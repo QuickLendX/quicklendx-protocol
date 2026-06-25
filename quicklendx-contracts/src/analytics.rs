@@ -5,7 +5,7 @@ use crate::types::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Vec};
 
 /// Category breakdown for invoices
-/// 
+///
 /// A lightweight summary of invoice count per category, suitable for dashboard views.
 /// Omits categories with zero invoices to minimize response size. The breakdown is
 /// bounded by the number of distinct categories (9 as of the current InvoiceCategory enum).
@@ -782,8 +782,7 @@ impl AnalyticsCalculator {
         ]
         .iter()
         {
-            let count =
-                crate::storage::InvoiceStorage::get_invoices_by_status(env, *status).len();
+            let count = crate::storage::InvoiceStorage::get_invoices_by_status(env, *status).len();
             total_transactions += count;
             if *status == InvoiceStatus::Paid {
                 successful_transactions = count;
@@ -800,7 +799,8 @@ impl AnalyticsCalculator {
         let defaulted_invoices =
             crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Defaulted);
         let error_rate = if total_transactions > 0 {
-            defaulted_invoices.len()
+            defaulted_invoices
+                .len()
                 .saturating_mul(10000)
                 .saturating_div(total_transactions) as i128
         } else {
@@ -1264,7 +1264,7 @@ impl AnalyticsCalculator {
         // Calculate portfolio diversity score (simplified)
         let portfolio_diversity_score = if total_investments > 0 {
             // In a real implementation, this would analyze category distribution
-            
+
             if total_investments > 10 {
                 80
             } else if total_investments > 5 {

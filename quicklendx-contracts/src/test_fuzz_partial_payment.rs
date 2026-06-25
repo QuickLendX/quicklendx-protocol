@@ -20,17 +20,17 @@ use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::settlement::get_payment_count;
 use crate::{QuickLendXContract, QuickLendXContractClient};
+use alloc::boxed::Box;
+use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::format;
+use alloc::string::String as RustString;
+use alloc::vec::Vec;
 use proptest::prelude::*;
 use proptest::test_runner::FileFailurePersistence;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, BytesN, Env, String, Vec as SorobanVec,
 };
-use alloc::boxed::Box;
-use alloc::collections::{BTreeMap, BTreeSet};
-use alloc::format;
-use alloc::string::String as RustString;
-use alloc::vec::Vec;
 
 const MIN_INVOICE_AMOUNT: i128 = 100;
 const MAX_INVOICE_AMOUNT: i128 = 100_000;
@@ -41,9 +41,7 @@ const MAX_PAYMENT_COUNT: u32 = 1_000;
 const SMOKE_CASES: u32 = 10;
 
 fn partial_payment_proptest_config() -> ProptestConfig {
-    ProptestConfig::with_failure_persistence(FileFailurePersistence::WithSource(
-        "partial_payment",
-    ))
+    ProptestConfig::with_failure_persistence(FileFailurePersistence::WithSource("partial_payment"))
 }
 
 fn partial_payment_proptest_config_smoke() -> ProptestConfig {
@@ -226,11 +224,9 @@ impl PartialPaymentOracle {
     fn amount_for_action(&self, action: &PaymentAction) -> i128 {
         match action {
             PaymentAction::ValidPayment { amount, .. } => *amount,
-            PaymentAction::ReplaySame { tx_index } => self
-                .first_amount_by_tx
-                .get(tx_index)
-                .copied()
-                .unwrap_or(1),
+            PaymentAction::ReplaySame { tx_index } => {
+                self.first_amount_by_tx.get(tx_index).copied().unwrap_or(1)
+            }
             PaymentAction::ReplayDifferentAmount { alt_amount, .. } => *alt_amount,
         }
     }
@@ -292,8 +288,8 @@ fn run_sequence(
         let nonce_key = PartialPaymentOracle::nonce_key(tx_index);
         let nonce_was_seen = oracle.seen_nonces.contains(&nonce_key);
         let before_paid = client.get_invoice(invoice_id).total_paid;
-        let before_count = env
-            .as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
+        let before_count =
+            env.as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
 
         let contract_result = execute_action(env, client, invoice_id, action, &oracle);
         let oracle_result = oracle.apply(amount, tx_index);
@@ -314,8 +310,8 @@ fn run_sequence(
         }
 
         let after_paid = client.get_invoice(invoice_id).total_paid;
-        let after_count = env
-            .as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
+        let after_count =
+            env.as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
 
         if nonce_was_seen {
             assert_eq!(
@@ -377,8 +373,7 @@ fn assert_step_invariants_deterministic(
         invoice.total_paid
     );
 
-    let count = env
-        .as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
+    let count = env.as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
     assert!(
         count >= prev_count,
         "payment_count decreased: {} -> {}",
@@ -427,8 +422,7 @@ fn assert_step_invariants(
         invoice.total_paid
     );
 
-    let count = env
-        .as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
+    let count = env.as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
     prop_assert!(
         count >= prev_count,
         "payment_count decreased: {} -> {}",
@@ -479,8 +473,8 @@ fn run_sequence_proptest(
         let nonce_key = PartialPaymentOracle::nonce_key(tx_index);
         let nonce_was_seen = oracle.seen_nonces.contains(&nonce_key);
         let before_paid = client.get_invoice(invoice_id).total_paid;
-        let before_count = env
-            .as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
+        let before_count =
+            env.as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
 
         let contract_result = execute_action(env, client, invoice_id, action, &oracle);
         let oracle_result = oracle.apply(amount, tx_index);
@@ -489,30 +483,37 @@ fn run_sequence_proptest(
             (Ok(()), Ok(())) => {}
             (Err(e1), Err(e2)) => {
                 prop_assert_eq!(
-                    *e1, *e2,
+                    *e1,
+                    *e2,
                     "error mismatch for action {:?}: contract={:?} oracle={:?}",
-                    action, e1, e2
+                    action,
+                    e1,
+                    e2
                 );
             }
             (c, o) => prop_assert!(
                 false,
                 "contract/oracle success mismatch for {:?}: contract={:?} oracle={:?}",
-                action, c, o
+                action,
+                c,
+                o
             ),
         }
 
         let after_paid = client.get_invoice(invoice_id).total_paid;
-        let after_count = env
-            .as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
+        let after_count =
+            env.as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
 
         if nonce_was_seen {
             prop_assert_eq!(
-                after_paid, before_paid,
+                after_paid,
+                before_paid,
                 "replay changed total_paid for {:?}",
                 action
             );
             prop_assert_eq!(
-                after_count, before_count,
+                after_count,
+                before_count,
                 "replay changed payment_count for {:?}",
                 action
             );
@@ -540,9 +541,12 @@ fn action_strategy(max_amount: i128) -> impl Strategy<Value = PaymentAction> {
         (1i128..=max_amount, (0u32..20u32))
             .prop_map(|(amount, tx_index)| PaymentAction::ValidPayment { amount, tx_index }),
         (0u32..20u32).prop_map(|tx_index| PaymentAction::ReplaySame { tx_index }),
-        ((0u32..20u32), (1i128..=max_amount)).prop_map(
-            |(tx_index, alt_amount)| PaymentAction::ReplayDifferentAmount { tx_index, alt_amount },
-        ),
+        ((0u32..20u32), (1i128..=max_amount)).prop_map(|(tx_index, alt_amount)| {
+            PaymentAction::ReplayDifferentAmount {
+                tx_index,
+                alt_amount,
+            }
+        },),
     ]
 }
 
@@ -585,11 +589,15 @@ fn fuzz_partial_payment_case(
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let (invoice_id, _business) =
-        setup_funded_invoice(&env, &client, &contract_id, invoice_amount);
+    let (invoice_id, _business) = setup_funded_invoice(&env, &client, &contract_id, invoice_amount);
 
     let oracle_forward = run_sequence_proptest(
-        &env, &client, &contract_id, &invoice_id, invoice_amount, &actions,
+        &env,
+        &client,
+        &contract_id,
+        &invoice_id,
+        invoice_amount,
+        &actions,
     )?;
 
     // Reordering: replays after first-seen payments must not change totals.
@@ -598,11 +606,15 @@ fn fuzz_partial_payment_case(
     env2.mock_all_auths();
     let contract_id2 = env2.register(QuickLendXContract, ());
     let client2 = QuickLendXContractClient::new(&env2, &contract_id2);
-    let (invoice_id2, _) =
-        setup_funded_invoice(&env2, &client2, &contract_id2, invoice_amount);
+    let (invoice_id2, _) = setup_funded_invoice(&env2, &client2, &contract_id2, invoice_amount);
 
     let oracle_reordered = run_sequence_proptest(
-        &env2, &client2, &contract_id2, &invoice_id2, invoice_amount, &reordered,
+        &env2,
+        &client2,
+        &contract_id2,
+        &invoice_id2,
+        invoice_amount,
+        &reordered,
     )?;
 
     prop_assert_eq!(
@@ -651,7 +663,9 @@ proptest! {
 // Deterministic edge-case tests
 // ---------------------------------------------------------------------------
 
-fn edge_setup(invoice_amount: i128) -> (Env, QuickLendXContractClient<'static>, Address, BytesN<32>) {
+fn edge_setup(
+    invoice_amount: i128,
+) -> (Env, QuickLendXContractClient<'static>, Address, BytesN<32>) {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
@@ -663,11 +677,8 @@ fn edge_setup(invoice_amount: i128) -> (Env, QuickLendXContractClient<'static>, 
 #[test]
 fn partial_payment_zero_amount_rejected() {
     let (env, client, _contract_id, invoice_id) = edge_setup(1_000);
-    let result = client.try_process_partial_payment(
-        &invoice_id,
-        &0,
-        &String::from_str(&env, "zero-tx"),
-    );
+    let result =
+        client.try_process_partial_payment(&invoice_id, &0, &String::from_str(&env, "zero-tx"));
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
     assert_eq!(client.get_invoice(&invoice_id).total_paid, 0);
@@ -676,11 +687,7 @@ fn partial_payment_zero_amount_rejected() {
 #[test]
 fn partial_payment_exact_final_marks_paid() {
     let (env, client, _contract_id, invoice_id) = edge_setup(1_000);
-    client.process_partial_payment(
-        &invoice_id,
-        &1_000,
-        &String::from_str(&env, "exact-final"),
-    );
+    client.process_partial_payment(&invoice_id, &1_000, &String::from_str(&env, "exact-final"));
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.total_paid, 1_000);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
@@ -689,16 +696,9 @@ fn partial_payment_exact_final_marks_paid() {
 #[test]
 fn partial_payment_after_finalization_rejected() {
     let (env, client, _contract_id, invoice_id) = edge_setup(1_000);
-    client.process_partial_payment(
-        &invoice_id,
-        &1_000,
-        &String::from_str(&env, "final-tx"),
-    );
-    let result = client.try_process_partial_payment(
-        &invoice_id,
-        &1,
-        &String::from_str(&env, "after-final"),
-    );
+    client.process_partial_payment(&invoice_id, &1_000, &String::from_str(&env, "final-tx"));
+    let result =
+        client.try_process_partial_payment(&invoice_id, &1, &String::from_str(&env, "after-final"));
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
     assert_eq!(client.get_invoice(&invoice_id).total_paid, 1_000);
@@ -712,8 +712,9 @@ fn partial_payment_replay_no_double_credit() {
     client.process_partial_payment(&invoice_id, &900, &tx);
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.total_paid, 400, "double-credit via nonce replay");
-    let count = env
-        .as_contract(&contract_id, || get_payment_count(&env, &invoice_id).unwrap());
+    let count = env.as_contract(&contract_id, || {
+        get_payment_count(&env, &invoice_id).unwrap()
+    });
     assert_eq!(count, 1);
 }
 
@@ -738,7 +739,14 @@ fn partial_payment_reordered_replays_match_forward() {
     let forward = run_sequence(&env, &client, &contract_id, &invoice_id, 1_000, &actions);
     let reordered = reorder_replays_after_first_seen(&actions);
     let (env2, client2, contract_id2, invoice_id2) = edge_setup(1_000);
-    let reversed = run_sequence(&env2, &client2, &contract_id2, &invoice_id2, 1_000, &reordered);
+    let reversed = run_sequence(
+        &env2,
+        &client2,
+        &contract_id2,
+        &invoice_id2,
+        1_000,
+        &reordered,
+    );
 
     assert_eq!(forward.total_paid, reversed.total_paid);
     assert_eq!(forward.payment_count, reversed.payment_count);

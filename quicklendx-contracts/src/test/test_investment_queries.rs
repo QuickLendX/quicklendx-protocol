@@ -10,10 +10,7 @@
 extern crate alloc;
 use crate::errors::QuickLendXError;
 use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
-use soroban_sdk::{
-    testutils::{Address as _},
-    Address, BytesN, Env, Vec,
-};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
 
 // ============================================================================
 // Test Helpers
@@ -39,7 +36,7 @@ fn create_test_investment(
         let mut invoice_bytes = [seed; 32];
         invoice_bytes[0] = 0xFE;
         let invoice_id = BytesN::from_array(env, &invoice_bytes);
-        
+
         let investment = Investment {
             investment_id: investment_id.clone(),
             invoice_id: invoice_id.clone(),
@@ -75,8 +72,10 @@ fn test_get_investment_nonexistent_returns_error() {
 
     let nonexistent_id = BytesN::from_array(&env, &[0u8; 32]);
     let result = client.try_get_investment(&nonexistent_id);
-    
-    let err = result.err().expect("expected error for nonexistent investment");
+
+    let err = result
+        .err()
+        .expect("expected error for nonexistent investment");
     let contract_error = err.expect("expected contract error");
     assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
 }
@@ -88,8 +87,10 @@ fn test_get_invoice_investment_nonexistent_returns_error() {
 
     let nonexistent_invoice_id = BytesN::from_array(&env, &[0u8; 32]);
     let result = client.try_get_invoice_investment(&nonexistent_invoice_id);
-    
-    let err = result.err().expect("expected error for nonexistent invoice");
+
+    let err = result
+        .err()
+        .expect("expected error for nonexistent invoice");
     let contract_error = err.expect("expected contract error");
     assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
 }
@@ -128,7 +129,7 @@ fn test_get_investment_multiple_statuses() {
     env.mock_all_auths();
 
     let investor = Address::generate(&env);
-    
+
     // Create investments with different statuses
     let (id1, _) = create_test_investment(
         &env,
@@ -356,9 +357,9 @@ fn test_get_investments_by_investor_mixed_statuses() {
     env.mock_all_auths();
 
     let investor = Address::generate(&env);
-    
+
     let mut expected_ids = Vec::new(&env);
-    
+
     let (id1, _) = create_test_investment(
         &env,
         &contract_id,
@@ -368,7 +369,7 @@ fn test_get_investments_by_investor_mixed_statuses() {
         60,
     );
     expected_ids.push_back(id1);
-    
+
     let (id2, _) = create_test_investment(
         &env,
         &contract_id,
@@ -378,7 +379,7 @@ fn test_get_investments_by_investor_mixed_statuses() {
         61,
     );
     expected_ids.push_back(id2);
-    
+
     let (id3, _) = create_test_investment(
         &env,
         &contract_id,
@@ -388,7 +389,7 @@ fn test_get_investments_by_investor_mixed_statuses() {
         62,
     );
     expected_ids.push_back(id3);
-    
+
     let (id4, _) = create_test_investment(
         &env,
         &contract_id,
@@ -418,7 +419,7 @@ fn test_query_investment_with_insurance() {
 
     let investor = Address::generate(&env);
     let provider = Address::generate(&env);
-    
+
     let (investment_id, _) = create_test_investment(
         &env,
         &contract_id,
@@ -432,7 +433,7 @@ fn test_query_investment_with_insurance() {
 
     let result = client.get_investment(&investment_id);
     assert_eq!(result.insurance.len(), 1);
-    
+
     let insurance = result.insurance.get(0).unwrap();
     assert_eq!(insurance.provider, provider);
     assert_eq!(insurance.coverage_percentage, 50);
@@ -497,8 +498,22 @@ fn test_portfolio_summary_only_defaulted() {
     env.mock_all_auths();
 
     let investor = Address::generate(&env);
-    create_test_investment(&env, &contract_id, &investor, 1_000, InvestmentStatus::Defaulted, 90);
-    create_test_investment(&env, &contract_id, &investor, 2_000, InvestmentStatus::Defaulted, 91);
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        1_000,
+        InvestmentStatus::Defaulted,
+        90,
+    );
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        2_000,
+        InvestmentStatus::Defaulted,
+        91,
+    );
 
     let summary = client.get_investor_portfolio_summary(&investor);
 
@@ -518,17 +533,66 @@ fn test_portfolio_summary_mixed_statuses() {
 
     let investor = Address::generate(&env);
     // Active: 3_000 + 5_000 = 8_000 principal
-    create_test_investment(&env, &contract_id, &investor, 3_000, InvestmentStatus::Active, 100);
-    create_test_investment(&env, &contract_id, &investor, 5_000, InvestmentStatus::Active, 101);
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        3_000,
+        InvestmentStatus::Active,
+        100,
+    );
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        5_000,
+        InvestmentStatus::Active,
+        101,
+    );
     // Completed: 2 positions, 4_000 + 6_000 = 10_000 returns
-    create_test_investment(&env, &contract_id, &investor, 4_000, InvestmentStatus::Completed, 102);
-    create_test_investment(&env, &contract_id, &investor, 6_000, InvestmentStatus::Completed, 103);
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        4_000,
+        InvestmentStatus::Completed,
+        102,
+    );
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        6_000,
+        InvestmentStatus::Completed,
+        103,
+    );
     // Defaulted: 1 position
-    create_test_investment(&env, &contract_id, &investor, 1_500, InvestmentStatus::Defaulted, 104);
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        1_500,
+        InvestmentStatus::Defaulted,
+        104,
+    );
     // Refunded: 1 position
-    create_test_investment(&env, &contract_id, &investor, 2_500, InvestmentStatus::Refunded, 105);
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        2_500,
+        InvestmentStatus::Refunded,
+        105,
+    );
     // Withdrawn: counted in total only
-    create_test_investment(&env, &contract_id, &investor, 7_000, InvestmentStatus::Withdrawn, 106);
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        7_000,
+        InvestmentStatus::Withdrawn,
+        106,
+    );
 
     let summary = client.get_investor_portfolio_summary(&investor);
 
@@ -549,11 +613,11 @@ fn test_portfolio_summary_reconciles_with_individual_records() {
 
     let investor = Address::generate(&env);
     let amounts: [(i128, InvestmentStatus, u8); 6] = [
-        (1_000, InvestmentStatus::Active,    110),
-        (2_000, InvestmentStatus::Active,    111),
+        (1_000, InvestmentStatus::Active, 110),
+        (2_000, InvestmentStatus::Active, 111),
         (3_000, InvestmentStatus::Completed, 112),
         (4_000, InvestmentStatus::Defaulted, 113),
-        (5_000, InvestmentStatus::Refunded,  114),
+        (5_000, InvestmentStatus::Refunded, 114),
         (6_000, InvestmentStatus::Withdrawn, 115),
     ];
 
@@ -596,8 +660,22 @@ fn test_portfolio_summary_isolated_per_investor() {
     let investor1 = Address::generate(&env);
     let investor2 = Address::generate(&env);
 
-    create_test_investment(&env, &contract_id, &investor1, 9_000, InvestmentStatus::Active,    120);
-    create_test_investment(&env, &contract_id, &investor2, 1_000, InvestmentStatus::Completed, 121);
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor1,
+        9_000,
+        InvestmentStatus::Active,
+        120,
+    );
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor2,
+        1_000,
+        InvestmentStatus::Completed,
+        121,
+    );
 
     let s1 = client.get_investor_portfolio_summary(&investor1);
     assert_eq!(s1.active_principal, 9_000);

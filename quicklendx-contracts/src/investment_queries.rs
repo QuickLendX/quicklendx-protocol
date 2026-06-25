@@ -238,8 +238,9 @@ impl InvestmentQueries {
         while idx < cap {
             if let Some(id) = ids.get(idx) {
                 if let Some(inv) = InvestmentStorage::get_investment(env, &id) {
-                    total_positions =
-                        total_positions.checked_add(1).ok_or(QuickLendXError::ArithmeticOverflow)?;
+                    total_positions = total_positions
+                        .checked_add(1)
+                        .ok_or(QuickLendXError::ArithmeticOverflow)?;
                     match inv.status {
                         InvestmentStatus::Active => {
                             active_principal = active_principal

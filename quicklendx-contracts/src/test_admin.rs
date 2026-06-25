@@ -32,6 +32,10 @@ mod test_admin {
         (env, contract_id, admin)
     }
 
+    fn existing_destination(env: &Env) -> Address {
+        env.register(QuickLendXContract, ())
+    }
+
     fn initialize_admin(
         env: &Env,
         contract_id: &Address,
@@ -46,7 +50,9 @@ mod test_admin {
         current_admin: &Address,
         new_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::transfer_admin(env, current_admin, new_admin))
+        env.as_contract(contract_id, || {
+            AdminStorage::transfer_admin(env, current_admin, new_admin)
+        })
     }
 
     fn initiate_admin_transfer(
@@ -65,7 +71,9 @@ mod test_admin {
         contract_id: &Address,
         pending_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::accept_admin_transfer(env, pending_admin))
+        env.as_contract(contract_id, || {
+            AdminStorage::accept_admin_transfer(env, pending_admin)
+        })
     }
 
     fn cancel_admin_transfer(
@@ -73,7 +81,9 @@ mod test_admin {
         contract_id: &Address,
         current_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::cancel_admin_transfer(env, current_admin))
+        env.as_contract(contract_id, || {
+            AdminStorage::cancel_admin_transfer(env, current_admin)
+        })
     }
 
     fn set_two_step_enabled(
@@ -82,7 +92,9 @@ mod test_admin {
         admin: &Address,
         enabled: bool,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::set_two_step_enabled(env, admin, enabled))
+        env.as_contract(contract_id, || {
+            AdminStorage::set_two_step_enabled(env, admin, enabled)
+        })
     }
 
     fn get_admin(env: &Env, contract_id: &Address) -> Option<Address> {
@@ -115,7 +127,9 @@ mod test_admin {
         current_admin: &Address,
         new_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::set_admin(env, current_admin, new_admin))
+        env.as_contract(contract_id, || {
+            AdminStorage::set_admin(env, current_admin, new_admin)
+        })
     }
 
     fn require_admin_auth(
@@ -123,13 +137,12 @@ mod test_admin {
         contract_id: &Address,
         address: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::require_admin_auth(env, address))
+        env.as_contract(contract_id, || {
+            AdminStorage::require_admin_auth(env, address)
+        })
     }
 
-    fn require_current_admin(
-        env: &Env,
-        contract_id: &Address,
-    ) -> Result<Address, QuickLendXError> {
+    fn require_current_admin(env: &Env, contract_id: &Address) -> Result<Address, QuickLendXError> {
         env.as_contract(contract_id, || AdminStorage::require_current_admin(env))
     }
 
@@ -146,7 +159,9 @@ mod test_admin {
         contract_id: &Address,
         admin: &Address,
     ) -> Result<u32, QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::with_admin_auth(env, admin, || Ok(42)))
+        env.as_contract(contract_id, || {
+            AdminStorage::with_admin_auth(env, admin, || Ok(42))
+        })
     }
 
     fn with_admin_auth_err(
@@ -159,11 +174,10 @@ mod test_admin {
         })
     }
 
-    fn with_current_admin_ok(
-        env: &Env,
-        contract_id: &Address,
-    ) -> Result<Address, QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::with_current_admin(env, |admin| Ok(admin.clone())))
+    fn with_current_admin_ok(env: &Env, contract_id: &Address) -> Result<Address, QuickLendXError> {
+        env.as_contract(contract_id, || {
+            AdminStorage::with_current_admin(env, |admin| Ok(admin.clone()))
+        })
     }
 
     fn with_current_admin_err(
@@ -171,7 +185,9 @@ mod test_admin {
         contract_id: &Address,
     ) -> Result<Address, QuickLendXError> {
         env.as_contract(contract_id, || {
-            AdminStorage::with_current_admin(env, |_admin| Err(QuickLendXError::OperationNotAllowed))
+            AdminStorage::with_current_admin(env, |_admin| {
+                Err(QuickLendXError::OperationNotAllowed)
+            })
         })
     }
 
@@ -246,7 +262,7 @@ mod test_admin {
     #[test]
     fn direct_transfer_updates_admin_atomically() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let admin_2 = Address::generate(&env);
+        let admin_2 = existing_destination(&env);
 
         assert_eq!(
             transfer_admin(&env, &contract_id, &admin_1, &admin_2),
@@ -262,7 +278,7 @@ mod test_admin {
     #[test]
     fn two_step_transfer_sets_pending_and_lock() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let admin_2 = Address::generate(&env);
+        let admin_2 = existing_destination(&env);
 
         set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
         transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
@@ -275,7 +291,7 @@ mod test_admin {
     #[test]
     fn direct_initiate_transfer_api_is_enforced_and_works() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let admin_2 = Address::generate(&env);
+        let admin_2 = existing_destination(&env);
         let attacker = Address::generate(&env);
 
         assert_eq!(
@@ -286,6 +302,24 @@ mod test_admin {
         initiate_admin_transfer(&env, &contract_id, &admin_1, &admin_2).unwrap();
         assert_eq!(get_pending_admin(&env, &contract_id), Some(admin_2));
         assert!(is_transfer_locked(&env, &contract_id));
+    }
+
+    #[test]
+    fn generated_address_lookalike_destinations_are_rejected() {
+        let (env, contract_id, admin_1) = setup_with_admin();
+        let lookalike_admin = Address::generate(&env);
+
+        assert_eq!(
+            transfer_admin(&env, &contract_id, &admin_1, &lookalike_admin),
+            Err(QuickLendXError::InvalidAddress)
+        );
+        assert_eq!(get_admin(&env, &contract_id), Some(admin_1.clone()));
+
+        assert_eq!(
+            initiate_admin_transfer(&env, &contract_id, &admin_1, &lookalike_admin),
+            Err(QuickLendXError::InvalidAddress)
+        );
+        assert_eq!(get_pending_admin(&env, &contract_id), None);
     }
 
     #[test]
@@ -308,7 +342,7 @@ mod test_admin {
     #[test]
     fn two_step_accept_requires_pending_admin() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let admin_2 = Address::generate(&env);
+        let admin_2 = existing_destination(&env);
         let attacker = Address::generate(&env);
 
         set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
@@ -339,7 +373,7 @@ mod test_admin {
     #[test]
     fn two_step_cancel_clears_pending_and_lock() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let admin_2 = Address::generate(&env);
+        let admin_2 = existing_destination(&env);
 
         set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
         transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
@@ -353,8 +387,8 @@ mod test_admin {
     #[test]
     fn transfer_lock_blocks_reentrant_transfer_attempts() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let admin_2 = Address::generate(&env);
-        let admin_3 = Address::generate(&env);
+        let admin_2 = existing_destination(&env);
+        let admin_3 = existing_destination(&env);
 
         set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
         transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
@@ -369,8 +403,8 @@ mod test_admin {
     #[test]
     fn lock_and_pending_block_one_step_transfer_even_without_two_step_mode() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let pending_admin = Address::generate(&env);
-        let replacement = Address::generate(&env);
+        let pending_admin = existing_destination(&env);
+        let replacement = existing_destination(&env);
 
         initiate_admin_transfer(&env, &contract_id, &admin_1, &pending_admin).unwrap();
         assert_eq!(
@@ -382,7 +416,7 @@ mod test_admin {
     #[test]
     fn disabling_two_step_clears_stuck_pending_state() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let admin_2 = Address::generate(&env);
+        let admin_2 = existing_destination(&env);
 
         set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
         transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
@@ -398,7 +432,7 @@ mod test_admin {
     #[test]
     fn emits_expected_events_for_admin_lifecycle() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let admin_2 = Address::generate(&env);
+        let admin_2 = existing_destination(&env);
 
         assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_init"));
 
@@ -415,7 +449,7 @@ mod test_admin {
     #[test]
     fn emits_cancel_event_when_pending_transfer_is_aborted() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let admin_2 = Address::generate(&env);
+        let admin_2 = existing_destination(&env);
 
         set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
         transfer_admin(&env, &contract_id, &admin_1, &admin_2).unwrap();
@@ -430,7 +464,7 @@ mod test_admin {
     fn legacy_and_helper_paths_enforce_auth_and_state() {
         let (env, contract_id) = setup();
         let admin_1 = Address::generate(&env);
-        let admin_2 = Address::generate(&env);
+        let admin_2 = existing_destination(&env);
         let outsider = Address::generate(&env);
 
         // require_admin path before initialization
@@ -542,16 +576,16 @@ mod test_admin {
 #[cfg(all(test, feature = "legacy-tests"))]
 mod access_control_matrix {
     use crate::admin::AdminStorage;
-    use crate::currency::CurrencyWhitelist;
-    use crate::emergency::EmergencyWithdraw;
-    use crate::init::ProtocolInitializer;
-    use crate::pause::PauseControl;
     use crate::backup;
     use crate::bid::BidStorage;
-    use crate::protocol_limits::ProtocolLimitsContract;
+    use crate::currency::CurrencyWhitelist;
+    use crate::emergency::EmergencyWithdraw;
     use crate::errors::QuickLendXError;
+    use crate::init::ProtocolInitializer;
+    use crate::pause::PauseControl;
+    use crate::protocol_limits::ProtocolLimitsContract;
     use crate::QuickLendXContract;
-    use soroban_sdk::{testutils::Address as _, Address, Env, Vec, String};
+    use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
     // ========================================================================
     // Test Setup Helpers
@@ -592,15 +626,11 @@ mod access_control_matrix {
         let non_admin = get_non_admin(&env);
 
         // Non-admin cannot initialize
-        let result = env.as_contract(&contract_id, || {
-            AdminStorage::initialize(&env, &non_admin)
-        });
+        let result = env.as_contract(&contract_id, || AdminStorage::initialize(&env, &non_admin));
         assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
 
         // Admin can initialize
-        let result = env.as_contract(&contract_id, || {
-            AdminStorage::initialize(&env, &admin)
-        });
+        let result = env.as_contract(&contract_id, || AdminStorage::initialize(&env, &admin));
         assert_eq!(result, Ok(()));
     }
 
@@ -903,12 +933,12 @@ mod access_control_matrix {
         assert_eq!(result, Err(QuickLendXError::NotAdmin));
 
         // Admin can execute (may fail due to balance, but auth passes)
-        let result = env.as_contract(&contract_id, || {
-            EmergencyWithdraw::execute(&env, &admin)
-        });
+        let result = env.as_contract(&contract_id, || EmergencyWithdraw::execute(&env, &admin));
         // Result may be Err depending on balance, but auth check passes
         match result {
-            Ok(()) | Err(QuickLendXError::InsufficientFunds) | Err(QuickLendXError::TokenTransferFailed) => {}
+            Ok(())
+            | Err(QuickLendXError::InsufficientFunds)
+            | Err(QuickLendXError::TokenTransferFailed) => {}
             Err(e) => panic!("Unexpected error: {:?}", e),
         }
     }
@@ -926,15 +956,11 @@ mod access_control_matrix {
         });
 
         // Non-admin cannot cancel
-        let result = env.as_contract(&contract_id, || {
-            EmergencyWithdraw::cancel(&env, &non_admin)
-        });
+        let result = env.as_contract(&contract_id, || EmergencyWithdraw::cancel(&env, &non_admin));
         assert_eq!(result, Err(QuickLendXError::NotAdmin));
 
         // Admin can cancel
-        let result = env.as_contract(&contract_id, || {
-            EmergencyWithdraw::cancel(&env, &admin)
-        });
+        let result = env.as_contract(&contract_id, || EmergencyWithdraw::cancel(&env, &admin));
         assert_eq!(result, Ok(()));
     }
 
@@ -957,7 +983,13 @@ mod access_control_matrix {
 
         // Former admin cannot initiate new emergency withdraw
         let result = env.as_contract(&contract_id, || {
-            EmergencyWithdraw::initiate(&env, &admin, Address::generate(&env), 1000, Address::generate(&env))
+            EmergencyWithdraw::initiate(
+                &env,
+                &admin,
+                Address::generate(&env),
+                1000,
+                Address::generate(&env),
+            )
         });
         assert_eq!(result, Err(QuickLendXError::NotAdmin));
     }
@@ -983,7 +1015,11 @@ mod access_control_matrix {
             CurrencyWhitelist::add_currency(&env, &admin, &currency)
         });
         assert_eq!(result, Ok(()));
-        assert!(env.as_contract(&contract_id, || CurrencyWhitelist::is_allowed_currency(&env, &currency)));
+        assert!(
+            env.as_contract(&contract_id, || CurrencyWhitelist::is_allowed_currency(
+                &env, &currency
+            ))
+        );
     }
 
     #[test]
@@ -1100,7 +1136,9 @@ mod access_control_matrix {
         });
         assert_eq!(result, Ok(50));
         assert_eq!(
-            env.as_contract(&contract_id, || BidStorage::get_max_active_bids_per_investor(&env)),
+            env.as_contract(&contract_id, || {
+                BidStorage::get_max_active_bids_per_investor(&env)
+            }),
             50
         );
     }
@@ -1140,7 +1178,7 @@ mod access_control_matrix {
         // Non-admin cannot set protocol limits
         let result = env.as_contract(&contract_id, || {
             ProtocolLimitsContract::set_protocol_limits(
-                &env, &non_admin, 1000, 10, 100, 365, 86400, 100
+                &env, &non_admin, 1000, 10, 100, 365, 86400, 100,
             )
         });
         assert_eq!(result, Err(QuickLendXError::NotAdmin));
@@ -1148,7 +1186,7 @@ mod access_control_matrix {
         // Admin can set protocol limits
         let result = env.as_contract(&contract_id, || {
             ProtocolLimitsContract::set_protocol_limits(
-                &env, &admin, 1000, 10, 100, 365, 86400, 100
+                &env, &admin, 1000, 10, 100, 365, 86400, 100,
             )
         });
         assert_eq!(result, Ok(()));
@@ -1501,7 +1539,9 @@ mod access_control_matrix {
         let result = client.execute_emergency_withdraw(&admin);
         // May fail due to insufficient balance, but auth check passes
         match result {
-            Ok(()) | Err(QuickLendXError::InsufficientFunds) | Err(QuickLendXError::TokenTransferFailed) => {}
+            Ok(())
+            | Err(QuickLendXError::InsufficientFunds)
+            | Err(QuickLendXError::TokenTransferFailed) => {}
             _ => {}
         }
     }
@@ -1576,9 +1616,7 @@ mod access_control_matrix {
         let non_admin = get_non_admin(&env);
 
         // AdminStorage::initialize - requires self-auth, not admin check
-        let result = env.as_contract(&contract_id, || {
-            AdminStorage::initialize(&env, &non_admin)
-        });
+        let result = env.as_contract(&contract_id, || AdminStorage::initialize(&env, &non_admin));
         assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
 
         // AdminStorage::transfer_admin - requires initialized state
@@ -1588,9 +1626,7 @@ mod access_control_matrix {
         assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
 
         // AdminStorage::require_current_admin - returns error when not initialized
-        let result = env.as_contract(&contract_id, || {
-            AdminStorage::require_current_admin(&env)
-        });
+        let result = env.as_contract(&contract_id, || AdminStorage::require_current_admin(&env));
         assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
 
         // ProtocolInitializer methods - would fail admin check
@@ -1644,17 +1680,47 @@ mod access_control_matrix {
 
         // admin_1 (former admin) cannot perform any admin operations
         let results = vec![
-            env.as_contract(&contract_id, || AdminStorage::transfer_admin(&env, &admin_1, &Address::generate(&env))),
-            env.as_contract(&contract_id, || AdminStorage::initiate_admin_transfer(&env, &admin_1, &Address::generate(&env))),
-            env.as_contract(&contract_id, || AdminStorage::set_two_step_enabled(&env, &admin_1, true)),
-            env.as_contract(&contract_id, || ProtocolInitializer::set_protocol_config(&env, &admin_1, 1000, 365, 86400)),
-            env.as_contract(&contract_id, || ProtocolInitializer::set_fee_config(&env, &admin_1, 200)),
-            env.as_contract(&contract_id, || PauseControl::set_paused(&env, &admin_1, true)),
-            env.as_contract(&contract_id, || EmergencyWithdraw::initiate(&env, &admin_1, Address::generate(&env), 1000, Address::generate(&env))),
-            env.as_contract(&contract_id, || CurrencyWhitelist::add_currency(&env, &admin_1, &Address::generate(&env))),
-            env.as_contract(&contract_id, || BidStorage::set_bid_ttl_days(&env, &admin_1, 14)),
-            env.as_contract(&contract_id, || BidStorage::set_max_active_bids_per_investor(&env, &admin_1, 50)),
-            env.as_contract(&contract_id, || ProtocolLimitsContract::set_protocol_limits(&env, &admin_1, 1000, 10, 100, 365, 86400, 100)),
+            env.as_contract(&contract_id, || {
+                AdminStorage::transfer_admin(&env, &admin_1, &Address::generate(&env))
+            }),
+            env.as_contract(&contract_id, || {
+                AdminStorage::initiate_admin_transfer(&env, &admin_1, &Address::generate(&env))
+            }),
+            env.as_contract(&contract_id, || {
+                AdminStorage::set_two_step_enabled(&env, &admin_1, true)
+            }),
+            env.as_contract(&contract_id, || {
+                ProtocolInitializer::set_protocol_config(&env, &admin_1, 1000, 365, 86400)
+            }),
+            env.as_contract(&contract_id, || {
+                ProtocolInitializer::set_fee_config(&env, &admin_1, 200)
+            }),
+            env.as_contract(&contract_id, || {
+                PauseControl::set_paused(&env, &admin_1, true)
+            }),
+            env.as_contract(&contract_id, || {
+                EmergencyWithdraw::initiate(
+                    &env,
+                    &admin_1,
+                    Address::generate(&env),
+                    1000,
+                    Address::generate(&env),
+                )
+            }),
+            env.as_contract(&contract_id, || {
+                CurrencyWhitelist::add_currency(&env, &admin_1, &Address::generate(&env))
+            }),
+            env.as_contract(&contract_id, || {
+                BidStorage::set_bid_ttl_days(&env, &admin_1, 14)
+            }),
+            env.as_contract(&contract_id, || {
+                BidStorage::set_max_active_bids_per_investor(&env, &admin_1, 50)
+            }),
+            env.as_contract(&contract_id, || {
+                ProtocolLimitsContract::set_protocol_limits(
+                    &env, &admin_1, 1000, 10, 100, 365, 86400, 100,
+                )
+            }),
         ];
 
         for (i, result) in results.into_iter().enumerate() {
@@ -1669,12 +1735,27 @@ mod access_control_matrix {
 
         // admin_2 can perform all admin operations
         let results = vec![
-            (ProtocolInitializer::set_protocol_config(&env, &admin_2, 1000, 365, 86400), "set_protocol_config"),
-            (ProtocolInitializer::set_fee_config(&env, &admin_2, 200), "set_fee_config"),
+            (
+                ProtocolInitializer::set_protocol_config(&env, &admin_2, 1000, 365, 86400),
+                "set_protocol_config",
+            ),
+            (
+                ProtocolInitializer::set_fee_config(&env, &admin_2, 200),
+                "set_fee_config",
+            ),
             (PauseControl::set_paused(&env, &admin_2, true), "set_paused"),
-            (CurrencyWhitelist::add_currency(&env, &admin_2, &Address::generate(&env)), "add_currency"),
-            (BidStorage::set_bid_ttl_days(&env, &admin_2, 14), "set_bid_ttl_days"),
-            (BidStorage::set_max_active_bids_per_investor(&env, &admin_2, 50), "set_max_active_bids"),
+            (
+                CurrencyWhitelist::add_currency(&env, &admin_2, &Address::generate(&env)),
+                "add_currency",
+            ),
+            (
+                BidStorage::set_bid_ttl_days(&env, &admin_2, 14),
+                "set_bid_ttl_days",
+            ),
+            (
+                BidStorage::set_max_active_bids_per_investor(&env, &admin_2, 50),
+                "set_max_active_bids",
+            ),
         ];
 
         for (result, name) in results {
@@ -1704,9 +1785,15 @@ mod access_control_matrix {
         // All should fail independently
         for _ in 0..3 {
             let results = vec![
-                env.as_contract(&contract_id, || AdminStorage::transfer_admin(&env, &non_admin, &Address::generate(&env))),
-                env.as_contract(&contract_id, || ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400)),
-                env.as_contract(&contract_id, || PauseControl::set_paused(&env, &non_admin, true)),
+                env.as_contract(&contract_id, || {
+                    AdminStorage::transfer_admin(&env, &non_admin, &Address::generate(&env))
+                }),
+                env.as_contract(&contract_id, || {
+                    ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400)
+                }),
+                env.as_contract(&contract_id, || {
+                    PauseControl::set_paused(&env, &non_admin, true)
+                }),
             ];
 
             for result in results {
@@ -1749,9 +1836,7 @@ mod access_control_matrix {
         assert_eq!(result, Err(QuickLendXError::NotAdmin));
 
         // Admin calling with admin address should succeed
-        let result = env.as_contract(&contract_id, || {
-            AdminStorage::require_admin(&env, &admin)
-        });
+        let result = env.as_contract(&contract_id, || AdminStorage::require_admin(&env, &admin));
         assert_eq!(result, Ok(()));
     }
 
@@ -1779,9 +1864,7 @@ mod access_control_matrix {
         assert_eq!(result2, Err(QuickLendXError::NotAdmin));
 
         // Pattern 2: require_current_admin
-        let result3 = env.as_contract(&contract_id, || {
-            AdminStorage::require_current_admin(&env)
-        });
+        let result3 = env.as_contract(&contract_id, || AdminStorage::require_current_admin(&env));
         assert_eq!(result3, Ok(admin));
 
         // Verify consistency: all admin-gated methods reject non-admin
@@ -2026,7 +2109,8 @@ mod access_control_matrix_extended {
 
         // Non-admin cannot update fee structure
         let fee_type = crate::types::FeeType::PlatformFee;
-        let result = client.try_update_fee_structure(&non_admin, fee_type.clone(), 100, 10, 1000, true);
+        let result =
+            client.try_update_fee_structure(&non_admin, fee_type.clone(), 100, 10, 1000, true);
         assert!(result.is_err());
 
         // Admin can update fee structure
@@ -2050,26 +2134,17 @@ mod access_control_matrix_extended {
 
         // Non-admin cannot configure revenue distribution
         let result = client.try_configure_revenue_distribution(
-            &non_admin,
-            &treasury,
-            8000,  // treasury_share_bps
-            1500,  // developer_share_bps
-            500,   // platform_share_bps
-            true,  // auto_distribution
-            1000,  // min_distribution_amount
+            &non_admin, &treasury, 8000, // treasury_share_bps
+            1500, // developer_share_bps
+            500,  // platform_share_bps
+            true, // auto_distribution
+            1000, // min_distribution_amount
         );
         assert!(result.is_err());
 
         // Admin can configure revenue distribution
-        let result = client.configure_revenue_distribution(
-            &admin,
-            &treasury,
-            8000,
-            1500,
-            500,
-            true,
-            1000,
-        );
+        let result =
+            client.configure_revenue_distribution(&admin, &treasury, 8000, 1500, 500, true, 1000);
         assert!(result.is_ok());
     }
 
@@ -2235,15 +2310,8 @@ mod access_control_matrix_extended {
         assert!(result.is_err());
 
         // Admin can create vesting schedule
-        let result = client.create_vesting_schedule(
-            &admin,
-            &token,
-            &beneficiary,
-            1000000,
-            1000,
-            100,
-            2000,
-        );
+        let result =
+            client.create_vesting_schedule(&admin, &token, &beneficiary, 1000000, 1000, 100, 2000);
         assert!(result.is_ok());
     }
 
@@ -2393,29 +2461,84 @@ mod access_control_matrix_extended {
         // Non-admin should be rejected for each
         let admin_methods = vec![
             ("transfer_admin", || client.try_transfer_admin(&non_admin)),
-            ("set_protocol_config", || client.try_set_protocol_config(&non_admin, 1000, 365, 86400)),
-            ("set_fee_config", || client.try_set_fee_config(&non_admin, 200)),
-            ("add_currency", || client.try_add_currency(&non_admin, &Address::generate(&env))),
-            ("remove_currency", || client.try_remove_currency(&non_admin, &Address::generate(&env))),
-            ("set_currencies", || client.try_set_currencies(&non_admin, &Vec::new(&env))),
-            ("clear_currencies", || client.try_clear_currencies(&non_admin)),
-            ("initiate_emergency_withdraw", || client.try_initiate_emergency_withdraw(&non_admin, &Address::generate(&env), 1000, &Address::generate(&env))),
-            ("execute_emergency_withdraw", || client.try_execute_emergency_withdraw(&non_admin)),
-            ("cancel_emergency_withdraw", || client.try_cancel_emergency_withdraw(&non_admin)),
+            ("set_protocol_config", || {
+                client.try_set_protocol_config(&non_admin, 1000, 365, 86400)
+            }),
+            ("set_fee_config", || {
+                client.try_set_fee_config(&non_admin, 200)
+            }),
+            ("add_currency", || {
+                client.try_add_currency(&non_admin, &Address::generate(&env))
+            }),
+            ("remove_currency", || {
+                client.try_remove_currency(&non_admin, &Address::generate(&env))
+            }),
+            ("set_currencies", || {
+                client.try_set_currencies(&non_admin, &Vec::new(&env))
+            }),
+            ("clear_currencies", || {
+                client.try_clear_currencies(&non_admin)
+            }),
+            ("initiate_emergency_withdraw", || {
+                client.try_initiate_emergency_withdraw(
+                    &non_admin,
+                    &Address::generate(&env),
+                    1000,
+                    &Address::generate(&env),
+                )
+            }),
+            ("execute_emergency_withdraw", || {
+                client.try_execute_emergency_withdraw(&non_admin)
+            }),
+            ("cancel_emergency_withdraw", || {
+                client.try_cancel_emergency_withdraw(&non_admin)
+            }),
             ("pause", || client.try_pause(&non_admin)),
             ("unpause", || client.try_unpause(&non_admin)),
             ("create_backup", || client.try_create_backup(&non_admin)),
             ("cleanup_backups", || client.try_cleanup_backups(&non_admin)),
-            ("set_backup_retention_policy", || client.try_set_backup_retention_policy(&non_admin, 5, 0, true)),
-            ("initialize_protocol_limits", || client.try_initialize_protocol_limits(&non_admin, 1000, 365, 86400)),
-            ("set_protocol_limits", || client.try_set_protocol_limits(&non_admin, 1000, 365, 86400)),
-            ("update_protocol_limits", || client.try_update_protocol_limits(&non_admin, 1000, 365, 86400)),
-            ("update_limits_max_invoices", || client.try_update_limits_max_invoices(&non_admin, 1000, 365, 86400, 50)),
-            ("verify_business", || client.try_verify_business(&non_admin, &Address::generate(&env))),
-            ("reject_business", || client.try_reject_business(&non_admin, &Address::generate(&env), &soroban_sdk::String::from_str(&env, "reason"))),
-            ("set_investment_limit", || client.try_set_investment_limit(&Address::generate(&env), 500000)),
-            ("create_vesting_schedule", || client.try_create_vesting_schedule(&non_admin, &Address::generate(&env), &Address::generate(&env), 1000000, 1000, 100, 2000)),
-            ("initialize_fee_system", || client.try_initialize_fee_system(&non_admin)),
+            ("set_backup_retention_policy", || {
+                client.try_set_backup_retention_policy(&non_admin, 5, 0, true)
+            }),
+            ("initialize_protocol_limits", || {
+                client.try_initialize_protocol_limits(&non_admin, 1000, 365, 86400)
+            }),
+            ("set_protocol_limits", || {
+                client.try_set_protocol_limits(&non_admin, 1000, 365, 86400)
+            }),
+            ("update_protocol_limits", || {
+                client.try_update_protocol_limits(&non_admin, 1000, 365, 86400)
+            }),
+            ("update_limits_max_invoices", || {
+                client.try_update_limits_max_invoices(&non_admin, 1000, 365, 86400, 50)
+            }),
+            ("verify_business", || {
+                client.try_verify_business(&non_admin, &Address::generate(&env))
+            }),
+            ("reject_business", || {
+                client.try_reject_business(
+                    &non_admin,
+                    &Address::generate(&env),
+                    &soroban_sdk::String::from_str(&env, "reason"),
+                )
+            }),
+            ("set_investment_limit", || {
+                client.try_set_investment_limit(&Address::generate(&env), 500000)
+            }),
+            ("create_vesting_schedule", || {
+                client.try_create_vesting_schedule(
+                    &non_admin,
+                    &Address::generate(&env),
+                    &Address::generate(&env),
+                    1000000,
+                    1000,
+                    100,
+                    2000,
+                )
+            }),
+            ("initialize_fee_system", || {
+                client.try_initialize_fee_system(&non_admin)
+            }),
         ];
 
         for (method_name, method_call) in admin_methods {
@@ -2452,7 +2575,9 @@ mod access_control_matrix_extended {
         let methods = vec![
             ("set_protocol_config", || {
                 env.as_contract(&contract_id, || {
-                    crate::init::ProtocolInitializer::set_protocol_config(&env, &admin_1, 1000, 365, 86400)
+                    crate::init::ProtocolInitializer::set_protocol_config(
+                        &env, &admin_1, 1000, 365, 86400,
+                    )
                 })
             }),
             ("set_fee_config", || {
@@ -2467,7 +2592,11 @@ mod access_control_matrix_extended {
             }),
             ("add_currency", || {
                 env.as_contract(&contract_id, || {
-                    crate::currency::CurrencyWhitelist::add_currency(&env, &admin_1, &Address::generate(&env))
+                    crate::currency::CurrencyWhitelist::add_currency(
+                        &env,
+                        &admin_1,
+                        &Address::generate(&env),
+                    )
                 })
             }),
             ("set_bid_ttl_days", || {
@@ -2482,12 +2611,27 @@ mod access_control_matrix_extended {
             }),
             ("set_protocol_limits", || {
                 env.as_contract(&contract_id, || {
-                    crate::protocol_limits::ProtocolLimitsContract::set_protocol_limits(&env, admin_1.clone(), 1000, 10, 100, 365, 86400, 100)
+                    crate::protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+                        &env,
+                        admin_1.clone(),
+                        1000,
+                        10,
+                        100,
+                        365,
+                        86400,
+                        100,
+                    )
                 })
             }),
             ("emergency_initiate", || {
                 env.as_contract(&contract_id, || {
-                    crate::emergency::EmergencyWithdraw::initiate(&env, &admin_1, Address::generate(&env), 1000, Address::generate(&env))
+                    crate::emergency::EmergencyWithdraw::initiate(
+                        &env,
+                        &admin_1,
+                        Address::generate(&env),
+                        1000,
+                        Address::generate(&env),
+                    )
                 })
             }),
         ];
@@ -2506,7 +2650,9 @@ mod access_control_matrix_extended {
         let methods = vec![
             ("set_protocol_config", || {
                 env.as_contract(&contract_id, || {
-                    crate::init::ProtocolInitializer::set_protocol_config(&env, &admin_2, 1000, 365, 86400)
+                    crate::init::ProtocolInitializer::set_protocol_config(
+                        &env, &admin_2, 1000, 365, 86400,
+                    )
                 })
             }),
             ("set_fee_config", || {
@@ -2521,7 +2667,11 @@ mod access_control_matrix_extended {
             }),
             ("add_currency", || {
                 env.as_contract(&contract_id, || {
-                    crate::currency::CurrencyWhitelist::add_currency(&env, &admin_2, &Address::generate(&env))
+                    crate::currency::CurrencyWhitelist::add_currency(
+                        &env,
+                        &admin_2,
+                        &Address::generate(&env),
+                    )
                 })
             }),
         ];
@@ -2635,7 +2785,10 @@ mod dry_run_preview {
         assert_eq!(diff.after_grace_period_seconds, params.grace_period_seconds);
         assert_eq!(diff.after_fee_bps, params.fee_bps);
         // before == after (we applied the same values), so it should be a no-op
-        assert!(diff.is_noop, "Expected is_noop=true after applying the same values");
+        assert!(
+            diff.is_noop,
+            "Expected is_noop=true after applying the same values"
+        );
         assert!(diff.would_succeed);
         assert_eq!(diff.validation_error_code, 0);
     }
@@ -2661,8 +2814,7 @@ mod dry_run_preview {
 
         // Apply and confirm storage matches what preview projected
         apply_protocol_config(&env, &contract_id, &admin, &params);
-        let live_fee =
-            env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env));
+        let live_fee = env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env));
         assert_eq!(live_fee, new_fee);
     }
 
@@ -2674,8 +2826,7 @@ mod dry_run_preview {
         apply_protocol_config(&env, &contract_id, &admin, &baseline);
 
         // Capture current values before preview
-        let fee_before =
-            env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env));
+        let fee_before = env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env));
         let min_before = env.as_contract(&contract_id, || {
             ProtocolInitializer::get_min_invoice_amount(&env)
         });
@@ -2690,13 +2841,18 @@ mod dry_run_preview {
         preview(&env, &contract_id, &admin, different).unwrap();
 
         // Storage must be unchanged
-        let fee_after =
-            env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env));
+        let fee_after = env.as_contract(&contract_id, || ProtocolInitializer::get_fee_bps(&env));
         let min_after = env.as_contract(&contract_id, || {
             ProtocolInitializer::get_min_invoice_amount(&env)
         });
-        assert_eq!(fee_before, fee_after, "fee_bps must not change after preview");
-        assert_eq!(min_before, min_after, "min_invoice_amount must not change after preview");
+        assert_eq!(
+            fee_before, fee_after,
+            "fee_bps must not change after preview"
+        );
+        assert_eq!(
+            min_before, min_after,
+            "min_invoice_amount must not change after preview"
+        );
     }
 
     /// Non-admin callers are rejected with NotAdmin.
@@ -2726,7 +2882,10 @@ mod dry_run_preview {
 
         let diff = preview(&env, &contract_id, &admin, params).unwrap();
         assert!(!diff.would_succeed);
-        assert_eq!(diff.validation_error_code, QuickLendXError::InvalidAmount as u32);
+        assert_eq!(
+            diff.validation_error_code,
+            QuickLendXError::InvalidAmount as u32
+        );
     }
 
     /// fee_bps > 1000 → would_succeed=false, code=InvalidFeeBasisPoints.
@@ -2812,7 +2971,10 @@ mod dry_run_preview {
         changed.fee_bps += 1; // only fee differs
 
         let diff = preview(&env, &contract_id, &admin, changed).unwrap();
-        assert!(!diff.is_noop, "Expected is_noop=false when one field differs");
+        assert!(
+            !diff.is_noop,
+            "Expected is_noop=false when one field differs"
+        );
         assert!(diff.would_succeed);
     }
 
@@ -2849,11 +3011,7 @@ mod dry_run_preview {
             let mut params = valid_params();
             params.fee_bps = bps;
             let diff = preview(&env, &contract_id, &admin, params).unwrap();
-            assert!(
-                diff.would_succeed,
-                "fee_bps={} should be valid",
-                bps
-            );
+            assert!(diff.would_succeed, "fee_bps={} should be valid", bps);
             assert_eq!(diff.validation_error_code, 0);
         }
     }
@@ -2867,6 +3025,9 @@ mod dry_run_preview {
 
         let diff = preview(&env, &contract_id, &admin, params).unwrap();
         assert!(!diff.would_succeed);
-        assert_eq!(diff.validation_error_code, QuickLendXError::InvalidAmount as u32);
+        assert_eq!(
+            diff.validation_error_code,
+            QuickLendXError::InvalidAmount as u32
+        );
     }
 }

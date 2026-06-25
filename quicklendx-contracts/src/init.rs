@@ -590,8 +590,7 @@ impl ProtocolInitializer {
             let before_fee_bps = Self::get_fee_bps(env);
 
             // ── Validate proposed params (mirrors set_protocol_config + set_fee_config) ──
-            let (would_succeed, validation_error_code) =
-                Self::validate_config_params(&params);
+            let (would_succeed, validation_error_code) = Self::validate_config_params(&params);
 
             // ── Compute no-op flag ───────────────────────────────────────────
             let is_noop = params.min_invoice_amount == before_min_invoice_amount

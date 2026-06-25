@@ -225,11 +225,7 @@ impl BidStorage {
     }
     pub fn get_bids_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
         let count_key = Self::invoice_bid_count_key(invoice_id);
-        let count: u32 = env
-            .storage()
-            .persistent()
-            .get(&count_key)
-            .unwrap_or(0);
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
         if count > 0 {
             bump_persistent(env, &count_key);
         }
@@ -721,7 +717,7 @@ impl BidStorage {
     ) -> (u32, u32) {
         // Validate and cap pagination parameters
         let capped_limit = limit.min(MAX_BIDS_PER_INVOICE);
-        
+
         // Prevent overflow: offset + limit must not exceed u32::MAX
         if offset > u32::MAX - capped_limit {
             return (0, 0);
@@ -730,7 +726,7 @@ impl BidStorage {
         let current_timestamp = env.ledger().timestamp();
         let count_key = Self::invoice_bid_count_key(invoice_id);
         let old_count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
-        
+
         if old_count > 0 {
             bump_persistent(env, &count_key);
         }
@@ -1084,15 +1080,14 @@ impl BidStorage {
             let bid_id = bid_ids.get(idx).unwrap();
             if let Some(bid) = Self::get_bid(env, &bid_id) {
                 // Every Expired bid must have a past deadline
-                if bid.status == BidStatus::Expired
-                    && bid.expiration_timestamp >= current_timestamp {
-                        return false;
-                    }
+                if bid.status == BidStatus::Expired && bid.expiration_timestamp >= current_timestamp
+                {
+                    return false;
+                }
                 // No Placed bid should remain past its deadline
-                if bid.status == BidStatus::Placed
-                    && bid.is_expired(current_timestamp) {
-                        return false;
-                    }
+                if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
+                    return false;
+                }
             }
             idx += 1;
         }

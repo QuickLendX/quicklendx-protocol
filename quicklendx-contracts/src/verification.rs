@@ -1339,7 +1339,6 @@ pub fn update_investor_analytics(
             &verification.risk_level,
         );
 
-
         verification.total_invested = verification
             .total_invested
             .saturating_add(investment_amount);
@@ -1361,7 +1360,12 @@ pub fn update_investor_analytics(
         verification.risk_score =
             calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
         verification.risk_level = determine_risk_level(verification.risk_score);
-        verification.tier = compute_investor_tier(verification.total_invested, verification.successful_investments, verification.defaulted_investments, verification.risk_score)?;
+        verification.tier = compute_investor_tier(
+            verification.total_invested,
+            verification.successful_investments,
+            verification.defaulted_investments,
+            verification.risk_score,
+        )?;
 
         // Preserve the investor's approved baseline and only re-derive the
         // dynamic limit using the updated tier/risk profile.
@@ -1488,8 +1492,8 @@ pub fn recompute_investor_tier(
         return Err(QuickLendXError::NotAdmin);
     }
 
-    let mut verification = InvestorVerificationStorage::get(env, investor)
-        .ok_or(QuickLendXError::KYCNotFound)?;
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
 
     if !matches!(verification.status, BusinessVerificationStatus::Verified) {
         return Err(QuickLendXError::InvalidKYCStatus);
@@ -1520,7 +1524,8 @@ pub fn recompute_investor_tier(
     verification.risk_level = risk_level;
     verification.tier = tier;
     verification.investment_limit = investment_limit;
-    verification.compliance_notes = Some(String::from_str(env, "Investor tier recomputed by admin"));
+    verification.compliance_notes =
+        Some(String::from_str(env, "Investor tier recomputed by admin"));
 
     InvestorVerificationStorage::update(env, &verification);
     Ok(())
@@ -1543,8 +1548,8 @@ pub fn recompute_investor_tier(
         return Err(QuickLendXError::NotAdmin);
     }
 
-    let mut verification = InvestorVerificationStorage::get(env, investor)
-        .ok_or(QuickLendXError::KYCNotFound)?;
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
 
     if !matches!(verification.status, BusinessVerificationStatus::Verified) {
         return Err(QuickLendXError::InvalidKYCStatus);
@@ -1575,7 +1580,8 @@ pub fn recompute_investor_tier(
     verification.risk_level = risk_level;
     verification.tier = tier;
     verification.investment_limit = investment_limit;
-    verification.compliance_notes = Some(String::from_str(env, "Investor tier recomputed by admin"));
+    verification.compliance_notes =
+        Some(String::from_str(env, "Investor tier recomputed by admin"));
 
     InvestorVerificationStorage::update(env, &verification);
     Ok(())

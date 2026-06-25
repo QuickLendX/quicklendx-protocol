@@ -24,6 +24,15 @@ pub const ADMIN_TWO_STEP_KEY: Symbol = symbol_short!("adm_2st");
 pub struct AdminStorage;
 
 impl AdminStorage {
+    #[inline]
+    fn require_existing_transfer_destination(address: &Address) -> Result<(), QuickLendXError> {
+        if !address.exists() {
+            return Err(QuickLendXError::InvalidAddress);
+        }
+
+        Ok(())
+    }
+
     /// Initialize the admin once.
     ///
     /// # Security
@@ -65,6 +74,8 @@ impl AdminStorage {
             return Err(QuickLendXError::OperationNotAllowed);
         }
 
+        Self::require_existing_transfer_destination(new_admin)?;
+
         if Self::is_two_step_enabled(env) {
             return Self::initiate_admin_transfer_internal(env, current_admin, new_admin);
         }
@@ -105,6 +116,8 @@ impl AdminStorage {
         if current_admin == pending_admin {
             return Err(QuickLendXError::OperationNotAllowed);
         }
+
+        Self::require_existing_transfer_destination(pending_admin)?;
 
         if Self::is_transfer_locked(env) || Self::get_pending_admin(env).is_some() {
             return Err(QuickLendXError::OperationNotAllowed);

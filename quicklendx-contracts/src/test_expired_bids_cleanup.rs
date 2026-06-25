@@ -853,8 +853,14 @@ fn test_exact_expiry_set_exactness() {
     let bid_e = create_and_place_bid(&env, &client, &investor, &invoice_id, 70_000, 70_700);
 
     // All 5 are Placed
-    assert_eq!(count_bids_by_status(&env, &invoice_id, BidStatus::Placed), 5);
-    assert_eq!(count_bids_by_status(&env, &invoice_id, BidStatus::Expired), 0);
+    assert_eq!(
+        count_bids_by_status(&env, &invoice_id, BidStatus::Placed),
+        5
+    );
+    assert_eq!(
+        count_bids_by_status(&env, &invoice_id, BidStatus::Expired),
+        0
+    );
 
     // 1) Advance to exactly at TTL boundary (should NOT expire any bids)
     let ttl_boundary = now + ttl_seconds;
@@ -866,11 +872,13 @@ fn test_exact_expiry_set_exactness() {
         "No bids expire exactly at TTL boundary (strict > comparison)"
     );
     assert_eq!(
-        count_bids_by_status(&env, &invoice_id, BidStatus::Placed), 5,
+        count_bids_by_status(&env, &invoice_id, BidStatus::Placed),
+        5,
         "All 5 bids still Placed at exact TTL boundary"
     );
     assert_eq!(
-        count_bids_by_status(&env, &invoice_id, BidStatus::Expired), 0,
+        count_bids_by_status(&env, &invoice_id, BidStatus::Expired),
+        0,
         "No bids expired at exact TTL boundary"
     );
 
@@ -883,11 +891,13 @@ fn test_exact_expiry_set_exactness() {
         "Exactly 5 bids should expire 1 second past TTL boundary"
     );
     assert_eq!(
-        count_bids_by_status(&env, &invoice_id, BidStatus::Expired), 0,
+        count_bids_by_status(&env, &invoice_id, BidStatus::Expired),
+        0,
         "Expired bids pruned from invoice index"
     );
     assert_eq!(
-        get_bid_count_for_invoice(&env, &invoice_id), 0,
+        get_bid_count_for_invoice(&env, &invoice_id),
+        0,
         "All expired bids removed from invoice index"
     );
 
@@ -928,11 +938,13 @@ fn test_exact_expiry_mixed_active_expired() {
 
     // Check: 4 Placed (1 about to become terminal, but accept already moved it)
     assert_eq!(
-        count_bids_by_status(&env, &invoice_id, BidStatus::Placed), 3,
+        count_bids_by_status(&env, &invoice_id, BidStatus::Placed),
+        3,
         "3 Placed after acceptance"
     );
     assert_eq!(
-        count_bids_by_status(&env, &invoice_id, BidStatus::Accepted), 1,
+        count_bids_by_status(&env, &invoice_id, BidStatus::Accepted),
+        1,
         "1 Accepted after acceptance"
     );
 
@@ -969,7 +981,8 @@ fn test_exact_expiry_mixed_active_expired() {
 
     // Invoice index contains only active + terminal (2 bids)
     assert_eq!(
-        get_bid_count_for_invoice(&env, &invoice_id), 2,
+        get_bid_count_for_invoice(&env, &invoice_id),
+        2,
         "Only active + terminal bids remain in invoice index"
     );
 }
@@ -1096,10 +1109,7 @@ fn test_investor_limit_released_after_cleanup() {
 
     // Active count should be 0
     let active_count = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
-    assert_eq!(
-        active_count, 0,
-        "Zero active bids after all expired"
-    );
+    assert_eq!(active_count, 0, "Zero active bids after all expired");
 }
 
 // -------------------------------------------------------------------------------
@@ -1162,10 +1172,7 @@ fn test_idempotent_cleanup_preserves_active_count() {
     );
 
     let active_after_3 = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
-    assert_eq!(
-        active_after_3, 1,
-        "Active count stable after third cleanup"
-    );
+    assert_eq!(active_after_3, 1, "Active count stable after third cleanup");
 
     // Verify remaining bid statuses
     assert_eq!(
@@ -1205,11 +1212,18 @@ fn test_idempotent_cleanup_all_active() {
     // Repeat cleanup many times at same timestamp
     for i in 0..5 {
         let cleaned = BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        assert_eq!(cleaned, 0, "Iteration {}: cleanup idempotent with active bids", i);
+        assert_eq!(
+            cleaned, 0,
+            "Iteration {}: cleanup idempotent with active bids",
+            i
+        );
     }
 
     let active_after = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
-    assert_eq!(active_after, 2, "Active count unchanged after repeated cleanup");
+    assert_eq!(
+        active_after, 2,
+        "Active count unchanged after repeated cleanup"
+    );
 }
 
 // -------------------------------------------------------------------------------

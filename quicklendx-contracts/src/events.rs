@@ -594,9 +594,6 @@ pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     .publish(env);
 }
 
-
-
-
 #[contractevent]
 pub struct RevenueDistributed {
     pub period: u64,
