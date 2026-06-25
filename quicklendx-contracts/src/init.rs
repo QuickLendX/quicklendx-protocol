@@ -33,7 +33,7 @@
 
 use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
 use crate::errors::QuickLendXError;
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, String, Vec};
 
 /// Storage key for protocol initialization flag
 const PROTOCOL_INITIALIZED_KEY: Symbol = symbol_short!("proto_in");
@@ -251,10 +251,7 @@ impl ProtocolInitializer {
         params.admin.require_auth();
 
         // Zero-address guard: reject the well-known Stellar zero/burn address.
-        let zero = Address::from_string(&soroban_sdk::String::from_str(
-            env,
-            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-        ));
+        let zero = Self::zero_address(env);
         if params.admin == zero || params.treasury == zero {
             return Err(QuickLendXError::InvalidAddress);
         }
@@ -421,6 +418,13 @@ impl ProtocolInitializer {
     /// # Returns
     /// * `Ok(())` if all parameters are valid
     /// * `Err(QuickLendXError)` with specific error for invalid parameters
+    fn zero_address(env: &Env) -> Address {
+        Address::from_string(&String::from_str(
+            env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        ))
+    }
+
     fn validate_initialization_params(
         env: &Env,
         params: &InitializationParams,
@@ -450,14 +454,19 @@ impl ProtocolInitializer {
             return Err(QuickLendXError::InvalidAddress);
         }
 
-        // VALIDATION: Initial currencies must not contain duplicates or
-        // reserved addresses (admin, treasury, contract itself).
+        // VALIDATION: Initial currencies must not contain duplicates, reserved
+        // addresses, or the well-known zero/burn address.
         let contract_address = env.current_contract_address();
+        let zero = Self::zero_address(env);
         let len = params.initial_currencies.len();
         for i in 0..len {
             let curr = params.initial_currencies.get(i).unwrap();
             // Must not be a reserved address
-            if curr == params.admin || curr == params.treasury || curr == contract_address {
+            if curr == params.admin
+                || curr == params.treasury
+                || curr == contract_address
+                || curr == zero
+            {
                 return Err(QuickLendXError::InvalidCurrency);
             }
             // Must not be a duplicate (O(n-) - list is expected to be small)
