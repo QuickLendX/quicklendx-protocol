@@ -86,6 +86,7 @@ pub mod invoice_search;
 pub mod maintenance;
 pub mod monitor;
 pub mod notifications;
+pub mod pagination;
 pub mod pause;
 pub mod payments;
 pub mod profits;
@@ -159,6 +160,8 @@ mod test_accept_bid_instruction_budget;
 #[cfg(test)]
 #[path = "test/test_investment_queries.rs"]
 mod test_investment_queries;
+#[cfg(test)]
+mod test_queries;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_overflow;
 // #[cfg(all(test, feature = "legacy-tests"))]
