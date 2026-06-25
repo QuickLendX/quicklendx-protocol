@@ -518,6 +518,8 @@ fn test_invoice_settled_field_order() {
     assert!(p.investor_return >= 0);
     assert!(p.platform_fee >= 0);
     assert_eq!(p.timestamp, ts);
+    assert_eq!(p.amount, EXP_RETURN, "amount must equal total settled");
+    assert_eq!(p.ledger, env.ledger().sequence(), "ledger sequence must be set");
 }
 
 // ============================================================================
@@ -1068,6 +1070,8 @@ fn test_loan_settled_event_schema() {
     assert!(p.investor_return >= 0, "investor_return must be non-negative");
     assert!(p.platform_fee >= 0, "platform_fee must be non-negative");
     assert_eq!(p.timestamp, ts, "timestamp mismatch");
+    assert_eq!(p.amount, EXP_RETURN, "amount must equal total settled");
+    assert_eq!(p.ledger, env.ledger().sequence(), "ledger sequence must be set");
 }
 
 // ============================================================================
@@ -1555,6 +1559,42 @@ fn test_event_timestamp_ordering() {
 
     assert!(invoice.created_at <= time_verify);
     assert!(bid.timestamp >= time_bid);
+}
+
+// ============================================================================
+// 25. InvoiceSettled — amount and ledger fields locked in
+// ============================================================================
+
+/// Verifies that every settlement emits `InvoiceSettled` with the correct
+/// `amount` (total settled) and `ledger` (ledger sequence number).
+#[test]
+fn test_invoice_settled_includes_amount_and_ledger() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, cid) = setup(&env);
+    let biz = Address::generate(&env);
+    let inv = Address::generate(&env);
+    let currency = mint_currency(&env, &cid, &biz, Some(&inv));
+    kyc_business(&env, &client, &admin, &biz);
+    kyc_investor(&env, &client, &inv, INV_LIMIT);
+
+    let (id, _) = upload_invoice(&env, &client, &biz, &currency, "amount ledger test");
+    client.verify_invoice(&id);
+    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    client.accept_bid(&id, &bid_id);
+
+    // Advance ledger sequence so we get a predictable non-zero value.
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 5;
+    });
+    let expected_ledger = env.ledger().sequence();
+
+    client.make_payment(&id, &EXP_RETURN, &String::from_str(&env, "TX_AMT_LEDGER"));
+
+    let p: InvoiceSettled = latest_payload(&env, TOPIC_INVOICE_SETTLED);
+    assert_eq!(p.invoice_id, id, "invoice_id mismatch");
+    assert_eq!(p.amount, EXP_RETURN, "amount must equal total settled");
+    assert_eq!(p.ledger, expected_ledger, "ledger sequence mismatch");
 }
 
 // Helper used only in this test module - suppress unused warning
