@@ -493,6 +493,78 @@ mod test_admin {
             Err(QuickLendXError::NotAdmin)
         );
     }
+
+    #[test]
+    fn admin_get_escrow_returns_full_record() {
+        use crate::payments::{Escrow, EscrowStorage, EscrowStatus};
+        use soroban_sdk::BytesN;
+
+        let (env, contract_id, admin) = setup_with_admin();
+        let escrow_id = BytesN::from_array(&env, &[1u8; 32]);
+        let invoice_id = BytesN::from_array(&env, &[2u8; 32]);
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let currency = Address::generate(&env);
+
+        let escrow = Escrow {
+            escrow_id: escrow_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            business: business.clone(),
+            amount: 1000,
+            currency: currency.clone(),
+            created_at: 12345,
+            status: EscrowStatus::Held,
+        };
+
+        env.as_contract(&contract_id, || {
+            EscrowStorage::store_escrow(&env, &escrow);
+        });
+
+        let result = env.as_contract(&contract_id, || {
+            QuickLendXContract::admin_get_escrow(env.clone(), admin, escrow_id.clone())
+        });
+
+        assert!(result.is_ok());
+        let retrieved = result.unwrap();
+        assert_eq!(retrieved.escrow_id, escrow_id);
+        assert_eq!(retrieved.invoice_id, invoice_id);
+        assert_eq!(retrieved.investor, investor);
+        assert_eq!(retrieved.business, business);
+        assert_eq!(retrieved.amount, 1000);
+        assert_eq!(retrieved.currency, currency);
+        assert_eq!(retrieved.created_at, 12345);
+        assert_eq!(retrieved.status, EscrowStatus::Held);
+    }
+
+    #[test]
+    fn admin_get_escrow_requires_admin() {
+        use soroban_sdk::BytesN;
+
+        let (env, contract_id, admin) = setup_with_admin();
+        let non_admin = Address::generate(&env);
+        let escrow_id = BytesN::from_array(&env, &[1u8; 32]);
+
+        let result = env.as_contract(&contract_id, || {
+            QuickLendXContract::admin_get_escrow(env.clone(), non_admin, escrow_id)
+        });
+
+        assert_eq!(result, Err(QuickLendXError::NotAdmin));
+    }
+
+    #[test]
+    fn admin_get_escrow_returns_storage_key_not_found_for_missing_escrow() {
+        use soroban_sdk::BytesN;
+
+        let (env, contract_id, admin) = setup_with_admin();
+        let escrow_id = BytesN::from_array(&env, &[1u8; 32]);
+
+        let result = env.as_contract(&contract_id, || {
+            QuickLendXContract::admin_get_escrow(env.clone(), admin, escrow_id)
+        });
+
+        assert_eq!(result, Err(QuickLendXError::StorageKeyNotFound));
+    }
 }
 
 // ============================================================================

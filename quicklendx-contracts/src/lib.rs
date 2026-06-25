@@ -2234,6 +2234,35 @@ impl QuickLendXContract {
         Ok(escrow.status)
     }
 
+    /// Admin-only: Get escrow record by escrow ID for support and inspection.
+    ///
+    /// Returns the full escrow record including all fields (id, invoice_id, investor,
+    /// business, amount, currency, created_at, status). This is a read-only operation
+    /// intended for support teams to inspect escrow state without requiring invoice_id.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `admin` - The admin address (must be authenticated and authorized)
+    /// * `escrow_id` - The escrow ID to inspect
+    ///
+    /// # Returns
+    /// * `Ok(Escrow)` - The full escrow record
+    /// * `Err(QuickLendXError::NotAdmin)` - Caller is not the current admin
+    /// * `Err(QuickLendXError::StorageKeyNotFound)` - No escrow record exists for this escrow_id
+    ///
+    /// # Security
+    /// - Requires admin authorization
+    /// - Read-only (no state mutations)
+    /// - Safe for use in monitoring and support tooling
+    pub fn admin_get_escrow(
+        env: Env,
+        admin: Address,
+        escrow_id: BytesN<32>,
+    ) -> Result<payments::Escrow, QuickLendXError> {
+        AdminStorage::require_admin_auth(&env, &admin)?;
+        EscrowStorage::get_escrow(&env, &escrow_id).ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
     /// Release escrow funds to business upon invoice verification
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
