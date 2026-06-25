@@ -84,6 +84,7 @@ fn make_invoice(env: &Env, invoice_id: &BytesN<32>) -> Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
+            resolution_outcome: None,
         },
         total_paid: 0,
         payment_history: Vec::new(env),
