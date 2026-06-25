@@ -129,6 +129,8 @@ mod test_dispute;
 mod test_dispute_refund_flow;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
+#[cfg(test)]
+mod test_dust_transfer;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
 #[cfg(all(test, feature = "legacy-tests"))]
