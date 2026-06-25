@@ -1,14 +1,4 @@
 # Backend Browser Security
-
-## CORS Policy
-
-Browser-facing APIs use an explicit allowlist based on `ALLOWED_ORIGINS`.
-
-- `ALLOWED_ORIGINS` is a comma-separated list of trusted browser origins.
-- Requests from untrusted origins are rejected by CORS middleware.
-- Preflight (`OPTIONS`) responses return `204` for trusted origins.
-- Browser API routes run with `credentials: true` and explicit allowed headers/methods.
-
 This prevents implicit trust of arbitrary origins and ensures only approved web clients can call browser API routes.
 
 ## CSRF Strategy
