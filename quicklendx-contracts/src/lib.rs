@@ -127,6 +127,8 @@ mod test_currency_batch;
 mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
+#[cfg(test)]
+mod test_escrow_refund_after_expiry;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(all(test, feature = "legacy-tests"))]
