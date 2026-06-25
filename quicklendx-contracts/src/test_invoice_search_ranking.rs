@@ -57,6 +57,7 @@ mod test_invoice_search_ranking {
             resolution: String::from_str(env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
+            resolution_outcome: crate::types::DisputeResolution::Unresolved,
         };
 
         Invoice {
@@ -111,6 +112,7 @@ mod test_invoice_search_ranking {
             resolution: String::from_str(&env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
+            resolution_outcome: crate::types::DisputeResolution::Unresolved,
         };
 
         // Invoice 1: Exact ID match
@@ -231,6 +233,7 @@ mod test_invoice_search_ranking {
             resolution: String::from_str(&env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
+            resolution_outcome: crate::types::DisputeResolution::Unresolved,
         };
 
         // Invoice with Exact ID match, created at 1000

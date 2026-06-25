@@ -150,6 +150,11 @@ impl EmergencyWithdraw {
         let now = env.ledger().timestamp();
         let unlock_at = now.saturating_add(DEFAULT_EMERGENCY_TIMELOCK_SECS);
         let expires_at = unlock_at.saturating_add(DEFAULT_EMERGENCY_EXPIRATION_SECS);
+
+        if expires_at <= now {
+            return Err(QuickLendXError::InvalidTimestamp);
+        }
+
         let nonce = Self::increment_nonce(env);
 
         let pending = PendingEmergencyWithdrawal {
