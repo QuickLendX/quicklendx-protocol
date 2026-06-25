@@ -30,7 +30,6 @@ pub mod profits;
 pub mod settlement;
 pub mod storage_types;
 pub mod verification;
-pub mod investment;
 pub mod payments;
 pub mod invariants;
 
