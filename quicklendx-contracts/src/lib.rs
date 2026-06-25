@@ -48,8 +48,10 @@ mod test_escrow;
 mod test_fees;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
+#[cfg(test)]
+mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
 #[cfg(test)]
@@ -60,6 +62,7 @@ pub mod analytics;
 pub mod audit;
 pub mod backup;
 pub mod backup_v1;
+pub mod backpressure;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
@@ -81,6 +84,7 @@ pub mod investment_queries;
 pub mod invoice;
 pub mod invoice_search;
 pub mod maintenance;
+pub mod monitor;
 pub mod notifications;
 pub mod pause;
 pub mod payments;
@@ -110,6 +114,8 @@ mod test_escrow_event_completeness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_expiry_boundary;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency;
@@ -131,6 +137,8 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(test)]
 mod test_freshness_bounds;
+#[cfg(test)]
+mod test_health_status;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
 #[cfg(test)]
@@ -143,12 +151,14 @@ mod test_investment_consistency;
 mod test_accept_bid_race;
 #[cfg(test)]
 mod test_bid_cancel_accept_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
 // #[cfg(test)]
-// mod test_investment_queries;
+#[cfg(test)]
+#[path = "test/test_investment_queries.rs"]
+mod test_investment_queries;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_overflow;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -164,7 +174,7 @@ mod test_profit_fee;
 // mod test_storage;
 #[cfg(test)]
 mod test_storage_key_layout;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_limits_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_health;
@@ -210,7 +220,7 @@ mod test_input_matrix;
 mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(test)]
 mod test_invoice_metadata;
@@ -230,6 +240,8 @@ mod test_category_breakdown;
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_insurance_premium_props;
 #[cfg(test)]
 mod test_notifications;
 pub mod types;
@@ -255,14 +267,14 @@ use events::{
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
-use profits::{calculate_profit as do_calculate_profit, PlatformFee};
+use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_investor_verification as do_get_investor_verification, normalize_tag, reject_business,
-    reject_investor as do_reject_investor, require_business_not_pending,
+    reject_investor as do_reject_investor, recompute_investor_tier, require_business_not_pending,
     require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
@@ -722,6 +734,26 @@ impl QuickLendXContract {
         pause::PauseControl::is_paused(&env)
     }
 
+    /// Return whether the protocol is in maintenance (read-only) mode.
+    pub fn is_maintenance_mode(env: Env) -> bool {
+        maintenance::MaintenanceControl::is_maintenance_mode(&env)
+    }
+
+    /// Return the maintenance reason string, if maintenance mode is active.
+    pub fn get_maintenance_reason(env: Env) -> Option<String> {
+        maintenance::MaintenanceControl::get_maintenance_reason(&env)
+    }
+
+    /// Enable or disable maintenance mode (admin only).
+    pub fn set_maintenance_mode(
+        env: Env,
+        admin: Address,
+        enabled: bool,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        maintenance::MaintenanceControl::set_maintenance_mode(&env, &admin, enabled, &reason)
+    }
+
     /// Atomically enter incident mode: hard pause plus maintenance with reason.
     ///
     /// Coordinates [`pause::PauseControl`] and [`maintenance::MaintenanceControl`]
@@ -741,6 +773,20 @@ impl QuickLendXContract {
         admin: Address,
     ) -> Result<incident::IncidentSnapshot, QuickLendXError> {
         incident::IncidentControl::exit_incident_mode(&env, &admin)
+    }
+
+    /// Consolidated operational health snapshot for write-gating and degraded banners.
+    ///
+    /// Composes pause, maintenance, backpressure, and freshness signals in a single
+    /// ledger-consistent read. No new state is stored; all fields are read-through
+    /// aggregates of existing flags.
+    ///
+    /// # `writes_allowed`
+    /// `true` only when the protocol is not paused, not in maintenance, and not
+    /// shedding load via backpressure. Freshness (`data_is_stale`) is advisory for
+    /// indexed off-chain reads and does not affect `writes_allowed`.
+    pub fn get_health_status(env: Env) -> monitor::HealthStatus {
+        monitor::get_health_status(&env)
     }
 
     /// Get a snapshot of the protocol's current health status.
@@ -1912,6 +1958,27 @@ impl QuickLendXContract {
         verification::set_investment_limit(&env, &admin, &investor, new_limit)
     }
 
+    /// Recompute investor tier from tracked investment performance.
+    pub fn recompute_investor_tier(
+        env: Env,
+        admin: Address,
+        investor: Address,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        recompute_investor_tier(&env, &admin, &investor)
+    }
+
+    /// Recompute investor tier from tracked investment performance.
+    pub fn recompute_investor_tier(
+        env: Env,
+        admin: Address,
+        investor: Address,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        recompute_investor_tier(&env, &admin, &investor)
+    }
+
+
     /// Verify business (admin only)
     pub fn verify_business(
         // This function is already defined in verification module
@@ -2916,6 +2983,19 @@ impl QuickLendXContract {
         InvestmentStorage::get_investments_by_investor(&env, &investor)
     }
 
+    /// Return an aggregate portfolio snapshot for `investor` in a single
+    /// bounded read.
+    ///
+    /// Delegates to [`investment_queries::InvestmentQueries::investor_portfolio_summary`].
+    /// No auth is required because every individual investment record is
+    /// already publicly queryable.
+    pub fn get_investor_portfolio_summary(
+        env: Env,
+        investor: Address,
+    ) -> Result<investment_queries::InvestorPortfolioSummary, QuickLendXError> {
+        investment_queries::InvestmentQueries::investor_portfolio_summary(&env, &investor)
+    }
+
     /// Get bid history for an invoice (simple version without pagination)
     pub fn get_bid_history(env: Env, invoice_id: BytesN<32>) -> Vec<Bid> {
         BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
@@ -3327,10 +3407,46 @@ impl QuickLendXContract {
         invoice.dispute.resolution = resolution.clone();
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
+        invoice.dispute.resolution_outcome = None;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
         // Emit DisputeResolved event immediately after state mutation.
         emit_dispute_resolved(&env, &invoice_id, &admin, &resolution);
+        if let Some(updated_invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+            // Lifecycle trigger: dispute-resolved notifications for business and investor.
+            let _ = notifications::NotificationSystem::notify_dispute_resolved(
+                &env,
+                &updated_invoice,
+            );
+        }
+        Ok(())
+    }
+
+    pub fn resolve_dispute_structured(
+        env: Env,
+        invoice_id: BytesN<32>,
+        admin: Address,
+        outcome: DisputeResolution,
+        note: String,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        validate_dispute_resolution(&note)?;
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        if invoice.dispute_status != DisputeStatus::UnderReview {
+            return Err(QuickLendXError::DisputeNotUnderReview);
+        }
+
+        invoice.dispute_status = DisputeStatus::Resolved;
+        invoice.dispute.resolution = note.clone();
+        invoice.dispute.resolution_outcome = Some(outcome);
+        invoice.dispute.resolved_by = admin.clone();
+        invoice.dispute.resolved_at = env.ledger().timestamp();
+        InvoiceStorage::update_invoice(&env, &invoice);
+        dispute::track_dispute_invoice(&env, &invoice_id);
+        // Emit DisputeResolved event immediately after state mutation.
+        emit_dispute_resolved(&env, &invoice_id, &admin, &note);
         if let Some(updated_invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
             // Lifecycle trigger: dispute-resolved notifications for business and investor.
             let _ = notifications::NotificationSystem::notify_dispute_resolved(

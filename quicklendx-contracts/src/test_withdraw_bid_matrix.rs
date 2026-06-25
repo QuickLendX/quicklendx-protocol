@@ -48,8 +48,8 @@ use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
-    testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke},
-    Address, BytesN, Env, IntoVal, String, Vec,
+    testutils::{Address as _, Ledger},
+    Address, BytesN, Env, String, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -63,7 +63,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &id);
     let admin = Address::generate(&env);
-    client.set_admin(&admin);
+    client.initialize_admin(&admin);
     let business = Address::generate(&env);
     client.submit_kyc_application(&business, &String::from_str(&env, "kyc"));
     client.verify_business(&admin, &business);
@@ -80,7 +80,7 @@ fn place_bid(
     let currency = Address::generate(env);
     client.add_currency(admin, &currency);
     let due = env.ledger().timestamp() + 86_400;
-    let invoice_id = client.store_invoice(
+    let invoice_id = client.try_store_invoice(
         business,
         &1_000i128,
         &currency,
@@ -88,12 +88,12 @@ fn place_bid(
         &String::from_str(env, "inv").into_bytes(),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    ).unwrap();
-    client.verify_invoice(&invoice_id);
+    ).unwrap().unwrap();
+    client.try_verify_invoice(&invoice_id).unwrap().unwrap();
     let investor = Address::generate(env);
-    client.submit_investor_kyc(&investor, &String::from_str(env, "kyc").into_bytes()).unwrap();
-    client.verify_investor(admin, &investor, &10_000i128).unwrap();
-    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    client.try_submit_investor_kyc(&investor, &String::from_str(env, "kyc").into_bytes()).unwrap().unwrap();
+    client.try_verify_investor(&investor, &10_000i128).unwrap().unwrap();
+    let bid_id = client.try_place_bid(&investor, &invoice_id, &900i128, &950i128).unwrap().unwrap();
     (bid_id, investor, invoice_id)
 }
 
@@ -107,10 +107,11 @@ fn test_investor_can_withdraw_own_placed_bid() {
     let (bid_id, investor, _) = place_bid(&env, &client, &admin, &business);
 
     // mock_all_auths is active - investor auth is satisfied
-    let result = client.withdraw_bid(&bid_id);
+    let result = client.try_withdraw_bid(&bid_id);
     assert!(result.is_ok(), "investor should be able to withdraw their own Placed bid");
+    result.unwrap(); // Unwrap to ensure no error
 
-    let bid = client.get_bid(&bid_id).unwrap();
+    let bid = client.try_get_bid(&bid_id).unwrap().unwrap();
     assert_eq!(
         bid.status, BidStatus::Withdrawn,
         "bid status must be Withdrawn after withdraw_bid"
@@ -122,8 +123,9 @@ fn test_investor_can_withdraw_own_placed_bid() {
 fn test_withdraw_bid_returns_ok_on_success() {
     let (env, client, admin, business) = setup();
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
-    let result = client.withdraw_bid(&bid_id);
+    let result = client.try_withdraw_bid(&bid_id);
     assert!(result.is_ok(), "withdraw_bid should return Ok for Placed bid");
+    result.unwrap(); // Unwrap to ensure no error
 }
 
 // ===========================================================================
@@ -136,13 +138,15 @@ fn test_withdraw_already_withdrawn_bid_fails() {
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
 
     // First withdraw
-    client.withdraw_bid(&bid_id).unwrap();
+    client.try_withdraw_bid(&bid_id).unwrap().unwrap();
 
     // Second withdraw attempt
-    let result = client.withdraw_bid(&bid_id);
-    assert!(result.is_err(), "withdrawing an already-Withdrawn bid must fail");
+    let result = client.try_withdraw_bid(&bid_id);
+    assert!(result.is_ok(), "should get a result");
+    let err_result = result.unwrap();
+    assert!(err_result.is_err(), "withdrawing an already-Withdrawn bid must fail");
     assert_eq!(
-        result.unwrap_err(),
+        err_result.unwrap_err(),
         QuickLendXError::OperationNotAllowed,
         "error must be OperationNotAllowed"
     );
@@ -156,9 +160,11 @@ fn test_withdraw_cancelled_bid_fails() {
     // Cancel the bid first
     client.cancel_bid(&bid_id);
 
-    // Try to withdraw
-    let result = client.withdraw_bid(&bid_id);
-    assert!(result.is_err(), "withdrawing a Cancelled bid must fail");
+    // Try to withdraw the cancelled bid
+    let result = client.try_withdraw_bid(&bid_id);
+    assert!(result.is_ok(), "should get a result");
+    let err_result = result.unwrap();
+    assert!(err_result.is_err(), "withdrawing a Cancelled bid must fail");
     assert_eq!(
         result.unwrap_err(),
         QuickLendXError::OperationNotAllowed,
@@ -179,8 +185,10 @@ fn test_withdraw_accepted_bid_fails() {
     client.accept_bid(&invoice_id, &bid_id).unwrap();
 
     // Try to withdraw
-    let result = client.withdraw_bid(&bid_id);
-    assert!(result.is_err(), "withdrawing an Accepted bid must fail");
+    let result = client.try_withdraw_bid(&bid_id);
+    assert!(result.is_ok(), "should get a result");
+    let err_result = result.unwrap();
+    assert!(err_result.is_err(), "withdrawing an Accepted bid must fail");
     assert_eq!(
         result.unwrap_err(),
         QuickLendXError::OperationNotAllowed,
@@ -201,8 +209,10 @@ fn test_withdraw_expired_bid_fails() {
     env.ledger().set_timestamp(env.ledger().timestamp() + 604_801);
 
     // Try to withdraw the expired bid
-    let result = client.withdraw_bid(&bid_id);
-    assert!(result.is_err(), "withdrawing an Expired bid must fail");
+    let result = client.try_withdraw_bid(&bid_id);
+    assert!(result.is_ok(), "should get a result");
+    let err_result = result.unwrap();
+    assert!(err_result.is_err(), "withdrawing an Expired bid must fail");
     assert_eq!(
         result.unwrap_err(),
         QuickLendXError::OperationNotAllowed,
@@ -218,8 +228,10 @@ fn test_withdraw_expired_bid_fails() {
 fn test_withdraw_nonexistent_bid_fails() {
     let (env, client, _, _) = setup();
     let fake_id = BytesN::from_array(&env, &[0u8; 32]);
-    let result = client.withdraw_bid(&fake_id);
-    assert!(result.is_err(), "withdrawing a non-existent bid must fail");
+    let result = client.try_withdraw_bid(&fake_id);
+    assert!(result.is_ok(), "should get a result");
+    let err_result = result.unwrap();
+    assert!(err_result.is_err(), "withdrawing a non-existent bid must fail");
     assert_eq!(
         result.unwrap_err(),
         QuickLendXError::StorageKeyNotFound,
@@ -398,7 +410,7 @@ fn test_withdrawn_bid_excluded_from_get_best_bid() {
     // Place a second bid with lower profit
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
-    client.verify_investor(&admin, &investor_b, &10_000i128);
+    client.try_verify_investor(&investor_b, &10_000i128).unwrap().unwrap();
     let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &900i128);
 
     // Bid A has higher profit (950 - 900 = 50) than B (900 - 800 = 100)
@@ -439,12 +451,12 @@ fn test_withdrawn_bid_excluded_from_rank_bids() {
     // Place two more bids
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
-    client.verify_investor(&admin, &investor_b, &10_000i128);
+    client.try_verify_investor(&investor_b, &10_000i128).unwrap().unwrap();
     let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &900i128);
 
     let investor_c = Address::generate(&env);
     client.submit_investor_kyc(&investor_c, &String::from_str(&env, "kyc"));
-    client.verify_investor(&admin, &investor_c, &10_000i128);
+    client.try_verify_investor(&investor_c, &10_000i128).unwrap().unwrap();
     let bid_id_c = client.place_bid(&investor_c, &invoice_id, &700i128, &850i128);
 
     // Get ranked bids before withdrawal
@@ -499,8 +511,8 @@ fn test_all_withdrawn_bids_results_empty_ranking() {
     let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &900i128);
 
     // Withdraw all bids
-    client.withdraw_bid(&bid_id_a).unwrap();
-    client.withdraw_bid(&bid_id_b).unwrap();
+    client.try_withdraw_bid(&bid_id_a).unwrap().unwrap();
+    client.try_withdraw_bid(&bid_id_b).unwrap().unwrap();
 
     // Ranking should be empty
     let ranked = client.get_ranked_bids(&invoice_id);
@@ -580,11 +592,11 @@ fn test_withdraw_does_not_affect_other_bids_on_same_invoice() {
     // Place a second bid from a different investor
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
-    client.verify_investor(&admin, &investor_b, &10_000i128);
+    client.try_verify_investor(&investor_b, &10_000i128).unwrap().unwrap();
     let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &850i128);
 
     // Withdraw only bid A
-    client.withdraw_bid(&bid_id_a).unwrap();
+    client.try_withdraw_bid(&bid_id_a).unwrap().unwrap();
 
     // Bid B must still be Placed
     let bid_b = client.get_bid(&bid_id_b).unwrap();
@@ -614,8 +626,10 @@ fn test_withdraw_expired_but_not_cleaned_bid() {
     );
 
     // Try to withdraw - should fail because it's not Placed
-    let result = client.withdraw_bid(&bid_id);
-    assert!(result.is_err(), "cannot withdraw an Expired bid");
+    let result = client.try_withdraw_bid(&bid_id);
+    assert!(result.is_ok(), "should get a result");
+    let err_result = result.unwrap();
+    assert!(err_result.is_err(), "cannot withdraw an Expired bid");
     assert_eq!(result.unwrap_err(), QuickLendXError::OperationNotAllowed);
 }
 
@@ -625,7 +639,7 @@ fn test_withdraw_then_place_new_bid_from_same_investor() {
     let (bid_id_1, investor, invoice_id) = place_bid(&env, &client, &admin, &business);
 
     // Withdraw the first bid
-    client.withdraw_bid(&bid_id_1).unwrap();
+    client.try_withdraw_bid(&bid_id_1).unwrap().unwrap();
     let bid_1 = client.get_bid(&bid_id_1).unwrap();
     assert_eq!(bid_1.status, BidStatus::Withdrawn);
 

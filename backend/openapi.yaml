@@ -956,6 +956,28 @@ paths:
                     example: "1 hour"
         "401":
           description: Authentication required
+        "429":
+          description: Too many concurrent export jobs. Please try again later.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [error]
+                properties:
+                  error:
+                    type: object
+                    required: [message, code]
+                    properties:
+                      message:
+                        type: string
+                        description: Human-readable error message.
+                      code:
+                        type: string
+                        enum: [EXPORT_CONCURRENCY_EXCEEDED]
+              example:
+                error:
+                  message: "Too many concurrent export jobs. Please try again later."
+                  code: "EXPORT_CONCURRENCY_EXCEEDED"
 
   /exports/download/{token}:
     get:

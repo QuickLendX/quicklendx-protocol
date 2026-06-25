@@ -33,8 +33,8 @@
 //!   append-only invoice audit trail.
 
 use crate::errors::QuickLendXError;
-use crate::invoice::{Dispute, DisputeStatus};
 use crate::storage::InvoiceStorage;
+use crate::types::{Dispute, DisputeResolution, DisputeStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 // ---------------------------------------------------------------------------
@@ -78,6 +78,9 @@ pub struct DisputeTimelineEntry {
     /// For "Resolved": resolution text (only when status == Resolved,
     ///   otherwise redacted as empty string).
     pub summary: String,
+    /// Structured resolution outcome (only present for "Resolved" events
+    /// that were resolved using resolve_dispute_structured).
+    pub resolution_outcome: Option<DisputeResolution>,
 }
 
 /// Paginated dispute timeline response.
@@ -146,6 +149,7 @@ fn build_all_entries(
         actor: dispute.created_by.clone(),
         // Reason is safe to surface; evidence is not included here.
         summary: dispute.reason.clone(),
+        resolution_outcome: None,
     });
 
     // --- Event 1: UnderReview ----------------------------------------------
@@ -169,6 +173,7 @@ fn build_all_entries(
             // Admin identity is redacted to avoid leaking privileged info.
             actor: redacted_address(env),
             summary: String::from_str(env, ""),
+            resolution_outcome: None,
         });
     }
 
@@ -183,6 +188,7 @@ fn build_all_entries(
             // so callers can verify finality without exposing review identity.
             actor: dispute.resolved_by.clone(),
             summary: dispute.resolution.clone(),
+            resolution_outcome: dispute.resolution_outcome,
         });
     }
 
@@ -250,8 +256,7 @@ pub fn get_dispute_timeline(
     offset: u32,
     limit: u32,
 ) -> Result<DisputeTimeline, QuickLendXError> {
-    let invoice =
-        InvoiceStorage::get(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    let invoice = InvoiceStorage::get(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     if invoice.dispute_status == DisputeStatus::None {
         return Err(QuickLendXError::DisputeNotFound);

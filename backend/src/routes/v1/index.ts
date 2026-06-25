@@ -22,7 +22,6 @@ import {
 } from "../../services/eventValidator";
 import { FileRawEventStore } from "../../services/rawEventStore";
 import { getRateLimitPolicies } from "../../middleware/rate-limit";
-
 const router = Router();
 const eventIdStore = new FileRawEventStore(new DefaultEventValidator());
 

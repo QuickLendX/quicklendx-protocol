@@ -26,6 +26,12 @@ policies for high-cost operations. The live thresholds come from
 | `reconciliation` | 10 requests | 60s | 120s | API key, falling back to client IP | Reconciliation and monitoring routes |
 | `export` | 5 requests | 60s | 120s | API key, falling back to client IP | Export generation and download routes |
 
+## Export Concurrency Limit
+
+In addition to rate limits, the backend enforces a concurrency limit on export jobs to prevent disk I/O exhaustion. By default, each API key (or user, if no API key is used) is limited to 2 concurrent export jobs. This limit is configurable via the `EXPORT_MAX_CONCURRENT_PER_KEY` environment variable.
+
+When the concurrency limit is exceeded, the API returns a `429 Too Many Requests` response with error code `EXPORT_CONCURRENCY_EXCEEDED`.
+
 In `NODE_ENV=test`, the exported policy snapshot intentionally uses larger limits
 so conformance tests can exercise endpoints without tripping the limiter:
 `global` and `perKey` use 1000 requests, while `strict`, `reconciliation`, and
