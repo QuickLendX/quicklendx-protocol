@@ -5,6 +5,7 @@ import { config } from "../../config";
 import { getUser } from "../../middleware/userAuth";
 import fs from "fs";
 import { assertExportToken } from "../../lib/entityId";
+import { exportConcurrencyService } from "../../services/exportConcurrency";
 
 export const requestExport = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -20,7 +21,26 @@ export const requestExport = async (req: Request, res: Response, next: NextFunct
       });
     }
 
-    const token = await exportService.generateExportFile(userId, format);
+    // Determine the key for concurrency limiting: use API key ID if available, otherwise user ID
+    const key = req.apiKey ? req.apiKey.id : userId;
+
+    // Try to acquire a concurrency slot
+    if (!exportConcurrencyService.tryAcquire(key)) {
+      return res.status(429).json({
+        error: {
+          message: "Too many concurrent export jobs. Please try again later.",
+          code: "EXPORT_CONCURRENCY_EXCEEDED",
+        },
+      });
+    }
+
+    let token: string;
+    try {
+      token = await exportService.generateExportFile(userId, format);
+    } finally {
+      // Release the slot once the export file generation is complete (whether success or failure)
+      exportConcurrencyService.release(key);
+    }
 
     auditLogService.recordAuthorization({
       action: "data_export_requested",
