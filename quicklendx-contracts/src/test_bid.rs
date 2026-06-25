@@ -451,9 +451,24 @@ fn test_investor_can_cancel_multiple_own_bids() {
 // 7. TTL/EXPIRY BOUNDARIES — exact-timestamp and off-by-one protections
 // ===========================================================================
 
-/// At exact expiration timestamp, bid remains valid (strict `>` expiry rule).
+/// One second before expiration timestamp, bid should still be accepted.
 #[test]
-fn test_accept_bid_at_exact_expiration_timestamp_succeeds() {
+fn test_accept_bid_one_second_before_expiration_succeeds() {
+    let (env, client, admin, business) = setup();
+    client.set_bid_ttl_days(&1u64);
+
+    let (bid_id, _, invoice_id) = place_bid(&env, &client, &admin, &business);
+    let bid = client.get_bid(&bid_id).unwrap();
+    env.ledger()
+        .set_timestamp(bid.expiration_timestamp.saturating_sub(1));
+
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_ok(), "bid should remain valid one second before expiry");
+}
+
+/// At expiration timestamp, bid must not be accepted.
+#[test]
+fn test_accept_bid_at_expiration_timestamp_fails() {
     let (env, client, admin, business) = setup();
     client.set_bid_ttl_days(&1u64);
 
@@ -462,22 +477,7 @@ fn test_accept_bid_at_exact_expiration_timestamp_succeeds() {
     env.ledger().set_timestamp(bid.expiration_timestamp);
 
     let result = client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(result.is_ok(), "bid should remain valid at exact expiry timestamp");
-}
-
-/// One second after expiration timestamp, bid must not be accepted.
-#[test]
-fn test_accept_bid_after_expiration_timestamp_fails() {
-    let (env, client, admin, business) = setup();
-    client.set_bid_ttl_days(&1u64);
-
-    let (bid_id, _, invoice_id) = place_bid(&env, &client, &admin, &business);
-    let bid = client.get_bid(&bid_id).unwrap();
-    env.ledger()
-        .set_timestamp(bid.expiration_timestamp.saturating_add(1));
-
-    let result = client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(result.is_err(), "expired bid must not be accepted");
+    assert!(result.is_err(), "expired bid must not be accepted at expiry timestamp");
     assert_eq!(
         result.unwrap_err().expect("expected contract error"),
         QuickLendXError::InvalidStatus
