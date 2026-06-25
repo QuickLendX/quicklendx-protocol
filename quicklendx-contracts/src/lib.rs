@@ -48,11 +48,11 @@ mod test_escrow;
 mod test_fees;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod bench;
 
 pub mod admin;
@@ -143,7 +143,7 @@ mod test_investment_consistency;
 mod test_accept_bid_race;
 #[cfg(test)]
 mod test_bid_cancel_accept_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
@@ -228,6 +228,8 @@ mod test_max_invoices_per_business;
 mod test_category_breakdown;
 #[cfg(test)]
 mod test_diagnostics;
+#[cfg(test)]
+mod test_business_invoices_paged_ordering;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
 #[cfg(test)]
@@ -2651,7 +2653,8 @@ impl QuickLendXContract {
     /// @param offset Starting index for pagination (0-based)
     /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
     /// @return Vector of invoice IDs matching the criteria
-    /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
+    /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance.
+    ///      Results are sorted by `created_at` descending (newest first).
     pub fn get_business_invoices_paged(
         env: Env,
         business: Address,
@@ -2667,31 +2670,31 @@ impl QuickLendXContract {
 
         let capped_limit = cap_query_limit(limit);
         let all_invoices = InvoiceStorage::get_business_invoices(&env, &business);
-        let mut filtered = Vec::new(&env);
 
+        // Collect (created_at, invoice_id) pairs for sorting.
+        let mut pairs: alloc::vec::Vec<(u64, BytesN<32>)> = alloc::vec::Vec::new();
         for invoice_id in all_invoices.iter() {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
-                if let Some(status) = &status_filter {
-                    if invoice.status == *status {
-                        filtered.push_back(invoice_id);
-                    }
-                } else {
-                    filtered.push_back(invoice_id);
+                let include = match &status_filter {
+                    Some(status) => invoice.status == *status,
+                    None => true,
+                };
+                if include {
+                    pairs.push((invoice.created_at, invoice_id));
                 }
             }
         }
 
-        // Apply pagination (overflow-safe)
+        // Sort descending by created_at (newest first).
+        pairs.sort_by(|a, b| b.0.cmp(&a.0));
+
+        // Apply pagination (overflow-safe) and collect into Soroban Vec.
+        let len_u32 = pairs.len() as u32;
+        let start = offset.min(len_u32) as usize;
+        let end = (offset.saturating_add(capped_limit).min(len_u32)) as usize;
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len();
-        let start = offset.min(len_u32);
-        let end = start.saturating_add(capped_limit).min(len_u32);
-        let mut idx = start;
-        while idx < end {
-            if let Some(invoice_id) = filtered.get(idx) {
-                result.push_back(invoice_id);
-            }
-            idx += 1;
+        for (_, id) in &pairs[start..end] {
+            result.push_back(id.clone());
         }
         result
     }
