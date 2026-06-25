@@ -37,6 +37,7 @@ npm run dev
 ## Documentation
 
 - `docs/`: Project-wide design, implementation, and audit documentation.
+- `docs/CONTRACT_VERSION_COMPATIBILITY.md`: Which contract versions can interoperate, and what stays compatible across an upgrade.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
