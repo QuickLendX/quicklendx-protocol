@@ -1968,16 +1968,6 @@ impl QuickLendXContract {
         recompute_investor_tier(&env, &admin, &investor)
     }
 
-    /// Recompute investor tier from tracked investment performance.
-    pub fn recompute_investor_tier(
-        env: Env,
-        admin: Address,
-        investor: Address,
-    ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        recompute_investor_tier(&env, &admin, &investor)
-    }
-
 
     /// Verify business (admin only)
     pub fn verify_business(
@@ -3293,6 +3283,7 @@ impl QuickLendXContract {
                 "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
             ),
             resolved_at: 0,
+            resolution_outcome: None,
         };
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
