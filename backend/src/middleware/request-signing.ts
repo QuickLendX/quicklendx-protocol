@@ -103,7 +103,9 @@ export function requireSignature(req: Request, res: Response, next: NextFunction
     if (!isValid && apiKey.prev_signing_secret_hash && apiKey.prev_secret_expires_at) {
       const prevExpiresAt = new Date(apiKey.prev_secret_expires_at).getTime();
       if (now < prevExpiresAt) {
-        const expectedPrevSignature = crypto.createHmac('sha256', apiKey.prev_signing_secret_hash).update(payload).digest('hex');
+        const parts = apiKey.prev_signing_secret_hash.split(':');
+        const prevSigningSecret = parts.length > 1 ? parts[1] : parts[0];
+        const expectedPrevSignature = crypto.createHmac('sha256', prevSigningSecret).update(payload).digest('hex');
         const expectedPrevBuf = Buffer.from(expectedPrevSignature);
         isValid = sigBuf.length === expectedPrevBuf.length && crypto.timingSafeEqual(sigBuf, expectedPrevBuf);
       }

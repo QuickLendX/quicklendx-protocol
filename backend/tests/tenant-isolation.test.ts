@@ -22,9 +22,14 @@
  * - Error message sanitization
  */
 
+import path from "path";
+import crypto from "crypto";
+import fs from "fs";
+import { closeDatabase } from "../src/lib/database";
 import request from "supertest";
 import app from "../src/app";
 import { invoiceStore } from "../src/services/invoiceStore";
+import { bidStore } from "../src/services/bidStore";
 import { MOCK_BIDS } from "../src/controllers/v1/bids";
 import { MOCK_INVOICES } from "../src/controllers/v1/invoices";
 import {
@@ -93,7 +98,18 @@ jest.mock("../src/middleware/api-key-auth", () => {
   };
 });
 
+const TEST_DB_DIR = path.resolve(__dirname, "../.data");
+const TEST_DB_PATH = path.join(TEST_DB_DIR, `test-tenant-iso-${crypto.randomUUID()}.db`);
+
 beforeAll(() => {
+  process.env.DATABASE_PATH = TEST_DB_PATH;
+  closeDatabase();
+
+  // Force bidStore to fall back to mock bids
+  jest.spyOn(bidStore, "getBidsPaginated").mockImplementation(() => {
+    throw new Error("no such table: bids");
+  });
+
   // Populate test data into MOCK arrays used by controllers in test mode
   MOCK_INVOICES.length = 0;
   MOCK_INVOICES.push(...ALL_TENANT_INVOICES);
@@ -106,6 +122,13 @@ afterAll(() => {
   // Clean up test data
   MOCK_INVOICES.length = 0;
   MOCK_BIDS.length = 0;
+
+  closeDatabase();
+  try {
+    if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
+    try { fs.unlinkSync(TEST_DB_PATH + "-wal"); } catch {}
+    try { fs.unlinkSync(TEST_DB_PATH + "-shm"); } catch {}
+  } catch {}
 });
 
 // ─── Invoice List Endpoint Isolation Tests ──────────────────────────────────
@@ -199,7 +222,7 @@ describe("GET /v1/invoices - List Endpoint Tenant Isolation", () => {
 describe("GET /v1/invoices/:id - Detail Endpoint Tenant Isolation", () => {
   test("Business A can retrieve their own invoice by ID", async () => {
     const response = await request(app)
-      .get(`/v1/invoices/${INVOICE_BUSINESS_A_1.id}`)
+      .get(`/api/v1/invoices/${INVOICE_BUSINESS_A_1.id}`)
       .set("Authorization", "Bearer business_a_token");
 
     expect(response.status).toBe(200);
@@ -209,7 +232,7 @@ describe("GET /v1/invoices/:id - Detail Endpoint Tenant Isolation", () => {
 
   test("Business B can retrieve their own invoice by ID", async () => {
     const response = await request(app)
-      .get(`/v1/invoices/${INVOICE_BUSINESS_B_1.id}`)
+      .get(`/api/v1/invoices/${INVOICE_BUSINESS_B_1.id}`)
       .set("Authorization", "Bearer business_b_token");
 
     expect(response.status).toBe(200);
@@ -223,7 +246,7 @@ describe("GET /v1/invoices/:id - Detail Endpoint Tenant Isolation", () => {
     // IDs exist in the system. A 403 would confirm the resource exists but is
     // forbidden, leaking information.
     const response = await request(app)
-      .get(`/v1/invoices/${INVOICE_BUSINESS_B_1.id}`)
+      .get(`/api/v1/invoices/${INVOICE_BUSINESS_B_1.id}`)
       .set("Authorization", "Bearer business_a_token");
 
     expect(response.status).toBe(404);
@@ -240,7 +263,7 @@ describe("GET /v1/invoices/:id - Detail Endpoint Tenant Isolation", () => {
 
   test("Business B accessing Business A's invoice returns 404", async () => {
     const response = await request(app)
-      .get(`/v1/invoices/${INVOICE_BUSINESS_A_1.id}`)
+      .get(`/api/v1/invoices/${INVOICE_BUSINESS_A_1.id}`)
       .set("Authorization", "Bearer business_b_token");
 
     expect(response.status).toBe(404);
@@ -252,7 +275,7 @@ describe("GET /v1/invoices/:id - Detail Endpoint Tenant Isolation", () => {
     // Investors should not have direct access to invoice detail endpoints
     // as they interact with invoices through the bidding workflow only.
     const response = await request(app)
-      .get(`/v1/invoices/${INVOICE_BUSINESS_A_1.id}`)
+      .get(`/api/v1/invoices/${INVOICE_BUSINESS_A_1.id}`)
       .set("Authorization", "Bearer investor_a_token");
 
     expect(response.status).toBe(404);
@@ -262,7 +285,7 @@ describe("GET /v1/invoices/:id - Detail Endpoint Tenant Isolation", () => {
   test("Accessing non-existent invoice returns 404 with sanitized error", async () => {
     const fakeInvoiceId = "0xdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
     const response = await request(app)
-      .get(`/v1/invoices/${fakeInvoiceId}`)
+      .get(`/api/v1/invoices/${fakeInvoiceId}`)
       .set("Authorization", "Bearer business_a_token");
 
     expect(response.status).toBe(404);
@@ -532,7 +555,7 @@ describe("Error Message Sanitization - No Metadata Leakage", () => {
   test("404 errors never expose database IDs or foreign key constraints", async () => {
     const fakeId = "0x9999999999999999999999999999999999999999999999999999999999999999";
     const response = await request(app)
-      .get(`/v1/invoices/${fakeId}`)
+      .get(`/api/v1/invoices/${fakeId}`)
       .set("Authorization", "Bearer business_a_token");
 
     expect(response.status).toBe(404);

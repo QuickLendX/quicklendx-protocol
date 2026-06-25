@@ -49,7 +49,7 @@ export const OVERFLOW_KEY = "__overflow__";
 // ── Regex patterns for route normalisation ───────────────────────────────────
 
 /** Matches ULID (26 uppercase base32 chars). */
-const ULID_RE = /\b[0-9A-Z]{26}\b/g;
+const ULID_RE = /\b[0-9A-Z]{26}\b/gi;
 
 /** Matches UUID v1–v5. */
 const UUID_RE = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi;
@@ -202,8 +202,13 @@ export class LatencyTracker {
     let bucket = this.buckets.get(key);
 
     if (!bucket) {
-      // Enforce the route cap — new unseen keys go to the overflow bucket
-      if (this.buckets.size >= MAX_ROUTES) {
+      // Enforce the route cap — new unseen keys go to the overflow bucket.
+      // Bypass the cap check if we are already recording to the overflow key
+      // itself to avoid infinite recursion when adding the overflow bucket.
+      const hasOverflowKey = this.buckets.has(OVERFLOW_KEY);
+      const cap = hasOverflowKey ? MAX_ROUTES : MAX_ROUTES - 1;
+
+      if (key !== OVERFLOW_KEY && this.buckets.size >= cap) {
         this.recordNormalised(OVERFLOW_KEY, durationMs, nowMs);
         return;
       }

@@ -106,7 +106,7 @@ describe("requestContext", () => {
   describe("withCorrelationId", () => {
     it("should set correlation ID in context for synchronous function", () => {
       const testId = "test-correlation-id";
-      let capturedId: string | undefined;
+      let capturedId: string | null | undefined;
 
       withCorrelationId(testId, () => {
         capturedId = getCorrelationId();
@@ -117,7 +117,7 @@ describe("requestContext", () => {
 
     it("should set correlation ID in context for async function", async () => {
       const testId = "async-correlation-id";
-      let capturedId: string | undefined;
+      let capturedId: string | null | undefined;
 
       await withCorrelationId(testId, async () => {
         await Promise.resolve();
@@ -178,8 +178,8 @@ describe("requestContext", () => {
     it("should handle nested contexts", () => {
       const outerId = "outer";
       const innerId = "inner";
-      let capturedInner: string | undefined;
-      let capturedOuter: string | undefined;
+      let capturedInner: string | null | undefined;
+      let capturedOuter: string | null | undefined;
 
       withCorrelationId(outerId, () => {
         capturedOuter = getCorrelationId();

@@ -193,7 +193,7 @@ describe("request id propagation", () => {
     let entry: AuditEntry | undefined;
 
     const res = await runRequest({}, () => {
-      observed = getCorrelationId();
+      observed = getCorrelationId() ?? null;
       entry = appendAudit("generated");
     });
 
@@ -207,7 +207,7 @@ describe("request id propagation", () => {
     let observed: string | null = null;
 
     const res = await runRequest({ "x-request-id": malicious }, () => {
-      observed = getCorrelationId();
+      observed = getCorrelationId() ?? null;
     });
 
     expect(observed).toMatch(ULID_RE);
@@ -220,11 +220,11 @@ describe("request id propagation", () => {
 
     await runRequest({ "x-request-id": inbound }, async () => {
       await Promise.resolve();
-      seen.push(getCorrelationId());
+      seen.push(getCorrelationId() ?? null);
 
       await new Promise<void>((resolve) =>
         setTimeout(() => {
-          seen.push(getCorrelationId());
+          seen.push(getCorrelationId() ?? null);
           resolve();
         }, 5)
       );
@@ -275,19 +275,19 @@ describe("request id propagation", () => {
   });
 
   it("does not leak context across event-loop ticks", async () => {
-    expect(getCorrelationId()).toBeNull();
+    expect(getCorrelationId()).toBeUndefined();
 
     await runRequest({ "x-request-id": "leak-check-1" }, () => {
       expect(getCorrelationId()).toBe("leak-check-1");
     });
 
     // immediately after the request completes the context is gone
-    expect(getCorrelationId()).toBeNull();
+    expect(getCorrelationId()).toBeUndefined();
 
     // and a tick scheduled entirely outside any request sees no context
     await new Promise<void>((resolve) =>
       setImmediate(() => {
-        expect(getCorrelationId()).toBeNull();
+        expect(getCorrelationId()).toBeUndefined();
         resolve();
       })
     );

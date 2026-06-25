@@ -109,9 +109,10 @@ describe("RPC Client & Circuit Breaker - Fault Injection Tests", () => {
   });
 
   it("falls back to original fetch when no failure is queued", async () => {
-    // When no failures are queued, FaultyFetch delegates to the original fetch.
-    // The original fetch should try to contact the real STELLAR_RPC_URL and fail (or succeed) in Jest context.
-    // We just assert that it executes the real fetch logic (which throws an HTTP/network/protocol error).
-    await expect(client.call("getLedger")).rejects.toThrow();
+    const originalFetchMock = jest.fn().mockRejectedValue(new Error("Original fetch mock failure"));
+    (faultyFetch as any).originalFetch = originalFetchMock;
+
+    await expect(client.call("getLedger")).rejects.toThrow("Original fetch mock failure");
+    expect(originalFetchMock).toHaveBeenCalled();
   });
 });

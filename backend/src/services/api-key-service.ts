@@ -95,7 +95,9 @@ export class ApiKeyService {
     if (!isValid && dbKey.prev_signing_secret_hash && dbKey.prev_secret_expires_at) {
       const prevExpiresAt = new Date(dbKey.prev_secret_expires_at);
       if (prevExpiresAt > new Date()) {
-        isValid = timingSafeCompare(providedHash, dbKey.prev_signing_secret_hash);
+        const parts = dbKey.prev_signing_secret_hash.split(':');
+        const prevKeyHash = parts[0];
+        isValid = timingSafeCompare(providedHash, prevKeyHash);
       }
     }
 
@@ -234,7 +236,7 @@ export class ApiKeyService {
     db.updateApiKey(keyId, {
       key_hash: newHash,
       signing_secret_hash: newSigningSecretHash,
-      prev_signing_secret_hash: oldKey.signing_secret_hash || oldKey.key_hash,
+      prev_signing_secret_hash: `${oldKey.key_hash}:${oldKey.signing_secret_hash || ''}`,
       prev_secret_expires_at: prevSecretExpiresAt,
     });
 

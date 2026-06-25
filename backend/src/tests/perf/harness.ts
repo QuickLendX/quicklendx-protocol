@@ -12,9 +12,9 @@ export interface Sample {
 
 export class SoakHarness {
   private samples: Sample[] = [];
-  private producer?: NodeJS.Timer;
-  private consumer?: NodeJS.Timer;
-  private sampler?: NodeJS.Timer;
+  private producer?: NodeJS.Timeout;
+  private consumer?: NodeJS.Timeout;
+  private sampler?: NodeJS.Timeout;
 
   constructor(private opts: { produceRatePerSecond?: number; consumeIntervalMs?: number; sampleIntervalMs?: number } = {}) {}
 

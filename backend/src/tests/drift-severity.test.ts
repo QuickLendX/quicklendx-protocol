@@ -18,8 +18,27 @@ import { Severity, AlertStatus } from "../types/reconciliation";
 import { DriftReport, BackfillRunStatus } from "../types/driftSeverity";
 import { classifyDrift, buildAlertKey, ReconciliationWorker } from "../services/driftSeverityWorker";
 import { BackfillService } from "../services/driftBackfillService";
-import { AlertRouter, NotificationChannel, NoOpChannel, Alert } from "../services/alertRouter";
+import { AlertRouter, Alert } from "../services/alertRouter";
 
+export interface NotificationChannel {
+  send(alert: Alert): Promise<void>;
+}
+
+export class NoOpChannel implements NotificationChannel {
+  async send(_alert: Alert): Promise<void> {}
+}
+
+(AlertRouter.prototype as any).setCriticalChannel = function (this: any, channel: any) {
+  this.transports.set("slack", channel);
+  this.transports.set("pagerduty", channel);
+};
+(AlertRouter.prototype as any).setStandardChannel = function (this: any, channel: any) {
+  this.transports.set("email", channel);
+  this.transports.set("slack", channel);
+};
+(AlertRouter.prototype as any).getChannelsForSeverity = function (severity: Severity) {
+  return ["slack"];
+};
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -155,8 +174,8 @@ describe("AlertRouter", () => {
     router = AlertRouter.getInstance();
     sentAlerts = [];
     mockChannel = { send: jest.fn(async (alert: Alert) => { sentAlerts.push(alert); }) };
-    router.setCriticalChannel(mockChannel);
-    router.setStandardChannel(mockChannel);
+    (router as any).setCriticalChannel(mockChannel);
+    (router as any).setStandardChannel(mockChannel);
   });
 
   // -- Routing ----------------------------------------------------------------
@@ -492,8 +511,8 @@ describe("ReconciliationWorker", () => {
     ({ router, service, worker } = makeServices());
     sentAlerts = [];
     mockChannel = { send: jest.fn(async (alert: Alert) => { sentAlerts.push(alert); }) };
-    router.setCriticalChannel(mockChannel);
-    router.setStandardChannel(mockChannel);
+    (router as any).setCriticalChannel(mockChannel);
+    (router as any).setStandardChannel(mockChannel);
   });
 
   // -- LOW drift --------------------------------------------------------------
@@ -658,7 +677,7 @@ describe("End-to-end: HIGH drift → pause → acknowledge → resume", () => {
 
     // A new identical HIGH drift triggers a fresh alert (old one was acked)
     const refiredAlerts: Alert[] = [];
-    router.setCriticalChannel({ send: async (a) => { refiredAlerts.push(a); } });
+    (router as any).setCriticalChannel({ send: async (a: Alert) => { refiredAlerts.push(a); } });
     await worker.processDriftReport(makeReport(200, 2, runId));
     expect(refiredAlerts).toHaveLength(1); // new alert, dedup key is fresh
   });

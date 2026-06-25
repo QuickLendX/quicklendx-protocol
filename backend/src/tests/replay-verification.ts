@@ -19,6 +19,7 @@ async function verifyReplayDeterminism(): Promise<void> {
       id: "verify_event_1",
       ledger: 1000,
       txHash: "0x1234567890abcdef",
+      eventIndex: 0,
       type: "InvoiceCreated",
       payload: {
         invoice_id: "inv_verify_001",
@@ -34,6 +35,7 @@ async function verifyReplayDeterminism(): Promise<void> {
       id: "verify_event_2",
       ledger: 1001,
       txHash: "0x1234567890abcdef",
+      eventIndex: 1,
       type: "InvoiceSettled",
       payload: {
         invoice_id: "inv_verify_001",

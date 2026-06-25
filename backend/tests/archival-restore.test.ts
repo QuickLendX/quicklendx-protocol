@@ -21,6 +21,7 @@ function rawEvent(
     id,
     ledger,
     txHash: `tx-${id}`,
+    eventIndex: 0,
     type: "InvoiceCreated",
     payload: { invoiceId: id },
     timestamp: indexedAtMs,

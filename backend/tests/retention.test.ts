@@ -23,6 +23,7 @@ function rawEvent(
     id,
     ledger,
     txHash: `tx-${id}`,
+    eventIndex: 0,
     type: "InvoiceCreated",
     payload: { invoiceId: id },
     timestamp: indexedAtMs,
@@ -43,6 +44,8 @@ function auditEntry(id: string, timestampMs: number): AuditEntry {
     userAgent: "jest",
     effect: "test",
     success: true,
+    prevHash: "0".repeat(64),
+    entryHash: "0".repeat(64),
   };
 }
 

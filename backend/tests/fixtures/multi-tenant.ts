@@ -23,6 +23,7 @@ export const TENANT_INVESTOR_B = "GINVESTOR_B_STELLAR_ADDRESS_BBBBBBBBBBBBBBBBBB
 export const API_KEY_BUSINESS_A: ApiKey = {
   id: crypto.randomUUID(),
   key_hash: crypto.createHash("sha256").update("business_a_key").digest("hex"),
+  signing_secret_hash: null,
   prev_signing_secret_hash: null,
   prefix: "qlx_test_busA",
   name: "Business A API Key",
@@ -38,6 +39,7 @@ export const API_KEY_BUSINESS_A: ApiKey = {
 export const API_KEY_BUSINESS_B: ApiKey = {
   id: crypto.randomUUID(),
   key_hash: crypto.createHash("sha256").update("business_b_key").digest("hex"),
+  signing_secret_hash: null,
   prev_signing_secret_hash: null,
   prefix: "qlx_test_busB",
   name: "Business B API Key",
@@ -53,6 +55,7 @@ export const API_KEY_BUSINESS_B: ApiKey = {
 export const API_KEY_INVESTOR_A: ApiKey = {
   id: crypto.randomUUID(),
   key_hash: crypto.createHash("sha256").update("investor_a_key").digest("hex"),
+  signing_secret_hash: null,
   prev_signing_secret_hash: null,
   prefix: "qlx_test_invA",
   name: "Investor A API Key",
@@ -68,6 +71,7 @@ export const API_KEY_INVESTOR_A: ApiKey = {
 export const API_KEY_INVESTOR_B: ApiKey = {
   id: crypto.randomUUID(),
   key_hash: crypto.createHash("sha256").update("investor_b_key").digest("hex"),
+  signing_secret_hash: null,
   prev_signing_secret_hash: null,
   prefix: "qlx_test_invB",
   name: "Investor B API Key",

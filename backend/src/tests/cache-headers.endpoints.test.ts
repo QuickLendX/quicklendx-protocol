@@ -5,6 +5,28 @@ import { MOCK_INVOICES } from "../controllers/v1/invoices";
 import { MOCK_SETTLEMENTS } from "../controllers/v1/settlements";
 import { CC_SHORT, CC_LONG, CC_NO_STORE } from "../middleware/cache-headers";
 
+jest.mock("../middleware/api-key-auth", () => ({
+  apiKeyAuthMiddleware: (req: any, res: any, next: any) => {
+    req.apiKey = {
+      id: "mock-key-id",
+      key_hash: "mock-hash",
+      scopes: ["read:invoices", "read:bids"],
+      created_by: "mock-requester",
+    };
+    next();
+  },
+  optionalApiKeyAuth: (req: any, res: any, next: any) => {
+    req.apiKey = {
+      id: "mock-key-id",
+      key_hash: "mock-hash",
+      scopes: ["read:invoices", "read:bids"],
+      created_by: "mock-requester",
+    };
+    next();
+  },
+  requireScopes: () => (req: any, res: any, next: any) => next(),
+}));
+
 describe("Conditional Caching & ETag Integration Tests", () => {
   beforeAll(() => {
     // Set deterministic mock values for freshness headers
@@ -118,7 +140,8 @@ describe("Conditional Caching & ETag Integration Tests", () => {
 
   describe("CC_NO_STORE tier endpoints (Bids & Disputes)", () => {
     it("should return CC_NO_STORE and omit ETag/Last-Modified for bids list", async () => {
-      const res = await supertest(app).get("/api/v1/bids");
+      const validInvoiceId = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+      const res = await supertest(app).get(`/api/v1/bids?invoice_id=${validInvoiceId}`);
       expect(res.status).toBe(200);
       expect(res.headers["cache-control"]).toBe(CC_NO_STORE);
       expect(res.headers["etag"]).toBeUndefined();
@@ -126,7 +149,7 @@ describe("Conditional Caching & ETag Integration Tests", () => {
 
       // Should never return 304
       const revalidateRes = await supertest(app)
-        .get("/api/v1/bids")
+        .get(`/api/v1/bids?invoice_id=${validInvoiceId}`)
         .set("If-None-Match", "*");
       expect(revalidateRes.status).toBe(200);
     });
@@ -162,7 +185,8 @@ describe("Conditional Caching & ETag Integration Tests", () => {
     });
 
     it("should return 200 when If-Modified-Since is a past date", async () => {
-      const pastDate = new Date(Date.now() - 2 * 86400 * 1000).toUTCString();
+      const invoiceDate = new Date(MOCK_INVOICES[0].created_at);
+      const pastDate = new Date(invoiceDate.getTime() - 24 * 3600 * 1000).toUTCString();
       const res = await supertest(app)
         .get("/api/v1/invoices")
         .set("If-Modified-Since", pastDate);

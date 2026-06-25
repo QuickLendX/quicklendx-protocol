@@ -24,6 +24,7 @@ describe('API Key Rotation Endpoint (Integration)', () => {
       CREATE TABLE IF NOT EXISTS api_keys (
         id TEXT PRIMARY KEY,
         key_hash TEXT NOT NULL,
+        signing_secret_hash TEXT,
         prev_signing_secret_hash TEXT,
         prefix TEXT NOT NULL,
         name TEXT NOT NULL,

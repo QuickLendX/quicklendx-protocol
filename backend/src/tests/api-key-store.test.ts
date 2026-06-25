@@ -29,6 +29,7 @@ beforeAll(() => {
     CREATE TABLE IF NOT EXISTS api_keys (
       id TEXT PRIMARY KEY,
       key_hash TEXT NOT NULL,
+      signing_secret_hash TEXT,
       prefix TEXT NOT NULL,
       name TEXT NOT NULL,
       scopes TEXT NOT NULL,
@@ -98,6 +99,7 @@ function makeKey(overrides: Partial<DbApiKey> = {}): DbApiKey {
   return {
     id: crypto.randomUUID(),
     key_hash: crypto.createHash('sha256').update(crypto.randomBytes(32)).digest('hex'),
+    signing_secret_hash: null,
     prev_signing_secret_hash: null,
     prefix: `qlx_test_${crypto.randomBytes(4).toString('hex')}`,
     name: 'Test Key',

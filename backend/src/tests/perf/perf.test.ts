@@ -51,6 +51,7 @@ describe('Database Performance Tests', () => {
       CREATE TABLE IF NOT EXISTS api_keys (
         id TEXT PRIMARY KEY,
         key_hash TEXT NOT NULL,
+        signing_secret_hash TEXT,
         prefix TEXT UNIQUE NOT NULL,
         name TEXT NOT NULL,
         scopes TEXT NOT NULL,
@@ -334,6 +335,7 @@ describe('Database Performance Tests', () => {
         apiKeyDb.createApiKey({
           id: ulid(),
           key_hash: `hash_${i}`,
+          signing_secret_hash: null,
           prefix: `prefix_${i}`,
           name: `Key ${i}`,
           scopes: 'read,write',

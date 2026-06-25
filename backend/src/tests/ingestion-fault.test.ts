@@ -5,6 +5,7 @@ function makeEvent(ledger: number, i = 0): IndexedEvent {
   return {
     ledger,
     txHash: `0xabc${ledger}${i}`,
+    eventIndex: i,
     type: "InvoiceCreated",
     payload: { id: `inv-${ledger}-${i}` },
   };
@@ -16,14 +17,18 @@ function makeEvent(ledger: number, i = 0): IndexedEvent {
  * which would ignore/on-conflict-do-nothing duplicate writes.
  */
 class DeduplicatingInMemoryStore extends InMemoryIngestionStore {
-  async commitBatch(events: IndexedEvent[], newCursor: number): Promise<void> {
+  override async commitBatch(
+    events: IndexedEvent[],
+    newCursor: number,
+    options?: { replaceOnConflict?: boolean }
+  ): Promise<{ eventsStored: number; eventsSkipped: number }> {
     const existingEvents = this.getEvents();
     const existingHashes = new Set(existingEvents.map((e) => e.txHash));
     const uniqueNewEvents = events.filter((e) => !existingHashes.has(e.txHash));
 
     // To simulate partial commit correctly: if target has cursor updated, we use it.
     // InMemoryIngestionStore commitBatch appends events and updates cursor.
-    await super.commitBatch(uniqueNewEvents, newCursor);
+    return super.commitBatch(uniqueNewEvents, newCursor, options);
   }
 }
 

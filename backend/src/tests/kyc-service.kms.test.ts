@@ -197,7 +197,11 @@ describe("KycService — encrypt/decrypt", () => {
     const record = await service.encrypt(payload);
     const decrypted = await service.decrypt(record);
     for (const field of SENSITIVE_FIELDS) {
-      expect((decrypted as Record<string, unknown>)[field]).toBe("[REDACTED]");
+      if (field in payload) {
+        expect((decrypted as Record<string, unknown>)[field]).toBe("[REDACTED]");
+      } else {
+        expect((decrypted as Record<string, unknown>)[field]).toBeUndefined();
+      }
     }
   });
 
@@ -335,7 +339,11 @@ describe("KycService — key rotation", () => {
     const decrypted = await serviceV2.decrypt(rotated);
     expect(decrypted.userId).toBe("user-123");
     for (const field of SENSITIVE_FIELDS) {
-      expect((decrypted as Record<string, unknown>)[field]).toBe("[REDACTED]");
+      if (field in payload) {
+        expect((decrypted as Record<string, unknown>)[field]).toBe("[REDACTED]");
+      } else {
+        expect((decrypted as Record<string, unknown>)[field]).toBeUndefined();
+      }
     }
   });
 

@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
-import { AlertRouter } from "../alertRouter";
-import { Severity, AlertStatus } from "../../types/reconciliation";
-import { AlertTransport } from "./transports/AlertTransport";
+import { AlertRouter } from "../services/alertRouter";
+import { Severity, AlertStatus } from "../types/reconciliation";
+import { AlertTransport } from "../services/alerts/transports/AlertTransport";
 
 // Mock transport for testing
 class MockTransport implements AlertTransport {
@@ -35,7 +34,7 @@ describe("AlertRouter", () => {
 
   beforeEach(() => {
     AlertRouter.resetInstance();
-    router = new AlertRouter(/* dedupeWindowMs */ 1000); // 1 second for testing
+    router = AlertRouter.getInstance(1000); // 1 second for testing
     mockEmailTransport = new MockTransport();
     mockSlackTransport = new MockTransport();
     mockPagerDutyTransport = new MockTransport();
@@ -108,7 +107,7 @@ describe("AlertRouter", () => {
       expect(mockEmailTransport.calls.length).toBe(1);
     });
 
-    it("should allow alerts after deduplication window expires", async (ctx) => {
+    it("should allow alerts after deduplication window expires", async () => {
       (router as any).transports.set("email", mockEmailTransport);
 
       // First alert
@@ -126,7 +125,7 @@ describe("AlertRouter", () => {
       );
       expect(second).toBe(true);
       expect(mockEmailTransport.calls.length).toBe(2);
-    }, { timeout: 5000 });
+    }, 5000);
   });
 
   describe("transport failure isolation", () => {
@@ -199,7 +198,7 @@ describe("AlertRouter", () => {
 
       const alerts = router.getAllAlerts();
       expect(alerts.length).toBe(3);
-    }, { timeout: 5000 });
+    }, 5000);
 
     it("should check if alert is open", async () => {
       (router as any).transports.set("email", mockEmailTransport);
@@ -239,6 +238,6 @@ describe("AlertRouter", () => {
 
       router.clearExpiredDedupeEntries();
       expect((router as any).dedupeWindows.size).toBe(0);
-    }, { timeout: 5000 });
+    }, 5000);
   });
 });

@@ -11,7 +11,7 @@ const router = Router();
  * GET /api/v1/bids - Get ranked bids for an invoice
  * Query params: invoice_id (required), investor (optional), status (optional), limit, cursor
  */
-router.get("/", createQueryValidationMiddleware(getBidsQuerySchema), bidController.getBids);
+router.get("/", apiKeyAuthMiddleware, createQueryValidationMiddleware(getBidsQuerySchema), bidController.getBids);
 
 /**
  * POST /api/v1/bids - Place a new bid

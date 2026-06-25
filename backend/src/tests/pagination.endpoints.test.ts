@@ -1,6 +1,28 @@
 import supertest from "supertest";
 import app from "../app";
 
+jest.mock("../middleware/api-key-auth", () => ({
+  apiKeyAuthMiddleware: (req: any, res: any, next: any) => {
+    req.apiKey = {
+      id: "mock-key-id",
+      key_hash: "mock-hash",
+      scopes: ["read:invoices", "read:bids"],
+      created_by: "mock-requester",
+    };
+    next();
+  },
+  optionalApiKeyAuth: (req: any, res: any, next: any) => {
+    req.apiKey = {
+      id: "mock-key-id",
+      key_hash: "mock-hash",
+      scopes: ["read:invoices", "read:bids"],
+      created_by: "mock-requester",
+    };
+    next();
+  },
+  requireScopes: () => (req: any, res: any, next: any) => next(),
+}));
+
 describe("Cursor pagination endpoints", () => {
   it("returns 400 for limit=0 on invoices", async () => {
     const res = await supertest(app).get("/api/v1/invoices?limit=0");

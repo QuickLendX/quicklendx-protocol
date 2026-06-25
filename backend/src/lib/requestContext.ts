@@ -33,8 +33,8 @@ export function runWithContext<T>(correlationId: string, fn: () => T): T {
  * Get the correlation ID for the current async context.
  * Returns null if called outside a request context.
  */
-export function getCorrelationId(): string | null {
-  return storage.getStore()?.correlationId ?? null;
+export function getCorrelationId(): string | undefined {
+  return storage.getStore()?.correlationId;
 }
 
 /**

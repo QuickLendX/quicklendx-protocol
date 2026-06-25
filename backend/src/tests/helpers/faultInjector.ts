@@ -47,18 +47,22 @@ export class FaultyIngestionStore implements IngestionStore {
     return this.target.getCursor();
   }
 
-  async commitBatch(events: IndexedEvent[], newCursor: number): Promise<void> {
+  async commitBatch(
+    events: IndexedEvent[],
+    newCursor: number,
+    options?: { replaceOnConflict?: boolean }
+  ): Promise<{ eventsStored: number; eventsSkipped: number }> {
     if (this.shouldFailCommit) {
       if (this.partialCommitCount > 0) {
         // Simulating a partial commit: write some events but do not advance the cursor.
         const currentCursor = await this.target.getCursor();
         const partialEvents = events.slice(0, this.partialCommitCount);
         // Note: we pass the old cursor directly (even if null) so the cursor doesn't advance.
-        await this.target.commitBatch(partialEvents, currentCursor as any);
+        await this.target.commitBatch(partialEvents, currentCursor as any, options);
       }
       throw this.failCommitError;
     }
-    await this.target.commitBatch(events, newCursor);
+    return this.target.commitBatch(events, newCursor, options);
   }
 
   async rollbackTo(cursor: number): Promise<void> {

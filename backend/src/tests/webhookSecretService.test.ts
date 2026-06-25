@@ -46,6 +46,7 @@ describe("WebhookSecretStore", () => {
       pending_created_at: null,
       grace_period_seconds: 3600,
       status: WebhookSecretStatus.Active,
+      algorithm: "hmac-sha256" as const,
       created_at: now,
       updated_at: now,
     };
@@ -69,6 +70,7 @@ describe("WebhookSecretStore", () => {
       pending_created_at: null,
       grace_period_seconds: 3600,
       status: WebhookSecretStatus.Active,
+      algorithm: "hmac-sha256" as const,
       created_at: now,
       updated_at: now,
     });
@@ -85,6 +87,7 @@ describe("WebhookSecretStore", () => {
       pending_created_at: null,
       grace_period_seconds: 3600,
       status: WebhookSecretStatus.Active,
+      algorithm: "hmac-sha256" as const,
       created_at: now,
       updated_at: now,
     });
@@ -103,6 +106,7 @@ describe("WebhookSecretStore", () => {
       pending_created_at: null,
       grace_period_seconds: 3600,
       status: WebhookSecretStatus.Active,
+      algorithm: "hmac-sha256" as const,
       created_at: now,
       updated_at: now,
     });
@@ -120,6 +124,7 @@ describe("WebhookSecretStore", () => {
       pending_created_at: null,
       grace_period_seconds: 3600,
       status: WebhookSecretStatus.Active,
+      algorithm: "hmac-sha256" as const,
       created_at: now,
       updated_at: now,
     });
@@ -130,6 +135,7 @@ describe("WebhookSecretStore", () => {
       pending_created_at: null,
       grace_period_seconds: 3600,
       status: WebhookSecretStatus.Active,
+      algorithm: "hmac-sha256" as const,
       created_at: now,
       updated_at: now,
     });

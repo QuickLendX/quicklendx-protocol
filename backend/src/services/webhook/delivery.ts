@@ -294,8 +294,14 @@ export async function deliverWebhookJson(
     const doRequest = options?.requestImpl ?? requestOnceHttps;
     const res = await doRequest(validated, body, policy, agent);
 
-    if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location
-        && redirectCount < policy.maxRedirects && redirectCount < 1) {
+    if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+      if (redirectCount >= policy.maxRedirects) {
+        console.log(`${correlationPrefix}WebhookDelivery: Too many redirects for ${validated.href}`);
+        throw new WebhookDeliveryError(
+          "TOO_MANY_REDIRECTS",
+          "Webhook exceeded maximum redirect count",
+        );
+      }
       redirectCount += 1;
       let redirectTarget: string;
       try {
@@ -319,7 +325,7 @@ export async function deliverWebhookJson(
             `${correlationPrefix}WebhookDelivery: Redirect target validation failed for ${redirectTarget}: ${e.message}`,
           );
           throw new WebhookDeliveryError(
-            "REDIRECT_NOT_ALLOWED",
+            e.code,
             `Redirect target validation failed: ${e.message}`,
           );
         }

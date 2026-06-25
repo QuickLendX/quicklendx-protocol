@@ -48,6 +48,19 @@ export const getInvoices = async (
         throw err;
       }
     }
+
+    if (req.apiKey && req.apiKey.created_by) {
+      const createdBy = req.apiKey.created_by;
+      const isBusiness = req.apiKey.scopes.includes("write:invoices");
+      if (isBusiness) {
+        if (filter.business && filter.business !== createdBy) {
+          filtered = [];
+        } else {
+          filtered = filtered.filter((inv) => inv.business === createdBy);
+        }
+      }
+    }
+
     const page = applyPagination(filtered, "created_at", params);
 
     const body = { data: page.data, next_cursor: page.next_cursor, has_more: page.has_more, freshness: freshnessService.getFreshness() };
@@ -87,6 +100,17 @@ export const getInvoiceById = async (
       return res.status(404).json({
         error: { message: "Invoice not found", code: "INVOICE_NOT_FOUND" },
       });
+    }
+
+    if (req.apiKey) {
+      const isInvestor = req.apiKey.scopes.includes("write:bids");
+      const isBusiness = req.apiKey.scopes.includes("write:invoices");
+      
+      if (isInvestor || (isBusiness && invoice.business !== req.apiKey.created_by)) {
+        return res.status(404).json({
+          error: { message: "Invoice not found", code: "INVOICE_NOT_FOUND" },
+        });
+      }
     }
 
     if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body: invoice })) {

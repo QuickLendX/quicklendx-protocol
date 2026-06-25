@@ -30,7 +30,7 @@ describe("Pagination property-based tests", () => {
         fc.property(
           fc.record({
             id: fc.string({ minLength: 1, maxLength: 100 }),
-            sort_val: fc.number({ min: -Number.MAX_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER }),
+            sort_val: fc.double({ min: -Number.MAX_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER }),
           }),
           (payload: CursorPayload) => {
             const encoded = encodeCursor(payload);
@@ -48,7 +48,7 @@ describe("Pagination property-based tests", () => {
       fc.assert(
         fc.property(
           fc.record({
-            id: fc.stringOf(fc.char()),
+            id: fc.string({ minLength: 1 }),
             sort_val: fc.oneof(
               fc.constant(0),
               fc.constant(1),
@@ -94,13 +94,11 @@ describe("Pagination property-based tests", () => {
           fc.string({
             minLength: 1,
             maxLength: 100,
-            // Characters NOT in base64url alphabet
-            blacklist: "!@#$%^&*(){}[]|\\;:',<>?/`~ \n\t",
-          }),
+          }).filter(str => !/[!@#$%^&*(){}[\]|\\;:',<>?/`~ \n\t]/.test(str)),
           (malformed: string) => {
             const result = decodeCursor(malformed);
             // Either returns null or throws (both are acceptable)
-            expect([null, undefined].includes(result)).toBe(true);
+            expect(result).toBeNull();
           }
         )
       );
@@ -181,7 +179,7 @@ describe("Pagination property-based tests", () => {
             try {
               const result = decodeCursor(tampered);
               // Should either return null or throw
-              expect([null, undefined].includes(result)).toBe(true);
+              expect(result).toBeNull();
             } catch {
               // Decoding errors are fine for tampered data
             }
@@ -261,7 +259,7 @@ describe("Pagination property-based tests", () => {
         fc.property(
           fc.oneof(
             fc.string(),
-            fc.float({ noNaN: false, noInfinity: false }),
+            fc.float(),
             fc.boolean(),
             fc.object()
           ),
@@ -285,7 +283,7 @@ describe("Pagination property-based tests", () => {
         fc.property(
           fc.record({
             id: fc.string({ minLength: 1, maxLength: 100 }),
-            sort_val: fc.number({ noNaN: true, noInfinity: true }),
+            sort_val: fc.double().filter(d => !isNaN(d) && isFinite(d)),
           }),
           (payload: CursorPayload) => {
             const encoded = encodeCursor(payload);
@@ -302,8 +300,7 @@ describe("Pagination property-based tests", () => {
         fc.property(
           fc.string({
             minLength: 1,
-            blacklist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_=",
-          }),
+          }).filter(str => !/[A-Za-z0-9\-_=]/.test(str)),
           (malformed: string) => {
             expect(() => {
               parsePaginationParams({ cursor: malformed });
@@ -396,7 +393,7 @@ describe("Pagination property-based tests", () => {
         fc.property(
           fc.record({
             id: fc.string({ minLength: 1, maxLength: 100 }),
-            sort_val: fc.number({ noNaN: true, noInfinity: true }),
+            sort_val: fc.double().filter(d => !isNaN(d) && isFinite(d)),
           }),
           (payload: CursorPayload) => {
             expect(() => {

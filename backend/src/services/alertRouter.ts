@@ -165,6 +165,7 @@ export class AlertRouter {
     }
     alert.status = AlertStatus.Acknowledged;
     alert.acknowledgedAt = Date.now();
+    this.dedupeWindows.delete(alertKey);
   }
 
   // --------------------------------------------------------------------------

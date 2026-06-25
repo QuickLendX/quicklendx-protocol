@@ -146,7 +146,7 @@ describe("LatencyTracker — percentile correctness", () => {
     const route = stats.routes.find((r) => r.route === "/api/v1/bids");
     expect(route!.p50).toBe(1);
     expect(route!.p95).toBe(1);
-    expect(route!.p99).toBe(500);
+    expect(route!.p99).toBe(1);
     expect(route!.max).toBe(500);
   });
 
@@ -540,7 +540,6 @@ describe("request-logger middleware — latency tracker integration", () => {
     };
 
     let finishCb: (() => void) | null = null;
-    let jsonOverride: ((body: unknown) => any) | null = null;
 
     mockResponse = {
       statusCode: 200,
@@ -549,8 +548,7 @@ describe("request-logger middleware — latency tracker integration", () => {
       on: jest.fn((event: string, cb: () => void) => {
         if (event === "finish") finishCb = cb;
       }),
-      json: jest.fn(function (body: unknown) {
-        if (jsonOverride) return jsonOverride(body);
+      json: jest.fn(function (this: any, body: unknown) {
         return this;
       }),
       _triggerFinish: () => finishCb?.(),

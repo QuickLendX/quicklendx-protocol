@@ -108,6 +108,14 @@ export function extractLastModified(
       const v = r[field];
       if (typeof v === "number" && v > maxTs) {
         maxTs = v;
+      } else if (typeof v === "string") {
+        const parsed = Date.parse(v);
+        if (!isNaN(parsed)) {
+          const seconds = Math.floor(parsed / 1000);
+          if (seconds > maxTs) {
+            maxTs = seconds;
+          }
+        }
       }
     }
   }

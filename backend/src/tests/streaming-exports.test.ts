@@ -121,7 +121,8 @@ describe("ExportService - File generation", () => {
     const fp = await exportService.getFilePath(token);
     const stat = await fsp.stat(fp!);
     const mode = stat.mode & 0o777;
-    expect(mode).toBe(0o600);
+    const expectedMode = process.platform === "win32" ? 0o666 : 0o600;
+    expect(mode).toBe(expectedMode);
   });
 
   it("getFilePath returns null for unknown token", async () => {
