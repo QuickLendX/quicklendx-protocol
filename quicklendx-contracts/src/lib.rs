@@ -54,8 +54,7 @@ mod test_maintenance_write_matrix;
 mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
-#[cfg(test)]
-mod bench;
+pub mod bench;
 
 pub mod admin;
 pub mod analytics;
@@ -267,7 +266,8 @@ use events::{
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
-use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
+use profits::{calculate_profit as do_calculate_profit, PlatformFee};
+use crate::types::PlatformFeeConfig;
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
@@ -576,6 +576,11 @@ impl QuickLendXContract {
     /// Get maximum active bids allowed per investor
     pub fn get_max_active_bids_per_investor(env: Env) -> u32 {
         bid::BidStorage::get_max_active_bids_per_investor(&env)
+    }
+
+    /// Get current investor active-bid limit configuration snapshot.
+    pub fn get_bid_limit_config(env: Env) -> bid::BidLimitConfig {
+        bid::BidStorage::get_bid_limit_config(&env)
     }
 
     /// Set maximum active bids allowed per investor (admin only)
@@ -1294,7 +1299,7 @@ impl QuickLendXContract {
     ///
     /// # Example
     /// If platform has 10 Services invoices and 5 Products invoices:
-    /// ```
+    /// ```ignore
     /// CategoryBreakdown(vec![
     ///     (Services, 10),
     ///     (Products, 5),
@@ -1495,12 +1500,8 @@ impl QuickLendXContract {
             return Err(QuickLendXError::MaxBidsPerInvoiceExceeded);
         }
 
-        let max_active_bids = BidStorage::get_max_active_bids_per_investor(&env);
-        if max_active_bids > 0 {
-            let active_bids = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
-            if active_bids >= max_active_bids {
-                return Err(QuickLendXError::OperationNotAllowed);
-            }
+        if BidStorage::investor_has_reached_bid_limit(&env, &investor) {
+            return Err(QuickLendXError::MaxActiveBidsPerInvestorExceeded);
         }
         validate_bid(&env, &invoice, bid_amount, expected_return, &investor)?;
         // Create bid
@@ -1956,16 +1957,6 @@ impl QuickLendXContract {
         let admin =
             BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         verification::set_investment_limit(&env, &admin, &investor, new_limit)
-    }
-
-    /// Recompute investor tier from tracked investment performance.
-    pub fn recompute_investor_tier(
-        env: Env,
-        admin: Address,
-        investor: Address,
-    ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        recompute_investor_tier(&env, &admin, &investor)
     }
 
     /// Recompute investor tier from tracked investment performance.
@@ -3293,6 +3284,7 @@ impl QuickLendXContract {
                 "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
             ),
             resolved_at: 0,
+            resolution_outcome: None,
         };
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
@@ -3440,7 +3432,7 @@ impl QuickLendXContract {
 
         invoice.dispute_status = DisputeStatus::Resolved;
         invoice.dispute.resolution = note.clone();
-        invoice.dispute.resolution_outcome = Some(outcome);
+        invoice.dispute.resolution_outcome = Some(outcome as u32);
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
         InvoiceStorage::update_invoice(&env, &invoice);
