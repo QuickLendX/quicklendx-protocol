@@ -15,6 +15,9 @@ const BPS_DENOMINATOR: i128 = 10_000;
 const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
 const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
 const ROTATION_TTL_SECONDS: u64 = 604_800; // 7 days
+/// Minimum delay before a pending rotation can be confirmed (1 day).
+/// Prevents same-block finalisation and gives the admin a window to cancel.
+pub const MIN_ROTATION_DELAY_SECONDS: u64 = 86_400; // 1 day
 const EARLY_PLATFORM_DISCOUNT_BPS: i128 = 1_000; // 10%
 const LATE_FEE_SURCHARGE_BPS: i128 = 2_000; // 20%
 
@@ -1069,14 +1072,21 @@ impl FeeManager {
 
         new_address.require_auth();
 
-        if env.ledger().timestamp() > request.confirmation_deadline {
+        let now = env.ledger().timestamp();
+
+        // Enforce minimum delay: cannot confirm before min_delay has elapsed.
+        if now < request.initiated_at.saturating_add(MIN_ROTATION_DELAY_SECONDS) {
+            return Err(QuickLendXError::RotationTimelockNotElapsed);
+        }
+
+        if now > request.confirmation_deadline {
             env.storage().instance().remove(&ROTATION_KEY);
             return Err(QuickLendXError::RotationExpired);
         }
 
         let mut platform_config = Self::get_platform_fee_config(env)?;
         platform_config.treasury_address = Some(new_address.clone());
-        platform_config.updated_at = env.ledger().timestamp();
+        platform_config.updated_at = now;
         platform_config.updated_by = new_address.clone();
         env.storage()
             .instance()
