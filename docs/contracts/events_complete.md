@@ -598,8 +598,10 @@ Emitted when invoice data passes audit validation.
 Emitted when audit logs are queried.
 
 **Data Fields:**
-- `query_type: String` - Type of audit query performed
+- `query_type: OpType` - Typed audit operation discriminator (see `OpType` enum)
 - `result_count: u32` - Results returned
+
+`OpType` variants: `InvoiceCreated`, `InvoiceUploaded`, `InvoiceVerified`, `InvoiceFunded`, `InvoicePaid`, `InvoiceDefaulted`, `InvoiceStatusChanged`, `InvoiceRated`, `BidPlaced`, `BidAccepted`, `BidWithdrawn`, `EscrowCreated`, `EscrowReleased`, `EscrowRefunded`, `PaymentProcessed`, `SettlementCompleted`.
 
 **Use Case:** Monitor audit access, security tracking
 
