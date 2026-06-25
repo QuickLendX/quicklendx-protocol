@@ -84,6 +84,7 @@ fn create_invoice(
                 resolution: String::from_str(env, ""),
                 resolved_by: Address::generate(env),
                 resolved_at: 0,
+                resolution_outcome: None,
             },
             total_paid: 0,
             payment_history: vec![env],
