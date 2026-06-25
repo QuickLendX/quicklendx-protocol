@@ -1222,22 +1222,12 @@ pub fn calculate_investor_risk_score(
     Ok(risk_score)
 }
 
-/// Determine investor tier based on risk score and investment history
-/// Calculate the investor tier using deterministic performance thresholds.
+/// Determine an investor's tier from their stored verification record.
 ///
-/// Promotion is based on the investor's accumulated performance counters and
-/// risk score. The mapping is stable and idempotent: the same counters always
-/// yield the same tier.
-///
-/// Threshold table:
-/// | Tier | Risk Score | Total Invested | Successful Investments | Max Default Rate |
-/// |------|------------|----------------|------------------------|------------------|
-/// | VIP | <= 10 | >= 5,000,000 | >= 50 | <= 5% |
-/// | Platinum | <= 20 | >= 1,000,000 | >= 20 | <= 10% |
-/// | Gold | <= 40 | >= 100,000 | >= 10 | <= 15% |
-/// | Silver | <= 60 | >= 10,000 | >= 3 | <= 25% |
-/// | Basic | otherwise | - | - | - |
-pub fn compute_investor_tier(
+/// Loads the investor's tracked performance counters and delegates to the
+/// deterministic [`compute_investor_tier`]. Returns [`InvestorTier::Basic`]
+/// when the investor has no verification record yet.
+pub fn determine_investor_tier(
     env: &Env,
     investor: &Address,
     risk_score: u32,
@@ -1254,6 +1244,68 @@ pub fn compute_investor_tier(
     }
 
     Ok(InvestorTier::Basic)
+}
+
+/// Calculate the investor tier using deterministic performance thresholds.
+///
+/// Promotion is based on the investor's accumulated performance counters and
+/// risk score. The mapping is stable and idempotent: the same counters always
+/// yield the same tier.
+///
+/// Threshold table (a tier requires every column in its row to be satisfied;
+/// otherwise the next lower tier is tried, falling back to `Basic`):
+/// | Tier | Risk Score | Total Invested | Successful Investments | Max Default Rate |
+/// |------|------------|----------------|------------------------|------------------|
+/// | VIP | <= 10 | >= 5,000,000 | >= 50 | <= 5% |
+/// | Platinum | <= 20 | >= 1,000,000 | >= 20 | <= 10% |
+/// | Gold | <= 40 | >= 100,000 | >= 10 | <= 15% |
+/// | Silver | <= 60 | >= 10,000 | >= 3 | <= 25% |
+/// | Basic | otherwise | - | - | - |
+///
+/// The default rate is `defaulted_investments / (successful_investments +
+/// defaulted_investments)`, evaluated without division as
+/// `defaulted * 100 <= max_pct * total_count` to stay integer-exact.
+pub fn compute_investor_tier(
+    total_invested: i128,
+    successful_investments: u32,
+    defaulted_investments: u32,
+    risk_score: u32,
+) -> Result<InvestorTier, QuickLendXError> {
+    validate_risk_score(risk_score)?;
+
+    let total_count = successful_investments as u64 + defaulted_investments as u64;
+    let defaulted = defaulted_investments as u64;
+    let default_rate_within = |max_pct: u64| defaulted * 100 <= max_pct * total_count;
+
+    let tier = if risk_score <= 10
+        && total_invested >= 5_000_000
+        && successful_investments >= 50
+        && default_rate_within(5)
+    {
+        InvestorTier::VIP
+    } else if risk_score <= 20
+        && total_invested >= 1_000_000
+        && successful_investments >= 20
+        && default_rate_within(10)
+    {
+        InvestorTier::Platinum
+    } else if risk_score <= 40
+        && total_invested >= 100_000
+        && successful_investments >= 10
+        && default_rate_within(15)
+    {
+        InvestorTier::Gold
+    } else if risk_score <= 60
+        && total_invested >= 10_000
+        && successful_investments >= 3
+        && default_rate_within(25)
+    {
+        InvestorTier::Silver
+    } else {
+        InvestorTier::Basic
+    };
+
+    Ok(tier)
 }
 
 /// Determine risk level based on risk score
@@ -1466,61 +1518,6 @@ pub fn set_investment_limit(
     verification.investment_limit = calculated_limit;
     verification.compliance_notes =
         Some(String::from_str(env, "Investment limit updated by admin"));
-
-    InvestorVerificationStorage::update(env, &verification);
-    Ok(())
-}
-
-/// Recompute investor tier and investment limit from tracked performance counters.
-///
-/// This function keeps the tier assignment deterministic and idempotent by
-/// recomputing tier from `total_invested`, `successful_investments`,
-/// `defaulted_investments`, and `risk_score`, then updating the stored record.
-/// It preserves the investor's approved base limit and applies the new tier/risk
-/// multipliers to derive the new investment limit.
-pub fn recompute_investor_tier(
-    env: &Env,
-    admin: &Address,
-    investor: &Address,
-) -> Result<(), QuickLendXError> {
-    admin.require_auth();
-    if !crate::admin::AdminStorage::is_admin(env, admin) {
-        return Err(QuickLendXError::NotAdmin);
-    }
-
-    let mut verification = InvestorVerificationStorage::get(env, investor)
-        .ok_or(QuickLendXError::KYCNotFound)?;
-
-    if !matches!(verification.status, BusinessVerificationStatus::Verified) {
-        return Err(QuickLendXError::InvalidKYCStatus);
-    }
-
-    let prior_tier = verification.tier.clone();
-    let prior_risk_level = verification.risk_level.clone();
-    let base_limit = recover_base_limit_from_current_limit(
-        verification.investment_limit,
-        &prior_tier,
-        &prior_risk_level,
-    )
-    .max(1);
-
-    let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
-    validate_risk_score(risk_score)?;
-
-    let tier = compute_investor_tier(
-        verification.total_invested,
-        verification.successful_investments,
-        verification.defaulted_investments,
-        risk_score,
-    )?;
-    let risk_level = determine_risk_level(risk_score);
-    let investment_limit = calculate_investment_limit(&tier, &risk_level, base_limit);
-
-    verification.risk_score = risk_score;
-    verification.risk_level = risk_level;
-    verification.tier = tier;
-    verification.investment_limit = investment_limit;
-    verification.compliance_notes = Some(String::from_str(env, "Investor tier recomputed by admin"));
 
     InvestorVerificationStorage::update(env, &verification);
     Ok(())
