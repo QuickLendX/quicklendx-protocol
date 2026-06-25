@@ -18,6 +18,7 @@
 - [Deployment Guide](#deployment-guide)
 - [Troubleshooting](#troubleshooting)
 - [Best Practices](#best-practices)
+- [Documentation](#documentation)
 - [Contributing](#contributing)
 
 ## 🚀 Overview
@@ -1092,6 +1093,24 @@ The protocol includes comprehensive fuzz testing for critical operations:
 - **Arithmetic Safety**: Tests for overflow/underflow in calculations
 
 See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) for detailed security analysis.
+
+## 📚 Documentation
+
+Additional documentation is available in the `docs/` directory:
+
+- **[Decimal Handling](docs/decimal-handling.md)**: How the contract handles different token decimal places (USDC, DAI, XLM, etc.) and how integrators should convert amounts
+- **[Protocol Limits](PROTOCOL_LIMITS_README.md)**: Protocol-wide limits and configuration
+- **[Admin Operations](docs/admin-dry-run.md)**: Admin function dry-run previews
+- **[Bid Lifecycle](docs/bid-lifecycle.md)**: Complete bid state machine and transitions
+- **[Escrow Invariants](docs/escrow-invariants.md)**: Escrow state guarantees and safety properties
+- **[Investment Lifecycle](docs/investment-lifecycle.md)**: Investment states and transitions
+- **[Settlement & Dispute Interaction](docs/settlement-dispute-interaction.md)**: How settlements interact with disputes
+- **[Invoice Search](docs/invoice-search-ranking.md)**: Invoice search and ranking algorithms
+- **[Insurance Stacking](docs/insurance-stacking.md)**: Multiple insurance providers per investment
+- **[Notifications Idempotency](docs/notifications-idempotency.md)**: Notification delivery guarantees
+- **[Storage TTL Policy](docs/storage-ttl-policy.md)**: Storage lifetime management
+- **[Protocol Health](docs/protocol-health.md)**: Health check endpoints and monitoring
+- **[Error Catalog](docs/error-catalog.md)**: Complete error reference
 
 ## 🧪 Test Harness Authorization Guide
 
