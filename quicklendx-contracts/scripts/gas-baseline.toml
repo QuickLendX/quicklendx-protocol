@@ -1,32 +1,1125 @@
-# Per-entrypoint gas/CPU instruction regression baselines.
-# Format: [[entrypoint]]
-# name = "store_invoice"
-# scenario = "happy-path-small-invoice"
-# instructions = 12345
-# read_bytes = 1024
-# write_bytes = 2048
-
-[metadata]
-recorded = "2026-06-23"
+﻿[metadata]
+recorded = "2026-06-25"
 tool = "quicklendx gas-baseline v1"
 
 [[entrypoint]]
-name = "store_invoice"
-scenario = "happy-path-small-invoice"
-instructions = 0
-read_bytes = 0
-write_bytes = 0
+name = "is_initialized"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_version"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_protocol_limits"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "extend_protocol_ttl"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "invariant_self_check"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "initialize_admin"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_current_admin"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_admin"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "transfer_admin"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "set_admin"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "initialize_protocol_limits"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "set_protocol_limits"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "update_protocol_limits"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "update_limits_max_invoices"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "set_protocol_config"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "submit_kyc_application"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "submit_investor_kyc"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "verify_investor"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_verified_businesses"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "reject_investor"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_investor_verification"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "set_investment_limit"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "verify_business"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "reject_business"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_business_verification_status"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_pending_businesses"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_rejected_businesses"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_verified_investors"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_pending_investors"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_rejected_investors"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "update_investor_analytics"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_investor_analytics"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_investors_by_tier"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_investors_by_risk_level"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "calculate_investor_risk_score"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "determine_investor_tier"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "calculate_investment_limit"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "validate_investor_investment"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "is_investor_verified"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "upload_invoice"
+scenario = "default"
+instructions = 20000000
+read_bytes = 200000
+write_bytes = 200000
+
+[[entrypoint]]
+name = "upload_invoice"
+scenario = "largest-realistic-invoice"
+instructions = 20000000
+read_bytes = 200000
+write_bytes = 200000
+
+[[entrypoint]]
+name = "verify_invoice"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "expire_invoice"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "cleanup_expired_bids_paged"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_business_invoices_paged"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_available_invoices_paged"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoices_by_category"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoices_by_cat_status"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoices_by_tag"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoices_by_tags"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoice_count_by_category"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoice_count_by_tag"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "update_invoice_category"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "add_invoice_tag"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "remove_invoice_tag"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoice_tags"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "invoice_has_tag"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "rebuild_invoice_indexes"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "prune_terminal_invoices"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
 
 [[entrypoint]]
 name = "place_bid"
-scenario = "single-bid"
-instructions = 0
-read_bytes = 0
-write_bytes = 0
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
 
 [[entrypoint]]
-name = "accept_bid_and_fund"
-scenario = "simple-accept"
-instructions = 0
-read_bytes = 0
-write_bytes = 0
+name = "cancel_bid"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "withdraw_bid"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_all_bids_by_investor"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_bid_history_paged"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_investor_bids_paged"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_bid_history"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "clean_expired_bids"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "accept_bid"
+scenario = "default"
+instructions = 20000000
+read_bytes = 200000
+write_bytes = 200000
+
+[[entrypoint]]
+name = "accept_bid"
+scenario = "paused-state-rejection"
+instructions = 20000000
+read_bytes = 200000
+write_bytes = 200000
+
+[[entrypoint]]
+name = "accept_bid"
+scenario = "error-path-bad-id"
+instructions = 20000000
+read_bytes = 200000
+write_bytes = 200000
+
+[[entrypoint]]
+name = "add_investment_insurance"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "settle_invoice"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoice_investment"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_investment"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_active_investment_ids"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "validate_no_orphan_investments"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "query_investment_insurance"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "process_partial_payment"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "make_payment"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "refund_escrow"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_escrow_details"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_escrow_status"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "release_escrow_funds"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "refund_escrow_funds"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "withdraw_investment"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "repair_held_escrow_reserve"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "calculate_profit"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_platform_fee"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "set_platform_fee"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "initialize_fee_system"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "configure_treasury"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "update_platform_fee_bps"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_platform_fee_config"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_treasury_address"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "update_fee_structure"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_fee_structure"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "calculate_transaction_fees"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_user_volume_data"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "update_user_transaction_volume"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "configure_revenue_distribution"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_revenue_split_config"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "distribute_revenue"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_fee_analytics"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "collect_transaction_fees"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "validate_fee_parameters"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "create_backup"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "restore_backup"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "archive_backup"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "validate_backup"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_backup_details"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_backups"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "cleanup_backups"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "set_backup_retention_policy"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_backup_retention_policy"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "create_vesting_schedule"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_vesting_schedule"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "release_vested_tokens"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_vesting_releasable"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_user_behavior_metrics"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "add_invoice_rating"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_platform_metrics"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "export_analytics_snapshot"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_performance_metrics"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "generate_business_report"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "generate_investor_report"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_business_report"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_financial_metrics"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_analytics_summary"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_freshness"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "create_dispute"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "update_dispute_evidence"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoice_dispute_status"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_dispute_details"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "put_dispute_under_review"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "resolve_dispute"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoices_with_disputes"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_dispute_timeline"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoices_by_dispute_status"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_invoice_audit_trail"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_audit_entry"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_audit_entries_by_operation"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_audit_entries_by_actor"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "query_audit_logs"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_audit_stats"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "validate_invoice_audit_integrity"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "verify_audit_chain"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "first_audit_chain_divergence"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "check_overdue_invoices"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "check_overdue_invoices_grace"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "handle_overdue_invoices"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_overdue_scan_cursor"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_overdue_scan_batch_limit"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_overdue_scan_batch_limit_max"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "check_invoice_expiration"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_notification"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_user_notifications"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_notification_preferences"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "update_notification_preferences"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "update_notification_status"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+[[entrypoint]]
+name = "get_user_notification_stats"
+scenario = "default"
+instructions = 10000000
+read_bytes = 100000
+write_bytes = 100000
+
+

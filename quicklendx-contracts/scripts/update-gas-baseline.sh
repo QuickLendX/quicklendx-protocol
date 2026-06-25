@@ -2,12 +2,8 @@
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTRACTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-echo "This helper documents how to refresh gas baselines."
-echo ""
-echo "Run the measurement harness (requires the bench measurement tests to be implemented):"
-echo "  pushd $CONTRACTS_DIR"
-echo "  cargo test --test gas_regression -- --nocapture"
-echo "  popd"
-echo ""
-echo "Update scripts/gas-baseline.toml with recorded values and commit the change."
-exit 0
+
+echo "Updating Soroban gas regression baselines..."
+cd "$CONTRACTS_DIR"
+UPDATE_GAS_BASELINE=1 cargo test --test gas_regression -- --nocapture
+echo "Baselines updated successfully in scripts/gas-baseline.toml!"

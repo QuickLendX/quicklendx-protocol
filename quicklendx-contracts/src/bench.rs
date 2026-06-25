@@ -1,30 +1,34 @@
 //! Bench helpers for gas/cpu instruction measurement.
 //! This module is compiled only for tests and provides a `measure` helper.
-//! It intentionally returns placeholder zero-deltas when the Soroban budget
-//! APIs are unavailable; tests that require real measurement should enable
-//! the appropriate dev-dependencies and use real budget snapshots.
+
 #[cfg(test)]
 pub mod bench {
     use soroban_sdk::Env;
 
-    /// Budget deltas recorded for a scenario.
+    /// @notice Budget deltas recorded for a scenario.
+    /// @field instructions The number of CPU instructions executed.
+    /// @field read_bytes The number of bytes read from storage.
+    /// @field write_bytes The number of bytes written to storage.
     pub struct BudgetDelta {
         pub instructions: u64,
         pub read_bytes: u64,
         pub write_bytes: u64,
     }
 
-    /// Measure the budget delta for a closure.
-    ///
-    /// Note: This stub returns zeros unless a test harness records real
-    /// `BudgetSnapshot` values. It exists to provide a stable API surface
-    /// for the measurement scripts and docs.
-    pub fn measure<F: FnOnce()>(_env: &Env, _label: &str, f: F) -> BudgetDelta {
+    /// @notice Measure the budget delta for a closure.
+    /// @param env The Soroban execution environment.
+    /// @param label The label of the scenario being measured.
+    /// @param f The closure executing the contract invocation.
+    /// @return The recorded BudgetDelta.
+    pub fn measure<F: FnOnce()>(env: &Env, _label: &str, f: F) -> BudgetDelta {
+        env.enable_invocation_metering();
         f();
+        let estimate = env.cost_estimate();
+        let resources = estimate.resources();
         BudgetDelta {
-            instructions: 0,
-            read_bytes: 0,
-            write_bytes: 0,
+            instructions: resources.instructions as u64,
+            read_bytes: resources.disk_read_bytes as u64,
+            write_bytes: resources.write_bytes as u64,
         }
     }
 }
