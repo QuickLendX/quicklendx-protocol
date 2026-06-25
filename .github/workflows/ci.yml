@@ -95,6 +95,33 @@ jobs:
           cd quicklendx-contracts
           cargo test --test wasm_build_size_budget --verbose
 
+      - name: Install cargo-deny
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
+        run: |
+          source $HOME/.cargo/env
+          cargo install cargo-deny --locked --version "0.16.5"
+
+      - name: Check supply-chain advisories (blocks crates with open CVEs)
+        # Threat: a dependency with an open security advisory could introduce
+        # known vulnerabilities (e.g., memory corruption, SSRF, privilege escalation)
+        # into the compiled WASM contract. Without this check, a CI pass gives a
+        # false signal of security. cargo-deny --config deny.toml fails the build
+        # if any crate in the dependency tree has an unresolved RustSec advisory.
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
+        run: |
+          source $HOME/.cargo/env
+          cd quicklendx-contracts
+          cargo deny --config ../deny.toml check advisories
+
+      - name: Run advisory enforcement negative test
+        # Validates deny.toml policy at the config level (no cargo-deny install needed).
+        # Fails if vulnerability is weakened from "deny" to "warn"/"allow".
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
+        run: |
+          source $HOME/.cargo/env
+          cd quicklendx-contracts
+          cargo test --test advisory_enforcement --verbose
+
       - name: Run Cargo tests
         run: |
           source $HOME/.cargo/env
