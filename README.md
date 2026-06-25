@@ -38,6 +38,7 @@ npm run dev
 
 - `docs/`: Project-wide design, implementation, and audit documentation.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
+- `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
