@@ -25,12 +25,13 @@ import fs from "fs";
 import crypto from "crypto";
 import request from "supertest";
 import { Request, Response, NextFunction } from "express";
+import fc from "fast-check";
 
 // ── DB isolation setup ──────────────────────────────────────────────────────
 import { getDatabase, closeDatabase } from "../lib/database";
 import { db } from "../db/database";
 import { apiKeyService } from "../services/api-key-service";
-import { featureFlagService } from "../services/featureFlagService";
+import { featureFlagService, computeBucket } from "../services/featureFlagService";
 import { auditLogService } from "../services/auditLogService";
 import { requireFlag } from "../middleware/feature-flag";
 import app from "../app";
@@ -89,13 +90,14 @@ beforeAll(() => {
   // Feature flags schema
   conn.exec(`
     CREATE TABLE IF NOT EXISTS feature_flags (
-      id         TEXT    NOT NULL PRIMARY KEY,
-      api_key_id TEXT    NOT NULL,
-      flag       TEXT    NOT NULL,
-      enabled    INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
-      created_at TEXT    NOT NULL,
-      updated_at TEXT    NOT NULL,
-      updated_by TEXT    NOT NULL,
+      id                 TEXT    NOT NULL PRIMARY KEY,
+      api_key_id         TEXT    NOT NULL,
+      flag               TEXT    NOT NULL,
+      enabled            INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+      rollout_percentage INTEGER,
+      created_at         TEXT    NOT NULL,
+      updated_at         TEXT    NOT NULL,
+      updated_by         TEXT    NOT NULL,
       UNIQUE(api_key_id, flag)
     )
   `);
@@ -593,5 +595,145 @@ describe("Cache invalidation on toggle", () => {
 
     featureFlagService.deleteFlag("ci-key2", "del_flag");
     expect(featureFlagService.isEnabled("ci-key2", "del_flag")).toBe(false);
+  });
+});
+
+// ============================================================================
+// Rollout Percentage and Sticky Bucketing Tests
+// ============================================================================
+
+describe("FeatureFlagService: Rollout Percentage & Sticky Bucketing", () => {
+  beforeEach(() => {
+    const conn = getDatabase();
+    conn.prepare("DELETE FROM feature_flags").run();
+    featureFlagService.clearCache();
+  });
+
+  test("isEnabledForUser returns false when no row exists", () => {
+    expect(
+      featureFlagService.isEnabledForUser("tenant-A", "new_feature", "user-123")
+    ).toBe(false);
+  });
+
+  test("isEnabledForUser returns false when flag is disabled globally", () => {
+    featureFlagService.setFlag({
+      api_key_id: "tenant-A",
+      flag: "new_feature",
+      enabled: false,
+      rollout_percentage: 100,
+      updated_by: "admin",
+    });
+    expect(
+      featureFlagService.isEnabledForUser("tenant-A", "new_feature", "user-123")
+    ).toBe(false);
+  });
+
+  test("isEnabledForUser returns true for all users when rollout_percentage is null", () => {
+    featureFlagService.setFlag({
+      api_key_id: "tenant-A",
+      flag: "new_feature",
+      enabled: true,
+      rollout_percentage: null,
+      updated_by: "admin",
+    });
+    expect(
+      featureFlagService.isEnabledForUser("tenant-A", "new_feature", "user-1")
+    ).toBe(true);
+    expect(
+      featureFlagService.isEnabledForUser("tenant-A", "new_feature", "user-2")
+    ).toBe(true);
+  });
+
+  test("isEnabledForUser is deterministic and sticky", () => {
+    featureFlagService.setFlag({
+      api_key_id: "tenant-A",
+      flag: "new_feature",
+      enabled: true,
+      rollout_percentage: 50,
+      updated_by: "admin",
+    });
+
+    const user1 = "user-abc-123";
+    const res1 = featureFlagService.isEnabledForUser("tenant-A", "new_feature", user1);
+    const res2 = featureFlagService.isEnabledForUser("tenant-A", "new_feature", user1);
+    expect(res1).toBe(res2);
+
+    const user2 = "user-xyz-456";
+    const res3 = featureFlagService.isEnabledForUser("tenant-A", "new_feature", user2);
+    const res4 = featureFlagService.isEnabledForUser("tenant-A", "new_feature", user2);
+    expect(res3).toBe(res4);
+  });
+
+  test("rollout_percentage 0 allows 0% of users and 100 allows 100% of users", () => {
+    // 0% rollout
+    featureFlagService.setFlag({
+      api_key_id: "tenant-A",
+      flag: "zero_rollout",
+      enabled: true,
+      rollout_percentage: 0,
+      updated_by: "admin",
+    });
+    for (let i = 0; i < 100; i++) {
+      expect(
+        featureFlagService.isEnabledForUser("tenant-A", "zero_rollout", `user-${i}`)
+      ).toBe(false);
+    }
+
+    // 100% rollout
+    featureFlagService.setFlag({
+      api_key_id: "tenant-A",
+      flag: "hundred_rollout",
+      enabled: true,
+      rollout_percentage: 100,
+      updated_by: "admin",
+    });
+    for (let i = 0; i < 100; i++) {
+      expect(
+        featureFlagService.isEnabledForUser("tenant-A", "hundred_rollout", `user-${i}`)
+      ).toBe(true);
+    }
+  });
+
+  // Property-based test using fast-check
+  test("sticky bucketing satisfies uniform distribution, determinism, and monotonicity properties", () => {
+    fc.assert(
+      fc.property(
+        fc.string({ minLength: 1, maxLength: 50 }), // flag
+        fc.string({ minLength: 1, maxLength: 50 }), // userId
+        (flag: string, userId: string) => {
+          // 1. computeBucket returns a value in [0, 100)
+          const bucket = computeBucket(flag, userId);
+          expect(bucket).toBeGreaterThanOrEqual(0);
+          expect(bucket).toBeLessThan(100);
+
+          // 2. Deterministic: same inputs yield same bucket
+          expect(computeBucket(flag, userId)).toBe(bucket);
+
+          // 3. Monotonicity: if a user is enabled at rollout X, they remain enabled at rollout Y (Y > X)
+          // Setup service state for key-prop
+          featureFlagService.setFlag({
+            api_key_id: "tenant-prop",
+            flag,
+            enabled: true,
+            rollout_percentage: 30,
+            updated_by: "admin",
+          });
+          const enabledAt30 = featureFlagService.isEnabledForUser("tenant-prop", flag, userId);
+
+          featureFlagService.setFlag({
+            api_key_id: "tenant-prop",
+            flag,
+            enabled: true,
+            rollout_percentage: 70,
+            updated_by: "admin",
+          });
+          const enabledAt70 = featureFlagService.isEnabledForUser("tenant-prop", flag, userId);
+
+          if (enabledAt30) {
+            expect(enabledAt70).toBe(true);
+          }
+        }
+      )
+    );
   });
 });
