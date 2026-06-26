@@ -229,11 +229,6 @@ fn test_get_invoice_err_nonexistent_invoice() {
     let nonexistent_id = BytesN::from_array(&env, &[1u8; 32]);
 
     let result = client.try_get_invoice(&nonexistent_id);
-    assert!(
-        result.unwrap().is_err(),
-        "get_invoice should fail for nonexistent invoice"
-    );
-
     let err = result.unwrap().unwrap_err();
     assert_eq!(
         err,
