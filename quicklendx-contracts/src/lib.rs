@@ -187,6 +187,8 @@ mod test_withdraw_bid_matrix;
 #[cfg(test)]
 #[path = "test/test_investment_queries.rs"]
 mod test_investment_queries;
+#[cfg(test)]
+mod test_queries;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_overflow;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -315,7 +317,6 @@ use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
-use crate::types::PlatformFeeConfig;
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
@@ -2027,8 +2028,9 @@ impl QuickLendXContract {
         investor: Address,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        do_recompute_investor_tier(&env, &admin, &investor)
+        recompute_investor_tier(&env, &admin, &investor)
     }
+
 
 
     /// Verify business (admin only)

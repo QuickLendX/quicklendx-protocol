@@ -18,17 +18,8 @@
 //! 5. **No panics** - Only `saturating_*` arithmetic is used and all indexing
 //!    goes through pre-computed safe bounds.
 
-extern crate alloc;
-
 use alloc::vec::Vec;
-use crate::errors::QuickLendXError;
-
-/// Maximum number of records any paginated query endpoint may return in a
-/// single response.
-///
-/// Raising this constant requires a security review because it raises the
-/// worst-case memory consumption and gas cost of every query endpoint.
-pub const MAX_QUERY_LIMIT: u32 = 100;
+use crate::MAX_QUERY_LIMIT;
 
 /// Clamp a caller-supplied `limit` to [`MAX_QUERY_LIMIT`].
 ///
