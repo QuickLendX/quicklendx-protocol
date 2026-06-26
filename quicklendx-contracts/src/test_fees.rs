@@ -798,6 +798,34 @@ fn test_comprehensive_fee_calculation() {
     assert_eq!(fees, 1403);
 }
 
+/// Regression test: ensure total fees collected in a period cannot exceed the protocol cap
+#[test]
+fn test_fee_cap_per_window_rejects_excessive_collection() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = setup_investor(&env, &client, &admin);
+
+    client.initialize_fee_system(&admin);
+
+    // Collect an amount just below the cap - should succeed
+    let cap = crate::fees::MAX_FEE_PER_WINDOW;
+    let first_amount: i128 = cap.saturating_sub(1);
+    let mut fees = Map::new(&env);
+    fees.set(FeeType::Platform, first_amount);
+    client.collect_transaction_fees(&user, &fees, &first_amount);
+
+    // Now attempt to collect a small amount that would push the period total over the cap
+    let mut extra = Map::new(&env);
+    extra.set(FeeType::Platform, 2i128);
+    let res = client.try_collect_transaction_fees(&user, &extra, &2i128);
+    let err = res.err().expect("collecting beyond cap must fail");
+    let contract_err = err.expect("expected contract invoke error");
+    assert_eq!(contract_err, QuickLendXError::InvalidFeeConfiguration);
+}
+
 // ============================================================================
 // Treasury Configuration Tests
 // ============================================================================

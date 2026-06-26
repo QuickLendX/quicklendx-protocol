@@ -15,6 +15,9 @@ const MIN_FEE_BPS: u32 = 0;
 const BPS_DENOMINATOR: i128 = 10_000;
 const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
 const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
+/// Maximum total fees that may be collected in a single revenue period/window.
+/// Enforced to prevent unbounded fee accumulation per accounting period.
+pub const MAX_FEE_PER_WINDOW: i128 = 5_000_000_000_000; // 5M stroops
 const ROTATION_TTL_SECONDS: u64 = 604_800; // 7 days
 /// Minimum delay before a pending rotation can be confirmed (1 day).
 /// Prevents same-block finalisation and gives the admin a window to cancel.
@@ -834,8 +837,16 @@ impl FeeManager {
                 transaction_count: 0,
             });
 
-        revenue_data.total_collected =
-            Self::checked_add(revenue_data.total_collected, total_amount)?;
+        // Enforce a hard cap on total fees collected per period/window.
+        let projected_total = revenue_data
+            .total_collected
+            .checked_add(total_amount)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
+        if projected_total > MAX_FEE_PER_WINDOW {
+            return Err(QuickLendXError::InvalidFeeConfiguration);
+        }
+
+        revenue_data.total_collected = projected_total;
         revenue_data.pending_distribution =
             Self::checked_add(revenue_data.pending_distribution, total_amount)?;
         revenue_data.transaction_count = revenue_data.transaction_count.saturating_add(1);
