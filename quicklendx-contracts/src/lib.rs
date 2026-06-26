@@ -38,6 +38,8 @@ mod scratch_events;
 mod test_default;
 #[cfg(test)]
 mod test_default_finality_matrix;
+#[cfg(test)]
+mod test_emergency_withdraw_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality;
 #[cfg(all(test, feature = "legacy-tests"))]
