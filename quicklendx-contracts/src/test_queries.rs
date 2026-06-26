@@ -24,8 +24,9 @@ use alloc::vec::Vec;
 
 use crate::pagination::{
     calculate_safe_bounds, cap_query_limit, paginate_slice, validate_pagination_params,
-    MAX_QUERY_LIMIT,
+    validate_query_params, MAX_QUERY_LIMIT,
 };
+use crate::errors::QuickLendXError;
 #[cfg(feature = "fuzz-tests")]
 use proptest::prelude::*;
 
@@ -78,6 +79,29 @@ fn test_validate_limit_zero_at_end_of_collection() {
     assert_eq!(safe_off, 50);
     assert_eq!(eff_lim, 0);
     assert!(!has_more);
+}
+
+/// `validate_query_params` checks boundaries: offset > u32::MAX - MAX_QUERY_LIMIT
+#[test]
+fn test_validate_query_params_boundaries() {
+    // Normal offset
+    assert!(validate_query_params(0, 10).is_ok());
+    assert!(validate_query_params(100, 10).is_ok());
+
+    // Boundary check
+    let max_valid_offset = u32::MAX - MAX_QUERY_LIMIT;
+    assert!(validate_query_params(max_valid_offset, 10).is_ok());
+
+    // Overflow checks
+    let invalid_offset = max_valid_offset + 1;
+    assert_eq!(
+        validate_query_params(invalid_offset, 10).unwrap_err(),
+        QuickLendXError::InvalidAmount
+    );
+    assert_eq!(
+        validate_query_params(u32::MAX, 10).unwrap_err(),
+        QuickLendXError::InvalidAmount
+    );
 }
 
 // ---------------------------------------------------------------------------
