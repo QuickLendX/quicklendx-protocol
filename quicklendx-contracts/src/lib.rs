@@ -106,6 +106,8 @@ mod test_accept_bid_race;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
+mod test_panic_handler;
+#[cfg(test)]
 mod test_admin;
 #[cfg(test)]
 mod test_self_call_rejection;

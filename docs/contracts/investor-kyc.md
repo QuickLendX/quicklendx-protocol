@@ -1,5 +1,7 @@
 # Investor KYC and Investment Limits
 
+> For the detailed math behind risk scores, tier thresholds, and investment-limit multipliers, see [`docs/INVESTOR_TIER.md`](../INVESTOR_TIER.md).
+
 ## Overview
 
 The QuickLendX protocol implements a comprehensive investor verification system that ensures only verified investors can participate in invoice financing. The system includes KYC (Know Your Customer) verification, risk assessment, tiered investor classification, and per-investor investment limits.

@@ -39,7 +39,7 @@ npm run dev
 - `docs/`: Project-wide design, implementation, and audit documentation.
 - `docs/RUSTDOC.md`: Auto-published rustdoc URL for the latest tag — start here if you are integrating with the contracts.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
-- `docs/UPGRADE_PATHS.md`: Which protocol versions can upgrade to which, storage migration checklist, and rollback procedure.
+- `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-contracts/docs/ATTESTATIONS.md`: Attestation event schemas and lifecycle for off-chain indexers — covers KYC verification events, invoice verification events, the `RawEvent` wire format, and idempotency guarantees.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
