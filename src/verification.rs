@@ -1,7 +1,3 @@
-// ─────────────────────────────────────────────────────────────────────────────
-// Types
-// ─────────────────────────────────────────────────────────────────────────────
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InvestorTier {
     Basic,
@@ -26,11 +22,6 @@ pub enum RiskLevel {
     VeryHigh,
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tier / Risk Logic
-// ─────────────────────────────────────────────────────────────────────────────
-
-/// Determines the tier based on historical stats.
 pub fn compute_investor_tier(
     total_invested: i128,
     successful_investments: u32,
@@ -60,12 +51,7 @@ pub fn tier_multiplier(tier: InvestorTier) -> u128 {
     }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Validation & Guards (Placeholders for compilation)
-// ─────────────────────────────────────────────────────────────────────────────
-
 pub fn validate_transition(from: VerificationStatus, to: VerificationStatus) -> Result<(), &'static str> {
-    // Logic for transition validation
     Ok(())
 }
 
