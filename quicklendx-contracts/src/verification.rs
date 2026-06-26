@@ -1372,47 +1372,54 @@ pub fn compute_investor_tier(
 ) -> Result<InvestorTier, QuickLendXError> {
     validate_risk_score(risk_score)?;
 
-    let total_investments = successful_investments.saturating_add(defaulted_investments);
-    let default_rate = if total_investments > 0 {
-        ((defaulted_investments as u64 * 100) / total_investments as u64) as u32
-    } else {
+    let total_attempts = successful_investments.saturating_add(defaulted_investments);
+    let default_rate_pct = if total_attempts == 0 {
         0
+    } else {
+        (defaulted_investments as u64)
+            .saturating_mul(100)
+            .saturating_div(total_attempts as u64) as u32
     };
 
+    // Check VIP
     if risk_score <= VIP_RISK_SCORE_MAX
         && total_invested >= VIP_TOTAL_INVESTED_MIN
         && successful_investments >= VIP_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate <= VIP_DEFAULT_RATE_MAX_PCT
+        && default_rate_pct <= VIP_DEFAULT_RATE_MAX_PCT
     {
         return Ok(InvestorTier::VIP);
     }
 
+    // Check Platinum
     if risk_score <= PLATINUM_RISK_SCORE_MAX
         && total_invested >= PLATINUM_TOTAL_INVESTED_MIN
         && successful_investments >= PLATINUM_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate <= PLATINUM_DEFAULT_RATE_MAX_PCT
+        && default_rate_pct <= PLATINUM_DEFAULT_RATE_MAX_PCT
     {
         return Ok(InvestorTier::Platinum);
     }
 
+    // Check Gold
     if risk_score <= GOLD_RISK_SCORE_MAX
         && total_invested >= GOLD_TOTAL_INVESTED_MIN
         && successful_investments >= GOLD_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate <= GOLD_DEFAULT_RATE_MAX_PCT
+        && default_rate_pct <= GOLD_DEFAULT_RATE_MAX_PCT
     {
         return Ok(InvestorTier::Gold);
     }
 
+    // Check Silver
     if risk_score <= SILVER_RISK_SCORE_MAX
         && total_invested >= SILVER_TOTAL_INVESTED_MIN
         && successful_investments >= SILVER_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate <= SILVER_DEFAULT_RATE_MAX_PCT
+        && default_rate_pct <= SILVER_DEFAULT_RATE_MAX_PCT
     {
         return Ok(InvestorTier::Silver);
     }
 
     Ok(InvestorTier::Basic)
 }
+
 
 /// Determine risk level based on risk score
 pub fn determine_risk_level(risk_score: u32) -> InvestorRiskLevel {

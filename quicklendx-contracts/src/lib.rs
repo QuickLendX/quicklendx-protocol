@@ -317,6 +317,7 @@ use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
+use crate::types::PlatformFeeConfig;
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
@@ -2032,7 +2033,6 @@ impl QuickLendXContract {
     }
 
 
-
     /// Verify business (admin only)
     pub fn verify_business(
         // This function is already defined in verification module
@@ -3375,7 +3375,7 @@ impl QuickLendXContract {
                 "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
             ),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         };
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
