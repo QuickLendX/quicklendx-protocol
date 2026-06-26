@@ -37,7 +37,7 @@ npm run dev
 ## Documentation
 
 - `docs/`: Project-wide design, implementation, and audit documentation.
-- `docs/RUSTDOC.md`: Auto-published rustdoc URL for the latest tag — start here if you are integrating with the contracts.
+- `docs/BACKUP_RETENTION.md`: Retention policy for contract backups and integrity verification.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
 - `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
