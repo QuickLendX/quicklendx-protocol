@@ -311,4 +311,36 @@ impl AdminStorage {
         let admin = Self::require_current_admin(env)?;
         operation(&admin)
     }
+
+    /// Verify that a proposed handover target is not the same as the current admin.
+    ///
+    /// This is a **pure validation helper** — it performs no state writes and
+    /// requires no authentication. Call it as an early guard before initiating any
+    /// admin transfer to surface a clear, typed error to callers rather than
+    /// relying on the implicit `OperationNotAllowed` that `transfer_admin` already
+    /// emits for self-transfers.
+    ///
+    /// # Arguments
+    /// * `proposed` — The address that would become the new admin.
+    ///
+    /// # Returns
+    /// * `Ok(())` — The handover is structurally valid (proposed ≠ current).
+    /// * `Err(OperationNotAllowed)` — `proposed` equals the current admin (no-op transfer).
+    /// * `Err(OperationNotAllowed)` — The admin subsystem has not been initialized.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// AdminStorage::verify_admin_handover(&env, &new_admin)?;
+    /// AdminStorage::transfer_admin(&env, &current_admin, &new_admin)?;
+    /// ```
+    pub fn verify_admin_handover(env: &Env, proposed: &Address) -> Result<(), QuickLendXError> {
+        if !Self::is_initialized(env) {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+        let current = Self::get_admin(env).ok_or(QuickLendXError::OperationNotAllowed)?;
+        if *proposed == current {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+        Ok(())
+    }
 }

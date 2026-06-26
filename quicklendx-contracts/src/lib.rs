@@ -95,6 +95,8 @@ pub mod settlement;
 pub mod storage;
 #[cfg(test)]
 mod test_admin;
+#[cfg(test)]
+mod test_admin_handover;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]

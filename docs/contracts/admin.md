@@ -85,3 +85,51 @@ To keep admin transfer safety regressions visible while legacy modules are still
 - Report generation: `cargo llvm-cov --lib --lcov --output-path coverage/lcov.info`
 - Admin gate: `scripts/check-admin-coverage.sh coverage/lcov.info`
 - Minimum required: `95%` line coverage (`ADMIN_COVERAGE_MIN`, default `95`)
+
+## `verify_admin_handover` helper
+
+`AdminStorage::verify_admin_handover(env, proposed)` is a **pure, read-only** validation helper.
+
+### Purpose
+
+Callers (operators, downstream contracts, frontend integrations) that need to present pre-flight feedback before committing a transfer previously had to either:
+
+- Attempt the full `transfer_admin` and inspect the opaque `OperationNotAllowed` error, or
+- Re-implement the same-address check themselves.
+
+`verify_admin_handover` provides a single, well-named entry point that surfaces the identity violation as an explicit, typed `OperationNotAllowed` without side effects.
+
+### Signature
+
+```rust
+pub fn verify_admin_handover(env: &Env, proposed: &Address) -> Result<(), QuickLendXError>
+```
+
+### Behaviour
+
+| Condition | Return value |
+|-----------|-------------|
+| Admin subsystem not initialized | `Err(OperationNotAllowed)` |
+| `proposed == current admin` | `Err(OperationNotAllowed)` |
+| `proposed != current admin` | `Ok(())` |
+
+### Properties
+
+- **Read-only**: no storage writes, no auth calls, no events emitted.
+- **Idempotent**: safe to call multiple times; each call reflects the current on-chain state.
+- **Composable**: use as a pre-flight guard before `transfer_admin` or `initiate_admin_transfer`.
+
+### Example usage
+
+```rust,ignore
+// Pre-flight check from an outer call or test.
+AdminStorage::verify_admin_handover(&env, &proposed_admin)?;
+// Only reaches here if proposed != current admin.
+AdminStorage::transfer_admin(&env, &current_admin, &proposed_admin)?;
+```
+
+### Notes
+
+`verify_admin_handover` does **not** replace the existing guard inside `transfer_admin` or
+`initiate_admin_transfer` — both functions still independently reject self-transfers.
+The helper is additive and backwards-compatible.
