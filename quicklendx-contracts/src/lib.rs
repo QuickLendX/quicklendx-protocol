@@ -168,6 +168,9 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(test)]
 mod test_freshness_bounds;
+// Issue #1541 — lag at zero, lag at positive, lag during pause.
+#[cfg(test)]
+mod test_freshness_lag;
 #[cfg(test)]
 mod test_health_status;
 #[cfg(all(test, feature = "legacy-tests"))]
