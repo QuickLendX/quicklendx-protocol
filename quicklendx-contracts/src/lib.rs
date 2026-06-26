@@ -186,6 +186,10 @@ mod test_profit_fee;
 // mod test_refund;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_storage;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_reentrancy;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_reentrancy_fault_injection;
 #[cfg(test)]
 mod test_storage_key_layout;
 #[cfg(all(test, feature = "legacy-tests"))]
