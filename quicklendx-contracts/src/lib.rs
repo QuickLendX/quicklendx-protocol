@@ -86,6 +86,7 @@ pub mod invoice_search;
 pub mod maintenance;
 pub mod monitor;
 pub mod notifications;
+pub mod pagination;
 pub mod pause;
 pub mod payments;
 pub mod profits;
@@ -117,6 +118,8 @@ mod test_escrow_event_completeness;
 mod test_bid_ttl;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_boundary;
+#[cfg(test)]
+mod test_queries;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -291,7 +294,7 @@ use crate::storage::{BidStorage, InvoiceStorage};
 pub struct QuickLendXContract;
 
 /// Maximum number of records returned by paginated query endpoints.
-pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
+pub(crate) const MAX_QUERY_LIMIT: u32 = pagination::MAX_QUERY_LIMIT;
 
 /// @notice Validates and caps query limit to prevent resource abuse
 /// @param limit The requested limit value
@@ -299,7 +302,7 @@ pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
 /// @dev Returns 0 if limit is 0, enforcing empty result behavior
 #[inline]
 fn cap_query_limit(limit: u32) -> u32 {
-    investment_queries::InvestmentQueries::cap_query_limit(limit)
+    pagination::cap_query_limit(limit)
 }
 
 /// @notice Validates query parameters for security and resource protection
@@ -307,15 +310,8 @@ fn cap_query_limit(limit: u32) -> u32 {
 /// @param limit The requested result limit
 /// @return Result indicating validation success or failure
 /// @dev Prevents potential overflow and ensures reasonable query bounds
-fn validate_query_params(offset: u32, _limit: u32) -> Result<(), QuickLendXError> {
-    // Check for potential overflow in offset + limit calculation
-    if offset > u32::MAX - MAX_QUERY_LIMIT {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    // Limit is automatically capped by cap_query_limit, but we validate the input
-    // Note: limit=0 is allowed and results in empty response
-    Ok(())
+fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError> {
+    pagination::validate_query_params(offset, limit)
 }
 
 /// Write a `u32` as ASCII decimal into `buf`, return byte length.
@@ -2725,7 +2721,6 @@ impl QuickLendXContract {
             return Vec::new(&env);
         }
 
-        let capped_limit = cap_query_limit(limit);
         let all_invoices = InvoiceStorage::get_business_invoices(&env, &business);
         let mut filtered = Vec::new(&env);
 
@@ -2744,8 +2739,7 @@ impl QuickLendXContract {
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
         let len_u32 = filtered.len();
-        let start = offset.min(len_u32);
-        let end = start.saturating_add(capped_limit).min(len_u32);
+        let (start, end) = pagination::calculate_safe_bounds(offset, limit, len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(invoice_id) = filtered.get(idx) {
@@ -2828,7 +2822,6 @@ impl QuickLendXContract {
             return Vec::new(&env);
         }
 
-        let capped_limit = cap_query_limit(limit);
         let verified_invoices =
             InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified);
         let mut filtered = Vec::new(&env);
@@ -2859,8 +2852,7 @@ impl QuickLendXContract {
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
         let len_u32 = filtered.len();
-        let start = offset.min(len_u32);
-        let end = start.saturating_add(capped_limit).min(len_u32);
+        let (start, end) = pagination::calculate_safe_bounds(offset, limit, len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(invoice_id) = filtered.get(idx) {
@@ -2891,7 +2883,6 @@ impl QuickLendXContract {
             return Vec::new(&env);
         }
 
-        let capped_limit = cap_query_limit(limit);
         let all_bids = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
         let mut filtered = Vec::new(&env);
 
@@ -2908,8 +2899,7 @@ impl QuickLendXContract {
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
         let len_u32 = filtered.len();
-        let start = offset.min(len_u32);
-        let end = start.saturating_add(capped_limit).min(len_u32);
+        let (start, end) = pagination::calculate_safe_bounds(offset, limit, len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(bid) = filtered.get(idx) {
@@ -2940,7 +2930,6 @@ impl QuickLendXContract {
             return Vec::new(&env);
         }
 
-        let capped_limit = cap_query_limit(limit);
         let all_bid_ids = BidStorage::get_bids_by_investor_all(&env, &investor);
         let mut filtered = Vec::new(&env);
 
@@ -2959,8 +2948,7 @@ impl QuickLendXContract {
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
         let len_u32 = filtered.len();
-        let start = offset.min(len_u32);
-        let end = start.saturating_add(capped_limit).min(len_u32);
+        let (start, end) = pagination::calculate_safe_bounds(offset, limit, len_u32);
         let mut idx = start;
         while idx < end {
             if let Some(bid) = filtered.get(idx) {
