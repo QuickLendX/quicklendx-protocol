@@ -75,10 +75,7 @@ fn test_get_investment_nonexistent_returns_error() {
 
     let nonexistent_id = BytesN::from_array(&env, &[0u8; 32]);
     let result = client.try_get_investment(&nonexistent_id);
-    
-    let err = result.err().expect("expected error for nonexistent investment");
-    let contract_error = err.expect("expected contract error");
-    assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::StorageKeyNotFound);
 }
 
 #[test]
@@ -88,10 +85,7 @@ fn test_get_invoice_investment_nonexistent_returns_error() {
 
     let nonexistent_invoice_id = BytesN::from_array(&env, &[0u8; 32]);
     let result = client.try_get_invoice_investment(&nonexistent_invoice_id);
-    
-    let err = result.err().expect("expected error for nonexistent invoice");
-    let contract_error = err.expect("expected contract error");
-    assert_eq!(contract_error, QuickLendXError::StorageKeyNotFound);
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::StorageKeyNotFound);
 }
 
 // ============================================================================
