@@ -1279,7 +1279,8 @@ pub fn calculate_investor_risk_score(
     Ok(risk_score)
 }
 
-/// Determine an investor's tier from their stored verification record.
+/// Determine investor tier based on risk score and investment history.
+/// Calculate the investor tier using deterministic performance thresholds.
 ///
 /// Loads the investor's tracked performance counters and delegates to the
 /// deterministic [`compute_investor_tier`]. Returns [`InvestorTier::Basic`]
@@ -1292,7 +1293,7 @@ pub fn determine_investor_tier(
     validate_risk_score(risk_score)?;
 
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
-        return compute_tier_from_counters(
+        return compute_tier_from_stats(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
@@ -1303,66 +1304,50 @@ pub fn determine_investor_tier(
     Ok(InvestorTier::Basic)
 }
 
-/// Calculate the investor tier using deterministic performance thresholds.
-///
-/// Promotion is based on the investor's accumulated performance counters and
-/// risk score. The mapping is stable and idempotent: the same counters always
-/// yield the same tier.
-///
-/// Threshold table (a tier requires every column in its row to be satisfied;
-/// otherwise the next lower tier is tried, falling back to `Basic`):
-/// | Tier | Risk Score | Total Invested | Successful Investments | Max Default Rate |
-/// |------|------------|----------------|------------------------|------------------|
-/// | VIP | <= 10 | >= 5,000,000 | >= 50 | <= 5% |
-/// | Platinum | <= 20 | >= 1,000,000 | >= 20 | <= 10% |
-/// | Gold | <= 40 | >= 100,000 | >= 10 | <= 15% |
-/// | Silver | <= 60 | >= 10,000 | >= 3 | <= 25% |
-/// | Basic | otherwise | - | - | - |
-///
-/// The default rate is `defaulted_investments / (successful_investments +
-/// defaulted_investments)`, evaluated without division as
-/// `defaulted * 100 <= max_pct * total_count` to stay integer-exact.
-pub fn compute_investor_tier(
+/// Pure tier calculation from raw performance counters and risk score.
+/// Used internally so that tier derivation is DRY across all call sites.
+fn compute_tier_from_stats(
     total_invested: i128,
     successful_investments: u32,
     defaulted_investments: u32,
     risk_score: u32,
 ) -> Result<InvestorTier, QuickLendXError> {
-    validate_risk_score(risk_score)?;
-
-    let total_count = successful_investments as u64 + defaulted_investments as u64;
-    let defaulted = defaulted_investments as u64;
-    let default_rate_within = |max_pct: u64| defaulted * 100 <= max_pct * total_count;
-
-    let tier = if risk_score <= 10
-        && total_invested >= 5_000_000
-        && successful_investments >= 50
-        && default_rate_within(5)
-    {
-        InvestorTier::VIP
-    } else if risk_score <= 20
-        && total_invested >= 1_000_000
-        && successful_investments >= 20
-        && default_rate_within(10)
-    {
-        InvestorTier::Platinum
-    } else if risk_score <= 40
-        && total_invested >= 100_000
-        && successful_investments >= 10
-        && default_rate_within(15)
-    {
-        InvestorTier::Gold
-    } else if risk_score <= 60
-        && total_invested >= 10_000
-        && successful_investments >= 3
-        && default_rate_within(25)
-    {
-        InvestorTier::Silver
+    let total_deals = successful_investments + defaulted_investments;
+    let default_rate_pct = if total_deals > 0 {
+        (defaulted_investments * 100) / total_deals
     } else {
-        InvestorTier::Basic
+        0
     };
 
-    Ok(tier)
+    if risk_score <= VIP_RISK_SCORE_MAX
+        && total_invested >= VIP_TOTAL_INVESTED_MIN
+        && successful_investments >= VIP_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= VIP_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::VIP);
+    }
+    if risk_score <= PLATINUM_RISK_SCORE_MAX
+        && total_invested >= PLATINUM_TOTAL_INVESTED_MIN
+        && successful_investments >= PLATINUM_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= PLATINUM_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::Platinum);
+    }
+    if risk_score <= GOLD_RISK_SCORE_MAX
+        && total_invested >= GOLD_TOTAL_INVESTED_MIN
+        && successful_investments >= GOLD_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= GOLD_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::Gold);
+    }
+    if risk_score <= SILVER_RISK_SCORE_MAX
+        && total_invested >= SILVER_TOTAL_INVESTED_MIN
+        && successful_investments >= SILVER_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= SILVER_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::Silver);
+    }
+    Ok(InvestorTier::Basic)
 }
 
 /// Determine risk level based on risk score
@@ -1518,12 +1503,7 @@ pub fn update_investor_analytics(
         verification.risk_score =
             calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
         verification.risk_level = determine_risk_level(verification.risk_score);
-        verification.tier = compute_tier_from_counters(
-            verification.total_invested,
-            verification.successful_investments,
-            verification.defaulted_investments,
-            verification.risk_score,
-        )?;
+        verification.tier = compute_tier_from_stats(verification.total_invested, verification.successful_investments, verification.defaulted_investments, verification.risk_score)?;
 
         // Preserve the investor's approved baseline and only re-derive the
         // dynamic limit using the updated tier/risk profile.
@@ -1669,7 +1649,7 @@ pub fn recompute_investor_tier(
     let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
     validate_risk_score(risk_score)?;
 
-    let tier = compute_investor_tier(
+    let tier = compute_tier_from_stats(
         verification.total_invested,
         verification.successful_investments,
         verification.defaulted_investments,

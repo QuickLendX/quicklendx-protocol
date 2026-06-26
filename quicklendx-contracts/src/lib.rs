@@ -277,7 +277,7 @@ mod test_insurance_claim_payout;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
-mod test_compute_yield_props;
+mod test_fuzz_cancelled_noop;
 #[cfg(test)]
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -316,11 +316,12 @@ use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
+use crate::types::PlatformFeeConfig;
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
 use verification::{
-    calculate_investment_limit, calculate_investor_risk_score,
+    calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     get_investor_verification as do_get_investor_verification, normalize_tag, reject_business,
     reject_investor as do_reject_investor, recompute_investor_tier, require_business_not_pending,
     require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
@@ -2031,6 +2032,7 @@ impl QuickLendXContract {
         recompute_investor_tier(&env, &admin, &investor)
     }
 
+
     /// Verify business (admin only)
     pub fn verify_business(
         // This function is already defined in verification module
@@ -2237,7 +2239,7 @@ impl QuickLendXContract {
         investor: Address,
         risk_score: u32,
     ) -> Result<InvestorTier, QuickLendXError> {
-        verification::compute_investor_tier(&env, &investor, risk_score)
+        compute_investor_tier(&env, &investor, risk_score)
     }
 
     /// Calculate investment limit for investor
