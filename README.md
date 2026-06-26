@@ -37,7 +37,7 @@ npm run dev
 ## Documentation
 
 - `docs/`: Project-wide design, implementation, and audit documentation.
-- `docs/ON_CHAIN_LOGS.md`: Where to find tx-level vs contract-level events and how to subscribe to them.
+- `docs/INVARIANTS.md`: Plain-English catalog of every invariant the Soroban contracts enforce, with enforcement locations and violation codes.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
 - `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
