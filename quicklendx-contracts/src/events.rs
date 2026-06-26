@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 
+use crate::audit::OpType;
 use crate::fees::FeeType;
 use crate::payments::Escrow;
 use crate::types::Bid;
@@ -42,6 +43,8 @@ pub const TOPIC_BID_PLACED: &str = "bid_placed";
 pub const TOPIC_BID_ACCEPTED: &str = "bid_accepted";
 /// Topic for `BidWithdrawn` events.
 pub const TOPIC_BID_WITHDRAWN: &str = "bid_withdrawn";
+/// Topic for `BidCancelled` events.
+pub const TOPIC_BID_CANCELLED: &str = "bid_cancelled";
 /// Topic for `BidExpired` events.
 pub const TOPIC_BID_EXPIRED: &str = "bid_expired";
 /// Topic for `EscrowCreated` / `FundsLocked` events.
@@ -136,6 +139,16 @@ pub struct InvoiceCancelled {
 ///
 /// Topic: [`TOPIC_INVOICE_SETTLED`] (`"inv_set"`)
 ///
+/// # Fields
+/// - `invoice_id` – Unique 32-byte invoice identifier.
+/// - `amount` – Total amount settled (sum of all payments applied to this invoice).
+/// - `ledger` – Ledger sequence number at the time of settlement.
+/// - `business` – Address of the business that owns the invoice.
+/// - `investor` – Address of the investor who funded the invoice.
+/// - `investor_return` – Amount returned to the investor after fees.
+/// - `platform_fee` – Fee taken by the platform.
+/// - `timestamp` – Ledger timestamp at emission time.
+///
 /// # Security
 /// No PII is included. `investor_return` and `platform_fee` are derived
 /// from validated contract state only.
@@ -143,6 +156,8 @@ pub struct InvoiceCancelled {
 #[contractevent]
 pub struct InvoiceSettled {
     pub invoice_id: BytesN<32>,
+    pub amount: i128,
+    pub ledger: u32,
     pub business: Address,
     pub investor: Address,
     pub investor_return: i128,
@@ -258,6 +273,19 @@ pub struct BidAccepted {
 #[derive(Debug, PartialEq)]
 #[contractevent]
 pub struct BidWithdrawn {
+    pub bid_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub bid_amount: i128,
+    pub timestamp: u64,
+}
+
+/// Emitted when a bid is cancelled by its investor.
+///
+/// Topic: [`TOPIC_BID_CANCELLED`] (`"bid_cancelled"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct BidCancelled {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
     pub investor: Address,
@@ -489,7 +517,7 @@ pub struct AuditValidation {
 
 #[contractevent]
 pub struct AuditQuery {
-    pub query_type: String,
+    pub query_type: OpType,
     pub result_count: u32,
 }
 
@@ -593,9 +621,6 @@ pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     }
     .publish(env);
 }
-
-
-
 
 #[contractevent]
 pub struct RevenueDistributed {
@@ -701,6 +726,8 @@ pub fn emit_invoice_settled(
 ) {
     InvoiceSettled {
         invoice_id: invoice.id.clone(),
+        amount: invoice.total_paid,
+        ledger: env.ledger().sequence(),
         business: invoice.business.clone(),
         investor: invoice.investor.clone().unwrap_or(Address::from_str(
             env,
@@ -1014,6 +1041,17 @@ pub fn emit_bid_withdrawn(env: &Env, bid: &Bid) {
     .publish(env);
 }
 
+pub fn emit_bid_cancelled(env: &Env, bid: &Bid) {
+    BidCancelled {
+        bid_id: bid.bid_id.clone(),
+        invoice_id: bid.invoice_id.clone(),
+        investor: bid.investor.clone(),
+        bid_amount: bid.bid_amount,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
 pub fn emit_bid_accepted(env: &Env, bid: &Bid, invoice_id: &BytesN<32>, business: &Address) {
     BidAccepted {
         bid_id: bid.bid_id.clone(),
@@ -1113,7 +1151,7 @@ pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool)
     .publish(env);
 }
 
-pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
+pub fn emit_audit_query(env: &Env, query_type: OpType, result_count: u32) {
     AuditQuery {
         query_type,
         result_count,

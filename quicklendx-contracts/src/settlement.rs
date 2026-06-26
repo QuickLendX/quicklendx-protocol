@@ -158,7 +158,12 @@ pub fn process_partial_payment(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     let payer = invoice.business.clone();
 
-    crate::qlx_log!(env, "settlement", "Recording partial payment: amount={}", payment_amount);
+    crate::qlx_log!(
+        env,
+        "settlement",
+        "Recording partial payment: amount={}",
+        payment_amount
+    );
 
     let progress = record_payment(
         env,
@@ -369,7 +374,12 @@ pub fn settle_invoice(
         return Err(QuickLendXError::InvalidAmount);
     }
 
-    crate::qlx_log!(env, "settlement", "Full settlement initiated: payment={}", payment_amount);
+    crate::qlx_log!(
+        env,
+        "settlement",
+        "Full settlement initiated: payment={}",
+        payment_amount
+    );
 
     // Early double-settle guard: reject if already finalized.
     if is_finalized(env, invoice_id) {

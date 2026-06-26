@@ -20,11 +20,11 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::notifications::{
-    NotificationDeliveryStatus, NotificationPreferences, NotificationPriority,
-    NotificationSystem, NotificationType,
-};
 use crate::invoice::InvoiceCategory;
+use crate::notifications::{
+    NotificationDeliveryStatus, NotificationPreferences, NotificationPriority, NotificationSystem,
+    NotificationType,
+};
 use soroban_sdk::{
     symbol_short,
     testutils::{Address as _, Events, Ledger},
@@ -57,8 +57,7 @@ where
 /// Count events whose first topic matches `topic_sym`.
 /// Uses the XDR-based `ContractEvents` API (soroban-sdk 25+).
 fn count_topic(env: &Env, topic_sym: Symbol) -> usize {
-    let topic_xdr = xdr::ScVal::try_from_val(env, &topic_sym)
-        .expect("topic to ScVal");
+    let topic_xdr = xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
     env.events()
         .all()
         .events()
@@ -71,8 +70,7 @@ fn count_topic(env: &Env, topic_sym: Symbol) -> usize {
 
 /// Return the data `Val` of the most-recent event whose first topic matches `topic_sym`.
 fn latest_data_val(env: &Env, topic_sym: Symbol) -> Val {
-    let topic_xdr = xdr::ScVal::try_from_val(env, &topic_sym)
-        .expect("topic to ScVal");
+    let topic_xdr = xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
     let events = env.events().all();
     for e in events.events().iter().rev() {
         match &e.body {
@@ -129,42 +127,12 @@ fn create_notif(
 #[test]
 fn test_single_notif_event_per_creation() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    let before = count_topic(env, symbol_short!("notif"));
-    
-        create_notif(
-            env,
-            contract_id,
-            &recipient,
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-    );
-    let after = count_topic(env, symbol_short!("notif"));
+        let before = count_topic(env, symbol_short!("notif"));
 
-    assert_eq!(
-        after - before,
-        1,
-        "expected exactly 1 notif event, got {}",
-        after - before
-    );
-    });
-}
-
-/// Creating N distinct notifications emits exactly N `notif` events.
-#[test]
-fn test_n_notifications_emit_n_events() {
-    run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
-
-    let recipient = Address::generate(env);
-    let n = 5usize;
-
-    let before = count_topic(env, symbol_short!("notif"));
-    for _i in 0..n {
-        
         create_notif(
             env,
             contract_id,
@@ -172,13 +140,47 @@ fn test_n_notifications_emit_n_events() {
             NotificationType::InvoiceCreated,
             NotificationPriority::Medium,
         );
-        // Advance timestamp so each notification gets a unique ID.
-        env.ledger()
-            .set_timestamp(env.ledger().timestamp() + 1);
-    }
-    let after = count_topic(env, symbol_short!("notif"));
+        let after = count_topic(env, symbol_short!("notif"));
 
-    assert_eq!(after - before, n, "expected {} notif events, got {}", n, after - before);
+        assert_eq!(
+            after - before,
+            1,
+            "expected exactly 1 notif event, got {}",
+            after - before
+        );
+    });
+}
+
+/// Creating N distinct notifications emits exactly N `notif` events.
+#[test]
+fn test_n_notifications_emit_n_events() {
+    run_notif_test(|env, contract_id| {
+        env.ledger().set_timestamp(1_000);
+
+        let recipient = Address::generate(env);
+        let n = 5usize;
+
+        let before = count_topic(env, symbol_short!("notif"));
+        for _i in 0..n {
+            create_notif(
+                env,
+                contract_id,
+                &recipient,
+                NotificationType::InvoiceCreated,
+                NotificationPriority::Medium,
+            );
+            // Advance timestamp so each notification gets a unique ID.
+            env.ledger().set_timestamp(env.ledger().timestamp() + 1);
+        }
+        let after = count_topic(env, symbol_short!("notif"));
+
+        assert_eq!(
+            after - before,
+            n,
+            "expected {} notif events, got {}",
+            n,
+            after - before
+        );
     });
 }
 
@@ -192,53 +194,59 @@ fn test_n_notifications_emit_n_events() {
 #[test]
 fn test_blocked_notification_emits_no_event_on_retry() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    // Opt the user out of InvoiceCreated notifications.
-    let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
-    prefs.invoice_created = false;
-    NotificationSystem::update_user_preferences(env, &recipient, prefs);
+        // Opt the user out of InvoiceCreated notifications.
+        let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
+        prefs.invoice_created = false;
+        NotificationSystem::update_user_preferences(env, &recipient, prefs);
 
-    let before = count_topic(env, symbol_short!("notif"));
+        let before = count_topic(env, symbol_short!("notif"));
 
-    // First attempt - should be blocked.
-    let result1 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-        String::from_str(env, "Title"),
-        String::from_str(env, "Msg"),
-        None,
-    );
-    assert!(
-        matches!(result1, Err(crate::errors::QuickLendXError::NotificationBlocked)),
-        "expected NotificationBlocked on first attempt"
-    );
+        // First attempt - should be blocked.
+        let result1 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+            String::from_str(env, "Title"),
+            String::from_str(env, "Msg"),
+            None,
+        );
+        assert!(
+            matches!(
+                result1,
+                Err(crate::errors::QuickLendXError::NotificationBlocked)
+            ),
+            "expected NotificationBlocked on first attempt"
+        );
 
-    // Second attempt (retry) - still blocked.
-    let result2 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-        String::from_str(env, "Title"),
-        String::from_str(env, "Msg"),
-        None,
-    );
-    assert!(
-        matches!(result2, Err(crate::errors::QuickLendXError::NotificationBlocked)),
-        "expected NotificationBlocked on retry"
-    );
+        // Second attempt (retry) - still blocked.
+        let result2 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+            String::from_str(env, "Title"),
+            String::from_str(env, "Msg"),
+            None,
+        );
+        assert!(
+            matches!(
+                result2,
+                Err(crate::errors::QuickLendXError::NotificationBlocked)
+            ),
+            "expected NotificationBlocked on retry"
+        );
 
-    let after = count_topic(env, symbol_short!("notif"));
-    assert_eq!(
-        after - before,
-        0,
-        "blocked notifications must not emit any notif events"
-    );
+        let after = count_topic(env, symbol_short!("notif"));
+        assert_eq!(
+            after - before,
+            0,
+            "blocked notifications must not emit any notif events"
+        );
     });
 }
 
@@ -247,18 +255,18 @@ fn test_blocked_notification_emits_no_event_on_retry() {
 #[test]
 fn test_preference_update_emits_one_event_per_call() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let user = Address::generate(env);
-    let prefs = NotificationSystem::get_user_preferences(env, &user);
+        let user = Address::generate(env);
+        let prefs = NotificationSystem::get_user_preferences(env, &user);
 
-    let before = count_topic(env, symbol_short!("pref_up"));
+        let before = count_topic(env, symbol_short!("pref_up"));
 
-    NotificationSystem::update_user_preferences(env, &user, prefs.clone());
-    NotificationSystem::update_user_preferences(env, &user, prefs);
+        NotificationSystem::update_user_preferences(env, &user, prefs.clone());
+        NotificationSystem::update_user_preferences(env, &user, prefs);
 
-    let after = count_topic(env, symbol_short!("pref_up"));
-    assert_eq!(after - before, 2, "expected 2 pref_up events for 2 calls");
+        let after = count_topic(env, symbol_short!("pref_up"));
+        assert_eq!(after - before, 2, "expected 2 pref_up events for 2 calls");
     });
 }
 
@@ -272,40 +280,40 @@ fn test_preference_update_emits_one_event_per_call() {
 #[test]
 fn test_notif_payload_contains_no_sensitive_strings() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    // Use a title/message that would be obviously PII if leaked.
-    NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::BidAccepted,
-        NotificationPriority::High,
-        String::from_str(env, "John Doe - Tax ID 123456789"),
-        String::from_str(env, "Email: john@example.com Phone: +1-555-0100"),
-        None,
-    )
-    .expect("create_notification failed");
+        // Use a title/message that would be obviously PII if leaked.
+        NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::BidAccepted,
+            NotificationPriority::High,
+            String::from_str(env, "John Doe - Tax ID 123456789"),
+            String::from_str(env, "Email: john@example.com Phone: +1-555-0100"),
+            None,
+        )
+        .expect("create_notification failed");
 
-    // Decode the payload - this will panic if the tuple shape is wrong,
-    // proving the payload is (id, address, type, priority) and nothing else.
-    let (notif_id, emitted_recipient, ntype, priority) = latest_notif_payload(env);
+        // Decode the payload - this will panic if the tuple shape is wrong,
+        // proving the payload is (id, address, type, priority) and nothing else.
+        let (notif_id, emitted_recipient, ntype, priority) = latest_notif_payload(env);
 
-    // Structural checks: correct types, correct recipient, no extra fields.
-    assert_eq!(emitted_recipient, recipient, "recipient mismatch");
-    assert_eq!(ntype, NotificationType::BidAccepted);
-    assert_eq!(priority, NotificationPriority::High);
+        // Structural checks: correct types, correct recipient, no extra fields.
+        assert_eq!(emitted_recipient, recipient, "recipient mismatch");
+        assert_eq!(ntype, NotificationType::BidAccepted);
+        assert_eq!(priority, NotificationPriority::High);
 
-    // The notification ID must be a 32-byte opaque hash - not a human-readable string.
-    assert_eq!(notif_id.len(), 32, "notification ID must be 32 bytes");
+        // The notification ID must be a 32-byte opaque hash - not a human-readable string.
+        assert_eq!(notif_id.len(), 32, "notification ID must be 32 bytes");
 
-    // Confirm the stored notification has the title/message but the event does not.
-    let stored = NotificationSystem::get_notification(env, &notif_id)
-        .expect("notification not found in storage");
-    // Title and message exist in storage (for in-app display) but are absent from the event.
-    assert_eq!(stored.recipient, recipient);
-    assert_eq!(stored.notification_type, NotificationType::BidAccepted);
+        // Confirm the stored notification has the title/message but the event does not.
+        let stored = NotificationSystem::get_notification(env, &notif_id)
+            .expect("notification not found in storage");
+        // Title and message exist in storage (for in-app display) but are absent from the event.
+        assert_eq!(stored.recipient, recipient);
+        assert_eq!(stored.notification_type, NotificationType::BidAccepted);
     });
 }
 
@@ -314,29 +322,28 @@ fn test_notif_payload_contains_no_sensitive_strings() {
 #[test]
 fn test_status_event_payload_contains_no_pii() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
-    let notif_id = 
-        create_notif(
+        let recipient = Address::generate(env);
+        let notif_id = create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::PaymentReceived,
-        NotificationPriority::High,
-    );
+            NotificationType::PaymentReceived,
+            NotificationPriority::High,
+        );
 
-    NotificationSystem::update_notification_status(
-        env,
-        &notif_id,
-        NotificationDeliveryStatus::Delivered,
-    )
-    .expect("status update failed");
+        NotificationSystem::update_notification_status(
+            env,
+            &notif_id,
+            NotificationDeliveryStatus::Delivered,
+        )
+        .expect("status update failed");
 
-    // Decode - panics if shape is wrong, proving no extra fields.
-    let (emitted_id, emitted_status) = latest_status_payload(env);
-    assert_eq!(emitted_id, notif_id);
-    assert_eq!(emitted_status, NotificationDeliveryStatus::Delivered);
+        // Decode - panics if shape is wrong, proving no extra fields.
+        let (emitted_id, emitted_status) = latest_status_payload(env);
+        assert_eq!(emitted_id, notif_id);
+        assert_eq!(emitted_status, NotificationDeliveryStatus::Delivered);
     });
 }
 
@@ -345,17 +352,17 @@ fn test_status_event_payload_contains_no_pii() {
 #[test]
 fn test_pref_up_payload_contains_only_address() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let user = Address::generate(env);
-    let prefs = NotificationSystem::get_user_preferences(env, &user);
-    NotificationSystem::update_user_preferences(env, &user, prefs);
+        let user = Address::generate(env);
+        let prefs = NotificationSystem::get_user_preferences(env, &user);
+        NotificationSystem::update_user_preferences(env, &user, prefs);
 
-    // Payload shape: (Address,)
-    let raw = latest_data_val(env, symbol_short!("pref_up"));
-    let (emitted_user,) = <(Address,)>::try_from_val(env, &raw)
-        .expect("pref_up payload must be (Address,)");
-    assert_eq!(emitted_user, user);
+        // Payload shape: (Address,)
+        let raw = latest_data_val(env, symbol_short!("pref_up"));
+        let (emitted_user,) =
+            <(Address,)>::try_from_val(env, &raw).expect("pref_up payload must be (Address,)");
+        assert_eq!(emitted_user, user);
     });
 }
 
@@ -367,36 +374,35 @@ fn test_pref_up_payload_contains_only_address() {
 #[test]
 fn test_each_status_transition_emits_one_event() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
-    let notif_id = 
-        create_notif(
+        let recipient = Address::generate(env);
+        let notif_id = create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::InvoiceVerified,
-        NotificationPriority::High,
-    );
-
-    let transitions = [
-        NotificationDeliveryStatus::Sent,
-        NotificationDeliveryStatus::Delivered,
-        NotificationDeliveryStatus::Read,
-    ];
-
-    for (i, status) in transitions.iter().enumerate() {
-        let before = count_topic(env, symbol_short!("n_status"));
-        NotificationSystem::update_notification_status(env, &notif_id, status.clone())
-            .expect("status update failed");
-        let after = count_topic(env, symbol_short!("n_status"));
-        assert_eq!(
-            after - before,
-            1,
-            "transition {} should emit exactly 1 n_status event",
-            i
+            NotificationType::InvoiceVerified,
+            NotificationPriority::High,
         );
-    }
+
+        let transitions = [
+            NotificationDeliveryStatus::Sent,
+            NotificationDeliveryStatus::Delivered,
+            NotificationDeliveryStatus::Read,
+        ];
+
+        for (i, status) in transitions.iter().enumerate() {
+            let before = count_topic(env, symbol_short!("n_status"));
+            NotificationSystem::update_notification_status(env, &notif_id, status.clone())
+                .expect("status update failed");
+            let after = count_topic(env, symbol_short!("n_status"));
+            assert_eq!(
+                after - before,
+                1,
+                "transition {} should emit exactly 1 n_status event",
+                i
+            );
+        }
     });
 }
 
@@ -404,31 +410,30 @@ fn test_each_status_transition_emits_one_event() {
 #[test]
 fn test_failed_status_emits_one_event() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
-    let notif_id = 
-        create_notif(
+        let recipient = Address::generate(env);
+        let notif_id = create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::PaymentOverdue,
-        NotificationPriority::Critical,
-    );
+            NotificationType::PaymentOverdue,
+            NotificationPriority::Critical,
+        );
 
-    let before = count_topic(env, symbol_short!("n_status"));
-    NotificationSystem::update_notification_status(
-        env,
-        &notif_id,
-        NotificationDeliveryStatus::Failed,
-    )
-    .expect("status update failed");
-    let after = count_topic(env, symbol_short!("n_status"));
+        let before = count_topic(env, symbol_short!("n_status"));
+        NotificationSystem::update_notification_status(
+            env,
+            &notif_id,
+            NotificationDeliveryStatus::Failed,
+        )
+        .expect("status update failed");
+        let after = count_topic(env, symbol_short!("n_status"));
 
-    assert_eq!(after - before, 1);
-    let (emitted_id, emitted_status) = latest_status_payload(env);
-    assert_eq!(emitted_id, notif_id);
-    assert_eq!(emitted_status, NotificationDeliveryStatus::Failed);
+        assert_eq!(after - before, 1);
+        let (emitted_id, emitted_status) = latest_status_payload(env);
+        assert_eq!(emitted_id, notif_id);
+        assert_eq!(emitted_status, NotificationDeliveryStatus::Failed);
     });
 }
 
@@ -441,63 +446,66 @@ fn test_failed_status_emits_one_event() {
 #[test]
 fn test_all_types_blocked_emits_no_events() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    // Disable every type.
-    let prefs = NotificationPreferences {
-        user: recipient.clone(),
-        invoice_created: false,
-        invoice_verified: false,
-        invoice_status_changed: false,
-        bid_received: false,
-        bid_accepted: false,
-        payment_received: false,
-        payment_overdue: false,
-        invoice_defaulted: false,
-        system_alerts: false,
-        general: false,
-        minimum_priority: NotificationPriority::Critical,
-        updated_at: env.ledger().timestamp(),
-    };
-    NotificationSystem::update_user_preferences(env, &recipient, prefs);
+        // Disable every type.
+        let prefs = NotificationPreferences {
+            user: recipient.clone(),
+            invoice_created: false,
+            invoice_verified: false,
+            invoice_status_changed: false,
+            bid_received: false,
+            bid_accepted: false,
+            payment_received: false,
+            payment_overdue: false,
+            invoice_defaulted: false,
+            system_alerts: false,
+            general: false,
+            minimum_priority: NotificationPriority::Critical,
+            updated_at: env.ledger().timestamp(),
+        };
+        NotificationSystem::update_user_preferences(env, &recipient, prefs);
 
-    let all_types = [
-        NotificationType::InvoiceCreated,
-        NotificationType::InvoiceVerified,
-        NotificationType::InvoiceStatusChanged,
-        NotificationType::BidReceived,
-        NotificationType::BidAccepted,
-        NotificationType::PaymentReceived,
-        NotificationType::PaymentOverdue,
-        NotificationType::InvoiceDefaulted,
-        NotificationType::SystemAlert,
-        NotificationType::General,
-    ];
+        let all_types = [
+            NotificationType::InvoiceCreated,
+            NotificationType::InvoiceVerified,
+            NotificationType::InvoiceStatusChanged,
+            NotificationType::BidReceived,
+            NotificationType::BidAccepted,
+            NotificationType::PaymentReceived,
+            NotificationType::PaymentOverdue,
+            NotificationType::InvoiceDefaulted,
+            NotificationType::SystemAlert,
+            NotificationType::General,
+        ];
 
-    let before = count_topic(env, symbol_short!("notif"));
-    for ntype in all_types {
-        let result = NotificationSystem::create_notification(
-            env,
-            recipient.clone(),
-            ntype,
-            NotificationPriority::Low, // below Critical minimum
-            String::from_str(env, "T"),
-            String::from_str(env, "M"),
-            None,
+        let before = count_topic(env, symbol_short!("notif"));
+        for ntype in all_types {
+            let result = NotificationSystem::create_notification(
+                env,
+                recipient.clone(),
+                ntype,
+                NotificationPriority::Low, // below Critical minimum
+                String::from_str(env, "T"),
+                String::from_str(env, "M"),
+                None,
+            );
+            assert!(
+                matches!(
+                    result,
+                    Err(crate::errors::QuickLendXError::NotificationBlocked)
+                ),
+                "expected NotificationBlocked"
+            );
+        }
+        let after = count_topic(env, symbol_short!("notif"));
+        assert_eq!(
+            after - before,
+            0,
+            "no notif events should be emitted when all types are blocked"
         );
-        assert!(
-            matches!(result, Err(crate::errors::QuickLendXError::NotificationBlocked)),
-            "expected NotificationBlocked"
-        );
-    }
-    let after = count_topic(env, symbol_short!("notif"));
-    assert_eq!(
-        after - before,
-        0,
-        "no notif events should be emitted when all types are blocked"
-    );
     });
 }
 
@@ -505,34 +513,34 @@ fn test_all_types_blocked_emits_no_events() {
 #[test]
 fn test_below_minimum_priority_emits_no_event() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    // Set minimum priority to High.
-    let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
-    prefs.minimum_priority = NotificationPriority::High;
-    NotificationSystem::update_user_preferences(env, &recipient, prefs);
+        // Set minimum priority to High.
+        let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
+        prefs.minimum_priority = NotificationPriority::High;
+        NotificationSystem::update_user_preferences(env, &recipient, prefs);
 
-    let before = count_topic(env, symbol_short!("notif"));
+        let before = count_topic(env, symbol_short!("notif"));
 
-    // Low priority - should be blocked.
-    let result = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-        String::from_str(env, "T"),
-        String::from_str(env, "M"),
-        None,
-    );
-    assert!(matches!(
-        result,
-        Err(crate::errors::QuickLendXError::NotificationBlocked)
-    ));
+        // Low priority - should be blocked.
+        let result = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+            String::from_str(env, "T"),
+            String::from_str(env, "M"),
+            None,
+        );
+        assert!(matches!(
+            result,
+            Err(crate::errors::QuickLendXError::NotificationBlocked)
+        ));
 
-    let after = count_topic(env, symbol_short!("notif"));
-    assert_eq!(after - before, 0);
+        let after = count_topic(env, symbol_short!("notif"));
+        assert_eq!(after - before, 0);
     });
 }
 
@@ -540,28 +548,28 @@ fn test_below_minimum_priority_emits_no_event() {
 #[test]
 fn test_at_minimum_priority_emits_event() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
-    prefs.minimum_priority = NotificationPriority::High;
-    NotificationSystem::update_user_preferences(env, &recipient, prefs);
+        let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
+        prefs.minimum_priority = NotificationPriority::High;
+        NotificationSystem::update_user_preferences(env, &recipient, prefs);
 
-    let before = count_topic(env, symbol_short!("notif"));
+        let before = count_topic(env, symbol_short!("notif"));
 
-    // High priority - should pass.
-    
+        // High priority - should pass.
+
         create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::InvoiceVerified,
-        NotificationPriority::High,
-    );
+            NotificationType::InvoiceVerified,
+            NotificationPriority::High,
+        );
 
-    let after = count_topic(env, symbol_short!("notif"));
-    assert_eq!(after - before, 1);
+        let after = count_topic(env, symbol_short!("notif"));
+        assert_eq!(after - before, 1);
     });
 }
 
@@ -574,31 +582,32 @@ fn test_at_minimum_priority_emits_event() {
 #[test]
 fn test_notification_ids_differ_across_timestamps() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    let id1 = 
-        create_notif(
+        let id1 = create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-    );
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+        );
 
-    env.ledger().set_timestamp(1_001);
+        env.ledger().set_timestamp(1_001);
 
-    let id2 = 
-        create_notif(
+        let id2 = create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-    );
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+        );
 
-    assert_ne!(id1, id2, "notifications at different timestamps must have distinct IDs");
+        assert_ne!(
+            id1, id2,
+            "notifications at different timestamps must have distinct IDs"
+        );
     });
 }
 
@@ -611,32 +620,31 @@ fn test_notification_ids_differ_across_timestamps() {
 #[test]
 fn test_read_only_queries_emit_no_events() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
-    let notif_id = 
-        create_notif(
+        let recipient = Address::generate(env);
+        let notif_id = create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-    );
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+        );
 
-    // Snapshot event count after creation.
-    let snapshot = env.events().all().events().len();
+        // Snapshot event count after creation.
+        let snapshot = env.events().all().events().len();
 
-    // Read-only calls.
-    let _ = NotificationSystem::get_notification(env, &notif_id);
-    let _ = NotificationSystem::get_user_notifications(env, &recipient);
-    let _ = NotificationSystem::get_user_preferences(env, &recipient);
-    let _ = NotificationSystem::get_user_notification_stats(env, &recipient);
+        // Read-only calls.
+        let _ = NotificationSystem::get_notification(env, &notif_id);
+        let _ = NotificationSystem::get_user_notifications(env, &recipient);
+        let _ = NotificationSystem::get_user_preferences(env, &recipient);
+        let _ = NotificationSystem::get_user_notification_stats(env, &recipient);
 
-    assert_eq!(
-        env.events().all().events().len(),
-        snapshot,
-        "read-only queries must not emit any events"
-    );
+        assert_eq!(
+            env.events().all().events().len(),
+            snapshot,
+            "read-only queries must not emit any events"
+        );
     });
 }
 
@@ -649,23 +657,30 @@ fn test_read_only_queries_emit_no_events() {
 #[test]
 fn test_status_update_on_missing_notification_emits_no_event() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let fake_id = BytesN::from_array(env, &[0u8; 32]);
+        let fake_id = BytesN::from_array(env, &[0u8; 32]);
 
-    let before = count_topic(env, symbol_short!("n_status"));
-    let result = NotificationSystem::update_notification_status(
-        env,
-        &fake_id,
-        NotificationDeliveryStatus::Delivered,
-    );
-    let after = count_topic(env, symbol_short!("n_status"));
+        let before = count_topic(env, symbol_short!("n_status"));
+        let result = NotificationSystem::update_notification_status(
+            env,
+            &fake_id,
+            NotificationDeliveryStatus::Delivered,
+        );
+        let after = count_topic(env, symbol_short!("n_status"));
 
-    assert!(
-        matches!(result, Err(crate::errors::QuickLendXError::NotificationNotFound)),
-        "expected NotificationNotFound"
-    );
-    assert_eq!(after - before, 0, "no n_status event on missing notification");
+        assert!(
+            matches!(
+                result,
+                Err(crate::errors::QuickLendXError::NotificationNotFound)
+            ),
+            "expected NotificationNotFound"
+        );
+        assert_eq!(
+            after - before,
+            0,
+            "no n_status event on missing notification"
+        );
     });
 }
 
@@ -678,34 +693,33 @@ fn test_status_update_on_missing_notification_emits_no_event() {
 #[test]
 fn test_notif_payload_fields_are_deterministic() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
+        env.ledger().set_timestamp(1_000);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    
         create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::BidReceived,
-        NotificationPriority::Medium,
-    );
-    let (_, r1, t1, p1) = latest_notif_payload(env);
+            NotificationType::BidReceived,
+            NotificationPriority::Medium,
+        );
+        let (_, r1, t1, p1) = latest_notif_payload(env);
 
-    env.ledger().set_timestamp(1_001);
-    
+        env.ledger().set_timestamp(1_001);
+
         create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::BidReceived,
-        NotificationPriority::Medium,
-    );
-    let (_, r2, t2, p2) = latest_notif_payload(env);
+            NotificationType::BidReceived,
+            NotificationPriority::Medium,
+        );
+        let (_, r2, t2, p2) = latest_notif_payload(env);
 
-    assert_eq!(r1, r2, "recipient must be consistent");
-    assert_eq!(t1, t2, "notification type must be consistent");
-    assert_eq!(p1, p2, "priority must be consistent");
+        assert_eq!(r1, r2, "recipient must be consistent");
+        assert_eq!(t1, t2, "notification type must be consistent");
+        assert_eq!(p1, p2, "priority must be consistent");
     });
 }
 
@@ -718,49 +732,47 @@ fn test_notif_payload_fields_are_deterministic() {
 #[test]
 fn test_idempotency_key_derivation_is_deterministic() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
-    env.ledger().set_sequence_number(100);
+        env.ledger().set_timestamp(1_000);
+        env.ledger().set_sequence_number(100);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    // Create first notification
-    let notif_id_1 = 
-        create_notif(
+        // Create first notification
+        let notif_id_1 = create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-    );
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+        );
 
-    let notif_1 = NotificationSystem::get_notification(env, &notif_id_1)
-        .expect("notification not found");
-    let key_1 = notif_1.idempotency_key.clone();
+        let notif_1 =
+            NotificationSystem::get_notification(env, &notif_id_1).expect("notification not found");
+        let key_1 = notif_1.idempotency_key.clone();
 
-    // Create second notification with same parameters at same ledger sequence
-    // (but different timestamp, so different notification ID)
-    env.ledger().set_timestamp(1_001);
-    let notif_id_2 = 
-        create_notif(
+        // Create second notification with same parameters at same ledger sequence
+        // (but different timestamp, so different notification ID)
+        env.ledger().set_timestamp(1_001);
+        let notif_id_2 = create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-    );
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+        );
 
-    let notif_2 = NotificationSystem::get_notification(env, &notif_id_2)
-        .expect("notification not found");
-    let key_2 = notif_2.idempotency_key.clone();
+        let notif_2 =
+            NotificationSystem::get_notification(env, &notif_id_2).expect("notification not found");
+        let key_2 = notif_2.idempotency_key.clone();
 
-    // Keys should differ because timestamps (nonces) differ
-    assert_ne!(
-        key_1, key_2,
-        "different timestamps should produce different idempotency keys"
-    );
+        // Keys should differ because timestamps (nonces) differ
+        assert_ne!(
+            key_1, key_2,
+            "different timestamps should produce different idempotency keys"
+        );
 
-    // But notification IDs should also differ
-    assert_ne!(notif_id_1, notif_id_2, "notification IDs should differ");
+        // But notification IDs should also differ
+        assert_ne!(notif_id_1, notif_id_2, "notification IDs should differ");
     });
 }
 
@@ -769,49 +781,52 @@ fn test_idempotency_key_derivation_is_deterministic() {
 #[test]
 fn test_replay_same_notification_is_rejected() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
-    env.ledger().set_sequence_number(100);
+        env.ledger().set_timestamp(1_000);
+        env.ledger().set_sequence_number(100);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    // First submission succeeds
-    let result1 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::InvoiceVerified,
-        NotificationPriority::High,
-        String::from_str(env, "Title"),
-        String::from_str(env, "Message"),
-        None,
-    );
-    assert!(result1.is_ok(), "first submission should succeed");
+        // First submission succeeds
+        let result1 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::InvoiceVerified,
+            NotificationPriority::High,
+            String::from_str(env, "Title"),
+            String::from_str(env, "Message"),
+            None,
+        );
+        assert!(result1.is_ok(), "first submission should succeed");
 
-    let before = count_topic(env, symbol_short!("notif"));
+        let before = count_topic(env, symbol_short!("notif"));
 
-    // Replay with same parameters (same timestamp, same ledger sequence)
-    // This simulates a transaction being resubmitted
-    let result2 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::InvoiceVerified,
-        NotificationPriority::High,
-        String::from_str(env, "Title"),
-        String::from_str(env, "Message"),
-        None,
-    );
+        // Replay with same parameters (same timestamp, same ledger sequence)
+        // This simulates a transaction being resubmitted
+        let result2 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::InvoiceVerified,
+            NotificationPriority::High,
+            String::from_str(env, "Title"),
+            String::from_str(env, "Message"),
+            None,
+        );
 
-    // Should be rejected as duplicate
-    assert!(
-        matches!(result2, Err(crate::errors::QuickLendXError::NotificationDuplicate)),
-        "replay should be rejected with NotificationDuplicate"
-    );
+        // Should be rejected as duplicate
+        assert!(
+            matches!(
+                result2,
+                Err(crate::errors::QuickLendXError::NotificationDuplicate)
+            ),
+            "replay should be rejected with NotificationDuplicate"
+        );
 
-    let after = count_topic(env, symbol_short!("notif"));
-    assert_eq!(
-        after - before,
-        0,
-        "replay rejection must not emit any notif events"
-    );
+        let after = count_topic(env, symbol_short!("notif"));
+        assert_eq!(
+            after - before,
+            0,
+            "replay rejection must not emit any notif events"
+        );
     });
 }
 
@@ -820,57 +835,64 @@ fn test_replay_same_notification_is_rejected() {
 #[test]
 fn test_replay_rejection_across_all_notification_kinds() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
-    env.ledger().set_sequence_number(100);
+        env.ledger().set_timestamp(1_000);
+        env.ledger().set_sequence_number(100);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
-    prefs.general = true;
-    NotificationSystem::update_user_preferences(env, &recipient, prefs);
+        let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
+        prefs.general = true;
+        NotificationSystem::update_user_preferences(env, &recipient, prefs);
 
-    let all_types = [
-        NotificationType::InvoiceCreated,
-        NotificationType::InvoiceVerified,
-        NotificationType::InvoiceStatusChanged,
-        NotificationType::BidReceived,
-        NotificationType::BidAccepted,
-        NotificationType::PaymentReceived,
-        NotificationType::PaymentOverdue,
-        NotificationType::InvoiceDefaulted,
-        NotificationType::SystemAlert,
-        NotificationType::General,
-    ];
+        let all_types = [
+            NotificationType::InvoiceCreated,
+            NotificationType::InvoiceVerified,
+            NotificationType::InvoiceStatusChanged,
+            NotificationType::BidReceived,
+            NotificationType::BidAccepted,
+            NotificationType::PaymentReceived,
+            NotificationType::PaymentOverdue,
+            NotificationType::InvoiceDefaulted,
+            NotificationType::SystemAlert,
+            NotificationType::General,
+        ];
 
-    for ntype in all_types {
-        // First submission
-        let result1 = NotificationSystem::create_notification(
-            env,
-            recipient.clone(),
-            ntype.clone(),
-            NotificationPriority::Medium,
-            String::from_str(env, "T"),
-            String::from_str(env, "M"),
-            None,
-        );
-        assert!(result1.is_ok(), "first submission for {:?} should succeed", ntype);
+        for ntype in all_types {
+            // First submission
+            let result1 = NotificationSystem::create_notification(
+                env,
+                recipient.clone(),
+                ntype.clone(),
+                NotificationPriority::Medium,
+                String::from_str(env, "T"),
+                String::from_str(env, "M"),
+                None,
+            );
+            assert!(
+                result1.is_ok(),
+                "first submission for {:?} should succeed",
+                ntype
+            );
 
-        // Replay
-        let result2 = NotificationSystem::create_notification(
-            env,
-            recipient.clone(),
-            ntype.clone(),
-            NotificationPriority::Medium,
-            String::from_str(env, "T"),
-            String::from_str(env, "M"),
-            None,
-        );
-        assert!(
-            matches!(result2, Err(crate::errors::QuickLendXError::NotificationDuplicate)),
-            "replay for {:?} should be rejected",
-            ntype
-        );
-    }
+            // Replay
+            let result2 = NotificationSystem::create_notification(
+                env,
+                recipient.clone(),
+                ntype.clone(),
+                NotificationPriority::Medium,
+                String::from_str(env, "T"),
+                String::from_str(env, "M"),
+                None,
+            );
+            assert!(
+                matches!(
+                    result2,
+                    Err(crate::errors::QuickLendXError::NotificationDuplicate)
+                ),
+                "replay for {:?} should be rejected",
+                ntype
+            );
+        }
     });
 }
 
@@ -879,38 +901,38 @@ fn test_replay_rejection_across_all_notification_kinds() {
 #[test]
 fn test_different_recipients_not_rejected_as_duplicates() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
-    env.ledger().set_sequence_number(100);
+        env.ledger().set_timestamp(1_000);
+        env.ledger().set_sequence_number(100);
 
-    let recipient1 = Address::generate(env);
-    let recipient2 = Address::generate(env);
+        let recipient1 = Address::generate(env);
+        let recipient2 = Address::generate(env);
 
-    // First notification to recipient1
-    let result1 = NotificationSystem::create_notification(
-        env,
-        recipient1.clone(),
-        NotificationType::PaymentReceived,
-        NotificationPriority::High,
-        String::from_str(env, "T"),
-        String::from_str(env, "M"),
-        None,
-    );
-    assert!(result1.is_ok());
+        // First notification to recipient1
+        let result1 = NotificationSystem::create_notification(
+            env,
+            recipient1.clone(),
+            NotificationType::PaymentReceived,
+            NotificationPriority::High,
+            String::from_str(env, "T"),
+            String::from_str(env, "M"),
+            None,
+        );
+        assert!(result1.is_ok());
 
-    // Same notification type to recipient2 (different target_id)
-    let result2 = NotificationSystem::create_notification(
-        env,
-        recipient2.clone(),
-        NotificationType::PaymentReceived,
-        NotificationPriority::High,
-        String::from_str(env, "T"),
-        String::from_str(env, "M"),
-        None,
-    );
-    assert!(
-        result2.is_ok(),
-        "different recipients should not be rejected as duplicates"
-    );
+        // Same notification type to recipient2 (different target_id)
+        let result2 = NotificationSystem::create_notification(
+            env,
+            recipient2.clone(),
+            NotificationType::PaymentReceived,
+            NotificationPriority::High,
+            String::from_str(env, "T"),
+            String::from_str(env, "M"),
+            None,
+        );
+        assert!(
+            result2.is_ok(),
+            "different recipients should not be rejected as duplicates"
+        );
     });
 }
 
@@ -920,40 +942,40 @@ fn test_different_recipients_not_rejected_as_duplicates() {
 #[test]
 fn test_different_ledger_sequences_produce_different_keys() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
-    env.ledger().set_sequence_number(100);
+        env.ledger().set_timestamp(1_000);
+        env.ledger().set_sequence_number(100);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    // First notification at ledger 100
-    let result1 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::BidAccepted,
-        NotificationPriority::High,
-        String::from_str(env, "T"),
-        String::from_str(env, "M"),
-        None,
-    );
-    assert!(result1.is_ok());
+        // First notification at ledger 100
+        let result1 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::BidAccepted,
+            NotificationPriority::High,
+            String::from_str(env, "T"),
+            String::from_str(env, "M"),
+            None,
+        );
+        assert!(result1.is_ok());
 
-    // Advance ledger sequence
-    env.ledger().set_sequence_number(101);
+        // Advance ledger sequence
+        env.ledger().set_sequence_number(101);
 
-    // Same notification at ledger 101 should succeed (different ledger_seq)
-    let result2 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::BidAccepted,
-        NotificationPriority::High,
-        String::from_str(env, "T"),
-        String::from_str(env, "M"),
-        None,
-    );
-    assert!(
-        result2.is_ok(),
-        "different ledger sequences should produce different keys"
-    );
+        // Same notification at ledger 101 should succeed (different ledger_seq)
+        let result2 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::BidAccepted,
+            NotificationPriority::High,
+            String::from_str(env, "T"),
+            String::from_str(env, "M"),
+            None,
+        );
+        assert!(
+            result2.is_ok(),
+            "different ledger sequences should produce different keys"
+        );
     });
 }
 
@@ -962,49 +984,52 @@ fn test_different_ledger_sequences_produce_different_keys() {
 #[test]
 fn test_replay_protection_per_notification_type() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
-    env.ledger().set_sequence_number(100);
+        env.ledger().set_timestamp(1_000);
+        env.ledger().set_sequence_number(100);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    // Create InvoiceCreated notification
-    let result1 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-        String::from_str(env, "T"),
-        String::from_str(env, "M"),
-        None,
-    );
-    assert!(result1.is_ok());
+        // Create InvoiceCreated notification
+        let result1 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+            String::from_str(env, "T"),
+            String::from_str(env, "M"),
+            None,
+        );
+        assert!(result1.is_ok());
 
-    // Replay InvoiceCreated - should be rejected
-    let result2 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-        String::from_str(env, "T"),
-        String::from_str(env, "M"),
-        None,
-    );
-    assert!(matches!(
-        result2,
-        Err(crate::errors::QuickLendXError::NotificationDuplicate)
-    ));
+        // Replay InvoiceCreated - should be rejected
+        let result2 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+            String::from_str(env, "T"),
+            String::from_str(env, "M"),
+            None,
+        );
+        assert!(matches!(
+            result2,
+            Err(crate::errors::QuickLendXError::NotificationDuplicate)
+        ));
 
-    // Different type (BidAccepted) at same ledger should succeed
-    let result3 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::BidAccepted,
-        NotificationPriority::Medium,
-        String::from_str(env, "T"),
-        String::from_str(env, "M"),
-        None,
-    );
-    assert!(result3.is_ok(), "different notification type should not be rejected");
+        // Different type (BidAccepted) at same ledger should succeed
+        let result3 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::BidAccepted,
+            NotificationPriority::Medium,
+            String::from_str(env, "T"),
+            String::from_str(env, "M"),
+            None,
+        );
+        assert!(
+            result3.is_ok(),
+            "different notification type should not be rejected"
+        );
     });
 }
 
@@ -1012,36 +1037,35 @@ fn test_replay_protection_per_notification_type() {
 #[test]
 fn test_idempotency_key_stored_in_notification() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
-    env.ledger().set_sequence_number(100);
+        env.ledger().set_timestamp(1_000);
+        env.ledger().set_sequence_number(100);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    let notif_id = 
-        create_notif(
+        let notif_id = create_notif(
             env,
             contract_id,
             &recipient,
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-    );
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+        );
 
-    let notification = NotificationSystem::get_notification(env, &notif_id)
-        .expect("notification not found");
+        let notification =
+            NotificationSystem::get_notification(env, &notif_id).expect("notification not found");
 
-    // Idempotency key must be a 32-byte value
-    assert_eq!(
-        notification.idempotency_key.len(),
-        32,
-        "idempotency key must be 32 bytes"
-    );
+        // Idempotency key must be a 32-byte value
+        assert_eq!(
+            notification.idempotency_key.len(),
+            32,
+            "idempotency key must be 32 bytes"
+        );
 
-    // Key must be non-zero (not a default/empty value)
-    let zero_key = BytesN::from_array(env, &[0u8; 32]);
-    assert_ne!(
-        notification.idempotency_key, zero_key,
-        "idempotency key must not be zero"
-    );
+        // Key must be non-zero (not a default/empty value)
+        let zero_key = BytesN::from_array(env, &[0u8; 32]);
+        assert_ne!(
+            notification.idempotency_key, zero_key,
+            "idempotency key must not be zero"
+        );
     });
 }
 
@@ -1050,50 +1074,50 @@ fn test_idempotency_key_stored_in_notification() {
 #[test]
 fn test_blocked_notification_does_not_consume_idempotency_key() {
     run_notif_test(|env, contract_id| {
-    env.ledger().set_timestamp(1_000);
-    env.ledger().set_sequence_number(100);
+        env.ledger().set_timestamp(1_000);
+        env.ledger().set_sequence_number(100);
 
-    let recipient = Address::generate(env);
+        let recipient = Address::generate(env);
 
-    // Block InvoiceCreated notifications
-    let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
-    prefs.invoice_created = false;
-    NotificationSystem::update_user_preferences(env, &recipient, prefs);
+        // Block InvoiceCreated notifications
+        let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
+        prefs.invoice_created = false;
+        NotificationSystem::update_user_preferences(env, &recipient, prefs);
 
-    // First attempt - blocked
-    let result1 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-        String::from_str(env, "T"),
-        String::from_str(env, "M"),
-        None,
-    );
-    assert!(matches!(
-        result1,
-        Err(crate::errors::QuickLendXError::NotificationBlocked)
-    ));
+        // First attempt - blocked
+        let result1 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+            String::from_str(env, "T"),
+            String::from_str(env, "M"),
+            None,
+        );
+        assert!(matches!(
+            result1,
+            Err(crate::errors::QuickLendXError::NotificationBlocked)
+        ));
 
-    // Unblock the notification type
-    let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
-    prefs.invoice_created = true;
-    NotificationSystem::update_user_preferences(env, &recipient, prefs);
+        // Unblock the notification type
+        let mut prefs = NotificationSystem::get_user_preferences(env, &recipient);
+        prefs.invoice_created = true;
+        NotificationSystem::update_user_preferences(env, &recipient, prefs);
 
-    // Second attempt with same parameters should succeed (key not consumed)
-    let result2 = NotificationSystem::create_notification(
-        env,
-        recipient.clone(),
-        NotificationType::InvoiceCreated,
-        NotificationPriority::Medium,
-        String::from_str(env, "T"),
-        String::from_str(env, "M"),
-        None,
-    );
-    assert!(
-        result2.is_ok(),
-        "unblocked notification should succeed even with same parameters"
-    );
+        // Second attempt with same parameters should succeed (key not consumed)
+        let result2 = NotificationSystem::create_notification(
+            env,
+            recipient.clone(),
+            NotificationType::InvoiceCreated,
+            NotificationPriority::Medium,
+            String::from_str(env, "T"),
+            String::from_str(env, "M"),
+            None,
+        );
+        assert!(
+            result2.is_ok(),
+            "unblocked notification should succeed even with same parameters"
+        );
     });
 }
 
@@ -1185,7 +1209,10 @@ fn test_wire_accept_bid_emits_bid_accepted_notification() {
     let (_invoice_id, _bid_id) =
         funded_invoice_fixture(&env, &client, &business, &investor, &currency);
     assert!(notification_type_for_user(
-        &env, &contract_id, &investor, NotificationType::BidAccepted,
+        &env,
+        &contract_id,
+        &investor,
+        NotificationType::BidAccepted,
     ));
 }
 
@@ -1202,7 +1229,10 @@ fn test_wire_partial_payment_emits_payment_received_notification() {
     tok.approve(&business, &client.address, &10_000, &exp);
     client.process_partial_payment(&invoice_id, &2_000, &String::from_str(&env, "tx-1"));
     assert!(notification_type_for_user(
-        &env, &contract_id, &business, NotificationType::PaymentReceived,
+        &env,
+        &contract_id,
+        &business,
+        NotificationType::PaymentReceived,
     ));
 }
 
@@ -1219,7 +1249,10 @@ fn test_wire_settlement_emits_status_changed_notification() {
     tok.approve(&business, &client.address, &10_000, &exp);
     client.settle_invoice(&invoice_id, &10_000);
     assert!(notification_type_for_user(
-        &env, &contract_id, &business, NotificationType::InvoiceStatusChanged,
+        &env,
+        &contract_id,
+        &business,
+        NotificationType::InvoiceStatusChanged,
     ));
 }
 
@@ -1232,7 +1265,10 @@ fn test_wire_default_emits_invoice_defaulted_notification() {
     env.ledger().set_timestamp(9_999_999);
     let _ = client.try_mark_invoice_defaulted(&invoice_id, &None);
     assert!(notification_type_for_user(
-        &env, &contract_id, &business, NotificationType::InvoiceDefaulted,
+        &env,
+        &contract_id,
+        &business,
+        NotificationType::InvoiceDefaulted,
     ));
 }
 
@@ -1243,12 +1279,16 @@ fn test_wire_dispute_lifecycle_notifications() {
     let (invoice_id, _bid_id) =
         funded_invoice_fixture(&env, &client, &business, &investor, &currency);
     client.create_dispute(
-        &invoice_id, &business,
+        &invoice_id,
+        &business,
         &String::from_str(&env, "reason"),
         &String::from_str(&env, "evidence"),
     );
     assert!(notification_type_for_user(
-        &env, &contract_id, &business, NotificationType::SystemAlert,
+        &env,
+        &contract_id,
+        &business,
+        NotificationType::SystemAlert,
     ));
     client.put_dispute_under_review(&invoice_id, &admin);
     env.ledger().set_timestamp(env.ledger().timestamp() + 1);
@@ -1256,7 +1296,10 @@ fn test_wire_dispute_lifecycle_notifications() {
     let count = env.as_contract(&contract_id, || {
         NotificationSystem::get_user_notifications(&env, &business).len()
     });
-    assert!(count >= 2, "expected dispute opened + resolved notifications, got {count}");
+    assert!(
+        count >= 2,
+        "expected dispute opened + resolved notifications, got {count}"
+    );
 }
 
 #[test]
@@ -1279,6 +1322,9 @@ fn test_wire_payment_notification_respects_preferences() {
     tok.approve(&business, &client.address, &10_000, &exp);
     client.process_partial_payment(&invoice_id, &1_000, &String::from_str(&env, "tx-pref"));
     assert!(!notification_type_for_user(
-        &env, &contract_id, &business, NotificationType::PaymentReceived,
+        &env,
+        &contract_id,
+        &business,
+        NotificationType::PaymentReceived,
     ));
 }

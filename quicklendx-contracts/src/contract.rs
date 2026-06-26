@@ -289,6 +289,11 @@ impl QuickLendXContract {
         verify_business(&env, &admin, &business)
     }
 
+    /// Delete a business, removing it from any status list and marking as deleted.
+    pub fn delete_business(env: Env, business: Address) -> Result<(), QuickLendXError> {
+        BusinessVerificationStorage::delete_business(&env, &business)
+    }
+
     pub fn submit_investor_kyc(env: Env, investor: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
         InvestorVerificationStorage::submit(&env, &investor, kyc_data)
     }

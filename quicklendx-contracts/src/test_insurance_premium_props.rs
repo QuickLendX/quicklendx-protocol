@@ -399,11 +399,7 @@ mod test_insurance_premium_props {
     /// may saturate, but `saturating_mul` guarantees a finite value.
     #[test]
     fn prop_i128_max_amount_does_not_panic() {
-        for pct in [
-            MIN_COVERAGE_PERCENTAGE,
-            50,
-            MAX_COVERAGE_PERCENTAGE,
-        ] {
+        for pct in [MIN_COVERAGE_PERCENTAGE, 50, MAX_COVERAGE_PERCENTAGE] {
             let result = Investment::calculate_premium(i128::MAX, pct);
             // saturating_mul on i128::MAX * 100 saturates to i128::MAX;
             // checked_div then returns Some(i128::MAX), so the final premium
@@ -522,14 +518,14 @@ mod test_insurance_premium_props {
     #[test]
     fn prop_known_anchor_values_unchanged() {
         // Anchors from test_calculate_premium_typical_cases
-        assert_eq!(Investment::calculate_premium(10_000, 80),  160);
-        assert_eq!(Investment::calculate_premium(10_000, 50),  100);
+        assert_eq!(Investment::calculate_premium(10_000, 80), 160);
+        assert_eq!(Investment::calculate_premium(10_000, 50), 100);
         assert_eq!(Investment::calculate_premium(10_000, 100), 200);
-        assert_eq!(Investment::calculate_premium(10_000, 1),     2);
+        assert_eq!(Investment::calculate_premium(10_000, 1), 2);
 
         // Anchors from test_calculate_premium_minimum_floor
-        assert_eq!(Investment::calculate_premium(500, 1),   1); // floor
-        assert_eq!(Investment::calculate_premium(100, 1),   1); // floor
+        assert_eq!(Investment::calculate_premium(500, 1), 1); // floor
+        assert_eq!(Investment::calculate_premium(100, 1), 1); // floor
 
         // Large anchor from test_calculate_premium_overflow_safety
         assert_eq!(

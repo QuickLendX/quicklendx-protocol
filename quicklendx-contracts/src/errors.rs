@@ -24,7 +24,7 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceAlreadyDefaulted = 1006,
 
-    // Authorization (1100-1103)
+    // Authorization (1100-1104)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     Unauthorized = 1100,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -33,6 +33,9 @@ pub enum QuickLendXError {
     NotInvestor = 1102,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotAdmin = 1103,
+    /// Caller address equals the contract's own address (confused-deputy prevention).
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    SelfCallNotAllowed = 1104,
 
     // Input validation (1200-1204)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -68,9 +71,11 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     MaxBidsPerInvoiceExceeded = 1406,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
-    MaxInvoicesPerBusinessExceeded = 1407,
+    MaxActiveBidsPerInvestorExceeded = 1407,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
-    InvalidBidTtl = 1408,
+    MaxInvoicesPerBusinessExceeded = 1408,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidBidTtl = 1409,
 
     // Rating (1500-1503)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -95,6 +100,7 @@ pub enum QuickLendXError {
     InvalidKYCStatus = 1604,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvestorNotVerified = 1605,
+    BusinessDeleted = 1660,
 
     // Audit (1700-1702)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -125,6 +131,8 @@ pub enum QuickLendXError {
     RotationNotFound = 1854,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     RotationExpired = 1855,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    RotationTimelockNotElapsed = 1857,
 
     // Dispute (1900-1906)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -191,6 +199,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
+            QuickLendXError::SelfCallNotAllowed => symbol_short!("SELF_NA"),
             // Input validation
             QuickLendXError::InvalidAmount => symbol_short!("INV_AMT"),
             QuickLendXError::InvalidAddress => symbol_short!("INV_ADR"),
@@ -219,6 +228,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),
             QuickLendXError::InvalidKYCStatus => symbol_short!("KYC_IS"),
             QuickLendXError::InvestorNotVerified => symbol_short!("INV_NV"),
+            QuickLendXError::BusinessDeleted => symbol_short!("BUS_DEL"),
             // Audit
             QuickLendXError::AuditLogNotFound => symbol_short!("AUD_NF"),
             QuickLendXError::AuditIntegrityError => symbol_short!("AUD_IE"),
@@ -233,6 +243,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::RotationAlreadyPending => symbol_short!("ROT_PND"),
             QuickLendXError::RotationNotFound => symbol_short!("ROT_NF"),
             QuickLendXError::RotationExpired => symbol_short!("ROT_EXP"),
+            QuickLendXError::RotationTimelockNotElapsed => symbol_short!("ROT_TLK"),
             // Dispute
             QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
             QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
@@ -246,6 +257,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
             QuickLendXError::NotificationDuplicate => symbol_short!("NOT_DUP"),
             QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
+            QuickLendXError::MaxActiveBidsPerInvestorExceeded => symbol_short!("MAX_ACT"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),

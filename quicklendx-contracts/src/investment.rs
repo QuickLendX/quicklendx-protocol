@@ -185,8 +185,7 @@ impl Investment {
         premium: i128,
     ) -> Result<i128, QuickLendXError> {
         // Validate coverage percentage bounds.
-        if !(MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE).contains(&coverage_percentage)
-        {
+        if !(MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE).contains(&coverage_percentage) {
             return Err(QuickLendXError::InvalidCoveragePercentage);
         }
 
@@ -314,11 +313,11 @@ impl Investment {
 pub struct InvestmentStorage;
 
 /// Storage operations for investments.
-/// 
+///
 /// ## Invariants Maintained
 /// - Each invoice can have at most one investment record. The `get_investment_by_invoice`
 ///   lookup enforces this via a single invoice-to-investment mapping key.
-/// - Each investment exists in exactly one status index (Active, Completed, Defaulted, 
+/// - Each investment exists in exactly one status index (Active, Completed, Defaulted,
 ///   Refunded, or Withdrawn) based on its `status` field.
 /// - The active investment index (`act_inv`) contains ONLY investments with `status == Active`.
 ///   During any status transition leaving Active, the investment is removed from this index.
@@ -363,7 +362,9 @@ impl InvestmentStorage {
         extend_persistent_ttl(env, &investment.investment_id);
 
         let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
-        env.storage().persistent().set(&invoice_index_key, &investment.investment_id);
+        env.storage()
+            .persistent()
+            .set(&invoice_index_key, &investment.investment_id);
         extend_persistent_ttl(env, &invoice_index_key);
 
         // Add to investor index
@@ -430,7 +431,9 @@ impl InvestmentStorage {
         extend_persistent_ttl(env, &investment.investment_id);
 
         let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
-        env.storage().persistent().set(&invoice_index_key, &investment.investment_id);
+        env.storage()
+            .persistent()
+            .set(&invoice_index_key, &investment.investment_id);
         extend_persistent_ttl(env, &invoice_index_key);
     }
 

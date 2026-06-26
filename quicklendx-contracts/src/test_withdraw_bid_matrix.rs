@@ -80,20 +80,32 @@ fn place_bid(
     let currency = Address::generate(env);
     client.add_currency(admin, &currency);
     let due = env.ledger().timestamp() + 86_400;
-    let invoice_id = client.try_store_invoice(
-        business,
-        &1_000i128,
-        &currency,
-        &due,
-        &String::from_str(env, "inv").into_bytes(),
-        &InvoiceCategory::Services,
-        &Vec::new(env),
-    ).unwrap().unwrap();
+    let invoice_id = client
+        .try_store_invoice(
+            business,
+            &1_000i128,
+            &currency,
+            &due,
+            &String::from_str(env, "inv").into_bytes(),
+            &InvoiceCategory::Services,
+            &Vec::new(env),
+        )
+        .unwrap()
+        .unwrap();
     client.try_verify_invoice(&invoice_id).unwrap().unwrap();
     let investor = Address::generate(env);
-    client.try_submit_investor_kyc(&investor, &String::from_str(env, "kyc").into_bytes()).unwrap().unwrap();
-    client.try_verify_investor(&investor, &10_000i128).unwrap().unwrap();
-    let bid_id = client.try_place_bid(&investor, &invoice_id, &900i128, &950i128).unwrap().unwrap();
+    client
+        .try_submit_investor_kyc(&investor, &String::from_str(env, "kyc").into_bytes())
+        .unwrap()
+        .unwrap();
+    client
+        .try_verify_investor(&investor, &10_000i128)
+        .unwrap()
+        .unwrap();
+    let bid_id = client
+        .try_place_bid(&investor, &invoice_id, &900i128, &950i128)
+        .unwrap()
+        .unwrap();
     (bid_id, investor, invoice_id)
 }
 
@@ -108,12 +120,16 @@ fn test_investor_can_withdraw_own_placed_bid() {
 
     // mock_all_auths is active - investor auth is satisfied
     let result = client.try_withdraw_bid(&bid_id);
-    assert!(result.is_ok(), "investor should be able to withdraw their own Placed bid");
+    assert!(
+        result.is_ok(),
+        "investor should be able to withdraw their own Placed bid"
+    );
     result.unwrap(); // Unwrap to ensure no error
 
     let bid = client.try_get_bid(&bid_id).unwrap().unwrap();
     assert_eq!(
-        bid.status, BidStatus::Withdrawn,
+        bid.status,
+        BidStatus::Withdrawn,
         "bid status must be Withdrawn after withdraw_bid"
     );
     assert_eq!(bid.investor, investor, "investor field must be unchanged");
@@ -124,7 +140,10 @@ fn test_withdraw_bid_returns_ok_on_success() {
     let (env, client, admin, business) = setup();
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
     let result = client.try_withdraw_bid(&bid_id);
-    assert!(result.is_ok(), "withdraw_bid should return Ok for Placed bid");
+    assert!(
+        result.is_ok(),
+        "withdraw_bid should return Ok for Placed bid"
+    );
     result.unwrap(); // Unwrap to ensure no error
 }
 
@@ -144,7 +163,10 @@ fn test_withdraw_already_withdrawn_bid_fails() {
     let result = client.try_withdraw_bid(&bid_id);
     assert!(result.is_ok(), "should get a result");
     let err_result = result.unwrap();
-    assert!(err_result.is_err(), "withdrawing an already-Withdrawn bid must fail");
+    assert!(
+        err_result.is_err(),
+        "withdrawing an already-Withdrawn bid must fail"
+    );
     assert_eq!(
         err_result.unwrap_err(),
         QuickLendXError::OperationNotAllowed,
@@ -190,7 +212,7 @@ fn test_withdraw_accepted_bid_fails() {
     let err_result = result.unwrap();
     assert!(err_result.is_err(), "withdrawing an Accepted bid must fail");
     assert_eq!(
-        result.unwrap_err(),
+        err_result.unwrap_err(),
         QuickLendXError::OperationNotAllowed,
         "error must be OperationNotAllowed"
     );
@@ -206,7 +228,8 @@ fn test_withdraw_expired_bid_fails() {
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
 
     // Advance time past TTL (default 7 days = 604_800 seconds)
-    env.ledger().set_timestamp(env.ledger().timestamp() + 604_801);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 604_801);
 
     // Try to withdraw the expired bid
     let result = client.try_withdraw_bid(&bid_id);
@@ -231,7 +254,10 @@ fn test_withdraw_nonexistent_bid_fails() {
     let result = client.try_withdraw_bid(&fake_id);
     assert!(result.is_ok(), "should get a result");
     let err_result = result.unwrap();
-    assert!(err_result.is_err(), "withdrawing a non-existent bid must fail");
+    assert!(
+        err_result.is_err(),
+        "withdrawing a non-existent bid must fail"
+    );
     assert_eq!(
         result.unwrap_err(),
         QuickLendXError::StorageKeyNotFound,
@@ -274,7 +300,10 @@ fn test_third_party_cannot_withdraw_bid() {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         let _ = client.withdraw_bid(&bid_id);
     }));
-    assert!(result.is_err(), "third party must not be able to withdraw bid");
+    assert!(
+        result.is_err(),
+        "third party must not be able to withdraw bid"
+    );
 
     // Bid must still be Placed
     let bid = client.get_bid(&bid_id).unwrap();
@@ -410,7 +439,10 @@ fn test_withdrawn_bid_excluded_from_get_best_bid() {
     // Place a second bid with lower profit
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
-    client.try_verify_investor(&investor_b, &10_000i128).unwrap().unwrap();
+    client
+        .try_verify_investor(&investor_b, &10_000i128)
+        .unwrap()
+        .unwrap();
     let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &900i128);
 
     // Bid A has higher profit (950 - 900 = 50) than B (900 - 800 = 100)
@@ -451,17 +483,27 @@ fn test_withdrawn_bid_excluded_from_rank_bids() {
     // Place two more bids
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
-    client.try_verify_investor(&investor_b, &10_000i128).unwrap().unwrap();
+    client
+        .try_verify_investor(&investor_b, &10_000i128)
+        .unwrap()
+        .unwrap();
     let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &900i128);
 
     let investor_c = Address::generate(&env);
     client.submit_investor_kyc(&investor_c, &String::from_str(&env, "kyc"));
-    client.try_verify_investor(&investor_c, &10_000i128).unwrap().unwrap();
+    client
+        .try_verify_investor(&investor_c, &10_000i128)
+        .unwrap()
+        .unwrap();
     let bid_id_c = client.place_bid(&investor_c, &invoice_id, &700i128, &850i128);
 
     // Get ranked bids before withdrawal
     let ranked_before = client.get_ranked_bids(&invoice_id);
-    assert_eq!(ranked_before.len(), 3, "should have 3 bids before withdrawal");
+    assert_eq!(
+        ranked_before.len(),
+        3,
+        "should have 3 bids before withdrawal"
+    );
     assert!(
         ranked_before.iter().any(|b| b.bid_id == bid_id_a),
         "A should be in ranking"
@@ -480,7 +522,11 @@ fn test_withdrawn_bid_excluded_from_rank_bids() {
 
     // Get ranked bids after withdrawal
     let ranked_after = client.get_ranked_bids(&invoice_id);
-    assert_eq!(ranked_after.len(), 2, "should have 2 bids after B withdrawn");
+    assert_eq!(
+        ranked_after.len(),
+        2,
+        "should have 2 bids after B withdrawn"
+    );
     assert!(
         ranked_after.iter().any(|b| b.bid_id == bid_id_a),
         "A should still be in ranking"
@@ -516,11 +562,18 @@ fn test_all_withdrawn_bids_results_empty_ranking() {
 
     // Ranking should be empty
     let ranked = client.get_ranked_bids(&invoice_id);
-    assert_eq!(ranked.len(), 0, "ranking should be empty when all bids withdrawn");
+    assert_eq!(
+        ranked.len(),
+        0,
+        "ranking should be empty when all bids withdrawn"
+    );
 
     // Best bid should be None
     let best = client.get_best_bid(&invoice_id);
-    assert!(best.is_none(), "best bid should be None when all bids withdrawn");
+    assert!(
+        best.is_none(),
+        "best bid should be None when all bids withdrawn"
+    );
 }
 
 // ===========================================================================
@@ -592,7 +645,10 @@ fn test_withdraw_does_not_affect_other_bids_on_same_invoice() {
     // Place a second bid from a different investor
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
-    client.try_verify_investor(&investor_b, &10_000i128).unwrap().unwrap();
+    client
+        .try_verify_investor(&investor_b, &10_000i128)
+        .unwrap()
+        .unwrap();
     let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &850i128);
 
     // Withdraw only bid A
@@ -601,7 +657,8 @@ fn test_withdraw_does_not_affect_other_bids_on_same_invoice() {
     // Bid B must still be Placed
     let bid_b = client.get_bid(&bid_id_b).unwrap();
     assert_eq!(
-        bid_b.status, BidStatus::Placed,
+        bid_b.status,
+        BidStatus::Placed,
         "withdrawing bid A must not affect bid B"
     );
 }
@@ -616,12 +673,14 @@ fn test_withdraw_expired_but_not_cleaned_bid() {
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
 
     // Advance time past TTL
-    env.ledger().set_timestamp(env.ledger().timestamp() + 604_801);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 604_801);
 
     // Bid is now Expired but hasn't been cleaned up yet
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(
-        bid.status, BidStatus::Expired,
+        bid.status,
+        BidStatus::Expired,
         "bid should be Expired after TTL"
     );
 
@@ -676,10 +735,7 @@ fn test_cannot_accept_withdrawn_bid() {
 
     // Try to accept the withdrawn bid - should fail
     let result = client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(
-        result.is_err(),
-        "cannot accept a Withdrawn bid"
-    );
+    assert!(result.is_err(), "cannot accept a Withdrawn bid");
 }
 
 #[test]

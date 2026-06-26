@@ -67,3 +67,9 @@ status indexes. Invoice creation is constrained by the protocol's
 and bid-related indexes are separately capped by their module limits. The
 snapshot itself introduces no new unbounded storage growth or additional nested
 iteration beyond those existing bounded indexes.
+
+## See also
+
+For how `schema_version` relates to the protocol version and backup format
+version — and the overall rules for which contract versions interoperate — see
+[CONTRACT_VERSION_COMPATIBILITY.md](../../docs/CONTRACT_VERSION_COMPATIBILITY.md).

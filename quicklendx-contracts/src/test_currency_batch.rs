@@ -97,7 +97,7 @@ fn test_add_batch_mixed() {
 
     assert_eq!(result.len(), 2);
     assert!(!result.get(0).unwrap()); // was already present
-    assert!(result.get(1).unwrap());  // newly added
+    assert!(result.get(1).unwrap()); // newly added
     assert_eq!(client.currency_count(), 2);
 }
 
@@ -110,7 +110,7 @@ fn test_add_batch_duplicates_in_input() {
     let result = client.add_currencies_batch(&admin, &batch);
 
     assert_eq!(result.len(), 2);
-    assert!(result.get(0).unwrap());  // first occurrence: added
+    assert!(result.get(0).unwrap()); // first occurrence: added
     assert!(!result.get(1).unwrap()); // second occurrence: already in evolving list
     assert_eq!(client.currency_count(), 1); // stored exactly once
 }
@@ -122,7 +122,10 @@ fn test_add_batch_non_admin_rejected() {
     let c = make_currency(&env);
     let batch = address_vec(&env, &[c]);
 
-    let err = client.try_add_currencies_batch(&impostor, &batch).unwrap_err().unwrap();
+    let err = client
+        .try_add_currencies_batch(&impostor, &batch)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::NotAdmin);
     assert_eq!(client.currency_count(), 0); // no mutation occurred
 }
@@ -137,7 +140,10 @@ fn test_add_batch_uninitialized_admin() {
     let any_address = Address::generate(&env);
     let batch = address_vec(&env, &[make_currency(&env)]);
 
-    let err = client.try_add_currencies_batch(&any_address, &batch).unwrap_err().unwrap();
+    let err = client
+        .try_add_currencies_batch(&any_address, &batch)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::OperationNotAllowed);
 }
 
@@ -147,19 +153,25 @@ fn test_add_batch_paused() {
     client.pause(&admin);
     let batch = address_vec(&env, &[make_currency(&env)]);
 
-    let err = client.try_add_currencies_batch(&admin, &batch).unwrap_err().unwrap();
+    let err = client
+        .try_add_currencies_batch(&admin, &batch)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::ContractPaused);
 }
 
 #[test]
 fn test_add_batch_result_length_matches_input() {
     let (env, client, admin) = setup();
-    let batch = address_vec(&env, &[
-        make_currency(&env),
-        make_currency(&env),
-        make_currency(&env),
-        make_currency(&env),
-    ]);
+    let batch = address_vec(
+        &env,
+        &[
+            make_currency(&env),
+            make_currency(&env),
+            make_currency(&env),
+            make_currency(&env),
+        ],
+    );
     let result = client.add_currencies_batch(&admin, &batch);
     assert_eq!(result.len(), batch.len());
 }
@@ -227,7 +239,7 @@ fn test_remove_batch_mixed() {
     let result = client.remove_currencies_batch(&admin, &batch);
 
     assert_eq!(result.len(), 2);
-    assert!(result.get(0).unwrap());  // was present, removed
+    assert!(result.get(0).unwrap()); // was present, removed
     assert!(!result.get(1).unwrap()); // was not present
     assert_eq!(client.currency_count(), 0);
 }
@@ -255,7 +267,10 @@ fn test_remove_batch_non_admin_rejected() {
     let impostor = Address::generate(&env);
 
     let batch = address_vec(&env, &[c]);
-    let err = client.try_remove_currencies_batch(&impostor, &batch).unwrap_err().unwrap();
+    let err = client
+        .try_remove_currencies_batch(&impostor, &batch)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::NotAdmin);
     assert_eq!(client.currency_count(), 1); // no mutation occurred
 }
@@ -269,7 +284,10 @@ fn test_remove_batch_uninitialized_admin() {
     let any_address = Address::generate(&env);
     let batch = address_vec(&env, &[make_currency(&env)]);
 
-    let err = client.try_remove_currencies_batch(&any_address, &batch).unwrap_err().unwrap();
+    let err = client
+        .try_remove_currencies_batch(&any_address, &batch)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::NotAdmin);
 }
 
@@ -281,18 +299,24 @@ fn test_remove_batch_paused() {
     client.pause(&admin);
 
     let batch = address_vec(&env, &[c]);
-    let err = client.try_remove_currencies_batch(&admin, &batch).unwrap_err().unwrap();
+    let err = client
+        .try_remove_currencies_batch(&admin, &batch)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::ContractPaused);
 }
 
 #[test]
 fn test_remove_batch_result_length_matches_input() {
     let (env, client, admin) = setup();
-    let batch = address_vec(&env, &[
-        make_currency(&env),
-        make_currency(&env),
-        make_currency(&env),
-    ]);
+    let batch = address_vec(
+        &env,
+        &[
+            make_currency(&env),
+            make_currency(&env),
+            make_currency(&env),
+        ],
+    );
     let result = client.remove_currencies_batch(&admin, &batch);
     assert_eq!(result.len(), batch.len());
 }

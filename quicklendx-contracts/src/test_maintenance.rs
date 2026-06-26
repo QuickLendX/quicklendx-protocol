@@ -21,10 +21,10 @@
 #![cfg(test)]
 
 use crate::errors::QuickLendXError;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
-use crate::maintenance::{MaintenanceControl, MAX_REASON_LEN, ExtendReport};
-use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::events::TtlExtended;
+use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use crate::maintenance::{ExtendReport, MaintenanceControl, MAX_REASON_LEN};
+use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
 // ============================================================================
@@ -298,10 +298,7 @@ fn test_reason_stored_on_enable() {
 
     client.set_maintenance_mode(&admin, &true, &reason(&env, msg));
 
-    assert_eq!(
-        client.get_maintenance_reason().unwrap(),
-        reason(&env, msg)
-    );
+    assert_eq!(client.get_maintenance_reason().unwrap(), reason(&env, msg));
 }
 
 #[test]
@@ -344,10 +341,8 @@ fn test_oversized_reason_rejected() {
 
     // Build a reason one byte over the limit.
     let oversized: String = {
-        let bytes = soroban_sdk::Bytes::from_slice(
-            &env,
-            &vec![b'x'; (MAX_REASON_LEN + 1) as usize],
-        );
+        let bytes =
+            soroban_sdk::Bytes::from_slice(&env, &vec![b'x'; (MAX_REASON_LEN + 1) as usize]);
         String::try_from_bytes(&bytes).unwrap()
     };
 
@@ -357,7 +352,10 @@ fn test_oversized_reason_rejected() {
         QuickLendXError::InvalidDescription,
         "Reason exceeding MAX_REASON_LEN must be rejected"
     );
-    assert!(!client.is_maintenance_mode(), "Flag must not change on rejection");
+    assert!(
+        !client.is_maintenance_mode(),
+        "Flag must not change on rejection"
+    );
 }
 
 #[test]
@@ -366,10 +364,7 @@ fn test_max_length_reason_accepted() {
     let (client, admin) = setup(&env);
 
     let max_reason: String = {
-        let bytes = soroban_sdk::Bytes::from_slice(
-            &env,
-            &vec![b'a'; MAX_REASON_LEN as usize],
-        );
+        let bytes = soroban_sdk::Bytes::from_slice(&env, &vec![b'a'; MAX_REASON_LEN as usize]);
         String::try_from_bytes(&bytes).unwrap()
     };
 
@@ -440,8 +435,7 @@ fn test_disable_when_already_disabled_is_safe() {
 fn count_ttl_extended_events(env: &Env) -> usize {
     use soroban_sdk::xdr;
     let topic_sym = soroban_sdk::Symbol::new(env, "ttl_extended");
-    let topic_xdr =
-        xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
+    let topic_xdr = xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
     env.events()
         .all()
         .events()

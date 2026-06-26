@@ -4,8 +4,8 @@ use crate::defaults::{
     DEFAULT_OVERDUE_SCAN_BATCH_LIMIT,
 };
 const MAX_GRACE_PERIOD: u64 = 30 * 24 * 60 * 60;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::errors::QuickLendXError;
+use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, BytesN, Env, String, Vec,
@@ -106,7 +106,10 @@ fn test_resolve_grace_period_clamping() {
         // 4. Custom invalid value exceeding MAX_GRACE_PERIOD (30 days)
         let invalid_custom = MAX_GRACE_PERIOD + 1;
         let resolved_invalid = resolve_grace_period(&env, Some(invalid_custom));
-        assert!(matches!(resolved_invalid, Err(QuickLendXError::InvalidTimestamp)));
+        assert!(matches!(
+            resolved_invalid,
+            Err(QuickLendXError::InvalidTimestamp)
+        ));
     });
 }
 
@@ -117,7 +120,8 @@ fn test_grace_period_boundary_on_both_sides() {
     let investor = create_verified_investor(&env, &client, &admin, 10000);
 
     let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
+    let invoice_id =
+        create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
 
     let grace_period = 3 * 24 * 60 * 60; // 3 days
     let grace_deadline = due_date + grace_period;
@@ -142,7 +146,9 @@ fn test_grace_period_boundary_on_both_sides() {
 
     // Reset default scan cursor back to 0 for next check
     env.as_contract(&client.address, || {
-        env.storage().instance().set(&soroban_sdk::symbol_short!("ovd_scan"), &0u32);
+        env.storage()
+            .instance()
+            .set(&soroban_sdk::symbol_short!("ovd_scan"), &0u32);
     });
 
     // 2. Exactly one second past grace deadline -> defaultable

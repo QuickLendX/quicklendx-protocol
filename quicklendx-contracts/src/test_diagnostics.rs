@@ -45,11 +45,7 @@ fn setup_verified_business(
     business
 }
 
-fn setup_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn setup_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &limit);
@@ -91,7 +87,8 @@ fn test_qlx_log_plain_message_is_captured() {
     crate::qlx_log!(&env, "test", "hello from diagnostics");
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("\"test\"") && l.contains("\"hello from diagnostics\"")),
+        logs.iter()
+            .any(|l| l.contains("\"test\"") && l.contains("\"hello from diagnostics\"")),
         "Expected 'test' and 'hello from diagnostics' in logs, got: {:?}",
         logs
     );
@@ -104,7 +101,8 @@ fn test_qlx_log_with_format_args_is_captured() {
     crate::qlx_log!(&env, "payment", "amount={}", amount);
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("\"payment\"") && l.contains("amount=42000")),
+        logs.iter()
+            .any(|l| l.contains("\"payment\"") && l.contains("amount=42000")),
         "Expected 'payment' and 'amount=42000' in logs, got: {:?}",
         logs
     );
@@ -121,10 +119,22 @@ fn test_qlx_log_multiple_domains_are_tagged_correctly() {
     let logs = env.logs().all();
     let log_str: alloc::string::String = logs.join(" | ");
 
-    assert!(log_str.contains("\"escrow\"") && log_str.contains("Escrow created"), "Missing escrow log");
-    assert!(log_str.contains("\"bid\"") && log_str.contains("Bid placed"), "Missing bid log");
-    assert!(log_str.contains("\"settlement\"") && log_str.contains("Payment recorded"), "Missing settlement log");
-    assert!(log_str.contains("\"payment\"") && log_str.contains("Funds transferred"), "Missing payment log");
+    assert!(
+        log_str.contains("\"escrow\"") && log_str.contains("Escrow created"),
+        "Missing escrow log"
+    );
+    assert!(
+        log_str.contains("\"bid\"") && log_str.contains("Bid placed"),
+        "Missing bid log"
+    );
+    assert!(
+        log_str.contains("\"settlement\"") && log_str.contains("Payment recorded"),
+        "Missing settlement log"
+    );
+    assert!(
+        log_str.contains("\"payment\"") && log_str.contains("Funds transferred"),
+        "Missing payment log"
+    );
 }
 
 #[test]
@@ -149,7 +159,9 @@ fn test_qlx_log_multiple_format_args() {
     );
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("\"settlement\"") && l.contains("investor_return=9800") && l.contains("platform_fee=200")),
+        logs.iter().any(|l| l.contains("\"settlement\"")
+            && l.contains("investor_return=9800")
+            && l.contains("platform_fee=200")),
         "Expected settlement log with multiple args, got: {:?}",
         logs
     );
@@ -181,7 +193,8 @@ fn test_bid_placed_emits_diagnostic_log() {
 
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("\"bid\"") && l.contains("Bid placed")),
+        logs.iter()
+            .any(|l| l.contains("\"bid\"") && l.contains("Bid placed")),
         "Expected 'bid' and 'Bid placed' in logs after place_bid, got: {:?}",
         logs
     );
@@ -210,7 +223,8 @@ fn test_bid_withdrawn_emits_diagnostic_log() {
 
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("\"bid\"") && l.contains("Bid withdrawn")),
+        logs.iter()
+            .any(|l| l.contains("\"bid\"") && l.contains("Bid withdrawn")),
         "Expected 'bid' and 'Bid withdrawn' in logs after withdraw_bid, got: {:?}",
         logs
     );
@@ -283,20 +297,18 @@ fn test_partial_payment_emits_diagnostic_log() {
     let bid_id = client.place_bid(&investor, &invoice_id, &10_000, &10_500);
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
-    client.process_partial_payment(
-        &invoice_id,
-        &3_000i128,
-        &String::from_str(&env, "txn-001"),
-    );
+    client.process_partial_payment(&invoice_id, &3_000i128, &String::from_str(&env, "txn-001"));
 
     let logs = env.logs().all();
     assert!(
-        logs.iter().any(|l| l.contains("\"settlement\"") && l.contains("Recording partial payment")),
+        logs.iter()
+            .any(|l| l.contains("\"settlement\"") && l.contains("Recording partial payment")),
         "Expected 'settlement' Recording partial payment in logs, got: {:?}",
         logs
     );
     assert!(
-        logs.iter().any(|l| l.contains("\"settlement\"") && l.contains("Payment recorded")),
+        logs.iter()
+            .any(|l| l.contains("\"settlement\"") && l.contains("Payment recorded")),
         "Expected 'settlement' Payment recorded in logs, got: {:?}",
         logs
     );
@@ -390,7 +402,8 @@ fn test_diagnostics_feature_gating_behavior() {
         crate::qlx_log!(&env, "test", "emitted with diagnostics feature");
         let logs = env.logs().all();
         assert!(
-            logs.iter().any(|l| l.contains("\"test\"") && l.contains("emitted with diagnostics feature")),
+            logs.iter()
+                .any(|l| l.contains("\"test\"") && l.contains("emitted with diagnostics feature")),
             "Diagnostics log must be emitted when diagnostics feature is enabled"
         );
     }
@@ -408,7 +421,7 @@ fn test_diagnostics_feature_gating_behavior() {
 #[test]
 fn test_diagnostics_tags_and_topics() {
     let env = Env::default();
-    
+
     // Emit diagnostic signals for each domain tag
     crate::qlx_log!(&env, "escrow", "testing escrow tag");
     crate::qlx_log!(&env, "bid", "testing bid tag");
@@ -473,7 +486,50 @@ fn test_diagnostics_tag_uniqueness() {
     let expected_tags = ["escrow", "bid", "settlement", "payment"];
     for i in 0..expected_tags.len() {
         for j in (i + 1)..expected_tags.len() {
-            assert_ne!(expected_tags[i], expected_tags[j], "Domain tag must be unique");
+            assert_ne!(
+                expected_tags[i], expected_tags[j],
+                "Domain tag must be unique"
+            );
         }
     }
+}
+
+#[cfg(feature = "diagnostics")]
+#[test]
+fn test_get_protocol_diagnostics_basic() {
+    let (env, client, admin, contract_addr) = full_setup();
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &client, &admin, &business, &investor, &contract_addr);
+
+    // Before any invoices: counts should be zero.
+    let diag = client.get_protocol_diagnostics();
+    assert_eq!(diag.total_invoices, 0);
+    assert_eq!(diag.pending_invoices, 0);
+    assert_eq!(diag.verified_invoices, 0);
+    assert!(!diag.is_paused);
+    assert!(!diag.is_maintenance);
+    assert!(!diag.backpressure_active);
+    assert_eq!(diag.currency_count, 1);
+
+    // Upload and verify an invoice, then check counts update.
+    let invoice_id = client.upload_invoice(
+        &business,
+        &10_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86_400),
+        &String::from_str(&env, "Diagnostics entry-point test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let diag2 = client.get_protocol_diagnostics();
+    assert_eq!(diag2.total_invoices, 1);
+    assert_eq!(diag2.pending_invoices, 1);
+    assert_eq!(diag2.verified_invoices, 0);
+
+    client.verify_invoice(&invoice_id);
+    let diag3 = client.get_protocol_diagnostics();
+    assert_eq!(diag3.pending_invoices, 0);
+    assert_eq!(diag3.verified_invoices, 1);
+    assert_eq!(diag3.ledger_sequence, env.ledger().sequence());
 }

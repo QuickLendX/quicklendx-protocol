@@ -22,6 +22,8 @@ import {
 } from "../../services/eventValidator";
 import { FileRawEventStore } from "../../services/rawEventStore";
 import { getRateLimitPolicies } from "../../middleware/rate-limit";
+import { eventIngestLimitsMiddleware } from "../../middleware/event-ingest-limits";
+
 const router = Router();
 const eventIdStore = new FileRawEventStore(new DefaultEventValidator());
 
@@ -80,8 +82,8 @@ router.post(
 );
 
 // Event processing endpoint (for indexer to post events)
-router.post("/events", async (req, res) => {
-router.post("/events", async (req, res) => {
+router.post("/events", eventIngestLimitsMiddleware, async (req, res) => {
+  try {
     const events = Array.isArray(req.body) ? req.body : [req.body];
     const validation = validateEventBatch(events);
 

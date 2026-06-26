@@ -32,12 +32,12 @@ pub(crate) struct AcceptBidContext {
 }
 
 /// Validate the invoice, bid, and escrow state before any funds move.
-/// 
+///
 /// # Security
 /// - Authorization is checked against the exact invoice being funded
 /// - The bid must belong to that invoice
 /// - The invoice must not already have escrow, funding metadata, or an investment
-/// 
+///
 /// ## One-Escrow-Per-Invoice Invariant (Two-Layer Guard)
 /// This function implements the outer guard of the one-escrow-per-invoice invariant:
 /// it checks for existing escrow or investment records before any state changes.
@@ -389,13 +389,7 @@ pub fn withdraw_investment(
         escrow.amount,
     );
 
-    emit_escrow_refunded(
-        env,
-        &escrow.escrow_id,
-        invoice_id,
-        investor,
-        escrow.amount,
-    );
+    emit_escrow_refunded(env, &escrow.escrow_id, invoice_id, investor, escrow.amount);
 
     Ok(())
 }

@@ -39,8 +39,8 @@
 #![cfg(feature = "fuzz-tests")]
 
 use crate::bid::BidStorage;
-use crate::types::{Bid, BidStatus};
 use crate::test_seed;
+use crate::types::{Bid, BidStatus};
 use proptest::prelude::*;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 use std::cmp::Ordering;
@@ -58,27 +58,36 @@ use std::cmp::Ordering;
 /// - `status` is always `Placed` (only Placed bids are ranked).
 fn arb_bid() -> impl Strategy<Value = Bid> {
     (
-        any::<[u8; 32]>(),   // bid_id
-        any::<[u8; 32]>(),   // invoice_id
+        any::<[u8; 32]>(),         // bid_id
+        any::<[u8; 32]>(),         // invoice_id
         0i128..=1_000_000_000i128, // bid_amount
         0i128..=1_000_000_000i128, // expected_return
-        any::<u64>(),        // timestamp
-        any::<u64>(),        // expiration_timestamp
+        any::<u64>(),              // timestamp
+        any::<u64>(),              // expiration_timestamp
     )
-        .prop_map(|(bid_id_bytes, invoice_id_bytes, bid_amount, expected_return, timestamp, expiration_timestamp)| {
-            let env = Env::default();
-            let investor = Address::generate(&env);
-            Bid {
-                bid_id: BytesN::from_array(&env, &bid_id_bytes),
-                invoice_id: BytesN::from_array(&env, &invoice_id_bytes),
-                investor,
+        .prop_map(
+            |(
+                bid_id_bytes,
+                invoice_id_bytes,
                 bid_amount,
                 expected_return,
                 timestamp,
-                status: BidStatus::Placed,
                 expiration_timestamp,
-            }
-        })
+            )| {
+                let env = Env::default();
+                let investor = Address::generate(&env);
+                Bid {
+                    bid_id: BytesN::from_array(&env, &bid_id_bytes),
+                    invoice_id: BytesN::from_array(&env, &invoice_id_bytes),
+                    investor,
+                    bid_amount,
+                    expected_return,
+                    timestamp,
+                    status: BidStatus::Placed,
+                    expiration_timestamp,
+                }
+            },
+        )
 }
 
 /// Generate a triple of arbitrary bids for transitivity testing.
@@ -673,7 +682,11 @@ mod unit_tests {
         };
 
         let cmp = BidStorage::compare_bids(&bid1, &bid2);
-        assert_eq!(cmp, Ordering::Greater, "bid1 should rank higher (profit 100 > 50)");
+        assert_eq!(
+            cmp,
+            Ordering::Greater,
+            "bid1 should rank higher (profit 100 > 50)"
+        );
     }
 
     /// Test seed reproducibility: fixed seed produces fixed output.
@@ -687,6 +700,9 @@ mod unit_tests {
         let seed2 = test_seed::seed();
         std::env::remove_var("QUICKLENDX_SEED");
 
-        assert_eq!(seed1, seed2, "Fixed seed should produce deterministic output");
+        assert_eq!(
+            seed1, seed2,
+            "Fixed seed should produce deterministic output"
+        );
     }
 }

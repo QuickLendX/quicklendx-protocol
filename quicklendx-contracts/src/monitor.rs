@@ -36,12 +36,8 @@ pub fn get_health_status(env: &Env) -> HealthStatus {
     let maintenance_reason = MaintenanceControl::get_maintenance_reason(env);
     let backpressure_active = BackpressureControl::is_active(env);
 
-    let freshness = FreshnessMetadata::from_env(
-        env,
-        env.ledger().sequence(),
-        env.ledger().timestamp(),
-        0,
-    );
+    let freshness =
+        FreshnessMetadata::from_env(env, env.ledger().sequence(), env.ledger().timestamp(), 0);
     let data_is_stale = freshness.index_lag_seconds > DEFAULT_MAX_FRESHNESS_DRIFT_SECS;
 
     HealthStatus {
