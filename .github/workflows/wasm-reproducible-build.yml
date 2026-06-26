@@ -1,0 +1,227 @@
+name: WASM Reproducible Build
+
+# Asserts that two back-to-back clean WASM builds of quicklendx-contracts
+# produce byte-identical artefacts (matching SHA-256 hashes).
+#
+# Diverging hashes signal non-determinism — build-time timestamps, non-stable
+# codegen ordering, or toolchain drift — and BLOCK release and audit sign-off.
+#
+# Cache is INTENTIONALLY DISABLED on every step so each build starts from a
+# clean state. The only permitted inputs are:
+#   • The committed source tree
+#   • The pinned toolchain from rust-toolchain.toml
+#   • The pinned dependencies from Cargo.lock
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "quicklendx-contracts/**"
+      - "rust-toolchain.toml"
+      - "scripts/reproducible-build.sh"
+      - ".github/workflows/wasm-reproducible-build.yml"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "quicklendx-contracts/**"
+      - "rust-toolchain.toml"
+      - "scripts/reproducible-build.sh"
+      - ".github/workflows/wasm-reproducible-build.yml"
+  workflow_dispatch:   # allow manual trigger for audit purposes
+
+env:
+  CARGO_TERM_COLOR: always
+  WASM_TARGET: wasm32-unknown-unknown
+  # Explicitly disable incremental compilation to prevent any cross-run caching.
+  CARGO_INCREMENTAL: "0"
+  # Disable sccache / any other transparent caching proxy that CI may inject.
+  RUSTC_WRAPPER: ""
+
+jobs:
+  wasm-reproducible-build:
+    name: Assert byte-identical WASM across two clean builds
+    runs-on: ubuntu-latest
+    # No cache: action-level caches are intentionally not configured here.
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        # No submodules, no LFS — keep the checkout as clean as possible.
+
+      # ── Toolchain ───────────────────────────────────────────────────────────
+
+      - name: Install Rust toolchain (pinned by rust-toolchain.toml)
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain none
+          source "$HOME/.cargo/env"
+          # rust-toolchain.toml drives the channel; rustup respects it automatically.
+          rustup show
+
+      - name: Add WASM build target
+        run: |
+          source "$HOME/.cargo/env"
+          rustup target add ${{ env.WASM_TARGET }}
+
+      - name: Print toolchain fingerprint (audit trail)
+        run: |
+          source "$HOME/.cargo/env"
+          echo "--- rustc ---"
+          rustc --version --verbose
+          echo "--- cargo ---"
+          cargo --version
+          echo "--- targets ---"
+          rustup target list --installed
+
+      # ── Verify build hygiene ─────────────────────────────────────────────────
+
+      - name: Verify Cargo.lock is committed
+        run: |
+          if [[ ! -f quicklendx-contracts/Cargo.lock ]]; then
+            echo "ERROR: Cargo.lock is missing. Reproducible builds require a committed lockfile." >&2
+            exit 1
+          fi
+          echo "Cargo.lock present — dependencies are pinned."
+
+      - name: Verify codegen-units = 1 in release profile
+        run: |
+          source "$HOME/.cargo/env"
+          python3 - <<'EOF'
+          import sys, re
+
+          with open("quicklendx-contracts/Cargo.toml") as f:
+              content = f.read()
+
+          # Find [profile.release] block and check codegen-units
+          in_release = False
+          for line in content.splitlines():
+              if line.strip() == "[profile.release]":
+                  in_release = True
+              elif in_release and line.startswith("["):
+                  break
+              elif in_release and "codegen-units" in line:
+                  m = re.search(r"codegen-units\s*=\s*(\d+)", line)
+                  if m and int(m.group(1)) == 1:
+                      print("✅ codegen-units = 1 confirmed.")
+                      sys.exit(0)
+                  else:
+                      print("❌ codegen-units must be 1 for reproducible builds.", file=sys.stderr)
+                      sys.exit(1)
+
+          print("❌ codegen-units not found in [profile.release].", file=sys.stderr)
+          sys.exit(1)
+          EOF
+
+      # ── Build 1 ─────────────────────────────────────────────────────────────
+
+      - name: "[Build 1] Clean all artefacts"
+        run: |
+          source "$HOME/.cargo/env"
+          cargo clean \
+            --manifest-path quicklendx-contracts/Cargo.toml \
+            --target ${{ env.WASM_TARGET }} \
+            2>/dev/null || true
+          rm -rf quicklendx-contracts/target/${{ env.WASM_TARGET }}/release
+
+      - name: "[Build 1] Compile WASM"
+        run: |
+          source "$HOME/.cargo/env"
+          cargo build \
+            --manifest-path quicklendx-contracts/Cargo.toml \
+            --target ${{ env.WASM_TARGET }} \
+            --release \
+            --locked \
+            --no-default-features
+
+      - name: "[Build 1] Record SHA-256"
+        id: hash1
+        run: |
+          WASM="quicklendx-contracts/target/${{ env.WASM_TARGET }}/release/quicklendx_contracts.wasm"
+          if [[ ! -f "${WASM}" ]]; then
+            echo "ERROR: WASM artefact not found at ${WASM}" >&2
+            exit 1
+          fi
+          HASH=$(sha256sum "${WASM}" | awk '{print $1}')
+          echo "hash=${HASH}" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c%s "${WASM}")" >> "$GITHUB_OUTPUT"
+          echo "Build 1 SHA-256: ${HASH}"
+
+      # ── Build 2 ─────────────────────────────────────────────────────────────
+
+      - name: "[Build 2] Clean all artefacts"
+        run: |
+          source "$HOME/.cargo/env"
+          cargo clean \
+            --manifest-path quicklendx-contracts/Cargo.toml \
+            --target ${{ env.WASM_TARGET }} \
+            2>/dev/null || true
+          rm -rf quicklendx-contracts/target/${{ env.WASM_TARGET }}/release
+
+      - name: "[Build 2] Compile WASM"
+        run: |
+          source "$HOME/.cargo/env"
+          cargo build \
+            --manifest-path quicklendx-contracts/Cargo.toml \
+            --target ${{ env.WASM_TARGET }} \
+            --release \
+            --locked \
+            --no-default-features
+
+      - name: "[Build 2] Record SHA-256"
+        id: hash2
+        run: |
+          WASM="quicklendx-contracts/target/${{ env.WASM_TARGET }}/release/quicklendx_contracts.wasm"
+          HASH=$(sha256sum "${WASM}" | awk '{print $1}')
+          echo "hash=${HASH}" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c%s "${WASM}")" >> "$GITHUB_OUTPUT"
+          echo "Build 2 SHA-256: ${HASH}"
+
+      # ── Assert ──────────────────────────────────────────────────────────────
+
+      - name: Assert hashes match (reproducibility gate)
+        env:
+          HASH_1: ${{ steps.hash1.outputs.hash }}
+          HASH_2: ${{ steps.hash2.outputs.hash }}
+          SIZE_1: ${{ steps.hash1.outputs.size }}
+          SIZE_2: ${{ steps.hash2.outputs.size }}
+        run: |
+          echo "============================================================"
+          echo "  Reproducibility verdict"
+          echo "============================================================"
+          echo "  Build 1: ${HASH_1}  (${SIZE_1} bytes)"
+          echo "  Build 2: ${HASH_2}  (${SIZE_2} bytes)"
+          echo ""
+
+          if [[ "${HASH_1}" == "${HASH_2}" ]]; then
+            echo "  ✅  PASS — hashes match. WASM build is reproducible."
+            echo "  Artefact SHA-256: ${HASH_1}"
+          else
+            echo "  ❌  FAIL — hashes DIVERGE. Build is non-deterministic." >&2
+            echo ""                                                           >&2
+            echo "  This blocks release and audit sign-off."                 >&2
+            echo "  See docs/reproducible-builds.md for investigation steps." >&2
+            exit 1
+          fi
+
+      # ── Upload artefact (for audit trails) ──────────────────────────────────
+
+      - name: Upload WASM artefact with hash manifest
+        if: success()
+        run: |
+          WASM="quicklendx-contracts/target/${{ env.WASM_TARGET }}/release/quicklendx_contracts.wasm"
+          HASH="${{ steps.hash2.outputs.hash }}"
+
+          mkdir -p wasm-release
+          cp "${WASM}" wasm-release/quicklendx_contracts.wasm
+          echo "${HASH}  quicklendx_contracts.wasm" > wasm-release/quicklendx_contracts.wasm.sha256
+
+          echo "Artefact manifest:"
+          cat wasm-release/quicklendx_contracts.wasm.sha256
+
+      - name: Upload WASM release artefacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-reproducible-build-${{ github.sha }}
+          path: wasm-release/
+          retention-days: 90
+          if-no-files-found: error
