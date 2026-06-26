@@ -267,20 +267,21 @@ use events::{
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
-use profits::{calculate_profit as do_calculate_profit, PlatformFee, PlatformFeeConfig};
+use profits::{calculate_profit as do_calculate_profit, PlatformFee};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
     get_investor_verification as do_get_investor_verification, normalize_tag,
-    recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
-    require_business_not_pending, require_investor_not_pending,
-    submit_investor_kyc as do_submit_investor_kyc, submit_kyc_application, validate_bid,
-    validate_dispute_evidence, validate_dispute_resolution, validate_investor_investment,
-    validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
-    verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
-    InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
+    recompute_investor_tier as do_recompute_investor_tier, reject_business,
+    reject_investor as do_reject_investor, require_business_not_pending,
+    require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
+    submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
+    validate_investor_investment, validate_invoice_metadata, verify_business,
+    verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
+    BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
+    InvestorVerificationStorage,
 };
 
 use crate::storage::{BidStorage, InvoiceStorage};
@@ -1872,7 +1873,7 @@ impl QuickLendXContract {
     }
 
     /// Retrieve the current platform fee configuration
-    pub fn get_platform_fee(env: Env) -> PlatformFeeConfig {
+    pub fn get_platform_fee(env: Env) -> types::PlatformFeeConfig {
         PlatformFee::get_config(&env)
     }
 
@@ -1960,17 +1961,7 @@ impl QuickLendXContract {
         investor: Address,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        recompute_investor_tier(&env, &admin, &investor)
-    }
-
-    /// Recompute investor tier from tracked investment performance.
-    pub fn recompute_investor_tier(
-        env: Env,
-        admin: Address,
-        investor: Address,
-    ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        recompute_investor_tier(&env, &admin, &investor)
+        do_recompute_investor_tier(&env, &admin, &investor)
     }
 
     /// Verify business (admin only)
@@ -3289,6 +3280,7 @@ impl QuickLendXContract {
                 "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
             ),
             resolved_at: 0,
+            resolution_outcome: None,
         };
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
@@ -3432,7 +3424,7 @@ impl QuickLendXContract {
 
         invoice.dispute_status = DisputeStatus::Resolved;
         invoice.dispute.resolution = note.clone();
-        invoice.dispute.resolution_outcome = Some(outcome);
+        invoice.dispute.resolution_outcome = Some(outcome.code());
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
         InvoiceStorage::update_invoice(&env, &invoice);

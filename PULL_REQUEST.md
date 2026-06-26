@@ -24,8 +24,8 @@ Admin transfer is not a hot path; it is an operator/governance action. No instru
 ## Verification
 
 - `cargo fmt --all` from `quicklendx-contracts/`
-- `cargo test -p quicklendx-contracts generated_address_lookalike_destinations_are_rejected`
+- `cargo test -p quicklendx-contracts --lib generated_address_lookalike_destinations_are_rejected`
 - `cargo build --target wasm32-unknown-unknown --release`
 - `cargo clippy --workspace --all-targets -- -D warnings`
 
-Current local test/WASM verification is blocked by pre-existing crate compile errors unrelated to this change, including duplicate `recompute_investor_tier` definitions in `src/verification.rs`/`src/lib.rs`, a private `PlatformFeeConfig` import, missing `Dispute::resolution_outcome` fields in existing tests/code, and an unavailable `enable_invocation_metering` method in `src/bench.rs`. Clippy could not start because `cargo-clippy` is not applicable to the active `stable-x86_64-unknown-linux-gnu` toolchain even though `rustup component add clippy` reports the component is up to date.
+`cargo test -p quicklendx-contracts` is still blocked by the existing `tests/gas_regression.rs` target, which calls older contract APIs and cannot import the bench helper as currently gated. Clippy could not start because `cargo-clippy` is not applicable to the active `stable-x86_64-unknown-linux-gnu` toolchain even though `rustup component add clippy` reports the component is up to date.
