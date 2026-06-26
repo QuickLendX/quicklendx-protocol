@@ -312,3 +312,22 @@ impl AdminStorage {
         operation(&admin)
     }
 }
+
+/// Reject the call if `caller` equals the contract's own address.
+///
+/// # Threat model
+/// On Soroban, a cross-contract call can supply the callee's own contract address
+/// as an `Address` argument.  If the callee then calls `addr.require_auth()`, the
+/// Soroban host grants auth because the contract is authorizing itself — a
+/// confused-deputy scenario.  An attacker can exploit this to impersonate the
+/// contract as a business, investor, or admin, bypassing KYC and access controls.
+///
+/// This guard must be called at every public entrypoint that accepts a user-controlled
+/// `Address` that will subsequently have `require_auth()` called on it.
+#[inline]
+pub fn require_not_self(env: &Env, caller: &Address) -> Result<(), QuickLendXError> {
+    if *caller == env.current_contract_address() {
+        return Err(QuickLendXError::SelfCallNotAllowed);
+    }
+    Ok(())
+}

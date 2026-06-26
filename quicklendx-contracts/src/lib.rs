@@ -101,6 +101,8 @@ pub mod storage;
 mod test_panic_handler;
 #[cfg(test)]
 mod test_admin;
+#[cfg(test)]
+mod test_self_call_rejection;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -259,6 +261,7 @@ pub use types::*;
 pub mod verification;
 pub mod vesting;
 use admin::AdminStorage;
+use admin::require_not_self;
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
 };
@@ -878,6 +881,7 @@ impl QuickLendXContract {
         tags: Vec<String>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        require_not_self(&env, &business)?;
         // Validate input parameters
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -1459,6 +1463,7 @@ impl QuickLendXContract {
         expected_return: i128,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        require_not_self(&env, &investor)?;
         // Authorization check: Only the investor can place their own bid
         investor.require_auth();
 
@@ -1901,6 +1906,7 @@ impl QuickLendXContract {
         kyc_data: String,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        require_not_self(&env, &business)?;
         submit_kyc_application(&env, &business, kyc_data)
     }
 
@@ -1911,6 +1917,7 @@ impl QuickLendXContract {
         kyc_data: String,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        require_not_self(&env, &investor)?;
         do_submit_investor_kyc(&env, &investor, kyc_data)
     }
 
