@@ -128,6 +128,8 @@ pub enum QuickLendXError {
     RotationNotFound = 1854,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     RotationExpired = 1855,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    RotationTimelockNotElapsed = 1857,
 
     // Dispute (1900-1906)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -237,6 +239,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::RotationAlreadyPending => symbol_short!("ROT_PND"),
             QuickLendXError::RotationNotFound => symbol_short!("ROT_NF"),
             QuickLendXError::RotationExpired => symbol_short!("ROT_EXP"),
+            QuickLendXError::RotationTimelockNotElapsed => symbol_short!("ROT_TLK"),
             // Dispute
             QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
             QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
