@@ -653,6 +653,27 @@ pub struct ProtocolInitialized {
 }
 
 // ============================================================================
+// Pause Control Events
+
+#[contractevent]
+pub struct Paused {
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct Unpaused {
+    pub admin: Address,
+}
+
+pub fn emit_paused(env: &Env, admin: &Address) {
+    Paused { admin: admin.clone() }.publish(env);
+}
+
+pub fn emit_unpaused(env: &Env, admin: &Address) {
+    Unpaused { admin: admin.clone() }.publish(env);
+}
+
+// ============================================================================
 // Invoice Event Emitters
 // ============================================================================
 
