@@ -57,6 +57,7 @@ mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
+use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
 #[cfg(any(test, feature = "testutils"))]
 pub mod bench;
@@ -1515,9 +1516,15 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_amount: i128,
         expected_return: i128,
+        salt: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &investor)?;
+        // Idempotency check
+        let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
+        if idempotency_exists(&env, &idem_key) {
+            return Err(QuickLendXError::DuplicateBid);
+        }
         // Authorization check: Only the investor can place their own bid
         investor.require_auth();
 
@@ -1577,6 +1584,8 @@ impl QuickLendXContract {
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+        // Store idempotency marker
+        store_idempotency(&env, &idem_key);
 
         crate::qlx_log!(
             &env,

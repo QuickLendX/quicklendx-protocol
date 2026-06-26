@@ -194,7 +194,15 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_amount: i128,
         expected_return: i128,
-    ) -> BytesN<32> {
+        salt: BytesN<32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        // Idempotency check
+        let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
+        if idempotency_exists(&env, &idem_key) {
+            return Err(QuickLendXError::DuplicateBid);
+        }
+        // Store idempotency marker
+        store_idempotency(&env, &idem_key);
         let bid_id = BidStorage::generate_unique_bid_id(&env);
         let bid = Bid {
             bid_id: bid_id.clone(),
@@ -207,7 +215,7 @@ impl QuickLendXContract {
             expiration_timestamp: env.ledger().timestamp() + 86400,
         };
         BidStorage::store_bid(&env, &bid);
-        bid_id
+        Ok(bid_id)
     }
 
     pub fn accept_bid(env: Env, invoice_id: BytesN<32>, bid_id: BytesN<32>) {
