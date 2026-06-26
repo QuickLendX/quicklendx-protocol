@@ -230,11 +230,11 @@ fn test_get_invoice_err_nonexistent_invoice() {
 
     let result = client.try_get_invoice(&nonexistent_id);
     assert!(
-        result.is_err(),
+        result.unwrap().is_err(),
         "get_invoice should fail for nonexistent invoice"
     );
 
-    let err = result.unwrap_err().unwrap();
+    let err = result.unwrap().unwrap_err();
     assert_eq!(
         err,
         QuickLendXError::InvoiceNotFound,
@@ -255,11 +255,11 @@ fn test_get_invoice_err_multiple_random_bytesn32() {
 
         let result = client.try_get_invoice(&random_id);
         assert!(
-            result.is_err(),
+            result.clone().unwrap().is_err(),
             "get_invoice should fail for random ID {}",
             i
         );
-        let err = result.unwrap_err().unwrap();
+        let err = result.unwrap().unwrap_err();
         assert_eq!(err, QuickLendXError::InvoiceNotFound);
     }
 }
