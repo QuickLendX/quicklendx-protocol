@@ -245,6 +245,8 @@ mod test_insurance_premium_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_compute_yield_props;
 #[cfg(test)]
+mod test_vesting_summary;
+#[cfg(test)]
 mod test_notifications;
 pub mod types;
 pub use types::*;
@@ -3135,6 +3137,10 @@ impl QuickLendXContract {
     pub fn get_vesting_releasable(env: Env, id: u64) -> Option<i128> {
         let schedule = vesting::Vesting::get_schedule(&env, id)?;
         vesting::Vesting::releasable_amount(&env, &schedule).ok()
+    }
+
+    pub fn get_vesting_summary(env: Env, user: Address) -> vesting::VestingSummary {
+        vesting::Vesting::get_summary_for_user(&env, &user)
     }
 
     // ============================================================================
