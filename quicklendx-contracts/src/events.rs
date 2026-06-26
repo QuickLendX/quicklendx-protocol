@@ -139,6 +139,16 @@ pub struct InvoiceCancelled {
 ///
 /// Topic: [`TOPIC_INVOICE_SETTLED`] (`"inv_set"`)
 ///
+/// # Fields
+/// - `invoice_id` – Unique 32-byte invoice identifier.
+/// - `amount` – Total amount settled (sum of all payments applied to this invoice).
+/// - `ledger` – Ledger sequence number at the time of settlement.
+/// - `business` – Address of the business that owns the invoice.
+/// - `investor` – Address of the investor who funded the invoice.
+/// - `investor_return` – Amount returned to the investor after fees.
+/// - `platform_fee` – Fee taken by the platform.
+/// - `timestamp` – Ledger timestamp at emission time.
+///
 /// # Security
 /// No PII is included. `investor_return` and `platform_fee` are derived
 /// from validated contract state only.
@@ -146,6 +156,8 @@ pub struct InvoiceCancelled {
 #[contractevent]
 pub struct InvoiceSettled {
     pub invoice_id: BytesN<32>,
+    pub amount: i128,
+    pub ledger: u32,
     pub business: Address,
     pub investor: Address,
     pub investor_return: i128,
@@ -714,6 +726,8 @@ pub fn emit_invoice_settled(
 ) {
     InvoiceSettled {
         invoice_id: invoice.id.clone(),
+        amount: invoice.total_paid,
+        ledger: env.ledger().sequence(),
         business: invoice.business.clone(),
         investor: invoice.investor.clone().unwrap_or(Address::from_str(
             env,
