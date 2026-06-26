@@ -43,6 +43,7 @@ npm run dev
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-contracts/docs/ATTESTATIONS.md`: Attestation event schemas and lifecycle for off-chain indexers — covers KYC verification events, invoice verification events, the `RawEvent` wire format, and idempotency guarantees.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
+- `backend/docs/REPLAY_RUNBOOK.md`: Step-by-step operator runbook for replaying ingestion from a specific ledger — covers reorg recovery, gap backfill, force rebuild after schema migration, and troubleshooting stuck runs.
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
 - `docs/STORAGE_LAYOUT.md`: Smart contract storage layout decisions.
 

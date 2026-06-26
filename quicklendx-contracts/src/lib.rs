@@ -153,6 +153,8 @@ mod test_currency_match_funding;
 mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
+#[cfg(test)]
+mod test_escrow_refund_after_expiry;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
@@ -318,10 +320,9 @@ use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
 use verification::{
-    calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
-    get_investor_verification as do_get_investor_verification, normalize_tag,
-    recompute_investor_tier as do_recompute_investor_tier, reject_business,
-    reject_investor as do_reject_investor, require_business_not_pending,
+    calculate_investment_limit, calculate_investor_risk_score,
+    get_investor_verification as do_get_investor_verification, normalize_tag, reject_business,
+    reject_investor as do_reject_investor, recompute_investor_tier, require_business_not_pending,
     require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
@@ -2235,8 +2236,7 @@ impl QuickLendXContract {
         investor: Address,
         risk_score: u32,
     ) -> Result<InvestorTier, QuickLendXError> {
-        // This function is already defined in verification module
-        compute_investor_tier(&env, &investor, risk_score)
+        verification::compute_investor_tier(&env, &investor, risk_score)
     }
 
     /// Calculate investment limit for investor
@@ -3372,7 +3372,7 @@ impl QuickLendXContract {
                 "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
             ),
             resolved_at: 0,
-            resolution_outcome: crate::types::DisputeResolution::None,
+            resolution_outcome: crate::types::OptionalDisputeResolution::None,
         };
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
@@ -3485,7 +3485,7 @@ impl QuickLendXContract {
         invoice.dispute.resolution = resolution.clone();
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
-        invoice.dispute.resolution_outcome = crate::types::DisputeResolution::None;
+        invoice.dispute.resolution_outcome = crate::types::OptionalDisputeResolution::None;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
         // Emit DisputeResolved event immediately after state mutation.
@@ -3516,7 +3516,7 @@ impl QuickLendXContract {
 
         invoice.dispute_status = DisputeStatus::Resolved;
         invoice.dispute.resolution = note.clone();
-        invoice.dispute.resolution_outcome = outcome;
+        invoice.dispute.resolution_outcome = crate::types::OptionalDisputeResolution::Some(outcome);
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
         InvoiceStorage::update_invoice(&env, &invoice);

@@ -1222,6 +1222,57 @@ pub fn calculate_investor_risk_score(
     Ok(risk_score)
 }
 
+/// Pure computation: derive investor tier from raw performance counters.
+///
+/// This is the private kernel used by [`compute_investor_tier`] and
+/// [`recompute_investor_tier`]. All inputs come directly from a stored
+/// [`InvestorVerification`] record — no storage access happens here.
+fn compute_tier_from_counters(
+    total_invested: i128,
+    successful_investments: u32,
+    defaulted_investments: u32,
+    risk_score: u32,
+) -> Result<InvestorTier, QuickLendXError> {
+    validate_risk_score(risk_score)?;
+
+    let total_investments = successful_investments.saturating_add(defaulted_investments);
+    let default_rate = if total_investments > 0 {
+        (defaulted_investments * 100) / total_investments
+    } else {
+        0
+    };
+
+    if risk_score <= 10
+        && total_invested >= 5_000_000
+        && successful_investments >= 50
+        && default_rate <= 5
+    {
+        return Ok(InvestorTier::VIP);
+    }
+    if risk_score <= 20
+        && total_invested >= 1_000_000
+        && successful_investments >= 20
+        && default_rate <= 10
+    {
+        return Ok(InvestorTier::Platinum);
+    }
+    if risk_score <= 40
+        && total_invested >= 100_000
+        && successful_investments >= 10
+        && default_rate <= 15
+    {
+        return Ok(InvestorTier::Gold);
+    }
+    if risk_score <= 60
+        && total_invested >= 10_000
+        && successful_investments >= 3
+        && default_rate <= 25
+    {
+        return Ok(InvestorTier::Silver);
+    }
+    Ok(InvestorTier::Basic)
+}
+
 /// Determine investor tier based on risk score and investment history
 /// Calculate the investor tier using deterministic performance thresholds.
 ///
@@ -1245,7 +1296,7 @@ pub fn compute_investor_tier(
     validate_risk_score(risk_score)?;
 
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
-        return compute_investor_tier_from_counters(
+        return compute_tier_from_counters(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
@@ -1420,7 +1471,7 @@ pub fn update_investor_analytics(
         verification.risk_score =
             calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
         verification.risk_level = determine_risk_level(verification.risk_score);
-        verification.tier = compute_investor_tier_from_counters(
+        verification.tier = compute_tier_from_counters(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
@@ -1571,7 +1622,7 @@ pub fn recompute_investor_tier(
     let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
     validate_risk_score(risk_score)?;
 
-    let tier = compute_investor_tier_from_counters(
+    let tier = compute_tier_from_counters(
         verification.total_invested,
         verification.successful_investments,
         verification.defaulted_investments,
@@ -1584,8 +1635,7 @@ pub fn recompute_investor_tier(
     verification.risk_level = risk_level;
     verification.tier = tier;
     verification.investment_limit = investment_limit;
-    verification.compliance_notes =
-        Some(String::from_str(env, "Investor tier recomputed by admin"));
+    verification.compliance_notes = Some(String::from_str(env, "Investor tier recomputed by admin"));
 
     InvestorVerificationStorage::update(env, &verification);
     Ok(())

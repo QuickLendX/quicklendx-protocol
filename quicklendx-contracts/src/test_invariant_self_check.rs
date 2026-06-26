@@ -12,9 +12,7 @@ use soroban_sdk::{Address, BytesN, Env, String, Vec};
 use crate::invariants::{run_invariant_checks, InvariantReport};
 use crate::investment::InvestmentStorage;
 use crate::storage::InvoiceStorage;
-use crate::types::{
-    Dispute, DisputeStatus, Investment, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
-};
+use crate::types::{Investment, InvestmentStatus, Invoice, InvoiceStatus, InvoiceCategory, Dispute, DisputeStatus, OptionalDisputeResolution};
 use crate::{QuickLendXContract, QuickLendXContractClient};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
@@ -86,6 +84,7 @@ fn make_invoice(env: &Env, invoice_id: &BytesN<32>) -> Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
+            resolution_outcome: OptionalDisputeResolution::None,
         },
         total_paid: 0,
         payment_history: Vec::new(env),
