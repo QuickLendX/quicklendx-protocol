@@ -32,8 +32,12 @@
 //! - Currency whitelist management functions
 
 use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
+use crate::audit::{
+    address_to_audit_string, log_config_change, write_i128_to_buf, write_u64_to_buf,
+    AuditOperation,
+};
 use crate::errors::QuickLendXError;
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol, Vec};
 
 /// Storage key for protocol initialization flag
 const PROTOCOL_INITIALIZED_KEY: Symbol = symbol_short!("proto_in");
@@ -207,6 +211,41 @@ pub struct ProtocolConfigDiff {
     /// `would_succeed` is `true`. Callers can cast this to the error enum for
     /// human-readable display.
     pub validation_error_code: u32,
+}
+
+// ─── Audit serialization helpers ─────────────────────────────────────────────
+
+fn fmt_proto_cfg(
+    env: &Env,
+    min_invoice_amount: i128,
+    max_due_date_days: u64,
+    grace_period_seconds: u64,
+) -> String {
+    // "min_inv:{i128};max_days:{u64};grace:{u64}" — max ~104 chars
+    let mut buf = [0u8; 120];
+    let mut pos = 0usize;
+    let p = b"min_inv:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_i128_to_buf(&mut buf[pos..], min_invoice_amount);
+    let p = b";max_days:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_u64_to_buf(&mut buf[pos..], max_due_date_days);
+    let p = b";grace:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_u64_to_buf(&mut buf[pos..], grace_period_seconds);
+    String::from_str(
+        env,
+        core::str::from_utf8(&buf[..pos]).unwrap_or("proto_cfg"),
+    )
+}
+
+fn fmt_fee_bps(env: &Env, value: u32) -> String {
+    let mut buf = [0u8; 10];
+    let len = write_u64_to_buf(&mut buf, value as u64);
+    String::from_str(env, core::str::from_utf8(&buf[..len]).unwrap_or("0"))
 }
 
 /// Protocol initialization and configuration management with hardened security
@@ -516,6 +555,11 @@ impl ProtocolInitializer {
                 return Err(QuickLendXError::InvalidTimestamp);
             }
 
+            // Capture old value before write
+            let old_str = Self::get_protocol_config(env).map(|c| {
+                fmt_proto_cfg(env, c.min_invoice_amount, c.max_due_date_days, c.grace_period_seconds)
+            });
+
             // Update configuration
             let config = ProtocolConfig {
                 min_invoice_amount,
@@ -525,6 +569,16 @@ impl ProtocolInitializer {
                 updated_by: admin.clone(),
             };
             env.storage().instance().set(&PROTOCOL_CONFIG_KEY, &config);
+
+            // Tamper-evident audit entry (atomic with storage write above via Soroban tx semantics)
+            log_config_change(
+                env,
+                AuditOperation::ConfigProtocolChanged,
+                admin.clone(),
+                "proto_cfg",
+                old_str,
+                Some(fmt_proto_cfg(env, min_invoice_amount, max_due_date_days, grace_period_seconds)),
+            );
 
             // Emit event
             emit_protocol_config_updated(
@@ -656,8 +710,21 @@ impl ProtocolInitializer {
                 return Err(QuickLendXError::InvalidFeeBasisPoints);
             }
 
+            // Capture old value before write
+            let old_str = Some(fmt_fee_bps(env, Self::get_fee_bps(env)));
+
             // Update fee
             env.storage().instance().set(&FEE_BPS_KEY, &fee_bps);
+
+            // Tamper-evident audit entry (atomic with storage write above via Soroban tx semantics)
+            log_config_change(
+                env,
+                AuditOperation::ConfigFeeChanged,
+                admin.clone(),
+                "fee_bps",
+                old_str,
+                Some(fmt_fee_bps(env, fee_bps)),
+            );
 
             // Emit event
             emit_fee_config_updated(env, admin, fee_bps);
@@ -687,8 +754,21 @@ impl ProtocolInitializer {
                 return Err(QuickLendXError::InvalidAddress);
             }
 
+            // Capture old value before write
+            let old_str = Self::get_treasury(env).map(|t| address_to_audit_string(env, &t));
+
             // Update treasury
             env.storage().instance().set(&TREASURY_KEY, treasury);
+
+            // Tamper-evident audit entry (atomic with storage write above via Soroban tx semantics)
+            log_config_change(
+                env,
+                AuditOperation::ConfigTreasuryChanged,
+                admin.clone(),
+                "treasury",
+                old_str,
+                Some(address_to_audit_string(env, treasury)),
+            );
 
             // Emit event
             emit_treasury_updated(env, admin, treasury);
