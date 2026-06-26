@@ -1270,3 +1270,23 @@ fn test_time_helpers_return_correct_values_throughout_lifecycle() {
     assert_eq!(client.emg_time_until_unlock(), 0);
     assert_eq!(client.emg_time_until_expire(), 0);
 }
+
+#[test]
+fn test_initiate_expires_before_queue_fails() {
+    let env = Env::default();
+    let (client, admin, _) = setup(&env);
+    let token = Address::generate(&env);
+    let target = Address::generate(&env);
+    let amount = 1_000i128;
+
+    // Set timestamp to u64::MAX to force saturating_add overflow/saturation,
+    // which results in expires_at == initiated_at (queued_at) because they both saturate to u64::MAX
+    env.ledger().set_timestamp(u64::MAX);
+
+    let result = client.try_initiate_emergency_withdraw(&admin, &token, &amount, &target);
+    assert!(result.is_err());
+    let err = result.unwrap_err();
+    let contract_err = err.expect("expected contract error");
+    assert_eq!(contract_err, crate::errors::QuickLendXError::InvalidTimestamp);
+}
+

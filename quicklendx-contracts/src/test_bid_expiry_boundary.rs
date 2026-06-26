@@ -19,12 +19,7 @@ use crate::invoice::InvoiceCategory;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token,
-    Address,
-    BytesN,
-    Env,
-    String,
-    Vec,
+    token, Address, BytesN, Env, String, Vec,
 };
 
 const SECONDS_PER_DAY: u64 = 86_400;
@@ -98,10 +93,16 @@ fn test_bid_exact_expiration_timestamp_is_not_expired() {
     env.ledger().set_timestamp(bid.expiration_timestamp);
     let now = env.ledger().timestamp();
 
-    assert!(!bid.is_expired(now), "bid must not be expired at exact boundary");
+    assert!(
+        !bid.is_expired(now),
+        "bid must not be expired at exact boundary"
+    );
 
     let cleaned = client.cleanup_expired_bids(&invoice_id);
-    assert_eq!(cleaned, 0, "cleanup must not remove a bid at exact expiration");
+    assert_eq!(
+        cleaned, 0,
+        "cleanup must not remove a bid at exact expiration"
+    );
 
     let bid_after = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid_after.status, BidStatus::Placed);
@@ -119,7 +120,10 @@ fn test_bid_one_second_past_expiration_timestamp_is_expired() {
     env.ledger().set_timestamp(bid.expiration_timestamp + 1);
     let now = env.ledger().timestamp();
 
-    assert!(bid.is_expired(now), "bid must be expired one second past boundary");
+    assert!(
+        bid.is_expired(now),
+        "bid must be expired one second past boundary"
+    );
 
     let cleaned = client.cleanup_expired_bids(&invoice_id);
     assert_eq!(cleaned, 1, "cleanup must remove a bid once it is expired");
@@ -157,7 +161,8 @@ fn test_bid_ttl_change_is_forward_only_and_best_bid_honors_boundary() {
     assert_eq!(best_at_boundary.bid_id, bid_short_id);
 
     // One second later, the short bid must be expired and excluded.
-    env.ledger().set_timestamp(bid_short.expiration_timestamp + 1);
+    env.ledger()
+        .set_timestamp(bid_short.expiration_timestamp + 1);
     assert!(bid_short.is_expired(env.ledger().timestamp()));
 
     let cleaned = client.cleanup_expired_bids(&invoice_id);

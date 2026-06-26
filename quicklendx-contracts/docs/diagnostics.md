@@ -65,6 +65,33 @@ When adding status tracking, developers must choose between logging a diagnostic
 | **Execution Cost** | Zero gas / storage cost in production. | Incurs gas and transaction storage fees. |
 | **Use Case** | Internal state assertions, tracing control flow, debugging error paths. | Emitting state changes (e.g. bid accepted, invoice created) that indexers must track. |
 
+---
+
+## `get_protocol_diagnostics` Entry-Point
+
+A feature-gated contract entry-point that returns a `ProtocolDiagnostics` struct with a rich internal snapshot useful for operators and support tooling.
+
+**Only compiled when `--features diagnostics` is set — absent from production WASM builds.**
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_invoices` | `u64` | All invoices ever stored |
+| `pending_invoices` | `u32` | Count in `Pending` status |
+| `verified_invoices` | `u32` | Count in `Verified` status |
+| `funded_invoices` | `u32` | Count in `Funded` status |
+| `paid_invoices` | `u32` | Count in `Paid` status |
+| `defaulted_invoices` | `u32` | Count in `Defaulted` status |
+| `total_bids_ever` | `u64` | Monotonic bid counter |
+| `is_paused` | `bool` | Pause flag |
+| `is_maintenance` | `bool` | Maintenance mode flag |
+| `backpressure_active` | `bool` | Load-shedding flag |
+| `fee_bps` | `u32` | Fee in basis points |
+| `currency_count` | `u32` | Whitelisted currency count |
+| `ledger_sequence` | `u32` | Sequence at snapshot time |
+| `ledger_timestamp` | `u64` | Timestamp at snapshot time |
+
+No authentication required. Read-only; never mutates state. No PII is exposed.
+
 ### Summary Rule
 
 If the signal is required for the frontend or indexing service to reconstruct contract history, use a contract **Event**. If the signal is only useful for troubleshooting, debugging, or verifying internal execution flow during development/testing, use a **Diagnostic**.

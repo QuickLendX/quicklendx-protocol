@@ -50,13 +50,19 @@ fn setup(env: &Env) -> (QuickLendXContractClient<'static>, Address) {
 fn enable_maintenance(client: &QuickLendXContractClient, admin: &Address, env: &Env) {
     let reason = String::from_str(env, "Load shedding active");
     client.set_maintenance_mode(admin, &true, &reason);
-    assert!(client.is_maintenance_mode(), "Maintenance mode must be enabled");
+    assert!(
+        client.is_maintenance_mode(),
+        "Maintenance mode must be enabled"
+    );
 }
 
 fn disable_maintenance(client: &QuickLendXContractClient, admin: &Address, env: &Env) {
     let reason = String::from_str(env, "");
     client.set_maintenance_mode(admin, &false, &reason);
-    assert!(!client.is_maintenance_mode(), "Maintenance mode must be disabled");
+    assert!(
+        !client.is_maintenance_mode(),
+        "Maintenance mode must be disabled"
+    );
 }
 
 fn create_verified_invoice(
@@ -268,7 +274,10 @@ fn test_recovery_store_invoice_below_threshold() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
 
     // Drop below threshold: disable maintenance mode
     disable_maintenance(&client, &admin, &env);
@@ -283,7 +292,10 @@ fn test_recovery_store_invoice_below_threshold() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert_ne!(invoice_id, soroban_sdk::BytesN::from_array(&env, &[0u8; 32]));
+    assert_ne!(
+        invoice_id,
+        soroban_sdk::BytesN::from_array(&env, &[0u8; 32])
+    );
 }
 
 #[test]
@@ -298,7 +310,10 @@ fn test_recovery_place_bid_below_threshold() {
 
     // Verify shedding
     let result = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
 
     // Drop below threshold
     disable_maintenance(&client, &admin, &env);
@@ -331,7 +346,10 @@ fn test_recovery_verify_invoice_below_threshold() {
 
     // Verify shedding
     let result = client.try_verify_invoice(&invoice_id);
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
 
     // Drop below threshold
     disable_maintenance(&client, &admin, &env);
@@ -353,13 +371,18 @@ fn test_recovery_submit_kyc_below_threshold() {
 
     // Verify shedding
     let result = client.try_submit_kyc_application(&business, &String::from_str(&env, "{}"));
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
 
     // Drop below threshold
     disable_maintenance(&client, &admin, &env);
 
     // Mutating call must succeed again
-    client.submit_kyc_application(&business, &String::from_str(&env, "{}")).unwrap();
+    client
+        .submit_kyc_application(&business, &String::from_str(&env, "{}"))
+        .unwrap();
 }
 
 #[test]
@@ -390,7 +413,10 @@ fn test_recovery_multiple_cycles() {
         &InvoiceCategory::Services,
         &Vec::new(env),
     );
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
     disable_maintenance(&client, &admin, &env);
     let invoice_id_2 = client.store_invoice(
         &business,
@@ -413,7 +439,10 @@ fn test_recovery_multiple_cycles() {
         &InvoiceCategory::Services,
         &Vec::new(env),
     );
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
     disable_maintenance(&client, &admin, &env);
     let invoice_id_3 = client.store_invoice(
         &business,
@@ -582,7 +611,10 @@ fn test_exactly_at_threshold_shedding() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
 }
 
 #[test]
@@ -609,7 +641,10 @@ fn test_exactly_below_threshold_recovery() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert_ne!(invoice_id, soroban_sdk::BytesN::from_array(&env, &[0u8; 32]));
+    assert_ne!(
+        invoice_id,
+        soroban_sdk::BytesN::from_array(&env, &[0u8; 32])
+    );
 }
 
 #[test]
@@ -696,7 +731,10 @@ fn test_reset_clears_reason() {
 
     // Reset (disable) - reason must be cleared
     client.set_maintenance_mode(&admin, &false, &String::from_str(env, ""));
-    assert!(client.get_maintenance_reason().is_none(), "Reason must be cleared on reset");
+    assert!(
+        client.get_maintenance_reason().is_none(),
+        "Reason must be cleared on reset"
+    );
 }
 
 #[test]
@@ -729,7 +767,10 @@ fn test_max_reason_length_constant() {
 
     // Should fail
     let result = client.try_set_maintenance_mode(&admin, &true, &oversized);
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
 }
 
 // ============================================================================
@@ -768,10 +809,16 @@ fn test_integration_full_lifecycle_with_shedding() {
         &InvoiceCategory::Services,
         &Vec::new(env),
     );
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
 
     let result = client.try_place_bid(&investor, &invoice_id, &2_000i128, &2_200i128);
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
 
     // Verify reads still work
     let invoice = client.get_invoice(&invoice_id);

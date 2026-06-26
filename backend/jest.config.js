@@ -2,6 +2,11 @@ module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
   testMatch: ["**/*.test.ts"],
+  globals: {
+    "ts-jest": {
+      diagnostics: false,
+    },
+  },
   coverageThreshold: {
     global: {
       branches: 55,
@@ -21,6 +26,10 @@ module.exports = {
       lines: 90,
       statements: 90,
     },
+    "src/lib/entityId.ts": {
+      lines: 95,
+      statements: 95,
+    },
   },
   collectCoverageFrom: [
     "scripts/lib/secret-scan-utils.js",
@@ -34,6 +43,7 @@ module.exports = {
     "src/services/eventProcessor.ts",
     "src/middleware/cache-headers.ts",
     "src/controllers/v1/bids.ts",
+    "src/lib/entityId.ts",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",

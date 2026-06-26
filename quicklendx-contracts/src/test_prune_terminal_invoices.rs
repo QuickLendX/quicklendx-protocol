@@ -41,7 +41,9 @@ impl TestFixture {
 
         let currency = {
             let token_admin = Address::generate(&env);
-            let c = env.register_stellar_asset_contract_v2(token_admin).address();
+            let c = env
+                .register_stellar_asset_contract_v2(token_admin)
+                .address();
             let sac = token::StellarAssetClient::new(&env, &c);
             sac.mint(&business, &100_000i128);
             sac.mint(&investor, &100_000i128);
@@ -53,7 +55,15 @@ impl TestFixture {
             c
         };
 
-        TestFixture { env, client, contract_id, admin, business, investor, currency }
+        TestFixture {
+            env,
+            client,
+            contract_id,
+            admin,
+            business,
+            investor,
+            currency,
+        }
     }
 
     fn create_paid_invoice(&self, amount: i128, timestamp: u64) -> BytesN<32> {
@@ -69,7 +79,9 @@ impl TestFixture {
             &Vec::new(&self.env),
         );
         self.client.verify_invoice(&invoice_id);
-        let bid_id = self.client.place_bid(&self.investor, &invoice_id, &amount, &(amount + 100));
+        let bid_id = self
+            .client
+            .place_bid(&self.investor, &invoice_id, &amount, &(amount + 100));
         self.client.accept_bid(&invoice_id, &bid_id);
         self.env.ledger().set_timestamp(timestamp + 10);
         self.client.settle_invoice(&invoice_id, &amount);
@@ -78,7 +90,12 @@ impl TestFixture {
         invoice_id
     }
 
-    fn create_invoice_with_status(&self, amount: i128, status: InvoiceStatus, timestamp: u64) -> BytesN<32> {
+    fn create_invoice_with_status(
+        &self,
+        amount: i128,
+        status: InvoiceStatus,
+        timestamp: u64,
+    ) -> BytesN<32> {
         match status {
             InvoiceStatus::Paid => self.create_paid_invoice(amount, timestamp),
             InvoiceStatus::Defaulted | InvoiceStatus::Refunded => {
@@ -94,7 +111,9 @@ impl TestFixture {
                     &Vec::new(&self.env),
                 );
                 self.client.verify_invoice(&invoice_id);
-                let bid_id = self.client.place_bid(&self.investor, &invoice_id, &amount, &(amount + 100));
+                let bid_id =
+                    self.client
+                        .place_bid(&self.investor, &invoice_id, &amount, &(amount + 100));
                 self.client.accept_bid(&invoice_id, &bid_id);
                 self.env.ledger().set_timestamp(timestamp + 10);
 
@@ -142,12 +161,18 @@ impl TestFixture {
         self.env.ledger().set_timestamp(timestamp);
         let due_date = timestamp + 86_400;
         let invoice_id = self.client.upload_invoice(
-            &self.business, &1000, &self.currency, &due_date,
+            &self.business,
+            &1000,
+            &self.currency,
+            &due_date,
             &String::from_str(&self.env, "Test"),
-            &InvoiceCategory::Services, &Vec::new(&self.env),
+            &InvoiceCategory::Services,
+            &Vec::new(&self.env),
         );
         self.client.verify_invoice(&invoice_id);
-        let bid_id = self.client.place_bid(&self.investor, &invoice_id, &1000, &1100);
+        let bid_id = self
+            .client
+            .place_bid(&self.investor, &invoice_id, &1000, &1100);
         self.client.accept_bid(&invoice_id, &bid_id);
         invoice_id
     }
@@ -165,7 +190,9 @@ fn test_prune_only_terminal() {
 
     fx.env.ledger().set_timestamp(now);
 
-    let report = fx.client.prune_terminal_invoices(&fx.admin, &retention, &0, &100);
+    let report = fx
+        .client
+        .prune_terminal_invoices(&fx.admin, &retention, &0, &100);
     assert_eq!(report.pruned, 1, "should prune 1 terminal invoice");
     assert_eq!(report.scanned, 2, "should scan 2 invoices total");
 
@@ -185,7 +212,9 @@ fn test_within_retention_window_not_pruned() {
 
     fx.env.ledger().set_timestamp(now);
 
-    let report = fx.client.prune_terminal_invoices(&fx.admin, &retention, &0, &100);
+    let report = fx
+        .client
+        .prune_terminal_invoices(&fx.admin, &retention, &0, &100);
     assert_eq!(report.pruned, 0, "should not prune recent invoice");
     assert_eq!(report.scanned, 1);
 
@@ -228,18 +257,24 @@ fn test_pagination() {
     fx.env.ledger().set_timestamp(now);
 
     // Page 1: offset 0, limit 2
-    let r1 = fx.client.prune_terminal_invoices(&fx.admin, &retention, &0, &2);
+    let r1 = fx
+        .client
+        .prune_terminal_invoices(&fx.admin, &retention, &0, &2);
     assert_eq!(r1.pruned, 2);
     assert_eq!(r1.scanned, 2);
     assert!(r1.next_offset > 0);
 
     // Page 2: resume at next_offset (total shrank to 1, offset past end → empty)
-    let r2 = fx.client.prune_terminal_invoices(&fx.admin, &retention, &r1.next_offset, &2);
+    let r2 = fx
+        .client
+        .prune_terminal_invoices(&fx.admin, &retention, &r1.next_offset, &2);
     assert_eq!(r2.pruned, 0);
     assert_eq!(r2.scanned, 0);
 
     // Restart from offset 0 to get the remaining one
-    let r3 = fx.client.prune_terminal_invoices(&fx.admin, &retention, &0, &100);
+    let r3 = fx
+        .client
+        .prune_terminal_invoices(&fx.admin, &retention, &0, &100);
     assert_eq!(r3.pruned, 1);
     assert_eq!(r3.scanned, 1);
 }
@@ -249,8 +284,11 @@ fn test_pagination() {
 fn test_non_admin_rejected() {
     let fx = TestFixture::setup();
     let stranger = Address::generate(&fx.env);
-    let err = fx.client.try_prune_terminal_invoices(&stranger, &0, &0, &100)
-        .unwrap_err().unwrap();
+    let err = fx
+        .client
+        .try_prune_terminal_invoices(&stranger, &0, &0, &100)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::NotAdmin);
 }
 
@@ -281,8 +319,13 @@ fn test_defaulted_and_refunded_pruned() {
 
     fx.env.ledger().set_timestamp(now);
 
-    let report = fx.client.prune_terminal_invoices(&fx.admin, &retention, &0, &100);
-    assert_eq!(report.pruned, 2, "should prune defaulted and refunded invoices");
+    let report = fx
+        .client
+        .prune_terminal_invoices(&fx.admin, &retention, &0, &100);
+    assert_eq!(
+        report.pruned, 2,
+        "should prune defaulted and refunded invoices"
+    );
     assert!(fx.client.try_get_invoice(&defaulted_id).is_err());
     assert!(fx.client.try_get_invoice(&refunded_id).is_err());
 }
@@ -297,7 +340,9 @@ fn test_prune_report_fields() {
 
     fx.env.ledger().set_timestamp(now);
 
-    let report = fx.client.prune_terminal_invoices(&fx.admin, &86_400, &0, &100);
+    let report = fx
+        .client
+        .prune_terminal_invoices(&fx.admin, &86_400, &0, &100);
     assert_eq!(report.scanned, 1);
     assert_eq!(report.pruned, 1);
     assert_eq!(report.next_offset, 1);
@@ -330,7 +375,9 @@ fn test_offset_beyond_total() {
 
     fx.env.ledger().set_timestamp(now);
 
-    let report = fx.client.prune_terminal_invoices(&fx.admin, &86_400, &100, &10);
+    let report = fx
+        .client
+        .prune_terminal_invoices(&fx.admin, &86_400, &100, &10);
     assert_eq!(report.pruned, 0);
     assert_eq!(report.scanned, 0);
 }
@@ -345,7 +392,9 @@ fn test_no_terminal_invoices() {
 
     fx.env.ledger().set_timestamp(now);
 
-    let report = fx.client.prune_terminal_invoices(&fx.admin, &86_400, &0, &100);
+    let report = fx
+        .client
+        .prune_terminal_invoices(&fx.admin, &86_400, &0, &100);
     assert_eq!(report.pruned, 0);
     assert_eq!(report.scanned, 1);
 }
@@ -363,7 +412,8 @@ fn test_index_cleanup_no_orphans() {
     let inv = fx.client.get_invoice(&invoice_id);
     assert_eq!(inv.status, InvoiceStatus::Paid);
 
-    fx.client.prune_terminal_invoices(&fx.admin, &86_400, &0, &100);
+    fx.client
+        .prune_terminal_invoices(&fx.admin, &86_400, &0, &100);
 
     assert!(
         fx.client.try_get_invoice(&invoice_id).is_err(),

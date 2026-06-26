@@ -222,8 +222,7 @@ mod tests {
         assert_eq!(health_before.fee_bps, 200);
 
         // Update fee config
-        ProtocolInitializer::set_fee_config(&env, &admin, 300)
-            .expect("set_fee_config failed");
+        ProtocolInitializer::set_fee_config(&env, &admin, 300).expect("set_fee_config failed");
 
         let health_after = ProtocolHealth::new(&env);
         assert_eq!(health_after.fee_bps, 300);
@@ -238,8 +237,7 @@ mod tests {
 
         // Add another currency
         let new_currency = Address::generate(&env);
-        CurrencyWhitelist::add_currency(&env, &admin, new_currency)
-            .expect("add_currency failed");
+        CurrencyWhitelist::add_currency(&env, &admin, new_currency).expect("add_currency failed");
 
         let health_after = ProtocolHealth::new(&env);
         assert_eq!(health_after.currency_count, 2);

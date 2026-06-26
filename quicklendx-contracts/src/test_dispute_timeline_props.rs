@@ -1,11 +1,11 @@
 #[cfg(test)]
 mod test_dispute_timeline_props {
-    use alloc::vec::Vec as RustVec;
     use crate::dispute_timeline::DisputeTimeline;
     use crate::errors::QuickLendXError;
     use crate::invoice::{DisputeStatus, Invoice, InvoiceCategory};
     use crate::storage::InvoiceStorage;
     use crate::QuickLendXContract;
+    use alloc::vec::Vec as RustVec;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
         Address, BytesN, Env, String, Vec,
@@ -20,8 +20,7 @@ mod test_dispute_timeline_props {
 | `evidence` | `Disputed` | `Disputed` | No new timeline entry | No |
 | `under_review` | `Disputed` | `UnderReview` | Append `UnderReview` | No |
 | `resolve` | `UnderReview` | `Resolved` | Append `Resolved` | Yes |"#;
-    const DOC_GRAMMAR_LINE: &str =
-        "`create -> evidence* -> (under_review -> resolve?)?`";
+    const DOC_GRAMMAR_LINE: &str = "`create -> evidence* -> (under_review -> resolve?)?`";
     const DOC_AUDIT_NOTE: &str =
         "The dispute timeline is a user-facing summary and does not replace the append-only invoice audit trail.";
 
@@ -58,7 +57,11 @@ mod test_dispute_timeline_props {
     impl XorShift64 {
         fn new(seed: u64) -> Self {
             Self {
-                state: if seed == 0 { 0x9E37_79B9_7F4A_7C15 } else { seed },
+                state: if seed == 0 {
+                    0x9E37_79B9_7F4A_7C15
+                } else {
+                    seed
+                },
             }
         }
 
@@ -145,9 +148,7 @@ mod test_dispute_timeline_props {
                 }
                 (ModelState::None, Action::Evidence) => Err(QuickLendXError::InvalidStatus),
                 (ModelState::None, Action::UnderReview) => Err(QuickLendXError::DisputeNotFound),
-                (ModelState::None, Action::Resolve) => {
-                    Err(QuickLendXError::DisputeNotUnderReview)
-                }
+                (ModelState::None, Action::Resolve) => Err(QuickLendXError::DisputeNotUnderReview),
                 (ModelState::Disputed, Action::Create) => {
                     Err(QuickLendXError::DisputeAlreadyExists)
                 }
@@ -163,9 +164,7 @@ mod test_dispute_timeline_props {
                 (ModelState::UnderReview, Action::Create) => {
                     Err(QuickLendXError::DisputeAlreadyExists)
                 }
-                (ModelState::UnderReview, Action::Evidence) => {
-                    Err(QuickLendXError::InvalidStatus)
-                }
+                (ModelState::UnderReview, Action::Evidence) => Err(QuickLendXError::InvalidStatus),
                 (ModelState::UnderReview, Action::UnderReview) => {
                     Err(QuickLendXError::InvalidStatus)
                 }
@@ -178,9 +177,7 @@ mod test_dispute_timeline_props {
                     Err(QuickLendXError::DisputeAlreadyExists)
                 }
                 (ModelState::Resolved, Action::Evidence) => Err(QuickLendXError::InvalidStatus),
-                (ModelState::Resolved, Action::UnderReview) => {
-                    Err(QuickLendXError::InvalidStatus)
-                }
+                (ModelState::Resolved, Action::UnderReview) => Err(QuickLendXError::InvalidStatus),
                 (ModelState::Resolved, Action::Resolve) => {
                     Err(QuickLendXError::DisputeNotUnderReview)
                 }
@@ -364,14 +361,8 @@ mod test_dispute_timeline_props {
 
             for (index, action) in action_list.iter().enumerate() {
                 env.ledger().set_timestamp(timestamp_list[index]);
-                let actual = apply_action(
-                    &env,
-                    &contract_id,
-                    &admin,
-                    &business,
-                    &invoice_id,
-                    *action,
-                );
+                let actual =
+                    apply_action(&env, &contract_id, &admin, &business, &invoice_id, *action);
 
                 if index < model.accepted_steps {
                     assert!(
@@ -379,7 +370,9 @@ mod test_dispute_timeline_props {
                         "legal prefix action {index} should succeed for seed {seed}"
                     );
                 } else {
-                    let expected = model.first_error.expect("illegal sequence must have an error");
+                    let expected = model
+                        .first_error
+                        .expect("illegal sequence must have an error");
                     let actual_err = actual.expect_err("illegal action should fail");
                     assert_eq!(
                         actual_err, expected,
@@ -429,7 +422,10 @@ mod test_dispute_timeline_props {
             }
         }
 
-        assert!(legal_sequences > 0, "randomized harness must exercise legal sequences");
+        assert!(
+            legal_sequences > 0,
+            "randomized harness must exercise legal sequences"
+        );
         assert!(
             illegal_sequences > 0,
             "randomized harness must exercise illegal sequences"
@@ -518,12 +514,7 @@ mod test_dispute_timeline_props {
 
         let timeline = env
             .as_contract(&contract_id, || {
-                QuickLendXContract::get_dispute_timeline(
-                    env.clone(),
-                    invoice_id.clone(),
-                    0,
-                    10,
-                )
+                QuickLendXContract::get_dispute_timeline(env.clone(), invoice_id.clone(), 0, 10)
             })
             .expect("timeline should load");
         assert_eq!(timeline.entries.len(), 3);

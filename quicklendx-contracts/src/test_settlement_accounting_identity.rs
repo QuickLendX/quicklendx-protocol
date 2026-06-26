@@ -5,10 +5,7 @@ use crate::profits::{
     calculate_profit, calculate_treasury_split, verify_no_dust, PlatformFee, BPS_DENOMINATOR,
 };
 use crate::settlement::get_invoice_progress;
-use soroban_sdk::{
-    testutils::Address as _,
-    token, Address, BytesN, Env, String, Vec,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
 
 fn setup_funded_invoice_with_fee(
     env: &Env,
@@ -67,20 +64,7 @@ fn setup_funded_invoice_with_fee(
 
 #[test]
 fn test_settlement_accounting_identity_exhaustive_fee_bps_pure() {
-    let payment_amounts = [
-        0i128,
-        1,
-        2,
-        3,
-        10,
-        49,
-        50,
-        51,
-        99,
-        100,
-        1_001,
-        1_000_000,
-    ];
+    let payment_amounts = [0i128, 1, 2, 3, 10, 49, 50, 51, 99, 100, 1_001, 1_000_000];
 
     for fee_bps in 0i128..=BPS_DENOMINATOR {
         for payment_amount in payment_amounts {
@@ -92,11 +76,8 @@ fn test_settlement_accounting_identity_exhaustive_fee_bps_pure() {
             ];
 
             for investment_amount in investment_variants {
-                let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(
-                    investment_amount,
-                    payment_amount,
-                    fee_bps,
-                );
+                let (investor_return, platform_fee) =
+                    PlatformFee::calculate_with_fee_bps(investment_amount, payment_amount, fee_bps);
 
                 assert!(
                     verify_no_dust(investor_return, platform_fee, payment_amount),
@@ -131,11 +112,8 @@ fn test_settlement_accounting_identity_table_driven_cases() {
     ];
 
     for (fee_bps, investment_amount, payment_amount) in cases {
-        let (investor_return, platform_fee) = PlatformFee::calculate_with_fee_bps(
-            investment_amount,
-            payment_amount,
-            fee_bps,
-        );
+        let (investor_return, platform_fee) =
+            PlatformFee::calculate_with_fee_bps(investment_amount, payment_amount, fee_bps);
 
         assert_eq!(investor_return + platform_fee, payment_amount);
         assert!(platform_fee <= payment_amount);
@@ -215,8 +193,9 @@ fn test_settlement_accounting_identity_partial_then_final() {
             &String::from_str(&env, "partial-before-final"),
         );
 
-        let progress_after_partial =
-            env.as_contract(&contract_id, || get_invoice_progress(&env, &invoice_id).unwrap());
+        let progress_after_partial = env.as_contract(&contract_id, || {
+            get_invoice_progress(&env, &invoice_id).unwrap()
+        });
         assert_eq!(progress_after_partial.total_paid, partial_payment);
         assert_eq!(progress_after_partial.status, InvoiceStatus::Funded);
 
@@ -227,7 +206,9 @@ fn test_settlement_accounting_identity_partial_then_final() {
         let implied_platform_fee = invoice_amount - investor_received;
 
         let (expected_investor_return, expected_platform_fee) = env
-            .as_contract(&contract_id, || calculate_profit(&env, investment_amount, invoice_amount));
+            .as_contract(&contract_id, || {
+                calculate_profit(&env, investment_amount, invoice_amount)
+            });
 
         assert_eq!(investor_received, expected_investor_return);
         assert_eq!(implied_platform_fee, expected_platform_fee);

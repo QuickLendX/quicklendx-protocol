@@ -49,7 +49,7 @@ pub struct InvestorPortfolioSummary {
 
 /// Maximum number of records returned by paginated query endpoints.
 /// This constant ensures memory usage stays within reasonable bounds.
-pub const MAX_QUERY_LIMIT: u32 = 100;
+pub const MAX_QUERY_LIMIT: u32 = crate::pagination::MAX_QUERY_LIMIT;
 
 /// Read-only investment query helpers with pagination support
 pub struct InvestmentQueries;
@@ -92,7 +92,7 @@ impl InvestmentQueries {
     /// - Enforces maximum limit to prevent DoS attacks via large queries
     #[inline]
     pub fn cap_query_limit(limit: u32) -> u32 {
-        limit.min(MAX_QUERY_LIMIT)
+        crate::pagination::cap_query_limit(limit)
     }
 
     /// Validates pagination parameters for safety and correctness.
@@ -114,13 +114,7 @@ impl InvestmentQueries {
         limit: u32,
         total_count: u32,
     ) -> (u32, u32, bool) {
-        let capped_limit = Self::cap_query_limit(limit);
-        let safe_offset = offset.min(total_count);
-        let remaining = total_count.saturating_sub(safe_offset);
-        let actual_limit = capped_limit.min(remaining);
-        let has_more = safe_offset.saturating_add(actual_limit) < total_count;
-
-        (safe_offset, actual_limit, has_more)
+        crate::pagination::validate_pagination_params(offset, limit, total_count)
     }
 
     /// Safely calculates pagination bounds with overflow protection.
@@ -138,10 +132,7 @@ impl InvestmentQueries {
     /// - Bounds are guaranteed to be within [0, collection_size]
     /// - Handles edge cases like offset >= collection_size gracefully
     pub fn calculate_safe_bounds(offset: u32, limit: u32, collection_size: u32) -> (u32, u32) {
-        let capped_limit = Self::cap_query_limit(limit);
-        let start = offset.min(collection_size);
-        let end = start.saturating_add(capped_limit).min(collection_size);
-        (start, end)
+        crate::pagination::calculate_safe_bounds(offset, limit, collection_size)
     }
 
     /// Retrieves paginated investments for a specific investor with overflow-safe arithmetic.
@@ -238,8 +229,9 @@ impl InvestmentQueries {
         while idx < cap {
             if let Some(id) = ids.get(idx) {
                 if let Some(inv) = InvestmentStorage::get_investment(env, &id) {
-                    total_positions =
-                        total_positions.checked_add(1).ok_or(QuickLendXError::ArithmeticOverflow)?;
+                    total_positions = total_positions
+                        .checked_add(1)
+                        .ok_or(QuickLendXError::ArithmeticOverflow)?;
                     match inv.status {
                         InvestmentStatus::Active => {
                             active_principal = active_principal

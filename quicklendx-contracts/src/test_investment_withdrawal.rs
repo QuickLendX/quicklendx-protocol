@@ -1,17 +1,24 @@
 use super::*;
 use crate::alloc::string::ToString;
 use crate::errors::QuickLendXError;
+use crate::events::TOPIC_INVESTMENT_WITHDRAWN;
 use crate::investment::{InvestmentStatus, InvestmentStorage};
 use crate::invoice::InvoiceCategory;
 use crate::payments::{EscrowStatus, EscrowStorage};
 use crate::types::InvoiceStatus;
-use crate::events::TOPIC_INVESTMENT_WITHDRAWN;
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
     token, xdr, Address, BytesN, Env, String, Symbol, TryFromVal, Val, Vec,
 };
 
-fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address, Address, Address, Address) {
+fn setup_env() -> (
+    Env,
+    QuickLendXContractClient<'static>,
+    Address,
+    Address,
+    Address,
+    Address,
+) {
     let env = Env::default();
     env.mock_all_auths();
     env.ledger().set_timestamp(1_000_000);
@@ -25,12 +32,7 @@ fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address, Address, Add
     (env, client, contract_id, admin, business, investor)
 }
 
-fn make_token(
-    env: &Env,
-    contract_id: &Address,
-    business: &Address,
-    investor: &Address,
-) -> Address {
+fn make_token(env: &Env, contract_id: &Address, business: &Address, investor: &Address) -> Address {
     let token_admin = Address::generate(env);
     let currency = env
         .register_stellar_asset_contract_v2(token_admin)
@@ -91,11 +93,7 @@ fn get_investment(
     })
 }
 
-fn is_in_active_index(
-    env: &Env,
-    contract_id: &Address,
-    investment_id: &BytesN<32>,
-) -> bool {
+fn is_in_active_index(env: &Env, contract_id: &Address, investment_id: &BytesN<32>) -> bool {
     env.as_contract(contract_id, || {
         InvestmentStorage::get_active_investment_ids(env)
             .iter()
@@ -115,13 +113,21 @@ fn test_withdrawal_success() {
 
     let investment = get_investment(&env, &contract_id, &invoice_id);
     assert_eq!(investment.status, InvestmentStatus::Active);
-    assert!(is_in_active_index(&env, &contract_id, &investment.investment_id));
+    assert!(is_in_active_index(
+        &env,
+        &contract_id,
+        &investment.investment_id
+    ));
 
     client.withdraw_investment(&invoice_id, &investor);
 
     let withdrawn = get_investment(&env, &contract_id, &invoice_id);
     assert_eq!(withdrawn.status, InvestmentStatus::Withdrawn);
-    assert!(!is_in_active_index(&env, &contract_id, &investment.investment_id));
+    assert!(!is_in_active_index(
+        &env,
+        &contract_id,
+        &investment.investment_id
+    ));
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Verified);
@@ -151,7 +157,10 @@ fn test_withdraw_after_settlement_rejected() {
 
     client.settle_invoice(&invoice_id, &1000);
 
-    let err = client.try_withdraw_investment(&invoice_id, &investor).unwrap_err().unwrap();
+    let err = client
+        .try_withdraw_investment(&invoice_id, &investor)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
 
@@ -167,7 +176,10 @@ fn test_withdraw_by_non_investor_rejected() {
 
     let stranger = Address::generate(&env);
 
-    let err = client.try_withdraw_investment(&invoice_id, &stranger).unwrap_err().unwrap();
+    let err = client
+        .try_withdraw_investment(&invoice_id, &stranger)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::Unauthorized);
 }
 
@@ -183,7 +195,10 @@ fn test_double_withdraw_rejected() {
 
     client.withdraw_investment(&invoice_id, &investor);
 
-    let err = client.try_withdraw_investment(&invoice_id, &investor).unwrap_err().unwrap();
+    let err = client
+        .try_withdraw_investment(&invoice_id, &investor)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
 
@@ -199,7 +214,10 @@ fn test_withdraw_after_escrow_released_rejected() {
 
     client.release_escrow_funds(&invoice_id);
 
-    let err = client.try_withdraw_investment(&invoice_id, &investor).unwrap_err().unwrap();
+    let err = client
+        .try_withdraw_investment(&invoice_id, &investor)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
 
@@ -215,7 +233,10 @@ fn test_withdraw_after_escrow_refunded_rejected() {
 
     client.refund_escrow_funds(&invoice_id, &business);
 
-    let err = client.try_withdraw_investment(&invoice_id, &investor).unwrap_err().unwrap();
+    let err = client
+        .try_withdraw_investment(&invoice_id, &investor)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
 
@@ -245,7 +266,11 @@ fn test_withdrawal_emits_events() {
     let before = count_events_with_topic(&env, TOPIC_INVESTMENT_WITHDRAWN);
     client.withdraw_investment(&invoice_id, &investor);
     let after = count_events_with_topic(&env, TOPIC_INVESTMENT_WITHDRAWN);
-    assert_eq!(after, before + 1, "withdrawal should emit exactly one InvestmentWithdrawn event");
+    assert_eq!(
+        after,
+        before + 1,
+        "withdrawal should emit exactly one InvestmentWithdrawn event"
+    );
 }
 
 /// Test: Withdrawn investment is immutable (no further transitions)
@@ -296,7 +321,11 @@ fn test_withdrawn_not_in_active_index() {
             assert_eq!(inv.status, InvestmentStatus::Active);
         }
     });
-    assert!(!is_in_active_index(&env, &contract_id, &investment.investment_id));
+    assert!(!is_in_active_index(
+        &env,
+        &contract_id,
+        &investment.investment_id
+    ));
     assert!(env.as_contract(&contract_id, || {
         InvestmentStorage::validate_no_orphan_investments(&env)
     }));
@@ -317,7 +346,10 @@ fn test_withdraw_reentrant_rejected() {
         env.storage().instance().set(&guard_key, &true);
     });
 
-    let err = client.try_withdraw_investment(&invoice_id, &investor).unwrap_err().unwrap();
+    let err = client
+        .try_withdraw_investment(&invoice_id, &investor)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::OperationNotAllowed);
 
     env.as_contract(&contract_id, || {
