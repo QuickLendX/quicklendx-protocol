@@ -58,6 +58,7 @@ mod test_maintenance_write_matrix;
 mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
+#[cfg(any(test, feature = "testutils"))]
 pub mod bench;
 
 pub mod admin;
@@ -3374,7 +3375,7 @@ impl QuickLendXContract {
                 "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
             ),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         };
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
@@ -3518,7 +3519,7 @@ impl QuickLendXContract {
 
         invoice.dispute_status = DisputeStatus::Resolved;
         invoice.dispute.resolution = note.clone();
-        invoice.dispute.resolution_outcome = Some(outcome.code());
+        invoice.dispute.resolution_outcome = outcome;
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
         InvoiceStorage::update_invoice(&env, &invoice);

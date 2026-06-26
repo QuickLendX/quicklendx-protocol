@@ -824,5 +824,40 @@ mod tests {
             assert_eq!(platform_fee, expected_fee, "Failed for fee_bps={}", fee_bps);
             assert!(verify_no_dust(investor_return, platform_fee, payment));
         }
+    #[test]
+    fn test_investor_platform_treasury_sum_invariant() {
+        let env = Env::default();
+        let cases = vec![
+            (0i128, 0i128),
+            (1000, 1100),
+            (1000, 1000),
+            (1000, 900),
+            (0, 1000),
+            (1000, 2000),
+        ];
+        for (investment, payment) in cases {
+            let breakdown = PlatformFee::calculate_breakdown(&env, investment, payment);
+            // Verify investor profit + platform fee = gross profit
+            assert_eq!(
+                breakdown.investor_profit + breakdown.platform_fee,
+                breakdown.gross_profit,
+                "Profit+Fee invariant failed for investment={} payment={}",
+                investment,
+                payment
+            );
+            // Treasury split
+            let (treasury, remaining) = calculate_treasury_split(breakdown.platform_fee, 5000);
+            // Ensure split sums to platform fee
+            assert_eq!(treasury + remaining, breakdown.platform_fee);
+            // Verify full invariant including treasury split
+            assert_eq!(
+                breakdown.investor_profit + treasury + remaining,
+                breakdown.gross_profit,
+                "Investor+Treasury+Remaining invariant failed for investment={} payment={}",
+                investment,
+                payment
+            );
+        }
+    }
     }
 }

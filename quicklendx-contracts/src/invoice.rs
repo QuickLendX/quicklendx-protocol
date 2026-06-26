@@ -6,7 +6,7 @@ use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 use crate::storage::InvoiceStorage;
 pub use crate::types::{
-    Dispute, DisputeStatus, DisputeResolution, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating,
+    Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating,
     InvoiceStatus,
 };
 

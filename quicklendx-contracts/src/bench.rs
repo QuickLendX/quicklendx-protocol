@@ -1,7 +1,9 @@
 //! Bench helpers for gas/cpu instruction measurement.
 //! This module is compiled only for tests and provides a `measure` helper.
 
-use soroban_sdk::Env;
+#[cfg(any(test, feature = "testutils"))]
+pub mod bench {
+    use soroban_sdk::Env;
 
 /// @notice Budget deltas recorded for a scenario.
 /// @field instructions The number of CPU instructions executed.

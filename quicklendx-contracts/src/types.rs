@@ -137,7 +137,7 @@ pub struct Dispute {
     pub resolution: String,
     pub resolved_by: Address,
     pub resolved_at: u64,
-    pub resolution_outcome: Option<u32>,
+    pub resolution_outcome: DisputeResolution,
 }
 
 /// Invoice rating structure
