@@ -5,6 +5,7 @@ import { freshnessService } from "../../services/freshnessService";
 import { invoiceStore } from "../../services/invoiceStore";
 import { parsePaginationParams, PaginationError, applyPagination } from "../../utils/pagination";
 import { getKycStatus } from "../../services/kycService";
+import { assertInvoiceId } from "../../lib/entityId";
 
 export const MOCK_INVOICES: any[] = [
   {
@@ -71,6 +72,7 @@ export const getInvoiceById = async (
 ) => {
   try {
     const { id } = req.params;
+    assertInvoiceId(id as string);
     let invoice;
     try {
       invoice = invoiceStore.findInvoiceById(id as string);
