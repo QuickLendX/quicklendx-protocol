@@ -674,7 +674,11 @@ fn test_active_index_cant_contain_terminal_investments() {
             "active index must not contain terminal investments"
         );
     }
-    assert_eq!(active_ids.len(), 0, "no active investments should remain after all terminal transitions");
+    assert_eq!(
+        active_ids.len(),
+        0,
+        "no active investments should remain after all terminal transitions"
+    );
 }
 
 /// Test: Active set excludes terminal investments after invalid retry paths

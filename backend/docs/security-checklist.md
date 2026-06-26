@@ -50,6 +50,38 @@ below apply to the admin plane and any future authenticated endpoints.
 | 2.7 | No direct string interpolation of user input into queries or shell commands | ✅ | All controllers | Mock data layer; enforce with parameterised queries when a real DB is added |
 | 2.8 | Zod schema property-based fuzz testing | ✅ | `src/tests/validators.fuzz.test.ts` | All exported validators must be fuzzed against malformed payloads (NaN, deep nesting, prototype pollution) using fast-check |
 
+### 2.9 Entity ID Validation
+
+All external entity IDs (invoice, bid, settlement, export token) are
+validated at the controller boundary using a shared assertion library in `src/lib/entityId.ts`.  The library enforces:
+
+- **Correct entity prefix** — each entity type uses a distinct prefix
+  (`inv_`, `bid_`, `stl_`, `exp_`).  A mismatched prefix is rejected.
+- **ULID format** — the suffix must be exactly 26 characters from the
+  Crockford base32 alphabet (`0-9A-HJKMNP-TV-Z`, case-insensitive).
+- **Type and length guards** — non-string inputs and strings longer
+  than the expected format are rejected by the ULID character-set check.
+
+Any malformed ID produces a `400 Bad Request` response with error code
+`INVALID_ENTITY_ID`.  This prevents ID-based injection attacks and
+ensures that internal storage boundaries only receive well-formed IDs.
+
+| # | Control | Status | File | Notes |
+|---|---------|--------|------|-------|
+| 2.9.1 | Invoice IDs validated via `assertInvoiceId()` | ✅ | `src/controllers/v1/invoices.ts`, `src/controllers/v1/bids.ts` | Called in `getInvoiceById`, `getBids`, `getBestBid`, `getTopBids`, `createBid` |
+| 2.9.2 | Bid IDs validated via `assertBidId()` | ⚠️ | `src/lib/entityId.ts` | Available but not wired to a production route (bid IDs are server-generated) |
+| 2.9.3 | Settlement IDs validated via `assertSettlementId()` | ✅ | `src/controllers/v1/settlements.ts` | Called in `getSettlementById` |
+| 2.9.4 | Export tokens validated via `assertExportToken()` | ✅ | `src/controllers/v1/exports.ts` | Called in `downloadExport` |
+| 2.9.5 | Rejects non-string, overlong, and non-Crockford inputs | ✅ | `src/lib/entityId.ts` | Covered by unit and integration tests |
+| 2.9.6 | Error code `INVALID_ENTITY_ID` returned to client | ✅ | `src/lib/entityId.ts` | `BadRequestError` with `statusCode=400` and `code="INVALID_ENTITY_ID"` |
+
+Test coverage:
+
+```bash
+cd backend
+npx jest entity-id --coverage
+```
+
 ---
 
 ## 3. Webhook / Outbound Request Security (SSRF)

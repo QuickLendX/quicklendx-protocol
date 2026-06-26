@@ -65,3 +65,7 @@ All events in a batch are validated **before** `commitBatch` is called. If any e
 - Validation runs before any write, so invalid payloads cannot corrupt the index.
 - The store interface is injected, making it straightforward to swap in a real DB-backed implementation with proper ACID transactions.
 
+## Related docs
+
+- [Attestation Events — Schema and Lifecycle](../../quicklendx-contracts/docs/ATTESTATIONS.md) — full topic reference, `RawEvent` wire format, and attestation lifecycle for downstream integrators.
+

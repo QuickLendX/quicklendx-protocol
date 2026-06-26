@@ -17,8 +17,8 @@
 //! - Bids expire correctly at the configured TTL boundary
 
 use super::*;
-use crate::bid::{BidStorage, 
-    BidStatus, BidTtlConfig, DEFAULT_BID_TTL_DAYS, MAX_BID_TTL_DAYS, MIN_BID_TTL_DAYS,
+use crate::bid::{
+    BidStatus, BidStorage, BidTtlConfig, DEFAULT_BID_TTL_DAYS, MAX_BID_TTL_DAYS, MIN_BID_TTL_DAYS,
 };
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
@@ -442,7 +442,10 @@ fn test_bid_exact_ttl_boundary_not_expired() {
 
     // Also verify via cleanup
     let cleaned = client.cleanup_expired_bids(&invoice_id);
-    assert_eq!(cleaned, 0, "Cleanup must not remove bid at exact TTL boundary");
+    assert_eq!(
+        cleaned, 0,
+        "Cleanup must not remove bid at exact TTL boundary"
+    );
 
     // Status still Placed
     let bid_after = client.get_bid(&bid_id).unwrap();
@@ -580,10 +583,5 @@ fn test_count_active_bids_multi_invoice_after_ttl_expiry() {
 
     // All bids expired
     let count_final = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
-    assert_eq!(
-        count_final, 0,
-        "0 active bids after all invoices cleaned"
-    );
+    assert_eq!(count_final, 0, "0 active bids after all invoices cleaned");
 }
-
-

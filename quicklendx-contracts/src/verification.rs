@@ -89,6 +89,7 @@ impl BusinessVerificationStorage {
     const PENDING_BUSINESSES_KEY: &'static str = "pending_businesses";
     const REJECTED_BUSINESSES_KEY: &'static str = "rejected_businesses";
     const ADMIN_KEY: &'static str = "admin_address";
+    const DELETED_BUSINESSES_KEY: &'static str = "deleted_businesses";
 
     /// Validates that a state transition is allowed according to KYC lifecycle rules
     ///
@@ -348,6 +349,59 @@ impl BusinessVerificationStorage {
 
     /// @deprecated Use `admin::AdminStorage::initialize()` or `admin::AdminStorage::set_admin()` instead
     /// This function is kept for backward compatibility with existing tests.
+    
+    /// Returns true if the business is marked as deleted.
+    pub fn is_deleted(env: &Env, business: &Address) -> bool {
+        let deleted = Self::get_deleted_businesses(env);
+        deleted.iter().any(|addr| addr == *business)
+    }
+
+    /// Retrieve list of deleted businesses.
+    pub fn get_deleted_businesses(env: &Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&Self::DELETED_BUSINESSES_KEY)
+            .unwrap_or(vec![env])
+    }
+
+    fn add_to_deleted_businesses(env: &Env, business: &Address) {
+        let mut deleted = Self::get_deleted_businesses(env);
+        deleted.push_back(business.clone());
+        env.storage()
+            .instance()
+            .set(&Self::DELETED_BUSINESSES_KEY, &deleted);
+    }
+
+    /// Deletes a business: removes from any status list and marks as deleted.
+    pub fn delete_business(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+        // Remove from verified, pending, rejected lists if present
+        if Self::is_business_verified(env, business) {
+            Self::remove_from_verified_businesses(env, business);
+        }
+        if Self::is_business_pending(env, business) {
+            Self::remove_from_pending_businesses(env, business);
+        }
+        if Self::is_business_rejected(env, business) {
+            Self::remove_from_rejected_businesses(env, business);
+        }
+        // Add to deleted list
+        if Self::is_deleted(env, business) {
+            // Already deleted; no-op
+            return Ok(());
+        }
+        Self::add_to_deleted_businesses(env, business);
+        Ok(())
+    }
+
+    // Helper checks for status presence
+    fn is_business_pending(env: &Env, business: &Address) -> bool {
+        let pending = Self::get_pending_businesses(env);
+        pending.iter().any(|addr| addr == *business)
+    }
+    fn is_business_rejected(env: &Env, business: &Address) -> bool {
+        let rejected = Self::get_rejected_businesses(env);
+        rejected.iter().any(|addr| addr == *business)
+    }
     /// It syncs with the new AdminStorage system.
     pub fn set_admin(env: &Env, admin: &Address) {
         // Store in old location for backward compatibility
@@ -909,6 +963,9 @@ pub fn require_business_verification(env: &Env, business: &Address) -> Result<()
 /// - `KYCAlreadyPending` if the business has a pending KYC application
 /// - `BusinessNotVerified` if the business has no KYC record or is rejected
 pub fn require_business_not_pending(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    if BusinessVerificationStorage::is_deleted(env, business) {
+        return Err(QuickLendXError::BusinessDeleted);
+    }
     match BusinessVerificationStorage::get_verification(env, business) {
         Some(v) => match v.status {
             BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
@@ -1116,7 +1173,7 @@ pub fn verify_investor(
             // Calculate risk score and determine tier
             let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
             validate_risk_score(risk_score)?;
-            let tier = determine_investor_tier(env, investor, risk_score)?;
+            let tier = compute_investor_tier(env, investor, risk_score)?;
             let risk_level = determine_risk_level(risk_score);
 
             // Calculate final investment limit based on tier and risk
@@ -1222,7 +1279,7 @@ pub fn calculate_investor_risk_score(
     Ok(risk_score)
 }
 
-/// Determine investor tier based on risk score and investment history
+/// Determine investor tier based on risk score and investment history.
 /// Calculate the investor tier using deterministic performance thresholds.
 ///
 /// Promotion is based on the investor's accumulated performance counters and
@@ -1237,7 +1294,7 @@ pub fn calculate_investor_risk_score(
 /// | Gold | <= 40 | >= 100,000 | >= 10 | <= 15% |
 /// | Silver | <= 60 | >= 10,000 | >= 3 | <= 25% |
 /// | Basic | otherwise | - | - | - |
-pub fn compute_investor_tier(
+pub fn determine_investor_tier(
     env: &Env,
     investor: &Address,
     risk_score: u32,
@@ -1245,12 +1302,65 @@ pub fn compute_investor_tier(
     validate_risk_score(risk_score)?;
 
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
-        return compute_investor_tier(
+        return compute_investor_tier_from_stats(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
             risk_score,
         );
+    }
+
+    Ok(InvestorTier::Basic)
+}
+
+pub fn compute_investor_tier(
+    total_invested: i128,
+    successful_investments: u32,
+    defaulted_investments: u32,
+    risk_score: u32,
+) -> Result<InvestorTier, QuickLendXError> {
+    validate_risk_score(risk_score)?;
+
+    let total_active_or_completed = successful_investments.saturating_add(defaulted_investments);
+    let default_rate_pct = if total_active_or_completed > 0 {
+        (defaulted_investments as u64)
+            .saturating_mul(100)
+            .checked_div(total_active_or_completed as u64)
+            .unwrap_or(0) as u32
+    } else {
+        0
+    };
+
+    if risk_score <= VIP_RISK_SCORE_MAX
+        && total_invested >= VIP_TOTAL_INVESTED_MIN
+        && successful_investments >= VIP_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= VIP_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::VIP);
+    }
+
+    if risk_score <= PLATINUM_RISK_SCORE_MAX
+        && total_invested >= PLATINUM_TOTAL_INVESTED_MIN
+        && successful_investments >= PLATINUM_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= PLATINUM_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::Platinum);
+    }
+
+    if risk_score <= GOLD_RISK_SCORE_MAX
+        && total_invested >= GOLD_TOTAL_INVESTED_MIN
+        && successful_investments >= GOLD_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= GOLD_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::Gold);
+    }
+
+    if risk_score <= SILVER_RISK_SCORE_MAX
+        && total_invested >= SILVER_TOTAL_INVESTED_MIN
+        && successful_investments >= SILVER_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= SILVER_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::Silver);
     }
 
     Ok(InvestorTier::Basic)
@@ -1265,6 +1375,55 @@ pub fn determine_risk_level(risk_score: u32) -> InvestorRiskLevel {
         76..=100 => InvestorRiskLevel::VeryHigh,
         _ => InvestorRiskLevel::VeryHigh, // fallback safety
     }
+}
+
+/// Core tier computation using raw counters (total invested, successes, defaults).
+pub fn compute_investor_tier(
+    total_invested: i128,
+    successful_investments: u32,
+    defaulted_investments: u32,
+    risk_score: u32,
+) -> Result<InvestorTier, QuickLendXError> {
+    let total = successful_investments.saturating_add(defaulted_investments);
+    let default_rate = if total > 0 {
+        (defaulted_investments.saturating_mul(100)) / total
+    } else {
+        0u32
+    };
+
+    if risk_score <= 10
+        && total_invested >= 5_000_000
+        && successful_investments >= 50
+        && default_rate <= 5
+    {
+        return Ok(InvestorTier::VIP);
+    }
+
+    if risk_score <= 20
+        && total_invested >= 1_000_000
+        && successful_investments >= 20
+        && default_rate <= 10
+    {
+        return Ok(InvestorTier::Platinum);
+    }
+
+    if risk_score <= 40
+        && total_invested >= 100_000
+        && successful_investments >= 10
+        && default_rate <= 15
+    {
+        return Ok(InvestorTier::Gold);
+    }
+
+    if risk_score <= 60
+        && total_invested >= 10_000
+        && successful_investments >= 3
+        && default_rate <= 25
+    {
+        return Ok(InvestorTier::Silver);
+    }
+
+    Ok(InvestorTier::Basic)
 }
 
 /// Calculate investment limit based on tier and risk level
@@ -1339,7 +1498,6 @@ pub fn update_investor_analytics(
             &verification.risk_level,
         );
 
-
         verification.total_invested = verification
             .total_invested
             .saturating_add(investment_amount);
@@ -1361,7 +1519,12 @@ pub fn update_investor_analytics(
         verification.risk_score =
             calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
         verification.risk_level = determine_risk_level(verification.risk_score);
-        verification.tier = compute_investor_tier(verification.total_invested, verification.successful_investments, verification.defaulted_investments, verification.risk_score)?;
+        verification.tier = compute_investor_tier_from_stats(
+            verification.total_invested,
+            verification.successful_investments,
+            verification.defaulted_investments,
+            verification.risk_score,
+        )?;
 
         // Preserve the investor's approved baseline and only re-derive the
         // dynamic limit using the updated tier/risk profile.
@@ -1526,60 +1689,6 @@ pub fn recompute_investor_tier(
     Ok(())
 }
 
-/// Recompute investor tier and investment limit from tracked performance counters.
-///
-/// This function keeps the tier assignment deterministic and idempotent by
-/// recomputing tier from `total_invested`, `successful_investments`,
-/// `defaulted_investments`, and `risk_score`, then updating the stored record.
-/// It preserves the investor's approved base limit and applies the new tier/risk
-/// multipliers to derive the new investment limit.
-pub fn recompute_investor_tier(
-    env: &Env,
-    admin: &Address,
-    investor: &Address,
-) -> Result<(), QuickLendXError> {
-    admin.require_auth();
-    if !crate::admin::AdminStorage::is_admin(env, admin) {
-        return Err(QuickLendXError::NotAdmin);
-    }
-
-    let mut verification = InvestorVerificationStorage::get(env, investor)
-        .ok_or(QuickLendXError::KYCNotFound)?;
-
-    if !matches!(verification.status, BusinessVerificationStatus::Verified) {
-        return Err(QuickLendXError::InvalidKYCStatus);
-    }
-
-    let prior_tier = verification.tier.clone();
-    let prior_risk_level = verification.risk_level.clone();
-    let base_limit = recover_base_limit_from_current_limit(
-        verification.investment_limit,
-        &prior_tier,
-        &prior_risk_level,
-    )
-    .max(1);
-
-    let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
-    validate_risk_score(risk_score)?;
-
-    let tier = compute_investor_tier(
-        verification.total_invested,
-        verification.successful_investments,
-        verification.defaulted_investments,
-        risk_score,
-    )?;
-    let risk_level = determine_risk_level(risk_score);
-    let investment_limit = calculate_investment_limit(&tier, &risk_level, base_limit);
-
-    verification.risk_score = risk_score;
-    verification.risk_level = risk_level;
-    verification.tier = tier;
-    verification.investment_limit = investment_limit;
-    verification.compliance_notes = Some(String::from_str(env, "Investor tier recomputed by admin"));
-
-    InvestorVerificationStorage::update(env, &verification);
-    Ok(())
-}
 
 /// Validate structured invoice metadata against the invoice amount
 pub fn validate_invoice_metadata(

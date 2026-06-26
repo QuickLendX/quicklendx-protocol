@@ -5,8 +5,7 @@
 use crate::errors::QuickLendXError;
 use crate::incident::IncidentSnapshot;
 use crate::invoice::InvoiceCategory;
-use crate::maintenance::{MaintenanceControl, MAX_REASON_LEN};
-use crate::pause::PauseControl;
+use crate::maintenance::MAX_REASON_LEN;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, String, Vec};
@@ -42,9 +41,9 @@ fn test_enter_incident_mode_sets_pause_and_maintenance() {
     assert_eq!(snapshot.reason, reason(&env, msg));
     assert_eq!(snapshot.timestamp, env.ledger().timestamp());
     assert!(client.is_paused());
-    assert!(MaintenanceControl::is_maintenance_mode(&env));
+    assert!(client.is_maintenance_mode());
     assert_eq!(
-        MaintenanceControl::get_maintenance_reason(&env).unwrap(),
+        client.get_maintenance_reason().unwrap(),
         reason(&env, msg)
     );
 }
@@ -58,7 +57,7 @@ fn test_enter_incident_mode_rejects_non_admin() {
     let result = client.try_enter_incident_mode(&attacker, &reason(&env, "attack"));
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::NotAdmin);
     assert!(!client.is_paused());
-    assert!(!MaintenanceControl::is_maintenance_mode(&env));
+    assert!(!client.is_maintenance_mode());
 }
 
 #[test]
@@ -69,9 +68,12 @@ fn test_enter_incident_mode_rejects_oversized_reason() {
     let oversized = reason_of_len(&env, (MAX_REASON_LEN + 1) as usize);
 
     let result = client.try_enter_incident_mode(&admin, &oversized);
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
     assert!(!client.is_paused());
-    assert!(!MaintenanceControl::is_maintenance_mode(&env));
+    assert!(!client.is_maintenance_mode());
 }
 
 #[test]
@@ -99,8 +101,8 @@ fn test_exit_incident_mode_clears_both_flags() {
     assert!(!snapshot.is_maintenance);
     assert_eq!(snapshot.reason, reason(&env, ""));
     assert!(!client.is_paused());
-    assert!(!MaintenanceControl::is_maintenance_mode(&env));
-    assert!(MaintenanceControl::get_maintenance_reason(&env).is_none());
+    assert!(!client.is_maintenance_mode());
+    assert!(client.get_maintenance_reason().is_none());
 }
 
 #[test]
@@ -132,7 +134,7 @@ fn test_exit_incident_mode_rejects_non_admin() {
     let result = client.try_exit_incident_mode(&attacker);
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::NotAdmin);
     assert!(client.is_paused());
-    assert!(MaintenanceControl::is_maintenance_mode(&env));
+    assert!(client.is_maintenance_mode());
 }
 
 #[test]
@@ -154,7 +156,10 @@ fn test_incident_mode_blocks_store_invoice() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::ContractPaused
+    );
 }
 
 #[test]
@@ -165,8 +170,8 @@ fn test_unpause_alone_leaves_maintenance_active() {
     client.enter_incident_mode(&admin, &reason(&env, "Drift test"));
     client.unpause(&admin);
 
-    assert!(!PauseControl::is_paused(&env));
-    assert!(MaintenanceControl::is_maintenance_mode(&env));
+    assert!(!client.is_paused());
+    assert!(client.is_maintenance_mode());
 }
 
 #[test]
@@ -176,7 +181,7 @@ fn test_reenter_realigns_drifted_flags() {
 
     client.pause(&admin);
     assert!(client.is_paused());
-    assert!(!MaintenanceControl::is_maintenance_mode(&env));
+    assert!(!client.is_maintenance_mode());
 
     let snapshot = client.enter_incident_mode(&admin, &reason(&env, "Realign"));
     assert!(snapshot.is_paused);

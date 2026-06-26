@@ -30,7 +30,7 @@ use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::maintenance::{MaintenanceControl, MAX_REASON_LEN};
 use crate::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec, BytesN};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 // ============================================================================
 // Setup & Helper Functions
@@ -380,10 +380,8 @@ fn test_maintenance_blocks_submit_investor_kyc() {
 
     enable_maintenance(&env, &client, &admin, "Investor KYC disabled");
 
-    let result = client.try_submit_investor_kyc(
-        &investor,
-        &String::from_str(&env, r#"{"accredited":true}"#),
-    );
+    let result = client
+        .try_submit_investor_kyc(&investor, &String::from_str(&env, r#"{"accredited":true}"#));
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive,
@@ -606,10 +604,7 @@ fn test_reason_round_trip_max_length() {
 
     // Create a reason string at maximum length.
     let max_reason: String = {
-        let bytes = soroban_sdk::Bytes::from_slice(
-            &env,
-            &vec![b'a'; MAX_REASON_LEN as usize],
-        );
+        let bytes = soroban_sdk::Bytes::from_slice(&env, &vec![b'a'; MAX_REASON_LEN as usize]);
         String::try_from_bytes(&bytes).unwrap()
     };
 
@@ -655,10 +650,8 @@ fn test_oversized_reason_rejected() {
 
     // Create a reason one byte over the limit.
     let oversized: String = {
-        let bytes = soroban_sdk::Bytes::from_slice(
-            &env,
-            &vec![b'x'; (MAX_REASON_LEN + 1) as usize],
-        );
+        let bytes =
+            soroban_sdk::Bytes::from_slice(&env, &vec![b'x'; (MAX_REASON_LEN + 1) as usize]);
         String::try_from_bytes(&bytes).unwrap()
     };
 
@@ -734,7 +727,10 @@ fn test_toggle_maintenance_multiple_times() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert_eq!(result1.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result1.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
 
     // Toggle 2: Disable
     disable_maintenance(&env, &client, &admin);
@@ -760,7 +756,10 @@ fn test_toggle_maintenance_multiple_times() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert_eq!(result3.unwrap_err().unwrap(), QuickLendXError::MaintenanceModeActive);
+    assert_eq!(
+        result3.unwrap_err().unwrap(),
+        QuickLendXError::MaintenanceModeActive
+    );
 
     // Toggle 4: Disable again
     disable_maintenance(&env, &client, &admin);

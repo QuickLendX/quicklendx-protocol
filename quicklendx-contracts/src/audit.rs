@@ -36,7 +36,7 @@
 use crate::errors::QuickLendXError;
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{
-    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
+    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
 
 /// Audit operation types
@@ -59,10 +59,126 @@ pub enum AuditOperation {
     EscrowRefunded,
     PaymentProcessed,
     SettlementCompleted,
+    /// Admin updated protocol-level config (min_invoice_amount / max_due_date_days / grace_period_seconds).
+    ConfigProtocolChanged,
+    /// Admin updated the global fee basis-point rate.
+    ConfigFeeChanged,
+    /// Admin changed the treasury address.
+    ConfigTreasuryChanged,
+    /// Admin updated a FeeStructure entry (bps / min_fee / max_fee / is_active).
+    ConfigFeeStructureChanged,
+    /// Admin reconfigured revenue-distribution shares.
+    ConfigRevenueDistributionChanged,
+}
+
+/// Typed operation types used by audit-log emission.
+///
+/// Mirrors [`AuditOperation`] but provides a `to_symbol()` conversion for
+/// Soroban event topics, so downstream consumers can match on a typed enum
+/// rather than free-form strings.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OpType {
+    InvoiceCreated,
+    InvoiceUploaded,
+    InvoiceVerified,
+    InvoiceFunded,
+    InvoicePaid,
+    InvoiceDefaulted,
+    InvoiceStatusChanged,
+    InvoiceRated,
+    BidPlaced,
+    BidAccepted,
+    BidWithdrawn,
+    EscrowCreated,
+    EscrowReleased,
+    EscrowRefunded,
+    PaymentProcessed,
+    SettlementCompleted,
+}
+
+impl OpType {
+    /// Return the Soroban `Symbol` used as the event topic / discriminator.
+    pub fn to_symbol(&self) -> Symbol {
+        match self {
+            OpType::InvoiceCreated => symbol_short!("inv_crt"),
+            OpType::InvoiceUploaded => symbol_short!("inv_up"),
+            OpType::InvoiceVerified => symbol_short!("inv_ver"),
+            OpType::InvoiceFunded => symbol_short!("inv_fnd"),
+            OpType::InvoicePaid => symbol_short!("inv_pd"),
+            OpType::InvoiceDefaulted => symbol_short!("inv_def"),
+            OpType::InvoiceStatusChanged => symbol_short!("inv_stch"),
+            OpType::InvoiceRated => symbol_short!("inv_rt"),
+            OpType::BidPlaced => symbol_short!("bid_plc"),
+            OpType::BidAccepted => symbol_short!("bid_acc"),
+            OpType::BidWithdrawn => symbol_short!("bid_wdr"),
+            OpType::EscrowCreated => symbol_short!("esc_cr"),
+            OpType::EscrowReleased => symbol_short!("esc_rel"),
+            OpType::EscrowRefunded => symbol_short!("esc_ref"),
+            OpType::PaymentProcessed => symbol_short!("pay_prc"),
+            OpType::SettlementCompleted => symbol_short!("stl_cmp"),
+        }
+    }
+
+    /// Numeric tag used for hash-chain computation.
+    pub fn tag(&self) -> u8 {
+        match self {
+            OpType::InvoiceCreated => 0,
+            OpType::InvoiceUploaded => 1,
+            OpType::InvoiceVerified => 2,
+            OpType::InvoiceFunded => 3,
+            OpType::InvoicePaid => 4,
+            OpType::InvoiceDefaulted => 5,
+            OpType::InvoiceStatusChanged => 6,
+            OpType::InvoiceRated => 7,
+            OpType::BidPlaced => 8,
+            OpType::BidAccepted => 9,
+            OpType::BidWithdrawn => 10,
+            OpType::EscrowCreated => 11,
+            OpType::EscrowReleased => 12,
+            OpType::EscrowRefunded => 13,
+            OpType::PaymentProcessed => 14,
+            OpType::SettlementCompleted => 15,
+        }
+    }
+}
+
+impl From<AuditOperation> for OpType {
+    fn from(op: AuditOperation) -> Self {
+        match op {
+            AuditOperation::InvoiceCreated => OpType::InvoiceCreated,
+            AuditOperation::InvoiceUploaded => OpType::InvoiceUploaded,
+            AuditOperation::InvoiceVerified => OpType::InvoiceVerified,
+            AuditOperation::InvoiceFunded => OpType::InvoiceFunded,
+            AuditOperation::InvoicePaid => OpType::InvoicePaid,
+            AuditOperation::InvoiceDefaulted => OpType::InvoiceDefaulted,
+            AuditOperation::InvoiceStatusChanged => OpType::InvoiceStatusChanged,
+            AuditOperation::InvoiceRated => OpType::InvoiceRated,
+            AuditOperation::BidPlaced => OpType::BidPlaced,
+            AuditOperation::BidAccepted => OpType::BidAccepted,
+            AuditOperation::BidWithdrawn => OpType::BidWithdrawn,
+            AuditOperation::EscrowCreated => OpType::EscrowCreated,
+            AuditOperation::EscrowReleased => OpType::EscrowReleased,
+            AuditOperation::EscrowRefunded => OpType::EscrowRefunded,
+            AuditOperation::PaymentProcessed => OpType::PaymentProcessed,
+            AuditOperation::SettlementCompleted => OpType::SettlementCompleted,
+        }
+    }
 }
 
 /// Fixed genesis sentinel for invoice-local audit hash chains.
 pub const AUDIT_CHAIN_GENESIS: [u8; 32] = [0u8; 32];
+
+/// Fixed sentinel `invoice_id` for all admin config-change audit entries.
+///
+/// Config changes are not scoped to any invoice; they share this virtual trail
+/// so every `set_protocol_config`, `set_fee_config`, `set_treasury`,
+/// `update_fee_structure`, and `configure_revenue_distribution` call chains its
+/// entry with the same hash-link ordering guarantee as invoice-local trails.
+///
+/// Distinct from `AUDIT_CHAIN_GENESIS` (`[0u8; 32]`) to prevent overlap
+/// between the per-invoice genesis sentinel and the config trail key.
+pub const CONFIG_AUDIT_SENTINEL: [u8; 32] = [0xCFu8; 32];
 
 /// Audit log entry structure
 ///
@@ -280,6 +396,11 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::EscrowRefunded => 13,
         AuditOperation::PaymentProcessed => 14,
         AuditOperation::SettlementCompleted => 15,
+        AuditOperation::ConfigProtocolChanged => 16,
+        AuditOperation::ConfigFeeChanged => 17,
+        AuditOperation::ConfigTreasuryChanged => 18,
+        AuditOperation::ConfigFeeStructureChanged => 19,
+        AuditOperation::ConfigRevenueDistributionChanged => 20,
     }
 }
 
@@ -479,7 +600,8 @@ impl AuditStorage {
         let all_entries = Self::get_all_audit_entries(env);
         let total_entries = all_entries.len();
 
-        let operations_count = Vec::new(env);
+        // Initialize operation counters vector
+        let mut operations_count: Vec<(AuditOperation, u32)> = Vec::new(env);
         let mut unique_actors: Vec<Address> = Vec::new(env);
         let mut min_timestamp = u64::MAX;
         let mut max_timestamp = 0u64;
@@ -490,13 +612,26 @@ impl AuditStorage {
                 if !unique_actors.iter().any(|a| a == entry.actor) {
                     unique_actors.push_back(entry.actor.clone());
                 }
-
                 // Update timestamp range
                 if entry.timestamp < min_timestamp {
                     min_timestamp = entry.timestamp;
                 }
                 if entry.timestamp > max_timestamp {
                     max_timestamp = entry.timestamp;
+                }
+                // Increment operation counters
+                let mut found = false;
+                for i in 0..operations_count.len() {
+                    let (op, mut cnt) = operations_count.get(i).unwrap();
+                    if op == entry.operation {
+                        cnt += 1;
+                        operations_count.set(i, (op, cnt));
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    operations_count.push_back((entry.operation.clone(), 1));
                 }
             }
         }
@@ -874,5 +1009,108 @@ pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Addres
         Some(String::from_str(env, "Settlement completed")),
         Some(amount),
         None,
+    );
+}
+
+// ─── Config-change audit helpers ─────────────────────────────────────────────
+
+/// Write a u64 as ASCII decimal digits into `buf`, returning the byte count.
+///
+/// `buf` must be at least 20 bytes. Used by config-change audit serialization.
+pub(crate) fn write_u64_to_buf(buf: &mut [u8], mut value: u64) -> usize {
+    let mut tmp = [0u8; 20];
+    let mut len = 0usize;
+    if value == 0 {
+        tmp[0] = b'0';
+        len = 1;
+    } else {
+        while value > 0 {
+            tmp[len] = b'0' + (value % 10) as u8;
+            value /= 10;
+            len += 1;
+        }
+    }
+    for i in 0..len {
+        buf[i] = tmp[len - 1 - i];
+    }
+    len
+}
+
+/// Write an i128 as ASCII decimal digits into `buf`, returning the byte count.
+///
+/// `buf` must be at least 41 bytes (sign + up to 39 decimal digits).
+pub(crate) fn write_i128_to_buf(buf: &mut [u8], value: i128) -> usize {
+    let (neg, mut abs) = if value < 0 {
+        (true, (value as u128).wrapping_neg())
+    } else {
+        (false, value as u128)
+    };
+    let mut tmp = [0u8; 40];
+    let mut len = 0usize;
+    if abs == 0 {
+        tmp[0] = b'0';
+        len = 1;
+    } else {
+        while abs > 0 {
+            tmp[len] = b'0' + (abs % 10) as u8;
+            abs /= 10;
+            len += 1;
+        }
+    }
+    let start = if neg { buf[0] = b'-'; 1 } else { 0 };
+    for i in 0..len {
+        buf[start + i] = tmp[len - 1 - i];
+    }
+    start + len
+}
+
+/// Encode the first 18 XDR bytes of an `Address` as a 36-character hex string.
+///
+/// 18 bytes = 144 bits of identity — sufficient to uniquely identify any Stellar
+/// account or contract address encountered on-chain. Result fits comfortably
+/// within `MAX_DESCRIPTION_LENGTH`.
+pub(crate) fn address_to_audit_string(env: &Env, addr: &Address) -> String {
+    let xdr = addr.clone().to_xdr(env);
+    let hex = b"0123456789abcdef";
+    let mut buf = [0u8; 36];
+    let take = (xdr.len() as usize).min(18);
+    for i in 0..take {
+        let byte = xdr.get(i as u32).unwrap_or(0);
+        buf[i * 2] = hex[(byte >> 4) as usize];
+        buf[i * 2 + 1] = hex[(byte & 0x0f) as usize];
+    }
+    String::from_str(
+        env,
+        core::str::from_utf8(&buf[..take * 2]).unwrap_or("addr"),
+    )
+}
+
+/// Append a config-change audit entry to the shared `CONFIG_AUDIT_SENTINEL` trail.
+///
+/// All five admin config mutations route through here so every param change is
+/// chained in the same tamper-evident, append-only trail keyed by
+/// `CONFIG_AUDIT_SENTINEL`.
+///
+/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
+/// guarantee the preceding storage write and this audit append both commit or
+/// both roll back — there is no partial-success scenario.
+pub(crate) fn log_config_change(
+    env: &Env,
+    operation: AuditOperation,
+    actor: Address,
+    param: &str,
+    old_value: Option<String>,
+    new_value: Option<String>,
+) {
+    let sentinel = BytesN::from_array(env, &CONFIG_AUDIT_SENTINEL);
+    log_operation(
+        env,
+        sentinel,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        None,
+        Some(String::from_str(env, param)),
     );
 }

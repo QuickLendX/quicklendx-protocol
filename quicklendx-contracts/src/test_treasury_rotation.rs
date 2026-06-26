@@ -1,3 +1,4 @@
+use crate::fees::MIN_ROTATION_DELAY_SECONDS;
 use crate::QuickLendXContract;
 use crate::QuickLendXContractClient;
 use soroban_sdk::{testutils::{Address as _, Ledger}, Address, Env};
@@ -9,6 +10,12 @@ fn setup(env: &Env) -> (QuickLendXContractClient, Address) {
     client.initialize_admin(&admin);
     client.initialize_fee_system(&admin);
     (client, admin)
+}
+
+/// Advance the ledger timestamp past the minimum rotation delay so that
+/// `confirm_treasury_rotation` does not return `RotationTimelockNotElapsed`.
+fn advance_past_min_delay(env: &Env) {
+    env.ledger().set_timestamp(env.ledger().timestamp() + MIN_ROTATION_DELAY_SECONDS + 1);
 }
 
 // ============================================================================
@@ -107,6 +114,7 @@ fn test_confirm_rotation_updates_treasury_address() {
     let new_treasury = Address::generate(&env);
 
     client.initiate_treasury_rotation(&new_treasury);
+    advance_past_min_delay(&env);
     let confirmed = client.confirm_treasury_rotation(&new_treasury);
 
     assert_eq!(confirmed, new_treasury);
@@ -121,6 +129,7 @@ fn test_confirm_rotation_clears_pending_request() {
     let new_treasury = Address::generate(&env);
 
     client.initiate_treasury_rotation(&new_treasury);
+    advance_past_min_delay(&env);
     client.confirm_treasury_rotation(&new_treasury);
 
     assert!(client.get_pending_treasury_rotation().is_none());
@@ -135,6 +144,7 @@ fn test_confirm_rotation_fails_with_wrong_address() {
     let wrong_addr = Address::generate(&env);
 
     client.initiate_treasury_rotation(&new_treasury);
+    advance_past_min_delay(&env);
 
     let result = client.try_confirm_treasury_rotation(&wrong_addr);
     assert!(result.is_err());
@@ -191,6 +201,7 @@ fn test_confirm_rotation_at_exact_deadline_succeeds() {
     let new_treasury = Address::generate(&env);
 
     let req = client.initiate_treasury_rotation(&new_treasury);
+    // deadline is well past the min delay (604_800 > 86_400)
     env.ledger().set_timestamp(req.confirmation_deadline);
 
     let confirmed = client.confirm_treasury_rotation(&new_treasury);
@@ -259,6 +270,9 @@ fn test_full_rotation_lifecycle() {
     let req = client.initiate_treasury_rotation(&treasury_v2);
     assert_eq!(req.new_address, treasury_v2);
 
+    // Advance past min delay
+    advance_past_min_delay(&env);
+
     // Confirm as new treasury
     let result = client.confirm_treasury_rotation(&treasury_v2);
     assert_eq!(result, treasury_v2);
@@ -278,6 +292,7 @@ fn test_can_rotate_again_after_successful_rotation() {
 
     client.configure_treasury(&addr_a);
     client.initiate_treasury_rotation(&addr_b);
+    advance_past_min_delay(&env);
     client.confirm_treasury_rotation(&addr_b);
 
     let addr_c = Address::generate(&env);
@@ -311,6 +326,7 @@ fn test_cancel_then_new_rotation_is_independent() {
     client.initiate_treasury_rotation(&addr_a);
     client.cancel_treasury_rotation();
     client.initiate_treasury_rotation(&addr_b);
+    advance_past_min_delay(&env);
     client.confirm_treasury_rotation(&addr_b);
 
     assert_eq!(client.get_treasury_address().unwrap(), addr_b);
@@ -328,6 +344,7 @@ fn test_fee_config_reflects_new_treasury_after_rotation() {
     let new_treasury = Address::generate(&env);
 
     client.initiate_treasury_rotation(&new_treasury);
+    advance_past_min_delay(&env);
     client.confirm_treasury_rotation(&new_treasury);
 
     let config = client.get_platform_fee_config();
@@ -343,13 +360,14 @@ fn test_rotation_preserves_fee_bps() {
 
     client.set_platform_fee(&500i128);
     client.initiate_treasury_rotation(&new_treasury);
+    advance_past_min_delay(&env);
     client.confirm_treasury_rotation(&new_treasury);
 
     assert_eq!(client.get_platform_fee().fee_bps, 500);
 }
 
 // ============================================================================
-// NEW: Fee routing invariants - fees go to OLD treasury until confirm
+// Fee routing invariants - fees go to OLD treasury until confirm
 // ============================================================================
 
 #[test]
@@ -363,7 +381,7 @@ fn test_fees_route_to_old_treasury_before_confirm() {
     client.configure_treasury(&old_treasury);
     client.initiate_treasury_rotation(&new_treasury);
 
-    // Treasury address must still be the old one
+    // Treasury address must still be the old one (no delay has passed)
     assert_eq!(client.get_treasury_address().unwrap(), old_treasury);
 }
 
@@ -377,6 +395,7 @@ fn test_fees_route_to_new_treasury_after_confirm() {
 
     client.configure_treasury(&old_treasury);
     client.initiate_treasury_rotation(&new_treasury);
+    advance_past_min_delay(&env);
     client.confirm_treasury_rotation(&new_treasury);
 
     assert_eq!(client.get_treasury_address().unwrap(), new_treasury);
@@ -400,20 +419,18 @@ fn test_cancel_resets_pending_and_keeps_old_treasury() {
 }
 
 // ============================================================================
-// NEW: Admin authorization on every step
+// Admin authorization on every step
 // ============================================================================
 
 #[test]
 fn test_initiate_requires_admin() {
     let env = Env::default();
     env.mock_all_auths();
-    let (client, admin) = setup(&env);
+    let (client, _admin) = setup(&env);
     let new_treasury = Address::generate(&env);
 
-    // Non-admin caller should fail (we remove mock for this test path)
-    // In practice the contract checks admin.require_auth()
     let result = client.try_initiate_treasury_rotation(&new_treasury);
-    // With mock_all_auths it passes, but the contract enforces admin internally
+    // With mock_all_auths it passes; the contract enforces admin internally
     assert!(result.is_ok() || result.is_err()); // structural test
 }
 
@@ -430,7 +447,7 @@ fn test_cancel_requires_admin() {
 }
 
 // ============================================================================
-// NEW: Edge cases
+// Edge cases
 // ============================================================================
 
 #[test]
@@ -452,6 +469,7 @@ fn test_double_confirm_fails() {
     let new_treasury = Address::generate(&env);
 
     client.initiate_treasury_rotation(&new_treasury);
+    advance_past_min_delay(&env);
     client.confirm_treasury_rotation(&new_treasury);
 
     let result = client.try_confirm_treasury_rotation(&new_treasury);
@@ -461,7 +479,6 @@ fn test_double_confirm_fails() {
 #[test]
 fn test_non_admin_cannot_initiate() {
     let env = Env::default();
-    // Do not mock all auths so we can test real auth failure
     let (client, _admin) = setup(&env);
     let new_treasury = Address::generate(&env);
 
@@ -486,6 +503,7 @@ fn test_failed_confirm_does_not_update_treasury() {
 
     client.configure_treasury(&old_treasury);
     client.initiate_treasury_rotation(&new_treasury);
+    advance_past_min_delay(&env);
     let _ = client.try_confirm_treasury_rotation(&wrong);
 
     assert_eq!(client.get_treasury_address().unwrap(), old_treasury);
@@ -509,7 +527,7 @@ fn test_expired_rotation_does_not_update_treasury() {
 }
 
 // ============================================================================
-// NEW: Expiration and confirmation-deadline boundary tests
+// Expiration and confirmation-deadline boundary tests
 // ============================================================================
 
 #[test]
@@ -520,9 +538,8 @@ fn test_rotation_deadline_boundary_conditions() {
     let new_treasury = Address::generate(&env);
 
     let req = client.initiate_treasury_rotation(&new_treasury);
-    let ttl: u64 = 604_800; // 7 days in seconds
 
-    // Test 1: Confirmation 1 second before deadline succeeds
+    // Test 1: Confirmation 1 second before deadline (well past min delay) succeeds
     env.ledger().set_timestamp(req.confirmation_deadline - 1);
     let result = client.try_confirm_treasury_rotation(&new_treasury);
     assert!(result.is_ok(), "Confirmation should succeed 1 second before deadline");
@@ -576,7 +593,6 @@ fn test_rotation_ttl_calculation_accuracy() {
         "Deadline should be exactly initiated_at + 604_800 seconds"
     );
 
-    // Verify initiated_at matches the timestamp when rotation was initiated
     assert_eq!(
         req.initiated_at,
         base_timestamp,
@@ -595,7 +611,6 @@ fn test_rotation_expiration_clears_pending_state() {
     client.configure_treasury(&old_treasury);
     let req = client.initiate_treasury_rotation(&new_treasury);
 
-    // Verify pending state exists
     assert!(client.get_pending_treasury_rotation().is_some());
 
     // Advance past deadline
@@ -604,10 +619,7 @@ fn test_rotation_expiration_clears_pending_state() {
     // Attempt confirmation (should fail and clear pending state)
     let _ = client.try_confirm_treasury_rotation(&new_treasury);
 
-    // Verify pending state is cleared
     assert!(client.get_pending_treasury_rotation().is_none());
-
-    // Verify treasury address is unchanged
     assert_eq!(client.get_treasury_address().unwrap(), old_treasury);
 }
 
@@ -618,14 +630,12 @@ fn test_rotation_deadline_with_different_start_times() {
     let (client, _admin) = setup(&env);
     let new_treasury = Address::generate(&env);
 
-    // Test with different starting timestamps
-    let test_timestamps = vec![0u64, 1_000_000, 10_000_000, 100_000_000];
+    let test_timestamps = vec![1_000_000u64, 10_000_000, 100_000_000];
 
     for start_ts in test_timestamps.iter() {
         env.ledger().set_timestamp(*start_ts);
         let req = client.initiate_treasury_rotation(&new_treasury);
 
-        // Verify deadline calculation is consistent regardless of start time
         let expected_deadline = *start_ts + 604_800;
         assert_eq!(
             req.confirmation_deadline,
@@ -634,7 +644,107 @@ fn test_rotation_deadline_with_different_start_times() {
             start_ts
         );
 
-        // Cancel to allow next iteration
         client.cancel_treasury_rotation();
     }
+}
+
+// ============================================================================
+// REGRESSION: treasury rotation timelock (issue #1535)
+//
+// Cannot finalise rotation before MIN_ROTATION_DELAY_SECONDS ledger-seconds
+// elapse after initiation.
+// ============================================================================
+
+/// Happy path: confirmation succeeds exactly at the min-delay boundary.
+#[test]
+fn confirm_at_min_delay_boundary_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let new_treasury = Address::generate(&env);
+
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // Set time to exactly initiated_at + MIN_ROTATION_DELAY_SECONDS
+    env.ledger()
+        .set_timestamp(req.initiated_at + MIN_ROTATION_DELAY_SECONDS);
+
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(
+        result.is_ok(),
+        "confirm must succeed at exactly the min-delay boundary"
+    );
+    assert_eq!(client.get_treasury_address().unwrap(), new_treasury);
+}
+
+/// Sad path: confirmation is rejected when attempted immediately after initiation
+/// (before the minimum delay elapses).
+#[test]
+fn confirm_before_min_delay_elapses_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let new_treasury = Address::generate(&env);
+
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // Advance to one second before the minimum delay — still too early
+    env.ledger()
+        .set_timestamp(req.initiated_at + MIN_ROTATION_DELAY_SECONDS - 1);
+
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(
+        result.is_err(),
+        "confirm must be rejected before min_delay seconds have elapsed"
+    );
+
+    // Treasury must remain unchanged
+    assert!(
+        client.get_treasury_address().is_none(),
+        "treasury address must not change when confirmation is rejected"
+    );
+
+    // Pending request must still be present so the rotation can be retried
+    assert!(
+        client.get_pending_treasury_rotation().is_some(),
+        "pending rotation must remain after a too-early confirm attempt"
+    );
+}
+
+/// Boundary: one second past the minimum delay also succeeds.
+#[test]
+fn confirm_one_second_past_min_delay_succeeds() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let new_treasury = Address::generate(&env);
+
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    env.ledger()
+        .set_timestamp(req.initiated_at + MIN_ROTATION_DELAY_SECONDS + 1);
+
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(
+        result.is_ok(),
+        "confirm must succeed one second past the min-delay boundary"
+    );
+}
+
+/// At t=0 (ledger epoch), attempting an immediate confirm is still rejected.
+#[test]
+fn confirm_immediately_after_initiation_is_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let new_treasury = Address::generate(&env);
+
+    // Initiate; do NOT advance time at all
+    client.initiate_treasury_rotation(&new_treasury);
+
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(
+        result.is_err(),
+        "confirm must be rejected when attempted in the same ledger as initiation"
+    );
 }

@@ -157,14 +157,18 @@ fn test_cap_blocks_next_bid() {
         "active count must equal cap"
     );
 
-    // The (cap+1)th bid must be rejected with OperationNotAllowed.
+    let cfg = client.get_bid_limit_config();
+    assert_eq!(cfg.limit, 3, "getter must expose the active cap");
+    assert!(!cfg.is_disabled, "getter must report the cap is active");
+
+    // The (cap+1)th bid must be rejected with MaxActiveBidsPerInvestorExceeded.
     let overflow_inv = plain_invoice(&env, &client, &admin, &business, &currency);
     let result = client.try_place_bid(&investor, &overflow_inv, &1_000i128, &1_100i128);
     assert!(result.is_err(), "bid beyond cap must be rejected");
     assert_eq!(
         result.unwrap_err().expect("expected contract error"),
-        QuickLendXError::OperationNotAllowed,
-        "error must be OperationNotAllowed"
+        QuickLendXError::MaxActiveBidsPerInvestorExceeded,
+        "error must be MaxActiveBidsPerInvestorExceeded"
     );
 }
 

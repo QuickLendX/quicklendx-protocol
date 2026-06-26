@@ -2,9 +2,10 @@
 //!
 //! Handles platform fee configuration, revenue tracking, volume-tier discounts,
 //! and treasury routing for all fee types supported by the protocol.
+use crate::audit::{log_config_change, write_i128_to_buf, write_u64_to_buf, AuditOperation};
 use crate::errors::QuickLendXError;
 use crate::events;
-use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, Symbol, Vec};
+use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, String, Symbol, Vec};
 
 // Constants
 const MAX_FEE_BPS: u32 = 1000; // 10% hard cap for all fees
@@ -15,6 +16,9 @@ const BPS_DENOMINATOR: i128 = 10_000;
 const DEFAULT_PLATFORM_FEE_BPS: u32 = 200; // 2%
 const MAX_PLATFORM_FEE_BPS: u32 = 1000; // 10%
 const ROTATION_TTL_SECONDS: u64 = 604_800; // 7 days
+/// Minimum delay before a pending rotation can be confirmed (1 day).
+/// Prevents same-block finalisation and gives the admin a window to cancel.
+pub const MIN_ROTATION_DELAY_SECONDS: u64 = 86_400; // 1 day
 const EARLY_PLATFORM_DISCOUNT_BPS: i128 = 1_000; // 10%
 const LATE_FEE_SURCHARGE_BPS: i128 = 2_000; // 20%
 
@@ -149,6 +153,81 @@ pub struct FeeAnalytics {
     pub average_fee_rate: i128,
     pub total_transactions: u32,
     pub fee_efficiency_score: u32,
+}
+
+// ─── Audit serialization helpers ─────────────────────────────────────────────
+
+fn fmt_fee_structure(
+    env: &Env,
+    base_fee_bps: u32,
+    min_fee: i128,
+    max_fee: i128,
+    is_active: bool,
+) -> String {
+    // "bps:{u32};min:{i128};max:{i128};active:{bool}" — max ~109 chars
+    let mut buf = [0u8; 120];
+    let mut pos = 0usize;
+    let p = b"bps:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_u64_to_buf(&mut buf[pos..], base_fee_bps as u64);
+    let p = b";min:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_i128_to_buf(&mut buf[pos..], min_fee);
+    let p = b";max:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_i128_to_buf(&mut buf[pos..], max_fee);
+    let p: &[u8] = if is_active { b";active:true" } else { b";active:false" };
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    String::from_str(
+        env,
+        core::str::from_utf8(&buf[..pos]).unwrap_or("fee_struct"),
+    )
+}
+
+fn fmt_rev_dist(
+    env: &Env,
+    treasury_bps: u32,
+    dev_bps: u32,
+    plt_bps: u32,
+    min_amt: i128,
+) -> String {
+    // "t:{u32};d:{u32};p:{u32};min:{i128}" — max ~67 chars
+    let mut buf = [0u8; 80];
+    let mut pos = 0usize;
+    let p = b"t:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_u64_to_buf(&mut buf[pos..], treasury_bps as u64);
+    let p = b";d:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_u64_to_buf(&mut buf[pos..], dev_bps as u64);
+    let p = b";p:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_u64_to_buf(&mut buf[pos..], plt_bps as u64);
+    let p = b";min:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_i128_to_buf(&mut buf[pos..], min_amt);
+    String::from_str(
+        env,
+        core::str::from_utf8(&buf[..pos]).unwrap_or("rev_dist"),
+    )
+}
+
+fn fee_type_label(fee_type: &FeeType) -> &'static str {
+    match fee_type {
+        FeeType::Platform => "Platform",
+        FeeType::Processing => "Processing",
+        FeeType::Verification => "Verification",
+        FeeType::EarlyPayment => "EarlyPayment",
+        FeeType::LatePayment => "LatePayment",
+    }
 }
 
 pub struct FeeManager;
@@ -510,7 +589,10 @@ impl FeeManager {
             .get(&FEE_CONFIG_KEY)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
         let mut found = false;
-        let mut old_bps = 0;
+        let mut old_bps = 0u32;
+        let mut old_min_fee: i128 = 0;
+        let mut old_max_fee: i128 = 0;
+        let mut old_is_active = false;
         let updated_structure = FeeStructure {
             fee_type: fee_type.clone(),
             base_fee_bps,
@@ -524,6 +606,9 @@ impl FeeManager {
             let structure = fee_structures.get(i).unwrap();
             if structure.fee_type == fee_type {
                 old_bps = structure.base_fee_bps;
+                old_min_fee = structure.min_fee;
+                old_max_fee = structure.max_fee;
+                old_is_active = structure.is_active;
                 fee_structures.set(i, updated_structure.clone());
                 found = true;
                 break;
@@ -536,6 +621,22 @@ impl FeeManager {
             .instance()
             .set(&FEE_CONFIG_KEY, &fee_structures);
         events::emit_fee_structure_updated(env, &fee_type, old_bps, base_fee_bps, admin);
+
+        // Tamper-evident audit entry (atomic with storage write above via Soroban tx semantics)
+        let old_str = if found {
+            Some(fmt_fee_structure(env, old_bps, old_min_fee, old_max_fee, old_is_active))
+        } else {
+            None
+        };
+        log_config_change(
+            env,
+            AuditOperation::ConfigFeeStructureChanged,
+            admin.clone(),
+            fee_type_label(&fee_type),
+            old_str,
+            Some(fmt_fee_structure(env, base_fee_bps, min_fee, max_fee, is_active)),
+        );
+
         Ok(updated_structure)
     }
 
@@ -586,15 +687,22 @@ impl FeeManager {
             let mut fee = Self::calculate_base_fee(&structure, transaction_amount)?;
             if structure.fee_type != FeeType::LatePayment {
                 let discount = Self::checked_mul_div(fee, tier_discount as i128, BPS_DENOMINATOR)?;
-                fee = fee.checked_sub(discount).ok_or(QuickLendXError::ArithmeticOverflow)?;
+                fee = fee
+                    .checked_sub(discount)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?;
             }
             if is_early_payment && structure.fee_type == FeeType::Platform {
-                let early = Self::checked_mul_div(fee, EARLY_PLATFORM_DISCOUNT_BPS, BPS_DENOMINATOR)?;
-                fee = fee.checked_sub(early).ok_or(QuickLendXError::ArithmeticOverflow)?;
+                let early =
+                    Self::checked_mul_div(fee, EARLY_PLATFORM_DISCOUNT_BPS, BPS_DENOMINATOR)?;
+                fee = fee
+                    .checked_sub(early)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?;
             }
             if is_late_payment && structure.fee_type == FeeType::LatePayment {
                 let late = Self::checked_mul_div(fee, LATE_FEE_SURCHARGE_BPS, BPS_DENOMINATOR)?;
-                fee = fee.checked_add(late).ok_or(QuickLendXError::ArithmeticOverflow)?;
+                fee = fee
+                    .checked_add(late)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?;
             }
             total_fees = Self::checked_add(total_fees, fee)?;
         }
@@ -726,8 +834,10 @@ impl FeeManager {
                 transaction_count: 0,
             });
 
-        revenue_data.total_collected = Self::checked_add(revenue_data.total_collected, total_amount)?;
-        revenue_data.pending_distribution = Self::checked_add(revenue_data.pending_distribution, total_amount)?;
+        revenue_data.total_collected =
+            Self::checked_add(revenue_data.total_collected, total_amount)?;
+        revenue_data.pending_distribution =
+            Self::checked_add(revenue_data.pending_distribution, total_amount)?;
         revenue_data.transaction_count = revenue_data.transaction_count.saturating_add(1);
 
         // Merge incoming fees into existing period map rather than overwriting.
@@ -777,8 +887,35 @@ impl FeeManager {
             return Err(QuickLendXError::InvalidAmount);
         }
 
+        // Capture old config before write
+        let old_str = Self::get_revenue_split_config(env).ok().map(|c| {
+            fmt_rev_dist(
+                env,
+                c.treasury_share_bps,
+                c.developer_share_bps,
+                c.platform_share_bps,
+                c.min_distribution_amount,
+            )
+        });
+
         let key = symbol_short!("rev_cfg");
         env.storage().instance().set(&key, &config);
+
+        // Tamper-evident audit entry (atomic with storage write above via Soroban tx semantics)
+        log_config_change(
+            env,
+            AuditOperation::ConfigRevenueDistributionChanged,
+            admin.clone(),
+            "rev_dist",
+            old_str,
+            Some(fmt_rev_dist(
+                env,
+                config.treasury_share_bps,
+                config.developer_share_bps,
+                config.platform_share_bps,
+                config.min_distribution_amount,
+            )),
+        );
 
         // Emit configuration event for audit trail
         crate::events::emit_platform_fee_config_updated(
@@ -896,8 +1033,10 @@ impl FeeManager {
         let amount = revenue_data.pending_distribution;
 
         // Calculate shares: treasury and developer via floor division, platform gets remainder
-        let treasury_amount = Self::checked_mul_div(amount, config.treasury_share_bps as i128, BPS_DENOMINATOR)?;
-        let developer_amount = Self::checked_mul_div(amount, config.developer_share_bps as i128, BPS_DENOMINATOR)?;
+        let treasury_amount =
+            Self::checked_mul_div(amount, config.treasury_share_bps as i128, BPS_DENOMINATOR)?;
+        let developer_amount =
+            Self::checked_mul_div(amount, config.developer_share_bps as i128, BPS_DENOMINATOR)?;
         let platform_amount = amount
             .checked_sub(treasury_amount)
             .and_then(|v| v.checked_sub(developer_amount))
@@ -1069,14 +1208,21 @@ impl FeeManager {
 
         new_address.require_auth();
 
-        if env.ledger().timestamp() > request.confirmation_deadline {
+        let now = env.ledger().timestamp();
+
+        // Enforce minimum delay: cannot confirm before min_delay has elapsed.
+        if now < request.initiated_at.saturating_add(MIN_ROTATION_DELAY_SECONDS) {
+            return Err(QuickLendXError::RotationTimelockNotElapsed);
+        }
+
+        if now > request.confirmation_deadline {
             env.storage().instance().remove(&ROTATION_KEY);
             return Err(QuickLendXError::RotationExpired);
         }
 
         let mut platform_config = Self::get_platform_fee_config(env)?;
         platform_config.treasury_address = Some(new_address.clone());
-        platform_config.updated_at = env.ledger().timestamp();
+        platform_config.updated_at = now;
         platform_config.updated_by = new_address.clone();
         env.storage()
             .instance()

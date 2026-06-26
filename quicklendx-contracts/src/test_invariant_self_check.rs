@@ -12,7 +12,7 @@ use soroban_sdk::{Address, BytesN, Env, String, Vec};
 use crate::invariants::{run_invariant_checks, InvariantReport};
 use crate::investment::InvestmentStorage;
 use crate::storage::InvoiceStorage;
-use crate::types::{Investment, InvestmentStatus, Invoice, InvoiceStatus, InvoiceCategory, Dispute, DisputeStatus};
+use crate::types::{Investment, InvestmentStatus, Invoice, InvoiceStatus, InvoiceCategory, Dispute, DisputeStatus, OptionalDisputeResolution};
 use crate::{QuickLendXContract, QuickLendXContractClient};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
@@ -84,6 +84,7 @@ fn make_invoice(env: &Env, invoice_id: &BytesN<32>) -> Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
+            resolution_outcome: None,
         },
         total_paid: 0,
         payment_history: Vec::new(env),
@@ -195,7 +196,11 @@ fn test_sum_investments_le_sum_invoices_violation() {
         run_invariant_checks(&env)
     });
 
-    assert!(!passed_for(&env, &report, "sum_investments_le_sum_invoices"));
+    assert!(!passed_for(
+        &env,
+        &report,
+        "sum_investments_le_sum_invoices"
+    ));
     assert!(!report.all_passed);
 }
 
@@ -221,8 +226,10 @@ fn test_escrow_uniqueness_violation() {
             created_at: 0,
             status: crate::payments::EscrowStatus::Held,
         };
-        env.storage().persistent().set(&corrupted_escrow.escrow_id, &corrupted_escrow);
-        
+        env.storage()
+            .persistent()
+            .set(&corrupted_escrow.escrow_id, &corrupted_escrow);
+
         let invoice_key = (soroban_sdk::symbol_short!("escrow"), &invoice.id);
         env.storage().persistent().set(&invoice_key, &escrow_id);
 
@@ -247,7 +254,11 @@ fn test_settlement_accounting_identity_violation() {
 
         // Verify it passes first
         let healthy_report = run_invariant_checks(&env);
-        assert!(passed_for(&env, &healthy_report, "settlement_accounting_identity"));
+        assert!(passed_for(
+            &env,
+            &healthy_report,
+            "settlement_accounting_identity"
+        ));
 
         // Tamper: corrupt total_paid to a negative number to violate accounting identity
         let mut tampered_invoice = invoice.clone();

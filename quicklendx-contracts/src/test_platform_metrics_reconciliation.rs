@@ -9,13 +9,13 @@
 extern crate alloc;
 
 use crate::analytics::{AnalyticsCalculator, PlatformMetrics};
-use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::investment::InvestmentStorage;
 use crate::storage::InvoiceStorage;
 use crate::types::{Investment, InvestmentStatus, InvoiceCategory, InvoiceStatus};
+use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, Env, String, Vec, BytesN,
+    Address, BytesN, Env, String, Vec,
 };
 
 fn setup(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address, Address) {
@@ -139,8 +139,12 @@ fn compute_independent_metrics(env: &Env, contract_id: &Address) -> IndependentM
 
         let mut expected_total_invested = 0i128;
         for inv in all_invoices.iter() {
-            if inv.status == InvoiceStatus::Funded || inv.status == InvoiceStatus::Paid || inv.status == InvoiceStatus::Defaulted {
-                if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, &inv.id) {
+            if inv.status == InvoiceStatus::Funded
+                || inv.status == InvoiceStatus::Paid
+                || inv.status == InvoiceStatus::Defaulted
+            {
+                if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, &inv.id)
+                {
                     expected_total_invested += investment.amount;
                 }
             }
@@ -188,23 +192,61 @@ fn test_platform_metrics_reconcile_with_independent_sum() {
     upload(&env, &client, &business, 1_000, "inv_pending");
 
     let inv_active = upload(&env, &client, &business, 2_500, "inv_active");
-    client.try_update_invoice_status(&inv_active, &InvoiceStatus::Verified).unwrap();
-    client.try_update_invoice_status(&inv_active, &InvoiceStatus::Funded).unwrap();
-    store_investment(&env, &contract_id, &inv_active, &investor, 2_500, InvestmentStatus::Active);
+    client
+        .try_update_invoice_status(&inv_active, &InvoiceStatus::Verified)
+        .unwrap();
+    client
+        .try_update_invoice_status(&inv_active, &InvoiceStatus::Funded)
+        .unwrap();
+    store_investment(
+        &env,
+        &contract_id,
+        &inv_active,
+        &investor,
+        2_500,
+        InvestmentStatus::Active,
+    );
 
     let inv_completed = upload(&env, &client, &business, 3_333, "inv_completed");
-    client.try_update_invoice_status(&inv_completed, &InvoiceStatus::Verified).unwrap();
-    client.try_update_invoice_status(&inv_completed, &InvoiceStatus::Funded).unwrap();
-    store_investment(&env, &contract_id, &inv_completed, &investor, 3_333, InvestmentStatus::Completed);
-    client.try_update_invoice_status(&inv_completed, &InvoiceStatus::Paid).unwrap();
+    client
+        .try_update_invoice_status(&inv_completed, &InvoiceStatus::Verified)
+        .unwrap();
+    client
+        .try_update_invoice_status(&inv_completed, &InvoiceStatus::Funded)
+        .unwrap();
+    store_investment(
+        &env,
+        &contract_id,
+        &inv_completed,
+        &investor,
+        3_333,
+        InvestmentStatus::Completed,
+    );
+    client
+        .try_update_invoice_status(&inv_completed, &InvoiceStatus::Paid)
+        .unwrap();
 
     let inv_defaulted = upload(&env, &client, &business, 7_777, "inv_defaulted");
-    client.try_update_invoice_status(&inv_defaulted, &InvoiceStatus::Verified).unwrap();
-    client.try_update_invoice_status(&inv_defaulted, &InvoiceStatus::Funded).unwrap();
-    store_investment(&env, &contract_id, &inv_defaulted, &investor, 7_777, InvestmentStatus::Defaulted);
+    client
+        .try_update_invoice_status(&inv_defaulted, &InvoiceStatus::Verified)
+        .unwrap();
+    client
+        .try_update_invoice_status(&inv_defaulted, &InvoiceStatus::Funded)
+        .unwrap();
+    store_investment(
+        &env,
+        &contract_id,
+        &inv_defaulted,
+        &investor,
+        7_777,
+        InvestmentStatus::Defaulted,
+    );
 
-    env.ledger().set_timestamp(env.ledger().timestamp() + 10_000_000u64); // skip grace period
-    client.try_update_invoice_status(&inv_defaulted, &InvoiceStatus::Defaulted).unwrap();
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 10_000_000u64); // skip grace period
+    client
+        .try_update_invoice_status(&inv_defaulted, &InvoiceStatus::Defaulted)
+        .unwrap();
 
     let inv_cancelled = upload(&env, &client, &business, 5_000, "inv_cancelled");
     client.try_cancel_invoice(&inv_cancelled).unwrap();
@@ -217,8 +259,14 @@ fn test_platform_metrics_reconcile_with_independent_sum() {
     assert_eq!(metrics.total_invoices, expected.total_invoices);
     assert_eq!(metrics.total_investments, expected.total_investments);
     assert_eq!(metrics.total_volume, expected.total_volume);
-    assert_eq!(metrics.average_invoice_amount, expected.average_invoice_amount);
-    assert_eq!(metrics.average_investment_amount, expected.average_investment_amount);
+    assert_eq!(
+        metrics.average_invoice_amount,
+        expected.average_invoice_amount
+    );
+    assert_eq!(
+        metrics.average_investment_amount,
+        expected.average_investment_amount
+    );
     assert_eq!(metrics.default_rate, expected.default_rate);
     assert_eq!(metrics.success_rate, expected.success_rate);
 }
@@ -235,13 +283,27 @@ fn test_default_rate_matches_fixture_ratio() {
     let inv3 = upload(&env, &client, &business, 1_000, "inv3");
 
     for inv in [&inv1, &inv2, &inv3] {
-        client.try_update_invoice_status(inv, &InvoiceStatus::Verified).unwrap();
-        client.try_update_invoice_status(inv, &InvoiceStatus::Funded).unwrap();
-        store_investment(&env, &contract_id, inv, &investor, 1_000, InvestmentStatus::Active);
+        client
+            .try_update_invoice_status(inv, &InvoiceStatus::Verified)
+            .unwrap();
+        client
+            .try_update_invoice_status(inv, &InvoiceStatus::Funded)
+            .unwrap();
+        store_investment(
+            &env,
+            &contract_id,
+            inv,
+            &investor,
+            1_000,
+            InvestmentStatus::Active,
+        );
     }
 
-    env.ledger().set_timestamp(env.ledger().timestamp() + 10_000_000u64);
-    client.try_update_invoice_status(&inv1, &InvoiceStatus::Defaulted).unwrap();
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 10_000_000u64);
+    client
+        .try_update_invoice_status(&inv1, &InvoiceStatus::Defaulted)
+        .unwrap();
 
     let metrics = env.as_contract(&contract_id, || {
         AnalyticsCalculator::calculate_platform_metrics(&env).unwrap()
@@ -264,13 +326,28 @@ fn test_success_rate_matches_fixture_ratio() {
     let inv3 = upload(&env, &client, &business, 1_000, "inv3");
 
     for inv in [&inv1, &inv2, &inv3] {
-        client.try_update_invoice_status(inv, &InvoiceStatus::Verified).unwrap();
-        client.try_update_invoice_status(inv, &InvoiceStatus::Funded).unwrap();
-        store_investment(&env, &contract_id, inv, &investor, 1_000, InvestmentStatus::Active);
+        client
+            .try_update_invoice_status(inv, &InvoiceStatus::Verified)
+            .unwrap();
+        client
+            .try_update_invoice_status(inv, &InvoiceStatus::Funded)
+            .unwrap();
+        store_investment(
+            &env,
+            &contract_id,
+            inv,
+            &investor,
+            1_000,
+            InvestmentStatus::Active,
+        );
     }
 
-    client.try_update_invoice_status(&inv1, &InvoiceStatus::Paid).unwrap();
-    client.try_update_invoice_status(&inv2, &InvoiceStatus::Paid).unwrap();
+    client
+        .try_update_invoice_status(&inv1, &InvoiceStatus::Paid)
+        .unwrap();
+    client
+        .try_update_invoice_status(&inv2, &InvoiceStatus::Paid)
+        .unwrap();
 
     let metrics = env.as_contract(&contract_id, || {
         AnalyticsCalculator::calculate_platform_metrics(&env).unwrap()
@@ -297,7 +374,10 @@ fn test_average_invoice_amount_rounding() {
     let expected = compute_independent_metrics(&env, &contract_id);
 
     assert_eq!(expected.average_invoice_amount, 333);
-    assert_eq!(metrics.average_invoice_amount, expected.average_invoice_amount);
+    assert_eq!(
+        metrics.average_invoice_amount,
+        expected.average_invoice_amount
+    );
 }
 
 #[test]
@@ -310,9 +390,20 @@ fn test_average_investment_amount_rounding() {
     let amounts = [166, 166, 166, 167, 167, 168];
     for (i, &amt) in amounts.iter().enumerate() {
         let inv = upload(&env, &client, &business, amt, &alloc::format!("inv{}", i));
-        client.try_update_invoice_status(&inv, &InvoiceStatus::Verified).unwrap();
-        client.try_update_invoice_status(&inv, &InvoiceStatus::Funded).unwrap();
-        store_investment(&env, &contract_id, &inv, &investor, amt, InvestmentStatus::Active);
+        client
+            .try_update_invoice_status(&inv, &InvoiceStatus::Verified)
+            .unwrap();
+        client
+            .try_update_invoice_status(&inv, &InvoiceStatus::Funded)
+            .unwrap();
+        store_investment(
+            &env,
+            &contract_id,
+            &inv,
+            &investor,
+            amt,
+            InvestmentStatus::Active,
+        );
     }
 
     let metrics = env.as_contract(&contract_id, || {
@@ -321,7 +412,10 @@ fn test_average_investment_amount_rounding() {
     let expected = compute_independent_metrics(&env, &contract_id);
 
     assert_eq!(expected.average_investment_amount, 166);
-    assert_eq!(metrics.average_investment_amount, expected.average_investment_amount);
+    assert_eq!(
+        metrics.average_investment_amount,
+        expected.average_investment_amount
+    );
 }
 
 #[test]
@@ -353,15 +447,29 @@ fn test_all_invoices_defaulted() {
     let inv2 = upload(&env, &client, &business, 2_000, "inv2");
 
     for inv in [&inv1, &inv2] {
-        client.try_update_invoice_status(inv, &InvoiceStatus::Verified).unwrap();
-        client.try_update_invoice_status(inv, &InvoiceStatus::Funded).unwrap();
-        store_investment(&env, &contract_id, inv, &investor, 1_000, InvestmentStatus::Active);
+        client
+            .try_update_invoice_status(inv, &InvoiceStatus::Verified)
+            .unwrap();
+        client
+            .try_update_invoice_status(inv, &InvoiceStatus::Funded)
+            .unwrap();
+        store_investment(
+            &env,
+            &contract_id,
+            inv,
+            &investor,
+            1_000,
+            InvestmentStatus::Active,
+        );
     }
 
-    env.ledger().set_timestamp(env.ledger().timestamp() + 10_000_000u64);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 10_000_000u64);
 
     for inv in [&inv1, &inv2] {
-        client.try_update_invoice_status(inv, &InvoiceStatus::Defaulted).unwrap();
+        client
+            .try_update_invoice_status(inv, &InvoiceStatus::Defaulted)
+            .unwrap();
     }
 
     let metrics = env.as_contract(&contract_id, || {
@@ -385,9 +493,20 @@ fn test_single_invoice() {
     let inv_amount = 5_432;
     let inv = upload(&env, &client, &business, inv_amount, "inv1");
 
-    client.try_update_invoice_status(&inv, &InvoiceStatus::Verified).unwrap();
-    client.try_update_invoice_status(&inv, &InvoiceStatus::Funded).unwrap();
-    store_investment(&env, &contract_id, &inv, &investor, inv_amount, InvestmentStatus::Active);
+    client
+        .try_update_invoice_status(&inv, &InvoiceStatus::Verified)
+        .unwrap();
+    client
+        .try_update_invoice_status(&inv, &InvoiceStatus::Funded)
+        .unwrap();
+    store_investment(
+        &env,
+        &contract_id,
+        &inv,
+        &investor,
+        inv_amount,
+        InvestmentStatus::Active,
+    );
 
     let metrics = env.as_contract(&contract_id, || {
         AnalyticsCalculator::calculate_platform_metrics(&env).unwrap()
@@ -396,6 +515,12 @@ fn test_single_invoice() {
 
     assert_eq!(expected.average_invoice_amount, inv_amount);
     assert_eq!(expected.average_investment_amount, inv_amount);
-    assert_eq!(metrics.average_invoice_amount, expected.average_invoice_amount);
-    assert_eq!(metrics.average_investment_amount, expected.average_investment_amount);
+    assert_eq!(
+        metrics.average_invoice_amount,
+        expected.average_invoice_amount
+    );
+    assert_eq!(
+        metrics.average_investment_amount,
+        expected.average_investment_amount
+    );
 }

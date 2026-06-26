@@ -2,7 +2,7 @@ use crate::admin::AdminStorage;
 use crate::dispute_timeline::{clear_under_review_timestamp, set_under_review_timestamp};
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
-use crate::types::{Dispute, DisputeResolution, DisputeStatus};
+use crate::types::{Dispute, DisputeResolution, DisputeStatus, OptionalDisputeResolution};
 use crate::verification::{
     validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
     validate_dispute_resolution,
@@ -168,7 +168,7 @@ pub fn create_dispute(
         resolution: String::from_str(env, ""),
         resolved_by: creator.clone(), // Placeholder — overwritten on resolution
         resolved_at: 0,
-        resolution_outcome: None,
+        resolution_outcome: DisputeResolution::None,
     };
 
     InvoiceStorage::update_invoice(env, &invoice);
@@ -298,7 +298,7 @@ pub fn resolve_dispute(
     invoice.dispute.resolution = resolution.clone();
     invoice.dispute.resolved_by = admin.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
-    invoice.dispute.resolution_outcome = None;
+    invoice.dispute.resolution_outcome = DisputeResolution::None;
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
@@ -357,7 +357,7 @@ pub fn resolve_dispute_structured(
 
     invoice.dispute_status = DisputeStatus::Resolved;
     invoice.dispute.resolution = note.clone();
-    invoice.dispute.resolution_outcome = Some(outcome);
+    invoice.dispute.resolution_outcome = outcome;
     invoice.dispute.resolved_by = admin.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
     InvoiceStorage::update_invoice(env, &invoice);

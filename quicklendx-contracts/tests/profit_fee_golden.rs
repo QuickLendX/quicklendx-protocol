@@ -10,9 +10,7 @@
 //! ```
 
 use quicklendx_contracts::fees::FeeManager;
-use quicklendx_contracts::profits::{
-    calculate_treasury_split, verify_no_dust, PlatformFee,
-};
+use quicklendx_contracts::profits::{calculate_treasury_split, verify_no_dust, PlatformFee};
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
 use serde::{Deserialize, Serialize};
 use soroban_sdk::testutils::Address as _;
@@ -153,7 +151,14 @@ fn generate_corpus_vectors() -> Vec<GoldenVector> {
     let mut vectors = Vec::new();
 
     let investments = [
-        0i128, 1, 100, 1_000, 10_000, 1_000_000, i128::MAX / 4, i128::MAX / 2,
+        0i128,
+        1,
+        100,
+        1_000,
+        10_000,
+        1_000_000,
+        i128::MAX / 4,
+        i128::MAX / 2,
     ];
     let payment_offsets = [-1i128, 0, 1, 50, 1_000];
     let fee_bps_values = [0i64, 1, 200, 1000];
@@ -325,9 +330,7 @@ fn refresh_profit_fee_corpus() {
     {
         // intentional bless path
     } else {
-        panic!(
-            "Corpus refresh blocked. Set ALLOW_PROFIT_FEE_CORPUS_REFRESH=1 to regenerate."
-        );
+        panic!("Corpus refresh blocked. Set ALLOW_PROFIT_FEE_CORPUS_REFRESH=1 to regenerate.");
     }
 
     let vectors = generate_corpus_vectors();

@@ -24,6 +24,7 @@ export interface FeatureFlag {
   api_key_id: string;
   flag: string;
   enabled: boolean;
+  rollout_percentage: number | null;
   created_at: string;
   updated_at: string;
   updated_by: string;
@@ -33,6 +34,7 @@ export interface FlagToggleInput {
   api_key_id: string;
   flag: string;
   enabled: boolean;
+  rollout_percentage?: number | null;
   updated_by: string;
 }
 
@@ -124,12 +126,44 @@ export class FeatureFlagService {
   }
 
   /**
+   * Check whether a feature flag is enabled for a specific user within a tenant.
+   *
+   * When `rollout_percentage` is set (0–100), the decision is made by hashing
+   * `flag + ":" + userId` with SHA-256 and mapping the first 4 bytes to a
+   * bucket in [0, 100). A user whose bucket is strictly less than the rollout
+   * percentage is considered enabled.
+   *
+   * **Sticky bucketing guarantee:** The same `(flag, userId)` pair always
+   * produces the same bucket, so the user's inclusion/exclusion is stable
+   * across calls, restarts, and replicas.
+   *
+   * When `rollout_percentage` is `null` or missing, the flag falls back to
+   * the plain boolean `enabled` field.
+   */
+  isEnabledForUser(apiKeyId: string, flag: string, userId: string): boolean {
+    // 1. Load the flag row
+    const flagRow = this.getFlag(apiKeyId, flag);
+    if (!flagRow) return false; // default-deny
+    if (!flagRow.enabled) return false; // globally disabled
+
+    // 2. If no rollout percentage is configured, treat as 100% rollout
+    if (flagRow.rollout_percentage === null || flagRow.rollout_percentage === undefined) {
+      return true;
+    }
+
+    // 3. Deterministic sticky bucketing
+    const bucket = computeBucket(flag, userId);
+    return bucket < flagRow.rollout_percentage;
+  }
+
+  /**
    * Set (upsert) a feature flag for the given API key.
    * Writes through the cache and records an audit event.
    */
   setFlag(input: FlagToggleInput): FeatureFlag {
     const db = getDatabase();
     const now = new Date().toISOString();
+    const rolloutPct = input.rollout_percentage ?? null;
 
     // Check for an existing row
     const existing = db
@@ -141,14 +175,14 @@ export class FeatureFlagService {
     if (existing) {
       id = existing.id;
       db.prepare(
-        "UPDATE feature_flags SET enabled = ?, updated_at = ?, updated_by = ? WHERE id = ?"
-      ).run(input.enabled ? 1 : 0, now, input.updated_by, id);
+        "UPDATE feature_flags SET enabled = ?, rollout_percentage = ?, updated_at = ?, updated_by = ? WHERE id = ?"
+      ).run(input.enabled ? 1 : 0, rolloutPct, now, input.updated_by, id);
     } else {
       id = crypto.randomUUID();
       db.prepare(`
-        INSERT INTO feature_flags (id, api_key_id, flag, enabled, created_at, updated_at, updated_by)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(id, input.api_key_id, input.flag, input.enabled ? 1 : 0, now, now, input.updated_by);
+        INSERT INTO feature_flags (id, api_key_id, flag, enabled, rollout_percentage, created_at, updated_at, updated_by)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(id, input.api_key_id, input.flag, input.enabled ? 1 : 0, rolloutPct, now, now, input.updated_by);
     }
 
     // Write-through cache invalidation
@@ -164,7 +198,7 @@ export class FeatureFlagService {
     const db = getDatabase();
     const row = db
       .prepare(
-        "SELECT id, api_key_id, flag, enabled, created_at, updated_at, updated_by FROM feature_flags WHERE api_key_id = ? AND flag = ?"
+        "SELECT id, api_key_id, flag, enabled, rollout_percentage, created_at, updated_at, updated_by FROM feature_flags WHERE api_key_id = ? AND flag = ?"
       )
       .get(apiKeyId, flag) as Record<string, unknown> | undefined;
 
@@ -178,7 +212,7 @@ export class FeatureFlagService {
     const db = getDatabase();
     const rows = db
       .prepare(
-        "SELECT id, api_key_id, flag, enabled, created_at, updated_at, updated_by FROM feature_flags WHERE api_key_id = ? ORDER BY flag ASC"
+        "SELECT id, api_key_id, flag, enabled, rollout_percentage, created_at, updated_at, updated_by FROM feature_flags WHERE api_key_id = ? ORDER BY flag ASC"
       )
       .all(apiKeyId) as Record<string, unknown>[];
     return rows.map((r) => this.rowToFlag(r));
@@ -191,7 +225,7 @@ export class FeatureFlagService {
     const db = getDatabase();
     const rows = db
       .prepare(
-        "SELECT id, api_key_id, flag, enabled, created_at, updated_at, updated_by FROM feature_flags ORDER BY api_key_id ASC, flag ASC"
+        "SELECT id, api_key_id, flag, enabled, rollout_percentage, created_at, updated_at, updated_by FROM feature_flags ORDER BY api_key_id ASC, flag ASC"
       )
       .all() as Record<string, unknown>[];
     return rows.map((r) => this.rowToFlag(r));
@@ -227,16 +261,40 @@ export class FeatureFlagService {
   // ---- Helpers -------------------------------------------------------------
 
   private rowToFlag(row: Record<string, unknown>): FeatureFlag {
+    const rawPct = row["rollout_percentage"];
     return {
       id: row["id"] as string,
       api_key_id: row["api_key_id"] as string,
       flag: row["flag"] as string,
       enabled: (row["enabled"] as number) === 1,
+      rollout_percentage: rawPct === null || rawPct === undefined ? null : (rawPct as number),
       created_at: row["created_at"] as string,
       updated_at: row["updated_at"] as string,
       updated_by: row["updated_by"] as string,
     };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Deterministic sticky bucketing
+// ---------------------------------------------------------------------------
+
+/**
+ * Compute a deterministic bucket in [0, 100) for a (flag, userId) pair.
+ *
+ * Uses SHA-256 of `flag + ":" + userId` and reads the first 4 bytes as a
+ * big-endian unsigned integer. The bucket is `hash_u32 % 100`.
+ *
+ * **Properties:**
+ * - Deterministic: same inputs always produce the same bucket.
+ * - Uniform: SHA-256 distributes evenly, so buckets are roughly uniform.
+ * - Stable across process restarts and replicas (no random seed).
+ */
+export function computeBucket(flag: string, userId: string): number {
+  const hash = crypto.createHash("sha256").update(`${flag}:${userId}`).digest();
+  // Read first 4 bytes as a big-endian unsigned 32-bit integer
+  const hashU32 = hash.readUInt32BE(0);
+  return hashU32 % 100;
 }
 
 /** Singleton instance used across the application. */

@@ -15,6 +15,7 @@ import {
   InvalidAmountError,
 } from "../../services/exposureService";
 import crypto from "crypto";
+import { assertInvoiceId } from "../../lib/entityId";
 
 /**
  * Create a new bid.
@@ -45,6 +46,7 @@ export const createBid = async (
     }
 
     const validated = createBidBodySchema.parse(req.body);
+    assertInvoiceId(validated.invoice_id);
 
     // ── Exposure-cap gate ────────────────────────────────────────────────
     // Compute the investor's current USD-equivalent exposure across
@@ -136,6 +138,7 @@ export const getBids = async (
         },
       });
     }
+    assertInvoiceId(invoice_id as string);
 
     const filters = {
       investor: investor as string | undefined,
@@ -172,6 +175,7 @@ export const getBestBid = async (
 ) => {
   try {
     const { invoiceId } = req.params;
+    assertInvoiceId(invoiceId as string);
     const bestBid = await bidStore.getBestBid(invoiceId as string);
     if (!bestBid) {
       return res.status(404).json({ error: "No best bid found for this invoice" });
@@ -193,6 +197,7 @@ export const getTopBids = async (
 ) => {
   try {
     const { invoiceId } = req.params;
+    assertInvoiceId(invoiceId as string);
     const topBids = await bidStore.getRankedBids(invoiceId as string, 100);
     res.json({ data: topBids });
   } catch (error) {

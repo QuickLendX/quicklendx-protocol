@@ -21,9 +21,15 @@ fn tier_level(tier: &VolumeTier) -> u8 {
 }
 
 const BOUNDARY_VALUES: [i128; 9] = [
-    9_999_999_999, 10_000_000_000, 10_000_000_001,
-    49_999_999_999, 50_000_000_000, 50_000_000_001,
-    99_999_999_999, 100_000_000_000, 100_000_000_001,
+    9_999_999_999,
+    10_000_000_000,
+    10_000_000_001,
+    49_999_999_999,
+    50_000_000_000,
+    50_000_000_001,
+    99_999_999_999,
+    100_000_000_000,
+    100_000_000_001,
 ];
 
 proptest! {
@@ -38,7 +44,7 @@ proptest! {
         env.mock_all_auths();
         let admin = Address::generate(&env);
         let user = Address::generate(&env);
-        
+
         let contract_id = env.register_contract(None, PropTestContract);
 
         env.as_contract(&contract_id, || {
@@ -55,11 +61,11 @@ proptest! {
                     .expect("Failed to update user volume");
 
                 prop_assert!(
-                    user_data.total_volume > current_volume, 
+                    user_data.total_volume > current_volume,
                     "total_volume must increase strictly without i128 overflow"
                 );
                 prop_assert_eq!(
-                    user_data.transaction_count, current_count + 1, 
+                    user_data.transaction_count, current_count + 1,
                     "transaction_count must accumulate by precisely 1 per call"
                 );
 
@@ -76,7 +82,7 @@ proptest! {
                     false,
                     false,
                 ).unwrap_or_else(|e| panic!("Fee calculation failed with error: {:?}", e));
-                
+
                 if previous_fee != i128::MAX {
                     prop_assert!(
                         current_fee <= previous_fee,
@@ -89,7 +95,7 @@ proptest! {
                 current_volume = user_data.total_volume;
                 current_count = user_data.transaction_count;
             }
-            
+
             Ok(())
         });
     }
@@ -102,7 +108,7 @@ proptest! {
         env.mock_all_auths();
         let admin = Address::generate(&env);
         let user = Address::generate(&env);
-        
+
         let contract_id = env.register_contract(None, PropTestContract);
 
         env.as_contract(&contract_id, || {
@@ -133,16 +139,16 @@ proptest! {
         env.mock_all_auths();
         let admin = Address::generate(&env);
         let user = Address::generate(&env);
-        
+
         let contract_id = env.register_contract(None, PropTestContract);
-        
+
         env.as_contract(&contract_id, || {
             let _ = FeeManager::initialize(&env, &admin);
             let test_amount = if base_volume + delta > 0 { base_volume + delta } else { 1 };
-            
+
             let user_data = FeeManager::update_user_volume(&env, &user, test_amount)
                 .expect("Failed to update user volume at boundary edge");
-            
+
             let level = tier_level(&user_data.current_tier);
             prop_assert!(level <= 3, "Tier level must securely remain within defined VolumeTier bounds");
             prop_assert!(user_data.total_volume > 0, "Volume tracking must remain strictly positive");
@@ -158,16 +164,16 @@ proptest! {
         env.mock_all_auths();
         let admin = Address::generate(&env);
         let user = Address::generate(&env);
-        
+
         let contract_id = env.register_contract(None, PropTestContract);
-        
+
         env.as_contract(&contract_id, || {
             let _ = FeeManager::initialize(&env, &admin);
             let initial_tier = 0;
             let user_data = FeeManager::update_user_volume(&env, &user, massive_amount)
                 .expect("Failed to update massive user volume");
             let final_tier = tier_level(&user_data.current_tier);
-            
+
             prop_assert!(
                 final_tier > initial_tier + 1,
                 "A legitimately massive volume update must bypass intermediate tiers immediately"

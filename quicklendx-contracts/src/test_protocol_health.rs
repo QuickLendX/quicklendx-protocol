@@ -13,7 +13,10 @@
 
 use crate::health::ProtocolHealth;
 use crate::init::InitializationParams;
-use crate::{admin::AdminStorage, currency::CurrencyWhitelist, init::ProtocolInitializer, pause::PauseControl, QuickLendXContract};
+use crate::{
+    admin::AdminStorage, currency::CurrencyWhitelist, init::ProtocolInitializer,
+    pause::PauseControl, QuickLendXContract,
+};
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 fn setup() -> (Env, Address) {
@@ -114,7 +117,10 @@ fn test_health_initialized_all_fields() {
     assert_eq!(health.fee_bps, 200, "fee_bps should match initialization");
     assert!(health.treasury.is_some(), "treasury should be set");
     assert_eq!(health.total_invoice_count, 0, "no invoices yet");
-    assert_eq!(health.currency_count, 1, "one currency in initial whitelist");
+    assert_eq!(
+        health.currency_count, 1,
+        "one currency in initial whitelist"
+    );
     assert!(
         !health.emergency_withdraw_pending,
         "no pending emergency withdraw"
@@ -169,8 +175,7 @@ fn test_health_fee_bps_updates() {
     assert_eq!(health_initial.fee_bps, 200);
 
     // Update to 300 bps (3%)
-    ProtocolInitializer::set_fee_config(&env, &admin, 300)
-        .expect("set_fee_config failed");
+    ProtocolInitializer::set_fee_config(&env, &admin, 300).expect("set_fee_config failed");
 
     let health_after = ProtocolHealth::new(&env);
     assert_eq!(health_after.fee_bps, 300, "fee_bps should reflect update");
@@ -204,8 +209,7 @@ fn test_health_treasury_set() {
 
     // Update treasury to a new address
     let new_treasury = Address::generate(&env);
-    ProtocolInitializer::set_treasury(&env, &admin, &new_treasury)
-        .expect("set_treasury failed");
+    ProtocolInitializer::set_treasury(&env, &admin, &new_treasury).expect("set_treasury failed");
 
     let health_after = ProtocolHealth::new(&env);
     assert!(health_after.treasury.is_some());
@@ -221,14 +225,20 @@ fn test_health_currency_count_increases() {
     let (env, _, admin) = setup_initialized_with_admin();
 
     let health_initial = ProtocolHealth::new(&env);
-    assert_eq!(health_initial.currency_count, 1, "initial count should be 1");
+    assert_eq!(
+        health_initial.currency_count, 1,
+        "initial count should be 1"
+    );
 
     // Add another currency
     let currency2 = Address::generate(&env);
     CurrencyWhitelist::add_currency(&env, &admin, currency2).expect("add_currency failed");
 
     let health_after = ProtocolHealth::new(&env);
-    assert_eq!(health_after.currency_count, 2, "count should be 2 after adding");
+    assert_eq!(
+        health_after.currency_count, 2,
+        "count should be 2 after adding"
+    );
 
     // Add third currency
     let currency3 = Address::generate(&env);
@@ -248,8 +258,7 @@ fn test_health_currency_count_changes_reflected() {
         assert_eq!(health.currency_count as u64, i as u64 + 1);
 
         let new_currency = Address::generate(&env);
-        CurrencyWhitelist::add_currency(&env, &admin, new_currency)
-            .expect("add_currency failed");
+        CurrencyWhitelist::add_currency(&env, &admin, new_currency).expect("add_currency failed");
     }
 }
 
@@ -403,16 +412,14 @@ fn test_health_full_workflow() {
     // Step 2: Add currencies
     for _ in 0..3 {
         let new_currency = Address::generate(&env);
-        CurrencyWhitelist::add_currency(&env, &admin, new_currency)
-            .expect("add_currency failed");
+        CurrencyWhitelist::add_currency(&env, &admin, new_currency).expect("add_currency failed");
     }
 
     let health2 = ProtocolHealth::new(&env);
     assert_eq!(health2.currency_count, 4);
 
     // Step 3: Update fee
-    ProtocolInitializer::set_fee_config(&env, &admin, 500)
-        .expect("set_fee_config failed");
+    ProtocolInitializer::set_fee_config(&env, &admin, 500).expect("set_fee_config failed");
 
     let health3 = ProtocolHealth::new(&env);
     assert_eq!(health3.fee_bps, 500);
