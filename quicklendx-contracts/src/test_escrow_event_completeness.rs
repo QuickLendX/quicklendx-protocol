@@ -7,14 +7,13 @@
 
 use super::*;
 use crate::events::{
-    EscrowCreated, EscrowRefunded, EscrowReleased, TOPIC_ESCROW_CREATED,
-    TOPIC_ESCROW_REFUNDED, TOPIC_ESCROW_RELEASED,
+    EscrowCreated, EscrowRefunded, EscrowReleased, TOPIC_ESCROW_CREATED, TOPIC_ESCROW_REFUNDED,
+    TOPIC_ESCROW_RELEASED,
 };
 use crate::invoice::InvoiceCategory;
 use crate::payments::EscrowStatus;
 use soroban_sdk::{
-    testutils::Address as _, token, xdr, Address, BytesN, Env, String, Symbol, TryFromVal,
-    Val, Vec,
+    testutils::Address as _, token, xdr, Address, BytesN, Env, String, Symbol, TryFromVal, Val, Vec,
 };
 
 const EVENT_AMOUNT: i128 = 10_000;
@@ -30,12 +29,19 @@ where
     for e in all.events().iter().rev() {
         if let xdr::ContractEventBody::V0(body) = &e.body {
             if body.topics.first() == Some(&topic_xdr) {
-                return T::try_from_val(env, &Val::try_from_val(env, &body.data).expect("data ScVal to Val"))
-                    .expect("event payload decode");
+                return T::try_from_val(
+                    env,
+                    &Val::try_from_val(env, &body.data).expect("data ScVal to Val"),
+                )
+                .expect("event payload decode");
             }
         }
     }
-    panic!("topic {:?} not found in {} events", topic_str, all.events().len());
+    panic!(
+        "topic {:?} not found in {} events",
+        topic_str,
+        all.events().len()
+    );
 }
 
 fn count_events_with_topic(env: &Env, topic_str: &str) -> usize {
@@ -134,7 +140,11 @@ fn test_escrow_event_completeness() {
     client.accept_bid(&invoice_id, &bid_id);
     let escrow = client.get_escrow_details(&invoice_id);
     assert_eq!(client.get_escrow_status(&invoice_id), EscrowStatus::Held);
-    assert_eq!(count_events_with_topic(&env, TOPIC_ESCROW_CREATED), 1, "expected exactly one EscrowCreated event");
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_ESCROW_CREATED),
+        1,
+        "expected exactly one EscrowCreated event"
+    );
     let created_event: EscrowCreated = latest_payload(&env, TOPIC_ESCROW_CREATED);
     assert_eq!(created_event.escrow_id, escrow.escrow_id);
     assert_eq!(created_event.invoice_id, invoice_id);
@@ -144,8 +154,15 @@ fn test_escrow_event_completeness() {
 
     // Release path
     client.release_escrow_funds(&invoice_id);
-    assert_eq!(client.get_escrow_status(&invoice_id), EscrowStatus::Released);
-    assert_eq!(count_events_with_topic(&env, TOPIC_ESCROW_RELEASED), 1, "expected exactly one EscrowReleased event");
+    assert_eq!(
+        client.get_escrow_status(&invoice_id),
+        EscrowStatus::Released
+    );
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_ESCROW_RELEASED),
+        1,
+        "expected exactly one EscrowReleased event"
+    );
     let released_event: EscrowReleased = latest_payload(&env, TOPIC_ESCROW_RELEASED);
     assert_eq!(released_event.escrow_id, escrow.escrow_id);
     assert_eq!(released_event.invoice_id, invoice_id);
@@ -154,12 +171,27 @@ fn test_escrow_event_completeness() {
 
     // Refund should be rejected after release and must not emit escrow refund
     let refund_result = client.try_refund_escrow_funds(&invoice_id, &admin);
-    assert!(refund_result.is_err(), "refund after release must be rejected");
-    assert_eq!(count_events_with_topic(&env, TOPIC_ESCROW_REFUNDED), 0, "no EscrowRefunded event should be emitted on rejected refund");
+    assert!(
+        refund_result.is_err(),
+        "refund after release must be rejected"
+    );
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_ESCROW_REFUNDED),
+        0,
+        "no EscrowRefunded event should be emitted on rejected refund"
+    );
 
     // Ensure no duplicate create/release events after failed refund attempt
-    assert_eq!(count_events_with_topic(&env, TOPIC_ESCROW_CREATED), 1, "EscrowCreated must remain exactly once");
-    assert_eq!(count_events_with_topic(&env, TOPIC_ESCROW_RELEASED), 1, "EscrowReleased must remain exactly once");
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_ESCROW_CREATED),
+        1,
+        "EscrowCreated must remain exactly once"
+    );
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_ESCROW_RELEASED),
+        1,
+        "EscrowReleased must remain exactly once"
+    );
 
     // Separate refund path on fresh invoice
     let invoice_id_2 = create_verified_invoice(&env, &client, &business, &currency);
@@ -167,11 +199,22 @@ fn test_escrow_event_completeness() {
     client.accept_bid(&invoice_id_2, &bid_id_2);
     let escrow_2 = client.get_escrow_details(&invoice_id_2);
     assert_eq!(client.get_escrow_status(&invoice_id_2), EscrowStatus::Held);
-    assert_eq!(count_events_with_topic(&env, TOPIC_ESCROW_CREATED), 2, "each escrow create transition must emit exactly one EscrowCreated event");
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_ESCROW_CREATED),
+        2,
+        "each escrow create transition must emit exactly one EscrowCreated event"
+    );
 
     client.refund_escrow_funds(&invoice_id_2, &business);
-    assert_eq!(client.get_escrow_status(&invoice_id_2), EscrowStatus::Refunded);
-    assert_eq!(count_events_with_topic(&env, TOPIC_ESCROW_REFUNDED), 1, "expected exactly one EscrowRefunded event");
+    assert_eq!(
+        client.get_escrow_status(&invoice_id_2),
+        EscrowStatus::Refunded
+    );
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_ESCROW_REFUNDED),
+        1,
+        "expected exactly one EscrowRefunded event"
+    );
     let refunded_event: EscrowRefunded = latest_payload(&env, TOPIC_ESCROW_REFUNDED);
     assert_eq!(refunded_event.escrow_id, escrow_2.escrow_id);
     assert_eq!(refunded_event.invoice_id, invoice_id_2);
@@ -180,9 +223,20 @@ fn test_escrow_event_completeness() {
 
     // A second refund attempt must be rejected and emit nothing new
     let refund_again = client.try_refund_escrow_funds(&invoice_id_2, &business);
-    assert!(refund_again.is_err(), "second refund attempt must be rejected");
-    assert_eq!(count_events_with_topic(&env, TOPIC_ESCROW_REFUNDED), 1, "EscrowRefunded must remain exactly once per escrow refund transition");
+    assert!(
+        refund_again.is_err(),
+        "second refund attempt must be rejected"
+    );
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_ESCROW_REFUNDED),
+        1,
+        "EscrowRefunded must remain exactly once per escrow refund transition"
+    );
 
     // No extra create/release events from the refund-only path
-    assert_eq!(count_events_with_topic(&env, TOPIC_ESCROW_RELEASED), 1, "EscrowReleased must remain exactly once after refund-only path");
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_ESCROW_RELEASED),
+        1,
+        "EscrowReleased must remain exactly once after refund-only path"
+    );
 }

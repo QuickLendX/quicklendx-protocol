@@ -2,9 +2,9 @@
 
 use crate::{
     backup::{Backup, BackupStatus, BackupStorage},
+    errors::QuickLendXError,
     storage::{InvoiceStorage, StorageIntegrityAudit},
     types::{DisputeStatus, Invoice, InvoiceCategory, InvoiceStatus},
-    errors::QuickLendXError,
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -114,9 +114,36 @@ fn test_restore_rebuilds_all_indexes() {
     let mut tags_2 = Vec::new(&env);
     tags_2.push_back(String::from_str(&env, "tech"));
 
-    let inv_1 = make_complex_invoice(&env, 1, &business_a, InvoiceStatus::Pending, InvoiceCategory::Technology, tags_1, "Acme Corp", "TAX123");
-    let inv_2 = make_complex_invoice(&env, 2, &business_a, InvoiceStatus::Funded, InvoiceCategory::Services, tags_2, "Acme Corp", "TAX123");
-    let inv_3 = make_complex_invoice(&env, 3, &business_b, InvoiceStatus::Pending, InvoiceCategory::Manufacturing, Vec::new(&env), "Beta LLC", "TAX999");
+    let inv_1 = make_complex_invoice(
+        &env,
+        1,
+        &business_a,
+        InvoiceStatus::Pending,
+        InvoiceCategory::Technology,
+        tags_1,
+        "Acme Corp",
+        "TAX123",
+    );
+    let inv_2 = make_complex_invoice(
+        &env,
+        2,
+        &business_a,
+        InvoiceStatus::Funded,
+        InvoiceCategory::Services,
+        tags_2,
+        "Acme Corp",
+        "TAX123",
+    );
+    let inv_3 = make_complex_invoice(
+        &env,
+        3,
+        &business_b,
+        InvoiceStatus::Pending,
+        InvoiceCategory::Manufacturing,
+        Vec::new(&env),
+        "Beta LLC",
+        "TAX999",
+    );
 
     let mut invoices_to_backup = Vec::new(&env);
     invoices_to_backup.push_back(inv_1.clone());
@@ -126,7 +153,16 @@ fn test_restore_rebuilds_all_indexes() {
     let backup_id = create_valid_backup(&env, invoices_to_backup);
 
     // Pre-populate state with some completely different data to ensure it's cleared
-    let stale_inv = make_complex_invoice(&env, 99, &Address::generate(&env), InvoiceStatus::Verified, InvoiceCategory::Other, Vec::new(&env), "Stale", "TAX000");
+    let stale_inv = make_complex_invoice(
+        &env,
+        99,
+        &Address::generate(&env),
+        InvoiceStatus::Verified,
+        InvoiceCategory::Other,
+        Vec::new(&env),
+        "Stale",
+        "TAX000",
+    );
     InvoiceStorage::store_invoice(&env, &stale_inv);
 
     // Perform restore
@@ -188,7 +224,11 @@ fn test_restore_rebuilds_all_indexes() {
 
     // Check no orphans
     let audit_result = StorageIntegrityAudit::audit_invoice_integrity(&env);
-    assert!(audit_result.is_ok(), "Audit failed: {:?}", audit_result.err().unwrap());
+    assert!(
+        audit_result.is_ok(),
+        "Audit failed: {:?}",
+        audit_result.err().unwrap()
+    );
 }
 
 #[test]
@@ -196,7 +236,16 @@ fn test_restore_idempotent_and_orphan_free() {
     let env = setup_env();
 
     let business_a = Address::generate(&env);
-    let inv_1 = make_complex_invoice(&env, 1, &business_a, InvoiceStatus::Pending, InvoiceCategory::Technology, Vec::new(&env), "Acme Corp", "TAX123");
+    let inv_1 = make_complex_invoice(
+        &env,
+        1,
+        &business_a,
+        InvoiceStatus::Pending,
+        InvoiceCategory::Technology,
+        Vec::new(&env),
+        "Acme Corp",
+        "TAX123",
+    );
 
     let mut invoices_to_backup = Vec::new(&env);
     invoices_to_backup.push_back(inv_1.clone());
@@ -234,7 +283,16 @@ fn test_unsupported_version_rejected() {
     let env = setup_env();
 
     let business_a = Address::generate(&env);
-    let inv_1 = make_complex_invoice(&env, 1, &business_a, InvoiceStatus::Pending, InvoiceCategory::Technology, Vec::new(&env), "Acme Corp", "TAX123");
+    let inv_1 = make_complex_invoice(
+        &env,
+        1,
+        &business_a,
+        InvoiceStatus::Pending,
+        InvoiceCategory::Technology,
+        Vec::new(&env),
+        "Acme Corp",
+        "TAX123",
+    );
 
     // Populate valid state
     InvoiceStorage::store_invoice(&env, &inv_1);
@@ -244,12 +302,30 @@ fn test_unsupported_version_rejected() {
     // Store V3
     use soroban_sdk::IntoVal;
     let mut map = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::new(&env);
-    map.set(soroban_sdk::Symbol::new(&env, "backup_id"), backup_id.clone().into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "timestamp"), env.ledger().timestamp().into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "description"), String::from_str(&env, "v3 backup").into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "invoice_count"), 1u32.into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "status"), BackupStatus::Active.into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "format_version"), 3u32.into_val(&env));
+    map.set(
+        soroban_sdk::Symbol::new(&env, "backup_id"),
+        backup_id.clone().into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "timestamp"),
+        env.ledger().timestamp().into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "description"),
+        String::from_str(&env, "v3 backup").into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "invoice_count"),
+        1u32.into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "status"),
+        BackupStatus::Active.into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "format_version"),
+        3u32.into_val(&env),
+    );
 
     env.storage().instance().set(&backup_id, &map);
 

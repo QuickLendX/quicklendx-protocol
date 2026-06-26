@@ -76,7 +76,10 @@ use soroban_sdk::testutils::{Address as _, AuthorizedFunction, AuthorizedInvocat
 use soroban_sdk::{symbol_short, token, Address, Env, String};
 
 // Test helper: Create a test currency token
-fn create_token_contract<'a>(env: &Env, admin: &Address) -> (token::Client<'a>, token::StellarAssetClient<'a>) {
+fn create_token_contract<'a>(
+    env: &Env,
+    admin: &Address,
+) -> (token::Client<'a>, token::StellarAssetClient<'a>) {
     let contract_address = env.register_stellar_asset_contract(admin.clone());
     (
         token::Client::new(env, &contract_address),
@@ -141,7 +144,8 @@ fn test_settlement_blocked_during_active_dispute() {
     client.initialize(&admin);
 
     let amount: i128 = 100_000;
-    let (invoice_id, currency) = setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
+    let (invoice_id, currency) =
+        setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
 
     // Step 1: Record partial payment (50%)
     let partial_amount = amount / 2;
@@ -212,7 +216,8 @@ fn test_dispute_resolves_in_favor_of_investor() {
     client.initialize(&admin);
 
     let amount: i128 = 100_000;
-    let (invoice_id, currency) = setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
+    let (invoice_id, currency) =
+        setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
 
     // Record partial payment
     let partial = amount / 3;
@@ -233,7 +238,10 @@ fn test_dispute_resolves_in_favor_of_investor() {
     assert!(settle_result.is_err());
 
     // Admin resolves in favor of investor
-    let resolution = String::from_str(&env, "Ruling: Business breached contract. Investor refund approved.");
+    let resolution = String::from_str(
+        &env,
+        "Ruling: Business breached contract. Investor refund approved.",
+    );
     client.resolve_dispute(&admin, &invoice_id, &resolution);
 
     let invoice_after = client.get_invoice(&invoice_id);
@@ -286,7 +294,8 @@ fn test_dispute_resolves_in_favor_of_business() {
     client.initialize(&admin);
 
     let amount: i128 = 150_000;
-    let (invoice_id, currency) = setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
+    let (invoice_id, currency) =
+        setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
 
     // Record partial payment (60%)
     let partial = (amount * 60) / 100;
@@ -306,7 +315,10 @@ fn test_dispute_resolves_in_favor_of_business() {
     assert!(blocked.is_err());
 
     // Admin resolves in favor of business
-    let resolution = String::from_str(&env, "Ruling: Dispute is frivolous. Business fulfilled obligations.");
+    let resolution = String::from_str(
+        &env,
+        "Ruling: Dispute is frivolous. Business fulfilled obligations.",
+    );
     client.resolve_dispute(&admin, &invoice_id, &resolution);
 
     let invoice_resolved = client.get_invoice(&invoice_id);
@@ -317,7 +329,11 @@ fn test_dispute_resolves_in_favor_of_business() {
     // or settlement becomes available automatically
 
     // Business pays remaining amount
-    client.process_partial_payment(&invoice_id, &remaining, &String::from_str(&env, "final_payment"));
+    client.process_partial_payment(
+        &invoice_id,
+        &remaining,
+        &String::from_str(&env, "final_payment"),
+    );
 
     // Settlement should now succeed (dispute resolved, full payment recorded)
     let final_progress = client.get_invoice_progress(&invoice_id);
@@ -360,7 +376,8 @@ fn test_dispute_resolves_neutral() {
     client.initialize(&admin);
 
     let amount: i128 = 200_000;
-    let (invoice_id, currency) = setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
+    let (invoice_id, currency) =
+        setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
 
     // Partial payment
     let partial = amount / 2;
@@ -375,7 +392,10 @@ fn test_dispute_resolves_neutral() {
     client.put_dispute_under_review(&admin, &invoice_id);
 
     // Neutral resolution
-    let resolution = String::from_str(&env, "Ruling: Both parties share responsibility. Standard terms apply.");
+    let resolution = String::from_str(
+        &env,
+        "Ruling: Both parties share responsibility. Standard terms apply.",
+    );
     client.resolve_dispute(&admin, &invoice_id, &resolution);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -388,7 +408,11 @@ fn test_dispute_resolves_neutral() {
 
     // For this test, we assume Option A: settlement can proceed
     let remaining = amount - partial;
-    client.process_partial_payment(&invoice_id, &remaining, &String::from_str(&env, "final_neutral"));
+    client.process_partial_payment(
+        &invoice_id,
+        &remaining,
+        &String::from_str(&env, "final_neutral"),
+    );
 
     let final_progress = client.get_invoice_progress(&invoice_id);
     assert_eq!(final_progress.total_paid, amount);
@@ -428,7 +452,8 @@ fn test_escrow_double_spend_protection_during_dispute() {
     client.initialize(&admin);
 
     let amount: i128 = 100_000;
-    let (invoice_id, currency) = setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
+    let (invoice_id, currency) =
+        setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
 
     // Open dispute
     let reason = String::from_str(&env, "Testing escrow safety");
@@ -493,7 +518,8 @@ fn test_partial_payments_during_dispute() {
     client.initialize(&admin);
 
     let amount: i128 = 100_000;
-    let (invoice_id, currency) = setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
+    let (invoice_id, currency) =
+        setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
 
     // Initial partial payment (30%)
     let payment1 = (amount * 30) / 100;

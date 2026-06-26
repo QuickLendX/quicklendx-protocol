@@ -687,15 +687,22 @@ impl FeeManager {
             let mut fee = Self::calculate_base_fee(&structure, transaction_amount)?;
             if structure.fee_type != FeeType::LatePayment {
                 let discount = Self::checked_mul_div(fee, tier_discount as i128, BPS_DENOMINATOR)?;
-                fee = fee.checked_sub(discount).ok_or(QuickLendXError::ArithmeticOverflow)?;
+                fee = fee
+                    .checked_sub(discount)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?;
             }
             if is_early_payment && structure.fee_type == FeeType::Platform {
-                let early = Self::checked_mul_div(fee, EARLY_PLATFORM_DISCOUNT_BPS, BPS_DENOMINATOR)?;
-                fee = fee.checked_sub(early).ok_or(QuickLendXError::ArithmeticOverflow)?;
+                let early =
+                    Self::checked_mul_div(fee, EARLY_PLATFORM_DISCOUNT_BPS, BPS_DENOMINATOR)?;
+                fee = fee
+                    .checked_sub(early)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?;
             }
             if is_late_payment && structure.fee_type == FeeType::LatePayment {
                 let late = Self::checked_mul_div(fee, LATE_FEE_SURCHARGE_BPS, BPS_DENOMINATOR)?;
-                fee = fee.checked_add(late).ok_or(QuickLendXError::ArithmeticOverflow)?;
+                fee = fee
+                    .checked_add(late)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?;
             }
             total_fees = Self::checked_add(total_fees, fee)?;
         }
@@ -827,8 +834,10 @@ impl FeeManager {
                 transaction_count: 0,
             });
 
-        revenue_data.total_collected = Self::checked_add(revenue_data.total_collected, total_amount)?;
-        revenue_data.pending_distribution = Self::checked_add(revenue_data.pending_distribution, total_amount)?;
+        revenue_data.total_collected =
+            Self::checked_add(revenue_data.total_collected, total_amount)?;
+        revenue_data.pending_distribution =
+            Self::checked_add(revenue_data.pending_distribution, total_amount)?;
         revenue_data.transaction_count = revenue_data.transaction_count.saturating_add(1);
 
         // Merge incoming fees into existing period map rather than overwriting.
@@ -1024,8 +1033,10 @@ impl FeeManager {
         let amount = revenue_data.pending_distribution;
 
         // Calculate shares: treasury and developer via floor division, platform gets remainder
-        let treasury_amount = Self::checked_mul_div(amount, config.treasury_share_bps as i128, BPS_DENOMINATOR)?;
-        let developer_amount = Self::checked_mul_div(amount, config.developer_share_bps as i128, BPS_DENOMINATOR)?;
+        let treasury_amount =
+            Self::checked_mul_div(amount, config.treasury_share_bps as i128, BPS_DENOMINATOR)?;
+        let developer_amount =
+            Self::checked_mul_div(amount, config.developer_share_bps as i128, BPS_DENOMINATOR)?;
         let platform_amount = amount
             .checked_sub(treasury_amount)
             .and_then(|v| v.checked_sub(developer_amount))

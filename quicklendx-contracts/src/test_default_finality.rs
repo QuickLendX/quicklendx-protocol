@@ -1,12 +1,15 @@
 #[cfg(test)]
 mod test_default_finality {
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+    use crate::defaults::handle_default;
+    use crate::errors::QuickLendXError;
+    use crate::storage::{InvestmentStorage, InvoiceStorage};
+    use crate::types::{
+        DisputeStatus, InsuranceCoverage, Investment, InvestmentStatus, Invoice, InvoiceCategory,
+        InvoiceStatus,
+    };
     use crate::QuickLendXContract;
     use crate::QuickLendXContractClient;
-    use crate::types::{Invoice, InvoiceStatus, InvoiceCategory, DisputeStatus, Investment, InvestmentStatus, InsuranceCoverage};
-    use crate::storage::{InvoiceStorage, InvestmentStorage};
-    use crate::errors::QuickLendXError;
-    use crate::defaults::handle_default;
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
     #[test]
     fn test_defaulted_invoice_operations_reject() {
@@ -14,10 +17,10 @@ mod test_default_finality {
         env.mock_all_auths();
         let contract_id = env.register_contract(None, QuickLendXContract);
         let client = QuickLendXContractClient::new(&env, &contract_id);
-        
+
         let business = Address::generate(&env);
         let admin = Address::generate(&env);
-        
+
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
         let invoice = Invoice {
             id: invoice_id.clone(),
@@ -47,19 +50,20 @@ mod test_default_finality {
             },
         };
         InvoiceStorage::store_invoice(&env, &invoice);
-        
+
         let bid_id = BytesN::from_array(&env, &[2; 32]);
-        
+
         // 1. Cannot be funded
         let res_fund = client.try_accept_bid_and_fund(&invoice_id, &bid_id);
         assert!(res_fund.is_err());
-        
+
         // 2. Cannot be settled
         let res_settle = client.try_settle_invoice(&invoice_id, &1000);
         assert!(res_settle.is_err());
-        
+
         // 3. Cannot have partial payments
-        let res_partial = client.try_process_partial_payment(&invoice_id, &500, &String::from_str(&env, "tx1"));
+        let res_partial =
+            client.try_process_partial_payment(&invoice_id, &500, &String::from_str(&env, "tx1"));
         assert!(res_partial.is_err());
     }
 
@@ -67,12 +71,12 @@ mod test_default_finality {
     fn test_single_insurance_claim_and_idempotent_default() {
         let env = Env::default();
         env.mock_all_auths();
-        
+
         let invoice_id = BytesN::from_array(&env, &[3; 32]);
         let business = Address::generate(&env);
         let investor = Address::generate(&env);
         let admin = Address::generate(&env);
-        
+
         let invoice = Invoice {
             id: invoice_id.clone(),
             business: business.clone(),
@@ -101,10 +105,10 @@ mod test_default_finality {
             },
         };
         InvoiceStorage::store_invoice(&env, &invoice);
-        
+
         let investment_id = BytesN::from_array(&env, &[4; 32]);
         let provider = Address::generate(&env);
-        
+
         let mut insurance_vec = Vec::new(&env);
         insurance_vec.push_back(InsuranceCoverage {
             provider: provider.clone(),
@@ -112,7 +116,7 @@ mod test_default_finality {
             premium_amount: 10,
             is_active: true,
         });
-        
+
         let investment = Investment {
             investment_id: investment_id.clone(),
             invoice_id: invoice_id.clone(),
@@ -123,7 +127,7 @@ mod test_default_finality {
             insurance: insurance_vec,
         };
         InvestmentStorage::store_investment(&env, &investment);
-        
+
         use crate::payments::{Escrow, EscrowStatus, EscrowStorage};
         let escrow_id = BytesN::from_array(&env, &[5; 32]);
         let escrow = Escrow {
@@ -138,11 +142,11 @@ mod test_default_finality {
             released_at: 0,
         };
         EscrowStorage::store_escrow(&env, &escrow);
-        
+
         // First transition accurately processes everything and flips status
         let res1 = handle_default(&env, &invoice_id);
         assert!(res1.is_ok());
-        
+
         // Double default fails securely, guaranteeing insurance only processed once
         let res2 = handle_default(&env, &invoice_id);
         assert_eq!(res2, Err(QuickLendXError::InvoiceAlreadyDefaulted));

@@ -69,7 +69,10 @@ fn test_enter_incident_mode_rejects_oversized_reason() {
     let oversized = reason_of_len(&env, (MAX_REASON_LEN + 1) as usize);
 
     let result = client.try_enter_incident_mode(&admin, &oversized);
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidDescription);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvalidDescription
+    );
     assert!(!client.is_paused());
     assert!(!MaintenanceControl::is_maintenance_mode(&env));
 }
@@ -154,7 +157,10 @@ fn test_incident_mode_blocks_store_invoice() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::ContractPaused
+    );
 }
 
 #[test]

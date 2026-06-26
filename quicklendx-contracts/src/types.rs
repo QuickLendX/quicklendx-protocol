@@ -85,6 +85,17 @@ pub enum DisputeResolution {
     Dismissed,
 }
 
+impl DisputeResolution {
+    pub fn code(self) -> u32 {
+        match self {
+            DisputeResolution::FavorBusiness => 0,
+            DisputeResolution::FavorInvestor => 1,
+            DisputeResolution::Split => 2,
+            DisputeResolution::Dismissed => 3,
+        }
+    }
+}
+
 /// Invoice category for classification
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -126,7 +137,7 @@ pub struct Dispute {
     pub resolution: String,
     pub resolved_by: Address,
     pub resolved_at: u64,
-    pub resolution_outcome: DisputeResolution,
+    pub resolution_outcome: Option<u32>,
 }
 
 /// Invoice rating structure

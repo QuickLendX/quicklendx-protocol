@@ -26,7 +26,7 @@ use crate::admin::AdminStorage;
 use crate::audit::AuditStorage;
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
-use crate::payments::{EscrowStorage, EscrowStatus};
+use crate::payments::{EscrowStatus, EscrowStorage};
 use crate::storage::InvoiceStorage;
 use crate::types::InvoiceStatus;
 
@@ -234,7 +234,11 @@ fn check_escrow_uniqueness(env: &Env) -> InvariantCheck {
     let mut passed = true;
     for id in InvoiceStorage::get_all_invoice_ids(env).iter() {
         let invoice_key = (soroban_sdk::symbol_short!("escrow"), &id);
-        if let Some(escrow_id) = env.storage().persistent().get::<_, BytesN<32>>(&invoice_key) {
+        if let Some(escrow_id) = env
+            .storage()
+            .persistent()
+            .get::<_, BytesN<32>>(&invoice_key)
+        {
             if let Some(escrow) = EscrowStorage::get_escrow(env, &escrow_id) {
                 if escrow.invoice_id != id {
                     passed = false;
@@ -264,20 +268,25 @@ fn check_settlement_accounting_identity(env: &Env) -> InvariantCheck {
     for id in InvoiceStorage::get_by_status(env, InvoiceStatus::Paid).iter() {
         if let Some(invoice) = InvoiceStorage::get_invoice(env, &id) {
             if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, &id) {
-                let (investor_return, platform_fee) = match crate::fees::FeeManager::calculate_platform_fee(
-                    env,
-                    investment.amount,
-                    invoice.total_paid,
-                ) {
-                    Ok(result) => result,
-                    Err(crate::errors::QuickLendXError::StorageKeyNotFound) => {
-                        crate::profits::calculate_profit(env, investment.amount, invoice.total_paid)
-                    }
-                    Err(_) => {
-                        passed = false;
-                        break;
-                    }
-                };
+                let (investor_return, platform_fee) =
+                    match crate::fees::FeeManager::calculate_platform_fee(
+                        env,
+                        investment.amount,
+                        invoice.total_paid,
+                    ) {
+                        Ok(result) => result,
+                        Err(crate::errors::QuickLendXError::StorageKeyNotFound) => {
+                            crate::profits::calculate_profit(
+                                env,
+                                investment.amount,
+                                invoice.total_paid,
+                            )
+                        }
+                        Err(_) => {
+                            passed = false;
+                            break;
+                        }
+                    };
 
                 let disbursement_total = match investor_return.checked_add(platform_fee) {
                     Some(val) => val,

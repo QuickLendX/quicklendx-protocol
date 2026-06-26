@@ -25,11 +25,10 @@ use super::*;
 use crate::audit::{AuditOperationFilter, AuditQueryFilter};
 use crate::errors::QuickLendXError;
 use crate::events::{
-    TOPIC_BID_ACCEPTED, TOPIC_BID_EXPIRED, TOPIC_BID_PLACED,
-    TOPIC_BID_WITHDRAWN, TOPIC_DISPUTE_CREATED, TOPIC_DISPUTE_RESOLVED,
-    TOPIC_DISPUTE_UNDER_REVIEW, TOPIC_ESCROW_CREATED, TOPIC_ESCROW_REFUNDED,
-    TOPIC_ESCROW_RELEASED, TOPIC_INVOICE_CANCELLED, TOPIC_INVOICE_DEFAULTED,
-    TOPIC_INVOICE_EXPIRED, TOPIC_INVOICE_FUNDED, TOPIC_INVOICE_SETTLED,
+    TOPIC_BID_ACCEPTED, TOPIC_BID_EXPIRED, TOPIC_BID_PLACED, TOPIC_BID_WITHDRAWN,
+    TOPIC_DISPUTE_CREATED, TOPIC_DISPUTE_RESOLVED, TOPIC_DISPUTE_UNDER_REVIEW,
+    TOPIC_ESCROW_CREATED, TOPIC_ESCROW_REFUNDED, TOPIC_ESCROW_RELEASED, TOPIC_INVOICE_CANCELLED,
+    TOPIC_INVOICE_DEFAULTED, TOPIC_INVOICE_EXPIRED, TOPIC_INVOICE_FUNDED, TOPIC_INVOICE_SETTLED,
     TOPIC_INVOICE_SETTLED_FINAL, TOPIC_INVOICE_UPLOADED, TOPIC_INVOICE_VERIFIED,
     TOPIC_PARTIAL_PAYMENT, TOPIC_PAYMENT_RECORDED,
 };
@@ -135,7 +134,11 @@ fn latest_event_data(env: &Env, topic_str: &str) -> Map<Symbol, Val> {
             }
         }
     }
-    panic!("topic {:?} not found in {} events", topic_str, all.events().len());
+    panic!(
+        "topic {:?} not found in {} events",
+        topic_str,
+        all.events().len()
+    );
 }
 
 /// Extract a field from an event data map by field name.
@@ -144,7 +147,9 @@ where
     T: TryFromVal<Env, Val>,
 {
     let key = Symbol::new(env, field);
-    let val = map.get(key).unwrap_or_else(|| panic!("field '{}' not found in event data", field));
+    let val = map
+        .get(key)
+        .unwrap_or_else(|| panic!("field '{}' not found in event data", field));
     T::try_from_val(env, &val).unwrap_or_else(|_| panic!("failed to decode field '{}'", field))
 }
 
@@ -162,7 +167,11 @@ fn latest_payload_val(env: &Env, topic_str: &str) -> Val {
             }
         }
     }
-    panic!("topic {:?} not found in {} events", topic_str, all.events().len());
+    panic!(
+        "topic {:?} not found in {} events",
+        topic_str,
+        all.events().len()
+    );
 }
 
 fn count_events_with_topic(env: &Env, topic_str: &str) -> usize {
@@ -1065,7 +1074,10 @@ fn test_loan_settled_event_schema() {
     assert_eq!(p.invoice_id, id, "invoice_id mismatch");
     assert_eq!(p.business, biz, "business mismatch");
     assert_eq!(p.investor, inv, "investor mismatch");
-    assert!(p.investor_return >= 0, "investor_return must be non-negative");
+    assert!(
+        p.investor_return >= 0,
+        "investor_return must be non-negative"
+    );
     assert!(p.platform_fee >= 0, "platform_fee must be non-negative");
     assert_eq!(p.timestamp, ts, "timestamp mismatch");
 }
@@ -1161,12 +1173,7 @@ fn test_no_events_on_duplicate_dispute() {
     client.accept_bid(&id, &bid_id);
 
     let reason = String::from_str(&env, "First dispute");
-    client.create_dispute(
-        &id,
-        &biz,
-        &reason,
-        &String::from_str(&env, "Evidence A"),
-    );
+    client.create_dispute(&id, &biz, &reason, &String::from_str(&env, "Evidence A"));
 
     let event_count_after_first = env.events().all().events().len();
 
@@ -1320,7 +1327,10 @@ fn test_bid_placed_and_withdrawn_events_emit_correct_payloads() {
     assert_eq!(p_bid.bid_amount, INV_AMOUNT);
     assert_eq!(p_bid.expected_return, EXP_RETURN);
     assert_eq!(p_bid.timestamp, placed_ts);
-    assert_eq!(p_bid.expiration_timestamp, crate::bid::Bid::default_expiration(placed_ts));
+    assert_eq!(
+        p_bid.expiration_timestamp,
+        crate::bid::Bid::default_expiration(placed_ts)
+    );
 
     let withdraw_ts = 120u64;
     env.ledger().set_timestamp(withdraw_ts);

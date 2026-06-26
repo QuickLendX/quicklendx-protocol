@@ -149,21 +149,35 @@ fn test_invoice_lifecycle_happy_path() {
     );
 
     let invoice = fx.client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Pending, "Stage 1: status must be Pending after upload");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Pending,
+        "Stage 1: status must be Pending after upload"
+    );
     assert_eq!(invoice.amount, invoice_amount, "Stage 1: amount must match");
-    assert_eq!(invoice.business, fx.business, "Stage 1: business must match");
+    assert_eq!(
+        invoice.business, fx.business,
+        "Stage 1: business must match"
+    );
     assert!(invoice.investor.is_none(), "Stage 1: no investor yet");
 
     // Analytics: 1 invoice total
     let metrics = fx.client.get_platform_metrics();
-    assert_eq!(metrics.total_invoices, 1, "Stage 1: analytics must count 1 invoice");
+    assert_eq!(
+        metrics.total_invoices, 1,
+        "Stage 1: analytics must count 1 invoice"
+    );
 
     // ── Stage 2: Verify invoice ──────────────────────────────────────────────
     /// Admin verifies the invoice; status must change to Verified.
     fx.client.verify_invoice(&invoice_id);
 
     let invoice = fx.client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Verified, "Stage 2: status must be Verified");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Verified,
+        "Stage 2: status must be Verified"
+    );
 
     let verified_ids = fx.client.get_invoices_by_status(&InvoiceStatus::Verified);
     assert!(
@@ -190,7 +204,11 @@ fn test_invoice_lifecycle_happy_path() {
     );
 
     let bids_for_invoice = fx.client.get_bids_for_invoice(&invoice_id);
-    assert_eq!(bids_for_invoice.len(), 1, "Stage 3: exactly one bid on invoice");
+    assert_eq!(
+        bids_for_invoice.len(),
+        1,
+        "Stage 3: exactly one bid on invoice"
+    );
 
     // ── Stage 4: Accept bid and fund ─────────────────────────────────────────
     /// Business accepts the bid; escrow is created, invoice becomes Funded.
@@ -215,9 +233,20 @@ fn test_invoice_lifecycle_happy_path() {
     );
 
     let invoice = fx.client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Funded, "Stage 4: status must be Funded");
-    assert_eq!(invoice.funded_amount, bid_amount, "Stage 4: funded_amount must equal bid_amount");
-    assert_eq!(invoice.investor, Some(fx.investor.clone()), "Stage 4: investor must be set");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Stage 4: status must be Funded"
+    );
+    assert_eq!(
+        invoice.funded_amount, bid_amount,
+        "Stage 4: funded_amount must equal bid_amount"
+    );
+    assert_eq!(
+        invoice.investor,
+        Some(fx.investor.clone()),
+        "Stage 4: investor must be set"
+    );
 
     // Investment record must exist and be Active
     let investment = fx.client.get_invoice_investment(&invoice_id);
@@ -226,11 +255,17 @@ fn test_invoice_lifecycle_happy_path() {
         InvestmentStatus::Active,
         "Stage 4: investment must be Active"
     );
-    assert_eq!(investment.amount, bid_amount, "Stage 4: investment amount must equal bid_amount");
+    assert_eq!(
+        investment.amount, bid_amount,
+        "Stage 4: investment amount must equal bid_amount"
+    );
 
     // Analytics: 1 investment
     let metrics = fx.client.get_platform_metrics();
-    assert_eq!(metrics.total_investments, 1, "Stage 4: analytics must count 1 investment");
+    assert_eq!(
+        metrics.total_investments, 1,
+        "Stage 4: analytics must count 1 investment"
+    );
 
     // ── Stage 5: Process partial payment ────────────────────────────────────
     /// Business makes a partial payment; total_paid must update, status stays Funded.
@@ -242,8 +277,15 @@ fn test_invoice_lifecycle_happy_path() {
     );
 
     let invoice = fx.client.get_invoice(&invoice_id);
-    assert_eq!(invoice.total_paid, partial_amount, "Stage 5: total_paid must equal partial_amount");
-    assert_eq!(invoice.status, InvoiceStatus::Funded, "Stage 5: status must still be Funded");
+    assert_eq!(
+        invoice.total_paid, partial_amount,
+        "Stage 5: total_paid must equal partial_amount"
+    );
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Stage 5: status must still be Funded"
+    );
     assert_eq!(
         invoice.payment_history.len(),
         1,
@@ -259,8 +301,15 @@ fn test_invoice_lifecycle_happy_path() {
     fx.client.settle_invoice(&invoice_id, &remaining);
 
     let invoice = fx.client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Paid, "Stage 6: status must be Paid after settle");
-    assert_eq!(invoice.total_paid, invoice_amount, "Stage 6: total_paid must equal invoice_amount");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Paid,
+        "Stage 6: status must be Paid after settle"
+    );
+    assert_eq!(
+        invoice.total_paid, invoice_amount,
+        "Stage 6: total_paid must equal invoice_amount"
+    );
 
     // Investment must be Completed
     let investment = fx.client.get_invoice_investment(&invoice_id);
@@ -290,8 +339,14 @@ fn test_invoice_lifecycle_happy_path() {
 
     // Analytics: success_rate > 0 after a paid invoice
     let metrics = fx.client.get_platform_metrics();
-    assert!(metrics.success_rate > 0, "Stage 6: analytics success_rate must be > 0");
-    assert_eq!(metrics.default_rate, 0, "Stage 6: analytics default_rate must be 0");
+    assert!(
+        metrics.success_rate > 0,
+        "Stage 6: analytics success_rate must be > 0"
+    );
+    assert_eq!(
+        metrics.default_rate, 0,
+        "Stage 6: analytics default_rate must be 0"
+    );
 
     // Status bucket invariant
     let paid_ids = fx.client.get_invoices_by_status(&InvoiceStatus::Paid);
@@ -362,12 +417,9 @@ fn test_invoice_lifecycle_default_branch() {
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
     /// Investor places a bid.
-    let bid_id = fx.client.place_bid(
-        &fx.investor,
-        &invoice_id,
-        &bid_amount,
-        &invoice_amount,
-    );
+    let bid_id = fx
+        .client
+        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount);
     assert_eq!(
         fx.client.get_bid(&bid_id).unwrap().status,
         BidStatus::Placed,
@@ -455,7 +507,10 @@ fn test_invoice_lifecycle_default_branch() {
 
     // Analytics: default_rate == 0 (refund, not default), success_rate == 0
     let metrics = fx.client.get_platform_metrics();
-    assert_eq!(metrics.success_rate, 0, "Stage 7: analytics success_rate must be 0");
+    assert_eq!(
+        metrics.success_rate, 0,
+        "Stage 7: analytics success_rate must be 0"
+    );
 }
 
 // ============================================================================
@@ -523,12 +578,9 @@ fn test_partial_then_full_settle() {
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
     /// Investor places a bid.
-    let bid_id = fx.client.place_bid(
-        &fx.investor,
-        &invoice_id,
-        &bid_amount,
-        &invoice_amount,
-    );
+    let bid_id = fx
+        .client
+        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount);
     assert_eq!(
         fx.client.get_bid(&bid_id).unwrap().bid_amount,
         bid_amount,
@@ -553,8 +605,15 @@ fn test_partial_then_full_settle() {
         &String::from_str(&env, "partial-1"),
     );
     let invoice = fx.client.get_invoice(&invoice_id);
-    assert_eq!(invoice.total_paid, 2_000, "Stage 5a: total_paid must be 2 000");
-    assert_eq!(invoice.status, InvoiceStatus::Funded, "Stage 5a: still Funded");
+    assert_eq!(
+        invoice.total_paid, 2_000,
+        "Stage 5a: total_paid must be 2 000"
+    );
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Stage 5a: still Funded"
+    );
 
     env.ledger().set_timestamp(3_000);
     fx.client.process_partial_payment(
@@ -563,8 +622,15 @@ fn test_partial_then_full_settle() {
         &String::from_str(&env, "partial-2"),
     );
     let invoice = fx.client.get_invoice(&invoice_id);
-    assert_eq!(invoice.total_paid, 4_000, "Stage 5b: total_paid must be 4 000");
-    assert_eq!(invoice.status, InvoiceStatus::Funded, "Stage 5b: still Funded");
+    assert_eq!(
+        invoice.total_paid, 4_000,
+        "Stage 5b: total_paid must be 4 000"
+    );
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Stage 5b: still Funded"
+    );
 
     env.ledger().set_timestamp(4_000);
     fx.client.process_partial_payment(
@@ -573,8 +639,15 @@ fn test_partial_then_full_settle() {
         &String::from_str(&env, "partial-3"),
     );
     let invoice = fx.client.get_invoice(&invoice_id);
-    assert_eq!(invoice.total_paid, 6_000, "Stage 5c: total_paid must be 6 000");
-    assert_eq!(invoice.status, InvoiceStatus::Funded, "Stage 5c: still Funded");
+    assert_eq!(
+        invoice.total_paid, 6_000,
+        "Stage 5c: total_paid must be 6 000"
+    );
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Stage 5c: still Funded"
+    );
     assert_eq!(
         invoice.payment_history.len(),
         3,
@@ -590,8 +663,15 @@ fn test_partial_then_full_settle() {
     fx.client.settle_invoice(&invoice_id, &4_000i128);
 
     let invoice = fx.client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Paid, "Stage 6: status must be Paid");
-    assert_eq!(invoice.total_paid, invoice_amount, "Stage 6: total_paid must equal invoice_amount");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Paid,
+        "Stage 6: status must be Paid"
+    );
+    assert_eq!(
+        invoice.total_paid, invoice_amount,
+        "Stage 6: total_paid must equal invoice_amount"
+    );
 
     // Investment must be Completed
     let investment = fx.client.get_invoice_investment(&invoice_id);
@@ -621,8 +701,14 @@ fn test_partial_then_full_settle() {
 
     // Analytics: success_rate > 0, default_rate == 0
     let metrics = fx.client.get_platform_metrics();
-    assert!(metrics.success_rate > 0, "Stage 6: analytics success_rate must be > 0");
-    assert_eq!(metrics.default_rate, 0, "Stage 6: analytics default_rate must be 0");
+    assert!(
+        metrics.success_rate > 0,
+        "Stage 6: analytics success_rate must be > 0"
+    );
+    assert_eq!(
+        metrics.default_rate, 0,
+        "Stage 6: analytics default_rate must be 0"
+    );
 
     // Status bucket invariant
     let paid_ids = fx.client.get_invoices_by_status(&InvoiceStatus::Paid);

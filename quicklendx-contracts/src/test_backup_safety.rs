@@ -11,19 +11,15 @@
 /// - `cleanup_old_backups` correctly applies both age and count policies
 /// - `generate_backup_id` produces IDs with the correct prefix
 /// - `store_backup` rejects duplicate IDs
-
 use crate::{
     backup::{Backup, BackupRetentionPolicy, BackupStatus, BackupStorage},
-    storage::InvoiceStorage,
-    types::{
-        DisputeStatus, Invoice, InvoiceCategory, InvoiceStatus, InvoiceRating,
-        PaymentRecord,
-    },
     errors::QuickLendXError,
+    storage::InvoiceStorage,
+    types::{DisputeStatus, Invoice, InvoiceCategory, InvoiceRating, InvoiceStatus, PaymentRecord},
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Bytes, Env, Vec, String, IntoVal,
+    Address, Bytes, BytesN, Env, IntoVal, String, Vec,
 };
 
 // ============================================================================
@@ -39,8 +35,8 @@ fn setup_env() -> Env {
 
 /// Build a minimal valid Invoice for storage tests.
 fn make_invoice(env: &Env, idx: u32, amount: i128) -> Invoice {
-    use soroban_sdk::{Address, BytesN, String, Vec};
     use crate::types::{Dispute, DisputeStatus};
+    use soroban_sdk::{Address, BytesN, String, Vec};
 
     let mut id_bytes = [0u8; 32];
     id_bytes[28..32].copy_from_slice(&idx.to_be_bytes());
@@ -415,7 +411,13 @@ fn test_restore_fails_for_nonexistent_backup() {
     let invoice = make_invoice(&env, 0, 1_000);
     InvoiceStorage::store_invoice(&env, &invoice);
 
-    let fake_id = BytesN::from_array(&env, &[0xB4, 0xC4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+    let fake_id = BytesN::from_array(
+        &env,
+        &[
+            0xB4, 0xC4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0,
+        ],
+    );
     let result = BackupStorage::restore_from_backup(&env, &fake_id);
     assert!(result.is_err());
 
@@ -687,7 +689,10 @@ fn test_v1_compatibility_upgrade_roundtrip() {
     let backup = BackupStorage::get_backup(&env, &backup_id).unwrap();
     assert_eq!(backup.backup_id, backup_id);
     assert_eq!(backup.format_version, 2);
-    assert_eq!(backup.description, soroban_sdk::String::from_str(&env, "v1 backup"));
+    assert_eq!(
+        backup.description,
+        soroban_sdk::String::from_str(&env, "v1 backup")
+    );
 }
 
 /// Test that V2/current backups are stored and retrieved normally.
@@ -750,12 +755,30 @@ fn test_v3_rejection_and_unsupported_error() {
 
     // Store a backup with version = 3 directly using Map to simulate future struct
     let mut map = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::new(&env);
-    map.set(soroban_sdk::Symbol::new(&env, "backup_id"), backup_id.clone().into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "timestamp"), env.ledger().timestamp().into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "description"), soroban_sdk::String::from_str(&env, "v3 backup").into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "invoice_count"), 1u32.into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "status"), BackupStatus::Active.into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "format_version"), 3u32.into_val(&env));
+    map.set(
+        soroban_sdk::Symbol::new(&env, "backup_id"),
+        backup_id.clone().into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "timestamp"),
+        env.ledger().timestamp().into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "description"),
+        soroban_sdk::String::from_str(&env, "v3 backup").into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "invoice_count"),
+        1u32.into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "status"),
+        BackupStatus::Active.into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "format_version"),
+        3u32.into_val(&env),
+    );
 
     env.storage().instance().set(&backup_id, &map);
 
@@ -796,12 +819,30 @@ fn test_mixed_version_restore_handling() {
     // 1. Create a V3 backup (unsupported)
     let v3_id = BackupStorage::generate_backup_id(&env);
     let mut map = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::new(&env);
-    map.set(soroban_sdk::Symbol::new(&env, "backup_id"), v3_id.clone().into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "timestamp"), env.ledger().timestamp().into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "description"), soroban_sdk::String::from_str(&env, "v3").into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "invoice_count"), 1u32.into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "status"), BackupStatus::Active.into_val(&env));
-    map.set(soroban_sdk::Symbol::new(&env, "format_version"), 3u32.into_val(&env));
+    map.set(
+        soroban_sdk::Symbol::new(&env, "backup_id"),
+        v3_id.clone().into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "timestamp"),
+        env.ledger().timestamp().into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "description"),
+        soroban_sdk::String::from_str(&env, "v3").into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "invoice_count"),
+        1u32.into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "status"),
+        BackupStatus::Active.into_val(&env),
+    );
+    map.set(
+        soroban_sdk::Symbol::new(&env, "format_version"),
+        3u32.into_val(&env),
+    );
     env.storage().instance().set(&v3_id, &map);
 
     // Attempting to restore V3 should fail and leave storage untouched

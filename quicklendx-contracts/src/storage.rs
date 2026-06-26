@@ -7,8 +7,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
-    PlatformFeeConfig, PruneReport, RebuildReport,
+    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus, PlatformFeeConfig,
+    PruneReport, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
@@ -227,13 +227,13 @@ impl Indexes {
 }
 
 /// Storage operations for invoices.
-/// 
+///
 /// ## Invariants Maintained
-/// - Each invoice exists in exactly one status index (Pending, Verified, Funded, Paid, 
+/// - Each invoice exists in exactly one status index (Pending, Verified, Funded, Paid,
 ///   Defaulted, Cancelled, or Refunded).
-/// - `get_invoice_count_by_status::<S>().len() == get_total_invoice_count()` for the sum 
+/// - `get_invoice_count_by_status::<S>().len() == get_total_invoice_count()` for the sum
 ///   across all statuses (count-index agreement).
-/// - When status changes, removal from old status index and addition to new status index 
+/// - When status changes, removal from old status index and addition to new status index
 ///   are performed atomically within the same transaction.
 /// - No invoice ID in any status index references a non-existent invoice record.
 pub struct InvoiceStorage;
@@ -242,9 +242,7 @@ impl InvoiceStorage {
     /// Store an invoice and update all its secondary indexes.
     pub fn store(env: &Env, invoice: &Invoice) {
         let key = DataKey::Invoice(invoice.id.clone());
-        env.storage()
-            .persistent()
-            .set(&key, invoice);
+        env.storage().persistent().set(&key, invoice);
         extend_persistent_ttl(env, &key);
         Self::add_to_business_index(env, &invoice.business, &invoice.id);
         Self::add_to_status_index(env, invoice.status, &invoice.id);
@@ -351,9 +349,7 @@ impl InvoiceStorage {
             }
         }
         let key = DataKey::Invoice(invoice.id.clone());
-        env.storage()
-            .persistent()
-            .set(&key, invoice);
+        env.storage().persistent().set(&key, invoice);
         extend_persistent_ttl(env, &key);
     }
 
@@ -474,9 +470,7 @@ impl InvoiceStorage {
         if !invoices.contains(invoice_id) {
             invoices.push_back(invoice_id.clone());
             let key = Indexes::invoices_by_business(business);
-            env.storage()
-                .persistent()
-                .set(&key, &invoices);
+            env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
         }
     }
@@ -486,9 +480,7 @@ impl InvoiceStorage {
         if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
             invoices.remove(pos as u32);
             let key = Indexes::invoices_by_business(business);
-            env.storage()
-                .persistent()
-                .set(&key, &invoices);
+            env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
         }
     }
@@ -498,9 +490,7 @@ impl InvoiceStorage {
         if !invoices.contains(invoice_id) {
             invoices.push_back(invoice_id.clone());
             let key = Indexes::invoices_by_status(status);
-            env.storage()
-                .persistent()
-                .set(&key, &invoices);
+            env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
         }
     }
@@ -510,9 +500,7 @@ impl InvoiceStorage {
         if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
             invoices.remove(pos as u32);
             let key = Indexes::invoices_by_status(status);
-            env.storage()
-                .persistent()
-                .set(&key, &invoices);
+            env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
         }
     }
@@ -773,7 +761,6 @@ impl InvoiceStorage {
         Self::remove_from_customer_index(env, &metadata.customer_name, invoice_id);
         Self::remove_from_tax_id_index(env, &metadata.tax_id, invoice_id);
     }
-
 }
 
 /// Storage operations for bids
@@ -1070,7 +1057,11 @@ impl InvoiceStorage {
     /// * `limit`  - Max invoices to process; capped at `MAX_REBUILD_PAGE`.
     pub fn rebuild_indexes_page(env: &Env, offset: u32, limit: u32) -> RebuildReport {
         const MAX_REBUILD_PAGE: u32 = 100;
-        let capped = if limit > MAX_REBUILD_PAGE { MAX_REBUILD_PAGE } else { limit };
+        let capped = if limit > MAX_REBUILD_PAGE {
+            MAX_REBUILD_PAGE
+        } else {
+            limit
+        };
 
         let all_ids = Self::get_all_invoice_ids(env);
         let total = all_ids.len();
@@ -1141,7 +1132,11 @@ impl InvoiceStorage {
         limit: u32,
     ) -> PruneReport {
         const MAX_PRUNE_PAGE: u32 = 100;
-        let capped = if limit > MAX_PRUNE_PAGE { MAX_PRUNE_PAGE } else { limit };
+        let capped = if limit > MAX_PRUNE_PAGE {
+            MAX_PRUNE_PAGE
+        } else {
+            limit
+        };
 
         let now = env.ledger().timestamp();
         let all_ids = Self::get_all_invoice_ids(env);

@@ -84,31 +84,38 @@ fn test_index_invoices_by_status_stable() {
     assert_snapshot_entry("invoices_by_status", "inv_st");
 
     let cases: &[(&str, InvoiceStatus)] = &[
-        ("pending",   InvoiceStatus::Pending),
-        ("verified",  InvoiceStatus::Verified),
-        ("funded",    InvoiceStatus::Funded),
-        ("paid",      InvoiceStatus::Paid),
+        ("pending", InvoiceStatus::Pending),
+        ("verified", InvoiceStatus::Verified),
+        ("funded", InvoiceStatus::Funded),
+        ("paid", InvoiceStatus::Paid),
         ("defaulted", InvoiceStatus::Defaulted),
         ("cancelled", InvoiceStatus::Cancelled),
-        ("refunded",  InvoiceStatus::Refunded),
+        ("refunded", InvoiceStatus::Refunded),
     ];
     for (expected, status) in cases {
         assert_snapshot_entry(&format!("InvoiceStatus::{:?}", status), expected);
         let (sym, status_sym) = Indexes::invoices_by_status(status.clone());
-        assert_eq!(sym, symbol_short!("inv_st"),
-            "invoices_by_status prefix changed for {:?}", status);
+        assert_eq!(
+            sym,
+            symbol_short!("inv_st"),
+            "invoices_by_status prefix changed for {:?}",
+            status
+        );
         // Verify each status variant maps to the expected symbol
         let expected_sym = match status {
-            InvoiceStatus::Pending   => symbol_short!("pending"),
-            InvoiceStatus::Verified  => symbol_short!("verified"),
-            InvoiceStatus::Funded    => symbol_short!("funded"),
-            InvoiceStatus::Paid      => symbol_short!("paid"),
+            InvoiceStatus::Pending => symbol_short!("pending"),
+            InvoiceStatus::Verified => symbol_short!("verified"),
+            InvoiceStatus::Funded => symbol_short!("funded"),
+            InvoiceStatus::Paid => symbol_short!("paid"),
             InvoiceStatus::Defaulted => symbol_short!("defaulted"),
             InvoiceStatus::Cancelled => symbol_short!("cancelled"),
-            InvoiceStatus::Refunded  => symbol_short!("refunded"),
+            InvoiceStatus::Refunded => symbol_short!("refunded"),
         };
-        assert_eq!(status_sym, expected_sym,
-            "InvoiceStatus::{:?} symbol changed", status);
+        assert_eq!(
+            status_sym, expected_sym,
+            "InvoiceStatus::{:?} symbol changed",
+            status
+        );
     }
 }
 
@@ -148,34 +155,41 @@ fn test_index_invoices_by_category_stable() {
     assert_snapshot_entry("invoices_by_category", "inv_cat");
 
     let cases: &[(&str, InvoiceCategory)] = &[
-        ("services",  InvoiceCategory::Services),
-        ("goods",     InvoiceCategory::Goods),
-        ("consult",   InvoiceCategory::Consulting),
-        ("logist",    InvoiceCategory::Logistics),
-        ("products",  InvoiceCategory::Products),
-        ("manufac",   InvoiceCategory::Manufacturing),
-        ("tech",      InvoiceCategory::Technology),
-        ("health",    InvoiceCategory::Healthcare),
-        ("other",     InvoiceCategory::Other),
+        ("services", InvoiceCategory::Services),
+        ("goods", InvoiceCategory::Goods),
+        ("consult", InvoiceCategory::Consulting),
+        ("logist", InvoiceCategory::Logistics),
+        ("products", InvoiceCategory::Products),
+        ("manufac", InvoiceCategory::Manufacturing),
+        ("tech", InvoiceCategory::Technology),
+        ("health", InvoiceCategory::Healthcare),
+        ("other", InvoiceCategory::Other),
     ];
     for (expected, category) in cases {
         assert_snapshot_entry(&format!("InvoiceCategory::{:?}", category), expected);
         let (sym, cat_sym) = Indexes::invoices_by_category(category.clone());
-        assert_eq!(sym, symbol_short!("inv_cat"),
-            "invoices_by_category prefix changed for {:?}", category);
+        assert_eq!(
+            sym,
+            symbol_short!("inv_cat"),
+            "invoices_by_category prefix changed for {:?}",
+            category
+        );
         let expected_sym = match category {
-            InvoiceCategory::Services      => symbol_short!("services"),
-            InvoiceCategory::Goods         => symbol_short!("goods"),
-            InvoiceCategory::Consulting    => symbol_short!("consult"),
-            InvoiceCategory::Logistics     => symbol_short!("logist"),
-            InvoiceCategory::Products      => symbol_short!("products"),
+            InvoiceCategory::Services => symbol_short!("services"),
+            InvoiceCategory::Goods => symbol_short!("goods"),
+            InvoiceCategory::Consulting => symbol_short!("consult"),
+            InvoiceCategory::Logistics => symbol_short!("logist"),
+            InvoiceCategory::Products => symbol_short!("products"),
             InvoiceCategory::Manufacturing => symbol_short!("manufac"),
-            InvoiceCategory::Technology    => symbol_short!("tech"),
-            InvoiceCategory::Healthcare    => symbol_short!("health"),
-            InvoiceCategory::Other         => symbol_short!("other"),
+            InvoiceCategory::Technology => symbol_short!("tech"),
+            InvoiceCategory::Healthcare => symbol_short!("health"),
+            InvoiceCategory::Other => symbol_short!("other"),
         };
-        assert_eq!(cat_sym, expected_sym,
-            "InvoiceCategory::{:?} symbol changed", category);
+        assert_eq!(
+            cat_sym, expected_sym,
+            "InvoiceCategory::{:?} symbol changed",
+            category
+        );
     }
 }
 
@@ -209,26 +223,33 @@ fn test_index_bids_by_status_stable() {
     assert_snapshot_entry("bids_by_status", "bids_stat");
 
     let cases: &[(&str, BidStatus)] = &[
-        ("placed",    BidStatus::Placed),
+        ("placed", BidStatus::Placed),
         ("withdrawn", BidStatus::Withdrawn),
-        ("accepted",  BidStatus::Accepted),
-        ("expired",   BidStatus::Expired),
+        ("accepted", BidStatus::Accepted),
+        ("expired", BidStatus::Expired),
         ("cancelled", BidStatus::Cancelled),
     ];
     for (expected, status) in cases {
         assert_snapshot_entry(&format!("BidStatus::{:?}", status), expected);
         let (sym, status_sym) = Indexes::bids_by_status(status.clone());
-        assert_eq!(sym, symbol_short!("bids_stat"),
-            "bids_by_status prefix changed for {:?}", status);
+        assert_eq!(
+            sym,
+            symbol_short!("bids_stat"),
+            "bids_by_status prefix changed for {:?}",
+            status
+        );
         let expected_sym = match status {
-            BidStatus::Placed    => symbol_short!("placed"),
+            BidStatus::Placed => symbol_short!("placed"),
             BidStatus::Withdrawn => symbol_short!("withdrawn"),
-            BidStatus::Accepted  => symbol_short!("accepted"),
-            BidStatus::Expired   => symbol_short!("expired"),
+            BidStatus::Accepted => symbol_short!("accepted"),
+            BidStatus::Expired => symbol_short!("expired"),
             BidStatus::Cancelled => symbol_short!("cancelled"),
         };
-        assert_eq!(status_sym, expected_sym,
-            "BidStatus::{:?} symbol changed", status);
+        assert_eq!(
+            status_sym, expected_sym,
+            "BidStatus::{:?} symbol changed",
+            status
+        );
     }
 }
 
@@ -262,26 +283,33 @@ fn test_index_investments_by_status_stable() {
     assert_snapshot_entry("investments_by_status", "inv_st");
 
     let cases: &[(&str, InvestmentStatus)] = &[
-        ("active",    InvestmentStatus::Active),
+        ("active", InvestmentStatus::Active),
         ("withdrawn", InvestmentStatus::Withdrawn),
         ("completed", InvestmentStatus::Completed),
         ("defaulted", InvestmentStatus::Defaulted),
-        ("refunded",  InvestmentStatus::Refunded),
+        ("refunded", InvestmentStatus::Refunded),
     ];
     for (expected, status) in cases {
         assert_snapshot_entry(&format!("InvestmentStatus::{:?}", status), expected);
         let (sym, status_sym) = Indexes::investments_by_status(status.clone());
-        assert_eq!(sym, symbol_short!("inv_st"),
-            "investments_by_status prefix changed for {:?}", status);
+        assert_eq!(
+            sym,
+            symbol_short!("inv_st"),
+            "investments_by_status prefix changed for {:?}",
+            status
+        );
         let expected_sym = match status {
-            InvestmentStatus::Active    => symbol_short!("active"),
+            InvestmentStatus::Active => symbol_short!("active"),
             InvestmentStatus::Withdrawn => symbol_short!("withdrawn"),
             InvestmentStatus::Completed => symbol_short!("completed"),
             InvestmentStatus::Defaulted => symbol_short!("defaulted"),
-            InvestmentStatus::Refunded  => symbol_short!("refunded"),
+            InvestmentStatus::Refunded => symbol_short!("refunded"),
         };
-        assert_eq!(status_sym, expected_sym,
-            "InvestmentStatus::{:?} symbol changed", status);
+        assert_eq!(
+            status_sym, expected_sym,
+            "InvestmentStatus::{:?} symbol changed",
+            status
+        );
     }
 }
 
@@ -350,18 +378,18 @@ fn test_data_key_variants_stable() {
     let env = setup();
     let id = BytesN::from_array(&env, &[0xABu8; 32]);
     // Ensure all three variants can be constructed and are distinct.
-    let invoice_key    = DataKey::Invoice(id.clone());
-    let bid_key        = DataKey::Bid(id.clone());
+    let invoice_key = DataKey::Invoice(id.clone());
+    let bid_key = DataKey::Bid(id.clone());
     let investment_key = DataKey::Investment(id.clone());
 
-    assert!(matches!(invoice_key,    DataKey::Invoice(_)));
-    assert!(matches!(bid_key,        DataKey::Bid(_)));
+    assert!(matches!(invoice_key, DataKey::Invoice(_)));
+    assert!(matches!(bid_key, DataKey::Bid(_)));
     assert!(matches!(investment_key, DataKey::Investment(_)));
 
     // Same ID in different variants must NOT collide.
-    assert!(!matches!(bid_key.clone(),        DataKey::Invoice(_)));
+    assert!(!matches!(bid_key.clone(), DataKey::Invoice(_)));
     assert!(!matches!(investment_key.clone(), DataKey::Invoice(_)));
-    assert!(!matches!(invoice_key.clone(),    DataKey::Bid(_)));
+    assert!(!matches!(invoice_key.clone(), DataKey::Bid(_)));
 }
 
 // ---------------------------------------------------------------------------
@@ -386,10 +414,16 @@ fn test_snapshot_file_exists_and_is_nonempty() {
 #[test]
 fn test_snapshot_covers_all_storage_classes() {
     let has_persistent = SNAPSHOT.contains("persistent");
-    let has_instance   = SNAPSHOT.contains("instance");
+    let has_instance = SNAPSHOT.contains("instance");
     // Temporary keys are not currently used; we only assert the other two.
-    assert!(has_persistent, "snapshot missing 'persistent' storage class entries");
-    assert!(has_instance,   "snapshot missing 'instance' storage class entries");
+    assert!(
+        has_persistent,
+        "snapshot missing 'persistent' storage class entries"
+    );
+    assert!(
+        has_instance,
+        "snapshot missing 'instance' storage class entries"
+    );
 }
 
 // ---------------------------------------------------------------------------

@@ -1245,7 +1245,7 @@ pub fn compute_investor_tier(
     validate_risk_score(risk_score)?;
 
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
-        return compute_tier_from_counters(
+        return compute_investor_tier_from_counters(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
@@ -1256,12 +1256,15 @@ pub fn compute_investor_tier(
     Ok(InvestorTier::Basic)
 }
 
-/// Compute investor tier from raw performance counters (no env/storage access).
-///
-/// Use this when you already have the performance counters and do not need to
-/// reload them from storage. All call sites that receive counters from an already-fetched
-/// `InvestorVerification` should call this instead of `compute_investor_tier`.
-pub fn compute_tier_from_counters(
+pub fn determine_investor_tier(
+    env: &Env,
+    investor: &Address,
+    risk_score: u32,
+) -> Result<InvestorTier, QuickLendXError> {
+    compute_investor_tier(env, investor, risk_score)
+}
+
+fn compute_investor_tier_from_counters(
     total_invested: i128,
     successful_investments: u32,
     defaulted_investments: u32,
@@ -1269,38 +1272,43 @@ pub fn compute_tier_from_counters(
 ) -> Result<InvestorTier, QuickLendXError> {
     validate_risk_score(risk_score)?;
 
-    let total = successful_investments + defaulted_investments;
-    let default_rate = if total > 0 {
-        (defaulted_investments * 100) / total
-    } else {
+    let total_investments = successful_investments.saturating_add(defaulted_investments);
+    let default_rate = if total_investments == 0 {
         0
+    } else {
+        defaulted_investments
+            .saturating_mul(100)
+            .saturating_div(total_investments)
     };
 
-    if risk_score <= VIP_RISK_SCORE_MAX
-        && total_invested >= VIP_TOTAL_INVESTED_MIN
-        && successful_investments >= VIP_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate <= VIP_DEFAULT_RATE_MAX_PCT
+    if risk_score <= 10
+        && total_invested >= 5_000_000
+        && successful_investments >= 50
+        && default_rate <= 5
     {
         return Ok(InvestorTier::VIP);
     }
-    if risk_score <= PLATINUM_RISK_SCORE_MAX
-        && total_invested >= PLATINUM_TOTAL_INVESTED_MIN
-        && successful_investments >= PLATINUM_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate <= PLATINUM_DEFAULT_RATE_MAX_PCT
+
+    if risk_score <= 20
+        && total_invested >= 1_000_000
+        && successful_investments >= 20
+        && default_rate <= 10
     {
         return Ok(InvestorTier::Platinum);
     }
-    if risk_score <= GOLD_RISK_SCORE_MAX
-        && total_invested >= GOLD_TOTAL_INVESTED_MIN
-        && successful_investments >= GOLD_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate <= GOLD_DEFAULT_RATE_MAX_PCT
+
+    if risk_score <= 40
+        && total_invested >= 100_000
+        && successful_investments >= 10
+        && default_rate <= 15
     {
         return Ok(InvestorTier::Gold);
     }
-    if risk_score <= SILVER_RISK_SCORE_MAX
-        && total_invested >= SILVER_TOTAL_INVESTED_MIN
-        && successful_investments >= SILVER_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate <= SILVER_DEFAULT_RATE_MAX_PCT
+
+    if risk_score <= 60
+        && total_invested >= 10_000
+        && successful_investments >= 3
+        && default_rate <= 25
     {
         return Ok(InvestorTier::Silver);
     }
@@ -1391,7 +1399,6 @@ pub fn update_investor_analytics(
             &verification.risk_level,
         );
 
-
         verification.total_invested = verification
             .total_invested
             .saturating_add(investment_amount);
@@ -1413,7 +1420,12 @@ pub fn update_investor_analytics(
         verification.risk_score =
             calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
         verification.risk_level = determine_risk_level(verification.risk_score);
-        verification.tier = compute_tier_from_counters(verification.total_invested, verification.successful_investments, verification.defaulted_investments, verification.risk_score)?;
+        verification.tier = compute_investor_tier_from_counters(
+            verification.total_invested,
+            verification.successful_investments,
+            verification.defaulted_investments,
+            verification.risk_score,
+        )?;
 
         // Preserve the investor's approved baseline and only re-derive the
         // dynamic limit using the updated tier/risk profile.
@@ -1540,8 +1552,8 @@ pub fn recompute_investor_tier(
         return Err(QuickLendXError::NotAdmin);
     }
 
-    let mut verification = InvestorVerificationStorage::get(env, investor)
-        .ok_or(QuickLendXError::KYCNotFound)?;
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
 
     if !matches!(verification.status, BusinessVerificationStatus::Verified) {
         return Err(QuickLendXError::InvalidKYCStatus);
@@ -1559,7 +1571,7 @@ pub fn recompute_investor_tier(
     let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
     validate_risk_score(risk_score)?;
 
-    let tier = compute_tier_from_counters(
+    let tier = compute_investor_tier_from_counters(
         verification.total_invested,
         verification.successful_investments,
         verification.defaulted_investments,
@@ -1572,12 +1584,12 @@ pub fn recompute_investor_tier(
     verification.risk_level = risk_level;
     verification.tier = tier;
     verification.investment_limit = investment_limit;
-    verification.compliance_notes = Some(String::from_str(env, "Investor tier recomputed by admin"));
+    verification.compliance_notes =
+        Some(String::from_str(env, "Investor tier recomputed by admin"));
 
     InvestorVerificationStorage::update(env, &verification);
     Ok(())
 }
-
 
 /// Validate structured invoice metadata against the invoice amount
 pub fn validate_invoice_metadata(

@@ -98,14 +98,8 @@ mod tests {
     /// paging in case a future caller passes a small `limit`. This is the
     /// "consumer doing it right" reference implementation that the test asserts
     /// against `invoice.total_paid`.
-    fn sum_full_records(
-        env: &Env,
-        contract_id: &Address,
-        invoice_id: &BytesN<32>,
-    ) -> i128 {
-        let count = env.as_contract(contract_id, || {
-            get_payment_count(env, invoice_id).unwrap()
-        });
+    fn sum_full_records(env: &Env, contract_id: &Address, invoice_id: &BytesN<32>) -> i128 {
+        let count = env.as_contract(contract_id, || get_payment_count(env, invoice_id).unwrap());
         let records = env.as_contract(contract_id, || {
             get_payment_records(env, invoice_id, 0, count).unwrap()
         });
@@ -271,7 +265,10 @@ mod tests {
         );
 
         // total_paid reflects all 33 payments, not just the 32 visible inline.
-        assert_eq!(invoice.total_paid, 330, "total_paid must include the evicted first payment");
+        assert_eq!(
+            invoice.total_paid, 330,
+            "total_paid must include the evicted first payment"
+        );
 
         // The durable record count is NOT truncated.
         let count = env.as_contract(&contract_id, || {
@@ -361,7 +358,10 @@ mod tests {
 
         let invoice = client.get_invoice(&invoice_id);
         assert_eq!(invoice.total_paid, 405);
-        assert_eq!(invoice.total_paid, invoice.amount, "invoice must be fully paid");
+        assert_eq!(
+            invoice.total_paid, invoice.amount,
+            "invoice must be fully paid"
+        );
         assert_eq!(
             invoice.status,
             crate::invoice::InvoiceStatus::Paid,
@@ -430,7 +430,10 @@ mod tests {
         let finalized = env.as_contract(&contract_id, || {
             crate::settlement::is_invoice_finalized(&env, &invoice_id).unwrap()
         });
-        assert!(finalized, "invoice must be marked finalized after auto-settlement");
+        assert!(
+            finalized,
+            "invoice must be marked finalized after auto-settlement"
+        );
 
         // Post-settlement, the full durable record set still reconstructs
         // total_paid exactly — settlement finalization does not prune records.
@@ -511,7 +514,10 @@ mod tests {
             "overpayment must be capped at total_due, not the requested amount"
         );
         assert_eq!(invoice.total_paid, invoice.amount);
-        assert!(invoice.total_paid <= invoice.amount, "capping invariant must never be violated");
+        assert!(
+            invoice.total_paid <= invoice.amount,
+            "capping invariant must never be violated"
+        );
 
         // The durable record for the capped final payment reflects the applied
         // (capped) amount, not the requested amount — matching the existing
