@@ -41,3 +41,4 @@ fuzz-tests = ["dep:proptest"]
 legacy-tests = []
 # Feature-gated logging and structured diagnostics
 diagnostics = []
+testutils = []

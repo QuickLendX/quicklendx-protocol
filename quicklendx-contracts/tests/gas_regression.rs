@@ -15,8 +15,8 @@ static FILE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 struct EntrypointBaseline {
-    name: String,
-    scenario: String,
+    name: std::string::String,
+    scenario: std::string::String,
     instructions: u64,
     read_bytes: u64,
     write_bytes: u64,
@@ -24,8 +24,8 @@ struct EntrypointBaseline {
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
 struct Metadata {
-    recorded: String,
-    tool: String,
+    recorded: std::string::String,
+    tool: std::string::String,
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug)]
@@ -460,27 +460,27 @@ fn test_analytics_disputes_gas() {
     bench_scenario!(harness, "export_analytics_snapshot", "default", client.try_export_analytics_snapshot(&harness.admin));
     bench_scenario!(harness, "get_performance_metrics", "default", client.try_get_performance_metrics());
     bench_scenario!(harness, "generate_business_report", "default", client.try_generate_business_report(&harness.business));
-    bench_scenario!(harness, "generate_investor_report", "default", client.try_generate_investor_report(&harness.investor));
-    bench_scenario!(harness, "get_business_report", "default", client.try_get_business_report(&harness.business));
-    bench_scenario!(harness, "get_financial_metrics", "default", client.try_get_financial_metrics());
+    bench_scenario!(harness, "generate_investor_report", "default", client.try_generate_investor_report(&harness.investor, &quicklendx_contracts::analytics::TimePeriod { start: 0, end: 1 }));
+    bench_scenario!(harness, "get_business_report", "default", client.try_get_business_report(&harness.invoice_id));
+    bench_scenario!(harness, "get_financial_metrics", "default", client.try_get_financial_metrics(&quicklendx_contracts::analytics::TimePeriod { start: 0, end: 1 }));
     bench_scenario!(harness, "get_analytics_summary", "default", client.try_get_analytics_summary());
-    bench_scenario!(harness, "get_freshness", "default", client.try_get_freshness());
+    bench_scenario!(harness, "get_freshness", "default", client.try_get_freshness(&0, &0, &0));
 
-    bench_scenario!(harness, "create_dispute", "default", client.try_create_dispute(&harness.invoice_id, &harness.investor, &String::from_str(env, "Reason")));
-    bench_scenario!(harness, "update_dispute_evidence", "default", client.try_update_dispute_evidence(&harness.invoice_id, &harness.investor, &String::from_str(env, "Evidence")));
+    bench_scenario!(harness, "create_dispute", "default", client.try_create_dispute(&harness.invoice_id, &harness.investor, &String::from_str(&harness.env, "Reason"), &String::from_str(&harness.env, "Evidence")));
+    bench_scenario!(harness, "update_dispute_evidence", "default", client.try_update_dispute_evidence(&harness.invoice_id, &harness.investor, &String::from_str(&harness.env, "Evidence")));
     bench_scenario!(harness, "get_invoice_dispute_status", "default", client.try_get_invoice_dispute_status(&harness.invoice_id));
     bench_scenario!(harness, "get_dispute_details", "default", client.try_get_dispute_details(&harness.invoice_id));
     bench_scenario!(harness, "put_dispute_under_review", "default", client.try_put_dispute_under_review(&harness.invoice_id, &harness.admin));
-    bench_scenario!(harness, "resolve_dispute", "default", client.try_resolve_dispute(&harness.invoice_id, &harness.admin, &DisputeStatus::Resolved, &String::from_str(env, "Resolved resolution")));
+    bench_scenario!(harness, "resolve_dispute", "default", client.try_resolve_dispute(&harness.invoice_id, &harness.admin, &String::from_str(&harness.env, "Resolved resolution")));
     bench_scenario!(harness, "get_invoices_with_disputes", "default", client.try_get_invoices_with_disputes());
-    bench_scenario!(harness, "get_dispute_timeline", "default", client.try_get_dispute_timeline(&harness.invoice_id));
+    bench_scenario!(harness, "get_dispute_timeline", "default", client.try_get_dispute_timeline(&harness.invoice_id, &0, &10));
     bench_scenario!(harness, "get_invoices_by_dispute_status", "default", client.try_get_invoices_by_dispute_status(&DisputeStatus::Resolved));
 
     bench_scenario!(harness, "get_invoice_audit_trail", "default", client.try_get_invoice_audit_trail(&harness.invoice_id));
     bench_scenario!(harness, "get_audit_entry", "default", client.try_get_audit_entry(&harness.invoice_id));
-    bench_scenario!(harness, "get_audit_entries_by_operation", "default", client.try_get_audit_entries_by_operation(&String::from_str(env, "upload")));
-    bench_scenario!(harness, "get_audit_entries_by_actor", "default", client.try_get_audit_entries_by_actor(&harness.business));
-    bench_scenario!(harness, "query_audit_logs", "default", client.try_query_audit_logs(&0, &10));
+    bench_scenario!(harness, "get_audit_entries_by_operation", "default", client.try_get_audit_entries_by_operation(&quicklendx_contracts::audit::AuditOperation::SystemEvent));
+    bench_scenario!(harness, "get_audit_entries_by_target", "default", client.try_get_audit_entries_by_target(&harness.invoice_id));
+    bench_scenario!(harness, "query_audit_logs", "default", client.try_query_audit_logs(&quicklendx_contracts::audit::AuditQueryFilter { operation: None, target_id: None, start_time: None, end_time: None }, &0, &10));
     bench_scenario!(harness, "get_audit_stats", "default", client.try_get_audit_stats());
     bench_scenario!(harness, "validate_invoice_audit_integrity", "default", client.try_validate_invoice_audit_integrity(&harness.invoice_id));
     bench_scenario!(harness, "verify_audit_chain", "default", client.try_verify_audit_chain(&harness.invoice_id));
@@ -501,12 +501,12 @@ fn test_overdue_notifications_gas() {
     bench_scenario!(harness, "get_overdue_scan_cursor", "default", client.try_get_overdue_scan_cursor());
     bench_scenario!(harness, "get_overdue_scan_batch_limit", "default", client.try_get_overdue_scan_batch_limit());
     bench_scenario!(harness, "get_overdue_scan_batch_limit_max", "default", client.try_get_overdue_scan_batch_limit_max());
-    bench_scenario!(harness, "check_invoice_expiration", "default", client.try_check_invoice_expiration(&harness.invoice_id));
+    bench_scenario!(harness, "check_invoice_expiration", "default", client.try_check_invoice_expiration(&harness.invoice_id, &None));
 
     bench_scenario!(harness, "get_notification", "default", client.try_get_notification(&harness.invoice_id));
     bench_scenario!(harness, "get_user_notifications", "default", client.try_get_user_notifications(&harness.investor));
     bench_scenario!(harness, "get_notification_preferences", "default", client.try_get_notification_preferences(&harness.investor));
-    bench_scenario!(harness, "update_notification_preferences", "default", client.try_update_notification_preferences(&harness.investor, &true, &true, &true));
-    bench_scenario!(harness, "update_notification_status", "default", client.try_update_notification_status(&harness.invoice_id, &true));
+    bench_scenario!(harness, "update_notification_preferences", "default", client.try_update_notification_preferences(&harness.investor, &quicklendx_contracts::notifications::NotificationPreferences::default_for_user(&harness.env, harness.investor.clone())));
+    bench_scenario!(harness, "update_notification_status", "default", client.try_update_notification_status(&harness.invoice_id, &quicklendx_contracts::notifications::NotificationDeliveryStatus::Sent));
     bench_scenario!(harness, "get_user_notification_stats", "default", client.try_get_user_notification_stats(&harness.investor));
 }
