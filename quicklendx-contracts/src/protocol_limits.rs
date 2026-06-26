@@ -228,8 +228,12 @@ impl ProtocolLimitsContract {
 
     /// @notice Validate invoice amount and due date against configured limits.
     pub fn validate_invoice(env: Env, amount: i128, due_date: u64) -> Result<(), QuickLendXError> {
-        let limits = Self::get_protocol_limits(env.clone());
         let current_time = env.ledger().timestamp();
+        if due_date <= current_time {
+            return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
+        let limits = Self::get_protocol_limits(env.clone());
 
         if amount < limits.min_invoice_amount {
             return Err(QuickLendXError::InvalidAmount);

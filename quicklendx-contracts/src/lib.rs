@@ -108,6 +108,10 @@ mod test_panic_handler;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
+mod test_panic_handler;
+#[cfg(test)]
+mod test_due_date_guard;
+#[cfg(test)]
 mod test_admin;
 #[cfg(test)]
 mod test_self_call_rejection;
