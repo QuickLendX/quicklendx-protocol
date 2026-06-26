@@ -41,6 +41,7 @@ npm run dev
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
 - `docs/UPGRADE_PATHS.md`: Which protocol versions can upgrade to which, storage migration checklist, and rollback procedure.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
+- `quicklendx-contracts/docs/ATTESTATIONS.md`: Attestation event schemas and lifecycle for off-chain indexers — covers KYC verification events, invoice verification events, the `RawEvent` wire format, and idempotency guarantees.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
 
