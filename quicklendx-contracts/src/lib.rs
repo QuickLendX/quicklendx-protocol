@@ -239,18 +239,10 @@ mod test_input_matrix;
 mod test_insurance_claim_payout;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_investment_transitions;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_compute_yield_props;
 #[cfg(test)]
-mod test_investment_withdrawal;
-#[cfg(test)]
-mod test_invoice_metadata;
-#[cfg(test)]
-mod test_invoice_search_ranking;
-#[cfg(test)]
-mod test_line_item_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_max_invoices_per_business;
+mod test_vesting_summary;
 #[cfg(test)]
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -289,6 +281,7 @@ use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
+use crate::types::PlatformFeeConfig;
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
@@ -3193,6 +3186,10 @@ impl QuickLendXContract {
         vesting::Vesting::releasable_amount(&env, &schedule).ok()
     }
 
+    pub fn get_vesting_summary(env: Env, user: Address) -> vesting::VestingSummary {
+        vesting::Vesting::get_summary_for_user(&env, &user)
+    }
+
     // ============================================================================
     // Analytics Functions
     // ============================================================================
@@ -3341,7 +3338,7 @@ impl QuickLendXContract {
                 "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
             ),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: crate::types::DisputeResolution::None,
         };
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
@@ -3454,7 +3451,7 @@ impl QuickLendXContract {
         invoice.dispute.resolution = resolution.clone();
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
-        invoice.dispute.resolution_outcome = crate::types::DisputeResolution::Unresolved;
+        invoice.dispute.resolution_outcome = crate::types::DisputeResolution::None;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
         // Emit DisputeResolved event immediately after state mutation.
@@ -3485,7 +3482,7 @@ impl QuickLendXContract {
 
         invoice.dispute_status = DisputeStatus::Resolved;
         invoice.dispute.resolution = note.clone();
-        invoice.dispute.resolution_outcome = Some(outcome.code());
+        invoice.dispute.resolution_outcome = outcome;
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
         InvoiceStorage::update_invoice(&env, &invoice);

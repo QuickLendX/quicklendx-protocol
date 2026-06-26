@@ -87,6 +87,20 @@ impl VestingStorage {
     }
 }
 
+/// Aggregated vesting summary for a single beneficiary across all their schedules.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VestingSummary {
+    /// Number of schedules belonging to this user.
+    pub grant_count: u32,
+    /// Sum of `total_amount` across all schedules.
+    pub total_granted: i128,
+    /// Sum of `released_amount` across all schedules.
+    pub total_released: i128,
+    /// Sum of currently releasable amounts across all schedules.
+    pub total_releasable: i128,
+}
+
 pub struct Vesting;
 
 impl Vesting {
@@ -213,6 +227,44 @@ impl Vesting {
     /// Return the vesting schedule, if present.
     pub fn get_schedule(env: &Env, id: u64) -> Option<VestingSchedule> {
         VestingStorage::get(env, id)
+    }
+
+    /// Return an aggregated summary of all vesting schedules for `user`.
+    ///
+    /// Scans every schedule from id 1 up to the current counter value and
+    /// collects those whose `beneficiary` matches `user`.  Returns a zeroed
+    /// `VestingSummary` when no matching schedule exists.
+    pub fn get_summary_for_user(env: &Env, user: &Address) -> VestingSummary {
+        let max_id: u64 = env
+            .storage()
+            .instance()
+            .get(&VESTING_COUNTER_KEY)
+            .unwrap_or(0);
+
+        let mut grant_count: u32 = 0;
+        let mut total_granted: i128 = 0;
+        let mut total_released: i128 = 0;
+        let mut total_releasable: i128 = 0;
+
+        for id in 1..=max_id {
+            if let Some(schedule) = VestingStorage::get(env, id) {
+                if &schedule.beneficiary == user {
+                    grant_count = grant_count.saturating_add(1);
+                    total_granted = total_granted.saturating_add(schedule.total_amount);
+                    total_released = total_released.saturating_add(schedule.released_amount);
+                    if let Ok(r) = Self::releasable_amount(env, &schedule) {
+                        total_releasable = total_releasable.saturating_add(r);
+                    }
+                }
+            }
+        }
+
+        VestingSummary {
+            grant_count,
+            total_granted,
+            total_released,
+            total_releasable,
+        }
     }
 
     /// Calculate total vested amount for a schedule at current time.
