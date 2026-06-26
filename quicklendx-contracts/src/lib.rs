@@ -316,7 +316,6 @@ use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
-use crate::types::PlatformFeeConfig;
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
@@ -2031,7 +2030,6 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         recompute_investor_tier(&env, &admin, &investor)
     }
-
 
     /// Verify business (admin only)
     pub fn verify_business(
