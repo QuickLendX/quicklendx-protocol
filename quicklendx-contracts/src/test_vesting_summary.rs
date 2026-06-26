@@ -1,31 +1,31 @@
 #![cfg(test)]
 //! Tests for `get_vesting_summary(user)`.
 //!
-//! Covers: empty user, single-grant user, multi-grant user, and a user whose
-//! address appears nowhere in the vesting ledger (sad path / isolation).
+//! Covers:
+//! - Empty user (no schedules) → zeroed summary
+//! - Single-grant user → correct aggregation
+//! - Multi-grant user → correct aggregation across schedules
+//! - Other-user grants are excluded from the summary
 
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{token, Address, Env};
 
-const ADMIN_BALANCE: i128 = 10_000_000;
+const ADMIN_BALANCE: i128 = 100_000_000;
 
 fn setup() -> (
     Env,
     QuickLendXContractClient<'static>,
     Address, // admin
-    Address, // beneficiary
     Address, // token_id
-    token::Client<'static>,
 ) {
     let env = Env::default();
     env.mock_all_auths();
-    env.ledger().set_timestamp(1000);
+    env.ledger().set_timestamp(1_000);
 
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    let beneficiary = Address::generate(&env);
     client.initialize_admin(&admin);
 
     let token_admin = Address::generate(&env);
@@ -34,47 +34,44 @@ fn setup() -> (
         .address();
     let sac = token::StellarAssetClient::new(&env, &token_id);
     let token_client = token::Client::new(&env, &token_id);
-
     sac.mint(&admin, &ADMIN_BALANCE);
     let exp = env.ledger().sequence() + 10_000;
     token_client.approve(&admin, &contract_id, &ADMIN_BALANCE, &exp);
 
-    (env, client, admin, beneficiary, token_id, token_client)
+    (env, client, admin, token_id)
 }
 
+// ── Empty user ────────────────────────────────────────────────────────────────
+
 #[test]
-fn summary_returns_zeros_for_user_with_no_grants() {
-    let (env, client, _admin, _beneficiary, _token_id, _token_client) = setup();
+fn returns_zeroed_summary_for_user_with_no_grants() {
+    let (env, client, _, _) = setup();
     let stranger = Address::generate(&env);
+
     let summary = client.get_vesting_summary(&stranger);
+
     assert_eq!(summary.grant_count, 0);
     assert_eq!(summary.total_granted, 0);
     assert_eq!(summary.total_released, 0);
     assert_eq!(summary.total_releasable, 0);
 }
 
+// ── Single-grant user ─────────────────────────────────────────────────────────
+
 #[test]
-fn summary_reflects_single_grant_before_cliff() {
-    let (env, client, admin, beneficiary, token_id, _token_client) = setup();
+fn returns_correct_summary_for_single_grant_before_cliff() {
+    let (env, client, admin, token_id) = setup();
+    let user = Address::generate(&env);
 
-    let total = 1_000i128;
-    let start = 1000u64;
-    let cliff_seconds = 500u64;
-    let end = start + 2_000;
+    let total = 5_000i128;
+    let start = 1_000u64;
+    let cliff_secs = 500u64;
+    let end = 3_000u64;
 
-    client.create_vesting_schedule(
-        &admin,
-        &token_id,
-        &beneficiary,
-        &total,
-        &start,
-        &cliff_seconds,
-        &end,
-    );
+    client.create_vesting_schedule(&admin, &token_id, &user, &total, &start, &cliff_secs, &end);
 
-    // Still before cliff — releasable must be 0.
-    env.ledger().set_timestamp(start + cliff_seconds - 1);
-    let summary = client.get_vesting_summary(&beneficiary);
+    // Still before cliff — releasable = 0
+    let summary = client.get_vesting_summary(&user);
     assert_eq!(summary.grant_count, 1);
     assert_eq!(summary.total_granted, total);
     assert_eq!(summary.total_released, 0);
@@ -82,72 +79,97 @@ fn summary_reflects_single_grant_before_cliff() {
 }
 
 #[test]
-fn summary_reflects_multiple_grants_for_same_user() {
-    let (env, client, admin, beneficiary, token_id, _token_client) = setup();
+fn returns_correct_summary_for_single_grant_after_cliff() {
+    let (env, client, admin, token_id) = setup();
+    let user = Address::generate(&env);
 
-    let start = 1000u64;
-    let cliff_seconds = 0u64;
-    let end = start + 2_000;
+    let total = 5_000i128;
+    let start = 1_000u64;
+    let cliff_secs = 500u64; // cliff at 1500
+    let end = 3_000u64;
 
-    client.create_vesting_schedule(
-        &admin,
-        &token_id,
-        &beneficiary,
-        &600i128,
-        &start,
-        &cliff_seconds,
-        &end,
-    );
-    client.create_vesting_schedule(
-        &admin,
-        &token_id,
-        &beneficiary,
-        &400i128,
-        &start,
-        &cliff_seconds,
-        &end,
-    );
+    client.create_vesting_schedule(&admin, &token_id, &user, &total, &start, &cliff_secs, &end);
 
-    // Past end — everything fully vested, nothing released yet.
-    env.ledger().set_timestamp(end + 1);
-    let summary = client.get_vesting_summary(&beneficiary);
-    assert_eq!(summary.grant_count, 2);
-    assert_eq!(summary.total_granted, 1_000);
+    // Advance past cliff to midpoint: elapsed = 1000, duration = 2000 → vested = 2500
+    env.ledger().set_timestamp(2_000);
+    let summary = client.get_vesting_summary(&user);
+    assert_eq!(summary.grant_count, 1);
+    assert_eq!(summary.total_granted, total);
     assert_eq!(summary.total_released, 0);
-    assert_eq!(summary.total_releasable, 1_000);
+    assert_eq!(summary.total_releasable, 2_500);
 }
 
 #[test]
-fn summary_excludes_grants_belonging_to_other_users() {
-    let (env, client, admin, beneficiary, _token_id, _token_client) = setup();
+fn returns_fully_releasable_for_single_grant_at_end() {
+    let (env, client, admin, token_id) = setup();
+    let user = Address::generate(&env);
+
+    let total = 5_000i128;
+    let start = 1_000u64;
+    let end = 3_000u64;
+
+    client.create_vesting_schedule(&admin, &token_id, &user, &total, &start, &0, &end);
+
+    env.ledger().set_timestamp(end);
+    let summary = client.get_vesting_summary(&user);
+    assert_eq!(summary.grant_count, 1);
+    assert_eq!(summary.total_granted, total);
+    assert_eq!(summary.total_releasable, total);
+}
+
+#[test]
+fn reflects_released_amount_after_partial_claim() {
+    let (env, client, admin, token_id) = setup();
+    let user = Address::generate(&env);
+
+    let total = 4_000i128;
+    let start = 1_000u64;
+    let end = 3_000u64; // no cliff
+
+    let id = client.create_vesting_schedule(&admin, &token_id, &user, &total, &start, &0, &end);
+
+    // Midpoint: elapsed = 1000, duration = 2000 → vested = 2000
+    env.ledger().set_timestamp(2_000);
+    client.release_vesting(&user, &id);
+
+    let summary = client.get_vesting_summary(&user);
+    assert_eq!(summary.grant_count, 1);
+    assert_eq!(summary.total_granted, total);
+    assert_eq!(summary.total_released, 2_000);
+    assert_eq!(summary.total_releasable, 0); // already claimed
+}
+
+// ── Multi-grant user ──────────────────────────────────────────────────────────
+
+#[test]
+fn aggregates_across_multiple_grants() {
+    let (env, client, admin, token_id) = setup();
+    let user = Address::generate(&env);
+
+    // Grant A: 3000 total, no cliff, ends at 2000
+    client.create_vesting_schedule(&admin, &token_id, &user, &3_000, &1_000, &0, &3_000);
+    // Grant B: 7000 total, no cliff, ends at 2000
+    client.create_vesting_schedule(&admin, &token_id, &user, &7_000, &1_000, &0, &3_000);
+
+    // At midpoint: each is 50 % vested → releasable = 1500 + 3500 = 5000
+    env.ledger().set_timestamp(2_000);
+    let summary = client.get_vesting_summary(&user);
+    assert_eq!(summary.grant_count, 2);
+    assert_eq!(summary.total_granted, 10_000);
+    assert_eq!(summary.total_released, 0);
+    assert_eq!(summary.total_releasable, 5_000);
+}
+
+#[test]
+fn excludes_other_users_grants_from_summary() {
+    let (env, client, admin, token_id) = setup();
+    let user = Address::generate(&env);
     let other = Address::generate(&env);
 
-    let start = 1000u64;
-    let end = start + 2_000;
+    client.create_vesting_schedule(&admin, &token_id, &user, &1_000, &1_000, &0, &3_000);
+    client.create_vesting_schedule(&admin, &token_id, &other, &9_000, &1_000, &0, &3_000);
 
-    // Mint and approve a second token so the other user's grant goes through.
-    let token_admin2 = Address::generate(&env);
-    let other_token = env
-        .register_stellar_asset_contract_v2(token_admin2.clone())
-        .address();
-    let sac2 = token::StellarAssetClient::new(&env, &other_token);
-    let other_tc = token::Client::new(&env, &other_token);
-    sac2.mint(&admin, &500i128);
-    let exp = env.ledger().sequence() + 10_000;
-    other_tc.approve(&admin, &client.address, &500i128, &exp);
-
-    client.create_vesting_schedule(
-        &admin,
-        &other_token,
-        &other,
-        &500i128,
-        &start,
-        &0u64,
-        &end,
-    );
-
-    // `beneficiary` should see an empty summary.
-    let summary = client.get_vesting_summary(&beneficiary);
-    assert_eq!(summary.grant_count, 0);
-    assert_eq!(summary.total_granted, 0);
+    let summary = client.get_vesting_summary(&user);
+    assert_eq!(summary.grant_count, 1);
+    assert_eq!(summary.total_granted, 1_000);
 }

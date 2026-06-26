@@ -224,6 +224,7 @@ mod test_string_limits;
 // mod test_types;
 #[cfg(test)]
 mod test_vesting;
+mod test_vesting_summary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_analytics_consistency;
 #[cfg(all(test, feature = "fuzz-tests"))]
