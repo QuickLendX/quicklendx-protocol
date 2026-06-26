@@ -14,6 +14,7 @@
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
 - [API Documentation](#api-documentation)
+- [Deterministic Ledger Time](#deterministic-ledger-time)
 - [Code Examples](#code-examples)
 - [Deployment Guide](#deployment-guide)
 - [Troubleshooting](#troubleshooting)
@@ -134,6 +135,10 @@ let bid_id = contract.place_bid(
 ```
 
 ## 📖 API Documentation
+
+### Deterministic Ledger Time
+
+See [Deterministic Ledger Time](docs/contracts/deterministic-time.md) for guidelines on using `env.ledger().timestamp()` instead of off-chain wall-clock time in contract logic.
 
 ### Core Functions
 
