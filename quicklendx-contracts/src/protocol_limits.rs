@@ -226,6 +226,11 @@ impl ProtocolLimitsContract {
             })
     }
 
+    /// Get the maximum active invoices per business.
+    pub fn get_max_invoices_per_business(env: Env) -> u32 {
+        Self::get_protocol_limits(env).max_invoices_per_business
+    }
+
     /// @notice Validate invoice amount and due date against configured limits.
     pub fn validate_invoice(env: Env, amount: i128, due_date: u64) -> Result<(), QuickLendXError> {
         let current_time = env.ledger().timestamp();
