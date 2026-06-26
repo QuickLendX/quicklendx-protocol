@@ -316,7 +316,6 @@ use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
 use payments::{create_escrow, release_escrow, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
-use crate::types::PlatformFeeConfig;
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
 };
@@ -3519,7 +3518,7 @@ impl QuickLendXContract {
 
         invoice.dispute_status = DisputeStatus::Resolved;
         invoice.dispute.resolution = note.clone();
-        invoice.dispute.resolution_outcome = Some(outcome as u32);
+        invoice.dispute.resolution_outcome = Some(outcome.code());
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
         InvoiceStorage::update_invoice(&env, &invoice);

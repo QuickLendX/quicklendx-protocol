@@ -357,7 +357,7 @@ pub fn resolve_dispute_structured(
 
     invoice.dispute_status = DisputeStatus::Resolved;
     invoice.dispute.resolution = note.clone();
-    invoice.dispute.resolution_outcome = Some(outcome as u32);
+    invoice.dispute.resolution_outcome = Some(outcome.code());
     invoice.dispute.resolved_by = admin.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
     InvoiceStorage::update_invoice(env, &invoice);

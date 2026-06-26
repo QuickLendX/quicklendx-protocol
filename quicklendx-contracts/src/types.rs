@@ -85,15 +85,15 @@ pub enum DisputeResolution {
     Dismissed,
 }
 
-/// Optional wrapper for DisputeResolution, required because
-/// `Option<#[contracttype] enum>` is not directly serialisable in Soroban SDK ≥ 25.
-/// Use `OptionalDisputeResolution::Some(v)` / `OptionalDisputeResolution::None`
-/// instead of bare `Option<DisputeResolution>` in any `#[contracttype]` struct.
-#[contracttype]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum OptionalDisputeResolution {
-    None,
-    Some(DisputeResolution),
+impl DisputeResolution {
+    pub fn code(self) -> u32 {
+        match self {
+            Self::FavorBusiness => 1,
+            Self::FavorInvestor => 2,
+            Self::Split => 3,
+            Self::Dismissed => 4,
+        }
+    }
 }
 
 /// Invoice category for classification

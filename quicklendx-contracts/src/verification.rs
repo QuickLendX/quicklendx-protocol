@@ -1293,7 +1293,7 @@ pub fn determine_investor_tier(
     validate_risk_score(risk_score)?;
 
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
-        return compute_tier_from_stats(
+        return compute_investor_tier_from_stats(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
@@ -1304,50 +1304,57 @@ pub fn determine_investor_tier(
     Ok(InvestorTier::Basic)
 }
 
-/// Pure tier calculation from raw performance counters and risk score.
-/// Used internally so that tier derivation is DRY across all call sites.
-fn compute_tier_from_stats(
+pub fn determine_investor_tier(
+    env: &Env,
+    investor: &Address,
+    risk_score: u32,
+) -> Result<InvestorTier, QuickLendXError> {
+    compute_investor_tier(env, investor, risk_score)
+}
+
+fn compute_investor_tier_from_stats(
     total_invested: i128,
     successful_investments: u32,
     defaulted_investments: u32,
     risk_score: u32,
 ) -> Result<InvestorTier, QuickLendXError> {
-    let total_deals = successful_investments + defaulted_investments;
-    let default_rate_pct = if total_deals > 0 {
-        (defaulted_investments * 100) / total_deals
-    } else {
+    validate_risk_score(risk_score)?;
+    let total_outcomes = successful_investments.saturating_add(defaulted_investments);
+    let default_rate = if total_outcomes == 0 {
         0
+    } else {
+        defaulted_investments.saturating_mul(100) / total_outcomes
     };
 
-    if risk_score <= VIP_RISK_SCORE_MAX
-        && total_invested >= VIP_TOTAL_INVESTED_MIN
-        && successful_investments >= VIP_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate_pct <= VIP_DEFAULT_RATE_MAX_PCT
+    let tier = if risk_score <= 10
+        && total_invested >= 5_000_000
+        && successful_investments >= 50
+        && default_rate <= 5
     {
-        return Ok(InvestorTier::VIP);
-    }
-    if risk_score <= PLATINUM_RISK_SCORE_MAX
-        && total_invested >= PLATINUM_TOTAL_INVESTED_MIN
-        && successful_investments >= PLATINUM_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate_pct <= PLATINUM_DEFAULT_RATE_MAX_PCT
+        InvestorTier::VIP
+    } else if risk_score <= 20
+        && total_invested >= 1_000_000
+        && successful_investments >= 20
+        && default_rate <= 10
     {
-        return Ok(InvestorTier::Platinum);
-    }
-    if risk_score <= GOLD_RISK_SCORE_MAX
-        && total_invested >= GOLD_TOTAL_INVESTED_MIN
-        && successful_investments >= GOLD_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate_pct <= GOLD_DEFAULT_RATE_MAX_PCT
+        InvestorTier::Platinum
+    } else if risk_score <= 40
+        && total_invested >= 100_000
+        && successful_investments >= 10
+        && default_rate <= 15
     {
-        return Ok(InvestorTier::Gold);
-    }
-    if risk_score <= SILVER_RISK_SCORE_MAX
-        && total_invested >= SILVER_TOTAL_INVESTED_MIN
-        && successful_investments >= SILVER_SUCCESSFUL_INVESTMENTS_MIN
-        && default_rate_pct <= SILVER_DEFAULT_RATE_MAX_PCT
+        InvestorTier::Gold
+    } else if risk_score <= 60
+        && total_invested >= 10_000
+        && successful_investments >= 3
+        && default_rate <= 25
     {
-        return Ok(InvestorTier::Silver);
-    }
-    Ok(InvestorTier::Basic)
+        InvestorTier::Silver
+    } else {
+        InvestorTier::Basic
+    };
+
+    Ok(tier)
 }
 
 /// Determine risk level based on risk score
@@ -1503,7 +1510,12 @@ pub fn update_investor_analytics(
         verification.risk_score =
             calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
         verification.risk_level = determine_risk_level(verification.risk_score);
-        verification.tier = compute_tier_from_stats(verification.total_invested, verification.successful_investments, verification.defaulted_investments, verification.risk_score)?;
+        verification.tier = compute_investor_tier_from_stats(
+            verification.total_invested,
+            verification.successful_investments,
+            verification.defaulted_investments,
+            verification.risk_score,
+        )?;
 
         // Preserve the investor's approved baseline and only re-derive the
         // dynamic limit using the updated tier/risk profile.
@@ -1649,7 +1661,7 @@ pub fn recompute_investor_tier(
     let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
     validate_risk_score(risk_score)?;
 
-    let tier = compute_tier_from_stats(
+    let tier = compute_investor_tier_from_stats(
         verification.total_invested,
         verification.successful_investments,
         verification.defaulted_investments,

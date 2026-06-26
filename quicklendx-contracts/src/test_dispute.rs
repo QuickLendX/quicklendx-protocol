@@ -536,7 +536,7 @@ mod test_dispute {
         assert_eq!(dispute.resolved_by, admin);
         assert_eq!(
             dispute.resolution_outcome,
-            OptionalDisputeResolution::Some(DisputeResolution::FavorInvestor)
+            Some(DisputeResolution::FavorInvestor.code())
         );
     }
 
