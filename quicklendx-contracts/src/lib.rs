@@ -182,6 +182,8 @@ mod test_backpressure_shedding;
 mod test_analytics_consistency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
+#[cfg(test)]
+mod test_bid_capacity_stress;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
 #[cfg(all(test, feature = "legacy-tests"))]
