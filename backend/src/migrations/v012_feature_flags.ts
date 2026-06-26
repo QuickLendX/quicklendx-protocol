@@ -21,16 +21,26 @@ export default {
   up: async (ctx: MigrationContext): Promise<void> => {
     await ctx.db.exec(`
       CREATE TABLE IF NOT EXISTS feature_flags (
-        id         TEXT    NOT NULL PRIMARY KEY,
-        api_key_id TEXT    NOT NULL,
-        flag       TEXT    NOT NULL,
-        enabled    INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
-        created_at TEXT    NOT NULL,
-        updated_at TEXT    NOT NULL,
-        updated_by TEXT    NOT NULL,
+        id                 TEXT    NOT NULL PRIMARY KEY,
+        api_key_id         TEXT    NOT NULL,
+        flag               TEXT    NOT NULL,
+        enabled            INTEGER NOT NULL DEFAULT 1 CHECK(enabled IN (0, 1)),
+        rollout_percentage INTEGER,
+        created_at         TEXT    NOT NULL,
+        updated_at         TEXT    NOT NULL,
+        updated_by         TEXT    NOT NULL,
         UNIQUE(api_key_id, flag)
       )
     `);
+
+    try {
+      await ctx.db.exec(`
+        ALTER TABLE feature_flags
+        ADD COLUMN rollout_percentage INTEGER
+      `);
+    } catch (e: any) {
+      if (!e.message.includes("duplicate column name")) throw e;
+    }
 
     await ctx.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_feature_flags_api_key_id
