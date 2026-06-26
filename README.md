@@ -44,6 +44,7 @@ npm run dev
 - `quicklendx-contracts/docs/ATTESTATIONS.md`: Attestation event schemas and lifecycle for off-chain indexers — covers KYC verification events, invoice verification events, the `RawEvent` wire format, and idempotency guarantees.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
+- `docs/STORAGE_LAYOUT.md`: Smart contract storage layout decisions.
 
 ## Contribution
 
