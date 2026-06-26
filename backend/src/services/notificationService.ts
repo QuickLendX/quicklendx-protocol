@@ -340,10 +340,11 @@ export class NotificationService {
   }
 
   /**
-   * Number of cache entries evicted due to max-size (for metrics / #1054).
+   * Close the SMTP transport during graceful shutdown so in-flight sends
+   * complete and no new ones start.
    */
-  get dedupCacheEvictions(): number {
-    return this.dedupCache.evictions;
+  public closeTransport(): void {
+    this.transporter.close();
   }
 }
 
