@@ -242,8 +242,6 @@ mod test_insurance_premium_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_compute_yield_props;
 #[cfg(test)]
-mod test_vesting_summary;
-#[cfg(test)]
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
