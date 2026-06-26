@@ -36,7 +36,7 @@
 use crate::errors::QuickLendXError;
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{
-    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
+    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
 
 /// Audit operation types
@@ -69,6 +69,101 @@ pub enum AuditOperation {
     ConfigFeeStructureChanged,
     /// Admin reconfigured revenue-distribution shares.
     ConfigRevenueDistributionChanged,
+}
+
+/// Typed operation types used by audit-log emission.
+///
+/// Mirrors [`AuditOperation`] but provides a `to_symbol()` conversion for
+/// Soroban event topics, so downstream consumers can match on a typed enum
+/// rather than free-form strings.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OpType {
+    InvoiceCreated,
+    InvoiceUploaded,
+    InvoiceVerified,
+    InvoiceFunded,
+    InvoicePaid,
+    InvoiceDefaulted,
+    InvoiceStatusChanged,
+    InvoiceRated,
+    BidPlaced,
+    BidAccepted,
+    BidWithdrawn,
+    EscrowCreated,
+    EscrowReleased,
+    EscrowRefunded,
+    PaymentProcessed,
+    SettlementCompleted,
+}
+
+impl OpType {
+    /// Return the Soroban `Symbol` used as the event topic / discriminator.
+    pub fn to_symbol(&self) -> Symbol {
+        match self {
+            OpType::InvoiceCreated => symbol_short!("inv_crt"),
+            OpType::InvoiceUploaded => symbol_short!("inv_up"),
+            OpType::InvoiceVerified => symbol_short!("inv_ver"),
+            OpType::InvoiceFunded => symbol_short!("inv_fnd"),
+            OpType::InvoicePaid => symbol_short!("inv_pd"),
+            OpType::InvoiceDefaulted => symbol_short!("inv_def"),
+            OpType::InvoiceStatusChanged => symbol_short!("inv_stch"),
+            OpType::InvoiceRated => symbol_short!("inv_rt"),
+            OpType::BidPlaced => symbol_short!("bid_plc"),
+            OpType::BidAccepted => symbol_short!("bid_acc"),
+            OpType::BidWithdrawn => symbol_short!("bid_wdr"),
+            OpType::EscrowCreated => symbol_short!("esc_cr"),
+            OpType::EscrowReleased => symbol_short!("esc_rel"),
+            OpType::EscrowRefunded => symbol_short!("esc_ref"),
+            OpType::PaymentProcessed => symbol_short!("pay_prc"),
+            OpType::SettlementCompleted => symbol_short!("stl_cmp"),
+        }
+    }
+
+    /// Numeric tag used for hash-chain computation.
+    pub fn tag(&self) -> u8 {
+        match self {
+            OpType::InvoiceCreated => 0,
+            OpType::InvoiceUploaded => 1,
+            OpType::InvoiceVerified => 2,
+            OpType::InvoiceFunded => 3,
+            OpType::InvoicePaid => 4,
+            OpType::InvoiceDefaulted => 5,
+            OpType::InvoiceStatusChanged => 6,
+            OpType::InvoiceRated => 7,
+            OpType::BidPlaced => 8,
+            OpType::BidAccepted => 9,
+            OpType::BidWithdrawn => 10,
+            OpType::EscrowCreated => 11,
+            OpType::EscrowReleased => 12,
+            OpType::EscrowRefunded => 13,
+            OpType::PaymentProcessed => 14,
+            OpType::SettlementCompleted => 15,
+        }
+    }
+}
+
+impl From<AuditOperation> for OpType {
+    fn from(op: AuditOperation) -> Self {
+        match op {
+            AuditOperation::InvoiceCreated => OpType::InvoiceCreated,
+            AuditOperation::InvoiceUploaded => OpType::InvoiceUploaded,
+            AuditOperation::InvoiceVerified => OpType::InvoiceVerified,
+            AuditOperation::InvoiceFunded => OpType::InvoiceFunded,
+            AuditOperation::InvoicePaid => OpType::InvoicePaid,
+            AuditOperation::InvoiceDefaulted => OpType::InvoiceDefaulted,
+            AuditOperation::InvoiceStatusChanged => OpType::InvoiceStatusChanged,
+            AuditOperation::InvoiceRated => OpType::InvoiceRated,
+            AuditOperation::BidPlaced => OpType::BidPlaced,
+            AuditOperation::BidAccepted => OpType::BidAccepted,
+            AuditOperation::BidWithdrawn => OpType::BidWithdrawn,
+            AuditOperation::EscrowCreated => OpType::EscrowCreated,
+            AuditOperation::EscrowReleased => OpType::EscrowReleased,
+            AuditOperation::EscrowRefunded => OpType::EscrowRefunded,
+            AuditOperation::PaymentProcessed => OpType::PaymentProcessed,
+            AuditOperation::SettlementCompleted => OpType::SettlementCompleted,
+        }
+    }
 }
 
 /// Fixed genesis sentinel for invoice-local audit hash chains.

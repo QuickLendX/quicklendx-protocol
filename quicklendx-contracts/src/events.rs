@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 
+use crate::audit::OpType;
 use crate::fees::FeeType;
 use crate::payments::Escrow;
 use crate::types::Bid;
@@ -489,7 +490,7 @@ pub struct AuditValidation {
 
 #[contractevent]
 pub struct AuditQuery {
-    pub query_type: String,
+    pub query_type: OpType,
     pub result_count: u32,
 }
 
@@ -593,9 +594,6 @@ pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     }
     .publish(env);
 }
-
-
-
 
 #[contractevent]
 pub struct RevenueDistributed {
@@ -1113,7 +1111,7 @@ pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool)
     .publish(env);
 }
 
-pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
+pub fn emit_audit_query(env: &Env, query_type: OpType, result_count: u32) {
     AuditQuery {
         query_type,
         result_count,
