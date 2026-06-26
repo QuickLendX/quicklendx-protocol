@@ -153,7 +153,12 @@ fn test_invoice_with_non_whitelisted_currency_fails_when_whitelist_set() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert!(res.is_err());
+    // Must surface the typed InvalidCurrency error, not a generic failure.
+    assert_eq!(
+        res,
+        Err(Ok(crate::errors::QuickLendXError::InvalidCurrency)),
+        "store_invoice must reject non-whitelisted currency with InvalidCurrency"
+    );
 }
 
 #[test]
@@ -787,7 +792,12 @@ fn test_upload_invoice_with_non_whitelisted_currency_fails() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    assert!(res.is_err(), "upload_invoice must reject non-whitelisted currency");
+    // Must surface the typed InvalidCurrency error, not a generic failure.
+    assert_eq!(
+        res,
+        Err(Ok(crate::errors::QuickLendXError::InvalidCurrency)),
+        "upload_invoice must reject non-whitelisted currency with InvalidCurrency"
+    );
 }
 
 /// `upload_invoice` accepts a whitelisted currency for a verified business.

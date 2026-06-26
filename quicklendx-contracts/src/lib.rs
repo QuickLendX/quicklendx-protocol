@@ -850,6 +850,28 @@ impl QuickLendXContract {
         health::ProtocolHealth::new(&env)
     }
 
+    /// Return a rich internal diagnostic snapshot.
+    ///
+    /// **Only available when compiled with `--features diagnostics`.**
+    /// This entry-point is entirely absent from production WASM builds — it is
+    /// compiled out at the Cargo feature level, adding zero bytes and zero gas
+    /// cost to standard deployments.
+    ///
+    /// Intended for operator tooling, support dashboards, and integration tests
+    /// that need per-status invoice counts, bid counters, and subsystem flags in
+    /// a single call without having to fan out across multiple read entry-points.
+    ///
+    /// # Returns
+    /// A [`diagnostics::ProtocolDiagnostics`] snapshot (see `diagnostics.rs`).
+    ///
+    /// # Security
+    /// - No authentication required (read-only, no PII).
+    /// - State is never mutated.
+    #[cfg(feature = "diagnostics")]
+    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
+        diagnostics::get_protocol_diagnostics(&env)
+    }
+
     // ============================================================================
     // Invoice Management Functions
     // ============================================================================
