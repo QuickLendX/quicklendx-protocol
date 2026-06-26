@@ -558,6 +558,15 @@ pub fn compute_yield(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
     numerator / (BPS_DENOMINATOR * 365)
 }
 
+/// Compute the expected return on a principal amount.
+///
+/// # Returns
+/// Total expected return (principal + yield)
+pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+    let yield_amount = compute_yield(amount, rate_bps, duration_days);
+    amount.max(0).saturating_add(yield_amount)
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
