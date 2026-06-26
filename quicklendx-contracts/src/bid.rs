@@ -102,16 +102,15 @@ pub struct BidLimitConfig {
 
 impl Bid {
     /// @notice Returns whether a bid is expired at `current_timestamp`.
-    /// @dev Expiration is evaluated with a strict comparison:
-    ///      `current_timestamp > expiration_timestamp`.
-    ///      This means a bid is still valid at the exact expiry timestamp and
-    ///      becomes expired starting from the next second. All cleanup and
-    ///      acceptance paths rely on this same predicate to avoid off-by-one
-    ///      divergence across call sites.
+    /// @dev Expiration is evaluated with an inclusive comparison:
+    ///      `current_timestamp >= expiration_timestamp`.
+    ///      This means a bid is valid until the second before expiry and
+    ///      becomes expired at the expiry timestamp. All cleanup and acceptance
+    ///      paths rely on this same predicate to avoid off-by-one divergence.
     /// @param current_timestamp Current ledger timestamp.
-    /// @return true when the bid has moved strictly past its expiry boundary.
+    /// @return true when the bid has reached or passed its expiry boundary.
     pub fn is_expired(&self, current_timestamp: u64) -> bool {
-        current_timestamp > self.expiration_timestamp
+        current_timestamp >= self.expiration_timestamp
     }
 
     /// Backward-compatible helper used by some tests: uses compile-time default.
@@ -984,6 +983,7 @@ impl BidStorage {
             if bid.status == BidStatus::Placed {
                 bid.status = BidStatus::Cancelled;
                 Self::update_bid(env, &bid);
+                crate::events::emit_bid_cancelled(env, &bid);
                 return true;
             }
         }
