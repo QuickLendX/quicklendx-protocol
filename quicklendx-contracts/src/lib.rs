@@ -3796,3 +3796,6 @@ mod test_settlement_dispute_interaction;
 
 #[cfg(test)]
 mod test_prune_terminal_invoices;
+
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_accounting;
