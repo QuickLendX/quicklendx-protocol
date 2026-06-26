@@ -1,0 +1,52 @@
+name: Rustdoc
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/rustdoc.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "src/**"
+      - "quicklendx-contracts/**"
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/rustdoc.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "src/**"
+      - "quicklendx-contracts/**"
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-doc:
+    name: cargo doc (${{ matrix.package.name }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - name: root contract crate
+            working-directory: .
+          - name: quicklendx-contracts
+            working-directory: quicklendx-contracts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+          source "$HOME/.cargo/env"
+          rustup show
+
+      - name: Generate package rustdoc
+        working-directory: ${{ matrix.package.working-directory }}
+        run: |
+          source "$HOME/.cargo/env"
+          cargo doc --no-deps --locked

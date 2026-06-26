@@ -98,6 +98,20 @@ The published URL is updated automatically on every tag push — no manual step 
 
 If the published URL returns a 404, the most likely cause is that no tag has been pushed yet for the current development cycle. Generate the docs locally using the command above, or check the repository's Actions tab to confirm the publish workflow ran successfully.
 
+## Pull request validation
+
+Every push to `main` and every pull request that touches contract sources,
+Cargo metadata, or the rustdoc workflow runs `.github/workflows/rustdoc.yml`.
+That workflow checks each contract package independently:
+
+| Package | Working directory | Command |
+|---|---|---|
+| Root contract crate | `.` | `cargo doc --no-deps --locked` |
+| Smart contract package | `quicklendx-contracts/` | `cargo doc --no-deps --locked` |
+
+The matrix keeps rustdoc failures scoped to the package that introduced them
+and prevents a healthy package from hiding a broken API surface in another one.
+
 ---
 
 ## Related documentation
