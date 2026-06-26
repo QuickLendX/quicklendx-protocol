@@ -78,7 +78,7 @@ pub enum DisputeStatus {
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum DisputeResolution {
-    Unresolved,
+    None,
     FavorBusiness,
     FavorInvestor,
     Split,
@@ -137,7 +137,7 @@ pub struct Dispute {
     pub resolution: String,
     pub resolved_by: Address,
     pub resolved_at: u64,
-    pub resolution_outcome: OptionalDisputeResolution,
+    pub resolution_outcome: DisputeResolution,
 }
 
 /// Invoice rating structure

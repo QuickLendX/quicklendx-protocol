@@ -89,6 +89,7 @@ impl BusinessVerificationStorage {
     const PENDING_BUSINESSES_KEY: &'static str = "pending_businesses";
     const REJECTED_BUSINESSES_KEY: &'static str = "rejected_businesses";
     const ADMIN_KEY: &'static str = "admin_address";
+    const DELETED_BUSINESSES_KEY: &'static str = "deleted_businesses";
 
     /// Validates that a state transition is allowed according to KYC lifecycle rules
     ///
@@ -348,6 +349,59 @@ impl BusinessVerificationStorage {
 
     /// @deprecated Use `admin::AdminStorage::initialize()` or `admin::AdminStorage::set_admin()` instead
     /// This function is kept for backward compatibility with existing tests.
+    
+    /// Returns true if the business is marked as deleted.
+    pub fn is_deleted(env: &Env, business: &Address) -> bool {
+        let deleted = Self::get_deleted_businesses(env);
+        deleted.iter().any(|addr| addr == *business)
+    }
+
+    /// Retrieve list of deleted businesses.
+    pub fn get_deleted_businesses(env: &Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&Self::DELETED_BUSINESSES_KEY)
+            .unwrap_or(vec![env])
+    }
+
+    fn add_to_deleted_businesses(env: &Env, business: &Address) {
+        let mut deleted = Self::get_deleted_businesses(env);
+        deleted.push_back(business.clone());
+        env.storage()
+            .instance()
+            .set(&Self::DELETED_BUSINESSES_KEY, &deleted);
+    }
+
+    /// Deletes a business: removes from any status list and marks as deleted.
+    pub fn delete_business(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+        // Remove from verified, pending, rejected lists if present
+        if Self::is_business_verified(env, business) {
+            Self::remove_from_verified_businesses(env, business);
+        }
+        if Self::is_business_pending(env, business) {
+            Self::remove_from_pending_businesses(env, business);
+        }
+        if Self::is_business_rejected(env, business) {
+            Self::remove_from_rejected_businesses(env, business);
+        }
+        // Add to deleted list
+        if Self::is_deleted(env, business) {
+            // Already deleted; no-op
+            return Ok(());
+        }
+        Self::add_to_deleted_businesses(env, business);
+        Ok(())
+    }
+
+    // Helper checks for status presence
+    fn is_business_pending(env: &Env, business: &Address) -> bool {
+        let pending = Self::get_pending_businesses(env);
+        pending.iter().any(|addr| addr == *business)
+    }
+    fn is_business_rejected(env: &Env, business: &Address) -> bool {
+        let rejected = Self::get_rejected_businesses(env);
+        rejected.iter().any(|addr| addr == *business)
+    }
     /// It syncs with the new AdminStorage system.
     pub fn set_admin(env: &Env, admin: &Address) {
         // Store in old location for backward compatibility
@@ -909,6 +963,9 @@ pub fn require_business_verification(env: &Env, business: &Address) -> Result<()
 /// - `KYCAlreadyPending` if the business has a pending KYC application
 /// - `BusinessNotVerified` if the business has no KYC record or is rejected
 pub fn require_business_not_pending(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    if BusinessVerificationStorage::is_deleted(env, business) {
+        return Err(QuickLendXError::BusinessDeleted);
+    }
     match BusinessVerificationStorage::get_verification(env, business) {
         Some(v) => match v.status {
             BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
@@ -1288,7 +1345,7 @@ fn compute_tier_from_counters(
 /// | Gold | <= 40 | >= 100,000 | >= 10 | <= 15% |
 /// | Silver | <= 60 | >= 10,000 | >= 3 | <= 25% |
 /// | Basic | otherwise | - | - | - |
-pub fn compute_investor_tier(
+pub fn determine_investor_tier(
     env: &Env,
     investor: &Address,
     risk_score: u32,
@@ -1307,15 +1364,7 @@ pub fn compute_investor_tier(
     Ok(InvestorTier::Basic)
 }
 
-pub fn determine_investor_tier(
-    env: &Env,
-    investor: &Address,
-    risk_score: u32,
-) -> Result<InvestorTier, QuickLendXError> {
-    compute_investor_tier(env, investor, risk_score)
-}
-
-fn compute_investor_tier_from_counters(
+pub fn compute_investor_tier(
     total_invested: i128,
     successful_investments: u32,
     defaulted_investments: u32,
@@ -1323,49 +1372,54 @@ fn compute_investor_tier_from_counters(
 ) -> Result<InvestorTier, QuickLendXError> {
     validate_risk_score(risk_score)?;
 
-    let total_investments = successful_investments.saturating_add(defaulted_investments);
-    let default_rate = if total_investments == 0 {
+    let total_attempts = successful_investments.saturating_add(defaulted_investments);
+    let default_rate_pct = if total_attempts == 0 {
         0
     } else {
-        defaulted_investments
+        (defaulted_investments as u64)
             .saturating_mul(100)
-            .saturating_div(total_investments)
+            .saturating_div(total_attempts as u64) as u32
     };
 
-    if risk_score <= 10
-        && total_invested >= 5_000_000
-        && successful_investments >= 50
-        && default_rate <= 5
+    // Check VIP
+    if risk_score <= VIP_RISK_SCORE_MAX
+        && total_invested >= VIP_TOTAL_INVESTED_MIN
+        && successful_investments >= VIP_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= VIP_DEFAULT_RATE_MAX_PCT
     {
         return Ok(InvestorTier::VIP);
     }
 
-    if risk_score <= 20
-        && total_invested >= 1_000_000
-        && successful_investments >= 20
-        && default_rate <= 10
+    // Check Platinum
+    if risk_score <= PLATINUM_RISK_SCORE_MAX
+        && total_invested >= PLATINUM_TOTAL_INVESTED_MIN
+        && successful_investments >= PLATINUM_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= PLATINUM_DEFAULT_RATE_MAX_PCT
     {
         return Ok(InvestorTier::Platinum);
     }
 
-    if risk_score <= 40
-        && total_invested >= 100_000
-        && successful_investments >= 10
-        && default_rate <= 15
+    // Check Gold
+    if risk_score <= GOLD_RISK_SCORE_MAX
+        && total_invested >= GOLD_TOTAL_INVESTED_MIN
+        && successful_investments >= GOLD_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= GOLD_DEFAULT_RATE_MAX_PCT
     {
         return Ok(InvestorTier::Gold);
     }
 
-    if risk_score <= 60
-        && total_invested >= 10_000
-        && successful_investments >= 3
-        && default_rate <= 25
+    // Check Silver
+    if risk_score <= SILVER_RISK_SCORE_MAX
+        && total_invested >= SILVER_TOTAL_INVESTED_MIN
+        && successful_investments >= SILVER_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= SILVER_DEFAULT_RATE_MAX_PCT
     {
         return Ok(InvestorTier::Silver);
     }
 
     Ok(InvestorTier::Basic)
 }
+
 
 /// Determine risk level based on risk score
 pub fn determine_risk_level(risk_score: u32) -> InvestorRiskLevel {
@@ -1622,7 +1676,7 @@ pub fn recompute_investor_tier(
     let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
     validate_risk_score(risk_score)?;
 
-    let tier = compute_tier_from_counters(
+    let tier = compute_investor_tier(
         verification.total_invested,
         verification.successful_investments,
         verification.defaulted_investments,
@@ -1640,6 +1694,8 @@ pub fn recompute_investor_tier(
     InvestorVerificationStorage::update(env, &verification);
     Ok(())
 }
+
+
 
 /// Validate structured invoice metadata against the invoice amount
 pub fn validate_invoice_metadata(

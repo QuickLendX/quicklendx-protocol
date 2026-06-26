@@ -2030,6 +2030,7 @@ impl QuickLendXContract {
         do_recompute_investor_tier(&env, &admin, &investor)
     }
 
+
     /// Verify business (admin only)
     pub fn verify_business(
         // This function is already defined in verification module
@@ -3372,7 +3373,7 @@ impl QuickLendXContract {
                 "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
             ),
             resolved_at: 0,
-            resolution_outcome: crate::types::OptionalDisputeResolution::None,
+            resolution_outcome: DisputeResolution::None,
         };
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
@@ -3485,7 +3486,7 @@ impl QuickLendXContract {
         invoice.dispute.resolution = resolution.clone();
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
-        invoice.dispute.resolution_outcome = crate::types::OptionalDisputeResolution::None;
+        invoice.dispute.resolution_outcome = DisputeResolution::None;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
         // Emit DisputeResolved event immediately after state mutation.
@@ -3516,7 +3517,7 @@ impl QuickLendXContract {
 
         invoice.dispute_status = DisputeStatus::Resolved;
         invoice.dispute.resolution = note.clone();
-        invoice.dispute.resolution_outcome = crate::types::OptionalDisputeResolution::Some(outcome);
+        invoice.dispute.resolution_outcome = outcome;
         invoice.dispute.resolved_by = admin.clone();
         invoice.dispute.resolved_at = env.ledger().timestamp();
         InvoiceStorage::update_invoice(&env, &invoice);

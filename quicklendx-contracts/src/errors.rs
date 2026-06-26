@@ -98,6 +98,7 @@ pub enum QuickLendXError {
     InvalidKYCStatus = 1604,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvestorNotVerified = 1605,
+    BusinessDeleted = 1660,
 
     // Audit (1700-1702)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -225,6 +226,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),
             QuickLendXError::InvalidKYCStatus => symbol_short!("KYC_IS"),
             QuickLendXError::InvestorNotVerified => symbol_short!("INV_NV"),
+            QuickLendXError::BusinessDeleted => symbol_short!("BUS_DEL"),
             // Audit
             QuickLendXError::AuditLogNotFound => symbol_short!("AUD_NF"),
             QuickLendXError::AuditIntegrityError => symbol_short!("AUD_IE"),

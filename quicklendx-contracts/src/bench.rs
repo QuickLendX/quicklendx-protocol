@@ -21,8 +21,6 @@ pub mod bench {
     /// @param f The closure executing the contract invocation.
     /// @return The recorded BudgetDelta.
     pub fn measure<F: FnOnce()>(env: &Env, _label: &str, f: F) -> BudgetDelta {
-        // Reset the budget tracker so we get a clean delta for this closure.
-        env.budget().reset_unlimited();
         f();
         let budget = env.budget();
         BudgetDelta {

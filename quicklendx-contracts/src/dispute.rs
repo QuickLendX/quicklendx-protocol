@@ -168,7 +168,7 @@ pub fn create_dispute(
         resolution: String::from_str(env, ""),
         resolved_by: creator.clone(), // Placeholder — overwritten on resolution
         resolved_at: 0,
-        resolution_outcome: OptionalDisputeResolution::None,
+        resolution_outcome: DisputeResolution::None,
     };
 
     InvoiceStorage::update_invoice(env, &invoice);
@@ -298,7 +298,7 @@ pub fn resolve_dispute(
     invoice.dispute.resolution = resolution.clone();
     invoice.dispute.resolved_by = admin.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
-    invoice.dispute.resolution_outcome = OptionalDisputeResolution::None;
+    invoice.dispute.resolution_outcome = DisputeResolution::None;
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
@@ -357,7 +357,7 @@ pub fn resolve_dispute_structured(
 
     invoice.dispute_status = DisputeStatus::Resolved;
     invoice.dispute.resolution = note.clone();
-    invoice.dispute.resolution_outcome = OptionalDisputeResolution::Some(outcome);
+    invoice.dispute.resolution_outcome = outcome;
     invoice.dispute.resolved_by = admin.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
     InvoiceStorage::update_invoice(env, &invoice);

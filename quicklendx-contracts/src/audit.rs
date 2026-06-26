@@ -600,7 +600,8 @@ impl AuditStorage {
         let all_entries = Self::get_all_audit_entries(env);
         let total_entries = all_entries.len();
 
-        let operations_count = Vec::new(env);
+        // Initialize operation counters vector
+        let mut operations_count: Vec<(AuditOperation, u32)> = Vec::new(env);
         let mut unique_actors: Vec<Address> = Vec::new(env);
         let mut min_timestamp = u64::MAX;
         let mut max_timestamp = 0u64;
@@ -611,13 +612,26 @@ impl AuditStorage {
                 if !unique_actors.iter().any(|a| a == entry.actor) {
                     unique_actors.push_back(entry.actor.clone());
                 }
-
                 // Update timestamp range
                 if entry.timestamp < min_timestamp {
                     min_timestamp = entry.timestamp;
                 }
                 if entry.timestamp > max_timestamp {
                     max_timestamp = entry.timestamp;
+                }
+                // Increment operation counters
+                let mut found = false;
+                for i in 0..operations_count.len() {
+                    let (op, mut cnt) = operations_count.get(i).unwrap();
+                    if op == entry.operation {
+                        cnt += 1;
+                        operations_count.set(i, (op, cnt));
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    operations_count.push_back((entry.operation.clone(), 1));
                 }
             }
         }
