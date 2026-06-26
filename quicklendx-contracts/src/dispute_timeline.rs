@@ -80,7 +80,7 @@ pub struct DisputeTimelineEntry {
     pub summary: String,
     /// Structured resolution outcome (only present for "Resolved" events
     /// that were resolved using resolve_dispute_structured).
-    pub resolution_outcome: DisputeResolution,
+    pub resolution_outcome: Option<u32>,
 }
 
 /// Paginated dispute timeline response.

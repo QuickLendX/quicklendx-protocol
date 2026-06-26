@@ -71,9 +71,11 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     MaxBidsPerInvoiceExceeded = 1406,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
-    MaxInvoicesPerBusinessExceeded = 1407,
+    MaxActiveBidsPerInvestorExceeded = 1407,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
-    InvalidBidTtl = 1408,
+    MaxInvoicesPerBusinessExceeded = 1408,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidBidTtl = 1409,
 
     // Rating (1500-1503)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -255,6 +257,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
             QuickLendXError::NotificationDuplicate => symbol_short!("NOT_DUP"),
             QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
+            QuickLendXError::MaxActiveBidsPerInvestorExceeded => symbol_short!("MAX_ACT"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),

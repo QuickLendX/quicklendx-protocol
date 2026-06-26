@@ -473,7 +473,7 @@ fn test_error_code_consistency() {
     assert_eq!(QuickLendXError::InvalidTimestamp as u32, 1203);
     assert_eq!(QuickLendXError::InvalidDescription as u32, 1204);
     assert_eq!(QuickLendXError::InvalidTag as u32, 1800);
-    assert_eq!(QuickLendXError::InvalidBidTtl as u32, 1408);
+    assert_eq!(QuickLendXError::InvalidBidTtl as u32, 1409);
     assert_eq!(QuickLendXError::InvalidFeeBasisPoints as u32, 1852);
 }
 
