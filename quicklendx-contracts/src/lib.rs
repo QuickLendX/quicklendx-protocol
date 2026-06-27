@@ -90,6 +90,7 @@ pub mod invoice_search;
 pub mod maintenance;
 pub mod monitor;
 pub mod notifications;
+pub mod operational_limits;
 pub mod pagination;
 pub mod pause;
 pub mod payments;
@@ -176,6 +177,8 @@ mod test_freshness_lag;
 mod test_health_status;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
+#[cfg(test)]
+mod test_operational_limits;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -848,6 +851,17 @@ impl QuickLendXContract {
     /// indexed off-chain reads and does not affect `writes_allowed`.
     pub fn get_health_status(env: Env) -> monitor::HealthStatus {
         monitor::get_health_status(&env)
+    }
+
+    /// Consolidated operational limits snapshot: max batch size, max query limit,
+    /// and max fee (bps) in a single read.
+    ///
+    /// Replaces the previous workaround of probing `get_overdue_scan_batch_limit_max`,
+    /// the pagination cap, and the fee ceiling via separate calls (the fee ceiling
+    /// previously had no getter at all). All fields are read-through aggregates of
+    /// existing protocol constants; no new state is stored.
+    pub fn get_operational_limits(_env: Env) -> operational_limits::OperationalLimits {
+        operational_limits::get_operational_limits()
     }
 
     /// Get a snapshot of the protocol's current health status.
