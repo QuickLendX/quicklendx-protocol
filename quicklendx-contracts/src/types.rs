@@ -88,6 +88,7 @@ pub enum DisputeResolution {
 impl DisputeResolution {
     pub fn code(self) -> u32 {
         match self {
+            Self::None => 0,
             Self::FavorBusiness => 1,
             Self::FavorInvestor => 2,
             Self::Split => 3,

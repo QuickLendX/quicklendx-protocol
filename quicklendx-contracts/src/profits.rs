@@ -565,6 +565,7 @@ pub fn compute_yield(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
 
     // Test helper to create a mock breakdown for comparison
     fn make_breakdown(

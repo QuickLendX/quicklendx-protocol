@@ -102,6 +102,23 @@ macro_rules! qlx_log {
     ($env:expr, $domain:literal, $msg:literal, $($arg:tt)*) => {{}};
 }
 
+/// Panic if the current context is marked as view-only.
+///
+/// Use this at the start of any storage-mutating operation to enforce that
+/// the execution is restricted to read-only actions when the view-only flag
+/// is active.
+///
+/// # Panics
+/// Panics with a descriptive message if `StorageManager::is_view_only(env)` returns true.
+#[macro_export]
+macro_rules! assert_view_only {
+    ($env:expr) => {
+        if $crate::storage::StorageManager::is_view_only($env) {
+            panic!("illegal state write attempted in view-only context");
+        }
+    };
+}
+
 /// A rich diagnostic snapshot of internal protocol state.
 ///
 /// Only available when compiled with `--features diagnostics`. Never present in

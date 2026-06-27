@@ -37,6 +37,7 @@ use crate::audit::{
     AuditOperation,
 };
 use crate::errors::QuickLendXError;
+use crate::storage::StorageManager;
 use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, String, Vec};
 
 /// Storage key for protocol initialization flag
@@ -635,8 +636,9 @@ impl ProtocolInitializer {
         admin: &Address,
         params: ProtocolConfigParams,
     ) -> Result<ProtocolConfigDiff, QuickLendXError> {
-        AdminStorage::with_admin_auth(env, admin, || {
-            // ── Read current on-chain values (no writes below this line) ────
+        StorageManager::with_view_only(env, || {
+            AdminStorage::with_admin_auth(env, admin, || {
+                // ── Read current on-chain values (no writes below this line) ────
             let current_config = Self::get_protocol_config(env);
             let before_min_invoice_amount = current_config
                 .as_ref()
@@ -674,7 +676,7 @@ impl ProtocolInitializer {
                 would_succeed,
                 validation_error_code,
             })
-        })
+        }) })
     }
 
     /// Validate proposed config params without touching storage.

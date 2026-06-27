@@ -49,7 +49,7 @@
 mod test_dispute {
     use crate::errors::QuickLendXError;
     use crate::invoice::{DisputeStatus, InvoiceCategory};
-    use crate::types::{DisputeResolution, OptionalDisputeResolution};
+    use crate::types::{DisputeResolution};
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 

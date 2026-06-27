@@ -27,7 +27,7 @@ use crate::audit::AuditStorage;
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
 use crate::payments::{EscrowStatus, EscrowStorage};
-use crate::storage::InvoiceStorage;
+use crate::storage::{InvoiceStorage, StorageManager};
 use crate::types::InvoiceStatus;
 
 /// A single invariant check result row.
@@ -356,5 +356,8 @@ pub fn invariant_self_check(
     admin: &Address,
 ) -> Result<InvariantReport, QuickLendXError> {
     AdminStorage::require_admin_auth(env, admin)?;
-    Ok(run_invariant_checks(env))
+    // Enforce view-only context for all invariant checks
+    Ok(StorageManager::with_view_only(env, || {
+        run_invariant_checks(env)
+    }))
 }
