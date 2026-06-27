@@ -73,6 +73,11 @@ impl PauseControl {
     /// This is a frontend-friendly read-only getter that accepts a stable entrypoint
     /// symbol (`EP_*`) and returns `true` when the protocol is paused and the
     /// named entrypoint is part of the guarded set.
+    ///
+    /// **Complexity:** O(n) over `ALL_ENTRYPOINTS` (one `String::from_str`
+    /// allocation per entry). Acceptable for a read-only pause-check call
+    /// that is not on a hot transaction path; if this ever becomes hot,
+    /// compare via pre-built `Bytes` constants instead.
     pub fn is_entrypoint_paused(env: &Env, entrypoint: String) -> bool {
         if !Self::is_paused(env) {
             return false;

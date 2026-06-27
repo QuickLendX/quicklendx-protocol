@@ -364,6 +364,11 @@ use crate::storage::{BidStorage, InvoiceStorage};
 pub struct QuickLendXContract;
 
 /// Maximum number of records returned by paginated query endpoints.
+///
+/// Re-export of [`crate::pagination::MAX_QUERY_LIMIT`]. Kept as a
+/// `pub(crate)` alias so existing call sites that reference
+/// `crate::MAX_QUERY_LIMIT` continue to compile; new code should prefer
+/// `crate::pagination::MAX_QUERY_LIMIT` directly.
 pub(crate) const MAX_QUERY_LIMIT: u32 = pagination::MAX_QUERY_LIMIT;
 
 /// @notice Validates and caps query limit to prevent resource abuse

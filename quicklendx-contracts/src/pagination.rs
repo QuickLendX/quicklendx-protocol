@@ -27,10 +27,12 @@ use crate::errors::QuickLendXError;
 /// pagination module has no upward dependency on the contract root, which
 /// keeps the dependency graph acyclic.
 ///
-/// **Note:** this value is a fresh choice introduced while repairing the
-/// pre-existing circular import in this module; the prior value was not
-/// defined anywhere reachable. Update downstream callers if a tighter or
-/// looser cap is required.
+/// **History:** the pre-existing code held a circular import
+/// (`pagination::MAX_QUERY_LIMIT` referenced `crate::MAX_QUERY_LIMIT`, which
+/// in turn referenced `pagination::MAX_QUERY_LIMIT`), so the prior value was
+/// never defined anywhere reachable. The value `100` is a conservative
+/// default matching typical Soroban query limits and is the single site to
+/// tune if a tighter or looser cap is required.
 pub const MAX_QUERY_LIMIT: u32 = 100;
 
 /// Clamp a caller-supplied `limit` to [`MAX_QUERY_LIMIT`].
