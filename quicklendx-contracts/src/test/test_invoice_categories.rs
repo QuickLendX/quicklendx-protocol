@@ -880,10 +880,7 @@ fn test_remove_invoice_tag_nonexistent_fails() {
     );
 
     let result = client.try_remove_invoice_tag(&invoice_id, &String::from_str(&env, "nonexistent"));
-    assert!(
-        result.is_err(),
-        "remove_invoice_tag should fail for nonexistent tag"
-    );
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvoiceTagNotFound);
 }
 
 #[test]
@@ -934,7 +931,7 @@ fn test_add_tag_to_nonexistent_invoice() {
     let fake_id = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
 
     let result = client.try_add_invoice_tag(&fake_id, &String::from_str(&env, "urgent"));
-    assert!(result.is_err(), "Should fail for nonexistent invoice");
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvoiceNotFound);
 }
 
 #[test]
@@ -943,7 +940,7 @@ fn test_remove_tag_from_nonexistent_invoice() {
     let fake_id = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
 
     let result = client.try_remove_invoice_tag(&fake_id, &String::from_str(&env, "urgent"));
-    assert!(result.is_err(), "Should fail for nonexistent invoice");
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvoiceNotFound);
 }
 
 #[test]
@@ -952,7 +949,7 @@ fn test_update_category_nonexistent_invoice() {
     let fake_id = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
 
     let result = client.try_update_invoice_category(&fake_id, &InvoiceCategory::Products);
-    assert!(result.is_err(), "Should fail for nonexistent invoice");
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvoiceNotFound);
 }
 
 // ============================================================================

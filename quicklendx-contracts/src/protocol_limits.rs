@@ -36,6 +36,8 @@ const DEFAULT_MIN_AMOUNT: i128 = 10;
 pub const DEFAULT_MIN_BID_AMOUNT: i128 = 10;
 /// @notice Default minimum bid rate in basis points.
 pub const DEFAULT_MIN_BID_BPS: u32 = 100; // 1%
+/// @notice Hard minimum bid amount that admin may not undercut.
+pub const MIN_BID_FLOOR: i128 = 1;
 
 #[allow(dead_code)]
 const DEFAULT_MAX_DUE_DAYS: u64 = 365;
@@ -224,6 +226,38 @@ impl ProtocolLimitsContract {
                 grace_period_seconds: DEFAULT_GRACE_PERIOD,
                 max_invoices_per_business: DEFAULT_MAX_INVOICES_PER_BUSINESS,
             })
+    }
+
+    /// @notice Admin-only: update the absolute minimum bid amount.
+    /// @dev Enforces a hard floor of `MIN_BID_FLOOR` so the protocol
+    ///      cannot be configured to accept bids below the minimum viable
+    ///      economic unit. Returns the new value on success.
+    pub fn update_minimum_bid(
+        env: Env,
+        admin: Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
+        admin.require_auth();
+        Self::update_minimum_bid_authed(&env, &admin, amount)
+    }
+
+    /// @notice Update minimum bid without calling `require_auth` again.
+    /// @dev Used during initialization or when caller is already authenticated.
+    pub(crate) fn update_minimum_bid_authed(
+        env: &Env,
+        admin: &Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
+        AdminStorage::require_admin(env, admin)?;
+
+        if amount < MIN_BID_FLOOR {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let mut limits = Self::get_protocol_limits(env.clone());
+        limits.min_bid_amount = amount;
+        env.storage().instance().set(&LIMITS_KEY, &limits);
+        Ok(amount)
     }
 
     /// @notice Validate invoice amount and due date against configured limits.

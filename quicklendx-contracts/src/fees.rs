@@ -796,9 +796,7 @@ impl FeeManager {
                 return Err(QuickLendXError::InvalidAmount);
             }
 
-            computed_total = computed_total
-                .checked_add(amount)
-                .ok_or(QuickLendXError::InvalidFeeConfiguration)?;
+            computed_total = Self::checked_add(computed_total, amount)?;
         }
 
         if computed_total != total_amount {

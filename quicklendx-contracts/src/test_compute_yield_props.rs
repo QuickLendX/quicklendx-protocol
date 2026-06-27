@@ -12,7 +12,7 @@
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_compute_yield_props {
-    use crate::profits::compute_yield;
+    use crate::profits::{compute_expected_return, compute_yield};
     use proptest::prelude::*;
 
     // Ranges chosen to stay well inside i128 bounds while exercising realistic
@@ -99,6 +99,22 @@ mod test_compute_yield_props {
                 "zero rate must yield 0");
             prop_assert_eq!(compute_yield(amount, rate_bps, 0), 0,
                 "zero duration must yield 0");
+        }
+        // ── Expected Return ────────────────────────────────────────────────
+
+        #[test]
+        fn expected_return_is_non_negative_and_bounded(
+            amount in 0i128..MAX_AMOUNT,
+            rate_bps in 0u32..=MAX_RATE_BPS,
+            duration_days in 0u32..=MAX_DURATION_DAYS,
+        ) {
+            let er = compute_expected_return(amount, rate_bps, duration_days);
+            prop_assert!(er >= 0, "expected return must be non-negative");
+            
+            // Expected return must be bounded by the return at MAX_RATE_BPS
+            let max_er = compute_expected_return(amount, MAX_RATE_BPS, duration_days);
+            prop_assert!(er <= max_er, "expected return must be bounded by MAX_RATE");
+            prop_assert!(er >= amount, "expected return must be >= amount");
         }
     }
 }

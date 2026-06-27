@@ -3,6 +3,7 @@
 use crate::errors::QuickLendXError;
 use crate::init::InitializationParams;
 use crate::invoice::InvoiceCategory;
+use crate::protocol_limits;
 use crate::protocol_limits::ProtocolLimitsContract;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::Address as _;
@@ -270,4 +271,56 @@ fn test_initialize_rejects_invalid_limit_combination_before_state_commit() {
     assert_eq!(result, Err(Ok(QuickLendXError::InvalidTimestamp)));
     assert!(!client.is_initialized());
     assert_eq!(client.get_current_admin(), None);
+}
+
+#[test]
+fn update_minimum_bid_returns_new_amount_when_admin_calls_with_valid_floor_value() {
+    let (env, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    let result = client.update_minimum_bid(&admin, &protocol_limits::MIN_BID_FLOOR);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), protocol_limits::MIN_BID_FLOOR);
+
+    let limits = client.get_protocol_limits();
+    assert_eq!(limits.min_bid_amount, protocol_limits::MIN_BID_FLOOR);
+}
+
+#[test]
+fn update_minimum_bid_returns_new_amount_when_admin_calls_with_value_above_floor() {
+    let (env, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    let higher = protocol_limits::MIN_BID_FLOOR + 100;
+    let result = client.update_minimum_bid(&admin, &higher);
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap(), higher);
+
+    let limits = client.get_protocol_limits();
+    assert_eq!(limits.min_bid_amount, higher);
+}
+
+#[test]
+fn update_minimum_bid_rejects_amount_below_floor() {
+    let (env, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    let below_floor = protocol_limits::MIN_BID_FLOOR.saturating_sub(1);
+    let result = client.try_update_minimum_bid(&admin, &below_floor);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidAmount)));
+
+    let limits = client.get_protocol_limits();
+    assert_eq!(limits.min_bid_amount, protocol_limits::DEFAULT_MIN_BID_AMOUNT);
+}
+
+#[test]
+fn update_minimum_bid_rejects_non_admin() {
+    let (_, client, admin, non_admin, _) = setup();
+    client.set_admin(&admin);
+
+    let result = client.try_update_minimum_bid(&non_admin, &protocol_limits::MIN_BID_FLOOR);
+    assert_eq!(result, Err(Ok(QuickLendXError::NotAdmin)));
+
+    let limits = client.get_protocol_limits();
+    assert_eq!(limits.min_bid_amount, protocol_limits::DEFAULT_MIN_BID_AMOUNT);
 }
