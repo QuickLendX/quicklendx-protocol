@@ -351,7 +351,7 @@ use verification::{
     validate_investor_investment, validate_invoice_metadata, verify_business,
     verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
     BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
-    InvestorVerificationStorage,
+    InvestorVerificationStorage, determine_investor_tier,
 };
 
 use crate::storage::{BidStorage, InvoiceStorage};
@@ -2284,7 +2284,7 @@ impl QuickLendXContract {
         investor: Address,
         risk_score: u32,
     ) -> Result<InvestorTier, QuickLendXError> {
-        compute_investor_tier(&env, &investor, risk_score)
+        determine_investor_tier(&env, &investor, risk_score)
     }
 
     /// Calculate investment limit for investor
@@ -4032,3 +4032,6 @@ mod test_prune_terminal_invoices;
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
+
+#[cfg(test)]
+mod test_audit_stats_regression;

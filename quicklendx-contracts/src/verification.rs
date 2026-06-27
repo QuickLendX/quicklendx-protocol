@@ -1173,7 +1173,7 @@ pub fn verify_investor(
             // Calculate risk score and determine tier
             let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
             validate_risk_score(risk_score)?;
-            let tier = compute_investor_tier(env, investor, risk_score)?;
+            let tier = determine_investor_tier(env, investor, risk_score)?;
             let risk_level = determine_risk_level(risk_score);
 
             // Calculate final investment limit based on tier and risk
@@ -1302,7 +1302,7 @@ pub fn determine_investor_tier(
     validate_risk_score(risk_score)?;
 
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
-        return compute_investor_tier_from_stats(
+        return compute_investor_tier(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
@@ -1377,54 +1377,7 @@ pub fn determine_risk_level(risk_score: u32) -> InvestorRiskLevel {
     }
 }
 
-/// Core tier computation using raw counters (total invested, successes, defaults).
-pub fn compute_investor_tier(
-    total_invested: i128,
-    successful_investments: u32,
-    defaulted_investments: u32,
-    risk_score: u32,
-) -> Result<InvestorTier, QuickLendXError> {
-    let total = successful_investments.saturating_add(defaulted_investments);
-    let default_rate = if total > 0 {
-        (defaulted_investments.saturating_mul(100)) / total
-    } else {
-        0u32
-    };
 
-    if risk_score <= 10
-        && total_invested >= 5_000_000
-        && successful_investments >= 50
-        && default_rate <= 5
-    {
-        return Ok(InvestorTier::VIP);
-    }
-
-    if risk_score <= 20
-        && total_invested >= 1_000_000
-        && successful_investments >= 20
-        && default_rate <= 10
-    {
-        return Ok(InvestorTier::Platinum);
-    }
-
-    if risk_score <= 40
-        && total_invested >= 100_000
-        && successful_investments >= 10
-        && default_rate <= 15
-    {
-        return Ok(InvestorTier::Gold);
-    }
-
-    if risk_score <= 60
-        && total_invested >= 10_000
-        && successful_investments >= 3
-        && default_rate <= 25
-    {
-        return Ok(InvestorTier::Silver);
-    }
-
-    Ok(InvestorTier::Basic)
-}
 
 /// Calculate investment limit based on tier and risk level
 pub fn calculate_investment_limit(
@@ -1519,7 +1472,7 @@ pub fn update_investor_analytics(
         verification.risk_score =
             calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
         verification.risk_level = determine_risk_level(verification.risk_score);
-        verification.tier = compute_investor_tier_from_stats(
+        verification.tier = compute_investor_tier(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
