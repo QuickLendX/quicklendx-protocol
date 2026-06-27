@@ -71,6 +71,7 @@ npm run dev
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
 - `docs/PLATFORM_FEES.md`: Fee schedule and tenant override documentation.
 - [`docs/CURRENCY_WHITELIST.md`](docs/CURRENCY_WHITELIST.md): How tokens are added to and removed from the currency whitelist — contributor guide covering entrypoints, auth model, enforcement points, and test patterns.
+- [`docs/contracts/settlement-fund-split.md`](docs/contracts/settlement-fund-split.md): How settlement splits funds across investors, treasury, and platform — formula, worked examples, and code walkthrough.
 
 ## Contribution
 
