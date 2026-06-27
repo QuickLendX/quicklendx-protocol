@@ -1279,6 +1279,30 @@ pub fn calculate_investor_risk_score(
     Ok(risk_score)
 }
 
+/// Compute investor tier from the investor record and a risk score.
+///
+/// This wrapper is used by public contract entrypoints and internal business
+/// logic, while the core deterministic tier rules are implemented in the
+/// `compute_investor_tier_from_stats` helper.
+pub fn compute_investor_tier(
+    env: &Env,
+    investor: &Address,
+    risk_score: u32,
+) -> Result<InvestorTier, QuickLendXError> {
+    validate_risk_score(risk_score)?;
+
+    if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
+        return compute_investor_tier_from_stats(
+            verification.total_invested,
+            verification.successful_investments,
+            verification.defaulted_investments,
+            risk_score,
+        );
+    }
+
+    Ok(InvestorTier::Basic)
+}
+
 /// Determine investor tier based on risk score and investment history.
 /// Calculate the investor tier using deterministic performance thresholds.
 ///
@@ -1313,7 +1337,7 @@ pub fn determine_investor_tier(
     Ok(InvestorTier::Basic)
 }
 
-pub fn compute_investor_tier(
+pub fn compute_investor_tier_from_stats(
     total_invested: i128,
     successful_investments: u32,
     defaulted_investments: u32,
@@ -1623,7 +1647,7 @@ pub fn recompute_investor_tier(
     let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
     validate_risk_score(risk_score)?;
 
-    let tier = compute_investor_tier(
+    let tier = compute_investor_tier_from_stats(
         verification.total_invested,
         verification.successful_investments,
         verification.defaulted_investments,
