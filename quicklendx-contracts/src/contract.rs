@@ -204,6 +204,9 @@ impl QuickLendXContract {
         if idempotency_exists(&env, &idem_key) {
             return Err(QuickLendXError::DuplicateBid);
         }
+        if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            return Err(QuickLendXError::InvoiceFrozen);
+        }
         // Store idempotency marker
         store_idempotency(&env, &idem_key);
         let bid_id = BidStorage::generate_unique_bid_id(&env);
@@ -222,6 +225,9 @@ impl QuickLendXContract {
     }
 
     pub fn accept_bid(env: Env, invoice_id: BytesN<32>, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            return Err(QuickLendXError::InvoiceFrozen);
+        }
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         
@@ -293,6 +299,12 @@ impl QuickLendXContract {
 
     pub fn submit_kyc_application(env: Env, business: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
         submit_kyc_application(&env, &business, kyc_data)
+    }
+
+    pub fn freeze_invoice(env: Env, admin: Address, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        crate::admin::AdminStorage::require_admin(&env, &admin)?;
+        InvoiceStorage::set_frozen(&env, &invoice_id, true);
+        Ok(())
     }
 
     pub fn verify_business(env: Env, admin: Address, business: Address) -> Result<(), QuickLendXError> {

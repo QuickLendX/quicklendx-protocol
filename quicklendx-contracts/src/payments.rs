@@ -849,7 +849,7 @@ pub fn transfer_funds(
     }
 
     if from == to {
-        return Ok(());
+        return Err(QuickLendXError::SelfTransfer);
     }
 
     let token_client = token::Client::new(env, currency);

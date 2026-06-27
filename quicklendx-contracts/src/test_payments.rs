@@ -72,7 +72,7 @@ fn test_transfer_funds_zero_amount() {
 }
 
 #[test]
-fn test_transfer_funds_same_address_no_op() {
+fn test_transfer_funds_same_address_fails() {
     let (env, contract_id) = setup();
     let currency = setup_token(&env, &contract_id, &[], &[]);
     let addr = Address::generate(&env);
@@ -81,7 +81,7 @@ fn test_transfer_funds_same_address_no_op() {
         transfer_funds(&env, &currency, &addr, &addr, 1_000)
     });
 
-    assert_eq!(result, Ok(()));
+    assert_eq!(result, Err(QuickLendXError::SelfTransfer));
 }
 
 #[test]
