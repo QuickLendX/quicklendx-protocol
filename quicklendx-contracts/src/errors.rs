@@ -181,6 +181,7 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DuplicateDefaultTransition = 2202,
     BackupVersionUnsupported = 2203,
+    DuplicateBid = 2204,
 }
 
 impl From<QuickLendXError> for Symbol {
