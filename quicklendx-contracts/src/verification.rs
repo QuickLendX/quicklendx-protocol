@@ -1326,7 +1326,7 @@ pub fn determine_investor_tier(
     validate_risk_score(risk_score)?;
 
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
-        return compute_investor_tier(
+        return compute_investor_tier_from_stats(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
@@ -1496,7 +1496,7 @@ pub fn update_investor_analytics(
         verification.risk_score =
             calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
         verification.risk_level = determine_risk_level(verification.risk_score);
-        verification.tier = compute_investor_tier(
+        verification.tier = compute_investor_tier_from_stats(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,

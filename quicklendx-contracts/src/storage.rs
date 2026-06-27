@@ -51,6 +51,7 @@ pub enum DataKey {
     Invoice(BytesN<32>),
     Bid(BytesN<32>),
     Investment(BytesN<32>),
+    FrozenInvoice(BytesN<32>),
 }
 
 impl StorageKeys {
@@ -260,6 +261,26 @@ impl InvoiceStorage {
 
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
         Self::store(env, invoice)
+    }
+
+    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+        let key = DataKey::FrozenInvoice(invoice_id.clone());
+        if frozen {
+            env.storage().persistent().set(&key, &true);
+            extend_persistent_ttl(env, &key);
+        } else {
+            env.storage().persistent().remove(&key);
+        }
+    }
+
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
+        let key = DataKey::FrozenInvoice(invoice_id.clone());
+        if let Some(frozen) = env.storage().persistent().get::<_, bool>(&key) {
+            extend_persistent_ttl(env, &key);
+            frozen
+        } else {
+            false
+        }
     }
 
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {

@@ -23,6 +23,8 @@ pub enum QuickLendXError {
     InvoiceNotFunded = 1005,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceAlreadyDefaulted = 1006,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvoiceFrozen = 1007,
 
     // Authorization (1100-1104)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -37,7 +39,7 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     SelfCallNotAllowed = 1104,
 
-    // Input validation (1200-1204)
+    // Input validation (1200-1205)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidAmount = 1200,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -48,6 +50,8 @@ pub enum QuickLendXError {
     InvalidTimestamp = 1203,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDescription = 1204,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    SelfTransfer = 1205,
 
     // Storage (1300-1301)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
