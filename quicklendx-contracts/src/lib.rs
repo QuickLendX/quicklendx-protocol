@@ -947,10 +947,14 @@ impl QuickLendXContract {
     /// # Security
     /// - No authentication required (read-only, no PII).
     /// - State is never mutated.
-    #[cfg(feature = "diagnostics")]
-    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
-        diagnostics::get_protocol_diagnostics(&env)
-    }
+    // NOTE: `get_protocol_diagnostics` was moved out of this `#[contractimpl]`
+    // block into a separate, feature-gated `#[contractimpl]` impl at the end of
+    // this file. The `soroban-sdk` `#[contractimpl]` macro unconditionally emits
+    // a `__QuickLendXContract__get_protocol_diagnostics__invoke_raw_slice` export
+    // stub for every `pub fn` in the block, ignoring `#[cfg(...)]` on the method
+    // itself. Gating the entire impl block prevents the stub from being generated
+    // in production builds (keeping WASM size lean) and avoids the E0425
+    // "cannot find value" error when the `diagnostics` feature is off.
 
     // ============================================================================
     // Invoice Management Functions
@@ -4031,6 +4035,23 @@ impl QuickLendXContract {
         admin.require_auth();
         AdminStorage::require_admin(&env, &admin)?;
         EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
+    }
+}
+
+// =============================================================================
+// Feature-gated contract entrypoints
+// =============================================================================
+//
+// get_protocol_diagnostics is intentionally NOT inside the main contractimpl block.
+// The soroban-sdk contractimpl macro unconditionally emits export stubs for every
+// pub fn, ignoring cfg(...) on the method itself. Gating the entire impl block
+// prevents stub generation in non-diagnostics builds.
+
+#[cfg(feature = "diagnostics")]
+#[contractimpl]
+impl QuickLendXContract {
+    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
+        diagnostics::get_protocol_diagnostics(&env)
     }
 }
 
