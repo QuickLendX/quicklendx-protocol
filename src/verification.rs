@@ -49,6 +49,32 @@ pub fn tier_multiplier(tier: InvestorTier) -> u128 {
         InvestorTier::Platinum => 5,
         InvestorTier::Vip => 10,
     }
+
+    // ── verify_business_kyc Boundary Tests ─────────────────────────────────
+
+    #[test]
+    fn returns_error_when_kyc_is_missing() {
+        let result = verify_business_kyc(None, 2000, 1000);
+        assert_eq!(result, Err(GuardError::NotSubmitted));
+    }
+
+    #[test]
+    fn returns_error_when_kyc_is_expired() {
+        // Boundary check: current time matches expiration time exactly
+        let exact_boundary = verify_business_kyc(Some(VerificationStatus::Verified), 2000, 2000);
+        assert_eq!(exact_boundary, Err(GuardError::KycExpired));
+
+        // Sad path: current time exceeds expiration time
+        let past_boundary = verify_business_kyc(Some(VerificationStatus::Verified), 2000, 2001);
+        assert_eq!(past_boundary, Err(GuardError::KycExpired));
+    }
+
+    #[test]
+    fn succeeds_when_kyc_is_current() {
+        // Happy path: current time is strictly before expiration time
+        let result = verify_business_kyc(Some(VerificationStatus::Verified), 2000, 1999);
+        assert_eq!(result, Ok(()));
+    }
 }
 
 pub fn validate_transition(from: VerificationStatus, to: VerificationStatus) -> Result<(), &'static str> {
