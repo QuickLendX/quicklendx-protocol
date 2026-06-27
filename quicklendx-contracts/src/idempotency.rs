@@ -19,7 +19,7 @@ pub fn idempotency_key(
     data.append(&invoice_id.to_xdr(env));
     data.append(&investor.to_xdr(env));
     data.append(&salt.to_xdr(env));
-    env.crypto().sha256(&data)
+    env.crypto().sha256(&data).into()
 }
 
 /// Return `true` when an idempotency record for `key` is already present in
