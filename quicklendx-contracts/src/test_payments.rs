@@ -72,7 +72,7 @@ fn test_transfer_funds_zero_amount() {
 }
 
 #[test]
-fn test_transfer_funds_same_address_no_op() {
+fn test_transfer_funds_same_address_fails() {
     let (env, contract_id) = setup();
     let currency = setup_token(&env, &contract_id, &[], &[]);
     let addr = Address::generate(&env);
@@ -81,7 +81,7 @@ fn test_transfer_funds_same_address_no_op() {
         transfer_funds(&env, &currency, &addr, &addr, 1_000)
     });
 
-    assert_eq!(result, Ok(()));
+    assert_eq!(result, Err(QuickLendXError::SelfTransfer));
 }
 
 #[test]
@@ -312,7 +312,134 @@ fn test_create_escrow_insufficient_allowance_no_state_change() {
 }
 
 // ============================================================================
-// create_escrow - positive test
+// create_escrow - boundary tests: zero, max, overflow, invalid token
+// ============================================================================
+
+#[test]
+fn test_create_escrow_zero_amount_returns_invalid_amount() {
+    let (env, contract_id) = setup();
+    let investor = Address::generate(&env);
+    let business = Address::generate(&env);
+    let invoice_id = BytesN::from_array(&env, &[0x10; 32]);
+    let currency = setup_token(&env, &contract_id, &[], &[]);
+
+    let result = env.as_contract(&contract_id, || {
+        create_escrow(&env, &invoice_id, &investor, &business, 0, &currency)
+    });
+    assert_eq!(result, Err(QuickLendXError::InvalidAmount));
+    assert!(env.as_contract(&contract_id, || {
+        crate::payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none()
+    }));
+}
+
+#[test]
+fn test_create_escrow_negative_amount_returns_invalid_amount() {
+    let (env, contract_id) = setup();
+    let investor = Address::generate(&env);
+    let business = Address::generate(&env);
+    let invoice_id = BytesN::from_array(&env, &[0x11; 32]);
+    let currency = setup_token(&env, &contract_id, &[], &[]);
+
+    let result = env.as_contract(&contract_id, || {
+        create_escrow(&env, &invoice_id, &investor, &business, -1, &currency)
+    });
+    assert_eq!(result, Err(QuickLendXError::InvalidAmount));
+    assert!(env.as_contract(&contract_id, || {
+        crate::payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none()
+    }));
+}
+
+#[test]
+fn test_create_escrow_max_amount_with_zero_balance_returns_insufficient_funds() {
+    let (env, contract_id) = setup();
+    let investor = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&investor, &0);
+    let expiry = env.ledger().sequence() + 10_000;
+    tok.approve(&investor, &contract_id, &i128::MAX, &expiry);
+
+    let invoice_id = BytesN::from_array(&env, &[0x12; 32]);
+
+    let result = env.as_contract(&contract_id, || {
+        create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), i128::MAX, &currency)
+    });
+    assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
+    assert_eq!(tok.balance(&contract_id), 0);
+    assert!(env.as_contract(&contract_id, || {
+        crate::payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none()
+    }));
+}
+
+#[test]
+fn test_create_escrow_max_amount_with_sufficient_balance_succeeds() {
+    let (env, contract_id) = setup();
+    let investor = Address::generate(&env);
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    let tok = token::Client::new(&env, &currency);
+    sac.mint(&investor, &i128::MAX);
+    let expiry = env.ledger().sequence() + 10_000;
+    tok.approve(&investor, &contract_id, &i128::MAX, &expiry);
+
+    let invoice_id = BytesN::from_array(&env, &[0x13; 32]);
+
+    let result = env.as_contract(&contract_id, || {
+        create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), i128::MAX, &currency)
+    });
+    assert!(result.is_ok(), "max-amount escrow must succeed with sufficient balance");
+    assert_eq!(tok.balance(&investor), 0);
+    assert_eq!(tok.balance(&contract_id), i128::MAX);
+
+    let escrow = env.as_contract(&contract_id, || {
+        crate::payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(escrow.amount, i128::MAX);
+    assert_eq!(escrow.status, crate::payments::EscrowStatus::Held);
+}
+
+#[test]
+fn test_create_escrow_unregistered_token_address_does_not_write_escrow() {
+    let (env, contract_id) = setup();
+    let investor = Address::generate(&env);
+    let business = Address::generate(&env);
+    let invoice_id = BytesN::from_array(&env, &[0x14; 32]);
+
+    let real_token_admin = Address::generate(&env);
+    let real_currency = env
+        .register_stellar_asset_contract_v2(real_token_admin.clone())
+        .address();
+    let real_sac = token::StellarAssetClient::new(&env, &real_currency);
+    let real_tok = token::Client::new(&env, &real_currency);
+    real_sac.mint(&investor, &10_000);
+    let expiry = env.ledger().sequence() + 10_000;
+    real_tok.approve(&investor, &contract_id, &10_000, &expiry);
+
+    let bogus_currency = Address::generate(&env);
+    let investor_bal = real_tok.balance(&investor);
+    let contract_bal = real_tok.balance(&contract_id);
+
+    let result = env.as_contract(&contract_id, || {
+        create_escrow(&env, &invoice_id, &investor, &business, 10_000, &bogus_currency)
+    });
+
+    assert!(result.is_err(), "unregistered token address must not succeed");
+    assert_eq!(real_tok.balance(&investor), investor_bal);
+    assert_eq!(real_tok.balance(&contract_id), contract_bal);
+    assert!(env.as_contract(&contract_id, || {
+        crate::payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none()
+    }));
+}
+
+// ============================================================================
+// create_escrow - positive happy-path test
 // ============================================================================
 
 #[test]

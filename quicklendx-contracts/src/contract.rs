@@ -41,9 +41,9 @@ impl QuickLendXContract {
         ProtocolInitializer::initialize(&env, &params)
     }
 
-    /// Set the protocol admin (transfer).
-    pub fn set_admin(env: Env, admin: Address, new_admin: Address) {
-        AdminStorage::set_admin(&env, &admin, &new_admin).expect("Admin transfer failed");
+    pub fn set_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::set_admin(&env, &admin, &new_admin)?;
+        Ok(())
     }
 
     /// Initialize the protocol admin only.
@@ -51,9 +51,8 @@ impl QuickLendXContract {
         AdminStorage::initialize(&env, &admin)
     }
 
-    /// Get the current protocol admin.
-    pub fn get_admin(env: Env) -> Address {
-        AdminStorage::get_admin(&env).expect("Admin not initialized")
+    pub fn get_admin(env: Env) -> Result<Address, QuickLendXError> {
+        AdminStorage::get_admin(&env).ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
     /// Admin-gated, read-only protocol invariant self-check ("heartbeat").
@@ -134,6 +133,8 @@ impl QuickLendXContract {
         // This is the primary anti-spam control: only vetted businesses may write
         // invoice data to on-chain storage.
         crate::verification::require_business_not_pending(&env, &business)?;
+        // Enforce per-business invoice cap.
+        ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
 
         let invoice_id: BytesN<32> = env
             .crypto()
@@ -172,20 +173,22 @@ impl QuickLendXContract {
         Ok(invoice_id)
     }
 
-    pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Invoice {
-        InvoiceStorage::get(&env, &invoice_id).expect("Invoice not found")
+    pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLendXError> {
+        InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
     }
 
-    pub fn update_invoice_status(env: Env, invoice_id: BytesN<32>, status: InvoiceStatus) {
-        let mut invoice = InvoiceStorage::get(&env, &invoice_id).expect("Invoice not found");
+    pub fn update_invoice_status(env: Env, invoice_id: BytesN<32>, status: InvoiceStatus) -> Result<(), QuickLendXError> {
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.status = status;
         InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
     }
 
-    pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) {
-        let mut invoice = InvoiceStorage::get(&env, &invoice_id).expect("Invoice not found");
+    pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.status = InvoiceStatus::Verified;
         InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
     }
 
     pub fn place_bid(
@@ -194,7 +197,18 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_amount: i128,
         expected_return: i128,
-    ) -> BytesN<32> {
+        salt: BytesN<32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        // Idempotency check
+        let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
+        if idempotency_exists(&env, &idem_key) {
+            return Err(QuickLendXError::DuplicateBid);
+        }
+        if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            return Err(QuickLendXError::InvoiceFrozen);
+        }
+        // Store idempotency marker
+        store_idempotency(&env, &idem_key);
         let bid_id = BidStorage::generate_unique_bid_id(&env);
         let bid = Bid {
             bid_id: bid_id.clone(),
@@ -207,12 +221,15 @@ impl QuickLendXContract {
             expiration_timestamp: env.ledger().timestamp() + 86400,
         };
         BidStorage::store_bid(&env, &bid);
-        bid_id
+        Ok(bid_id)
     }
 
-    pub fn accept_bid(env: Env, invoice_id: BytesN<32>, bid_id: BytesN<32>) {
-        let mut invoice = InvoiceStorage::get(&env, &invoice_id).expect("Invoice not found");
-        let bid = BidStorage::get_bid(&env, &bid_id).expect("Bid not found");
+    pub fn accept_bid(env: Env, invoice_id: BytesN<32>, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            return Err(QuickLendXError::InvoiceFrozen);
+        }
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         
         invoice.mark_as_funded(&env, bid.investor.clone(), bid.bid_amount, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
@@ -235,6 +252,7 @@ impl QuickLendXContract {
             status: EscrowStatus::Held,
         };
         crate::payments::EscrowStorage::store_escrow(&env, &escrow);
+        Ok(())
     }
 
     pub fn get_bid(env: Env, bid_id: BytesN<32>) -> Option<Bid> {
@@ -252,10 +270,11 @@ impl QuickLendXContract {
         bids
     }
 
-    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) {
-        let mut bid = BidStorage::get_bid(&env, &bid_id).expect("Bid not found");
+    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let mut bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         bid.status = BidStatus::Withdrawn;
         BidStorage::store_bid(&env, &bid);
+        Ok(())
     }
 
     pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> u32 {
@@ -280,6 +299,12 @@ impl QuickLendXContract {
 
     pub fn submit_kyc_application(env: Env, business: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
         submit_kyc_application(&env, &business, kyc_data)
+    }
+
+    pub fn freeze_invoice(env: Env, admin: Address, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        crate::admin::AdminStorage::require_admin(&env, &admin)?;
+        InvoiceStorage::set_frozen(&env, &invoice_id, true);
+        Ok(())
     }
 
     pub fn verify_business(env: Env, admin: Address, business: Address) -> Result<(), QuickLendXError> {
@@ -315,16 +340,18 @@ impl QuickLendXContract {
         InvoiceStorage::get_count_by_status(&env, status)
     }
 
-    pub fn update_invoice_metadata(env: Env, invoice_id: BytesN<32>, metadata: InvoiceMetadata) {
-        let mut invoice = InvoiceStorage::get(&env, &invoice_id).expect("Invoice not found");
+    pub fn update_invoice_metadata(env: Env, invoice_id: BytesN<32>, metadata: InvoiceMetadata) -> Result<(), QuickLendXError> {
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.update_metadata(metadata);
         InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
     }
 
-    pub fn clear_invoice_metadata(env: Env, invoice_id: BytesN<32>) {
-        let mut invoice = InvoiceStorage::get(&env, &invoice_id).expect("Invoice not found");
+    pub fn clear_invoice_metadata(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.clear_metadata();
         InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
     }
 
     pub fn get_invoices_by_customer(env: Env, customer_name: soroban_sdk::Bytes) -> Vec<BytesN<32>> {
@@ -352,33 +379,35 @@ impl QuickLendXContract {
         comment: soroban_sdk::Bytes,
         investor: Address,
     ) -> Result<(), QuickLendXError> {
-        let mut invoice = InvoiceStorage::get(&env, &invoice_id).expect("Invoice not found");
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.add_rating(rating, comment, investor, env.ledger().timestamp())?;
         InvoiceStorage::update_invoice(&env, &invoice);
         Ok(())
     }
 
-    pub fn get_escrow_details(env: Env, invoice_id: BytesN<32>) -> Escrow {
-        EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).expect("Escrow not found")
+    pub fn get_escrow_details(env: Env, invoice_id: BytesN<32>) -> Result<Escrow, QuickLendXError> {
+        EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
-    pub fn get_escrow_status(env: Env, invoice_id: BytesN<32>) -> EscrowStatus {
-        EscrowStorage::get_escrow_status(&env, &invoice_id).expect("Escrow not found")
+    pub fn get_escrow_status(env: Env, invoice_id: BytesN<32>) -> Result<EscrowStatus, QuickLendXError> {
+        EscrowStorage::get_escrow_status(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
-    pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) {
-        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).expect("Escrow not found");
+    pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         escrow.status = EscrowStatus::Released;
         escrow.released_at = Some(env.ledger().timestamp());
         EscrowStorage::update_escrow(&env, &escrow);
+        Ok(())
     }
 
-    pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>, admin: Address) {
-        AdminStorage::require_admin(&env, &admin).expect("Admin only");
-        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).expect("Escrow not found");
+    pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>, admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
         escrow.status = EscrowStatus::Refunded;
         escrow.refunded_at = Some(env.ledger().timestamp());
         EscrowStorage::update_escrow(&env, &escrow);
+        Ok(())
     }
     
     // Backup & Restore
@@ -442,14 +471,15 @@ impl QuickLendXContract {
         max_backups: u32,
         max_age_seconds: u64,
         enabled: bool,
-    ) {
-        AdminStorage::require_admin(&env, &admin).expect("Admin only");
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
         let policy = BackupRetentionPolicy {
             max_backups,
             max_age_seconds,
             auto_cleanup_enabled: enabled,
         };
         BackupStorage::set_retention_policy(&env, &policy);
+        Ok(())
     }
 
     pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {

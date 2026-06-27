@@ -372,6 +372,268 @@ impl EscrowStorage {
     }
 }
 
+#[cfg(test)]
+mod payments_tests {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env};
+
+    fn contract_env() -> (Env, Address) {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        (env, contract_id)
+    }
+
+    fn mint_and_approve(
+        env: &Env,
+        contract_id: &Address,
+        token_admin: &Address,
+        holder: &Address,
+        balance: i128,
+        allowance: i128,
+    ) -> Address {
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin.clone())
+            .address();
+        let sac = token::StellarAssetClient::new(env, &currency);
+        let tok = token::Client::new(env, &currency);
+        sac.mint(holder, &balance);
+        let expiry = env.ledger().sequence() + 10_000;
+        tok.approve(holder, contract_id, &allowance, &expiry);
+        currency
+    }
+
+    // -----------------------------------------------------------------------
+    // Zero-amount boundary
+    // -----------------------------------------------------------------------
+
+    /// Passing `amount = 0` to `create_escrow` must return `InvalidAmount`
+    /// and must not create any escrow record or transfer any funds.
+    #[test]
+    fn test_create_escrow_zero_amount_returns_invalid_amount() {
+        let (env, contract_id) = contract_env();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[0u8; 32]);
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        let result = env.as_contract(&contract_id, || {
+            create_escrow(&env, &invoice_id, &investor, &business, 0, &currency)
+        });
+        assert_eq!(result, Err(QuickLendXError::InvalidAmount));
+        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+    }
+
+    /// Negative amounts are rejected before any state changes.
+    #[test]
+    fn test_create_escrow_negative_amount_returns_invalid_amount() {
+        let (env, contract_id) = contract_env();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1u8; 32]);
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        let result = env.as_contract(&contract_id, || {
+            create_escrow(&env, &invoice_id, &investor, &business, -1, &currency)
+        });
+        assert_eq!(result, Err(QuickLendXError::InvalidAmount));
+        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Max-amount boundary
+    // -----------------------------------------------------------------------
+
+    /// `i128::MAX` with zero investor balance must fail with `InsufficientFunds`
+    /// (the amount guard fires before the token call).
+    #[test]
+    fn test_create_escrow_max_amount_with_zero_balance_fails() {
+        let (env, contract_id) = contract_env();
+        let investor = Address::generate(&env);
+        let token_admin = Address::generate(&env);
+        let currency = mint_and_approve(
+            &env,
+            &contract_id,
+            &token_admin,
+            &investor,
+            0, // zero balance
+            i128::MAX,
+        );
+
+        let invoice_id = BytesN::from_array(&env, &[2u8; 32]);
+        let tok = token::Client::new(&env, &currency);
+
+        let result = env.as_contract(&contract_id, || {
+            create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), i128::MAX, &currency)
+        });
+        assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
+        assert_eq!(tok.balance(&contract_id), 0);
+        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+    }
+
+    /// Amount strictly exceeding the investor's balance is rejected with
+    /// `InsufficientFunds` and no state is mutated.
+    #[test]
+    fn test_create_escrow_amount_exceeds_balance_returns_insufficient_funds() {
+        let (env, contract_id) = contract_env();
+        let investor = Address::generate(&env);
+        let token_admin = Address::generate(&env);
+        let currency = mint_and_approve(
+            &env,
+            &contract_id,
+            &token_admin,
+            &investor,
+            5_000,
+            10_000,
+        );
+
+        let invoice_id = BytesN::from_array(&env, &[3u8; 32]);
+        let tok = token::Client::new(&env, &currency);
+
+        let investor_bal = tok.balance(&investor);
+        let contract_bal = tok.balance(&contract_id);
+
+        let result = env.as_contract(&contract_id, || {
+            create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), 5_001, &currency)
+        });
+        assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
+        assert_eq!(tok.balance(&investor), investor_bal);
+        assert_eq!(tok.balance(&contract_id), contract_bal);
+        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+    }
+
+    // -----------------------------------------------------------------------
+    // Max-amount with sufficient balance
+    // -----------------------------------------------------------------------
+
+    /// The largest representable positive amount (`i128::MAX`) can succeed
+    /// when the investor balance is sufficient and the allowance is granted.
+    /// This documents the upper-bound happy path.
+    #[test]
+    fn test_create_escrow_max_amount_with_sufficient_balance_succeeds() {
+        let (env, contract_id) = contract_env();
+        let investor = Address::generate(&env);
+        let token_admin = Address::generate(&env);
+        let currency = mint_and_approve(
+            &env,
+            &contract_id,
+            &token_admin,
+            &investor,
+            i128::MAX,
+            i128::MAX,
+        );
+
+        let invoice_id = BytesN::from_array(&env, &[4u8; 32]);
+        let tok = token::Client::new(&env, &currency);
+
+        let result = env.as_contract(&contract_id, || {
+            create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), i128::MAX, &currency)
+        });
+        assert!(result.is_ok(), "max-amount escrow must succeed with sufficient balance");
+        assert_eq!(tok.balance(&investor), 0);
+        assert_eq!(tok.balance(&contract_id), i128::MAX);
+
+        let escrow = env.as_contract(&contract_id, || {
+            EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap()
+        });
+        assert_eq!(escrow.amount, i128::MAX);
+        assert_eq!(escrow.status, EscrowStatus::Held);
+    }
+
+    // -----------------------------------------------------------------------
+    // Invalid token address
+    // -----------------------------------------------------------------------
+
+    /// Passing an address that is *not* a registered token contract must not
+    /// silently succeed; any failure path that leaves no escrow is acceptable.
+    #[test]
+    fn test_create_escrow_unregistered_token_address_does_not_succeed() {
+        let (env, contract_id) = contract_env();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[5u8; 32]);
+
+        // Provide a balance in a *real* token so the pre-checks pass, but pass
+        // a completely unregistered, random address as `currency`.
+        let real_token_admin = Address::generate(&env);
+        let real_currency = env
+            .register_stellar_asset_contract_v2(real_token_admin.clone())
+            .address();
+        let real_sac = token::StellarAssetClient::new(&env, &real_currency);
+        let real_tok = token::Client::new(&env, &real_currency);
+        real_sac.mint(&investor, &10_000);
+        let expiry = env.ledger().sequence() + 10_000;
+        real_tok.approve(&investor, &contract_id, &10_000, &expiry);
+
+        let bogus_currency = Address::generate(&env);
+
+        let investor_bal = real_tok.balance(&investor);
+        let contract_bal = real_tok.balance(&contract_id);
+
+        let result = env.as_contract(&contract_id, || {
+            create_escrow(&env, &invoice_id, &investor, &business, 10_000, &bogus_currency)
+        });
+
+        assert!(
+            result.is_err(),
+            "unregistered token address must not succeed"
+        );
+        assert_eq!(real_tok.balance(&investor), investor_bal);
+        assert_eq!(real_tok.balance(&contract_id), contract_bal);
+        assert!(
+            EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none(),
+            "no escrow must be written on invalid token address"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // One-escrow guard: second call with a different investor
+    // -----------------------------------------------------------------------
+
+    /// The duplicate escrow guard must reject a second call regardless of the
+    /// investor or amount; only the `invoice_id` matters.
+    #[test]
+    fn test_create_escrow_duplicate_different_investor_rejected() {
+        let (env, contract_id) = contract_env();
+        let investor1 = Address::generate(&env);
+        let investor2 = Address::generate(&env);
+        let token_admin = Address::generate(&env);
+        let currency = mint_and_approve(
+            &env,
+            &contract_id,
+            &token_admin,
+            &investor1,
+            10_000,
+            10_000,
+        );
+        let sac = token::StellarAssetClient::new(&env, &currency);
+        let tok = token::Client::new(&env, &currency);
+        sac.mint(&investor2, &10_000);
+        let expiry = env.ledger().sequence() + 10_000;
+        tok.approve(&investor2, &contract_id, &10_000, &expiry);
+
+        let invoice_id = BytesN::from_array(&env, &[6u8; 32]);
+
+        // First escrow
+        let r1 = env.as_contract(&contract_id, || {
+            create_escrow(&env, &invoice_id, &investor1, &Address::generate(&env), 10_000, &currency)
+        });
+        assert!(r1.is_ok(), "first escrow must succeed");
+
+        // Second attempt (different investor) must fail
+        let r2 = env.as_contract(&contract_id, || {
+            create_escrow(&env, &invoice_id, &investor2, &Address::generate(&env), 5_000, &currency)
+        });
+        assert_eq!(r2, Err(QuickLendXError::InvoiceAlreadyFunded));
+    }
+}
+
 /// Create escrow: transfer `amount` from investor to contract and store escrow record.
 ///
 /// ## One-Escrow-Per-Invoice Guard
@@ -587,7 +849,7 @@ pub fn transfer_funds(
     }
 
     if from == to {
-        return Ok(());
+        return Err(QuickLendXError::SelfTransfer);
     }
 
     let token_client = token::Client::new(env, currency);
