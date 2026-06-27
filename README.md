@@ -71,6 +71,7 @@ npm run dev
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
 - `docs/PLATFORM_FEES.md`: Fee schedule and tenant override documentation.
 - [`docs/CURRENCY_WHITELIST.md`](docs/CURRENCY_WHITELIST.md): How tokens are added to and removed from the currency whitelist — contributor guide covering entrypoints, auth model, enforcement points, and test patterns.
+- [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Contract error code catalog for frontends, SDKs, indexers, and support tooling.
 
 ## Contribution
 
