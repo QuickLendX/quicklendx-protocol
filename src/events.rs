@@ -26,6 +26,12 @@
 ///
 /// Indexers must subscribe to this exact string.  Do not rename without
 /// a versioned migration.
+#[cfg(any(test, feature = "test-support"))]
+extern crate alloc;
+
+#[cfg(any(test, feature = "test-support"))]
+use alloc::vec::Vec;
+
 pub const TOPIC_PAUSE_BLOCKED: &str = "PauseBlocked";
 
 // ─────────────────────────────────────────────────────────────────────────────
