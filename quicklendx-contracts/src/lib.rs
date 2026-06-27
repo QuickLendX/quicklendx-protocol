@@ -231,6 +231,12 @@ mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_ranking;
+// Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
+// every CI matrix entry.
+#[cfg(test)]
+mod test_bid_ranking_determinism;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_category_breakdown;
 #[cfg(test)]
 mod test_default_grace_boundary;
