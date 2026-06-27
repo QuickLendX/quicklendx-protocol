@@ -246,6 +246,10 @@ pub fn record_payment(
         return Err(QuickLendXError::InvalidAmount);
     }
 
+    if crate::storage::InvoiceStorage::is_frozen(env, invoice_id) {
+        return Err(QuickLendXError::InvoiceFrozen);
+    }
+
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
@@ -384,6 +388,10 @@ pub fn settle_invoice(
     // Early double-settle guard: reject if already finalized.
     if is_finalized(env, invoice_id) {
         return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if crate::storage::InvoiceStorage::is_frozen(env, invoice_id) {
+        return Err(QuickLendXError::InvoiceFrozen);
     }
 
     let invoice =

@@ -86,7 +86,7 @@ const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 7 * 24 * 60 * 60; // 7 days
 const DEFAULT_FEE_BPS: u32 = 200; // 2%
 
 // Security limits
-const MAX_FEE_BPS: u32 = 1000; // 10% maximum fee
+pub(crate) const MAX_FEE_BPS: u32 = 1000; // 10% maximum fee
 const MIN_FEE_BPS: u32 = 0; // 0% minimum fee
 const MAX_DUE_DATE_DAYS: u64 = 730; // 2 years maximum
 const MAX_GRACE_PERIOD_SECONDS: u64 = 30 * 24 * 60 * 60; // 30 days maximum

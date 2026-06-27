@@ -483,3 +483,42 @@ fn test_accept_bid_at_expiration_timestamp_fails() {
         QuickLendXError::InvalidStatus
     );
 }
+
+// ===========================================================================
+// 8. FREEZE INVOICE - Admin can freeze invoice and block bids
+// ===========================================================================
+
+#[test]
+fn test_freeze_invoice_blocks_bids() {
+    let (env, client, admin, business) = setup();
+
+    // Setup an invoice
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+    let due = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due,
+        &soroban_sdk::String::from_str(&env, "inv"),
+        &crate::invoice::InvoiceCategory::Services,
+        &soroban_sdk::Vec::new(&env),
+    );
+
+    // Freeze it
+    client.freeze_invoice(&admin, &invoice_id);
+
+    // Attempt to bid
+    let investor = Address::generate(&env);
+    client.submit_investor_kyc(&investor, &soroban_sdk::String::from_str(&env, "kyc"));
+    client.verify_investor(&admin, &investor, &10_000i128);
+
+    let result = client.try_place_bid(&investor, &invoice_id, &900i128, &950i128);
+    assert!(result.is_err(), "should block bid on frozen invoice");
+    assert_eq!(
+        result.unwrap_err().expect("expected contract error"),
+        QuickLendXError::InvoiceFrozen
+    );
+}
+}

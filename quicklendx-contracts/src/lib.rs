@@ -57,6 +57,7 @@ mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
+use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
 #[cfg(any(test, feature = "testutils"))]
 pub mod bench;
@@ -85,11 +86,13 @@ pub mod init;
 pub mod invariants;
 pub mod investment;
 pub mod investment_queries;
+pub mod address_summary;
 pub mod invoice;
 pub mod invoice_search;
 pub mod maintenance;
 pub mod monitor;
 pub mod notifications;
+pub mod operational_limits;
 pub mod pagination;
 pub mod pause;
 pub mod payments;
@@ -159,16 +162,23 @@ mod test_dust_transfer;
 mod test_escrow_event_completeness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
+#[cfg(test)]
+mod test_payments;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
 #[cfg(test)]
 mod test_freshness;
 #[cfg(test)]
 mod test_freshness_bounds;
+// Issue #1541 — lag at zero, lag at positive, lag during pause.
+#[cfg(test)]
+mod test_freshness_lag;
 #[cfg(test)]
 mod test_health_status;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
+#[cfg(test)]
+mod test_operational_limits;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -214,12 +224,21 @@ mod test_string_limits;
 // mod test_types;
 #[cfg(test)]
 mod test_vesting;
+mod test_vesting_summary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_analytics_consistency;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
+#[cfg(test)]
+mod test_bid_capacity_stress;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_ranking;
+// Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
+// every CI matrix entry.
+#[cfg(test)]
+mod test_bid_ranking_determinism;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_category_breakdown;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -251,6 +270,8 @@ mod test_line_item_consistency;
 mod test_invoice_search_ranking;
 #[cfg(test)]
 mod test_default_grace_boundary;
+#[cfg(test)]
+mod test_clock_rollover;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -267,6 +288,8 @@ mod test_insurance_claim_payout;
 mod test_insurance_premium_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_cancelled_noop;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_compute_yield_props;
 #[cfg(test)]
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -318,7 +341,7 @@ use verification::{
     validate_investor_investment, validate_invoice_metadata, verify_business,
     verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
     BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
-    InvestorVerificationStorage,
+    InvestorVerificationStorage, determine_investor_tier,
 };
 
 use crate::storage::{BidStorage, InvoiceStorage};
@@ -453,6 +476,11 @@ impl QuickLendXContract {
     /// Get current protocol limits
     pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
         protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
+    }
+
+    /// Admin-only: update the absolute minimum bid amount.
+    pub fn update_minimum_bid(env: Env, admin: Address, amount: i128) -> Result<i128, QuickLendXError> {
+        protocol_limits::ProtocolLimitsContract::update_minimum_bid(env, admin, amount)
     }
 
     /// Admin-only: extends the TTL for all major persistent storage indexes.
@@ -769,6 +797,15 @@ impl QuickLendXContract {
         pause::PauseControl::is_paused(&env)
     }
 
+    /// Return whether a specific guarded entrypoint is currently blocked by pause.
+    ///
+    /// Accepts one of the stable pause entrypoint symbols from `pause.rs` and
+    /// returns `true` only when the protocol is paused and the symbol refers to a
+    /// guarded write entrypoint.
+    pub fn is_entrypoint_paused(env: Env, entrypoint: String) -> bool {
+        pause::PauseControl::is_entrypoint_paused(&env, entrypoint)
+    }
+
     /// Return whether the contract is currently in maintenance mode.
     pub fn is_maintenance_mode(env: Env) -> bool {
         maintenance::MaintenanceControl::is_maintenance_mode(&env)
@@ -822,6 +859,17 @@ impl QuickLendXContract {
     /// indexed off-chain reads and does not affect `writes_allowed`.
     pub fn get_health_status(env: Env) -> monitor::HealthStatus {
         monitor::get_health_status(&env)
+    }
+
+    /// Consolidated operational limits snapshot: max batch size, max query limit,
+    /// and max fee (bps) in a single read.
+    ///
+    /// Replaces the previous workaround of probing `get_overdue_scan_batch_limit_max`,
+    /// the pagination cap, and the fee ceiling via separate calls (the fee ceiling
+    /// previously had no getter at all). All fields are read-through aggregates of
+    /// existing protocol constants; no new state is stored.
+    pub fn get_operational_limits(_env: Env) -> operational_limits::OperationalLimits {
+        operational_limits::get_operational_limits()
     }
 
     /// Get a snapshot of the protocol's current health status.
@@ -1509,9 +1557,15 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_amount: i128,
         expected_return: i128,
+        salt: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &investor)?;
+        // Idempotency check
+        let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
+        if idempotency_exists(&env, &idem_key) {
+            return Err(QuickLendXError::DuplicateBid);
+        }
         // Authorization check: Only the investor can place their own bid
         investor.require_auth();
 
@@ -1571,6 +1625,8 @@ impl QuickLendXContract {
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
+        // Store idempotency marker
+        store_idempotency(&env, &idem_key);
 
         crate::qlx_log!(
             &env,
@@ -1657,7 +1713,7 @@ impl QuickLendXContract {
         InvestmentStorage::store_investment(&env, &investment);
 
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
-            .expect("Escrow should exist after creation");
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
 
@@ -3059,6 +3115,18 @@ impl QuickLendXContract {
         investor: Address,
     ) -> Result<investment_queries::InvestorPortfolioSummary, QuickLendXError> {
         investment_queries::InvestmentQueries::investor_portfolio_summary(&env, &investor)
+    }
+
+    /// Return a canonical best-effort address summary across all supported roles.
+    ///
+    /// Mirrors [`get_investor_portfolio_summary`] style: no auth required and
+    /// returns a stable shape even if an address only has data for a subset of
+    /// roles.
+    pub fn get_address_summary(
+        env: Env,
+        addr: Address,
+    ) -> Result<address_summary::AddressSummary, QuickLendXError> {
+        address_summary::summarize_address(&env, &addr)
     }
 
     /// Get bid history for an invoice (simple version without pagination)
