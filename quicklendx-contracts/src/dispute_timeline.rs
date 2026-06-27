@@ -34,7 +34,7 @@
 
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
-use crate::types::{Dispute, DisputeResolution, DisputeStatus, OptionalDisputeResolution};
+use crate::types::{Dispute, DisputeResolution, DisputeStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 // ---------------------------------------------------------------------------

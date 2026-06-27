@@ -19,7 +19,14 @@
 //!    goes through pre-computed safe bounds.
 
 use alloc::vec::Vec;
-use crate::MAX_QUERY_LIMIT;
+use crate::errors::QuickLendXError;
+
+/// Maximum number of records returned by paginated query endpoints.
+///
+/// Defined here (and re-exported from `crate::MAX_QUERY_LIMIT`) so the
+/// pagination module has no upward dependency on the contract root, which
+/// keeps the dependency graph acyclic.
+pub const MAX_QUERY_LIMIT: u32 = 100;
 
 /// Clamp a caller-supplied `limit` to [`MAX_QUERY_LIMIT`].
 ///

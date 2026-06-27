@@ -2,7 +2,7 @@ use crate::admin::AdminStorage;
 use crate::dispute_timeline::{clear_under_review_timestamp, set_under_review_timestamp};
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
-use crate::types::{Dispute, DisputeResolution, DisputeStatus, OptionalDisputeResolution};
+use crate::types::{Dispute, DisputeResolution, DisputeStatus};
 use crate::verification::{
     validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
     validate_dispute_resolution,

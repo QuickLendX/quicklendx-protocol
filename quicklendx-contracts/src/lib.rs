@@ -81,6 +81,7 @@ pub mod events;
 pub mod fees;
 pub mod freshness;
 pub mod health;
+pub mod idempotency;
 pub mod incident;
 pub mod init;
 pub mod invariants;
@@ -2886,6 +2887,7 @@ impl QuickLendXContract {
 
         // Apply pagination (overflow-safe) and collect into Soroban Vec.
         let len_u32 = pairs.len() as u32;
+        let capped_limit = cap_query_limit(limit);
         let start = offset.min(len_u32) as usize;
         let end = (offset.saturating_add(capped_limit).min(len_u32)) as usize;
         let mut result = Vec::new(&env);

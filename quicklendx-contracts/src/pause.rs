@@ -6,6 +6,21 @@ const PAUSED_KEY: Symbol = symbol_short!("paused");
 const PAUSED_AT_KEY: Symbol = symbol_short!("paused_at");
 const MAX_PAUSE_DURATION: u64 = 7 * 24 * 3600;
 
+/// Set of contract entrypoint names that are guarded by the protocol pause.
+///
+/// Compared at runtime via [`soroban_sdk::String`] equality because Soroban
+/// `String` is a host type without a direct `as_str()` accessor.
+const ALL_ENTRYPOINTS: &[&str] = &[
+    "store_invoice",
+    "verify_invoice",
+    "place_bid",
+    "accept_bid",
+    "verify_business",
+    "verify_investor",
+    "create_dispute",
+    "resolve_dispute",
+];
+
 pub struct PauseControl;
 
 impl PauseControl {
@@ -59,6 +74,14 @@ impl PauseControl {
     /// symbol (`EP_*`) and returns `true` when the protocol is paused and the
     /// named entrypoint is part of the guarded set.
     pub fn is_entrypoint_paused(env: &Env, entrypoint: String) -> bool {
-        Self::is_paused(env) && ALL_ENTRYPOINTS.contains(&entrypoint.as_str())
+        if !Self::is_paused(env) {
+            return false;
+        }
+        for ep in ALL_ENTRYPOINTS {
+            if entrypoint == String::from_str(env, ep) {
+                return true;
+            }
+        }
+        false
     }
 }
