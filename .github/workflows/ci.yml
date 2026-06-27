@@ -96,20 +96,17 @@ jobs:
           cargo test --test wasm_build_size_budget --verbose
 
       - name: Run Cargo tests
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
-          cd quicklendx-contracts
           cargo test --verbose
 
       - name: Test coverage (baseline + admin gate)
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
           cargo install cargo-llvm-cov
-          cd quicklendx-contracts
           # TODO: restore the original 95% gate after the legacy test suite is repaired.
           cargo llvm-cov --lib --fail-under-lines 50
+          cd quicklendx-contracts
           cargo llvm-cov clean --workspace
           cargo llvm-cov --lib --lcov --output-path coverage/lcov.info
           bash scripts/check-admin-coverage.sh coverage/lcov.info
