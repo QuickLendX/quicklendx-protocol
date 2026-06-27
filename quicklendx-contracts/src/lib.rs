@@ -287,6 +287,8 @@ mod test_insurance_claim_payout;
 mod test_insurance_premium_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_cancelled_noop;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_compute_yield_props;
 #[cfg(test)]
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]

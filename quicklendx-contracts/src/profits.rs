@@ -476,6 +476,59 @@ pub fn calculate_treasury_split_checked(
 }
 
 // ============================================================================
+// Yield Calculation
+// ============================================================================
+
+/// Basis-point denominator shared with BPS_DENOMINATOR (10 000).
+const DAYS_PER_YEAR: i128 = 365;
+
+/// Compute the yield earned on a principal over a period at a given rate.
+///
+/// # Formula
+/// ```text
+/// yield = floor(amount * rate_bps * duration_days / (10_000 * 365))
+/// ```
+///
+/// The result is always non-negative.  For inputs that would produce a
+/// mathematically negative value (negative amount, negative rate, or negative
+/// duration) the function returns `0`.
+///
+/// # Arguments
+/// * `amount`        – Principal in the smallest denomination (≥ 0).
+/// * `rate_bps`      – Annual yield rate in basis points, e.g. `500` = 5 % p.a.
+/// * `duration_days` – Holding period in whole days (≥ 0).
+///
+/// # Returns
+/// The floor-rounded yield amount, or `0` for non-positive inputs.
+///
+/// # Overflow safety
+/// Uses `checked_mul` internally; if the intermediate product would overflow
+/// `i128` the function returns `0` (same as the non-positive-input sentinel).
+///
+/// # No-std
+/// Uses only primitive `i128` arithmetic — no `std` imports required.
+///
+/// # Example
+/// ```ignore
+/// // 1_000_000 principal, 5 % p.a. (500 bps), 365 days
+/// assert_eq!(compute_yield(1_000_000, 500, 365), 50_000);
+/// // 1_000_000 principal, 5 % p.a., 182 days
+/// assert_eq!(compute_yield(1_000_000, 500, 182), 24_931);
+/// ```
+pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 {
+    if amount <= 0 || rate_bps <= 0 || duration_days <= 0 {
+        return 0;
+    }
+    // amount * rate_bps * duration_days / (10_000 * 365)
+    let denominator = BPS_DENOMINATOR.saturating_mul(DAYS_PER_YEAR);
+    amount
+        .checked_mul(rate_bps)
+        .and_then(|v| v.checked_mul(duration_days))
+        .map(|v| v / denominator)
+        .unwrap_or(0)
+}
+
+// ============================================================================
 // Validation Functions
 // ============================================================================
 
