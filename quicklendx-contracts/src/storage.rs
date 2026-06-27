@@ -241,6 +241,7 @@ pub struct InvoiceStorage;
 impl InvoiceStorage {
     /// Store an invoice and update all its secondary indexes.
     pub fn store(env: &Env, invoice: &Invoice) {
+        crate::assert_view_only!(env);
         let key = DataKey::Invoice(invoice.id.clone());
         env.storage().persistent().set(&key, invoice);
         extend_persistent_ttl(env, &key);
@@ -314,6 +315,7 @@ impl InvoiceStorage {
     }
 
     pub fn update(env: &Env, invoice: &Invoice) {
+        crate::assert_view_only!(env);
         if let Some(old) = Self::get(env, &invoice.id) {
             if old.status != invoice.status {
                 Self::remove_from_status_index(env, old.status, &invoice.id);
@@ -378,6 +380,7 @@ impl InvoiceStorage {
     }
 
     pub fn delete_invoice(env: &Env, invoice_id: &BytesN<32>) {
+        crate::assert_view_only!(env);
         if let Some(invoice) = Self::get(env, invoice_id) {
             Self::remove_from_status_index(env, invoice.status, invoice_id);
             Self::remove_from_business_index(env, &invoice.business, invoice_id);
@@ -783,6 +786,10 @@ impl ConfigStorage {
 }
 
 pub struct StorageManager;
+
+/// Storage key for the view-only context flag.
+const VIEW_ONLY_KEY: Symbol = symbol_short!("view_onl");
+
 impl StorageManager {
     pub fn clear_all_mappings(env: &Env) {
         env.storage()
@@ -792,6 +799,30 @@ impl StorageManager {
         env.storage()
             .persistent()
             .remove(&StorageKeys::investment_count());
+    }
+
+    /// Return `true` if the current context is marked as view-only.
+    pub fn is_view_only(env: &Env) -> bool {
+        env.storage().instance().get(&VIEW_ONLY_KEY).unwrap_or(false)
+    }
+
+    /// Mark the current context as view-only or normal.
+    pub fn set_view_only(env: &Env, enabled: bool) {
+        env.storage().instance().set(&VIEW_ONLY_KEY, &enabled);
+    }
+
+    /// Execute a closure within a view-only context.
+    ///
+    /// Sets the view-only flag, runs `f`, then restores the previous flag state.
+    pub fn with_view_only<F, R>(env: &Env, f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        let previous = Self::is_view_only(env);
+        Self::set_view_only(env, true);
+        let result = f();
+        Self::set_view_only(env, previous);
+        result
     }
 }
 

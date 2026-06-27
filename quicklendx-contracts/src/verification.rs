@@ -1173,7 +1173,7 @@ pub fn verify_investor(
             // Calculate risk score and determine tier
             let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
             validate_risk_score(risk_score)?;
-            let tier = compute_investor_tier(env, investor, risk_score)?;
+            let tier = determine_investor_tier(env, investor, risk_score)?;
             let risk_level = determine_risk_level(risk_score);
 
             // Calculate final investment limit based on tier and risk
@@ -1378,7 +1378,7 @@ pub fn determine_risk_level(risk_score: u32) -> InvestorRiskLevel {
 }
 
 /// Core tier computation using raw counters (total invested, successes, defaults).
-pub fn compute_investor_tier(
+pub fn compute_investor_tier_from_stats(
     total_invested: i128,
     successful_investments: u32,
     defaulted_investments: u32,

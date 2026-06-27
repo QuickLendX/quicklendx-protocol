@@ -18,6 +18,8 @@
 
 use alloc::string::{String, ToString};
 use alloc::vec;
+use crate::pagination::validate_query_params;
+use crate::errors::QuickLendXError;
 use alloc::vec::Vec;
 
 use crate::pagination::{
