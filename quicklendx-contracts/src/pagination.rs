@@ -26,6 +26,11 @@ use crate::errors::QuickLendXError;
 /// Defined here (and re-exported from `crate::MAX_QUERY_LIMIT`) so the
 /// pagination module has no upward dependency on the contract root, which
 /// keeps the dependency graph acyclic.
+///
+/// **Note:** this value is a fresh choice introduced while repairing the
+/// pre-existing circular import in this module; the prior value was not
+/// defined anywhere reachable. Update downstream callers if a tighter or
+/// looser cap is required.
 pub const MAX_QUERY_LIMIT: u32 = 100;
 
 /// Clamp a caller-supplied `limit` to [`MAX_QUERY_LIMIT`].

@@ -479,9 +479,6 @@ pub fn calculate_treasury_split_checked(
 // Yield Calculation
 // ============================================================================
 
-/// Basis-point denominator shared with BPS_DENOMINATOR (10 000).
-const DAYS_PER_YEAR: i128 = 365;
-
 /// Compute the yield earned on a principal over a period at a given rate.
 ///
 /// # Formula
@@ -515,18 +512,7 @@ const DAYS_PER_YEAR: i128 = 365;
 /// // 1_000_000 principal, 5 % p.a., 182 days
 /// assert_eq!(compute_yield(1_000_000, 500, 182), 24_931);
 /// ```
-pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 {
-    if amount <= 0 || rate_bps <= 0 || duration_days <= 0 {
-        return 0;
-    }
-    // amount * rate_bps * duration_days / (10_000 * 365)
-    let denominator = BPS_DENOMINATOR.saturating_mul(DAYS_PER_YEAR);
-    amount
-        .checked_mul(rate_bps)
-        .and_then(|v| v.checked_mul(duration_days))
-        .map(|v| v / denominator)
-        .unwrap_or(0)
-}
+
 
 // ============================================================================
 // Yield Calculation
@@ -565,18 +551,7 @@ pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 
 /// // 1_000_000 principal, 5 % p.a., 182 days
 /// assert_eq!(compute_yield(1_000_000, 500, 182), 24_931);
 /// ```
-pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 {
-    if amount <= 0 || rate_bps <= 0 || duration_days <= 0 {
-        return 0;
-    }
-    // amount * rate_bps * duration_days / (10_000 * 365)
-    let denominator = BPS_DENOMINATOR.saturating_mul(DAYS_PER_YEAR);
-    amount
-        .checked_mul(rate_bps)
-        .and_then(|v| v.checked_mul(duration_days))
-        .map(|v| v / denominator)
-        .unwrap_or(0)
-}
+
 
 // ============================================================================
 // Validation Functions
