@@ -115,6 +115,8 @@ pub enum GuardError {
     VerificationPending,
     /// KYC application was rejected.
     VerificationRejected,
+    /// KYC data has expired based on current ledger time.
+    KycExpired,
     /// Bid / investment amount exceeds the investor's computed limit.
     InvestmentLimitExceeded {
         requested: u128,
@@ -471,6 +473,35 @@ pub fn compute_tier(total_invested: u128, successful_investments: u32) -> Invest
     }
 }
 
+/// Guard: Checks whether a business actor's KYC is missing, expired, or current.
+///
+/// # Parameters
+/// - `status` — The current validation status if a record exists (`Some`), or `None`.
+/// - `expiration_timestamp` — The timestamp when the KYC coverage officially lapses.
+/// - `current_timestamp` — The current ledger block time supplied by the caller.
+pub fn verify_business_kyc(
+    status: Option<VerificationStatus>,
+    expiration_timestamp: u64,
+    current_timestamp: u64,
+) -> Result<(), GuardError> {
+    // 1. Missing case
+    let current_status = status.ok_or(GuardError::NotSubmitted)?;
+
+    match current_status {
+        VerificationStatus::Pending => return Err(GuardError::VerificationPending),
+        VerificationStatus::Rejected => return Err(GuardError::VerificationRejected),
+        VerificationStatus::Verified => {}
+    }
+
+    // 2. Expired case (Boundary check)
+    if current_timestamp >= expiration_timestamp {
+        return Err(GuardError::KycExpired);
+    }
+
+    // 3. Current case (Happy path)
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -756,5 +787,31 @@ mod tests {
         assert_eq!(compute_tier(10_000_000, 0), InvestorTier::Basic);
         // Low invested but high count → stays at lower tier
         assert_eq!(compute_tier(1, 1_000), InvestorTier::Basic);
+    }
+
+    // ── verify_business_kyc Boundary Tests ─────────────────────────────────
+
+    #[test]
+    fn returns_error_when_kyc_is_missing() {
+        let result = verify_business_kyc(None, 2000, 1000);
+        assert_eq!(result, Err(GuardError::NotSubmitted));
+    }
+
+    #[test]
+    fn returns_error_when_kyc_is_expired() {
+        // Boundary check: current time matches expiration time exactly
+        let exact_boundary = verify_business_kyc(Some(VerificationStatus::Verified), 2000, 2000);
+        assert_eq!(exact_boundary, Err(GuardError::KycExpired));
+
+        // Sad path: current time exceeds expiration time
+        let past_boundary = verify_business_kyc(Some(VerificationStatus::Verified), 2000, 2001);
+        assert_eq!(past_boundary, Err(GuardError::KycExpired));
+    }
+
+    #[test]
+    fn succeeds_when_kyc_is_current() {
+        // Happy path: current time is strictly before expiration time
+        let result = verify_business_kyc(Some(VerificationStatus::Verified), 2000, 1999);
+        assert_eq!(result, Ok(()));
     }
 }
