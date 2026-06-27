@@ -283,6 +283,8 @@ mod test_line_item_consistency;
 mod test_invoice_search_ranking;
 #[cfg(test)]
 mod test_default_grace_boundary;
+#[cfg(test)]
+mod test_clock_rollover;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
