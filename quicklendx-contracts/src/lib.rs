@@ -164,6 +164,8 @@ mod test_dust_transfer;
 mod test_escrow_event_completeness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
+#[cfg(test)]
+mod test_payments;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
 #[cfg(test)]
@@ -483,6 +485,11 @@ impl QuickLendXContract {
     /// Get current protocol limits
     pub fn get_protocol_limits(env: Env) -> protocol_limits::ProtocolLimits {
         protocol_limits::ProtocolLimitsContract::get_protocol_limits(env)
+    }
+
+    /// Admin-only: update the absolute minimum bid amount.
+    pub fn update_minimum_bid(env: Env, admin: Address, amount: i128) -> Result<i128, QuickLendXError> {
+        protocol_limits::ProtocolLimitsContract::update_minimum_bid(env, admin, amount)
     }
 
     /// Admin-only: extends the TTL for all major persistent storage indexes.
