@@ -52,6 +52,22 @@ fn test_health_status_paused_but_not_maintenance() {
 }
 
 #[test]
+fn test_is_entrypoint_paused_supports_known_and_unknown_symbols() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    let invoice_upload = String::from_str(&env, "invoice_upload");
+    let arbitrary = String::from_str(&env, "unknown_entrypoint");
+
+    assert!(!client.is_entrypoint_paused(&invoice_upload));
+    assert!(!client.is_entrypoint_paused(&arbitrary));
+
+    client.pause(&admin);
+    assert!(client.is_entrypoint_paused(&invoice_upload));
+    assert!(!client.is_entrypoint_paused(&arbitrary));
+}
+
+#[test]
 fn test_health_status_maintenance_with_reason() {
     let env = Env::default();
     let (client, admin) = setup(&env);

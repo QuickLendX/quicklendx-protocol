@@ -1,6 +1,6 @@
 ﻿use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use soroban_sdk::{symbol_short, Address, Env, Symbol};
+use soroban_sdk::{symbol_short, Address, Env, String, Symbol};
 
 const PAUSED_KEY: Symbol = symbol_short!("paused");
 const PAUSED_AT_KEY: Symbol = symbol_short!("paused_at");
@@ -40,5 +40,14 @@ impl PauseControl {
             return Err(QuickLendXError::ContractPaused);
         }
         Ok(())
+    }
+
+    /// Return whether a specific guarded entrypoint is currently blocked by pause.
+    ///
+    /// This is a frontend-friendly read-only getter that accepts a stable entrypoint
+    /// symbol (`EP_*`) and returns `true` when the protocol is paused and the
+    /// named entrypoint is part of the guarded set.
+    pub fn is_entrypoint_paused(env: &Env, entrypoint: String) -> bool {
+        Self::is_paused(env) && ALL_ENTRYPOINTS.contains(&entrypoint.as_str())
     }
 }

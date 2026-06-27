@@ -794,6 +794,15 @@ impl QuickLendXContract {
         pause::PauseControl::is_paused(&env)
     }
 
+    /// Return whether a specific guarded entrypoint is currently blocked by pause.
+    ///
+    /// Accepts one of the stable pause entrypoint symbols from `pause.rs` and
+    /// returns `true` only when the protocol is paused and the symbol refers to a
+    /// guarded write entrypoint.
+    pub fn is_entrypoint_paused(env: Env, entrypoint: String) -> bool {
+        pause::PauseControl::is_entrypoint_paused(&env, entrypoint)
+    }
+
     /// Return whether the contract is currently in maintenance mode.
     pub fn is_maintenance_mode(env: Env) -> bool {
         maintenance::MaintenanceControl::is_maintenance_mode(&env)
