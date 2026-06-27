@@ -33,6 +33,7 @@
 
   •  docs/ : Project-wide design, implementation, and audit documentation.
   •  docs/VESTING.md  /docs/VESTING.md: Vesting model, edge cases, and admin protections.
+  •  docs/QUERIES.md  /docs/QUERIES.md: Catalog of common read-only entrypoints with concrete invocation examples and return values — the quickest way to find the query you need.
   •  docs/contracts/platform-fee-ops.md  /docs/contracts/platform-fee-ops.md: Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
   •  docs/RUNBOOK_INCIDENT_RESPONSE.md : Operator playbook for unexpected contract behavior and incident-mode recovery.
   •  docs/INVESTOR_TIER.md : How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
@@ -62,6 +63,7 @@ npm run dev
 - [Platform Fee & Treasury Split Operations Guide](file:///c:/Users/HP/quicklendx-protocol/docs/contracts/platform-fee-ops.md): Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
 - [Dispute Lifecycle](file:///c:/Users/HP/quicklendx-protocol/docs/DISPUTE.md): Who can open, who resolves, timeout behaviour, and fund implications.
+- [`docs/QUERIES.md`](docs/QUERIES.md): Catalog of common read-only entrypoints with concrete invocation examples and return values — the quickest way to find the query you need.
 - `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
 - `docs/KYC.md`: Business KYC vs investor KYC, what each gates.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
