@@ -65,7 +65,7 @@ impl QuickLendXContract {
 mod test {
     use super::*;
     use soroban_sdk::Env;
-    use soroban_sdk::testutils::Address as _; // Brings the mock address generator trait into scope
+    use soroban_sdk::testutils::Address as _;
 
     #[test]
     fn test_initialization() {
@@ -80,8 +80,7 @@ mod test {
         // Initialize the contract cleanly
         client.init(&admin, &fee, &min_holding);
 
-        // Directly query the contract state using storage lookups to satisfy 
-        // test assertions and code coverage without causing an OS abort loop
+        // Fetch stored state
         let stored_admin: Address = env.as_contract(&contract_id, || {
             env.storage().instance().get(&DataKey::Admin).unwrap()
         });
@@ -89,6 +88,13 @@ mod test {
         let stored_config: ProtocolConfig = env.as_contract(&contract_id, || {
             env.storage().instance().get(&DataKey::Config).unwrap()
         });
+
+        // Assertions using correct ProtocolConfig fields
+        assert_eq!(stored_admin, admin);
+        assert_eq!(stored_config.fee_percentage, fee);
+        assert_eq!(stored_config.min_holding_period, min_holding);
+    }
+}
 
 #[cfg(test)]
 mod test_solvency_invariant;
