@@ -95,6 +95,11 @@ pub enum OpType {
     EscrowRefunded,
     PaymentProcessed,
     SettlementCompleted,
+    ConfigProtocolChanged,
+    ConfigFeeChanged,
+    ConfigTreasuryChanged,
+    ConfigFeeStructureChanged,
+    ConfigRevenueDistributionChanged,
 }
 
 impl OpType {
@@ -117,6 +122,11 @@ impl OpType {
             OpType::EscrowRefunded => symbol_short!("esc_ref"),
             OpType::PaymentProcessed => symbol_short!("pay_prc"),
             OpType::SettlementCompleted => symbol_short!("stl_cmp"),
+            OpType::ConfigProtocolChanged => symbol_short!("cfg_proto"),
+            OpType::ConfigFeeChanged => symbol_short!("cfg_fee"),
+            OpType::ConfigTreasuryChanged => symbol_short!("cfg_treas"),
+            OpType::ConfigFeeStructureChanged => symbol_short!("cfg_feest"),
+            OpType::ConfigRevenueDistributionChanged => symbol_short!("cfg_rev"),
         }
     }
 
@@ -139,6 +149,11 @@ impl OpType {
             OpType::EscrowRefunded => 13,
             OpType::PaymentProcessed => 14,
             OpType::SettlementCompleted => 15,
+            OpType::ConfigProtocolChanged => 16,
+            OpType::ConfigFeeChanged => 17,
+            OpType::ConfigTreasuryChanged => 18,
+            OpType::ConfigFeeStructureChanged => 19,
+            OpType::ConfigRevenueDistributionChanged => 20,
         }
     }
 }
@@ -162,6 +177,11 @@ impl From<AuditOperation> for OpType {
             AuditOperation::EscrowRefunded => OpType::EscrowRefunded,
             AuditOperation::PaymentProcessed => OpType::PaymentProcessed,
             AuditOperation::SettlementCompleted => OpType::SettlementCompleted,
+            AuditOperation::ConfigProtocolChanged => OpType::ConfigProtocolChanged,
+            AuditOperation::ConfigFeeChanged => OpType::ConfigFeeChanged,
+            AuditOperation::ConfigTreasuryChanged => OpType::ConfigTreasuryChanged,
+            AuditOperation::ConfigFeeStructureChanged => OpType::ConfigFeeStructureChanged,
+            AuditOperation::ConfigRevenueDistributionChanged => OpType::ConfigRevenueDistributionChanged,
         }
     }
 }
