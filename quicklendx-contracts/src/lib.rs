@@ -234,6 +234,8 @@ mod test_analytics_consistency;
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
+#[cfg(test)]
+mod test_bid_capacity_stress;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
 // Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
