@@ -96,11 +96,9 @@ jobs:
           cargo test --test wasm_build_size_budget --verbose
 
       - name: Run Cargo tests
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
-          cd quicklendx-contracts
-          cargo test --test wasm_build_size_budget --verbose
+          cargo test --verbose
 
       - name: Test coverage (baseline + admin gate)
         run: |
