@@ -40,6 +40,7 @@ npm run dev
 - [Platform Fee & Treasury Split Operations Guide](file:///c:/Users/HP/quicklendx-protocol/docs/contracts/platform-fee-ops.md): Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
 - `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
+- [Storage TTL Policy & Mapping](file:///c:/Users/hp/quicklendx-protocol/docs/STORAGE_TTL.md): Time-To-Live (TTL) category, storage class, and bump amounts mapping for all contract storage keys.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-contracts/docs/contracts/deterministic-time.md`: Smart contract deterministic ledger time semantics.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
