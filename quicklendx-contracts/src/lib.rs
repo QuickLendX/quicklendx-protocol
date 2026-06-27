@@ -86,6 +86,7 @@ pub mod init;
 pub mod invariants;
 pub mod investment;
 pub mod investment_queries;
+pub mod address_summary;
 pub mod invoice;
 pub mod invoice_search;
 pub mod maintenance;
@@ -3119,6 +3120,18 @@ impl QuickLendXContract {
         investor: Address,
     ) -> Result<investment_queries::InvestorPortfolioSummary, QuickLendXError> {
         investment_queries::InvestmentQueries::investor_portfolio_summary(&env, &investor)
+    }
+
+    /// Return a canonical best-effort address summary across all supported roles.
+    ///
+    /// Mirrors [`get_investor_portfolio_summary`] style: no auth required and
+    /// returns a stable shape even if an address only has data for a subset of
+    /// roles.
+    pub fn get_address_summary(
+        env: Env,
+        addr: Address,
+    ) -> Result<address_summary::AddressSummary, QuickLendXError> {
+        address_summary::summarize_address(&env, &addr)
     }
 
     /// Get bid history for an invoice (simple version without pagination)
