@@ -124,7 +124,7 @@ fn test_validation_empty_customer_name() {
 
     let res = client.try_update_invoice_metadata(&invoice_id, &meta);
     assert_eq!(
-        res.unwrap_err().unwrap(),
+        res.unwrap().unwrap_err(),
         QuickLendXError::InvalidDescription
     );
 }
@@ -140,7 +140,7 @@ fn test_validation_empty_customer_address() {
 
     let res = client.try_update_invoice_metadata(&invoice_id, &meta);
     assert_eq!(
-        res.unwrap_err().unwrap(),
+        res.unwrap().unwrap_err(),
         QuickLendXError::InvalidDescription
     );
 }
@@ -156,7 +156,7 @@ fn test_validation_empty_tax_id() {
 
     let res = client.try_update_invoice_metadata(&invoice_id, &meta);
     assert_eq!(
-        res.unwrap_err().unwrap(),
+        res.unwrap().unwrap_err(),
         QuickLendXError::InvalidDescription
     );
 }
@@ -172,7 +172,7 @@ fn test_validation_empty_line_items() {
 
     let res = client.try_update_invoice_metadata(&invoice_id, &meta);
     assert_eq!(
-        res.unwrap_err().unwrap(),
+        res.unwrap().unwrap_err(),
         QuickLendXError::InvalidDescription
     );
 }
@@ -190,7 +190,7 @@ fn test_validation_invalid_line_item_desc() {
 
     let res = client.try_update_invoice_metadata(&invoice_id, &meta);
     assert_eq!(
-        res.unwrap_err().unwrap(),
+        res.unwrap().unwrap_err(),
         QuickLendXError::InvalidDescription
     );
 }
@@ -208,7 +208,7 @@ fn test_validation_invalid_line_item_qty_price() {
     meta.line_items = bad_items;
 
     let res = client.try_update_invoice_metadata(&invoice_id, &meta);
-    assert_eq!(res.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
+    assert_eq!(res.unwrap().unwrap_err(), QuickLendXError::InvalidAmount);
 
     let mut meta2 = valid_metadata(&env);
     let mut bad_items2 = Vec::new(&env);
@@ -222,7 +222,7 @@ fn test_validation_invalid_line_item_qty_price() {
     meta2.line_items = bad_items2;
 
     let res2 = client.try_update_invoice_metadata(&invoice_id, &meta2);
-    assert_eq!(res2.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
+    assert_eq!(res2.unwrap().unwrap_err(), QuickLendXError::InvalidAmount);
 }
 
 #[test]
@@ -243,7 +243,7 @@ fn test_validation_mismatched_computation() {
     meta.line_items = bad_items;
 
     let res = client.try_update_invoice_metadata(&invoice_id, &meta);
-    assert_eq!(res.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
+    assert_eq!(res.unwrap().unwrap_err(), QuickLendXError::InvalidAmount);
 }
 
 #[test]
@@ -265,7 +265,7 @@ fn test_validation_mismatched_invoice_total() {
 
     let res = client.try_update_invoice_metadata(&invoice_id, &meta);
     assert_eq!(
-        res.unwrap_err().unwrap(),
+        res.unwrap().unwrap_err(),
         QuickLendXError::InvoiceAmountInvalid
     );
 }
