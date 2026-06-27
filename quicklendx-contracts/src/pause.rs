@@ -1,4 +1,4 @@
-﻿use crate::admin::AdminStorage;
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use soroban_sdk::{symbol_short, Address, Env, String, Symbol};
 
@@ -24,7 +24,18 @@ impl PauseControl {
     pub fn set_paused(env: &Env, admin: &Address, paused: bool) -> Result<(), QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
+        // Check current paused state to ensure idempotency
+        let current: bool = Self::is_paused(env);
+        if current == paused {
+            return Ok(());
+        }
         Self::apply_paused(env, paused);
+        // Emit appropriate event based on state transition
+        if paused {
+            crate::events::emit_paused(env, admin);
+        } else {
+            crate::events::emit_unpaused(env, admin);
+        }
         Ok(())
     }
 
