@@ -109,10 +109,6 @@ mod test_accept_bid_race;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
-mod test_panic_handler;
-#[cfg(test)]
-mod test_panic_handler;
-#[cfg(test)]
 mod test_due_date_guard;
 #[cfg(test)]
 mod test_admin;
