@@ -88,7 +88,7 @@ mod tests {
             &investor,
             &invoice_id,
             &invoice_amount,
-            &(invoice_amount + 100),
+            &(invoice_amount + 100), &BytesN::from_array(&env, &[0u8; 32]),
         );
         client.accept_bid(&invoice_id, &bid_id);
         (invoice_id, business, investor, currency)

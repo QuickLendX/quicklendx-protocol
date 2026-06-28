@@ -378,6 +378,7 @@ mod payments_tests {
     use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env};
 
     fn contract_env() -> (Env, Address) {
+        use crate::QuickLendXContract;
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register(QuickLendXContract, ());

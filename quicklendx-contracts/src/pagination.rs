@@ -19,7 +19,10 @@
 //!    goes through pre-computed safe bounds.
 
 use alloc::vec::Vec;
-use crate::MAX_QUERY_LIMIT;
+use crate::errors::QuickLendXError;
+
+/// Maximum number of records returned by paginated query endpoints.
+pub const MAX_QUERY_LIMIT: u32 = 50;
 
 /// Clamp a caller-supplied `limit` to [`MAX_QUERY_LIMIT`].
 ///

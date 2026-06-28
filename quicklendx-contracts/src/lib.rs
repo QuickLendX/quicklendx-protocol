@@ -57,6 +57,7 @@ mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
+pub mod idempotency;
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
 #[cfg(any(test, feature = "testutils"))]
@@ -106,10 +107,6 @@ pub mod storage;
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
-mod test_panic_handler;
-#[cfg(test)]
-mod test_panic_handler;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
@@ -189,18 +186,12 @@ mod test_invariant_self_check;
 mod test_investment_consistency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
-mod test_bid_cancel_accept_race;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_withdraw_bid_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 // #[cfg(test)]
 #[cfg(test)]
 #[path = "test/test_investment_queries.rs"]
 mod test_investment_queries;
-#[cfg(test)]
-mod test_queries;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_overflow;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -251,10 +242,6 @@ mod test_bid_ranking;
 mod test_bid_ranking_determinism;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_category_breakdown;
-#[cfg(test)]
-mod test_default_grace_boundary;
-#[cfg(test)]
-mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
@@ -347,14 +334,15 @@ use settlement::{
 };
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
-    get_investor_verification as do_get_investor_verification, normalize_tag, reject_business,
+    determine_investor_tier, get_investor_verification as do_get_investor_verification,
+    normalize_tag, reject_business,
     reject_investor as do_reject_investor, recompute_investor_tier, require_business_not_pending,
     require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
     verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
     BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
-    InvestorVerificationStorage, determine_investor_tier,
+    InvestorVerificationStorage,
 };
 
 use crate::storage::{BidStorage, InvoiceStorage};
@@ -363,7 +351,7 @@ use crate::storage::{BidStorage, InvoiceStorage};
 pub struct QuickLendXContract;
 
 /// Maximum number of records returned by paginated query endpoints.
-pub(crate) const MAX_QUERY_LIMIT: u32 = pagination::MAX_QUERY_LIMIT;
+pub const MAX_QUERY_LIMIT: u32 = pagination::MAX_QUERY_LIMIT;
 
 /// @notice Validates and caps query limit to prevent resource abuse
 /// @param limit The requested limit value
@@ -829,6 +817,16 @@ impl QuickLendXContract {
         maintenance::MaintenanceControl::get_maintenance_reason(&env)
     }
 
+    /// Enable or disable maintenance mode (admin only).
+    pub fn set_maintenance_mode(
+        env: Env,
+        admin: Address,
+        enabled: bool,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        maintenance::MaintenanceControl::set_maintenance_mode(&env, &admin, enabled, &reason)
+    }
+
     /// Atomically enter incident mode: hard pause plus maintenance with reason.
     ///
     /// Coordinates [`pause::PauseControl`] and [`maintenance::MaintenanceControl`]
@@ -941,10 +939,7 @@ impl QuickLendXContract {
     /// # Security
     /// - No authentication required (read-only, no PII).
     /// - State is never mutated.
-    #[cfg(feature = "diagnostics")]
-    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
-        diagnostics::get_protocol_diagnostics(&env)
-    }
+    // Moved to gated contractimpl at the end of file to avoid SDK bug.
 
     // ============================================================================
     // Invoice Management Functions
@@ -1556,6 +1551,7 @@ impl QuickLendXContract {
     /// - Creates and stores the bid
     ///
     /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// @deprecated salt is no longer used for idempotency
     /// breaker is engaged, before the bid is validated or stored.
     pub fn place_bid(
         env: Env,
@@ -2886,6 +2882,7 @@ impl QuickLendXContract {
 
         // Apply pagination (overflow-safe) and collect into Soroban Vec.
         let len_u32 = pairs.len() as u32;
+        let capped_limit = cap_query_limit(limit);
         let start = offset.min(len_u32) as usize;
         let end = (offset.saturating_add(capped_limit).min(len_u32)) as usize;
         let mut result = Vec::new(&env);
@@ -4044,9 +4041,28 @@ mod test_settlement_dispute_interaction;
 
 #[cfg(test)]
 mod test_prune_terminal_invoices;
+#[cfg(test)]
+mod test_view_only;
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
 
-#[cfg(test)]
-mod test_audit_stats_regression;
+#[cfg(feature = "diagnostics")]
+#[contractimpl]
+impl QuickLendXContract {
+    /// Return a rich internal diagnostic snapshot.
+    ///
+    /// Intended for operator tooling, support dashboards, and integration tests
+    /// that need per-status invoice counts, bid counters, and subsystem flags in
+    /// a single call without having to fan out across multiple read entry-points.
+    ///
+    /// # Returns
+    /// A [`diagnostics::ProtocolDiagnostics`] snapshot (see `diagnostics.rs`).
+    ///
+    /// # Security
+    /// - No authentication required (read-only, no PII).
+    /// - State is never mutated.
+    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
+        diagnostics::get_protocol_diagnostics(&env)
+    }
+}

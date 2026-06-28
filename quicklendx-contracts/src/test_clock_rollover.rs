@@ -541,7 +541,7 @@ fn bid_placed_at_u64_max_minus_one_has_expiration_saturated_to_u64_max() {
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).unwrap();
 
     assert_eq!(
@@ -581,7 +581,7 @@ fn cleanup_does_not_remove_bid_whose_expiration_saturated_to_u64_max() {
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid.expiration_timestamp, u64::MAX);
 

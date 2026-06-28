@@ -4,6 +4,7 @@ extern crate std;
 use proptest::prelude::*;
 use proptest::test_runner::{Config, TestRunner};
 use std::env;
+use alloc::boxed::Box;
 
 use crate::emergency::{
     DEFAULT_EMERGENCY_EXPIRATION_SECS, DEFAULT_EMERGENCY_TIMELOCK_SECS,

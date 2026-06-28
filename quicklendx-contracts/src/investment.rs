@@ -356,6 +356,7 @@ impl InvestmentStorage {
     }
 
     pub fn store_investment(env: &Env, investment: &Investment) {
+        crate::assert_view_only!(env);
         env.storage()
             .persistent()
             .set(&investment.investment_id, investment);
@@ -406,6 +407,7 @@ impl InvestmentStorage {
     /// Panics (contract error) if the transition `old_status -> new_status` is
     /// not in the allowed set defined by `InvestmentStatus::validate_transition`.
     pub fn update_investment(env: &Env, investment: &Investment) {
+        crate::assert_view_only!(env);
         // Retrieve the previous status to validate the transition.
         let previous_status = env
             .storage()

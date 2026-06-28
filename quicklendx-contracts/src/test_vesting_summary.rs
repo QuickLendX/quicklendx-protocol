@@ -130,7 +130,7 @@ fn reflects_released_amount_after_partial_claim() {
 
     // Midpoint: elapsed = 1000, duration = 2000 → vested = 2000
     env.ledger().set_timestamp(2_000);
-    client.release_vesting(&user, &id);
+    client.release_vested_tokens(&user, &id);
 
     let summary = client.get_vesting_summary(&user);
     assert_eq!(summary.grant_count, 1);

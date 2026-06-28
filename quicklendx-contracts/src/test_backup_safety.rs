@@ -36,7 +36,7 @@ fn setup_env() -> Env {
 /// Build a minimal valid Invoice for storage tests.
 fn make_invoice(env: &Env, idx: u32, amount: i128) -> Invoice {
     use soroban_sdk::{Address, BytesN, String, Vec};
-    use crate::types::{Dispute, DisputeStatus, OptionalDisputeResolution};
+    use crate::types::{Dispute, DisputeStatus};
 
     let mut id_bytes = [0u8; 32];
     id_bytes[28..32].copy_from_slice(&idx.to_be_bytes());
@@ -73,7 +73,7 @@ fn make_invoice(env: &Env, idx: u32, amount: i128) -> Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: Address::generate(env),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         },
         total_paid: 0,
         payment_history: Vec::new(env),

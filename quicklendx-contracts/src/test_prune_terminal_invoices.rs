@@ -79,9 +79,7 @@ impl TestFixture {
             &Vec::new(&self.env),
         );
         self.client.verify_invoice(&invoice_id);
-        let bid_id = self
-            .client
-            .place_bid(&self.investor, &invoice_id, &amount, &(amount + 100));
+        let bid_id = self.client.place_bid(&self.investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&self.env, &[0u8; 32]));
         self.client.accept_bid(&invoice_id, &bid_id);
         self.env.ledger().set_timestamp(timestamp + 10);
         self.client.settle_invoice(&invoice_id, &amount);
@@ -111,12 +109,8 @@ impl TestFixture {
                     &Vec::new(&self.env),
                 );
                 self.client.verify_invoice(&invoice_id);
-                let bid_id =
-                    self.client
-                        .place_bid(&self.investor, &invoice_id, &amount, &(amount + 100));
+                let bid_id = self.client.place_bid(&self.investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&self.env, &[0u8; 32]));
                 self.client.accept_bid(&invoice_id, &bid_id);
-                self.env.ledger().set_timestamp(timestamp + 10);
-
                 match status {
                     InvoiceStatus::Defaulted => {
                         self.env.ledger().set_timestamp(due_date + 1);
@@ -170,15 +164,12 @@ impl TestFixture {
             &Vec::new(&self.env),
         );
         self.client.verify_invoice(&invoice_id);
-        let bid_id = self
-            .client
-            .place_bid(&self.investor, &invoice_id, &1000, &1100);
+        let bid_id = self.client.place_bid(&self.investor, &invoice_id, &1000, &1100, &BytesN::from_array(&self.env, &[0u8; 32]));
         self.client.accept_bid(&invoice_id, &bid_id);
         invoice_id
+
     }
 }
-
-/// Test: only terminal status invoices are pruned
 #[test]
 fn test_prune_only_terminal() {
     let fx = TestFixture::setup();
