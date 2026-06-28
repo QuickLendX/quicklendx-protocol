@@ -6,6 +6,19 @@ const PAUSED_KEY: Symbol = symbol_short!("paused");
 const PAUSED_AT_KEY: Symbol = symbol_short!("paused_at");
 const MAX_PAUSE_DURATION: u64 = 7 * 24 * 3600;
 
+pub const EP_INVOICE_UPLOAD: &str = "invoice_upload";
+pub const EP_BID_PLACEMENT: &str = "bid_placement";
+pub const EP_SETTLEMENT_INITIATION: &str = "settlement_initiation";
+pub const EP_ESCROW_RELEASE: &str = "escrow_release";
+pub const EP_INVESTMENT_ACTION: &str = "investment_action";
+pub const ALL_ENTRYPOINTS: [&str; 5] = [
+    EP_INVOICE_UPLOAD,
+    EP_BID_PLACEMENT,
+    EP_SETTLEMENT_INITIATION,
+    EP_ESCROW_RELEASE,
+    EP_INVESTMENT_ACTION,
+];
+
 pub struct PauseControl;
 
 impl PauseControl {
@@ -42,7 +55,9 @@ impl PauseControl {
     pub(crate) fn apply_paused(env: &Env, paused: bool) {
         env.storage().instance().set(&PAUSED_KEY, &paused);
         if paused {
-            env.storage().instance().set(&PAUSED_AT_KEY, &env.ledger().timestamp());
+            env.storage()
+                .instance()
+                .set(&PAUSED_AT_KEY, &env.ledger().timestamp());
         }
     }
 
@@ -59,6 +74,9 @@ impl PauseControl {
     /// symbol (`EP_*`) and returns `true` when the protocol is paused and the
     /// named entrypoint is part of the guarded set.
     pub fn is_entrypoint_paused(env: &Env, entrypoint: String) -> bool {
-        Self::is_paused(env) && ALL_ENTRYPOINTS.contains(&entrypoint.as_str())
+        Self::is_paused(env)
+            && ALL_ENTRYPOINTS
+                .iter()
+                .any(|known| entrypoint == String::from_str(env, known))
     }
 }

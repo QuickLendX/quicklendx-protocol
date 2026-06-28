@@ -24,6 +24,7 @@
 #[cfg(test)]
 mod test_bid_ranking_determinism {
     use crate::bid::{Bid, BidStatus, BidStorage};
+    use alloc::vec::Vec;
     use core::cmp::Ordering;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
@@ -240,9 +241,17 @@ mod test_bid_ranking_determinism {
         let bid_hi_id = {
             let env = Env::default();
             env.ledger().with_mut(|l| l.timestamp = 4_000);
-            make_bid(&env, &invoice_id(&env, 31), 5_000, 6_000, 50, BidStatus::Placed, 0x09)
-                .bid_id
-                .to_array()
+            make_bid(
+                &env,
+                &invoice_id(&env, 31),
+                5_000,
+                6_000,
+                50,
+                BidStatus::Placed,
+                0x09,
+            )
+            .bid_id
+            .to_array()
         };
         assert_eq!(
             ascending[0], bid_hi_id,
@@ -364,10 +373,7 @@ mod test_bid_ranking_determinism {
             Ordering::Greater,
             "higher expected_return wins when profit is equal"
         );
-        assert_eq!(
-            BidStorage::compare_bids(&higher, &lower),
-            Ordering::Less
-        );
+        assert_eq!(BidStorage::compare_bids(&higher, &lower), Ordering::Less);
     }
 
     /// Fourth tiebreaker: when all economic fields match, newer timestamp wins.
@@ -404,10 +410,7 @@ mod test_bid_ranking_determinism {
             "higher bid_id must win when every other field is identical"
         );
         // Symmetric check
-        assert_eq!(
-            BidStorage::compare_bids(&low_id, &high_id),
-            Ordering::Less
-        );
+        assert_eq!(BidStorage::compare_bids(&low_id, &high_id), Ordering::Less);
     }
 
     // =========================================================================
@@ -426,7 +429,11 @@ mod test_bid_ranking_determinism {
 
         for call in 1..=3u8 {
             let ranked = BidStorage::rank_bids(&env, &inv);
-            assert_eq!(ranked.len(), 1, "call {call}: expected exactly 1 ranked bid");
+            assert_eq!(
+                ranked.len(),
+                1,
+                "call {call}: expected exactly 1 ranked bid"
+            );
             assert_eq!(
                 ranked.get(0).unwrap().bid_id,
                 bid.bid_id,
@@ -522,10 +529,22 @@ mod test_bid_ranking_determinism {
         env.ledger().with_mut(|l| l.timestamp = 16_000);
         let inv = invoice_id(&env, 61);
 
-        persist(&env, &make_bid(&env, &inv, 5_000, 9_000, 1, BidStatus::Accepted, 1));
-        persist(&env, &make_bid(&env, &inv, 5_000, 9_000, 2, BidStatus::Withdrawn, 2));
-        persist(&env, &make_bid(&env, &inv, 5_000, 9_000, 3, BidStatus::Expired, 3));
-        persist(&env, &make_bid(&env, &inv, 5_000, 9_000, 4, BidStatus::Cancelled, 4));
+        persist(
+            &env,
+            &make_bid(&env, &inv, 5_000, 9_000, 1, BidStatus::Accepted, 1),
+        );
+        persist(
+            &env,
+            &make_bid(&env, &inv, 5_000, 9_000, 2, BidStatus::Withdrawn, 2),
+        );
+        persist(
+            &env,
+            &make_bid(&env, &inv, 5_000, 9_000, 3, BidStatus::Expired, 3),
+        );
+        persist(
+            &env,
+            &make_bid(&env, &inv, 5_000, 9_000, 4, BidStatus::Cancelled, 4),
+        );
 
         let ranked = BidStorage::rank_bids(&env, &inv);
         assert_eq!(ranked.len(), 0, "all non-Placed: ranked must be empty");
@@ -548,10 +567,10 @@ mod test_bid_ranking_determinism {
 
         // positive profit wins
         let positive = make_bid(&env, &inv, 5_000, 6_000, 1, BidStatus::Placed, 3); // profit 1000
-        // zero profit
+                                                                                    // zero profit
         let zero = make_bid(&env, &inv, 5_000, 5_000, 1, BidStatus::Placed, 2); // profit 0
-        // "negative" profit (saturating_sub clamps to 0 in u64, but i128 preserves it)
-        // bid_amount=6000, expected_return=5000 -> profit = -1000 (using i128 arithmetic)
+                                                                                // "negative" profit (saturating_sub clamps to 0 in u64, but i128 preserves it)
+                                                                                // bid_amount=6000, expected_return=5000 -> profit = -1000 (using i128 arithmetic)
         let negative = make_bid(&env, &inv, 6_000, 5_000, 1, BidStatus::Placed, 1); // profit -1000
 
         persist(&env, &positive);

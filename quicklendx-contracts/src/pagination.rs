@@ -18,8 +18,11 @@
 //! 5. **No panics** - Only `saturating_*` arithmetic is used and all indexing
 //!    goes through pre-computed safe bounds.
 
+use crate::errors::QuickLendXError;
 use alloc::vec::Vec;
-use crate::MAX_QUERY_LIMIT;
+
+/// Maximum number of records any paginated query endpoint may return.
+pub const MAX_QUERY_LIMIT: u32 = 100;
 
 /// Clamp a caller-supplied `limit` to [`MAX_QUERY_LIMIT`].
 ///
@@ -101,11 +104,7 @@ pub const fn validate_pagination_params(
 /// * `limit` - Number of records requested.
 /// * `collection_size` - Size of the collection being paginated.
 #[inline]
-pub const fn calculate_safe_bounds(
-    offset: u32,
-    limit: u32,
-    collection_size: u32,
-) -> (u32, u32) {
+pub const fn calculate_safe_bounds(offset: u32, limit: u32, collection_size: u32) -> (u32, u32) {
     let capped_limit = cap_query_limit(limit);
     let start = if offset > collection_size {
         collection_size

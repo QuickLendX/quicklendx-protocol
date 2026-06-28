@@ -15,6 +15,7 @@
 
 #![cfg(test)]
 
+use alloc::{format, vec::Vec};
 use soroban_sdk::{symbol_short, testutils::Address as _, Address, BytesN, Env, String};
 
 use crate::storage::{DataKey, Indexes, StorageKeys};

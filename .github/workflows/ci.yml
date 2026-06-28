@@ -99,6 +99,7 @@ jobs:
         run: |
           source $HOME/.cargo/env
           cargo test --verbose
+          cargo test --manifest-path quicklendx-contracts/Cargo.toml --verbose
 
       - name: Test coverage (baseline + admin gate)
         run: |

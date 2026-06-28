@@ -394,4 +394,3 @@ fn test_cross_function_reentrancy_partial_payment_blocks_others() {
 
     assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
 }
-}

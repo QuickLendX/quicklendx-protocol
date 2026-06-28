@@ -375,6 +375,7 @@ impl EscrowStorage {
 #[cfg(test)]
 mod payments_tests {
     use super::*;
+    use crate::QuickLendXContract;
     use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env};
 
     fn contract_env() -> (Env, Address) {
@@ -470,7 +471,14 @@ mod payments_tests {
         let tok = token::Client::new(&env, &currency);
 
         let result = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), i128::MAX, &currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor,
+                &Address::generate(&env),
+                i128::MAX,
+                &currency,
+            )
         });
         assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
         assert_eq!(tok.balance(&contract_id), 0);
@@ -484,14 +492,7 @@ mod payments_tests {
         let (env, contract_id) = contract_env();
         let investor = Address::generate(&env);
         let token_admin = Address::generate(&env);
-        let currency = mint_and_approve(
-            &env,
-            &contract_id,
-            &token_admin,
-            &investor,
-            5_000,
-            10_000,
-        );
+        let currency = mint_and_approve(&env, &contract_id, &token_admin, &investor, 5_000, 10_000);
 
         let invoice_id = BytesN::from_array(&env, &[3u8; 32]);
         let tok = token::Client::new(&env, &currency);
@@ -500,7 +501,14 @@ mod payments_tests {
         let contract_bal = tok.balance(&contract_id);
 
         let result = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), 5_001, &currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor,
+                &Address::generate(&env),
+                5_001,
+                &currency,
+            )
         });
         assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
         assert_eq!(tok.balance(&investor), investor_bal);
@@ -533,9 +541,19 @@ mod payments_tests {
         let tok = token::Client::new(&env, &currency);
 
         let result = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), i128::MAX, &currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor,
+                &Address::generate(&env),
+                i128::MAX,
+                &currency,
+            )
         });
-        assert!(result.is_ok(), "max-amount escrow must succeed with sufficient balance");
+        assert!(
+            result.is_ok(),
+            "max-amount escrow must succeed with sufficient balance"
+        );
         assert_eq!(tok.balance(&investor), 0);
         assert_eq!(tok.balance(&contract_id), i128::MAX);
 
@@ -577,7 +595,14 @@ mod payments_tests {
         let contract_bal = real_tok.balance(&contract_id);
 
         let result = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor, &business, 10_000, &bogus_currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor,
+                &business,
+                10_000,
+                &bogus_currency,
+            )
         });
 
         assert!(
@@ -604,14 +629,8 @@ mod payments_tests {
         let investor1 = Address::generate(&env);
         let investor2 = Address::generate(&env);
         let token_admin = Address::generate(&env);
-        let currency = mint_and_approve(
-            &env,
-            &contract_id,
-            &token_admin,
-            &investor1,
-            10_000,
-            10_000,
-        );
+        let currency =
+            mint_and_approve(&env, &contract_id, &token_admin, &investor1, 10_000, 10_000);
         let sac = token::StellarAssetClient::new(&env, &currency);
         let tok = token::Client::new(&env, &currency);
         sac.mint(&investor2, &10_000);
@@ -622,13 +641,27 @@ mod payments_tests {
 
         // First escrow
         let r1 = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor1, &Address::generate(&env), 10_000, &currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor1,
+                &Address::generate(&env),
+                10_000,
+                &currency,
+            )
         });
         assert!(r1.is_ok(), "first escrow must succeed");
 
         // Second attempt (different investor) must fail
         let r2 = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor2, &Address::generate(&env), 5_000, &currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor2,
+                &Address::generate(&env),
+                5_000,
+                &currency,
+            )
         });
         assert_eq!(r2, Err(QuickLendXError::InvoiceAlreadyFunded));
     }

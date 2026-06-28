@@ -57,7 +57,6 @@ mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
-use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
 #[cfg(any(test, feature = "testutils"))]
 pub mod bench;
@@ -82,6 +81,7 @@ pub mod fees;
 pub mod freshness;
 pub mod health;
 pub mod incident;
+pub mod idempotency;
 pub mod init;
 pub mod invariants;
 pub mod investment;
@@ -102,14 +102,13 @@ pub mod panic_handler;
 pub mod reentrancy;
 pub mod settlement;
 pub mod storage;
+pub mod time_weighted_average;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
+#[cfg(test)]
+mod test_time_weighted_average_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
-mod test_panic_handler;
-#[cfg(test)]
-mod test_panic_handler;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
@@ -134,12 +133,8 @@ mod test_backup;
 mod test_backup_restore_reindex;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_safety;
-#[cfg(test)]
-mod test_bid_cancel_accept_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_boundary;
-#[cfg(test)]
-mod test_queries;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -187,12 +182,8 @@ mod test_operational_limits;
 mod test_invariant_self_check;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_accept_bid_race;
 #[cfg(test)]
 mod test_bid_cancel_accept_race;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_withdraw_bid_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 // #[cfg(test)]
@@ -239,8 +230,6 @@ mod test_vesting_summary;
 mod test_analytics_consistency;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_bid_compare_order_props;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_ranking;
 #[cfg(test)]
 mod test_bid_capacity_stress;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -251,10 +240,6 @@ mod test_bid_ranking;
 mod test_bid_ranking_determinism;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_category_breakdown;
-#[cfg(test)]
-mod test_default_grace_boundary;
-#[cfg(test)]
-mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
@@ -263,8 +248,6 @@ mod test_fuzz_distribute_revenue;
 mod test_fuzz_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_partial_payment;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_incident;
 #[cfg(test)]
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_invariants;
@@ -290,8 +273,6 @@ mod test_clock_rollover;
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_category_breakdown;
 #[cfg(test)]
 mod test_diagnostics;
 #[cfg(test)]
@@ -309,8 +290,6 @@ mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
 mod test_platform_metrics_reconciliation;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_rebuild_indexes;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_seed;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
@@ -829,6 +808,16 @@ impl QuickLendXContract {
         maintenance::MaintenanceControl::get_maintenance_reason(&env)
     }
 
+    /// Enable or disable maintenance mode (admin only).
+    pub fn set_maintenance_mode(
+        env: Env,
+        admin: Address,
+        enabled: bool,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        maintenance::MaintenanceControl::set_maintenance_mode(&env, &admin, enabled, &reason)
+    }
+
     /// Atomically enter incident mode: hard pause plus maintenance with reason.
     ///
     /// Coordinates [`pause::PauseControl`] and [`maintenance::MaintenanceControl`]
@@ -922,28 +911,6 @@ impl QuickLendXContract {
     /// before callers can react to this data.
     pub fn get_protocol_health(env: Env) -> health::ProtocolHealth {
         health::ProtocolHealth::new(&env)
-    }
-
-    /// Return a rich internal diagnostic snapshot.
-    ///
-    /// **Only available when compiled with `--features diagnostics`.**
-    /// This entry-point is entirely absent from production WASM builds — it is
-    /// compiled out at the Cargo feature level, adding zero bytes and zero gas
-    /// cost to standard deployments.
-    ///
-    /// Intended for operator tooling, support dashboards, and integration tests
-    /// that need per-status invoice counts, bid counters, and subsystem flags in
-    /// a single call without having to fan out across multiple read entry-points.
-    ///
-    /// # Returns
-    /// A [`diagnostics::ProtocolDiagnostics`] snapshot (see `diagnostics.rs`).
-    ///
-    /// # Security
-    /// - No authentication required (read-only, no PII).
-    /// - State is never mutated.
-    #[cfg(feature = "diagnostics")]
-    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
-        diagnostics::get_protocol_diagnostics(&env)
     }
 
     // ============================================================================
@@ -1563,15 +1530,9 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_amount: i128,
         expected_return: i128,
-        salt: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &investor)?;
-        // Idempotency check
-        let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
-        if idempotency_exists(&env, &idem_key) {
-            return Err(QuickLendXError::DuplicateBid);
-        }
         // Authorization check: Only the investor can place their own bid
         investor.require_auth();
 
@@ -1631,9 +1592,6 @@ impl QuickLendXContract {
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
-        // Store idempotency marker
-        store_idempotency(&env, &idem_key);
-
         crate::qlx_log!(
             &env,
             "bid",
@@ -2887,6 +2845,7 @@ impl QuickLendXContract {
         // Apply pagination (overflow-safe) and collect into Soroban Vec.
         let len_u32 = pairs.len() as u32;
         let start = offset.min(len_u32) as usize;
+        let capped_limit = cap_query_limit(limit);
         let end = (offset.saturating_add(capped_limit).min(len_u32)) as usize;
         let mut result = Vec::new(&env);
         for (_, id) in &pairs[start..end] {
@@ -4024,6 +3983,18 @@ impl QuickLendXContract {
         admin.require_auth();
         AdminStorage::require_admin(&env, &admin)?;
         EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
+    }
+}
+
+#[cfg(feature = "diagnostics")]
+#[contractimpl]
+impl QuickLendXContract {
+    /// Return a rich internal diagnostic snapshot.
+    ///
+    /// This read-only entrypoint is absent from production builds unless the
+    /// `diagnostics` feature is explicitly enabled.
+    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
+        diagnostics::get_protocol_diagnostics(&env)
     }
 }
 

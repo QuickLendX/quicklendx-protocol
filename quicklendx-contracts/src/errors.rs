@@ -199,6 +199,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvoiceDueDateInvalid => symbol_short!("INV_DI"),
             QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NFD"),
             QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
+            QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
             // Authorization
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
@@ -211,6 +212,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidCurrency => symbol_short!("INV_CR"),
             QuickLendXError::InvalidTimestamp => symbol_short!("INV_TM"),
             QuickLendXError::InvalidDescription => symbol_short!("INV_DS"),
+            QuickLendXError::SelfTransfer => symbol_short!("SELF_XFR"),
             // Storage
             QuickLendXError::StorageError => symbol_short!("STORE"),
             QuickLendXError::StorageKeyNotFound => symbol_short!("KEY_NF"),
@@ -277,6 +279,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
+            QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
         }
     }
 }

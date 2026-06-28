@@ -69,8 +69,13 @@ const SECONDS_PER_DAY: u64 = 86_400;
 /// because we drive one investor up to `MAX_BIDS_PER_INVOICE` = 50
 /// bids. With the cap enabled, the 21st bid would be rejected by
 /// `place_bid` and we could never reach the per-invoice ceiling.
-fn setup()
--> (Env, QuickLendXContractClient<'static>, Address, Address, BytesN<32>) {
+fn setup() -> (
+    Env,
+    QuickLendXContractClient<'static>,
+    Address,
+    Address,
+    BytesN<32>,
+) {
     let env = Env::default();
     env.mock_all_auths();
     env.ledger().set_timestamp(1_700_000_000);
@@ -202,8 +207,7 @@ fn test_rank_bids_full_capacity_orders_by_documented_chain() {
         let profit_units = (MAX_BIDS_PER_INVOICE - i) as i128;
         let bid_amount = 5_000i128;
         let expected_return = bid_amount + profit_units * 100;
-        let bid_id =
-            client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+        let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
         if i == 0 {
             first_bid_id = Some(bid_id.clone());
         }
@@ -237,7 +241,7 @@ fn test_rank_bids_full_capacity_orders_by_documented_chain() {
         let prev = ranked.get(i as u32 - 1).unwrap();
         let cur = ranked.get(i as u32).unwrap();
         assert!(
-            BidStorage::compare_bids(prev, cur) != core::cmp::Ordering::Greater,
+            BidStorage::compare_bids(&prev, &cur) != core::cmp::Ordering::Greater,
             "chain ordering violated at index {}",
             i
         );
@@ -340,16 +344,14 @@ fn test_full_capacity_pure_bid_id_tiebreaker() {
         let prev = ranked.get(i as u32 - 1).unwrap();
         let cur = ranked.get(i as u32).unwrap();
         assert!(
-            BidStorage::compare_bids(prev, cur) != core::cmp::Ordering::Greater,
+            BidStorage::compare_bids(&prev, &cur) != core::cmp::Ordering::Greater,
             "pure bid_id tiebreaker broken at index {}",
             i
         );
     }
 
     // best == ranked[0] must hold under pure tiebreaker.
-    let best = client
-        .get_best_bid(&invoice_id)
-        .expect("must exist");
+    let best = client.get_best_bid(&invoice_id).expect("must exist");
     assert_eq!(
         best.bid_id,
         ranked.get(0).unwrap().bid_id,
@@ -391,11 +393,8 @@ fn test_full_coverage_cleanup_drains_all_expired_at_full_capacity() {
     // Full-coverage single call (offset == 0, end_idx == old_count,
     // cleaned > 0): storage counter is updated, returns
     // (cleaned, new_remaining).
-    let (cleaned, remaining) = client.cleanup_expired_bids_paged(
-        &invoice_id,
-        &0u32,
-        &MAX_BIDS_PER_INVOICE,
-    );
+    let (cleaned, remaining) =
+        client.cleanup_expired_bids_paged(&invoice_id, &0u32, &MAX_BIDS_PER_INVOICE);
     assert_eq!(
         cleaned, MAX_BIDS_PER_INVOICE,
         "full-coverage cleanup must drain all 50 expired bids"
@@ -406,25 +405,19 @@ fn test_full_coverage_cleanup_drains_all_expired_at_full_capacity() {
     );
 
     // Idempotency: re-running the same call observes the empty state.
-    let (cleaned_again, remaining_again) = client.cleanup_expired_bids_paged(
-        &invoice_id,
-        &0u32,
-        &MAX_BIDS_PER_INVOICE,
-    );
+    let (cleaned_again, remaining_again) =
+        client.cleanup_expired_bids_paged(&invoice_id, &0u32, &MAX_BIDS_PER_INVOICE);
     assert_eq!(
         cleaned_again, 0,
         "second pass must be fully idempotent (cleaned == 0)"
     );
-    assert_eq!(
-        remaining_again, 0,
-        "second pass must leave 0 in the index"
-    );
+    assert_eq!(remaining_again, 0, "second pass must leave 0 in the index");
 
     // The per-invoice index is empty — `get_bid_records_for_invoice`
     // and `count_bids_by_status` both see 0 entries.
-    let (placed, accepted, withdrawn, expired, cancelled) =
+    let (placed_count, accepted, withdrawn, expired, cancelled) =
         BidStorage::count_bids_by_status(&env, &invoice_id);
-    assert_eq!(placed, 0, "no Placed bids in index");
+    assert_eq!(placed_count, 0, "no Placed bids in index");
     assert_eq!(accepted, 0, "no Accepted bids in index");
     assert_eq!(withdrawn, 0, "no Withdrawn bids in index");
     assert_eq!(expired, 0, "no Expired bids in index (compacted)");
@@ -517,16 +510,15 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
             iterations <= max_iterations,
             "paged cleanup must terminate within a bounded number of iterations"
         );
-        let (cleaned, _remaining) = client.cleanup_expired_bids_paged(
-            &invoice_id, &offset, &chunk,
-        );
+        let (cleaned, _remaining) = client.cleanup_expired_bids_paged(&invoice_id, &offset, &chunk);
         // Per-page: pages whose range overlaps [0, 25) clean exactly
         // the expired slice in that range; pages with offset >= 25
         // clean 0.
         if offset < 25u32 {
             let expired_in_chunk = (25u32 - offset).min(chunk);
             assert_eq!(
-                cleaned, expired_in_chunk,
+                cleaned,
+                expired_in_chunk,
                 "page [{}, {}) must clean exactly the expired slice ({})",
                 offset,
                 offset + chunk,
@@ -534,7 +526,8 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
             );
         } else {
             assert_eq!(
-                cleaned, 0,
+                cleaned,
+                0,
                 "page [{}, {}) intersects no expired bids",
                 offset,
                 offset + chunk
@@ -554,9 +547,8 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     // (storage entries pointing to bids now in `Expired` status) and
     // counts them as cleaned; this also updates the storage
     // counter.
-    let (compact_cleaned, _compact_remaining) = client.cleanup_expired_bids_paged(
-        &invoice_id, &0u32, &MAX_BIDS_PER_INVOICE,
-    );
+    let (compact_cleaned, _compact_remaining) =
+        client.cleanup_expired_bids_paged(&invoice_id, &0u32, &MAX_BIDS_PER_INVOICE);
     assert_eq!(
         compact_cleaned, 25,
         "compaction pass must drain the 25 expired entries (incl. storage ghosts from the chunked path)"
@@ -566,9 +558,8 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     // idempotent (cleaned == 0). Combined with the previous
     // compaction pass, this proves the documented idempotency
     // guarantee of cleanup_expired_bids_paged.
-    let (idem_cleaned, _idem_remaining) = client.cleanup_expired_bids_paged(
-        &invoice_id, &0u32, &MAX_BIDS_PER_INVOICE,
-    );
+    let (idem_cleaned, _idem_remaining) =
+        client.cleanup_expired_bids_paged(&invoice_id, &0u32, &MAX_BIDS_PER_INVOICE);
     assert_eq!(
         idem_cleaned, 0,
         "second consecutive full-coverage pass must be idempotent (cleaned == 0)"
@@ -581,7 +572,8 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     let (placed_in_index, accepted, withdrawn, expired_in_index, cancelled) =
         BidStorage::count_bids_by_status(&env, &invoice_id);
     assert_eq!(
-        placed_in_index, MAX_BIDS_PER_INVOICE - 25,
+        placed_in_index,
+        MAX_BIDS_PER_INVOICE - 25,
         "25 Placed bids must survive in the index"
     );
     assert_eq!(accepted, 0, "no Accepted bids in index");
@@ -611,9 +603,7 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     // and identity of the surviving set.
     let mut expiring_ids_iter: usize = 0;
     while expiring_ids_iter < 25 {
-        let bid_id = placed
-            .get(expiring_ids_iter as u32)
-            .unwrap();
+        let bid_id = placed.get(expiring_ids_iter as u32).unwrap();
         let bid = BidStorage::get_bid(&env, &bid_id).expect("Bid struct present");
         assert_eq!(
             bid.status,
@@ -625,9 +615,7 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     }
     let mut surviving_ids_iter: usize = 25;
     while surviving_ids_iter < MAX_BIDS_PER_INVOICE as usize {
-        let bid_id = placed
-            .get(surviving_ids_iter as u32)
-            .unwrap();
+        let bid_id = placed.get(surviving_ids_iter as u32).unwrap();
         let bid = BidStorage::get_bid(&env, &bid_id).expect("Bid struct present");
         assert_eq!(
             bid.status,
