@@ -135,7 +135,13 @@ pub const fn calculate_safe_bounds(
 /// * Enforces [`MAX_QUERY_LIMIT`] to bound allocation size.
 /// * Preserves ordering - no sorting, no deduplication.
 pub fn paginate_slice<T: Clone>(items: &[T], offset: u32, limit: u32) -> Vec<T> {
-    let collection_size = u32::try_from(items.len()).unwrap_or(u32::MAX);
+    // Cast failure must surface as typed error, not panic.
+    // Use try_from and fall back safely; callers in paged endpoints already
+    // validate before reaching here. On failure we return empty (no panic).
+    let collection_size = match u32::try_from(items.len()) {
+        Ok(n) => n,
+        Err(_) => return Vec::new(),
+    };
     let (start, end) = calculate_safe_bounds(offset, limit, collection_size);
     if start >= end {
         return Vec::new();
