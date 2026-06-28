@@ -1,29 +1,32 @@
-//! # Bid Ranking Determinism Tests  (Issue #1551)
-//!
-//! Verifies that `BidStorage::rank_bids` and `BidStorage::compare_bids` produce
-//! **identical output for identical input regardless of call repetition or insertion
-//! order**.  These tests run on every CI matrix entry (plain `#[cfg(test)]`, no
-//! feature gate).
-//!
-//! ## What "determinism" means here
-//!
-//! * Calling `rank_bids` twice on the same environment and same ledger state
-//!   returns the same ranked sequence both times.
-//! * The ranking of a fixed bid set is independent of the order in which those
-//!   bids were inserted into storage.
-//! * `compare_bids` is reflexive, antisymmetric, and the resulting total order
-//!   has no ambiguous cases (the `bid_id` tiebreaker removes the last tie).
-//!
-//! ## What is NOT tested here
-//!
-//! * Full property / fuzz coverage — that lives in `test_bid_compare_order_props`
-//!   (feature-gated `fuzz-tests`).
-//! * Integration with the full contract call stack — those live in `test_bid_ranking`
-//!   (feature-gated `legacy-tests`).
+extern crate alloc;
+use alloc::vec::Vec;
+/// # Bid Ranking Determinism Tests  (Issue #1551)
+///
+/// Verifies that `BidStorage::rank_bids` and `BidStorage::compare_bids` produce
+/// **identical output for identical input regardless of call repetition or insertion
+/// order**.  These tests run on every CI matrix entry (plain `#[cfg(test)]`, no
+/// feature gate).
+///
+/// ## What "determinism" means here
+///
+/// * Calling `rank_bids` twice on the same environment and same ledger state
+///   returns the same ranked sequence both times.
+/// * The ranking of a fixed bid set is independent of the order in which those
+///   bids were inserted into storage.
+/// * `compare_bids` is reflexive, antisymmetric, and the resulting total order
+///   has no ambiguous cases (the `bid_id` tiebreaker removes the last tie).
+///
+/// ## What is NOT tested here
+///
+/// * Full property / fuzz coverage — that lives in `test_bid_compare_order_props`
+///   (feature-gated `fuzz-tests`).
+/// * Integration with the full contract call stack — those live in `test_bid_ranking`
+///   (feature-gated `legacy-tests`).
 
 #[cfg(test)]
 mod test_bid_ranking_determinism {
     use crate::bid::{Bid, BidStatus, BidStorage};
+use alloc::vec::Vec;
     use core::cmp::Ordering;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},

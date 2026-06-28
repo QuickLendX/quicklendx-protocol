@@ -57,6 +57,7 @@ mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
+pub mod idempotency;
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
 #[cfg(any(test, feature = "testutils"))]
@@ -341,7 +342,7 @@ use verification::{
     validate_investor_investment, validate_invoice_metadata, verify_business,
     verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
     BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
-    InvestorVerificationStorage, determine_investor_tier,
+    InvestorVerificationStorage,
 };
 
 use crate::storage::{BidStorage, InvoiceStorage};
@@ -1550,6 +1551,7 @@ impl QuickLendXContract {
     /// - Creates and stores the bid
     ///
     /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// @deprecated salt is no longer used for idempotency
     /// breaker is engaged, before the bid is validated or stored.
     pub fn place_bid(
         env: Env,

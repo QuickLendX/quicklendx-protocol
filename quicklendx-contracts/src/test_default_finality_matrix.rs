@@ -109,7 +109,7 @@ fn create_funded_invoice(
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     (invoice_id, business, investor, amount, currency)

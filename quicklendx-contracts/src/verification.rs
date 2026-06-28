@@ -1401,27 +1401,6 @@ pub fn determine_risk_level(risk_score: u32) -> InvestorRiskLevel {
     }
 }
 
-/// Core tier computation using raw counters (total invested, successes, defaults).
-pub fn compute_investor_tier_from_stats(
-    total_invested: i128,
-    successful_investments: u32,
-    defaulted_investments: u32,
-    risk_score: u32,
-) -> Result<InvestorTier, QuickLendXError> {
-    let total = successful_investments.saturating_add(defaulted_investments);
-    let default_rate = if total > 0 {
-        (defaulted_investments.saturating_mul(100)) / total
-    } else {
-        0u32
-    };
-
-    if risk_score <= 10
-        && total_invested >= 5_000_000
-        && successful_investments >= 50
-        && default_rate <= 5
-    {
-        return Ok(InvestorTier::VIP);
-    }
 
 
 /// Calculate investment limit based on tier and risk level

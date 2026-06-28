@@ -17,7 +17,7 @@ use quicklendx_contracts::{
     QuickLendXContract, QuickLendXContractClient,
 };
 use soroban_sdk::testutils::{Address as _, Ledger as _};
-use soroban_sdk::{token, Address, Env, String, Vec};
+use soroban_sdk::{token, Address, BytesN, Env, String, Vec};
 
 // ============================================================================
 // Setup helpers
@@ -191,7 +191,7 @@ fn test_invoice_lifecycle_happy_path() {
         &fx.investor,
         &invoice_id,
         &bid_amount,
-        &invoice_amount, // expected_return = full invoice amount
+        &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]) // expected_return = full invoice amount
     );
 
     let bid = fx.client.get_bid(&bid_id).unwrap();
@@ -419,7 +419,7 @@ fn test_invoice_lifecycle_default_branch() {
     /// Investor places a bid.
     let bid_id = fx
         .client
-        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount);
+        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]));
     assert_eq!(
         fx.client.get_bid(&bid_id).unwrap().status,
         BidStatus::Placed,
@@ -580,7 +580,7 @@ fn test_partial_then_full_settle() {
     /// Investor places a bid.
     let bid_id = fx
         .client
-        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount);
+        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]));
     assert_eq!(
         fx.client.get_bid(&bid_id).unwrap().bid_amount,
         bid_amount,
