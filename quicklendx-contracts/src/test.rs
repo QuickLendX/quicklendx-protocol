@@ -5133,7 +5133,7 @@ fn test_cancel_invoice_funded() {
     // Investor places bid
     let bid_amount = amount;
     let expected_return = amount + 100000;
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Business accepts bid (invoice becomes Funded)
     client.accept_bid(&invoice_id, &bid_id);
