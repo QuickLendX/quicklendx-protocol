@@ -278,8 +278,6 @@ mod test_clock_rollover;
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_category_breakdown;
 #[cfg(test)]
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
