@@ -425,7 +425,9 @@ mod payments_tests {
             create_escrow(&env, &invoice_id, &investor, &business, 0, &currency)
         });
         assert_eq!(result, Err(QuickLendXError::InvalidAmount));
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(env.as_contract(&contract_id, || {
+            EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none()
+        }));
     }
 
     /// Negative amounts are rejected before any state changes.
@@ -444,7 +446,9 @@ mod payments_tests {
             create_escrow(&env, &invoice_id, &investor, &business, -1, &currency)
         });
         assert_eq!(result, Err(QuickLendXError::InvalidAmount));
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(env.as_contract(&contract_id, || {
+            EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none()
+        }));
     }
 
     // -----------------------------------------------------------------------
@@ -471,11 +475,20 @@ mod payments_tests {
         let tok = token::Client::new(&env, &currency);
 
         let result = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), i128::MAX, &currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor,
+                &Address::generate(&env),
+                i128::MAX,
+                &currency,
+            )
         });
         assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
         assert_eq!(tok.balance(&contract_id), 0);
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(env.as_contract(&contract_id, || {
+            EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none()
+        }));
     }
 
     /// Amount strictly exceeding the investor's balance is rejected with
@@ -485,14 +498,7 @@ mod payments_tests {
         let (env, contract_id) = contract_env();
         let investor = Address::generate(&env);
         let token_admin = Address::generate(&env);
-        let currency = mint_and_approve(
-            &env,
-            &contract_id,
-            &token_admin,
-            &investor,
-            5_000,
-            10_000,
-        );
+        let currency = mint_and_approve(&env, &contract_id, &token_admin, &investor, 5_000, 10_000);
 
         let invoice_id = BytesN::from_array(&env, &[3u8; 32]);
         let tok = token::Client::new(&env, &currency);
@@ -501,12 +507,21 @@ mod payments_tests {
         let contract_bal = tok.balance(&contract_id);
 
         let result = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), 5_001, &currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor,
+                &Address::generate(&env),
+                5_001,
+                &currency,
+            )
         });
         assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
         assert_eq!(tok.balance(&investor), investor_bal);
         assert_eq!(tok.balance(&contract_id), contract_bal);
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(env.as_contract(&contract_id, || {
+            EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none()
+        }));
     }
 
     // -----------------------------------------------------------------------
@@ -534,9 +549,19 @@ mod payments_tests {
         let tok = token::Client::new(&env, &currency);
 
         let result = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), i128::MAX, &currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor,
+                &Address::generate(&env),
+                i128::MAX,
+                &currency,
+            )
         });
-        assert!(result.is_ok(), "max-amount escrow must succeed with sufficient balance");
+        assert!(
+            result.is_ok(),
+            "max-amount escrow must succeed with sufficient balance"
+        );
         assert_eq!(tok.balance(&investor), 0);
         assert_eq!(tok.balance(&contract_id), i128::MAX);
 
@@ -578,7 +603,14 @@ mod payments_tests {
         let contract_bal = real_tok.balance(&contract_id);
 
         let result = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor, &business, 10_000, &bogus_currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor,
+                &business,
+                10_000,
+                &bogus_currency,
+            )
         });
 
         assert!(
@@ -588,7 +620,9 @@ mod payments_tests {
         assert_eq!(real_tok.balance(&investor), investor_bal);
         assert_eq!(real_tok.balance(&contract_id), contract_bal);
         assert!(
-            EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none(),
+            env.as_contract(&contract_id, || {
+                EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none()
+            }),
             "no escrow must be written on invalid token address"
         );
     }
@@ -605,14 +639,8 @@ mod payments_tests {
         let investor1 = Address::generate(&env);
         let investor2 = Address::generate(&env);
         let token_admin = Address::generate(&env);
-        let currency = mint_and_approve(
-            &env,
-            &contract_id,
-            &token_admin,
-            &investor1,
-            10_000,
-            10_000,
-        );
+        let currency =
+            mint_and_approve(&env, &contract_id, &token_admin, &investor1, 10_000, 10_000);
         let sac = token::StellarAssetClient::new(&env, &currency);
         let tok = token::Client::new(&env, &currency);
         sac.mint(&investor2, &10_000);
@@ -623,13 +651,27 @@ mod payments_tests {
 
         // First escrow
         let r1 = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor1, &Address::generate(&env), 10_000, &currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor1,
+                &Address::generate(&env),
+                10_000,
+                &currency,
+            )
         });
         assert!(r1.is_ok(), "first escrow must succeed");
 
         // Second attempt (different investor) must fail
         let r2 = env.as_contract(&contract_id, || {
-            create_escrow(&env, &invoice_id, &investor2, &Address::generate(&env), 5_000, &currency)
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor2,
+                &Address::generate(&env),
+                5_000,
+                &currency,
+            )
         });
         assert_eq!(r2, Err(QuickLendXError::InvoiceAlreadyFunded));
     }
@@ -845,6 +887,10 @@ pub fn transfer_funds(
     to: &Address,
     amount: i128,
 ) -> Result<(), QuickLendXError> {
+    if !currency.exists() {
+        return Err(QuickLendXError::InvalidAddress);
+    }
+
     if amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
     }
@@ -853,8 +899,16 @@ pub fn transfer_funds(
         return Err(QuickLendXError::SelfTransfer);
     }
 
-    let token_client = token::Client::new(env, currency);
     let contract_address = env.current_contract_address();
+    if from != &contract_address && to != &contract_address {
+        let limits =
+            crate::protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+        if amount < limits.min_invoice_amount {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+    }
+
+    let token_client = token::Client::new(env, currency);
 
     // Ensure sufficient balance exists before attempting transfer
     let available_balance = token_client.balance(from);

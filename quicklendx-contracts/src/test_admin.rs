@@ -530,7 +530,7 @@ mod test_admin {
 
     #[test]
     fn admin_get_escrow_returns_full_record() {
-        use crate::payments::{Escrow, EscrowStorage, EscrowStatus};
+        use crate::payments::{Escrow, EscrowStatus, EscrowStorage};
         use soroban_sdk::BytesN;
 
         let (env, contract_id, admin) = setup_with_admin();

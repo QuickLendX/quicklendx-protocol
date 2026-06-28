@@ -84,10 +84,7 @@ pub fn emit_panic_caught(env: &Env, message: SorobanString) {
 /// This function is gated by `#[cfg(test)]` and is never compiled into a WASM
 /// release build.
 #[cfg(test)]
-pub fn catch_panic<T, F: FnOnce() -> T>(
-    env: &Env,
-    f: F,
-) -> Result<T, std::string::String> {
+pub fn catch_panic<T, F: FnOnce() -> T>(env: &Env, f: F) -> Result<T, std::string::String> {
     match std::panic::catch_unwind(std::panic::AssertUnwindSafe(f)) {
         Ok(val) => Ok(val),
         Err(payload) => {

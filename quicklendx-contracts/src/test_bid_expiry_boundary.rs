@@ -87,7 +87,13 @@ fn test_bid_exact_expiration_timestamp_is_not_expired() {
     let (env, client, admin) = setup();
     client.set_bid_ttl_days(&MIN_BID_TTL_DAYS);
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &5_000,
+        &6_000,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     let bid = client.get_bid(&bid_id).unwrap();
 
     env.ledger().set_timestamp(bid.expiration_timestamp);
@@ -114,7 +120,13 @@ fn test_bid_one_second_past_expiration_timestamp_is_expired() {
     let (env, client, admin) = setup();
     client.set_bid_ttl_days(&MIN_BID_TTL_DAYS);
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &5_000,
+        &6_000,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     let bid = client.get_bid(&bid_id).unwrap();
 
     env.ledger().set_timestamp(bid.expiration_timestamp + 1);
@@ -140,7 +152,13 @@ fn test_bid_ttl_change_is_forward_only_and_best_bid_honors_boundary() {
     // Place an existing bid with a long TTL.
     client.set_bid_ttl_days(&MAX_BID_TTL_DAYS);
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
-    let bid_long_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_long_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &5_000,
+        &6_000,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     let bid_long = client.get_bid(&bid_long_id).unwrap();
     let long_expiration = bid_long.expiration_timestamp;
 

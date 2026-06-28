@@ -110,7 +110,7 @@ mod test_compute_yield_props {
         ) {
             let er = compute_expected_return(amount, rate_bps, duration_days);
             prop_assert!(er >= 0, "expected return must be non-negative");
-            
+
             // Expected return must be bounded by the return at MAX_RATE_BPS
             let max_er = compute_expected_return(amount, MAX_RATE_BPS, duration_days);
             prop_assert!(er <= max_er, "expected return must be bounded by MAX_RATE");

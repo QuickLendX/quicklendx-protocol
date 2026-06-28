@@ -3,11 +3,11 @@
 //! Verifies that `assert_view_only!` correctly panics when the view-only flag
 //! is set and permits operations when it is not.
 
-use crate::storage::{StorageManager, InvoiceStorage};
-use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus};
-use crate::types::{Bid, BidStatus};
 use crate::bid::BidStorage;
 use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
+use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus};
+use crate::storage::{InvoiceStorage, StorageManager};
+use crate::types::{Bid, BidStatus};
 use crate::QuickLendXContract;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 

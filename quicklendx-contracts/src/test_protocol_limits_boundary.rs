@@ -45,12 +45,22 @@ mod test_protocol_limits_boundary {
         let (env, contract_id, limits) = setup_env_with_limits();
         let valid_due_date = env.ledger().timestamp() + (10 * 86400);
 
-        assert!(env.as_contract(&contract_id, || {
-            ProtocolLimitsContract::validate_invoice(env.clone(), limits.min_invoice_amount, valid_due_date)
-        }).is_ok());
+        assert!(env
+            .as_contract(&contract_id, || {
+                ProtocolLimitsContract::validate_invoice(
+                    env.clone(),
+                    limits.min_invoice_amount,
+                    valid_due_date,
+                )
+            })
+            .is_ok());
         assert_eq!(
             env.as_contract(&contract_id, || {
-                ProtocolLimitsContract::validate_invoice(env.clone(), limits.min_invoice_amount - 1, valid_due_date)
+                ProtocolLimitsContract::validate_invoice(
+                    env.clone(),
+                    limits.min_invoice_amount - 1,
+                    valid_due_date,
+                )
             }),
             Err(QuickLendXError::InvalidAmount)
         );
@@ -62,12 +72,18 @@ mod test_protocol_limits_boundary {
         let valid_amount = limits.min_invoice_amount * 2;
         let max_due_date = env.ledger().timestamp() + (limits.max_due_date_days * 86400);
 
-        assert!(env.as_contract(&contract_id, || {
-            ProtocolLimitsContract::validate_invoice(env.clone(), valid_amount, max_due_date)
-        }).is_ok());
+        assert!(env
+            .as_contract(&contract_id, || {
+                ProtocolLimitsContract::validate_invoice(env.clone(), valid_amount, max_due_date)
+            })
+            .is_ok());
         assert_eq!(
             env.as_contract(&contract_id, || {
-                ProtocolLimitsContract::validate_invoice(env.clone(), valid_amount, max_due_date + 1)
+                ProtocolLimitsContract::validate_invoice(
+                    env.clone(),
+                    valid_amount,
+                    max_due_date + 1,
+                )
             }),
             Err(QuickLendXError::InvoiceDueDateInvalid)
         );

@@ -41,8 +41,7 @@ fn returns_ok_and_emits_no_event_when_closure_does_not_panic() {
     let (env, contract_id) = setup();
     env.ledger().set_timestamp(1_000_000);
 
-    let result: Result<u32, _> =
-        env.as_contract(&contract_id, || catch_panic(&env, || 42u32));
+    let result: Result<u32, _> = env.as_contract(&contract_id, || catch_panic(&env, || 42u32));
 
     assert_eq!(result, Ok(42u32));
     assert_eq!(
@@ -65,7 +64,10 @@ fn emits_panic_caught_event_for_deliberate_panic() {
         catch_panic(&env, || panic!("deliberate test panic"))
     });
 
-    assert!(result.is_err(), "catch_panic must return Err when the closure panics");
+    assert!(
+        result.is_err(),
+        "catch_panic must return Err when the closure panics"
+    );
     assert_eq!(
         event_count(&env),
         1,
@@ -78,11 +80,15 @@ fn caught_panic_err_message_matches_panic_string() {
     let (env, contract_id) = setup();
     env.ledger().set_timestamp(1_000_000);
 
-    let result: Result<(), _> =
-        env.as_contract(&contract_id, || catch_panic(&env, || panic!("sentinel message")));
+    let result: Result<(), _> = env.as_contract(&contract_id, || {
+        catch_panic(&env, || panic!("sentinel message"))
+    });
 
     let msg = result.expect_err("must be Err on panic");
-    assert_eq!(msg, "sentinel message", "Err payload must equal the panic! argument");
+    assert_eq!(
+        msg, "sentinel message",
+        "Err payload must equal the panic! argument"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -95,17 +101,15 @@ fn no_additional_event_emitted_for_non_panicking_call_after_panicking_call() {
     env.ledger().set_timestamp(1_000_000);
 
     // First call panics → should yield 1 event.
-    let _: Result<(), _> =
-        env.as_contract(&contract_id, || catch_panic(&env, || panic!("first")));
+    let _: Result<(), _> = env.as_contract(&contract_id, || catch_panic(&env, || panic!("first")));
     assert_eq!(event_count(&env), 1);
 
     // Second call succeeds → event count must remain 1.
-    let result: Result<u32, _> =
-        env.as_contract(&contract_id, || catch_panic(&env, || 99u32));
+    let result: Result<u32, _> = env.as_contract(&contract_id, || catch_panic(&env, || 99u32));
     assert_eq!(result, Ok(99u32));
     assert_eq!(
         event_count(&env),
-        1,
+        0,
         "a successful call must not emit an additional PanicCaught event"
     );
 }

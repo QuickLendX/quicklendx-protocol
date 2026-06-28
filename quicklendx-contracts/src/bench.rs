@@ -5,15 +5,15 @@
 pub mod bench {
     use soroban_sdk::Env;
 
-/// @notice Budget deltas recorded for a scenario.
-/// @field instructions The number of CPU instructions executed.
-/// @field read_bytes The number of bytes read from storage.
-/// @field write_bytes The number of bytes written to storage.
-pub struct BudgetDelta {
-    pub instructions: u64,
-    pub read_bytes: u64,
-    pub write_bytes: u64,
-}
+    /// @notice Budget deltas recorded for a scenario.
+    /// @field instructions The number of CPU instructions executed.
+    /// @field read_bytes The number of bytes read from storage.
+    /// @field write_bytes The number of bytes written to storage.
+    pub struct BudgetDelta {
+        pub instructions: u64,
+        pub read_bytes: u64,
+        pub write_bytes: u64,
+    }
 
     /// @notice Measure the budget delta for a closure.
     /// @param env The Soroban execution environment.

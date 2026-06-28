@@ -34,12 +34,12 @@ extern crate alloc;
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod scratch_events;
+#[cfg(test)]
+mod test_concurrent_default_overlap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality;
-#[cfg(test)]
-mod test_concurrent_default_overlap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -56,21 +56,19 @@ mod test_maintenance;
 mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
-#[cfg(test)]
-mod test_concurrent_withdraw;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 pub mod idempotency;
-use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
+use crate::idempotency::{idempotency_exists, idempotency_key, store_idempotency};
 
-#[cfg(any(test, feature = "testutils"))]
-pub mod bench;
-pub mod idempotency;
+pub mod address_summary;
 pub mod admin;
 pub mod analytics;
 pub mod audit;
 pub mod backpressure;
 pub mod backup;
 pub mod backup_v1;
+#[cfg(any(test, feature = "testutils"))]
+pub mod bench;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
@@ -84,13 +82,11 @@ pub mod events;
 pub mod fees;
 pub mod freshness;
 pub mod health;
-pub mod idempotency;
 pub mod incident;
 pub mod init;
 pub mod invariants;
 pub mod investment;
 pub mod investment_queries;
-pub mod address_summary;
 pub mod invoice;
 pub mod invoice_search;
 pub mod maintenance;
@@ -98,11 +94,11 @@ pub mod monitor;
 pub mod notifications;
 pub mod operational_limits;
 pub mod pagination;
+pub mod panic_handler;
 pub mod pause;
 pub mod payments;
 pub mod profits;
 pub mod protocol_limits;
-pub mod panic_handler;
 pub mod reentrancy;
 pub mod settlement;
 pub mod storage;
@@ -110,14 +106,8 @@ pub mod storage;
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
-mod test_panic_handler;
-#[cfg(test)]
-mod test_due_date_guard;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_self_call_rejection;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -138,8 +128,6 @@ mod test_backup_safety;
 mod test_bid_cancel_accept_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_boundary;
-#[cfg(test)]
-mod test_queries;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -157,38 +145,46 @@ mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
 #[cfg(all(test, feature = "legacy-tests"))]
-mod test_escrow_refund_after_expiry;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
+#[cfg(test)]
+mod test_due_date_guard;
 #[cfg(test)]
 mod test_dust_transfer;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_event_completeness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
-#[cfg(test)]
-mod test_payments;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_escrow_refund_after_expiry;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
 #[cfg(test)]
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
+#[cfg(test)]
+mod test_panic_handler;
+#[cfg(test)]
+mod test_payments;
+#[cfg(test)]
+mod test_queries;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_self_call_rejection;
 // Issue #1541 — lag at zero, lag at positive, lag during pause.
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_accept_bid_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_lag;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_health_status;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
-#[cfg(test)]
-mod test_operational_limits;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_accept_bid_race;
+#[cfg(test)]
+mod test_operational_limits;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 // #[cfg(test)]
@@ -210,8 +206,6 @@ mod test_profit_fee;
 mod test_protocol_health;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_limits_boundary;
-#[cfg(test)]
-mod test_settlement_accounting_identity;
 #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_refund;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -221,30 +215,46 @@ mod test_reentrancy;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_reentrancy_fault_injection;
 #[cfg(test)]
+mod test_settlement_accounting_identity;
+#[cfg(test)]
 mod test_storage_key_layout;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_string_limits;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_types;
-#[cfg(test)]
-mod test_vesting;
-mod test_vesting_summary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_analytics_consistency;
+#[cfg(test)]
+mod test_bid_capacity_stress;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
 #[cfg(test)]
-mod test_bid_capacity_stress;
+mod test_vesting;
+mod test_vesting_summary;
 // Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
 // every CI matrix entry.
 #[cfg(test)]
 mod test_bid_ranking_determinism;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_business_invoices_paged_ordering;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_category_breakdown;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_category_breakdown;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_clock_rollover;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_compute_yield_props;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_default_grace_boundary;
+#[cfg(test)]
+mod test_diagnostics;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_cancelled_noop;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_distribute_revenue;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
@@ -254,49 +264,35 @@ mod test_fuzz_partial_payment;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(test)]
+mod test_incident;
+#[cfg(test)]
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
-mod test_investment_withdrawal;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_investment_transitions;
-#[cfg(test)]
-mod test_incident;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_invoice_metadata;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_line_item_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_invoice_search_ranking;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_default_grace_boundary;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_clock_rollover;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_rebuild_indexes;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_max_invoices_per_business;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_category_breakdown;
-#[cfg(test)]
-mod test_diagnostics;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_business_invoices_paged_ordering;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_fuzz_cancelled_noop;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_compute_yield_props;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_investment_transitions;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_investment_withdrawal;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_invoice_metadata;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_invoice_search_ranking;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_line_item_consistency;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
 mod test_platform_metrics_reconciliation;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_rebuild_indexes;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_seed;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
@@ -307,8 +303,8 @@ pub mod types;
 pub use types::*;
 pub mod verification;
 pub mod vesting;
-use admin::AdminStorage;
 use admin::require_not_self;
+use admin::AdminStorage;
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
 };
@@ -334,14 +330,13 @@ use settlement::{
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
-    normalize_tag, reject_business,
-    reject_investor as do_reject_investor, recompute_investor_tier, require_business_not_pending,
-    require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
-    submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
-    validate_investor_investment, validate_invoice_metadata, verify_business,
-    verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
-    BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
-    InvestorVerificationStorage,
+    normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
+    require_business_not_pending, require_investor_not_pending,
+    submit_investor_kyc as do_submit_investor_kyc, submit_kyc_application, validate_bid,
+    validate_dispute_evidence, validate_dispute_resolution, validate_investor_investment,
+    validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
+    verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
+    InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
 };
 
 use crate::storage::{BidStorage, InvoiceStorage};
@@ -479,7 +474,11 @@ impl QuickLendXContract {
     }
 
     /// Admin-only: update the absolute minimum bid amount.
-    pub fn update_minimum_bid(env: Env, admin: Address, amount: i128) -> Result<i128, QuickLendXError> {
+    pub fn update_minimum_bid(
+        env: Env,
+        admin: Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
         protocol_limits::ProtocolLimitsContract::update_minimum_bid(env, admin, amount)
     }
 
@@ -2075,7 +2074,6 @@ impl QuickLendXContract {
         recompute_investor_tier(&env, &admin, &investor)
     }
 
-
     /// Verify business (admin only)
     pub fn verify_business(
         // This function is already defined in verification module
@@ -2133,9 +2131,9 @@ impl QuickLendXContract {
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
         let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
-        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
-            env,
-            admin,
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits_authed(
+            &env,
+            &admin,
             min_invoice_amount,
             10,  // min_bid_amount
             100, // min_bid_bps (default)

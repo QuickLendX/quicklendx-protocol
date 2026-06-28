@@ -79,7 +79,13 @@ impl TestFixture {
             &Vec::new(&self.env),
         );
         self.client.verify_invoice(&invoice_id);
-        let bid_id = self.client.place_bid(&self.investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&self.env, &[0u8; 32]));
+        let bid_id = self.client.place_bid(
+            &self.investor,
+            &invoice_id,
+            &amount,
+            &(amount + 100),
+            &BytesN::from_array(&self.env, &[0u8; 32]),
+        );
         self.client.accept_bid(&invoice_id, &bid_id);
         self.env.ledger().set_timestamp(timestamp + 10);
         self.client.settle_invoice(&invoice_id, &amount);
@@ -109,7 +115,13 @@ impl TestFixture {
                     &Vec::new(&self.env),
                 );
                 self.client.verify_invoice(&invoice_id);
-                let bid_id = self.client.place_bid(&self.investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&self.env, &[0u8; 32]));
+                let bid_id = self.client.place_bid(
+                    &self.investor,
+                    &invoice_id,
+                    &amount,
+                    &(amount + 100),
+                    &BytesN::from_array(&self.env, &[0u8; 32]),
+                );
                 self.client.accept_bid(&invoice_id, &bid_id);
                 match status {
                     InvoiceStatus::Defaulted => {
@@ -164,10 +176,15 @@ impl TestFixture {
             &Vec::new(&self.env),
         );
         self.client.verify_invoice(&invoice_id);
-        let bid_id = self.client.place_bid(&self.investor, &invoice_id, &1000, &1100, &BytesN::from_array(&self.env, &[0u8; 32]));
+        let bid_id = self.client.place_bid(
+            &self.investor,
+            &invoice_id,
+            &1000,
+            &1100,
+            &BytesN::from_array(&self.env, &[0u8; 32]),
+        );
         self.client.accept_bid(&invoice_id, &bid_id);
         invoice_id
-
     }
 }
 #[test]

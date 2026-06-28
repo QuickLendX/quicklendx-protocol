@@ -62,8 +62,9 @@ fn setup_contract(env: &Env) -> Fixture {
     let investor = Address::generate(env);
 
     // Admin bootstrap
+    client.initialize_admin(&admin);
     client.set_admin(&admin);
-    let _ = client.try_initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
+    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
 
     // Real SAC token
     let token_admin = Address::generate(env);
@@ -191,7 +192,8 @@ fn test_invoice_lifecycle_happy_path() {
         &fx.investor,
         &invoice_id,
         &bid_amount,
-        &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]) // expected_return = full invoice amount
+        &invoice_amount,
+        &BytesN::from_array(&fx.client.env, &[0u8; 32]), // expected_return = full invoice amount
     );
 
     let bid = fx.client.get_bid(&bid_id).unwrap();
@@ -417,9 +419,13 @@ fn test_invoice_lifecycle_default_branch() {
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
     /// Investor places a bid.
-    let bid_id = fx
-        .client
-        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]));
+    let bid_id = fx.client.place_bid(
+        &fx.investor,
+        &invoice_id,
+        &bid_amount,
+        &invoice_amount,
+        &BytesN::from_array(&fx.client.env, &[0u8; 32]),
+    );
     assert_eq!(
         fx.client.get_bid(&bid_id).unwrap().status,
         BidStatus::Placed,
@@ -578,9 +584,13 @@ fn test_partial_then_full_settle() {
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
     /// Investor places a bid.
-    let bid_id = fx
-        .client
-        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]));
+    let bid_id = fx.client.place_bid(
+        &fx.investor,
+        &invoice_id,
+        &bid_amount,
+        &invoice_amount,
+        &BytesN::from_array(&fx.client.env, &[0u8; 32]),
+    );
     assert_eq!(
         fx.client.get_bid(&bid_id).unwrap().bid_amount,
         bid_amount,

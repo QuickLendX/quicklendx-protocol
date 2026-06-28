@@ -3,8 +3,8 @@
 use crate::{
     backup::{Backup, BackupStatus, BackupStorage},
     invoice::InvoiceCategory,
+    types::{DisputeResolution, Invoice, InvoiceStatus},
     QuickLendXContract, QuickLendXContractClient, QuickLendXError,
-    types::{Invoice, InvoiceStatus, DisputeResolution},
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},

@@ -528,7 +528,11 @@ fn test_invoice_settled_field_order() {
     assert!(p.platform_fee >= 0);
     assert_eq!(p.timestamp, ts);
     assert_eq!(p.amount, EXP_RETURN, "amount must equal total settled");
-    assert_eq!(p.ledger, env.ledger().sequence(), "ledger sequence must be set");
+    assert_eq!(
+        p.ledger,
+        env.ledger().sequence(),
+        "ledger sequence must be set"
+    );
 }
 
 // ============================================================================
@@ -1083,7 +1087,11 @@ fn test_loan_settled_event_schema() {
     assert!(p.platform_fee >= 0, "platform_fee must be non-negative");
     assert_eq!(p.timestamp, ts, "timestamp mismatch");
     assert_eq!(p.amount, EXP_RETURN, "amount must equal total settled");
-    assert_eq!(p.ledger, env.ledger().sequence(), "ledger sequence must be set");
+    assert_eq!(
+        p.ledger,
+        env.ledger().sequence(),
+        "ledger sequence must be set"
+    );
 }
 
 // ============================================================================

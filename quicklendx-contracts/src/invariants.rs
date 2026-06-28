@@ -315,6 +315,76 @@ fn check_settlement_accounting_identity(env: &Env) -> InvariantCheck {
     row(env, "settlement_accounting_identity", passed, evidence)
 }
 
+/// Settlement total invariant check: recalculate total settlement and verify
+/// that `total_settlement == total_bid_amount + total_profit`.
+///
+/// **Cost:** O(N_paid) persistent reads to inspect all Paid invoices and their corresponding investments.
+fn check_settlement_total_invariant(env: &Env) -> InvariantCheck {
+    let mut total_settlement: i128 = 0;
+    let mut total_bid_amount: i128 = 0;
+    let mut total_profit: i128 = 0;
+    let mut passed = true;
+
+    for id in InvoiceStorage::get_by_status(env, InvoiceStatus::Paid).iter() {
+        if let Some(invoice) = InvoiceStorage::get_invoice(env, &id) {
+            if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, &id) {
+                let breakdown = crate::profits::PlatformFee::calculate_breakdown(
+                    env,
+                    investment.amount,
+                    invoice.total_paid,
+                );
+
+                total_settlement = match total_settlement.checked_add(invoice.total_paid) {
+                    Some(val) => val,
+                    None => {
+                        passed = false;
+                        break;
+                    }
+                };
+
+                total_bid_amount = match total_bid_amount.checked_add(investment.amount) {
+                    Some(val) => val,
+                    None => {
+                        passed = false;
+                        break;
+                    }
+                };
+
+                total_profit = match total_profit.checked_add(breakdown.gross_profit) {
+                    Some(val) => val,
+                    None => {
+                        passed = false;
+                        break;
+                    }
+                };
+            } else {
+                passed = false;
+                break;
+            }
+        }
+    }
+
+    if passed {
+        let expected_settlement = match total_bid_amount.checked_add(total_profit) {
+            Some(val) => val,
+            None => {
+                passed = false;
+                0
+            }
+        };
+        if passed && total_settlement != expected_settlement {
+            passed = false;
+        }
+    }
+
+    let evidence = if passed {
+        "Total settlement matches total bid amount plus total profit across all Paid invoices."
+    } else {
+        "Settlement invariant violation: total settlement does not match total bid amount plus total profit."
+    };
+    row(env, "settlement_total_invariant", passed, evidence)
+}
+
 /// Run every composed invariant check and assemble the report.
 ///
 /// Read-only and independent of admin gating, so tests can exercise it directly
@@ -329,6 +399,7 @@ pub fn run_invariant_checks(env: &Env) -> InvariantReport {
     checks.push_back(check_sum_investments_le_sum_invoices(env));
     checks.push_back(check_escrow_uniqueness(env));
     checks.push_back(check_settlement_accounting_identity(env));
+    checks.push_back(check_settlement_total_invariant(env));
 
     let mut all_passed = true;
     for c in checks.iter() {

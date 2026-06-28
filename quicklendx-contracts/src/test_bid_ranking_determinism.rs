@@ -26,7 +26,7 @@ use alloc::vec::Vec;
 #[cfg(test)]
 mod test_bid_ranking_determinism {
     use crate::bid::{Bid, BidStatus, BidStorage};
-use alloc::vec::Vec;
+    use alloc::vec::Vec;
     use core::cmp::Ordering;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
@@ -36,6 +36,12 @@ use alloc::vec::Vec;
     // =========================================================================
     // Helpers
     // =========================================================================
+
+    fn setup() -> (Env, Address) {
+        let env = Env::default();
+        let contract_id = env.register(crate::QuickLendXContract, ());
+        (env, contract_id)
+    }
 
     /// Build a deterministic invoice ID from a single seed byte.
     fn invoice_id(env: &Env, seed: u8) -> BytesN<32> {
@@ -78,9 +84,23 @@ use alloc::vec::Vec;
     }
 
     /// Persist a bid and register it on the invoice index.
-    fn persist(env: &Env, bid: &Bid) {
-        BidStorage::store_bid(env, bid);
-        BidStorage::add_bid_to_invoice(env, &bid.invoice_id, &bid.bid_id);
+    fn persist(env: &Env, bid: &Bid, contract_id: &Address) {
+        env.as_contract(contract_id, || {
+            BidStorage::store_bid(env, bid);
+            BidStorage::add_bid_to_invoice(env, &bid.invoice_id, &bid.bid_id);
+        });
+    }
+
+    fn rank_bids(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        contract_id: &Address,
+    ) -> soroban_sdk::Vec<Bid> {
+        env.as_contract(contract_id, || BidStorage::rank_bids(env, invoice_id))
+    }
+
+    fn get_best_bid(env: &Env, invoice_id: &BytesN<32>, contract_id: &Address) -> Option<Bid> {
+        env.as_contract(contract_id, || BidStorage::get_best_bid(env, invoice_id))
     }
 
     /// Extract bid IDs from a ranked Vec for easy equality assertions.
@@ -101,20 +121,20 @@ use alloc::vec::Vec;
     /// Calling `rank_bids` twice on the same state returns identical results.
     #[test]
     fn rank_bids_returns_same_sequence_on_repeated_calls() {
-        let env = Env::default();
+        let (env, contract_id) = setup();
         env.ledger().with_mut(|l| l.timestamp = 1_000);
         let inv = invoice_id(&env, 1);
 
         let bid_a = make_bid(&env, &inv, 5_000, 7_000, 10, BidStatus::Placed, 1);
         let bid_b = make_bid(&env, &inv, 4_000, 6_000, 20, BidStatus::Placed, 2);
         let bid_c = make_bid(&env, &inv, 6_000, 7_500, 30, BidStatus::Placed, 3);
-        persist(&env, &bid_a);
-        persist(&env, &bid_b);
-        persist(&env, &bid_c);
+        persist(&env, &bid_a, &contract_id);
+        persist(&env, &bid_b, &contract_id);
+        persist(&env, &bid_c, &contract_id);
 
-        let first_call = ids(&BidStorage::rank_bids(&env, &inv));
-        let second_call = ids(&BidStorage::rank_bids(&env, &inv));
-        let third_call = ids(&BidStorage::rank_bids(&env, &inv));
+        let first_call = ids(&rank_bids(&env, &inv, &contract_id));
+        let second_call = ids(&rank_bids(&env, &inv, &contract_id));
+        let third_call = ids(&rank_bids(&env, &inv, &contract_id));
 
         assert_eq!(
             first_call, second_call,
@@ -129,18 +149,18 @@ use alloc::vec::Vec;
     /// `get_best_bid` always equals `rank_bids[0]` across repeated calls.
     #[test]
     fn get_best_bid_equals_rank_bids_first_element_on_repeated_calls() {
-        let env = Env::default();
+        let (env, contract_id) = setup();
         env.ledger().with_mut(|l| l.timestamp = 2_000);
         let inv = invoice_id(&env, 2);
 
         let bid_x = make_bid(&env, &inv, 10_000, 12_000, 5, BidStatus::Placed, 10);
         let bid_y = make_bid(&env, &inv, 10_000, 11_500, 5, BidStatus::Placed, 20);
-        persist(&env, &bid_x);
-        persist(&env, &bid_y);
+        persist(&env, &bid_x, &contract_id);
+        persist(&env, &bid_y, &contract_id);
 
         for _ in 0..3 {
-            let ranked = BidStorage::rank_bids(&env, &inv);
-            let best = BidStorage::get_best_bid(&env, &inv).expect("best bid must be Some");
+            let ranked = rank_bids(&env, &inv, &contract_id);
+            let best = get_best_bid(&env, &inv, &contract_id).expect("best bid must be Some");
             assert_eq!(
                 best.bid_id,
                 ranked.get(0).unwrap().bid_id,
@@ -173,7 +193,7 @@ use alloc::vec::Vec;
         let mut expected_order: Option<Vec<[u8; 32]>> = None;
 
         for (perm_idx, order) in PERMUTATIONS.iter().enumerate() {
-            let env = Env::default();
+            let (env, contract_id) = setup();
             // Use a different invoice seed per permutation to avoid cross-contamination.
             env.ledger().with_mut(|l| l.timestamp = 3_000);
             let inv = invoice_id(&env, 10u8 + perm_idx as u8);
@@ -187,10 +207,10 @@ use alloc::vec::Vec;
             let bids = [&bid_top, &bid_mid, &bid_low];
 
             for &idx in order.iter() {
-                persist(&env, bids[idx as usize]);
+                persist(&env, bids[idx as usize], &contract_id);
             }
 
-            let ranked = ids(&BidStorage::rank_bids(&env, &inv));
+            let ranked = ids(&rank_bids(&env, &inv, &contract_id));
 
             match &expected_order {
                 None => expected_order = Some(ranked),
@@ -209,7 +229,7 @@ use alloc::vec::Vec;
     #[test]
     fn rank_bids_with_full_tie_is_insertion_order_independent() {
         let check = |inv_seed: u8, insert_ascending: bool| {
-            let env = Env::default();
+            let (env, contract_id) = setup();
             env.ledger().with_mut(|l| l.timestamp = 4_000);
             let inv = invoice_id(&env, inv_seed);
 
@@ -219,16 +239,16 @@ use alloc::vec::Vec;
             let bid_hi = make_bid(&env, &inv, 5_000, 6_000, 50, BidStatus::Placed, 0x09);
 
             if insert_ascending {
-                persist(&env, &bid_lo);
-                persist(&env, &bid_mi);
-                persist(&env, &bid_hi);
+                persist(&env, &bid_lo, &contract_id);
+                persist(&env, &bid_mi, &contract_id);
+                persist(&env, &bid_hi, &contract_id);
             } else {
-                persist(&env, &bid_hi);
-                persist(&env, &bid_mi);
-                persist(&env, &bid_lo);
+                persist(&env, &bid_hi, &contract_id);
+                persist(&env, &bid_mi, &contract_id);
+                persist(&env, &bid_lo, &contract_id);
             }
 
-            ids(&BidStorage::rank_bids(&env, &inv))
+            ids(&rank_bids(&env, &inv, &contract_id))
         };
 
         let ascending = check(30, true);
@@ -243,9 +263,17 @@ use alloc::vec::Vec;
         let bid_hi_id = {
             let env = Env::default();
             env.ledger().with_mut(|l| l.timestamp = 4_000);
-            make_bid(&env, &invoice_id(&env, 31), 5_000, 6_000, 50, BidStatus::Placed, 0x09)
-                .bid_id
-                .to_array()
+            make_bid(
+                &env,
+                &invoice_id(&env, 31),
+                5_000,
+                6_000,
+                50,
+                BidStatus::Placed,
+                0x09,
+            )
+            .bid_id
+            .to_array()
         };
         assert_eq!(
             ascending[0], bid_hi_id,
@@ -367,10 +395,7 @@ use alloc::vec::Vec;
             Ordering::Greater,
             "higher expected_return wins when profit is equal"
         );
-        assert_eq!(
-            BidStorage::compare_bids(&higher, &lower),
-            Ordering::Less
-        );
+        assert_eq!(BidStorage::compare_bids(&higher, &lower), Ordering::Less);
     }
 
     /// Fourth tiebreaker: when all economic fields match, newer timestamp wins.
@@ -407,10 +432,7 @@ use alloc::vec::Vec;
             "higher bid_id must win when every other field is identical"
         );
         // Symmetric check
-        assert_eq!(
-            BidStorage::compare_bids(&low_id, &high_id),
-            Ordering::Less
-        );
+        assert_eq!(BidStorage::compare_bids(&low_id, &high_id), Ordering::Less);
     }
 
     // =========================================================================
@@ -420,16 +442,20 @@ use alloc::vec::Vec;
     /// `rank_bids` returns exactly one element for a single `Placed` bid, repeatedly.
     #[test]
     fn rank_bids_returns_single_element_for_one_placed_bid() {
-        let env = Env::default();
+        let (env, contract_id) = setup();
         env.ledger().with_mut(|l| l.timestamp = 12_000);
         let inv = invoice_id(&env, 50);
 
         let bid = make_bid(&env, &inv, 1_000, 2_000, 1, BidStatus::Placed, 1);
-        persist(&env, &bid);
+        persist(&env, &bid, &contract_id);
 
         for call in 1..=3u8 {
-            let ranked = BidStorage::rank_bids(&env, &inv);
-            assert_eq!(ranked.len(), 1, "call {call}: expected exactly 1 ranked bid");
+            let ranked = rank_bids(&env, &inv, &contract_id);
+            assert_eq!(
+                ranked.len(),
+                1,
+                "call {call}: expected exactly 1 ranked bid"
+            );
             assert_eq!(
                 ranked.get(0).unwrap().bid_id,
                 bid.bid_id,
@@ -441,13 +467,13 @@ use alloc::vec::Vec;
     /// `rank_bids` returns an empty Vec when the invoice has no bids.
     #[test]
     fn rank_bids_returns_empty_vec_for_invoice_with_no_bids() {
-        let env = Env::default();
+        let (env, contract_id) = setup();
         env.ledger().with_mut(|l| l.timestamp = 13_000);
         let inv = invoice_id(&env, 51);
 
         // No bids persisted.
         for call in 1..=3u8 {
-            let ranked = BidStorage::rank_bids(&env, &inv);
+            let ranked = rank_bids(&env, &inv, &contract_id);
             assert_eq!(
                 ranked.len(),
                 0,
@@ -459,11 +485,11 @@ use alloc::vec::Vec;
     /// `get_best_bid` returns `None` when the invoice has no bids.
     #[test]
     fn get_best_bid_returns_none_for_invoice_with_no_bids() {
-        let env = Env::default();
+        let (env, contract_id) = setup();
         env.ledger().with_mut(|l| l.timestamp = 14_000);
         let inv = invoice_id(&env, 52);
 
-        let result = BidStorage::get_best_bid(&env, &inv);
+        let result = get_best_bid(&env, &inv, &contract_id);
         assert!(
             result.is_none(),
             "get_best_bid must return None when no bids exist"
@@ -480,7 +506,7 @@ use alloc::vec::Vec;
     /// never pollute the ranked output or change the winner.
     #[test]
     fn rank_bids_excludes_all_non_placed_statuses() {
-        let env = Env::default();
+        let (env, contract_id) = setup();
         env.ledger().with_mut(|l| l.timestamp = 15_000);
         let inv = invoice_id(&env, 60);
 
@@ -491,13 +517,13 @@ use alloc::vec::Vec;
         let expired = make_bid(&env, &inv, 9_000, 99_000, 4, BidStatus::Expired, 4);
         let cancelled = make_bid(&env, &inv, 9_000, 99_000, 5, BidStatus::Cancelled, 5);
 
-        persist(&env, &placed);
-        persist(&env, &accepted);
-        persist(&env, &withdrawn);
-        persist(&env, &expired);
-        persist(&env, &cancelled);
+        persist(&env, &placed, &contract_id);
+        persist(&env, &accepted, &contract_id);
+        persist(&env, &withdrawn, &contract_id);
+        persist(&env, &expired, &contract_id);
+        persist(&env, &cancelled, &contract_id);
 
-        let ranked = BidStorage::rank_bids(&env, &inv);
+        let ranked = rank_bids(&env, &inv, &contract_id);
         assert_eq!(
             ranked.len(),
             1,
@@ -510,7 +536,7 @@ use alloc::vec::Vec;
         );
 
         // get_best_bid must agree.
-        let best = BidStorage::get_best_bid(&env, &inv).expect("best must exist");
+        let best = get_best_bid(&env, &inv, &contract_id).expect("best must exist");
         assert_eq!(
             best.bid_id, placed.bid_id,
             "get_best_bid must also exclude non-Placed bids"
@@ -521,19 +547,35 @@ use alloc::vec::Vec;
     /// `get_best_bid` returns `None`.
     #[test]
     fn rank_bids_returns_empty_when_all_bids_are_non_placed() {
-        let env = Env::default();
+        let (env, contract_id) = setup();
         env.ledger().with_mut(|l| l.timestamp = 16_000);
         let inv = invoice_id(&env, 61);
 
-        persist(&env, &make_bid(&env, &inv, 5_000, 9_000, 1, BidStatus::Accepted, 1));
-        persist(&env, &make_bid(&env, &inv, 5_000, 9_000, 2, BidStatus::Withdrawn, 2));
-        persist(&env, &make_bid(&env, &inv, 5_000, 9_000, 3, BidStatus::Expired, 3));
-        persist(&env, &make_bid(&env, &inv, 5_000, 9_000, 4, BidStatus::Cancelled, 4));
+        persist(
+            &env,
+            &make_bid(&env, &inv, 5_000, 9_000, 1, BidStatus::Accepted, 1),
+            &contract_id,
+        );
+        persist(
+            &env,
+            &make_bid(&env, &inv, 5_000, 9_000, 2, BidStatus::Withdrawn, 2),
+            &contract_id,
+        );
+        persist(
+            &env,
+            &make_bid(&env, &inv, 5_000, 9_000, 3, BidStatus::Expired, 3),
+            &contract_id,
+        );
+        persist(
+            &env,
+            &make_bid(&env, &inv, 5_000, 9_000, 4, BidStatus::Cancelled, 4),
+            &contract_id,
+        );
 
-        let ranked = BidStorage::rank_bids(&env, &inv);
+        let ranked = rank_bids(&env, &inv, &contract_id);
         assert_eq!(ranked.len(), 0, "all non-Placed: ranked must be empty");
 
-        let best = BidStorage::get_best_bid(&env, &inv);
+        let best = get_best_bid(&env, &inv, &contract_id);
         assert!(best.is_none(), "all non-Placed: get_best_bid must be None");
     }
 
@@ -545,24 +587,24 @@ use alloc::vec::Vec;
     /// remains deterministic and lower-profit bids rank below higher-profit ones.
     #[test]
     fn rank_bids_is_deterministic_with_zero_and_negative_profit_bids() {
-        let env = Env::default();
+        let (env, contract_id) = setup();
         env.ledger().with_mut(|l| l.timestamp = 17_000);
         let inv = invoice_id(&env, 70);
 
         // positive profit wins
         let positive = make_bid(&env, &inv, 5_000, 6_000, 1, BidStatus::Placed, 3); // profit 1000
-        // zero profit
+                                                                                    // zero profit
         let zero = make_bid(&env, &inv, 5_000, 5_000, 1, BidStatus::Placed, 2); // profit 0
-        // "negative" profit (saturating_sub clamps to 0 in u64, but i128 preserves it)
-        // bid_amount=6000, expected_return=5000 -> profit = -1000 (using i128 arithmetic)
+                                                                                // "negative" profit (saturating_sub clamps to 0 in u64, but i128 preserves it)
+                                                                                // bid_amount=6000, expected_return=5000 -> profit = -1000 (using i128 arithmetic)
         let negative = make_bid(&env, &inv, 6_000, 5_000, 1, BidStatus::Placed, 1); // profit -1000
 
-        persist(&env, &positive);
-        persist(&env, &zero);
-        persist(&env, &negative);
+        persist(&env, &positive, &contract_id);
+        persist(&env, &zero, &contract_id);
+        persist(&env, &negative, &contract_id);
 
-        let first = ids(&BidStorage::rank_bids(&env, &inv));
-        let second = ids(&BidStorage::rank_bids(&env, &inv));
+        let first = ids(&rank_bids(&env, &inv, &contract_id));
+        let second = ids(&rank_bids(&env, &inv, &contract_id));
 
         assert_eq!(
             first, second,

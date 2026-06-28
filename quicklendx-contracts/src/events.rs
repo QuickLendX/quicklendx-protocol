@@ -666,11 +666,17 @@ pub struct Unpaused {
 }
 
 pub fn emit_paused(env: &Env, admin: &Address) {
-    Paused { admin: admin.clone() }.publish(env);
+    Paused {
+        admin: admin.clone(),
+    }
+    .publish(env);
 }
 
 pub fn emit_unpaused(env: &Env, admin: &Address) {
-    Unpaused { admin: admin.clone() }.publish(env);
+    Unpaused {
+        admin: admin.clone(),
+    }
+    .publish(env);
 }
 
 // ============================================================================

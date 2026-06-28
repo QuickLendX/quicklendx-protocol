@@ -79,7 +79,10 @@ fn test_proto_cfg_second_change_records_old_value() {
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
     let id = ids.get(ids.len() - 1).unwrap();
     let entry = client.get_audit_entry(&id).unwrap();
-    assert!(entry.old_value.is_some(), "second change must record old value");
+    assert!(
+        entry.old_value.is_some(),
+        "second change must record old value"
+    );
     assert!(entry.new_value.is_some());
 }
 
@@ -92,7 +95,11 @@ fn test_proto_cfg_non_admin_produces_no_entry() {
     assert!(client
         .try_set_protocol_config(&non_admin, &500_000i128, &180u64, &86_400u64)
         .is_err());
-    assert_eq!(trail_len(&client, &env), before, "rejected call must not emit entry");
+    assert_eq!(
+        trail_len(&client, &env),
+        before,
+        "rejected call must not emit entry"
+    );
 }
 
 #[test]
@@ -176,7 +183,10 @@ fn test_set_treasury_emits_one_entry() {
     let entry = client.get_audit_entry(&id).unwrap();
     assert_eq!(entry.operation, AuditOperation::ConfigTreasuryChanged);
     assert_eq!(entry.actor, admin);
-    assert_eq!(entry.old_value, None, "first treasury set has no previous address");
+    assert_eq!(
+        entry.old_value, None,
+        "first treasury set has no previous address"
+    );
     assert!(entry.new_value.is_some());
     assert_eq!(
         entry.additional_data,
@@ -195,7 +205,10 @@ fn test_set_treasury_second_change_records_old_value() {
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
     let id = ids.get(ids.len() - 1).unwrap();
     let entry = client.get_audit_entry(&id).unwrap();
-    assert!(entry.old_value.is_some(), "second treasury change must record old address");
+    assert!(
+        entry.old_value.is_some(),
+        "second treasury change must record old address"
+    );
     assert!(entry.new_value.is_some());
 }
 
@@ -227,7 +240,14 @@ fn test_update_fee_structure_new_entry_emits_audit() {
     let (env, client, admin) = setup_with_fees();
     let before = trail_len(&client, &env);
     // EarlyPayment is not in the default fee structures, so this is a new insertion
-    client.update_fee_structure(&admin, &FeeType::EarlyPayment, &200u32, &100i128, &10_000i128, &true);
+    client.update_fee_structure(
+        &admin,
+        &FeeType::EarlyPayment,
+        &200u32,
+        &100i128,
+        &10_000i128,
+        &true,
+    );
     assert_eq!(trail_len(&client, &env), before + 1);
 
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
@@ -235,7 +255,10 @@ fn test_update_fee_structure_new_entry_emits_audit() {
     let entry = client.get_audit_entry(&id).unwrap();
     assert_eq!(entry.operation, AuditOperation::ConfigFeeStructureChanged);
     assert_eq!(entry.actor, admin);
-    assert_eq!(entry.old_value, None, "new fee-type insertion has no old value");
+    assert_eq!(
+        entry.old_value, None,
+        "new fee-type insertion has no old value"
+    );
     assert!(entry.new_value.is_some());
     assert_eq!(
         entry.additional_data,
@@ -246,13 +269,30 @@ fn test_update_fee_structure_new_entry_emits_audit() {
 #[test]
 fn test_update_fee_structure_update_records_old_value() {
     let (env, client, admin) = setup_with_fees();
-    client.update_fee_structure(&admin, &FeeType::Platform, &200u32, &100i128, &10_000i128, &true);
-    client.update_fee_structure(&admin, &FeeType::Platform, &300u32, &200i128, &20_000i128, &true);
+    client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200u32,
+        &100i128,
+        &10_000i128,
+        &true,
+    );
+    client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &300u32,
+        &200i128,
+        &20_000i128,
+        &true,
+    );
 
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
     let id = ids.get(ids.len() - 1).unwrap();
     let entry = client.get_audit_entry(&id).unwrap();
-    assert!(entry.old_value.is_some(), "update of existing structure must record old value");
+    assert!(
+        entry.old_value.is_some(),
+        "update of existing structure must record old value"
+    );
     assert!(entry.new_value.is_some());
 }
 
@@ -262,7 +302,14 @@ fn test_update_fee_structure_invalid_bps_produces_no_entry() {
     let before = trail_len(&client, &env);
     // base_fee_bps > MAX_FEE_BPS (1000)
     assert!(client
-        .try_update_fee_structure(&admin, &FeeType::Platform, &1001u32, &100i128, &10_000i128, &true)
+        .try_update_fee_structure(
+            &admin,
+            &FeeType::Platform,
+            &1001u32,
+            &100i128,
+            &10_000i128,
+            &true
+        )
         .is_err());
     assert_eq!(trail_len(&client, &env), before);
 }
@@ -270,7 +317,14 @@ fn test_update_fee_structure_invalid_bps_produces_no_entry() {
 #[test]
 fn test_update_fee_structure_fee_type_label_in_additional_data() {
     let (env, client, admin) = setup_with_fees();
-    client.update_fee_structure(&admin, &FeeType::LatePayment, &500u32, &50i128, &5_000i128, &true);
+    client.update_fee_structure(
+        &admin,
+        &FeeType::LatePayment,
+        &500u32,
+        &100i128,
+        &5_000i128,
+        &true,
+    );
 
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
     let id = ids.get(ids.len() - 1).unwrap();
@@ -284,8 +338,22 @@ fn test_update_fee_structure_fee_type_label_in_additional_data() {
 #[test]
 fn test_update_fee_structure_chain_integrity() {
     let (env, client, admin) = setup_with_fees();
-    client.update_fee_structure(&admin, &FeeType::Platform, &200u32, &100i128, &10_000i128, &true);
-    client.update_fee_structure(&admin, &FeeType::Processing, &150u32, &50i128, &5_000i128, &true);
+    client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200u32,
+        &100i128,
+        &10_000i128,
+        &true,
+    );
+    client.update_fee_structure(
+        &admin,
+        &FeeType::Processing,
+        &150u32,
+        &50i128,
+        &5_000i128,
+        &true,
+    );
     assert!(client.verify_audit_chain(&sentinel(&env)));
 }
 
@@ -304,9 +372,15 @@ fn test_configure_revenue_distribution_emits_one_entry() {
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
     let id = ids.get(ids.len() - 1).unwrap();
     let entry = client.get_audit_entry(&id).unwrap();
-    assert_eq!(entry.operation, AuditOperation::ConfigRevenueDistributionChanged);
+    assert_eq!(
+        entry.operation,
+        AuditOperation::ConfigRevenueDistributionChanged
+    );
     assert_eq!(entry.actor, admin);
-    assert_eq!(entry.old_value, None, "first distribution config has no old value");
+    assert_eq!(
+        entry.old_value, None,
+        "first distribution config has no old value"
+    );
     assert!(entry.new_value.is_some());
     assert_eq!(
         entry.additional_data,
@@ -328,7 +402,10 @@ fn test_configure_revenue_distribution_second_call_records_old_value() {
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
     let id = ids.get(ids.len() - 1).unwrap();
     let entry = client.get_audit_entry(&id).unwrap();
-    assert!(entry.old_value.is_some(), "second config must record old value");
+    assert!(
+        entry.old_value.is_some(),
+        "second config must record old value"
+    );
     assert!(entry.new_value.is_some());
 }
 
@@ -373,7 +450,14 @@ fn test_all_five_functions_form_one_valid_chain() {
     client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64);
     client.set_fee_config(&admin, &200u32);
     client.set_treasury(&admin, &treasury);
-    client.update_fee_structure(&admin, &FeeType::Platform, &200u32, &100i128, &10_000i128, &true);
+    client.update_fee_structure(
+        &admin,
+        &FeeType::Platform,
+        &200u32,
+        &100i128,
+        &10_000i128,
+        &true,
+    );
     client.configure_revenue_distribution(
         &admin, &treasury, &5000u32, &3000u32, &2000u32, &false, &0i128,
     );
@@ -391,8 +475,7 @@ fn test_get_audit_entries_by_operation_returns_correct_counts() {
     client.set_protocol_config(&admin, &2_000_000i128, &730u64, &604_800u64);
     client.set_fee_config(&admin, &200u32);
 
-    let proto_ids =
-        client.get_audit_entries_by_operation(&AuditOperation::ConfigProtocolChanged);
+    let proto_ids = client.get_audit_entries_by_operation(&AuditOperation::ConfigProtocolChanged);
     assert_eq!(proto_ids.len(), 2);
 
     let fee_ids = client.get_audit_entries_by_operation(&AuditOperation::ConfigFeeChanged);
@@ -408,8 +491,5 @@ fn test_audit_stats_total_grows_with_each_change() {
     client.set_fee_config(&admin, &300u32);
 
     let stats_after = client.get_audit_stats();
-    assert_eq!(
-        stats_after.total_entries,
-        stats_before.total_entries + 2
-    );
+    assert_eq!(stats_after.total_entries, stats_before.total_entries + 2);
 }

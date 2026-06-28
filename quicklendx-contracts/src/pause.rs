@@ -1,6 +1,6 @@
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use soroban_sdk::{symbol_short, Address, Env, String, Symbol, Vec, vec};
+use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, Vec};
 
 const PAUSED_KEY: Symbol = symbol_short!("paused");
 const PAUSED_AT_KEY: Symbol = symbol_short!("paused_at");
@@ -28,11 +28,7 @@ impl PauseControl {
         if !env.storage().instance().get(&PAUSED_KEY).unwrap_or(false) {
             return false;
         }
-        let paused_at: u64 = env
-            .storage()
-            .instance()
-            .get(&PAUSED_AT_KEY)
-            .unwrap_or(0);
+        let paused_at: u64 = env.storage().instance().get(&PAUSED_AT_KEY).unwrap_or(0);
         if paused_at > 0 && env.ledger().timestamp() >= paused_at + MAX_PAUSE_DURATION {
             env.storage().instance().set(&PAUSED_KEY, &false);
             return false;
@@ -40,11 +36,7 @@ impl PauseControl {
         true
     }
 
-    pub fn set_paused(
-        env: &Env,
-        admin: &Address,
-        paused: bool,
-    ) -> Result<(), QuickLendXError> {
+    pub fn set_paused(env: &Env, admin: &Address, paused: bool) -> Result<(), QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
         let current: bool = Self::is_paused(env);
@@ -92,8 +84,8 @@ impl PauseControl {
         }
 
         // Simplified check for common entrypoints
-        entrypoint == String::from_str(env, "upload_invoice") ||
-        entrypoint == String::from_str(env, "place_bid") ||
-        entrypoint == String::from_str(env, "accept_bid")
+        entrypoint == String::from_str(env, "upload_invoice")
+            || entrypoint == String::from_str(env, "place_bid")
+            || entrypoint == String::from_str(env, "accept_bid")
     }
 }

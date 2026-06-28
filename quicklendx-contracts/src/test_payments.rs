@@ -4,10 +4,7 @@
 //! ensuring insufficient balance and allowance are rejected before any token call,
 //! and no partial state updates persist on failure.
 
-use soroban_sdk::{
-    testutils::Address as _,
-    token, Address, BytesN, Env,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env};
 
 use crate::errors::QuickLendXError;
 use crate::payments::{
@@ -174,12 +171,7 @@ fn test_transfer_funds_contract_sender_insufficient_balance() {
 fn test_transfer_funds_contract_sender_success() {
     let (env, contract_id) = setup();
     let to = Address::generate(&env);
-    let currency = setup_token(
-        &env,
-        &contract_id,
-        &[(contract_id.clone(), 5_000)],
-        &[],
-    );
+    let currency = setup_token(&env, &contract_id, &[(contract_id.clone(), 5_000)], &[]);
     let token_client = token::Client::new(&env, &currency);
 
     let result = env.as_contract(&contract_id, || {
@@ -366,7 +358,14 @@ fn test_create_escrow_max_amount_with_zero_balance_returns_insufficient_funds() 
     let invoice_id = BytesN::from_array(&env, &[0x12; 32]);
 
     let result = env.as_contract(&contract_id, || {
-        create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), i128::MAX, &currency)
+        create_escrow(
+            &env,
+            &invoice_id,
+            &investor,
+            &Address::generate(&env),
+            i128::MAX,
+            &currency,
+        )
     });
     assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
     assert_eq!(tok.balance(&contract_id), 0);
@@ -392,9 +391,19 @@ fn test_create_escrow_max_amount_with_sufficient_balance_succeeds() {
     let invoice_id = BytesN::from_array(&env, &[0x13; 32]);
 
     let result = env.as_contract(&contract_id, || {
-        create_escrow(&env, &invoice_id, &investor, &Address::generate(&env), i128::MAX, &currency)
+        create_escrow(
+            &env,
+            &invoice_id,
+            &investor,
+            &Address::generate(&env),
+            i128::MAX,
+            &currency,
+        )
     });
-    assert!(result.is_ok(), "max-amount escrow must succeed with sufficient balance");
+    assert!(
+        result.is_ok(),
+        "max-amount escrow must succeed with sufficient balance"
+    );
     assert_eq!(tok.balance(&investor), 0);
     assert_eq!(tok.balance(&contract_id), i128::MAX);
 
@@ -427,10 +436,20 @@ fn test_create_escrow_unregistered_token_address_does_not_write_escrow() {
     let contract_bal = real_tok.balance(&contract_id);
 
     let result = env.as_contract(&contract_id, || {
-        create_escrow(&env, &invoice_id, &investor, &business, 10_000, &bogus_currency)
+        create_escrow(
+            &env,
+            &invoice_id,
+            &investor,
+            &business,
+            10_000,
+            &bogus_currency,
+        )
     });
 
-    assert!(result.is_err(), "unregistered token address must not succeed");
+    assert!(
+        result.is_err(),
+        "unregistered token address must not succeed"
+    );
     assert_eq!(real_tok.balance(&investor), investor_bal);
     assert_eq!(real_tok.balance(&contract_id), contract_bal);
     assert!(env.as_contract(&contract_id, || {
@@ -505,9 +524,7 @@ fn test_release_escrow_insufficient_contract_balance_state_unchanged() {
         EscrowStorage::store_escrow(&env, &escrow);
     });
 
-    let result = env.as_contract(&contract_id, || {
-        release_escrow(&env, &invoice_id)
-    });
+    let result = env.as_contract(&contract_id, || release_escrow(&env, &invoice_id));
 
     assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
 
@@ -539,9 +556,7 @@ fn test_release_escrow_success() {
     let contract_before = token_client.balance(&contract_id);
     let business_before = token_client.balance(&business);
 
-    let result = env.as_contract(&contract_id, || {
-        release_escrow(&env, &invoice_id)
-    });
+    let result = env.as_contract(&contract_id, || release_escrow(&env, &invoice_id));
 
     assert_eq!(result, Ok(()));
 
@@ -583,9 +598,7 @@ fn test_refund_escrow_insufficient_contract_balance_state_unchanged() {
         EscrowStorage::store_escrow(&env, &escrow);
     });
 
-    let result = env.as_contract(&contract_id, || {
-        refund_escrow(&env, &invoice_id)
-    });
+    let result = env.as_contract(&contract_id, || refund_escrow(&env, &invoice_id));
 
     assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
 
@@ -617,9 +630,7 @@ fn test_refund_escrow_success() {
     let contract_before = token_client.balance(&contract_id);
     let investor_before = token_client.balance(&investor);
 
-    let result = env.as_contract(&contract_id, || {
-        refund_escrow(&env, &invoice_id)
-    });
+    let result = env.as_contract(&contract_id, || refund_escrow(&env, &invoice_id));
 
     assert_eq!(result, Ok(()));
 

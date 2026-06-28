@@ -181,7 +181,9 @@ impl From<AuditOperation> for OpType {
             AuditOperation::ConfigFeeChanged => OpType::ConfigFeeChanged,
             AuditOperation::ConfigTreasuryChanged => OpType::ConfigTreasuryChanged,
             AuditOperation::ConfigFeeStructureChanged => OpType::ConfigFeeStructureChanged,
-            AuditOperation::ConfigRevenueDistributionChanged => OpType::ConfigRevenueDistributionChanged,
+            AuditOperation::ConfigRevenueDistributionChanged => {
+                OpType::ConfigRevenueDistributionChanged
+            }
         }
     }
 }
@@ -1077,7 +1079,12 @@ pub(crate) fn write_i128_to_buf(buf: &mut [u8], value: i128) -> usize {
             len += 1;
         }
     }
-    let start = if neg { buf[0] = b'-'; 1 } else { 0 };
+    let start = if neg {
+        buf[0] = b'-';
+        1
+    } else {
+        0
+    };
     for i in 0..len {
         buf[start + i] = tmp[len - 1 - i];
     }

@@ -56,7 +56,13 @@ fn setup_funded_invoice_with_fee(
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &investment_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &investment_amount,
+        &invoice_amount,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
 
     (invoice_id, business, investor, currency)
