@@ -1,2 +1,0 @@
-{"runId":"bf_1779881498194_87u5anjo","timestamp":"2026-05-27T11:31:38.194Z","eventType":"started","actor":"ops","metadata":{"startLedger":1,"endLedger":3,"concurrency":1}}
-{"runId":"bf_1779881498194_87u5anjo","timestamp":"2026-05-27T11:31:38.206Z","eventType":"completed","actor":"ops","metadata":{"processedLedgers":3}}

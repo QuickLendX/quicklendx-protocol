@@ -1,6 +1,6 @@
 use crate::errors::QuickLendXError;
 use crate::types::Invoice;
-use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, Vec, TryFromVal};
+use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, TryFromVal, Vec};
 
 const RETENTION_POLICY_KEY: soroban_sdk::Symbol = symbol_short!("bkup_pol");
 const BACKUP_COUNTER_KEY: soroban_sdk::Symbol = symbol_short!("bkup_cnt");
@@ -88,7 +88,7 @@ impl BackupStorage {
             return Err(QuickLendXError::StorageError);
         }
 
-        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
+        if backup.description.is_empty() || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
         {
             return Err(QuickLendXError::InvalidDescription);
         }
@@ -112,7 +112,7 @@ impl BackupStorage {
         env.storage()
             .instance()
             .get(&RETENTION_POLICY_KEY)
-            .unwrap_or_else(|| BackupRetentionPolicy::default())
+            .unwrap_or_default()
     }
 
     /// Set the backup retention policy (admin only - caller must enforce auth).
@@ -173,10 +173,13 @@ impl BackupStorage {
     pub fn get_backup(env: &Env, backup_id: &BytesN<32>) -> Option<Backup> {
         let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)?;
 
-        if let Ok(map) = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val) {
+        if let Ok(map) =
+            soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
+        {
             let version_key = soroban_sdk::Symbol::new(env, "format_version");
             if map.contains_key(version_key.clone()) {
-                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v)) {
+                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v))
+                {
                     if version == 2 {
                         Backup::try_from_val(env, &raw_val).ok()
                     } else if version == 1 {
@@ -198,14 +201,23 @@ impl BackupStorage {
     }
 
     /// Verify version of a stored backup and reject unsupported/malformed payloads.
-    pub fn verify_backup_version(env: &Env, backup_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
-        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)
+    pub fn verify_backup_version(
+        env: &Env,
+        backup_id: &BytesN<32>,
+    ) -> Result<u32, QuickLendXError> {
+        let raw_val: soroban_sdk::Val = env
+            .storage()
+            .instance()
+            .get(backup_id)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-        if let Ok(map) = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val) {
+        if let Ok(map) =
+            soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
+        {
             let version_key = soroban_sdk::Symbol::new(env, "format_version");
             if map.contains_key(version_key.clone()) {
-                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v)) {
+                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v))
+                {
                     if version == 2 {
                         Ok(2)
                     } else if version == 1 {
@@ -301,7 +313,7 @@ impl BackupStorage {
         let data =
             Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-        if data.len() as u32 != backup.invoice_count {
+        if data.len() != backup.invoice_count {
             return Err(QuickLendXError::StorageError);
         }
 

@@ -14,10 +14,12 @@
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
 - [API Documentation](#api-documentation)
+- [Deterministic Ledger Time](#deterministic-ledger-time)
 - [Code Examples](#code-examples)
 - [Deployment Guide](#deployment-guide)
 - [Troubleshooting](#troubleshooting)
 - [Best Practices](#best-practices)
+- [Documentation](#documentation)
 - [Contributing](#contributing)
 
 ## 🚀 Overview
@@ -134,6 +136,10 @@ let bid_id = contract.place_bid(
 
 ## 📖 API Documentation
 
+### Deterministic Ledger Time
+
+See [Deterministic Ledger Time](docs/contracts/deterministic-time.md) for guidelines on using `env.ledger().timestamp()` instead of off-chain wall-clock time in contract logic.
+
 ### Core Functions
 
 #### Invoice Management
@@ -158,7 +164,7 @@ pub fn store_invoice(
 **Parameters:**
 
 - `business`: Address of the business creating the invoice
-- `amount`: Invoice amount in smallest currency unit (e.g., cents)
+- `amount`: Invoice amount in the token's smallest indivisible unit (e.g. 1 000 000 for 1.000000 USDC with 6 decimals, or 10 000 000 for 1 XLM with 7 decimals). The contract stores this value verbatim — **no decimal conversion is performed internally**. See [`docs/contracts/token-decimals.md`](../docs/contracts/token-decimals.md) for the full explanation and integration examples.
 - `currency`: Token address for the invoice currency
 - `due_date`: Unix timestamp for invoice due date
 - `description`: Human-readable invoice description
@@ -1093,6 +1099,26 @@ The protocol includes comprehensive fuzz testing for critical operations:
 
 See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) for detailed security analysis.
 
+## 📚 Documentation
+
+Additional documentation is available in the `docs/` directory:
+
+- **[Decimal Handling](docs/decimal-handling.md)**: How the contract handles different token decimal places (USDC, DAI, XLM, etc.) and how integrators should convert amounts
+- **[Protocol Limits](PROTOCOL_LIMITS_README.md)**: Protocol-wide limits and configuration
+- **[Admin Operations](docs/admin-dry-run.md)**: Admin function dry-run previews
+- **[Bid Lifecycle](docs/bid-lifecycle.md)**: Complete bid state machine and transitions
+- **[Bid Ranking](../docs/BID_RANKING.md)**: Deterministic ordering function — tier-by-tier tie-breaker logic, invariants, and contributor workflow.
+- **[Escrow Invariants](docs/escrow-invariants.md)**: Escrow state guarantees and safety properties
+- **[Investment Lifecycle](docs/investment-lifecycle.md)**: Investment states and transitions
+- **[Settlement & Dispute Interaction](docs/settlement-dispute-interaction.md)**: How settlements interact with disputes
+- **[Invoice Search](docs/invoice-search-ranking.md)**: Invoice search and ranking algorithms
+- **[Insurance Stacking](docs/insurance-stacking.md)**: Multiple insurance providers per investment
+- **[Notifications Idempotency](docs/notifications-idempotency.md)**: Notification delivery guarantees
+- **[Storage TTL Policy](docs/storage-ttl-policy.md)**: Storage lifetime management
+- **[Storage TTL Map](../docs/STORAGE_TTL.md)**: Detailed mapping of each contract storage key to its bump amount
+- **[Protocol Health](docs/protocol-health.md)**: Health check endpoints and monitoring
+- **[Error Catalog](docs/error-catalog.md)**: Complete error reference
+
 ## 🧪 Test Harness Authorization Guide
 
 ### Overview
@@ -1228,6 +1254,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
+- [Token Decimals — how non-standard decimals are handled internally](../docs/contracts/token-decimals.md)
 - [Stellar Documentation](https://developers.stellar.org/)
 - [Soroban Documentation](https://soroban.stellar.org/)
 - [Rust Documentation](https://doc.rust-lang.org/)

@@ -17,8 +17,8 @@
 //! - Bids expire correctly at the configured TTL boundary
 
 use super::*;
-use crate::bid::{BidStorage, 
-    BidStatus, BidTtlConfig, DEFAULT_BID_TTL_DAYS, MAX_BID_TTL_DAYS, MIN_BID_TTL_DAYS,
+use crate::bid::{
+    BidStatus, BidStorage, BidTtlConfig, DEFAULT_BID_TTL_DAYS, MAX_BID_TTL_DAYS, MIN_BID_TTL_DAYS,
 };
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
@@ -121,7 +121,7 @@ fn test_bid_uses_default_ttl_expiration() {
     let (env, client, admin) = setup();
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
     let now = env.ledger().timestamp();
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(
         bid.expiration_timestamp,
@@ -242,7 +242,7 @@ fn test_bid_uses_updated_ttl() {
     client.set_bid_ttl_days(&14u64);
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
     let now = env.ledger().timestamp();
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(
         bid.expiration_timestamp,
@@ -260,7 +260,7 @@ fn test_existing_bid_expiration_unchanged_after_ttl_update() {
     let now = env.ledger().timestamp();
 
     // Place bid with default TTL (7 days).
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
     let original_expiry = client.get_bid(&bid_id).unwrap().expiration_timestamp;
     assert_eq!(original_expiry, now + 7 * SECONDS_PER_DAY);
 
@@ -282,7 +282,7 @@ fn test_bid_expiration_with_minimum_ttl() {
     client.set_bid_ttl_days(&MIN_BID_TTL_DAYS);
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
     let now = env.ledger().timestamp();
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid.expiration_timestamp, now + SECONDS_PER_DAY);
 }
@@ -294,7 +294,7 @@ fn test_bid_expiration_with_maximum_ttl() {
     client.set_bid_ttl_days(&MAX_BID_TTL_DAYS);
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
     let now = env.ledger().timestamp();
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid.expiration_timestamp, now + 30 * SECONDS_PER_DAY);
 }
@@ -305,7 +305,7 @@ fn test_bid_not_expired_before_ttl_boundary() {
     let (env, client, admin) = setup();
     client.set_bid_ttl_days(&1u64);
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Advance to 1 second before expiry.
     env.ledger()
@@ -325,7 +325,7 @@ fn test_bid_expired_after_ttl_boundary() {
     let (env, client, admin) = setup();
     client.set_bid_ttl_days(&1u64);
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Advance past expiry.
     env.ledger()
@@ -368,7 +368,7 @@ fn test_bid_uses_default_after_reset() {
 
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
     let now = env.ledger().timestamp();
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(
         bid.expiration_timestamp,
@@ -428,7 +428,7 @@ fn test_bid_exact_ttl_boundary_not_expired() {
     let (env, client, admin) = setup();
     client.set_bid_ttl_days(&MIN_BID_TTL_DAYS);
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).unwrap();
 
     // Exact TTL boundary: timestamp == expiration_timestamp
@@ -442,7 +442,10 @@ fn test_bid_exact_ttl_boundary_not_expired() {
 
     // Also verify via cleanup
     let cleaned = client.cleanup_expired_bids(&invoice_id);
-    assert_eq!(cleaned, 0, "Cleanup must not remove bid at exact TTL boundary");
+    assert_eq!(
+        cleaned, 0,
+        "Cleanup must not remove bid at exact TTL boundary"
+    );
 
     // Status still Placed
     let bid_after = client.get_bid(&bid_id).unwrap();
@@ -459,7 +462,7 @@ fn test_bid_expired_one_second_past_ttl() {
     let (env, client, admin) = setup();
     client.set_bid_ttl_days(&MIN_BID_TTL_DAYS);
     let (_, investor, invoice_id) = funded_setup(&env, &client, &admin, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).unwrap();
 
     // 1 second past TTL boundary
@@ -501,7 +504,7 @@ fn test_count_active_bids_respects_ttl_config() {
     assert_eq!(client.get_bid_ttl_days(), 2);
 
     // Place 1 bid
-    client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Count should be 1 before expiry
     let active_before = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
@@ -580,10 +583,5 @@ fn test_count_active_bids_multi_invoice_after_ttl_expiry() {
 
     // All bids expired
     let count_final = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
-    assert_eq!(
-        count_final, 0,
-        "0 active bids after all invoices cleaned"
-    );
+    assert_eq!(count_final, 0, "0 active bids after all invoices cleaned");
 }
-
-

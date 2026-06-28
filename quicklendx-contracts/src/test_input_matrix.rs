@@ -184,7 +184,7 @@ fn test_place_bid_zero_amount() {
     let invoice_id = verified_invoice(&env, &client, &admin);
 
     assert_contract_err(
-        client.try_place_bid(&investor, &invoice_id, &0, &1),
+        client.try_place_bid(&investor, &invoice_id, &0, &1, &BytesN::from_array(&env, &[0u8; 32])),
         QuickLendXError::InvalidAmount,
     );
 }
@@ -196,7 +196,7 @@ fn test_place_bid_negative_amount() {
     let invoice_id = verified_invoice(&env, &client, &admin);
 
     assert_contract_err(
-        client.try_place_bid(&investor, &invoice_id, &-1, &1),
+        client.try_place_bid(&investor, &invoice_id, &-1, &1, &BytesN::from_array(&env, &[0u8; 32])),
         QuickLendXError::InvalidAmount,
     );
 }
@@ -473,7 +473,7 @@ fn test_error_code_consistency() {
     assert_eq!(QuickLendXError::InvalidTimestamp as u32, 1203);
     assert_eq!(QuickLendXError::InvalidDescription as u32, 1204);
     assert_eq!(QuickLendXError::InvalidTag as u32, 1800);
-    assert_eq!(QuickLendXError::InvalidBidTtl as u32, 1408);
+    assert_eq!(QuickLendXError::InvalidBidTtl as u32, 1409);
     assert_eq!(QuickLendXError::InvalidFeeBasisPoints as u32, 1852);
 }
 
@@ -532,7 +532,7 @@ fn test_update_invoice_metadata_oversized_fields() {
     let (env, client, admin) = setup();
     let business = verified_business(&env, &client, &admin);
     let currency = Address::generate(&env);
-    
+
     let invoice_id = client.upload_invoice(
         &business,
         &1000,
@@ -544,7 +544,7 @@ fn test_update_invoice_metadata_oversized_fields() {
     );
 
     let oversized_name = create_string(&env, 151); // MAX_NAME_LENGTH is 150
-    
+
     let mut items = Vec::new(&env);
     items.push_back(LineItemRecord(
         String::from_str(&env, "Service"),

@@ -101,3 +101,100 @@ macro_rules! qlx_log {
     ($env:expr, $domain:literal, $msg:literal) => {{}};
     ($env:expr, $domain:literal, $msg:literal, $($arg:tt)*) => {{}};
 }
+
+/// Panic if the current context is marked as view-only.
+///
+/// Use this at the start of any storage-mutating operation to enforce that
+/// the execution is restricted to read-only actions when the view-only flag
+/// is active.
+///
+/// # Panics
+/// Panics with a descriptive message if `StorageManager::is_view_only(env)` returns true.
+#[macro_export]
+macro_rules! assert_view_only {
+    ($env:expr) => {
+        if $crate::storage::StorageManager::is_view_only($env) {
+            panic!("illegal state write attempted in view-only context");
+        }
+    };
+}
+
+/// A rich diagnostic snapshot of internal protocol state.
+///
+/// Only available when compiled with `--features diagnostics`. Never present in
+/// production WASM builds, keeping the on-chain surface minimal.
+///
+/// All fields are read-only aggregates; no state is mutated.
+#[cfg(feature = "diagnostics")]
+#[soroban_sdk::contracttype]
+#[derive(Clone)]
+pub struct ProtocolDiagnostics {
+    /// Total invoices across all statuses.
+    pub total_invoices: u64,
+    /// Invoices in `Pending` status.
+    pub pending_invoices: u32,
+    /// Invoices in `Verified` status.
+    pub verified_invoices: u32,
+    /// Invoices in `Funded` status.
+    pub funded_invoices: u32,
+    /// Invoices in `Paid` status.
+    pub paid_invoices: u32,
+    /// Invoices in `Defaulted` status.
+    pub defaulted_invoices: u32,
+    /// Running bid counter (monotonically increasing).
+    pub total_bids_ever: u64,
+    /// Whether the protocol is currently paused.
+    pub is_paused: bool,
+    /// Whether maintenance mode is active.
+    pub is_maintenance: bool,
+    /// Whether backpressure load-shedding is active.
+    pub backpressure_active: bool,
+    /// Current fee in basis points.
+    pub fee_bps: u32,
+    /// Number of whitelisted currencies.
+    pub currency_count: u32,
+    /// Ledger sequence at snapshot time.
+    pub ledger_sequence: u32,
+    /// Ledger timestamp at snapshot time.
+    pub ledger_timestamp: u64,
+}
+
+/// Build a `ProtocolDiagnostics` snapshot from current contract state.
+///
+/// Read-only; no authentication required; no state mutations. This function is
+/// only compiled when the `diagnostics` Cargo feature is enabled — it is entirely
+/// absent from production WASM builds.
+#[cfg(feature = "diagnostics")]
+pub fn get_protocol_diagnostics(env: &soroban_sdk::Env) -> ProtocolDiagnostics {
+    use crate::backpressure::BackpressureControl;
+    use crate::bid::BidStorage;
+    use crate::currency::CurrencyWhitelist;
+    use crate::init::ProtocolInitializer;
+    use crate::maintenance::MaintenanceControl;
+    use crate::pause::PauseControl;
+    use crate::storage::InvoiceStorage;
+    use crate::types::InvoiceStatus;
+
+    let pending = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Pending).len();
+    let verified = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Verified).len();
+    let funded = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded).len();
+    let paid = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Paid).len();
+    let defaulted = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Defaulted).len();
+
+    ProtocolDiagnostics {
+        total_invoices: InvoiceStorage::get_total_count(env),
+        pending_invoices: pending,
+        verified_invoices: verified,
+        funded_invoices: funded,
+        paid_invoices: paid,
+        defaulted_invoices: defaulted,
+        total_bids_ever: BidStorage::next_count(env),
+        is_paused: PauseControl::is_paused(env),
+        is_maintenance: MaintenanceControl::is_maintenance_mode(env),
+        backpressure_active: BackpressureControl::is_active(env),
+        fee_bps: ProtocolInitializer::get_fee_bps(env),
+        currency_count: CurrencyWhitelist::currency_count(env),
+        ledger_sequence: env.ledger().sequence(),
+        ledger_timestamp: env.ledger().timestamp(),
+    }
+}

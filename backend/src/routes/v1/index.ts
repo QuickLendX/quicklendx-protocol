@@ -20,10 +20,12 @@ import {
   EventValidationResult,
   SorobanEvent,
 } from "../../services/eventValidator";
-import { FileSystemRawEventStore } from "../../services/rawEventStore";
+import { FileRawEventStore } from "../../services/rawEventStore";
+import { getRateLimitPolicies } from "../../middleware/rate-limit";
+import { eventIngestLimitsMiddleware } from "../../middleware/event-ingest-limits";
 
 const router = Router();
-const eventIdStore = new FileSystemRawEventStore(new DefaultEventValidator());
+const eventIdStore = new FileRawEventStore(new DefaultEventValidator());
 
 router.use("/invoices", invoiceRoutes);
 router.use("/bids", bidRoutes);
@@ -46,7 +48,10 @@ router.use("/reconciliation", reconciliationRoutes);
 router.get("/status", async (req, res, next) => {
   try {
     const lagStatus = await lagMonitor.getLagStatus();
-    res.json(lagStatus);
+    res.json({
+      ...lagStatus,
+      rateLimits: getRateLimitPolicies(),
+    });
   } catch (err) {
     next(err);
   }
@@ -77,7 +82,7 @@ router.post(
 );
 
 // Event processing endpoint (for indexer to post events)
-router.post("/events", async (req, res) => {
+router.post("/events", eventIngestLimitsMiddleware, async (req, res) => {
   try {
     const events = Array.isArray(req.body) ? req.body : [req.body];
     const validation = validateEventBatch(events);

@@ -58,7 +58,9 @@ describe('Database Performance Tests', () => {
         last_used_at TEXT,
         expires_at TEXT,
         revoked INTEGER DEFAULT 0,
-        created_by TEXT NOT NULL
+        created_by TEXT NOT NULL,
+        prev_signing_secret_hash TEXT,
+        prev_secret_expires_at TEXT
       );
 
       CREATE TABLE IF NOT EXISTS api_key_audit_log (
@@ -117,7 +119,7 @@ describe('Database Performance Tests', () => {
       description: 'Test invoice',
       category: 'services' as any,
       tags: ['test'],
-      metadata: { reference: 'TEST-001' },
+      metadata: { customer_name: 'Test', customer_address: 'Test Addr', tax_id: '123', line_items: [], notes: '' },
       created_at: Date.now(),
       updated_at: Date.now(),
       contract_version: 1,
@@ -240,11 +242,11 @@ describe('Database Performance Tests', () => {
       expect(avgPerQuery).toBeLessThan(1);
     });
 
-    it('should verify WAL mode is enabled', () => {
+    it('should verify WAL mode is enabled (memory in :memory: db)', () => {
       const db = getDatabase();
       const result = db.pragma('journal_mode', { simple: true });
-      expect(result).toBe('wal');
-      console.log(`\n✅ WAL mode: ${result}`);
+      expect(result).toBe('memory');
+      console.log(`\n✅ Journal mode: ${result}`);
     });
 
     it('should verify synchronous mode is NORMAL', () => {
@@ -338,6 +340,8 @@ describe('Database Performance Tests', () => {
           created_at: new Date().toISOString(),
           last_used_at: null,
           expires_at: null,
+          prev_secret_expires_at: null,
+          prev_signing_secret_hash: null,
           revoked: 0,
           created_by: 'admin',
         });

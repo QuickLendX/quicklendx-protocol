@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { ulid } from "ulid";
-import { getDatabase } from "../lib/database";
+import { webhookDeliveryRepo } from "./webhookDeliveryRepo";
+import type { WebhookDelivery } from "./webhookDeliveryRepo";
 
 const MAX_CAPACITY = 5000;
 
@@ -9,6 +9,7 @@ export const WebhookEventStatusSchema = z.enum([
   "processing",
   "success",
   "failed",
+  "dead_letter",
 ]);
 
 export type WebhookEventStatus = z.infer<typeof WebhookEventStatusSchema>;
@@ -19,6 +20,20 @@ export interface WebhookEvent {
   payload: unknown;
   enqueuedAt: string;
   status: WebhookEventStatus;
+}
+
+export interface WebhookDeliveryInfo {
+  id: string;
+  eventType: string;
+  payload: unknown;
+  subscriberId: string | null;
+  status: WebhookEventStatus;
+  enqueuedAt: string;
+  attemptCount: number;
+  maxAttempts: number;
+  nextRetryAt: string | null;
+  lastError: string | null;
+  lastAttemptAt: string | null;
 }
 
 const WebhookQueueStatsSchema = z.object({
@@ -34,13 +49,18 @@ const WebhookQueueStatsSchema = z.object({
 
 export type WebhookQueueStats = z.infer<typeof WebhookQueueStatsSchema>;
 
+function deliveryToEvent(d: WebhookDelivery): WebhookEvent {
+  return {
+    id: d.id,
+    type: d.eventType,
+    payload: d.payload,
+    enqueuedAt: d.enqueuedAt,
+    status: d.status,
+  };
+}
+
 class WebhookQueueService {
   private static instance: WebhookQueueService;
-  private db: any;
-
-  private constructor() {
-    this.db = getDatabase();
-  }
 
   public static getInstance(): WebhookQueueService {
     if (!WebhookQueueService.instance) {
@@ -50,85 +70,69 @@ class WebhookQueueService {
   }
 
   public static resetInstance(): void {
-    WebhookQueueService.instance = new WebhookQueueService();
+    if (WebhookQueueService.instance) {
+      WebhookQueueService.instance.db = getDatabase();
+    } else {
+      WebhookQueueService.instance = new WebhookQueueService();
+    }
   }
 
   enqueue(type: string, payload?: unknown): WebhookEvent {
-    return this.db.transaction(() => {
-      // Check current size of pending/processing elements
-      const rowCount = this.db
-        .prepare("SELECT COUNT(*) as count FROM webhook_queue WHERE status IN ('pending', 'processing')")
-        .get().count;
+    const stats = webhookDeliveryRepo.getStats();
+    if (stats.pending + stats.processing >= MAX_CAPACITY) {
+      webhookDeliveryRepo.incrementOverflow();
+      const err = new Error("Webhook queue capacity exceeded");
+      (err as any).statusCode = 503;
+      throw err;
+    }
 
-      if (rowCount >= MAX_CAPACITY) {
-        // Increment persistent overflow counter
-        this.db.prepare("UPDATE queue_metadata SET value = value + 1 WHERE key = 'overflow_count'").run();
-        const err = new Error("Webhook queue capacity exceeded");
-        (err as any).statusCode = 503;
-        throw err;
-      }
+    const delivery = webhookDeliveryRepo.create({
+      eventType: type,
+      payload,
+    });
+    return deliveryToEvent(delivery);
+  }
 
-      const id = ulid();
-      const enqueuedAt = new Date().toISOString();
-      const event: WebhookEvent = {
-        id,
-        type,
-        payload,
-        enqueuedAt,
-        status: "pending",
-      };
+  enqueueWithSubscriber(
+    type: string,
+    payload: unknown,
+    subscriberId: string
+  ): WebhookEvent {
+    const stats = webhookDeliveryRepo.getStats();
+    if (stats.pending + stats.processing >= MAX_CAPACITY) {
+      webhookDeliveryRepo.incrementOverflow();
+      const err = new Error("Webhook queue capacity exceeded");
+      (err as any).statusCode = 503;
+      throw err;
+    }
 
-      this.db
-        .prepare(`
-          INSERT INTO webhook_queue (id, type, payload, status, enqueued_at)
-          VALUES (?, ?, ?, ?, ?)
-        `)
-        .run(id, type, JSON.stringify(payload), "pending", enqueuedAt);
-
-      return event;
-    })();
+    const delivery = webhookDeliveryRepo.create({
+      eventType: type,
+      payload,
+      subscriberId,
+    });
+    return deliveryToEvent(delivery);
   }
 
   markSuccess(id: string): boolean {
-    const result = this.db
-      .prepare("UPDATE webhook_queue SET status = 'success' WHERE id = ? AND status IN ('pending', 'processing')")
-      .run(id);
-    return result.changes > 0;
+    return webhookDeliveryRepo.markSuccess(id);
   }
 
-  markFailed(id: string): boolean {
-    const result = this.db
-      .prepare("UPDATE webhook_queue SET status = 'failed' WHERE id = ? AND status IN ('pending', 'processing')")
-      .run(id);
-    return result.changes > 0;
+  markFailed(id: string): WebhookDelivery | null {
+    return webhookDeliveryRepo.markFailed(id);
   }
 
   getStats(): WebhookQueueStats {
-    const counts = this.db
-      .prepare(`
-        SELECT
-          COUNT(CASE WHEN status IN ('pending', 'processing') THEN 1 END) as size,
-          COUNT(CASE WHEN status = 'pending' THEN 1 END) as pendingCount,
-          COUNT(CASE WHEN status = 'success' THEN 1 END) as successCount,
-          COUNT(CASE WHEN status = 'failed' THEN 1 END) as failureCount,
-          MIN(CASE WHEN status IN ('pending', 'processing') THEN enqueued_at END) as oldestTimestamp
-        FROM webhook_queue
-      `)
-      .get();
-
-    const overflow = this.db
-      .prepare("SELECT value FROM queue_metadata WHERE key = 'overflow_count'")
-      .get();
-
+    const s = webhookDeliveryRepo.getStats();
     return {
-      depth: counts.size || 0,
-      size: counts.size || 0,
+      depth: s.pending + s.processing,
+      size: s.pending + s.processing,
       capacity: MAX_CAPACITY,
-      overflowCount: overflow?.value || 0,
-      pendingCount: counts.pendingCount || 0,
-      successCount: counts.successCount || 0,
-      failureCount: counts.failureCount || 0,
-      oldestTimestamp: counts.oldestTimestamp || null,
+      overflowCount: webhookDeliveryRepo.getOverflowCount(),
+      pendingCount: s.pending,
+      successCount: s.success,
+      failureCount: s.failed,
+      oldestTimestamp: s.oldestPending,
     };
   }
 
@@ -136,25 +140,50 @@ class WebhookQueueService {
     return this.getStats().size;
   }
 
-  /**
-   * Drain all pending events from the queue and reset it to empty.
-   */
   flush(): WebhookEvent[] {
-    const pending = this.db
-      .prepare("SELECT * FROM webhook_queue WHERE status = 'pending'")
-      .all()
-      .map((row: any) => ({
-        id: row.id,
-        type: row.type,
-        payload: JSON.parse(row.payload),
-        enqueuedAt: row.enqueued_at,
-        status: row.status as WebhookEventStatus,
-      }));
+    const pending = webhookDeliveryRepo.getPending();
+    for (const delivery of pending) {
+      webhookDeliveryRepo.markSuccess(delivery.id);
+    }
+    return pending.map(deliveryToEvent);
+  }
 
-    // Clear all pending events
-    this.db.prepare("DELETE FROM webhook_queue WHERE status = 'pending'").run();
+  getPendingDeliveries(): WebhookDelivery[] {
+    return webhookDeliveryRepo.getPending();
+  }
 
-    return pending;
+  getDeadLetters(): WebhookDelivery[] {
+    return webhookDeliveryRepo.getDeadLetters();
+  }
+
+  retryDeadLetter(id: string): boolean {
+    return webhookDeliveryRepo.retryDeadLetter(id);
+  }
+
+  cleanupDeliveries(olderThanDays?: number): number {
+    return webhookDeliveryRepo.cleanup(olderThanDays);
+  }
+
+  vacuumDeliveries(): void {
+    webhookDeliveryRepo.vacuum();
+  }
+
+  getDeliveryInfo(id: string): WebhookDeliveryInfo | null {
+    const delivery = webhookDeliveryRepo.getById(id);
+    if (!delivery) return null;
+    return {
+      id: delivery.id,
+      eventType: delivery.eventType,
+      payload: delivery.payload,
+      subscriberId: delivery.subscriberId,
+      status: delivery.status,
+      enqueuedAt: delivery.enqueuedAt,
+      attemptCount: delivery.attemptCount,
+      maxAttempts: delivery.maxAttempts,
+      nextRetryAt: delivery.nextRetryAt,
+      lastError: delivery.lastError,
+      lastAttemptAt: delivery.lastAttemptAt,
+    };
   }
 }
 

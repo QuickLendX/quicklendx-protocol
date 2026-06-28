@@ -13,12 +13,15 @@ import { getDatabase, getPreparedStatement } from '../lib/database';
 export interface DbApiKey {
   id: string;
   key_hash: string;
+  signing_secret_hash: string | null;
+  prev_signing_secret_hash: string | null;
   prefix: string;
   name: string;
   scopes: string;
   created_at: string;
   last_used_at: string | null;
   expires_at: string | null;
+  prev_secret_expires_at: string | null;
   revoked: number;
   created_by: string;
 }
@@ -35,7 +38,7 @@ export interface DbAuditLog {
 }
 
 const ALL_API_KEY_COLS = [
-  'id', 'key_hash', 'prefix', 'name', 'scopes',
+  'id', 'key_hash', 'signing_secret_hash', 'prefix', 'name', 'scopes',
   'created_at', 'last_used_at', 'expires_at', 'revoked', 'created_by',
 ] as const;
 
@@ -48,12 +51,15 @@ function rowToDbApiKey(row: any): DbApiKey {
   return {
     id: row.id,
     key_hash: row.key_hash,
+    signing_secret_hash: row.signing_secret_hash ?? null,
+    prev_signing_secret_hash: row.prev_signing_secret_hash ?? null,
     prefix: row.prefix,
     name: row.name,
     scopes: row.scopes,
     created_at: row.created_at,
     last_used_at: row.last_used_at ?? null,
     expires_at: row.expires_at ?? null,
+    prev_secret_expires_at: row.prev_secret_expires_at ?? null,
     revoked: row.revoked,
     created_by: row.created_by,
   };
@@ -86,11 +92,11 @@ class Database {
 
   createApiKey(key: DbApiKey): void {
     getPreparedStatement(`
-      INSERT INTO api_keys (id, key_hash, prefix, name, scopes, created_at, last_used_at, expires_at, revoked, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO api_keys (id, key_hash, signing_secret_hash, prev_signing_secret_hash, prefix, name, scopes, created_at, last_used_at, expires_at, prev_secret_expires_at, revoked, created_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
-      key.id, key.key_hash, key.prefix, key.name, key.scopes,
-      key.created_at, key.last_used_at, key.expires_at, key.revoked, key.created_by,
+      key.id, key.key_hash, key.signing_secret_hash, key.prev_signing_secret_hash, key.prefix, key.name, key.scopes,
+      key.created_at, key.last_used_at, key.expires_at, key.prev_secret_expires_at, key.revoked, key.created_by,
     );
   }
 

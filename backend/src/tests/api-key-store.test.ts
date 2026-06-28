@@ -36,7 +36,9 @@ beforeAll(() => {
       last_used_at TEXT,
       expires_at TEXT,
       revoked INTEGER NOT NULL DEFAULT 0,
-      created_by TEXT NOT NULL
+      created_by TEXT NOT NULL,
+      prev_signing_secret_hash TEXT,
+      prev_secret_expires_at TEXT
     )
   `);
   conn.exec(`
@@ -96,12 +98,14 @@ function makeKey(overrides: Partial<DbApiKey> = {}): DbApiKey {
   return {
     id: crypto.randomUUID(),
     key_hash: crypto.createHash('sha256').update(crypto.randomBytes(32)).digest('hex'),
+    prev_signing_secret_hash: null,
     prefix: `qlx_test_${crypto.randomBytes(4).toString('hex')}`,
     name: 'Test Key',
     scopes: JSON.stringify(['read:*']),
     created_at: new Date().toISOString(),
     last_used_at: null,
     expires_at: null,
+    prev_secret_expires_at: null,
     revoked: 0,
     created_by: 'test-user',
     ...overrides,

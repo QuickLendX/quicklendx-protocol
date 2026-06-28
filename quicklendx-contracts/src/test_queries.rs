@@ -16,16 +16,16 @@
 //! The tests use only the self-contained `pagination` module plus `alloc`
 //! types - no Soroban storage, no contract client, no legacy modules.
 
-extern crate alloc;
-
 use alloc::string::{String, ToString};
 use alloc::vec;
+use crate::pagination::validate_query_params;
+use crate::errors::QuickLendXError;
 use alloc::vec::Vec;
 
 use crate::pagination::{
     calculate_safe_bounds, cap_query_limit, paginate_slice, validate_pagination_params,
-    MAX_QUERY_LIMIT,
 };
+use crate::MAX_QUERY_LIMIT;
 #[cfg(feature = "fuzz-tests")]
 use proptest::prelude::*;
 
@@ -78,6 +78,29 @@ fn test_validate_limit_zero_at_end_of_collection() {
     assert_eq!(safe_off, 50);
     assert_eq!(eff_lim, 0);
     assert!(!has_more);
+}
+
+/// `validate_query_params` checks boundaries: offset > u32::MAX - MAX_QUERY_LIMIT
+#[test]
+fn test_validate_query_params_boundaries() {
+    // Normal offset
+    assert!(validate_query_params(0, 10).is_ok());
+    assert!(validate_query_params(100, 10).is_ok());
+
+    // Boundary check
+    let max_valid_offset = u32::MAX - MAX_QUERY_LIMIT;
+    assert!(validate_query_params(max_valid_offset, 10).is_ok());
+
+    // Overflow checks
+    let invalid_offset = max_valid_offset + 1;
+    assert_eq!(
+        validate_query_params(invalid_offset, 10).unwrap_err(),
+        QuickLendXError::InvalidAmount
+    );
+    assert_eq!(
+        validate_query_params(u32::MAX, 10).unwrap_err(),
+        QuickLendXError::InvalidAmount
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -323,7 +346,75 @@ fn test_boundary_offset_equals_total_yields_empty() {
 }
 
 // ---------------------------------------------------------------------------
-// 10. Cross-type coverage - u64, [u8; 32], NamedId(String)
+// 10. MAX_QUERY_LIMIT boundary: offset=0, offset==count, limit==MAX_QUERY_LIMIT
+// ---------------------------------------------------------------------------
+
+/// When `offset=0, limit=MAX_QUERY_LIMIT` on a collection of exactly
+/// `MAX_QUERY_LIMIT` items, `validate_pagination_params` reports no more
+/// pages because the entire collection fits in one response.
+#[test]
+fn test_offset_zero_limit_max_on_full_collection_has_no_more() {
+    let (safe_off, eff_lim, has_more) =
+        validate_pagination_params(0, MAX_QUERY_LIMIT, MAX_QUERY_LIMIT);
+    assert_eq!(safe_off, 0);
+    assert_eq!(eff_lim, MAX_QUERY_LIMIT);
+    assert!(!has_more, "entire collection fits in one page, has_more must be false");
+}
+
+/// When `offset=0, limit=MAX_QUERY_LIMIT` on a collection of exactly
+/// `MAX_QUERY_LIMIT` items, all items are returned.
+#[test]
+fn test_offset_zero_limit_max_on_full_collection_returns_all() {
+    let items = build_u64_items(MAX_QUERY_LIMIT);
+    let page = paginate_slice(&items, 0, MAX_QUERY_LIMIT);
+    assert_eq!(page.len() as u32, MAX_QUERY_LIMIT);
+    assert_eq!(page, items);
+
+    let (start, end) = calculate_safe_bounds(0, MAX_QUERY_LIMIT, MAX_QUERY_LIMIT);
+    assert_eq!(start, 0);
+    assert_eq!(end, MAX_QUERY_LIMIT);
+}
+
+/// When `offset == total_count == MAX_QUERY_LIMIT`, the result is empty and
+/// there are no more pages — the cursor is already past the end.
+#[test]
+fn test_offset_equals_count_limit_max_returns_empty() {
+    let (safe_off, eff_lim, has_more) =
+        validate_pagination_params(MAX_QUERY_LIMIT, MAX_QUERY_LIMIT, MAX_QUERY_LIMIT);
+    assert_eq!(safe_off, MAX_QUERY_LIMIT);
+    assert_eq!(eff_lim, 0);
+    assert!(!has_more);
+
+    let (start, end) = calculate_safe_bounds(MAX_QUERY_LIMIT, MAX_QUERY_LIMIT, MAX_QUERY_LIMIT);
+    assert_eq!(start, MAX_QUERY_LIMIT);
+    assert_eq!(end, MAX_QUERY_LIMIT);
+
+    let items = build_u64_items(MAX_QUERY_LIMIT);
+    let page = paginate_slice(&items, MAX_QUERY_LIMIT, MAX_QUERY_LIMIT);
+    assert!(page.is_empty());
+}
+
+/// `validate_pagination_params` and `calculate_safe_bounds` agree at both
+/// ends of the MAX_QUERY_LIMIT boundary.
+#[test]
+fn test_cross_consistency_at_max_query_limit_boundary() {
+    for &(offset, limit, total) in &[
+        (0u32, MAX_QUERY_LIMIT, MAX_QUERY_LIMIT),
+        (MAX_QUERY_LIMIT, MAX_QUERY_LIMIT, MAX_QUERY_LIMIT),
+    ] {
+        let (safe_off, eff_lim, _has_more) = validate_pagination_params(offset, limit, total);
+        let (start, end) = calculate_safe_bounds(offset, limit, total);
+        assert_eq!(start, safe_off, "start != safe_off for ({offset}, {limit}, {total})");
+        assert_eq!(
+            end.saturating_sub(start),
+            eff_lim,
+            "window size != effective_limit for ({offset}, {limit}, {total})"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 11. Cross-type coverage - u64, [u8; 32], NamedId(String)
 // ---------------------------------------------------------------------------
 
 /// Generic `paginate_slice` works for `u64`.
@@ -602,7 +693,7 @@ mod escrow_query_consistency {
         );
         client.verify_invoice(&invoice_id);
 
-        let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500));
+        let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500), &BytesN::from_array(&env, &[0u8; 32]));
         client.accept_bid(&invoice_id, &bid_id);
 
         (business, investor, currency, invoice_id, bid_id)

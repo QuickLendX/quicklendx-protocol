@@ -1,6 +1,12 @@
 use alloc::{format, string::String as RustString};
 use soroban_sdk::{contracterror, contracttype, Env, String};
 
+/// Default client-facing drift bound for freshness reads.
+///
+/// Freshness metadata is considered usable while `index_lag_seconds <= 120`.
+/// Clients should treat `index_lag_seconds > 120` as stale data.
+pub const DEFAULT_MAX_FRESHNESS_DRIFT_SECS: i64 = 120;
+
 #[derive(Clone, Debug, Eq, PartialEq)]
 #[contracttype]
 pub enum DataKey {
@@ -18,6 +24,9 @@ pub enum FreshnessError {
 }
 
 /// Transport-friendly freshness metadata returned by `lib.rs::get_freshness`.
+///
+/// See `quicklendx-contracts/docs/freshness.md` for the documented stale-data
+/// boundary and recommended client behavior.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct FreshnessMetadata {
@@ -61,9 +70,8 @@ fn iso8601_from_unix_timestamp(env: &Env, timestamp: u64) -> String {
     let minute = (secs_of_day % 3_600) / 60;
     let second = secs_of_day % 60;
 
-    let rendered: RustString = format!(
-        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z"
-    );
+    let rendered: RustString =
+        format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z");
     String::from_str(env, &rendered)
 }
 

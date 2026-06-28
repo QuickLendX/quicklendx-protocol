@@ -1,4 +1,4 @@
-﻿//! Escrow uniqueness tests: one escrow per invoice; prevent overwrite/poisoning.
+//! Escrow uniqueness tests: one escrow per invoice; prevent overwrite/poisoning.
 //!
 //! ## Security Invariant
 //! Each invoice maps to **at most one** escrow record for its entire lifetime.
@@ -590,10 +590,7 @@ fn test_failed_accept_leaves_no_escrow_and_no_state_change() {
 
 /// Asserts that there is exactly one escrow record for the given invoice_id.
 /// Panics if there are zero or more than one escrow records.
-fn assert_exactly_one_escrow_for_invoice(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-) {
+fn assert_exactly_one_escrow_for_invoice(env: &Env, invoice_id: &BytesN<32>) {
     // The storage only allows zero or one escrow per invoice_id.
     // We check that there is exactly one.
     let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id);
@@ -602,6 +599,117 @@ fn assert_exactly_one_escrow_for_invoice(
         "Expected exactly one escrow for invoice, found none"
     );
     // We could also check for more than one, but the storage map from invoice_id to escrow_id is a singleton.
-    // However, to be safe, we can check that there is no second escrow by trying to get a second escrow with a different key? 
+    // However, to be safe, we can check that there is no second escrow by trying to get a second escrow with a different key?
     // That doesn't make sense. We trust the storage design.
+}
+
+// ============================================================================
+// 8. Double-layer guard: both escrow and payments check sites
+// ============================================================================
+
+/// Exercise the double-layer guard by creating an escrow via direct call,
+/// then attempting to create another via the public API path.
+///
+/// This test verifies that BOTH guard sites are functional:
+/// 1. The outer guard in `escrow::load_accept_bid_context` checks for existing escrow
+/// 2. The inner guard in `payments::create_escrow` re-checks before token transfer
+///
+/// # Security
+/// Defense-in-depth: even if one guard is bypassed, the other prevents duplicate escrows.
+#[test]
+fn test_double_layer_guard_both_sites_active() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = verified_business(&env, &client, &admin);
+    let investor = verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
+
+    // Step 1: Create first escrow via direct call to payments::create_escrow
+    // This bypasses the outer guard in load_accept_bid_context
+    env.as_contract(&contract_id, || {
+        let result = create_escrow(&env, &invoice_id, &investor, &business, amount, &currency);
+        assert!(result.is_ok(), "first create_escrow must succeed");
+    });
+
+    // Verify escrow exists
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.status, EscrowStatus::Held);
+    assert_eq!(escrow.amount, amount);
+
+    // Step 2: Attempt to create second escrow via public API (accept_bid)
+    // This exercises the outer guard in load_accept_bid_context
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000));
+    let err = client
+        .try_accept_bid(&invoice_id, &bid_id)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(
+        err,
+        QuickLendXError::InvalidStatus,
+        "outer guard must reject"
+    );
+
+    // Step 3: Attempt to create second escrow via direct call again
+    // This exercises the inner guard in payments::create_escrow
+    env.as_contract(&contract_id, || {
+        let result = create_escrow(&env, &invoice_id, &investor, &business, amount, &currency);
+        assert_eq!(
+            result.unwrap_err(),
+            QuickLendXError::InvoiceAlreadyFunded,
+            "inner guard must reject duplicate"
+        );
+    });
+
+    // Verify only one escrow still exists
+    let escrow_after = client.get_escrow_details(&invoice_id);
+    assert_eq!(
+        escrow_after.escrow_id, escrow.escrow_id,
+        "escrow ID must not change"
+    );
+    assert_eq!(escrow_after.amount, amount, "escrow amount must not change");
+}
+
+/// Exercise the double-layer guard in reverse: create escrow via public API,
+/// then attempt direct call to payments::create_escrow.
+///
+/// This confirms that the inner guard in payments::create_escrow catches duplicates
+/// even when the outer guard in load_accept_bid_context has already been exercised.
+#[test]
+fn test_double_layer_guard_reverse_order() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = verified_business(&env, &client, &admin);
+    let investor = verified_investor(&env, &client, 50_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 10_000i128;
+    let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000));
+
+    // Step 1: Create escrow via public API (exercises outer guard)
+    client.accept_bid(&invoice_id, &bid_id);
+
+    // Verify escrow exists
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.status, EscrowStatus::Held);
+
+    // Step 2: Attempt to create second escrow via direct call
+    // This exercises the inner guard in payments::create_escrow
+    env.as_contract(&contract_id, || {
+        let result = create_escrow(&env, &invoice_id, &investor, &business, amount, &currency);
+        assert_eq!(
+            result.unwrap_err(),
+            QuickLendXError::InvoiceAlreadyFunded,
+            "inner guard must reject duplicate even after outer guard succeeded"
+        );
+    });
+
+    // Verify only one escrow still exists
+    let escrow_after = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow_after.escrow_id, escrow.escrow_id);
 }

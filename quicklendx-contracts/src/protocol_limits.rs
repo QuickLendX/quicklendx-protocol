@@ -36,6 +36,8 @@ const DEFAULT_MIN_AMOUNT: i128 = 10;
 pub const DEFAULT_MIN_BID_AMOUNT: i128 = 10;
 /// @notice Default minimum bid rate in basis points.
 pub const DEFAULT_MIN_BID_BPS: u32 = 100; // 1%
+/// @notice Hard minimum bid amount that admin may not undercut.
+pub const MIN_BID_FLOOR: i128 = 1;
 
 #[allow(dead_code)]
 const DEFAULT_MAX_DUE_DAYS: u64 = 365;
@@ -226,10 +228,46 @@ impl ProtocolLimitsContract {
             })
     }
 
+    /// @notice Admin-only: update the absolute minimum bid amount.
+    /// @dev Enforces a hard floor of `MIN_BID_FLOOR` so the protocol
+    ///      cannot be configured to accept bids below the minimum viable
+    ///      economic unit. Returns the new value on success.
+    pub fn update_minimum_bid(
+        env: Env,
+        admin: Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
+        admin.require_auth();
+        Self::update_minimum_bid_authed(&env, &admin, amount)
+    }
+
+    /// @notice Update minimum bid without calling `require_auth` again.
+    /// @dev Used during initialization or when caller is already authenticated.
+    pub(crate) fn update_minimum_bid_authed(
+        env: &Env,
+        admin: &Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
+        AdminStorage::require_admin(env, admin)?;
+
+        if amount < MIN_BID_FLOOR {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let mut limits = Self::get_protocol_limits(env.clone());
+        limits.min_bid_amount = amount;
+        env.storage().instance().set(&LIMITS_KEY, &limits);
+        Ok(amount)
+    }
+
     /// @notice Validate invoice amount and due date against configured limits.
     pub fn validate_invoice(env: Env, amount: i128, due_date: u64) -> Result<(), QuickLendXError> {
-        let limits = Self::get_protocol_limits(env.clone());
         let current_time = env.ledger().timestamp();
+        if due_date <= current_time {
+            return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
+        let limits = Self::get_protocol_limits(env.clone());
 
         if amount < limits.min_invoice_amount {
             return Err(QuickLendXError::InvalidAmount);

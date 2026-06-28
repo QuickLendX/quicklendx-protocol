@@ -148,7 +148,7 @@ impl PlatformFee {
         admin.require_auth();
 
         // Validate fee bounds
-        if new_fee_bps < 0 || new_fee_bps > MAX_PLATFORM_FEE_BPS {
+        if !(0..=MAX_PLATFORM_FEE_BPS).contains(&new_fee_bps) {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
@@ -464,8 +464,9 @@ pub fn calculate_treasury_split_checked(
 
     let treasury_amount = platform_fee
         .checked_mul(treasury_share_bps)
-        .and_then(|v| v.checked_div(BPS_DENOMINATOR))
-        .unwrap_or(0);
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_div(BPS_DENOMINATOR)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
 
     let remaining = platform_fee
         .checked_sub(treasury_amount)
@@ -474,6 +475,7 @@ pub fn calculate_treasury_split_checked(
     Ok((treasury_amount, remaining))
 }
 
+// ============================================================================
 // ============================================================================
 // Validation Functions
 // ============================================================================
@@ -524,12 +526,45 @@ pub fn validate_calculation_inputs(
 }
 
 // ============================================================================
+// Yield Calculation
+// ============================================================================
+
+/// Compute the simple interest yield on a principal amount.
+///
+/// # Formula
+/// ```text
+/// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
+/// ```
+///
+/// All arithmetic uses `saturating_mul` / integer division to stay within
+/// `i128` bounds without panicking and to preserve `#![no_std]` discipline.
+///
+/// # Arguments
+/// * `amount`        — Principal (must be >= 0; negative input returns 0)
+/// * `rate_bps`      — Annual rate in basis points, e.g. 500 = 5 %
+/// * `duration_days` — Holding period in days
+///
+/// # Monotonicity invariant
+/// For fixed `rate_bps` and `duration_days`, `yield` is non-decreasing in `amount`.
+/// For fixed `amount` and `duration_days`, `yield` is non-decreasing in `rate_bps`.
+/// For fixed `amount` and `rate_bps`, `yield` is non-decreasing in `duration_days`.
+/// Compute the expected return on a principal amount.
+///
+/// # Returns
+/// Total expected return (principal + yield)
+pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+    let yield_amount = compute_yield(amount, rate_bps.into(), duration_days.into());
+    amount.max(0).saturating_add(yield_amount)
+}
+
+// ============================================================================
 // Tests
 // ============================================================================
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
 
     // Test helper to create a mock breakdown for comparison
     fn make_breakdown(
@@ -789,5 +824,40 @@ mod tests {
             assert_eq!(platform_fee, expected_fee, "Failed for fee_bps={}", fee_bps);
             assert!(verify_no_dust(investor_return, platform_fee, payment));
         }
+    #[test]
+    fn test_investor_platform_treasury_sum_invariant() {
+        let env = Env::default();
+        let cases = vec![
+            (0i128, 0i128),
+            (1000, 1100),
+            (1000, 1000),
+            (1000, 900),
+            (0, 1000),
+            (1000, 2000),
+        ];
+        for (investment, payment) in cases {
+            let breakdown = PlatformFee::calculate_breakdown(&env, investment, payment);
+            // Verify investor profit + platform fee = gross profit
+            assert_eq!(
+                breakdown.investor_profit + breakdown.platform_fee,
+                breakdown.gross_profit,
+                "Profit+Fee invariant failed for investment={} payment={}",
+                investment,
+                payment
+            );
+            // Treasury split
+            let (treasury, remaining) = calculate_treasury_split(breakdown.platform_fee, 5000);
+            // Ensure split sums to platform fee
+            assert_eq!(treasury + remaining, breakdown.platform_fee);
+            // Verify full invariant including treasury split
+            assert_eq!(
+                breakdown.investor_profit + treasury + remaining,
+                breakdown.gross_profit,
+                "Investor+Treasury+Remaining invariant failed for investment={} payment={}",
+                investment,
+                payment
+            );
+        }
+    }
     }
 }

@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_ttl_updated};
-use crate::storage::extend_persistent_ttl;
+use crate::storage::{bump_persistent, extend_persistent_ttl};
 pub use crate::types::{Bid, BidStatus};
 
 /// Storage keys for the per-invoice bid index.
@@ -102,16 +102,15 @@ pub struct BidLimitConfig {
 
 impl Bid {
     /// @notice Returns whether a bid is expired at `current_timestamp`.
-    /// @dev Expiration is evaluated with a strict comparison:
-    ///      `current_timestamp > expiration_timestamp`.
-    ///      This means a bid is still valid at the exact expiry timestamp and
-    ///      becomes expired starting from the next second. All cleanup and
-    ///      acceptance paths rely on this same predicate to avoid off-by-one
-    ///      divergence across call sites.
+    /// @dev Expiration is evaluated with an inclusive comparison:
+    ///      `current_timestamp >= expiration_timestamp`.
+    ///      This means a bid is valid until the second before expiry and
+    ///      becomes expired at the expiry timestamp. All cleanup and acceptance
+    ///      paths rely on this same predicate to avoid off-by-one divergence.
     /// @param current_timestamp Current ledger timestamp.
-    /// @return true when the bid has moved strictly past its expiry boundary.
+    /// @return true when the bid has reached or passed its expiry boundary.
     pub fn is_expired(&self, current_timestamp: u64) -> bool {
-        current_timestamp > self.expiration_timestamp
+        current_timestamp >= self.expiration_timestamp
     }
 
     /// Backward-compatible helper used by some tests: uses compile-time default.
@@ -205,6 +204,7 @@ impl BidStorage {
     }
 
     pub fn store_bid(env: &Env, bid: &Bid) {
+        crate::assert_view_only!(env);
         env.storage().persistent().set(&bid.bid_id, bid);
         bump_persistent(env, &bid.bid_id);
         // Add to investor index
@@ -220,16 +220,13 @@ impl BidStorage {
         result
     }
     pub fn update_bid(env: &Env, bid: &Bid) {
+        crate::assert_view_only!(env);
         env.storage().persistent().set(&bid.bid_id, bid);
         bump_persistent(env, &bid.bid_id);
     }
     pub fn get_bids_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
         let count_key = Self::invoice_bid_count_key(invoice_id);
-        let count: u32 = env
-            .storage()
-            .persistent()
-            .get(&count_key)
-            .unwrap_or(0);
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
         if count > 0 {
             bump_persistent(env, &count_key);
         }
@@ -312,7 +309,7 @@ impl BidStorage {
         if days == 0 {
             return Err(QuickLendXError::InvalidBidTtl);
         }
-        if days < MIN_BID_TTL_DAYS || days > MAX_BID_TTL_DAYS {
+        if !(MIN_BID_TTL_DAYS..=MAX_BID_TTL_DAYS).contains(&days) {
             return Err(QuickLendXError::InvalidBidTtl);
         }
 
@@ -530,6 +527,7 @@ impl BidStorage {
         count
     }
     pub fn add_bid_to_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
+        crate::assert_view_only!(env);
         let count_key = Self::invoice_bid_count_key(invoice_id);
         let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
         let entry_key = Self::invoice_bid_entry_key(invoice_id, count);
@@ -573,7 +571,7 @@ impl BidStorage {
                 .storage()
                 .persistent()
                 .get::<_, BytesN<32>>(&entry_key)
-                .map_or(false, |bid_id| {
+                .is_some_and(|bid_id| {
                     bump_persistent(env, &entry_key);
                     if let Some(mut bid) = Self::get_bid(env, &bid_id) {
                         let is_terminal = bid.status == BidStatus::Accepted
@@ -721,7 +719,7 @@ impl BidStorage {
     ) -> (u32, u32) {
         // Validate and cap pagination parameters
         let capped_limit = limit.min(MAX_BIDS_PER_INVOICE);
-        
+
         // Prevent overflow: offset + limit must not exceed u32::MAX
         if offset > u32::MAX - capped_limit {
             return (0, 0);
@@ -730,7 +728,7 @@ impl BidStorage {
         let current_timestamp = env.ledger().timestamp();
         let count_key = Self::invoice_bid_count_key(invoice_id);
         let old_count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
-        
+
         if old_count > 0 {
             bump_persistent(env, &count_key);
         }
@@ -752,7 +750,7 @@ impl BidStorage {
                 .storage()
                 .persistent()
                 .get::<_, BytesN<32>>(&entry_key)
-                .map_or(false, |bid_id| {
+                .is_some_and(|bid_id| {
                     bump_persistent(env, &entry_key);
                     if let Some(mut bid) = Self::get_bid(env, &bid_id) {
                         let is_terminal = bid.status == BidStatus::Accepted
@@ -908,7 +906,7 @@ impl BidStorage {
 
     /// Return the index of the best bid inside `records` using `compare_bids`.
     fn select_best_index(records: &Vec<Bid>) -> Option<u32> {
-        if records.len() == 0 {
+        if records.is_empty() {
             return None;
         }
 
@@ -955,7 +953,7 @@ impl BidStorage {
 
         let mut ranked = Vec::new(env);
 
-        while remaining.len() > 0 {
+        while !remaining.is_empty() {
             let best_idx = Self::select_best_index(&remaining).unwrap();
             let best_bid = remaining.get(best_idx).unwrap();
             ranked.push_back(best_bid);
@@ -984,6 +982,7 @@ impl BidStorage {
             if bid.status == BidStatus::Placed {
                 bid.status = BidStatus::Cancelled;
                 Self::update_bid(env, &bid);
+                crate::events::emit_bid_cancelled(env, &bid);
                 return true;
             }
         }
@@ -1084,16 +1083,13 @@ impl BidStorage {
             let bid_id = bid_ids.get(idx).unwrap();
             if let Some(bid) = Self::get_bid(env, &bid_id) {
                 // Every Expired bid must have a past deadline
-                if bid.status == BidStatus::Expired {
-                    if bid.expiration_timestamp >= current_timestamp {
-                        return false;
-                    }
+                if bid.status == BidStatus::Expired && bid.expiration_timestamp >= current_timestamp
+                {
+                    return false;
                 }
                 // No Placed bid should remain past its deadline
-                if bid.status == BidStatus::Placed {
-                    if bid.is_expired(current_timestamp) {
-                        return false;
-                    }
+                if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
+                    return false;
                 }
             }
             idx += 1;

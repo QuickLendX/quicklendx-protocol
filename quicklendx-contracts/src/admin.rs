@@ -24,6 +24,15 @@ pub const ADMIN_TWO_STEP_KEY: Symbol = symbol_short!("adm_2st");
 pub struct AdminStorage;
 
 impl AdminStorage {
+    #[inline]
+    fn require_existing_transfer_destination(address: &Address) -> Result<(), QuickLendXError> {
+        if !address.exists() {
+            return Err(QuickLendXError::InvalidAddress);
+        }
+
+        Ok(())
+    }
+
     /// Initialize the admin once.
     ///
     /// # Security
@@ -65,6 +74,8 @@ impl AdminStorage {
             return Err(QuickLendXError::OperationNotAllowed);
         }
 
+        Self::require_existing_transfer_destination(new_admin)?;
+
         if Self::is_two_step_enabled(env) {
             return Self::initiate_admin_transfer_internal(env, current_admin, new_admin);
         }
@@ -105,6 +116,8 @@ impl AdminStorage {
         if current_admin == pending_admin {
             return Err(QuickLendXError::OperationNotAllowed);
         }
+
+        Self::require_existing_transfer_destination(pending_admin)?;
 
         if Self::is_transfer_locked(env) || Self::get_pending_admin(env).is_some() {
             return Err(QuickLendXError::OperationNotAllowed);
@@ -311,4 +324,55 @@ impl AdminStorage {
         let admin = Self::require_current_admin(env)?;
         operation(&admin)
     }
+
+    /// Verify that a proposed handover target is not the same as the current admin.
+    ///
+    /// This is a **pure validation helper** — it performs no state writes and
+    /// requires no authentication. Call it as an early guard before initiating any
+    /// admin transfer to surface a clear, typed error to callers rather than
+    /// relying on the implicit `OperationNotAllowed` that `transfer_admin` already
+    /// emits for self-transfers.
+    ///
+    /// # Arguments
+    /// * `proposed` — The address that would become the new admin.
+    ///
+    /// # Returns
+    /// * `Ok(())` — The handover is structurally valid (proposed ≠ current).
+    /// * `Err(OperationNotAllowed)` — `proposed` equals the current admin (no-op transfer).
+    /// * `Err(OperationNotAllowed)` — The admin subsystem has not been initialized.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// AdminStorage::verify_admin_handover(&env, &new_admin)?;
+    /// AdminStorage::transfer_admin(&env, &current_admin, &new_admin)?;
+    /// ```
+    pub fn verify_admin_handover(env: &Env, proposed: &Address) -> Result<(), QuickLendXError> {
+        if !Self::is_initialized(env) {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+        let current = Self::get_admin(env).ok_or(QuickLendXError::OperationNotAllowed)?;
+        if *proposed == current {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+        Ok(())
+    }
+}
+
+/// Reject the call if `caller` equals the contract's own address.
+///
+/// # Threat model
+/// On Soroban, a cross-contract call can supply the callee's own contract address
+/// as an `Address` argument.  If the callee then calls `addr.require_auth()`, the
+/// Soroban host grants auth because the contract is authorizing itself — a
+/// confused-deputy scenario.  An attacker can exploit this to impersonate the
+/// contract as a business, investor, or admin, bypassing KYC and access controls.
+///
+/// This guard must be called at every public entrypoint that accepts a user-controlled
+/// `Address` that will subsequently have `require_auth()` called on it.
+#[inline]
+pub fn require_not_self(env: &Env, caller: &Address) -> Result<(), QuickLendXError> {
+    if *caller == env.current_contract_address() {
+        return Err(QuickLendXError::SelfCallNotAllowed);
+    }
+    Ok(())
 }

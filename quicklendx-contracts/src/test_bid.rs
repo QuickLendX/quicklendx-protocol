@@ -32,9 +32,10 @@
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::{QuickLendXContract, QuickLendXContractClient};
+use crate::events::TOPIC_BID_CANCELLED;
 use soroban_sdk::{
     testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke},
-    Address, BytesN, Env, IntoVal, String, Vec,
+    xdr, Address, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 
 // ---------------------------------------------------------------------------
@@ -101,6 +102,22 @@ fn test_investor_can_cancel_own_placed_bid() {
         "bid status must be Cancelled after cancel_bid"
     );
     assert_eq!(bid.investor, investor, "investor field must be unchanged");
+    let topic_sym = Symbol::new(&env, TOPIC_BID_CANCELLED);
+    let topic_xdr = xdr::ScVal::try_from_val(&env, &topic_sym).expect("topic to ScVal");
+    let cancelled_events = env
+        .events()
+        .all()
+        .events()
+        .iter()
+        .filter(|e| {
+            if let xdr::ContractEventBody::V0(body) = &e.body {
+                body.topics.first() == Some(&topic_xdr)
+            } else {
+                false
+            }
+        })
+        .count();
+    assert_eq!(cancelled_events, 1, "cancel_bid must emit exactly one BidCancelled event");
 }
 
 #[test]
@@ -434,9 +451,24 @@ fn test_investor_can_cancel_multiple_own_bids() {
 // 7. TTL/EXPIRY BOUNDARIES — exact-timestamp and off-by-one protections
 // ===========================================================================
 
-/// At exact expiration timestamp, bid remains valid (strict `>` expiry rule).
+/// One second before expiration timestamp, bid should still be accepted.
 #[test]
-fn test_accept_bid_at_exact_expiration_timestamp_succeeds() {
+fn test_accept_bid_one_second_before_expiration_succeeds() {
+    let (env, client, admin, business) = setup();
+    client.set_bid_ttl_days(&1u64);
+
+    let (bid_id, _, invoice_id) = place_bid(&env, &client, &admin, &business);
+    let bid = client.get_bid(&bid_id).unwrap();
+    env.ledger()
+        .set_timestamp(bid.expiration_timestamp.saturating_sub(1));
+
+    let result = client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(result.is_ok(), "bid should remain valid one second before expiry");
+}
+
+/// At expiration timestamp, bid must not be accepted.
+#[test]
+fn test_accept_bid_at_expiration_timestamp_fails() {
     let (env, client, admin, business) = setup();
     client.set_bid_ttl_days(&1u64);
 
@@ -445,24 +477,48 @@ fn test_accept_bid_at_exact_expiration_timestamp_succeeds() {
     env.ledger().set_timestamp(bid.expiration_timestamp);
 
     let result = client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(result.is_ok(), "bid should remain valid at exact expiry timestamp");
-}
-
-/// One second after expiration timestamp, bid must not be accepted.
-#[test]
-fn test_accept_bid_after_expiration_timestamp_fails() {
-    let (env, client, admin, business) = setup();
-    client.set_bid_ttl_days(&1u64);
-
-    let (bid_id, _, invoice_id) = place_bid(&env, &client, &admin, &business);
-    let bid = client.get_bid(&bid_id).unwrap();
-    env.ledger()
-        .set_timestamp(bid.expiration_timestamp.saturating_add(1));
-
-    let result = client.try_accept_bid(&invoice_id, &bid_id);
-    assert!(result.is_err(), "expired bid must not be accepted");
+    assert!(result.is_err(), "expired bid must not be accepted at expiry timestamp");
     assert_eq!(
         result.unwrap_err().expect("expected contract error"),
         QuickLendXError::InvalidStatus
     );
+}
+
+// ===========================================================================
+// 8. FREEZE INVOICE - Admin can freeze invoice and block bids
+// ===========================================================================
+
+#[test]
+fn test_freeze_invoice_blocks_bids() {
+    let (env, client, admin, business) = setup();
+
+    // Setup an invoice
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+    let due = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due,
+        &soroban_sdk::String::from_str(&env, "inv"),
+        &crate::invoice::InvoiceCategory::Services,
+        &soroban_sdk::Vec::new(&env),
+    );
+
+    // Freeze it
+    client.freeze_invoice(&admin, &invoice_id);
+
+    // Attempt to bid
+    let investor = Address::generate(&env);
+    client.submit_investor_kyc(&investor, &soroban_sdk::String::from_str(&env, "kyc"));
+    client.verify_investor(&admin, &investor, &10_000i128);
+
+    let result = client.try_place_bid(&investor, &invoice_id, &900i128, &950i128);
+    assert!(result.is_err(), "should block bid on frozen invoice");
+    assert_eq!(
+        result.unwrap_err().expect("expected contract error"),
+        QuickLendXError::InvoiceFrozen
+    );
+}
 }

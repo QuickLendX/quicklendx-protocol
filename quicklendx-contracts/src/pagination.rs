@@ -18,16 +18,11 @@
 //! 5. **No panics** - Only `saturating_*` arithmetic is used and all indexing
 //!    goes through pre-computed safe bounds.
 
-extern crate alloc;
-
 use alloc::vec::Vec;
+use crate::errors::QuickLendXError;
 
-/// Maximum number of records any paginated query endpoint may return in a
-/// single response.
-///
-/// Raising this constant requires a security review because it raises the
-/// worst-case memory consumption and gas cost of every query endpoint.
-pub const MAX_QUERY_LIMIT: u32 = 100;
+/// Maximum number of records returned by paginated query endpoints.
+pub const MAX_QUERY_LIMIT: u32 = 50;
 
 /// Clamp a caller-supplied `limit` to [`MAX_QUERY_LIMIT`].
 ///
@@ -44,6 +39,23 @@ pub const fn cap_query_limit(limit: u32) -> u32 {
     } else {
         limit
     }
+}
+
+/// Validate query parameters for security and resource protection.
+///
+/// # Arguments
+/// * `offset` - Pagination offset starting index.
+/// * `_limit` - Pagination limit.
+///
+/// # Returns
+/// * `Ok(())` if valid.
+/// * `Err(QuickLendXError::InvalidAmount)` on potential offset overflow.
+#[inline]
+pub const fn validate_query_params(offset: u32, _limit: u32) -> Result<(), QuickLendXError> {
+    if offset > u32::MAX - MAX_QUERY_LIMIT {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+    Ok(())
 }
 
 /// Validate pagination parameters against a known collection size.

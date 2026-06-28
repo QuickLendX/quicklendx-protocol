@@ -49,6 +49,7 @@
 mod test_dispute {
     use crate::errors::QuickLendXError;
     use crate::invoice::{DisputeStatus, InvoiceCategory};
+    use crate::types::{DisputeResolution};
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
@@ -494,6 +495,144 @@ mod test_dispute {
         assert_eq!(dispute.evidence, evidence);
         assert_eq!(dispute.resolution, resolution);
         assert_eq!(dispute.resolved_by, admin);
+    }
+
+    /// [TC-20] Admin can resolve a dispute with structured outcome.
+    #[test]
+    fn test_resolve_dispute_structured_success() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+
+        let note = String::from_str(&env, "Dispute resolved in favor of investor");
+        let result = client.try_resolve_dispute_structured(
+            &invoice_id,
+            &admin,
+            &DisputeResolution::FavorInvestor,
+            &note,
+        );
+        assert!(
+            result.is_ok(),
+            "Admin should be able to resolve a UnderReview dispute with structured outcome"
+        );
+
+        assert_eq!(
+            client.get_invoice(&invoice_id).dispute_status,
+            DisputeStatus::Resolved
+        );
+
+        let dispute = client
+            .get_dispute_details(&invoice_id)
+            .expect("Dispute should be stored");
+        assert_eq!(dispute.resolution, note);
+        assert_eq!(dispute.resolved_by, admin);
+        assert_eq!(
+            dispute.resolution_outcome,
+            DisputeResolution::FavorInvestor
+        );
+    }
+
+    /// [TC-21] Resolving a dispute with structured outcome skipping review is rejected.
+    #[test]
+    fn test_resolve_dispute_structured_skipping_review_rejected() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+
+        let result = client.try_resolve_dispute_structured(
+            &invoice_id,
+            &admin,
+            &DisputeResolution::FavorBusiness,
+            &String::from_str(&env, "Skipped review"),
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err().expect("expected contract error");
+        assert_eq!(
+            err,
+            QuickLendXError::DisputeNotUnderReview,
+            "Cannot resolve a Disputed (not yet reviewed) dispute with structured outcome"
+        );
+    }
+
+    /// [TC-22] Resolving an already-resolved dispute with structured outcome is rejected.
+    #[test]
+    fn test_resolve_dispute_structured_already_resolved_rejected() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+        client.resolve_dispute_structured(
+            &invoice_id,
+            &admin,
+            &DisputeResolution::FavorBusiness,
+            &String::from_str(&env, "First resolution"),
+        );
+
+        let result = client.try_resolve_dispute_structured(
+            &invoice_id,
+            &admin,
+            &DisputeResolution::Dismissed,
+            &String::from_str(&env, "Second resolution"),
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err().expect("expected contract error");
+        assert_eq!(
+            err,
+            QuickLendXError::DisputeNotUnderReview,
+            "Cannot resolve an already-Resolved dispute with structured outcome"
+        );
+    }
+
+    /// [TC-23] An empty note for structured resolution is rejected.
+    #[test]
+    fn test_resolve_dispute_structured_empty_note_rejected() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
+
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "reason"),
+            &String::from_str(&env, "evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+
+        let result = client.try_resolve_dispute_structured(
+            &invoice_id,
+            &admin,
+            &DisputeResolution::Split,
+            &String::from_str(&env, ""),
+        );
+        assert!(result.is_err());
+        let err = result.unwrap_err().expect("expected contract error");
+        assert_eq!(
+            err,
+            QuickLendXError::InvalidDisputeReason,
+            "Empty note for structured resolution should be rejected"
+        );
     }
 
     /// [TC-17] Resolving a `Disputed` (not yet under review) dispute must return
@@ -1547,11 +1686,7 @@ mod test_dispute {
         let invoice_id = create_test_invoice(&env, &client, &admin, &business, 100_000);
 
         let err = client
-            .try_resolve_dispute(
-                &invoice_id,
-                &admin,
-                &String::from_str(&env, "resolution"),
-            )
+            .try_resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "resolution"))
             .unwrap_err()
             .expect("expected error");
         assert_eq!(err, QuickLendXError::DisputeNotUnderReview);
@@ -1634,11 +1769,7 @@ mod test_dispute {
         );
 
         let err = client
-            .try_resolve_dispute(
-                &invoice_id,
-                &admin,
-                &String::from_str(&env, "resolution"),
-            )
+            .try_resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "resolution"))
             .unwrap_err()
             .expect("expected error");
         assert_eq!(err, QuickLendXError::DisputeNotUnderReview);

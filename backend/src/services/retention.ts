@@ -1,11 +1,15 @@
 import path from "path";
-import { promises as fs } from "fs";
+import { promises as fs, createWriteStream } from "fs";
+import * as zlib from "zlib";
+import { pipeline } from "stream/promises";
+import { Readable } from "stream";
+import { createHash } from "crypto";
 import { retentionConfig } from "../config";
 import { auditService } from "./auditService";
 import { ReconciliationWorker } from "./reconciliationWorker";
 import { replayService } from "./replayService";
 import {
-  FileSystemRawEventStore,
+  FileRawEventStore,
   InMemoryRawEventStore,
 } from "./rawEventStore";
 import type { SnapshotRetentionRecord } from "./snapshotService";
@@ -21,6 +25,7 @@ export interface RetentionPolicy {
   intervalMs: number;
   archiveDir: string;
   actor: string;
+  archiveEnabled: boolean;
 }
 
 export interface RetentionCategorySummary {
@@ -97,7 +102,7 @@ interface CategorizedRetentionState<T> {
 }
 
 function buildDefaultDependencies(): RetentionDependencies {
-  const defaultRawEventStore = new FileSystemRawEventStore(new DefaultEventValidator());
+  const defaultRawEventStore = new FileRawEventStore(new DefaultEventValidator());
 
   return {
     rawEventStore: defaultRawEventStore,
@@ -221,11 +226,20 @@ export class RetentionWorker {
     };
 
     try {
-      rawState.summary.archivePath = await this.archiveCategory(
-        runId,
-        "raw-events",
-        rawState.purged
-      );
+      if (rawState.purged.length > 0) {
+        if (this.policy.archiveEnabled) {
+          const paths = await this.archiveRawEventsGzip(rawState.purged);
+          rawState.summary.archivePath = paths.join(",");
+          rawState.summary.archived = rawState.purged.length;
+        } else {
+          rawState.summary.archivePath = null;
+          rawState.summary.archived = 0;
+        }
+      } else {
+        rawState.summary.archivePath = null;
+        rawState.summary.archived = 0;
+      }
+
       auditState.summary.archivePath = await this.archiveCategory(
         runId,
         "audit-logs",
@@ -236,7 +250,6 @@ export class RetentionWorker {
         "snapshots",
         snapshotState.purged
       );
-      rawState.summary.archived = rawState.purged.length;
       auditState.summary.archived = auditState.purged.length;
       snapshotState.summary.archived = snapshotState.purged.length;
 
@@ -320,6 +333,104 @@ export class RetentionWorker {
     );
     await this.dependencies.archiveWriter(archivePath, rows);
     return archivePath;
+  }
+
+  async archiveAndCleanupRawEvents(options: { dryRun?: boolean; now?: number } = {}): Promise<RetentionCategorySummary> {
+    const now = options.now ?? Date.now();
+    const dryRun = options.dryRun ?? false;
+    const replayLock = this.dependencies.replayInspector.getActiveRetentionLock();
+    const reconciliationActive =
+      this.dependencies.reconciliationInspector.isReconciliationRunning();
+
+    const events = await this.dependencies.rawEventStore.getAllEvents();
+    const rawState = this.planRawEventRetention(
+      events,
+      now,
+      replayLock.minimumLedger,
+      replayLock.active,
+      reconciliationActive
+    );
+
+    if (dryRun) {
+      return rawState.summary;
+    }
+
+    if (rawState.purged.length > 0) {
+      if (this.policy.archiveEnabled) {
+        const paths = await this.archiveRawEventsGzip(rawState.purged);
+        rawState.summary.archivePath = paths.join(",");
+        rawState.summary.archived = rawState.purged.length;
+      } else {
+        rawState.summary.archivePath = null;
+        rawState.summary.archived = 0;
+      }
+      await this.dependencies.rawEventStore.replaceEvents(rawState.kept);
+    }
+
+    return rawState.summary;
+  }
+
+  private async archiveRawEventsGzip(purged: RawEvent[]): Promise<string[]> {
+    if (purged.length === 0) {
+      return [];
+    }
+
+    const groups: { [month: string]: RawEvent[] } = {};
+    for (const event of purged) {
+      const month = event.indexedAt.slice(0, 7); // "YYYY-MM"
+      if (!groups[month]) {
+        groups[month] = [];
+      }
+      groups[month].push(event);
+    }
+
+    const archivePaths: string[] = [];
+    for (const [month, events] of Object.entries(groups)) {
+      const fileName = `raw-events-${month}.jsonl.gz`;
+      const filePath = path.join(this.policy.archiveDir, fileName);
+      await fs.mkdir(path.dirname(filePath), { recursive: true });
+
+      const content = events.map((e) => JSON.stringify(e)).join("\n") + "\n";
+
+      // Append using gzip pipeline
+      const readable = Readable.from([content]);
+      const gzip = zlib.createGzip();
+      const writeStream = createWriteStream(filePath, { flags: "a" });
+      await pipeline(readable, gzip, writeStream);
+
+      // Verify the archive file (decompress and read)
+      await this.verifyArchive(filePath, content);
+
+      // Compute checksum of the .gz file and write it
+      const checksum = await this.computeSha256(filePath);
+      const checksumPath = `${filePath}.sha256`;
+      await fs.writeFile(checksumPath, checksum, "utf8");
+
+      archivePaths.push(filePath);
+    }
+
+    return archivePaths;
+  }
+
+  private async verifyArchive(filePath: string, appendedContent: string): Promise<void> {
+    const buffer = await fs.readFile(filePath);
+    return new Promise<void>((resolve, reject) => {
+      zlib.gunzip(buffer, (err, decompressed) => {
+        if (err) {
+          return reject(new Error(`Failed to decompress archive ${filePath}: ${err.message}`));
+        }
+        const text = decompressed.toString("utf8");
+        if (!text.endsWith(appendedContent)) {
+          return reject(new Error(`Archive verification failed for ${filePath}: appended content not found at the end.`));
+        }
+        resolve();
+      });
+    });
+  }
+
+  private async computeSha256(filePath: string): Promise<string> {
+    const buffer = await fs.readFile(filePath);
+    return createHash("sha256").update(buffer).digest("hex");
   }
 
   private planRawEventRetention(
