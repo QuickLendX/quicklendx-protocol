@@ -61,6 +61,13 @@ jobs:
           cd quicklendx-contracts
           cargo check --lib --verbose
 
+      - name: Clippy (all targets, deny warnings)
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
+        run: |
+          source $HOME/.cargo/env
+          cd quicklendx-contracts
+          cargo clippy --workspace --all-targets -- -D warnings
+
       - name: Install wasm-opt (binaryen) for size reduction
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
@@ -99,7 +106,7 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
-          cargo test --verbose
+          cargo test -p quicklendx-contracts --verbose
 
       - name: Test coverage (baseline + admin gate)
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'

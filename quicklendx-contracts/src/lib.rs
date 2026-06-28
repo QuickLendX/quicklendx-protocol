@@ -56,13 +56,15 @@ mod test_maintenance;
 mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
+#[cfg(test)]
+mod test_concurrent_withdraw;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 pub mod idempotency;
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
 #[cfg(any(test, feature = "testutils"))]
 pub mod bench;
-
+pub mod idempotency;
 pub mod admin;
 pub mod analytics;
 pub mod audit;
@@ -235,8 +237,6 @@ mod test_bid_compare_order_props;
 mod test_bid_ranking;
 #[cfg(test)]
 mod test_bid_capacity_stress;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_ranking;
 // Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
 // every CI matrix entry.
 #[cfg(test)]
@@ -297,8 +297,6 @@ mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
 mod test_platform_metrics_reconciliation;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_rebuild_indexes;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_seed;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
@@ -2885,6 +2883,7 @@ impl QuickLendXContract {
         let len_u32 = pairs.len() as u32;
         let capped_limit = cap_query_limit(limit);
         let start = offset.min(len_u32) as usize;
+        let capped_limit = cap_query_limit(limit);
         let end = (offset.saturating_add(capped_limit).min(len_u32)) as usize;
         let mut result = Vec::new(&env);
         for (_, id) in &pairs[start..end] {

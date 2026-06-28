@@ -1,6 +1,6 @@
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use soroban_sdk::{symbol_short, Address, Env, String, Symbol};
+use soroban_sdk::{symbol_short, Address, Env, String, Symbol, Vec, vec};
 
 const PAUSED_KEY: Symbol = symbol_short!("paused");
 const PAUSED_AT_KEY: Symbol = symbol_short!("paused_at");
@@ -28,7 +28,11 @@ impl PauseControl {
         if !env.storage().instance().get(&PAUSED_KEY).unwrap_or(false) {
             return false;
         }
-        let paused_at: u64 = env.storage().instance().get(&PAUSED_AT_KEY).unwrap_or(0);
+        let paused_at: u64 = env
+            .storage()
+            .instance()
+            .get(&PAUSED_AT_KEY)
+            .unwrap_or(0);
         if paused_at > 0 && env.ledger().timestamp() >= paused_at + MAX_PAUSE_DURATION {
             env.storage().instance().set(&PAUSED_KEY, &false);
             return false;
@@ -36,16 +40,18 @@ impl PauseControl {
         true
     }
 
-    pub fn set_paused(env: &Env, admin: &Address, paused: bool) -> Result<(), QuickLendXError> {
+    pub fn set_paused(
+        env: &Env,
+        admin: &Address,
+        paused: bool,
+    ) -> Result<(), QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
-        // Check current paused state to ensure idempotency
         let current: bool = Self::is_paused(env);
         if current == paused {
             return Ok(());
         }
         Self::apply_paused(env, paused);
-        // Emit appropriate event based on state transition
         if paused {
             crate::events::emit_paused(env, admin);
         } else {
@@ -57,7 +63,9 @@ impl PauseControl {
     pub(crate) fn apply_paused(env: &Env, paused: bool) {
         env.storage().instance().set(&PAUSED_KEY, &paused);
         if paused {
-            env.storage().instance().set(&PAUSED_AT_KEY, &env.ledger().timestamp());
+            env.storage()
+                .instance()
+                .set(&PAUSED_AT_KEY, &env.ledger().timestamp());
         }
     }
 
