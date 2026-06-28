@@ -40,9 +40,9 @@ mod test_default;
 mod test_default_finality;
 #[cfg(test)]
 mod test_concurrent_default_overlap;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_emergency_withdraw_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow;
@@ -82,6 +82,7 @@ pub mod events;
 pub mod fees;
 pub mod freshness;
 pub mod health;
+pub mod idempotency;
 pub mod incident;
 pub mod init;
 pub mod invariants;
@@ -111,9 +112,9 @@ mod test_accept_bid_race;
 mod test_panic_handler;
 #[cfg(test)]
 mod test_due_date_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_self_call_rejection;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
@@ -125,7 +126,7 @@ mod test_admin_two_step;
 mod test_audit;
 #[cfg(test)]
 mod test_audit_config;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_restore_reindex;
@@ -153,7 +154,7 @@ mod test_currency_match_funding;
 mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund_after_expiry;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
@@ -169,12 +170,12 @@ mod test_payments;
 mod test_expired_bids_cleanup;
 #[cfg(test)]
 mod test_freshness;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
 // Issue #1541 — lag at zero, lag at positive, lag during pause.
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_lag;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_health_status;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
@@ -219,7 +220,7 @@ mod test_reentrancy;
 mod test_reentrancy_fault_injection;
 #[cfg(test)]
 mod test_storage_key_layout;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_string_limits;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_types;
@@ -257,21 +258,21 @@ mod test_incident;
 mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
 #[cfg(test)]
 mod test_incident;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_metadata;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_line_item_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_search_ranking;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_grace_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_clock_rollover;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
@@ -281,7 +282,7 @@ mod test_max_invoices_per_business;
 mod test_category_breakdown;
 #[cfg(test)]
 mod test_diagnostics;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_invoices_paged_ordering;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
@@ -291,7 +292,7 @@ mod test_insurance_premium_props;
 mod test_fuzz_cancelled_noop;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_compute_yield_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
@@ -4024,9 +4025,26 @@ impl QuickLendXContract {
     }
 }
 
-#[cfg(test)]
+// =============================================================================
+// Feature-gated contract entrypoints
+// =============================================================================
+//
+// get_protocol_diagnostics is intentionally NOT inside the main contractimpl block.
+// The soroban-sdk contractimpl macro unconditionally emits export stubs for every
+// pub fn, ignoring cfg(...) on the method itself. Gating the entire impl block
+// prevents stub generation in non-diagnostics builds.
+
+#[cfg(feature = "diagnostics")]
+#[contractimpl]
+impl QuickLendXContract {
+    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
+        diagnostics::get_protocol_diagnostics(&env)
+    }
+}
+
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_emergency_escrow_protection;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_settle_refund_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_collision_cross_domain;

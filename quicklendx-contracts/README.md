@@ -1107,6 +1107,7 @@ Additional documentation is available in the `docs/` directory:
 - **[Protocol Limits](PROTOCOL_LIMITS_README.md)**: Protocol-wide limits and configuration
 - **[Admin Operations](docs/admin-dry-run.md)**: Admin function dry-run previews
 - **[Bid Lifecycle](docs/bid-lifecycle.md)**: Complete bid state machine and transitions
+- **[Bid Ranking](../docs/BID_RANKING.md)**: Deterministic ordering function — tier-by-tier tie-breaker logic, invariants, and contributor workflow.
 - **[Escrow Invariants](docs/escrow-invariants.md)**: Escrow state guarantees and safety properties
 - **[Investment Lifecycle](docs/investment-lifecycle.md)**: Investment states and transitions
 - **[Settlement & Dispute Interaction](docs/settlement-dispute-interaction.md)**: How settlements interact with disputes

@@ -890,4 +890,75 @@ mod test_bid_ranking {
             "invariant holds after multiple cleanups"
         );
     }
+
+    // --- Compile-checked doc example -----------------------------------------------
+    //
+    // This test mirrors the worked-example snippet documented in
+    // `docs/BID_RANKING.md` (§3.2 "Seeded pseudo-bid table"). If you change the
+    // example in the doc file you MUST also update this test and re-run it to
+    // ensure the documented example still compiles and produces the ordering the
+    // doc claims.
+    //
+    // The two equal-economics bids (`equal_new_higher_id` and
+    // `equal_old_lower_id`) deliberately share a timestamp so that tier 5
+    // (bid_id lexicographic) is the deciding factor — matching the §3.1
+    // worked example narrative.
+    #[test]
+    fn doc_example_full_tie_ladder() {
+        let env = Env::default();
+        env.ledger().with_mut(|li| li.timestamp = 1_000);
+
+        // Use a stable invoice_id so storage lookups hit.
+        let mut invoice_bytes = [0u8; 32];
+        invoice_bytes[31] = 0xAA;
+        let invoice_id = BytesN::from_array(&env, &invoice_bytes);
+
+        let investor = Address::generate(&env);
+
+        // Profit in parentheses for readability:
+        //   high_profit         (5_000 -> 7_000, profit 2_000, ts=10, id_suffix=0x01)
+        //   higher_amount       (5_300 -> 7_000, profit 1_700, ts=20, id_suffix=0x02)
+        //   equal_old_lower_id  (5_000 -> 6_000, profit 1_000, ts=20, id_suffix=0x02)
+        //   equal_new_higher_id (5_000 -> 6_000, profit 1_000, ts=20, id_suffix=0x09)
+        let high_profit = build_bid(
+            &env, &invoice_id, &investor, 5_000, 7_000, 10, BidStatus::Placed, 0x01,
+        );
+        let higher_amount = build_bid(
+            &env, &invoice_id, &investor, 5_300, 7_000, 20, BidStatus::Placed, 0x02,
+        );
+        let equal_old_lower_id = build_bid(
+            &env, &invoice_id, &investor, 5_000, 6_000, 20, BidStatus::Placed, 0x02,
+        );
+        let equal_new_higher_id = build_bid(
+            &env, &invoice_id, &investor, 5_000, 6_000, 20, BidStatus::Placed, 0x09,
+        );
+
+        for bid in [
+            &high_profit,
+            &higher_amount,
+            &equal_old_lower_id,
+            &equal_new_higher_id,
+        ] {
+            persist_bid(&env, bid);
+        }
+
+        let ranked = BidStorage::rank_bids(&env, &invoice_id);
+
+        assert_eq!(ranked.len(), 4);
+        // Tier 1 (profit): high_profit (2_000) beats every other bid.
+        assert_eq!(ranked.get(0).unwrap().bid_id, high_profit.bid_id);
+        // Tier 1 (profit): higher_amount (1_700) beats the equal_* (1_000);
+        // expected_return and bid_amount only matter when the earlier tiers tie.
+        assert_eq!(ranked.get(1).unwrap().bid_id, higher_amount.bid_id);
+        // Tier 5 (bid_id): profit, expected_return, bid_amount, and timestamp
+        // are all equal between equal_old_lower_id and equal_new_higher_id;
+        // lexicographic byte order makes id_suffix 0x09 > 0x02, so
+        // equal_new_higher_id ranks above equal_old_lower_id.
+        assert_eq!(ranked.get(2).unwrap().bid_id, equal_new_higher_id.bid_id);
+        assert_eq!(ranked.get(3).unwrap().bid_id, equal_old_lower_id.bid_id);
+
+        // Invariant: best_bid == rank_bids[0] when ranking is non-empty.
+        let best = BidStorage::get_best_bid(&env, &invoice_id).unwrap();
+        assert_eq!(best.bid_id, ranked.get(0).unwrap().bid_id);
+    }
 }
