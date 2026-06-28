@@ -49,7 +49,7 @@ pub struct InvestorPortfolioSummary {
 
 /// Maximum number of records returned by paginated query endpoints.
 /// This constant ensures memory usage stays within reasonable bounds.
-pub const MAX_QUERY_LIMIT: u32 = crate::pagination::MAX_QUERY_LIMIT;
+pub const MAX_QUERY_LIMIT: u32 = crate::MAX_QUERY_LIMIT;
 
 /// Read-only investment query helpers with pagination support
 pub struct InvestmentQueries;

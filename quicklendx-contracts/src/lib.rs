@@ -56,12 +56,14 @@ mod test_maintenance;
 mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
+#[cfg(test)]
+mod test_concurrent_withdraw;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
 #[cfg(any(test, feature = "testutils"))]
 pub mod bench;
-
+pub mod idempotency;
 pub mod admin;
 pub mod analytics;
 pub mod audit;
@@ -106,10 +108,6 @@ pub mod storage;
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
-mod test_panic_handler;
-#[cfg(test)]
-mod test_panic_handler;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
@@ -188,19 +186,11 @@ mod test_invariant_self_check;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_consistency;
 #[cfg(all(test, feature = "legacy-tests"))]
-mod test_accept_bid_race;
-#[cfg(test)]
-mod test_bid_cancel_accept_race;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_withdraw_bid_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 // #[cfg(test)]
 #[cfg(test)]
 #[path = "test/test_investment_queries.rs"]
 mod test_investment_queries;
-#[cfg(test)]
-mod test_queries;
 // #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_overflow;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -243,8 +233,6 @@ mod test_bid_compare_order_props;
 mod test_bid_ranking;
 #[cfg(test)]
 mod test_bid_capacity_stress;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_ranking;
 // Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
 // every CI matrix entry.
 #[cfg(test)]
@@ -275,25 +263,17 @@ mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
 #[cfg(test)]
-mod test_incident;
-#[cfg(test)]
 mod test_invoice_metadata;
 #[cfg(test)]
 mod test_line_item_consistency;
 #[cfg(test)]
 mod test_invoice_search_ranking;
 #[cfg(test)]
-mod test_default_grace_boundary;
-#[cfg(test)]
 mod test_clock_rollover;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_category_breakdown;
-#[cfg(test)]
-mod test_diagnostics;
 #[cfg(test)]
 mod test_business_invoices_paged_ordering;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -309,8 +289,6 @@ mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
 mod test_platform_metrics_reconciliation;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_rebuild_indexes;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_seed;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
@@ -363,7 +341,7 @@ use crate::storage::{BidStorage, InvoiceStorage};
 pub struct QuickLendXContract;
 
 /// Maximum number of records returned by paginated query endpoints.
-pub(crate) const MAX_QUERY_LIMIT: u32 = pagination::MAX_QUERY_LIMIT;
+pub(crate) const MAX_QUERY_LIMIT: u32 = 50;
 
 /// @notice Validates and caps query limit to prevent resource abuse
 /// @param limit The requested limit value
@@ -922,28 +900,6 @@ impl QuickLendXContract {
     /// before callers can react to this data.
     pub fn get_protocol_health(env: Env) -> health::ProtocolHealth {
         health::ProtocolHealth::new(&env)
-    }
-
-    /// Return a rich internal diagnostic snapshot.
-    ///
-    /// **Only available when compiled with `--features diagnostics`.**
-    /// This entry-point is entirely absent from production WASM builds — it is
-    /// compiled out at the Cargo feature level, adding zero bytes and zero gas
-    /// cost to standard deployments.
-    ///
-    /// Intended for operator tooling, support dashboards, and integration tests
-    /// that need per-status invoice counts, bid counters, and subsystem flags in
-    /// a single call without having to fan out across multiple read entry-points.
-    ///
-    /// # Returns
-    /// A [`diagnostics::ProtocolDiagnostics`] snapshot (see `diagnostics.rs`).
-    ///
-    /// # Security
-    /// - No authentication required (read-only, no PII).
-    /// - State is never mutated.
-    #[cfg(feature = "diagnostics")]
-    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
-        diagnostics::get_protocol_diagnostics(&env)
     }
 
     // ============================================================================
@@ -2887,6 +2843,7 @@ impl QuickLendXContract {
         // Apply pagination (overflow-safe) and collect into Soroban Vec.
         let len_u32 = pairs.len() as u32;
         let start = offset.min(len_u32) as usize;
+        let capped_limit = cap_query_limit(limit);
         let end = (offset.saturating_add(capped_limit).min(len_u32)) as usize;
         let mut result = Vec::new(&env);
         for (_, id) in &pairs[start..end] {
@@ -4024,6 +3981,14 @@ impl QuickLendXContract {
         admin.require_auth();
         AdminStorage::require_admin(&env, &admin)?;
         EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
+    }
+}
+
+#[cfg(feature = "diagnostics")]
+#[contractimpl]
+impl QuickLendXContract {
+    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
+        diagnostics::get_protocol_diagnostics(&env)
     }
 }
 

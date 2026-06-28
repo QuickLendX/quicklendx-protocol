@@ -600,7 +600,7 @@ pub fn validate_calculation_inputs(
 /// For fixed `rate_bps` and `duration_days`, `yield` is non-decreasing in `amount`.
 /// For fixed `amount` and `duration_days`, `yield` is non-decreasing in `rate_bps`.
 /// For fixed `amount` and `rate_bps`, `yield` is non-decreasing in `duration_days`.
-pub fn compute_yield(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
     if amount <= 0 || rate_bps == 0 || duration_days == 0 {
         return 0;
     }
@@ -616,7 +616,7 @@ pub fn compute_yield(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
 /// # Returns
 /// Total expected return (principal + yield)
 pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
-    let yield_amount = compute_yield(amount, rate_bps, duration_days);
+    let yield_amount = compute_yield_u32(amount, rate_bps, duration_days);
     amount.max(0).saturating_add(yield_amount)
 }
 

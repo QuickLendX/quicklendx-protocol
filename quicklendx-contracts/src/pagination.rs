@@ -19,7 +19,8 @@
 //!    goes through pre-computed safe bounds.
 
 use alloc::vec::Vec;
-use crate::MAX_QUERY_LIMIT;
+pub const MAX_QUERY_LIMIT: u32 = 50;
+use crate::QuickLendXError;
 
 /// Clamp a caller-supplied `limit` to [`MAX_QUERY_LIMIT`].
 ///

@@ -277,6 +277,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
+            QuickLendXError::InvoiceFrozen | QuickLendXError::SelfTransfer | QuickLendXError::DuplicateBid => todo!()
         }
     }
 }
