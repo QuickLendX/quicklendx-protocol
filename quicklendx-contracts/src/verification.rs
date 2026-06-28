@@ -349,7 +349,6 @@ impl BusinessVerificationStorage {
 
     /// @deprecated Use `admin::AdminStorage::initialize()` or `admin::AdminStorage::set_admin()` instead
     /// This function is kept for backward compatibility with existing tests.
-    
     /// Returns true if the business is marked as deleted.
     pub fn is_deleted(env: &Env, business: &Address) -> bool {
         let deleted = Self::get_deleted_businesses(env);
@@ -814,18 +813,6 @@ pub fn validate_bid(
     // 5. Investor Eligibility and Capacity
     // This checks both verification status AND individual/risk-based investment limits
     validate_investor_investment(env, investor, bid_amount)?;
-
-    // 6. Existing Bid Protection
-    BidStorage::cleanup_expired_bids(env, &invoice.id);
-    let existing_bids = BidStorage::get_bids_for_invoice(env, &invoice.id);
-    for bid_id in existing_bids.iter() {
-        if let Some(existing_bid) = BidStorage::get_bid(env, &bid_id) {
-            // Prevent multiple active bids from the same investor on one invoice
-            if existing_bid.investor == *investor && existing_bid.status == BidStatus::Placed {
-                return Err(QuickLendXError::OperationNotAllowed);
-            }
-        }
-    }
 
     Ok(())
 }

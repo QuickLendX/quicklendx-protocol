@@ -270,7 +270,14 @@ fn test_update_fee_structure_invalid_bps_produces_no_entry() {
 #[test]
 fn test_update_fee_structure_fee_type_label_in_additional_data() {
     let (env, client, admin) = setup_with_fees();
-    client.update_fee_structure(&admin, &FeeType::LatePayment, &500u32, &50i128, &5_000i128, &true);
+    client.update_fee_structure(
+        &admin,
+        &FeeType::LatePayment,
+        &500u32,
+        &100i128,
+        &5_000i128,
+        &true,
+    );
 
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
     let id = ids.get(ids.len() - 1).unwrap();

@@ -426,9 +426,18 @@ fn test_create_escrow_unregistered_token_address_does_not_write_escrow() {
     let investor_bal = real_tok.balance(&investor);
     let contract_bal = real_tok.balance(&contract_id);
 
-    let result = env.as_contract(&contract_id, || {
-        create_escrow(&env, &invoice_id, &investor, &business, 10_000, &bogus_currency)
-    });
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        env.as_contract(&contract_id, || {
+            create_escrow(
+                &env,
+                &invoice_id,
+                &investor,
+                &business,
+                10_000,
+                &bogus_currency,
+            )
+        })
+    }));
 
     assert!(result.is_err(), "unregistered token address must not succeed");
     assert_eq!(real_tok.balance(&investor), investor_bal);

@@ -5,6 +5,7 @@
 //! AnalyticsCalculator::calculate_platform_metrics.
 
 #![cfg(test)]
+#![allow(unused_must_use)]
 
 extern crate alloc;
 

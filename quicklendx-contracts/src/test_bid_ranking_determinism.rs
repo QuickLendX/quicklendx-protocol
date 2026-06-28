@@ -24,6 +24,7 @@
 #[cfg(test)]
 mod test_bid_ranking_determinism {
     use crate::bid::{Bid, BidStatus, BidStorage};
+    use crate::QuickLendXContract;
     use alloc::vec::Vec;
     use core::cmp::Ordering;
     use soroban_sdk::{
@@ -77,8 +78,33 @@ mod test_bid_ranking_determinism {
 
     /// Persist a bid and register it on the invoice index.
     fn persist(env: &Env, bid: &Bid) {
-        BidStorage::store_bid(env, bid);
-        BidStorage::add_bid_to_invoice(env, &bid.invoice_id, &bid.bid_id);
+        env.as_contract(&storage_contract(env), || {
+            BidStorage::store_bid(env, bid);
+            BidStorage::add_bid_to_invoice(env, &bid.invoice_id, &bid.bid_id);
+        });
+    }
+
+    fn storage_contract(env: &Env) -> Address {
+        Address::from_str(
+            env,
+            "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM",
+        )
+    }
+
+    fn storage_env() -> Env {
+        let env = Env::default();
+        env.register_at(&storage_contract(&env), QuickLendXContract, ());
+        env
+    }
+
+    fn rank(env: &Env, invoice: &BytesN<32>) -> soroban_sdk::Vec<Bid> {
+        env.as_contract(&storage_contract(env), || BidStorage::rank_bids(env, invoice))
+    }
+
+    fn best(env: &Env, invoice: &BytesN<32>) -> Option<Bid> {
+        env.as_contract(&storage_contract(env), || {
+            BidStorage::get_best_bid(env, invoice)
+        })
     }
 
     /// Extract bid IDs from a ranked Vec for easy equality assertions.
@@ -99,7 +125,7 @@ mod test_bid_ranking_determinism {
     /// Calling `rank_bids` twice on the same state returns identical results.
     #[test]
     fn rank_bids_returns_same_sequence_on_repeated_calls() {
-        let env = Env::default();
+        let env = storage_env();
         env.ledger().with_mut(|l| l.timestamp = 1_000);
         let inv = invoice_id(&env, 1);
 
@@ -110,9 +136,9 @@ mod test_bid_ranking_determinism {
         persist(&env, &bid_b);
         persist(&env, &bid_c);
 
-        let first_call = ids(&BidStorage::rank_bids(&env, &inv));
-        let second_call = ids(&BidStorage::rank_bids(&env, &inv));
-        let third_call = ids(&BidStorage::rank_bids(&env, &inv));
+        let first_call = ids(&rank(&env, &inv));
+        let second_call = ids(&rank(&env, &inv));
+        let third_call = ids(&rank(&env, &inv));
 
         assert_eq!(
             first_call, second_call,
@@ -127,7 +153,7 @@ mod test_bid_ranking_determinism {
     /// `get_best_bid` always equals `rank_bids[0]` across repeated calls.
     #[test]
     fn get_best_bid_equals_rank_bids_first_element_on_repeated_calls() {
-        let env = Env::default();
+        let env = storage_env();
         env.ledger().with_mut(|l| l.timestamp = 2_000);
         let inv = invoice_id(&env, 2);
 
@@ -137,8 +163,8 @@ mod test_bid_ranking_determinism {
         persist(&env, &bid_y);
 
         for _ in 0..3 {
-            let ranked = BidStorage::rank_bids(&env, &inv);
-            let best = BidStorage::get_best_bid(&env, &inv).expect("best bid must be Some");
+            let ranked = rank(&env, &inv);
+            let best = best(&env, &inv).expect("best bid must be Some");
             assert_eq!(
                 best.bid_id,
                 ranked.get(0).unwrap().bid_id,
@@ -171,7 +197,7 @@ mod test_bid_ranking_determinism {
         let mut expected_order: Option<Vec<[u8; 32]>> = None;
 
         for (perm_idx, order) in PERMUTATIONS.iter().enumerate() {
-            let env = Env::default();
+            let env = storage_env();
             // Use a different invoice seed per permutation to avoid cross-contamination.
             env.ledger().with_mut(|l| l.timestamp = 3_000);
             let inv = invoice_id(&env, 10u8 + perm_idx as u8);
@@ -188,7 +214,7 @@ mod test_bid_ranking_determinism {
                 persist(&env, bids[idx as usize]);
             }
 
-            let ranked = ids(&BidStorage::rank_bids(&env, &inv));
+            let ranked = ids(&rank(&env, &inv));
 
             match &expected_order {
                 None => expected_order = Some(ranked),
@@ -207,7 +233,7 @@ mod test_bid_ranking_determinism {
     #[test]
     fn rank_bids_with_full_tie_is_insertion_order_independent() {
         let check = |inv_seed: u8, insert_ascending: bool| {
-            let env = Env::default();
+            let env = storage_env();
             env.ledger().with_mut(|l| l.timestamp = 4_000);
             let inv = invoice_id(&env, inv_seed);
 
@@ -226,7 +252,7 @@ mod test_bid_ranking_determinism {
                 persist(&env, &bid_lo);
             }
 
-            ids(&BidStorage::rank_bids(&env, &inv))
+            ids(&rank(&env, &inv))
         };
 
         let ascending = check(30, true);
@@ -420,7 +446,7 @@ mod test_bid_ranking_determinism {
     /// `rank_bids` returns exactly one element for a single `Placed` bid, repeatedly.
     #[test]
     fn rank_bids_returns_single_element_for_one_placed_bid() {
-        let env = Env::default();
+        let env = storage_env();
         env.ledger().with_mut(|l| l.timestamp = 12_000);
         let inv = invoice_id(&env, 50);
 
@@ -428,7 +454,7 @@ mod test_bid_ranking_determinism {
         persist(&env, &bid);
 
         for call in 1..=3u8 {
-            let ranked = BidStorage::rank_bids(&env, &inv);
+            let ranked = rank(&env, &inv);
             assert_eq!(
                 ranked.len(),
                 1,
@@ -445,13 +471,13 @@ mod test_bid_ranking_determinism {
     /// `rank_bids` returns an empty Vec when the invoice has no bids.
     #[test]
     fn rank_bids_returns_empty_vec_for_invoice_with_no_bids() {
-        let env = Env::default();
+        let env = storage_env();
         env.ledger().with_mut(|l| l.timestamp = 13_000);
         let inv = invoice_id(&env, 51);
 
         // No bids persisted.
         for call in 1..=3u8 {
-            let ranked = BidStorage::rank_bids(&env, &inv);
+            let ranked = rank(&env, &inv);
             assert_eq!(
                 ranked.len(),
                 0,
@@ -463,11 +489,11 @@ mod test_bid_ranking_determinism {
     /// `get_best_bid` returns `None` when the invoice has no bids.
     #[test]
     fn get_best_bid_returns_none_for_invoice_with_no_bids() {
-        let env = Env::default();
+        let env = storage_env();
         env.ledger().with_mut(|l| l.timestamp = 14_000);
         let inv = invoice_id(&env, 52);
 
-        let result = BidStorage::get_best_bid(&env, &inv);
+        let result = best(&env, &inv);
         assert!(
             result.is_none(),
             "get_best_bid must return None when no bids exist"
@@ -484,7 +510,7 @@ mod test_bid_ranking_determinism {
     /// never pollute the ranked output or change the winner.
     #[test]
     fn rank_bids_excludes_all_non_placed_statuses() {
-        let env = Env::default();
+        let env = storage_env();
         env.ledger().with_mut(|l| l.timestamp = 15_000);
         let inv = invoice_id(&env, 60);
 
@@ -501,7 +527,7 @@ mod test_bid_ranking_determinism {
         persist(&env, &expired);
         persist(&env, &cancelled);
 
-        let ranked = BidStorage::rank_bids(&env, &inv);
+        let ranked = rank(&env, &inv);
         assert_eq!(
             ranked.len(),
             1,
@@ -514,7 +540,7 @@ mod test_bid_ranking_determinism {
         );
 
         // get_best_bid must agree.
-        let best = BidStorage::get_best_bid(&env, &inv).expect("best must exist");
+        let best = best(&env, &inv).expect("best must exist");
         assert_eq!(
             best.bid_id, placed.bid_id,
             "get_best_bid must also exclude non-Placed bids"
@@ -525,7 +551,7 @@ mod test_bid_ranking_determinism {
     /// `get_best_bid` returns `None`.
     #[test]
     fn rank_bids_returns_empty_when_all_bids_are_non_placed() {
-        let env = Env::default();
+        let env = storage_env();
         env.ledger().with_mut(|l| l.timestamp = 16_000);
         let inv = invoice_id(&env, 61);
 
@@ -546,10 +572,10 @@ mod test_bid_ranking_determinism {
             &make_bid(&env, &inv, 5_000, 9_000, 4, BidStatus::Cancelled, 4),
         );
 
-        let ranked = BidStorage::rank_bids(&env, &inv);
+        let ranked = rank(&env, &inv);
         assert_eq!(ranked.len(), 0, "all non-Placed: ranked must be empty");
 
-        let best = BidStorage::get_best_bid(&env, &inv);
+        let best = best(&env, &inv);
         assert!(best.is_none(), "all non-Placed: get_best_bid must be None");
     }
 
@@ -561,7 +587,7 @@ mod test_bid_ranking_determinism {
     /// remains deterministic and lower-profit bids rank below higher-profit ones.
     #[test]
     fn rank_bids_is_deterministic_with_zero_and_negative_profit_bids() {
-        let env = Env::default();
+        let env = storage_env();
         env.ledger().with_mut(|l| l.timestamp = 17_000);
         let inv = invoice_id(&env, 70);
 
@@ -577,8 +603,8 @@ mod test_bid_ranking_determinism {
         persist(&env, &zero);
         persist(&env, &negative);
 
-        let first = ids(&BidStorage::rank_bids(&env, &inv));
-        let second = ids(&BidStorage::rank_bids(&env, &inv));
+        let first = ids(&rank(&env, &inv));
+        let second = ids(&rank(&env, &inv));
 
         assert_eq!(
             first, second,

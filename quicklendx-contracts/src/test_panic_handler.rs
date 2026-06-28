@@ -99,13 +99,14 @@ fn no_additional_event_emitted_for_non_panicking_call_after_panicking_call() {
         env.as_contract(&contract_id, || catch_panic(&env, || panic!("first")));
     assert_eq!(event_count(&env), 1);
 
-    // Second call succeeds → event count must remain 1.
+    // Soroban's test event view is scoped to the latest contract invocation.
+    // A successful second call therefore exposes no events.
     let result: Result<u32, _> =
         env.as_contract(&contract_id, || catch_panic(&env, || 99u32));
     assert_eq!(result, Ok(99u32));
     assert_eq!(
         event_count(&env),
-        1,
+        0,
         "a successful call must not emit an additional PanicCaught event"
     );
 }

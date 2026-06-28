@@ -102,15 +102,14 @@ pub struct BidLimitConfig {
 
 impl Bid {
     /// @notice Returns whether a bid is expired at `current_timestamp`.
-    /// @dev Expiration is evaluated with an inclusive comparison:
-    ///      `current_timestamp >= expiration_timestamp`.
-    ///      This means a bid is valid until the second before expiry and
-    ///      becomes expired at the expiry timestamp. All cleanup and acceptance
+    /// @dev Expiration is evaluated after the expiration timestamp:
+    ///      `current_timestamp > expiration_timestamp`.
+    ///      This means a bid remains valid through its expiry timestamp. All cleanup and acceptance
     ///      paths rely on this same predicate to avoid off-by-one divergence.
     /// @param current_timestamp Current ledger timestamp.
     /// @return true when the bid has reached or passed its expiry boundary.
     pub fn is_expired(&self, current_timestamp: u64) -> bool {
-        current_timestamp >= self.expiration_timestamp
+        current_timestamp > self.expiration_timestamp
     }
 
     /// Backward-compatible helper used by some tests: uses compile-time default.
@@ -736,6 +735,7 @@ impl BidStorage {
         }
 
         let end_idx = (offset + capped_limit).min(old_count);
+        let is_full_coverage = offset == 0 && end_idx == old_count;
         let mut cleaned_count = 0u32;
         let mut write_idx: u32 = offset;
         let mut read_idx: u32 = offset;
@@ -777,7 +777,10 @@ impl BidStorage {
                 });
 
             if should_keep {
-                if write_idx != read_idx {
+                // Partial pages must preserve stable offsets for subsequent
+                // calls. Compact only when this call covers the full index;
+                // otherwise later pages could skip or duplicate entries.
+                if is_full_coverage && write_idx != read_idx {
                     let src = Self::invoice_bid_entry_key(invoice_id, read_idx);
                     let dst = Self::invoice_bid_entry_key(invoice_id, write_idx);
                     if let Some(bid_id) = env.storage().persistent().get::<_, BytesN<32>>(&src) {
@@ -793,7 +796,7 @@ impl BidStorage {
 
         // Only update count if we processed the entire list (offset=0 and end_idx=old_count)
         // Otherwise, the full cleanup will handle the final count update
-        if offset == 0 && end_idx == old_count && cleaned_count > 0 {
+        if is_full_coverage && cleaned_count > 0 {
             let new_count = old_count.saturating_sub(cleaned_count);
             env.storage().persistent().set(&count_key, &new_count);
             bump_persistent(env, &count_key);

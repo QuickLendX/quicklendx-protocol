@@ -37,7 +37,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
 #[test]
 fn store_invoice_rejects_contract_as_business() {
     let (env, client, _admin) = setup();
-    let self_addr = env.current_contract_address();
+    let self_addr = client.address.clone();
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86_400;
 
@@ -62,7 +62,7 @@ fn store_invoice_rejects_contract_as_business() {
 #[test]
 fn submit_kyc_application_rejects_contract_as_business() {
     let (env, client, _admin) = setup();
-    let self_addr = env.current_contract_address();
+    let self_addr = client.address.clone();
 
     let err = client
         .try_submit_kyc_application(&self_addr, &String::from_str(&env, "kyc"))
@@ -77,7 +77,7 @@ fn submit_kyc_application_rejects_contract_as_business() {
 #[test]
 fn submit_investor_kyc_rejects_contract_as_investor() {
     let (env, client, _admin) = setup();
-    let self_addr = env.current_contract_address();
+    let self_addr = client.address.clone();
 
     let err = client
         .try_submit_investor_kyc(&self_addr, &String::from_str(&env, "kyc"))

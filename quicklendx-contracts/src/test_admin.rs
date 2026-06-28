@@ -432,9 +432,9 @@ mod test_admin {
     #[test]
     fn emits_expected_events_for_admin_lifecycle() {
         let (env, contract_id, admin_1) = setup_with_admin();
-        let admin_2 = existing_destination(&env);
-
         assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_init"));
+
+        let admin_2 = existing_destination(&env);
 
         set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
         assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_2st"));

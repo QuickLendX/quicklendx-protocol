@@ -31,6 +31,8 @@
 //! the SDK's global allocator, both of which are mandatory on that target.
 
 extern crate alloc;
+#[cfg(test)]
+extern crate std;
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod scratch_events;

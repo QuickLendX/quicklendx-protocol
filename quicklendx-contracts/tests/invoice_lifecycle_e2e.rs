@@ -1,4 +1,5 @@
 //! Full invoice lifecycle end-to-end integration tests (Issue #1103).
+#![allow(dead_code, unused_doc_comments)]
 //!
 //! These tests exercise the complete on-chain lifecycle of an invoice from
 //! upload through settlement (or default), asserting state, status, and

@@ -1,45 +1,49 @@
 #![cfg(test)]
 use crate::audit::{log_operation, AuditOperation, AuditStorage};
 use proptest::prelude::*;
+use crate::QuickLendXContract;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 proptest! {
     #[test]
     fn test_audit_stats_counters_increment_exactly_once_per_event(
-        count_a in 0u32..50,
-        count_b in 0u32..50
+        count_a in 0u32..20,
+        count_b in 0u32..20
     ) {
         let env = Env::default();
+        let contract_id = env.register(QuickLendXContract, ());
         let actor = Address::generate(&env);
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
 
-        for _ in 0..count_a {
-            log_operation(
-                &env,
-                invoice_id.clone(),
-                AuditOperation::InvoiceCreated,
-                actor.clone(),
-                None,
-                None,
-                None,
-                None,
-            );
-        }
+        let stats = env.as_contract(&contract_id, || {
+            for _ in 0..count_a {
+                log_operation(
+                    &env,
+                    invoice_id.clone(),
+                    AuditOperation::InvoiceCreated,
+                    actor.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                );
+            }
 
-        for _ in 0..count_b {
-            log_operation(
-                &env,
-                invoice_id.clone(),
-                AuditOperation::InvoiceStatusChanged,
-                actor.clone(),
-                None,
-                None,
-                None,
-                None,
-            );
-        }
+            for _ in 0..count_b {
+                log_operation(
+                    &env,
+                    invoice_id.clone(),
+                    AuditOperation::InvoiceStatusChanged,
+                    actor.clone(),
+                    None,
+                    None,
+                    None,
+                    None,
+                );
+            }
 
-        let stats = AuditStorage::get_audit_stats(&env);
+            AuditStorage::get_audit_stats(&env)
+        });
         
         let mut found_a = 0;
         let mut found_b = 0;

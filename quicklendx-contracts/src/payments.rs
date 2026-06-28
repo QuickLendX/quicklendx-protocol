@@ -385,6 +385,12 @@ mod payments_tests {
         (env, contract_id)
     }
 
+    fn escrow_missing(env: &Env, contract_id: &Address, invoice_id: &BytesN<32>) -> bool {
+        env.as_contract(contract_id, || {
+            EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_none()
+        })
+    }
+
     fn mint_and_approve(
         env: &Env,
         contract_id: &Address,
@@ -425,7 +431,7 @@ mod payments_tests {
             create_escrow(&env, &invoice_id, &investor, &business, 0, &currency)
         });
         assert_eq!(result, Err(QuickLendXError::InvalidAmount));
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(escrow_missing(&env, &contract_id, &invoice_id));
     }
 
     /// Negative amounts are rejected before any state changes.
@@ -444,7 +450,7 @@ mod payments_tests {
             create_escrow(&env, &invoice_id, &investor, &business, -1, &currency)
         });
         assert_eq!(result, Err(QuickLendXError::InvalidAmount));
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(escrow_missing(&env, &contract_id, &invoice_id));
     }
 
     // -----------------------------------------------------------------------
@@ -482,7 +488,7 @@ mod payments_tests {
         });
         assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
         assert_eq!(tok.balance(&contract_id), 0);
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(escrow_missing(&env, &contract_id, &invoice_id));
     }
 
     /// Amount strictly exceeding the investor's balance is rejected with
@@ -513,7 +519,7 @@ mod payments_tests {
         assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
         assert_eq!(tok.balance(&investor), investor_bal);
         assert_eq!(tok.balance(&contract_id), contract_bal);
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(escrow_missing(&env, &contract_id, &invoice_id));
     }
 
     // -----------------------------------------------------------------------
@@ -594,16 +600,18 @@ mod payments_tests {
         let investor_bal = real_tok.balance(&investor);
         let contract_bal = real_tok.balance(&contract_id);
 
-        let result = env.as_contract(&contract_id, || {
-            create_escrow(
-                &env,
-                &invoice_id,
-                &investor,
-                &business,
-                10_000,
-                &bogus_currency,
-            )
-        });
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            env.as_contract(&contract_id, || {
+                create_escrow(
+                    &env,
+                    &invoice_id,
+                    &investor,
+                    &business,
+                    10_000,
+                    &bogus_currency,
+                )
+            })
+        }));
 
         assert!(
             result.is_err(),
@@ -612,7 +620,7 @@ mod payments_tests {
         assert_eq!(real_tok.balance(&investor), investor_bal);
         assert_eq!(real_tok.balance(&contract_id), contract_bal);
         assert!(
-            EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none(),
+            escrow_missing(&env, &contract_id, &invoice_id),
             "no escrow must be written on invalid token address"
         );
     }
@@ -877,7 +885,8 @@ pub fn transfer_funds(
     to: &Address,
     amount: i128,
 ) -> Result<(), QuickLendXError> {
-    if amount <= 0 {
+    const MIN_TRANSFER_AMOUNT: i128 = 10;
+    if amount < MIN_TRANSFER_AMOUNT {
         return Err(QuickLendXError::InvalidAmount);
     }
 

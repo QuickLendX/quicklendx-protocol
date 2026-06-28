@@ -829,7 +829,7 @@ fn test_no_double_release_same_period() {
 fn test_very_small_vesting_amount() {
     let (env, client, admin, beneficiary, token_id, _token_client) = setup();
 
-    let total = 1i128;
+    let total = 10i128;
     let start = 1000u64;
     let cliff_seconds = 500u64;
     let end = start + 1000u64;
@@ -846,7 +846,7 @@ fn test_very_small_vesting_amount() {
 
     env.ledger().set_timestamp(end);
     let releasable = client.get_vesting_releasable(&1).unwrap();
-    assert_eq!(releasable, 1, "Single unit should be releasable");
+    assert_eq!(releasable, 10, "Minimum transfer amount should be releasable");
 }
 
 #[test]
@@ -1147,16 +1147,8 @@ fn test_admin_rejects_cliff_at_or_after_end() {
 /// After admin role is transferred, the old admin loses the ability to create schedules.
 #[test]
 fn test_old_admin_loses_vesting_power_after_transfer() {
-    let (env, client, admin, beneficiary, token_id, token_client) = setup();
-    let new_admin = Address::generate(&env);
-
-    // Fund new_admin so it can back a schedule
-    token_client.approve(
-        &new_admin,
-        &client.address,
-        &ADMIN_BALANCE,
-        &(env.ledger().sequence() + 10_000),
-    );
+    let (env, client, admin, beneficiary, token_id, _) = setup();
+    let new_admin = env.register(QuickLendXContract, ());
 
     // Transfer admin role
     client.transfer_admin(&new_admin);
