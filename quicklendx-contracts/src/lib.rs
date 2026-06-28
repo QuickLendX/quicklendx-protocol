@@ -133,6 +133,8 @@ mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_restore_reindex;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_backup_retention_enforcement;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_safety;
 #[cfg(test)]
 mod test_bid_cancel_accept_race;
