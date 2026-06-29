@@ -4075,6 +4075,8 @@ impl QuickLendXContract {
 mod test_emergency_escrow_protection;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_settle_refund_race;
+#[cfg(test)]
+mod test_escrow_mutual_exclusion;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_collision_cross_domain;
 #[cfg(all(test, feature = "legacy-tests"))]
