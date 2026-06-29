@@ -20,7 +20,7 @@ fn test_get_freshness_returns_all_keys() {
     env.ledger().set_sequence_number(500);
     env.ledger().set_timestamp(1_700_000_000);
 
-    let result = client.get_freshness(&500u32, &1_700_000_000u64, &0u32);
+    let result = client.get_freshness(&500u32, &1_700_000_000u64, &0u32).unwrap();
 
     assert!(result.contains_key(String::from_str(&env, "last_indexed_ledger")));
     assert!(result.contains_key(String::from_str(&env, "index_lag_seconds")));
@@ -34,7 +34,7 @@ fn test_get_freshness_zero_lag() {
     env.ledger().set_sequence_number(500);
     env.ledger().set_timestamp(1_700_000_000);
 
-    let result = client.get_freshness(&500u32, &1_700_000_000u64, &0u32);
+    let result = client.get_freshness(&500u32, &1_700_000_000u64, &0u32).unwrap();
 
     let lag = result
         .get(String::from_str(&env, "index_lag_seconds"))
@@ -48,7 +48,7 @@ fn test_get_freshness_positive_lag() {
     env.ledger().set_sequence_number(500);
     env.ledger().set_timestamp(1_700_000_060); // 60 s ahead of indexed
 
-    let result = client.get_freshness(&499u32, &1_700_000_000u64, &0u32);
+    let result = client.get_freshness(&499u32, &1_700_000_000u64, &0u32).unwrap();
 
     let lag = result
         .get(String::from_str(&env, "index_lag_seconds"))
@@ -62,7 +62,7 @@ fn test_get_freshness_cursor_encodes_seq_and_offset() {
     env.ledger().set_sequence_number(1000);
     env.ledger().set_timestamp(1_700_000_000);
 
-    let result = client.get_freshness(&1000u32, &1_700_000_000u64, &25u32);
+    let result = client.get_freshness(&1000u32, &1_700_000_000u64, &25u32).unwrap();
 
     let cursor = result.get(String::from_str(&env, "cursor")).unwrap();
     assert_eq!(cursor, String::from_str(&env, "1000_25"));
@@ -74,7 +74,7 @@ fn test_get_freshness_last_updated_at_is_iso8601() {
     env.ledger().set_sequence_number(1000);
     env.ledger().set_timestamp(1_700_000_000);
 
-    let result = client.get_freshness(&1000u32, &1_700_000_000u64, &0u32);
+    let result = client.get_freshness(&1000u32, &1_700_000_000u64, &0u32).unwrap();
 
     let ts = result
         .get(String::from_str(&env, "last_updated_at"))
@@ -90,7 +90,7 @@ fn test_get_freshness_no_topology_in_values() {
     env.ledger().set_sequence_number(1000);
     env.ledger().set_timestamp(1_700_000_000);
 
-    let result = client.get_freshness(&1000u32, &1_700_000_000u64, &0u32);
+    let result = client.get_freshness(&1000u32, &1_700_000_000u64, &0u32).unwrap();
 
     // Cursor must only contain digits and underscore.
     let cursor = result.get(String::from_str(&env, "cursor")).unwrap();

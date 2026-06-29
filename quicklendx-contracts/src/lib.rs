@@ -3938,6 +3938,19 @@ impl QuickLendXContract {
 
     /// Build API freshness metadata as string key/value pairs.
     ///
+    /// # Errors
+    ///
+    /// Returns [] when
+    /// . Stellar/Soroban ledger sequences start at 1;
+    /// a value of 0 indicates an uninitialised or default-constructed caller
+    /// argument and must be rejected at the entrypoint boundary to prevent
+    /// stale or misleading freshness data from reaching downstream consumers.
+    ///
+    /// **Threat model**: accepting sequence 0 would allow a caller to supply a
+    /// sentinel "not-yet-indexed" value and receive a freshness response that
+    /// appears valid but represents no real ledger state. Downstream consumers
+    /// that cache the cursor  could serve permanently stale data.
+    ///
     /// See `quicklendx-contracts/docs/freshness.md` for the documented
     /// freshness drift bound and client handling guidance.
     pub fn get_freshness(
@@ -3945,7 +3958,14 @@ impl QuickLendXContract {
         indexed_ledger_seq: u32,
         indexed_ledger_timestamp: u64,
         offset: u32,
-    ) -> Map<String, String> {
+    ) -> Result<Map<String, String>, QuickLendXError> {
+        // Guard: ledger sequences start at 1 in Soroban; 0 is never a valid
+        // on-chain ledger sequence and indicates a caller bug or an attempt to
+        // inject a sentinel that bypasses freshness checks.
+        if indexed_ledger_seq == 0 {
+            return Err(QuickLendXError::InvalidLedgerSequence);
+        }
+
         let meta = freshness::FreshnessMetadata::from_env(
             &env,
             indexed_ledger_seq,
@@ -3967,7 +3987,7 @@ impl QuickLendXContract {
             meta.last_updated_at,
         );
         result.set(String::from_str(&env, "cursor"), meta.cursor);
-        result
+        Ok(result)
     }
 
     // ============================================================================
