@@ -161,6 +161,8 @@ mod test_escrow_refund_after_expiry;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
+mod test_dispute_event_invariant;
+#[cfg(test)]
 mod test_dust_transfer;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_event_completeness;
@@ -319,7 +321,7 @@ use escrow::{
 };
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_dispute_created,
-    emit_dispute_resolved, emit_dispute_under_review, emit_escrow_created, emit_escrow_released,
+    emit_dispute_rejected, emit_dispute_resolved, emit_dispute_under_review, emit_escrow_created, emit_escrow_released,
     emit_insurance_added, emit_insurance_premium_collected, emit_investor_verified,
     emit_invoice_cancelled, emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
     emit_invoice_uploaded, emit_invoice_verified,
@@ -3676,8 +3678,13 @@ impl QuickLendXContract {
         invoice.dispute.resolved_at = env.ledger().timestamp();
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
-        // Emit DisputeResolved event immediately after state mutation.
-        emit_dispute_resolved(&env, &invoice_id, &admin, &note);
+        // Emit exactly one event: DisputeRejected for dismissed disputes,
+        // DisputeResolved for all other outcomes. Never both.
+        if outcome == DisputeResolution::Dismissed {
+            emit_dispute_rejected(&env, &invoice_id, &admin, &note);
+        } else {
+            emit_dispute_resolved(&env, &invoice_id, &admin, &note);
+        }
         if let Some(updated_invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
             // Lifecycle trigger: dispute-resolved notifications for business and investor.
             let _ =

@@ -61,6 +61,8 @@ pub const TOPIC_DISPUTE_CREATED: &str = "dispute_created";
 pub const TOPIC_DISPUTE_UNDER_REVIEW: &str = "dispute_under_review";
 /// Topic for `DisputeResolved` events.
 pub const TOPIC_DISPUTE_RESOLVED: &str = "dispute_resolved";
+/// Topic for `DisputeRejected` events.
+pub const TOPIC_DISPUTE_REJECTED: &str = "dispute_rejected";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -585,6 +587,18 @@ pub struct DisputeResolved {
     pub invoice_id: BytesN<32>,
     pub resolved_by: Address,
     pub resolution: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when a dispute is rejected (dismissed) by an admin.
+///
+/// Topic: [`TOPIC_DISPUTE_REJECTED`] (`"dsp_rj"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct DisputeRejected {
+    pub invoice_id: BytesN<32>,
+    pub rejected_by: Address,
+    pub reason: String,
     pub timestamp: u64,
 }
 
@@ -1266,6 +1280,21 @@ pub fn emit_dispute_resolved(
         invoice_id: invoice_id.clone(),
         resolved_by: resolved_by.clone(),
         resolution: resolution.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_dispute_rejected(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    rejected_by: &Address,
+    reason: &String,
+) {
+    DisputeRejected {
+        invoice_id: invoice_id.clone(),
+        rejected_by: rejected_by.clone(),
+        reason: reason.clone(),
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
