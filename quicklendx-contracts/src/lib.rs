@@ -80,6 +80,7 @@ pub mod escrow;
 pub mod events;
 pub mod fees;
 pub mod freshness;
+pub mod governance;
 pub mod health;
 pub mod idempotency;
 pub mod incident;
