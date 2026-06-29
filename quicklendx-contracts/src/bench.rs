@@ -2,8 +2,7 @@
 //! This module is compiled only for tests and provides a `measure` helper.
 
 #[cfg(any(test, feature = "testutils"))]
-pub mod bench {
-    use soroban_sdk::Env;
+use soroban_sdk::Env;
 
 /// @notice Budget deltas recorded for a scenario.
 /// @field instructions The number of CPU instructions executed.
@@ -38,4 +37,3 @@ pub struct BudgetDelta {
     pub fn instructions_used(env: &Env) -> u64 {
         env.cost_estimate().resources().instructions as u64
     }
-}

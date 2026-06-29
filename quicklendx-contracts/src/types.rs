@@ -93,8 +93,7 @@ impl DisputeResolution {
             Self::FavorBusiness => 1,
             Self::FavorInvestor => 2,
             Self::Split => 3,
-            Self::Dismissed => 4,
-            DisputeResolution::None => todo!(),
+            Self::Dismissed => 4
         }
     }
 }

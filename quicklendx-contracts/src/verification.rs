@@ -349,7 +349,6 @@ impl BusinessVerificationStorage {
 
     /// @deprecated Use `admin::AdminStorage::initialize()` or `admin::AdminStorage::set_admin()` instead
     /// This function is kept for backward compatibility with existing tests.
-    
     /// Returns true if the business is marked as deleted.
     pub fn is_deleted(env: &Env, business: &Address) -> bool {
         let deleted = Self::get_deleted_businesses(env);

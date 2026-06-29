@@ -96,7 +96,7 @@ fn test_index_invoices_by_status_stable() {
     ];
     for (expected, status) in cases {
         assert_snapshot_entry(&format!("InvoiceStatus::{:?}", status), expected);
-        let (sym, status_sym) = Indexes::invoices_by_status(status.clone());
+        let (sym, status_sym) = Indexes::invoices_by_status(*status);
         assert_eq!(
             sym,
             symbol_short!("inv_st"),
@@ -169,7 +169,7 @@ fn test_index_invoices_by_category_stable() {
     ];
     for (expected, category) in cases {
         assert_snapshot_entry(&format!("InvoiceCategory::{:?}", category), expected);
-        let (sym, cat_sym) = Indexes::invoices_by_category(category.clone());
+        let (sym, cat_sym) = Indexes::invoices_by_category(*category);
         assert_eq!(
             sym,
             symbol_short!("inv_cat"),
@@ -233,7 +233,7 @@ fn test_index_bids_by_status_stable() {
     ];
     for (expected, status) in cases {
         assert_snapshot_entry(&format!("BidStatus::{:?}", status), expected);
-        let (sym, status_sym) = Indexes::bids_by_status(status.clone());
+        let (sym, status_sym) = Indexes::bids_by_status(*status);
         assert_eq!(
             sym,
             symbol_short!("bids_stat"),
@@ -293,7 +293,7 @@ fn test_index_investments_by_status_stable() {
     ];
     for (expected, status) in cases {
         assert_snapshot_entry(&format!("InvestmentStatus::{:?}", status), expected);
-        let (sym, status_sym) = Indexes::investments_by_status(status.clone());
+        let (sym, status_sym) = Indexes::investments_by_status(*status);
         assert_eq!(
             sym,
             symbol_short!("inv_st"),

@@ -423,7 +423,7 @@ impl FeeManager {
             .storage()
             .instance()
             .get(&FEE_CONFIG_KEY)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
         for i in 0..fee_structures.len() {
             let structure = fee_structures.get(i).unwrap();
             if structure.fee_type == *fee_type {
@@ -587,7 +587,7 @@ impl FeeManager {
             .storage()
             .instance()
             .get(&FEE_CONFIG_KEY)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
         let mut found = false;
         let mut old_bps = 0u32;
         let mut old_min_fee: i128 = 0;
@@ -669,7 +669,7 @@ impl FeeManager {
             .storage()
             .instance()
             .get(&FEE_CONFIG_KEY)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
         let user_volume_data = Self::get_user_volume(env, user);
         let tier_discount = Self::get_tier_discount(&user_volume_data.current_tier);
         let mut total_fees: i128 = 0;
@@ -996,7 +996,7 @@ impl FeeManager {
             .storage()
             .instance()
             .get(&symbol_short!("rev_cfg"))
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
 
         // Re-validate shares at distribution time (defense in depth)
         Self::validate_revenue_shares(
@@ -1018,7 +1018,7 @@ impl FeeManager {
             .storage()
             .instance()
             .get(&revenue_key)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
 
         if revenue_data.pending_distribution == 0 {
             return Err(QuickLendXError::OperationNotAllowed);
@@ -1077,7 +1077,7 @@ impl FeeManager {
             .storage()
             .instance()
             .get(&revenue_key)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
         let average_fee_rate = if revenue_data.transaction_count > 0 {
             revenue_data
                 .total_collected

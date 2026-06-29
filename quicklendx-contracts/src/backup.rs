@@ -209,7 +209,7 @@ impl BackupStorage {
             .storage()
             .instance()
             .get(backup_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
 
         if let Ok(map) =
             soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
@@ -304,14 +304,14 @@ impl BackupStorage {
     /// 4. Every invoice in the payload has a positive `amount`.
     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
         let _version = Self::verify_backup_version(env, backup_id)?;
-        let backup = Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let backup = Self::get_backup(env, backup_id).unwrap();
 
         // Validate metadata alone first (cheap).
         Self::validate_backup_metadata(&backup, None)?;
 
         // Fetch the payload and validate together with the count.
         let data =
-            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+            Self::get_backup_data(env, backup_id).unwrap();
 
         if data.len() != backup.invoice_count {
             return Err(QuickLendXError::StorageError);
@@ -385,7 +385,7 @@ impl BackupStorage {
 
         // Fetch the validated payload.
         let data =
-            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+            Self::get_backup_data(env, backup_id).unwrap();
 
         let restored_count = data.len();
 

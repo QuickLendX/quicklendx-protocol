@@ -352,7 +352,7 @@ fn test_add_batch_does_not_affect_other_currencies() {
     client.add_currency(&admin, &existing);
 
     let new_one = make_currency(&env);
-    let batch = address_vec(&env, &[new_one.clone()]);
+    let batch = address_vec(&env, core::slice::from_ref(&new_one));
     client.add_currencies_batch(&admin, &batch);
 
     assert_eq!(client.currency_count(), 2);

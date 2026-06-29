@@ -23,33 +23,33 @@ use soroban_sdk::{token, Address, BytesN, Env, String, Vec};
 // Setup helpers
 // ============================================================================
 
-/// Shared test fixture returned by `setup_contract`.
+// Shared test fixture returned by `setup_contract`.
 struct Fixture {
-    /// The contract client.
+    // The contract client.
     client: QuickLendXContractClient<'static>,
-    /// Admin address (controls verification and protocol config).
-    admin: Address,
-    /// Business address (invoice owner / payer).
+    // Admin address (controls verification and protocol config).
+    _admin: Address,
+    // Business address (invoice owner / payer).
     business: Address,
-    /// Investor address (places bids, receives returns).
+    // Investor address (places bids, receives returns).
     investor: Address,
-    /// Whitelisted token address (real SAC for balance assertions).
+    // Whitelisted token address (real SAC for balance assertions).
     currency: Address,
-    /// The contract's own address (used for escrow balance checks).
+    // The contract's own address (used for escrow balance checks).
     contract_id: Address,
 }
 
-/// Create a fully-initialised contract with a real Stellar Asset Contract
-/// (SAC) token, a verified business, and a verified investor.
-///
-/// Token balances minted:
-/// - business:    20 000 (enough to settle a 10 000 invoice after escrow release)
-/// - investor:    15 000 (enough to fund a 10 000 bid)
-/// - contract:         1 (initialises the SAC instance so balance lookups work)
-///
-/// Both business and investor approve the contract for their full balance so
-/// `accept_bid_and_fund` and `settle_invoice` can pull tokens without extra
-/// approval steps inside each test.
+// Create a fully-initialised contract with a real Stellar Asset Contract
+// (SAC) token, a verified business, and a verified investor.
+//
+// Token balances minted:
+// - business:    20 000 (enough to settle a 10 000 invoice after escrow release)
+// - investor:    15 000 (enough to fund a 10 000 bid)
+// - contract:         1 (initialises the SAC instance so balance lookups work)
+//
+// Both business and investor approve the contract for their full balance so
+// `accept_bid_and_fund` and `settle_invoice` can pull tokens without extra
+// approval steps inside each test.
 fn setup_contract(env: &Env) -> Fixture {
     env.mock_all_auths();
     env.ledger().set_timestamp(1_000);
@@ -94,7 +94,7 @@ fn setup_contract(env: &Env) -> Fixture {
 
     Fixture {
         client,
-        admin,
+        _admin: admin,
         business,
         investor,
         currency,
@@ -106,26 +106,26 @@ fn setup_contract(env: &Env) -> Fixture {
 // Test 1 — Happy path: Upload → Verify → Bid → Fund → Partial → Settle
 // ============================================================================
 
-/// # Balance flow (happy path)
-///
-/// ```text
-/// Initial:
-///   business  = 20 000
-///   investor  = 15 000
-///   contract  =      1
-///
-/// After accept_bid_and_fund (bid_amount = 9 000):
-///   investor  = 15 000 - 9 000 = 6 000   (tokens locked in escrow)
-///   contract  =      1 + 9 000 = 9 001
-///
-/// After settle_invoice (invoice_amount = 10 000):
-///   business  = 20 000 - 10 000 + 9 000 = 19 000
-///               (pays 10 000, receives 9 000 escrow release)
-///   investor  = 6 000 + investor_return   (return ≈ 9 000 + profit share)
-///   contract  = 9 001 - 9 000 + platform_fee
-///
-/// All funds accounted for: no tokens created or destroyed.
-/// ```
+// # Balance flow (happy path)
+//
+// ```text
+// Initial:
+//   business  = 20 000
+//   investor  = 15 000
+//   contract  =      1
+//
+// After accept_bid_and_fund (bid_amount = 9 000):
+//   investor  = 15 000 - 9 000 = 6 000   (tokens locked in escrow)
+//   contract  =      1 + 9 000 = 9 001
+//
+// After settle_invoice (invoice_amount = 10 000):
+//   business  = 20 000 - 10 000 + 9 000 = 19 000
+//               (pays 10 000, receives 9 000 escrow release)
+//   investor  = 6 000 + investor_return   (return ≈ 9 000 + profit share)
+//   contract  = 9 001 - 9 000 + platform_fee
+//
+// All funds accounted for: no tokens created or destroyed.
+// ```
 #[test]
 fn test_invoice_lifecycle_happy_path() {
     let env = Env::default();
@@ -136,7 +136,7 @@ fn test_invoice_lifecycle_happy_path() {
     let bid_amount: i128 = 9_000;
 
     // ── Stage 1: Upload invoice ──────────────────────────────────────────────
-    /// Business uploads an invoice; status must be Pending.
+    // Business uploads an invoice; status must be Pending.
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = fx.client.upload_invoice(
         &fx.business,
@@ -169,7 +169,7 @@ fn test_invoice_lifecycle_happy_path() {
     );
 
     // ── Stage 2: Verify invoice ──────────────────────────────────────────────
-    /// Admin verifies the invoice; status must change to Verified.
+    // Admin verifies the invoice; status must change to Verified.
     fx.client.verify_invoice(&invoice_id);
 
     let invoice = fx.client.get_invoice(&invoice_id);
@@ -186,7 +186,7 @@ fn test_invoice_lifecycle_happy_path() {
     );
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
-    /// Investor places a bid; bid must be recorded with Placed status.
+    // Investor places a bid; bid must be recorded with Placed status.
     let bid_id = fx.client.place_bid(
         &fx.investor,
         &invoice_id,
@@ -211,7 +211,7 @@ fn test_invoice_lifecycle_happy_path() {
     );
 
     // ── Stage 4: Accept bid and fund ─────────────────────────────────────────
-    /// Business accepts the bid; escrow is created, invoice becomes Funded.
+    // Business accepts the bid; escrow is created, invoice becomes Funded.
     let investor_bal_before = tok.balance(&fx.investor);
     let contract_bal_before = tok.balance(&fx.contract_id);
 
@@ -268,7 +268,7 @@ fn test_invoice_lifecycle_happy_path() {
     );
 
     // ── Stage 5: Process partial payment ────────────────────────────────────
-    /// Business makes a partial payment; total_paid must update, status stays Funded.
+    // Business makes a partial payment; total_paid must update, status stays Funded.
     let partial_amount: i128 = 4_000;
     fx.client.process_partial_payment(
         &invoice_id,
@@ -293,7 +293,7 @@ fn test_invoice_lifecycle_happy_path() {
     );
 
     // ── Stage 6: Settle invoice ──────────────────────────────────────────────
-    /// Business pays the remaining amount; invoice settles, investment completes.
+    // Business pays the remaining amount; invoice settles, investment completes.
     let remaining = invoice_amount - partial_amount; // 6 000
     let business_bal_before = tok.balance(&fx.business);
     let investor_bal_before_settle = tok.balance(&fx.investor);
@@ -360,24 +360,24 @@ fn test_invoice_lifecycle_happy_path() {
 // Test 2 — Default branch: Upload → Verify → Bid → Fund → Expire → Refund
 // ============================================================================
 
-/// # Balance flow (default branch)
-///
-/// ```text
-/// Initial:
-///   business  = 20 000
-///   investor  = 15 000
-///   contract  =      1
-///
-/// After accept_bid_and_fund (bid_amount = 9 000):
-///   investor  = 15 000 - 9 000 = 6 000
-///   contract  =      1 + 9 000 = 9 001
-///
-/// After refund_escrow (escrow returned to investor):
-///   investor  = 6 000 + 9 000 = 15 000   (fully restored)
-///   contract  = 9 001 - 9 000 =      1   (fully restored)
-///
-/// No funds lost: business balance unchanged, investor fully refunded.
-/// ```
+// # Balance flow (default branch)
+//
+// ```text
+// Initial:
+//   business  = 20 000
+//   investor  = 15 000
+//   contract  =      1
+//
+// After accept_bid_and_fund (bid_amount = 9 000):
+//   investor  = 15 000 - 9 000 = 6 000
+//   contract  =      1 + 9 000 = 9 001
+//
+// After refund_escrow (escrow returned to investor):
+//   investor  = 6 000 + 9 000 = 15 000   (fully restored)
+//   contract  = 9 001 - 9 000 =      1   (fully restored)
+//
+// No funds lost: business balance unchanged, investor fully refunded.
+// ```
 #[test]
 fn test_invoice_lifecycle_default_branch() {
     let env = Env::default();
@@ -388,7 +388,7 @@ fn test_invoice_lifecycle_default_branch() {
     let bid_amount: i128 = 9_000;
 
     // ── Stage 1: Upload invoice ──────────────────────────────────────────────
-    /// Business uploads an invoice.
+    // Business uploads an invoice.
     let due_date = env.ledger().timestamp() + 86_400; // 1 day from now
     let invoice_id = fx.client.upload_invoice(
         &fx.business,
@@ -407,7 +407,7 @@ fn test_invoice_lifecycle_default_branch() {
     );
 
     // ── Stage 2: Verify invoice ──────────────────────────────────────────────
-    /// Admin verifies the invoice.
+    // Admin verifies the invoice.
     fx.client.verify_invoice(&invoice_id);
     assert_eq!(
         fx.client.get_invoice(&invoice_id).status,
@@ -416,7 +416,7 @@ fn test_invoice_lifecycle_default_branch() {
     );
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
-    /// Investor places a bid.
+    // Investor places a bid.
     let bid_id = fx
         .client
         .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]));
@@ -427,7 +427,7 @@ fn test_invoice_lifecycle_default_branch() {
     );
 
     // ── Stage 4: Accept bid and fund ─────────────────────────────────────────
-    /// Business accepts the bid; escrow is created.
+    // Business accepts the bid; escrow is created.
     let investor_bal_before = tok.balance(&fx.investor);
     let contract_bal_before = tok.balance(&fx.contract_id);
 
@@ -450,12 +450,12 @@ fn test_invoice_lifecycle_default_branch() {
     );
 
     // ── Stage 5: Advance time past due date ──────────────────────────────────
-    /// Move ledger timestamp past the invoice due date so expire_invoice succeeds.
+    // Move ledger timestamp past the invoice due date so expire_invoice succeeds.
     env.ledger().set_timestamp(due_date + 1);
 
     // ── Stage 6: Expire invoice ──────────────────────────────────────────────
-    /// Expire the invoice (emits InvoiceExpired event).
-    /// expire_invoice only emits the event; it does not change the invoice status.
+    // Expire the invoice (emits InvoiceExpired event).
+    // expire_invoice only emits the event; it does not change the invoice status.
     fx.client.expire_invoice(&invoice_id);
 
     // Invoice is still Funded after expire_invoice — status only changes via
@@ -467,8 +467,8 @@ fn test_invoice_lifecycle_default_branch() {
     );
 
     // ── Stage 7: Refund escrow ───────────────────────────────────────────────
-    /// Admin triggers escrow refund while invoice is still Funded.
-    /// refund_escrow transitions the invoice to Refunded and returns funds to investor.
+    // Admin triggers escrow refund while invoice is still Funded.
+    // refund_escrow transitions the invoice to Refunded and returns funds to investor.
     let investor_bal_before_refund = tok.balance(&fx.investor);
     let contract_bal_before_refund = tok.balance(&fx.contract_id);
 
@@ -517,29 +517,29 @@ fn test_invoice_lifecycle_default_branch() {
 // Test 3 — Multiple partial payments then full settle
 // ============================================================================
 
-/// # Balance flow (partial then full settle)
-///
-/// ```text
-/// Initial:
-///   business  = 20 000
-///   investor  = 15 000
-///   contract  =      1
-///
-/// After accept_bid_and_fund (bid_amount = 8 000):
-///   investor  = 15 000 - 8 000 = 7 000
-///   contract  =      1 + 8 000 = 8 001
-///
-/// Partial payments (3 × 2 000 = 6 000 paid by business):
-///   business  = 20 000 - 6 000 = 14 000
-///
-/// Final settle (remaining 4 000):
-///   business  = 14 000 - 4 000 + 8 000 = 18 000
-///               (pays 4 000, receives 8 000 escrow release)
-///   investor  = 7 000 + investor_return
-///
-/// Total business outflow = 10 000 (invoice_amount), net = 10 000 - 8 000 = 2 000.
-/// All funds accounted for.
-/// ```
+// # Balance flow (partial then full settle)
+//
+// ```text
+// Initial:
+//   business  = 20 000
+//   investor  = 15 000
+//   contract  =      1
+//
+// After accept_bid_and_fund (bid_amount = 8 000):
+//   investor  = 15 000 - 8 000 = 7 000
+//   contract  =      1 + 8 000 = 8 001
+//
+// Partial payments (3 × 2 000 = 6 000 paid by business):
+//   business  = 20 000 - 6 000 = 14 000
+//
+// Final settle (remaining 4 000):
+//   business  = 14 000 - 4 000 + 8 000 = 18 000
+//               (pays 4 000, receives 8 000 escrow release)
+//   investor  = 7 000 + investor_return
+//
+// Total business outflow = 10 000 (invoice_amount), net = 10 000 - 8 000 = 2 000.
+// All funds accounted for.
+// ```
 #[test]
 fn test_partial_then_full_settle() {
     let env = Env::default();
@@ -550,7 +550,7 @@ fn test_partial_then_full_settle() {
     let bid_amount: i128 = 8_000;
 
     // ── Stage 1: Upload invoice ──────────────────────────────────────────────
-    /// Business uploads an invoice.
+    // Business uploads an invoice.
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = fx.client.upload_invoice(
         &fx.business,
@@ -568,7 +568,7 @@ fn test_partial_then_full_settle() {
     );
 
     // ── Stage 2: Verify invoice ──────────────────────────────────────────────
-    /// Admin verifies the invoice.
+    // Admin verifies the invoice.
     fx.client.verify_invoice(&invoice_id);
     assert_eq!(
         fx.client.get_invoice(&invoice_id).status,
@@ -577,7 +577,7 @@ fn test_partial_then_full_settle() {
     );
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
-    /// Investor places a bid.
+    // Investor places a bid.
     let bid_id = fx
         .client
         .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]));
@@ -588,7 +588,7 @@ fn test_partial_then_full_settle() {
     );
 
     // ── Stage 4: Accept bid and fund ─────────────────────────────────────────
-    /// Business accepts the bid; escrow is created.
+    // Business accepts the bid; escrow is created.
     fx.client.accept_bid_and_fund(&invoice_id, &bid_id);
     assert_eq!(
         fx.client.get_invoice(&invoice_id).status,
@@ -597,7 +597,7 @@ fn test_partial_then_full_settle() {
     );
 
     // ── Stage 5: Multiple partial payments ──────────────────────────────────
-    /// Business makes three partial payments of 2 000 each (total 6 000).
+    // Business makes three partial payments of 2 000 each (total 6 000).
     env.ledger().set_timestamp(2_000);
     fx.client.process_partial_payment(
         &invoice_id,
@@ -655,7 +655,7 @@ fn test_partial_then_full_settle() {
     );
 
     // ── Stage 6: Final payment that settles the invoice ──────────────────────
-    /// Business pays the remaining 4 000; invoice auto-settles to Paid.
+    // Business pays the remaining 4 000; invoice auto-settles to Paid.
     let business_bal_before = tok.balance(&fx.business);
     let investor_bal_before = tok.balance(&fx.investor);
 

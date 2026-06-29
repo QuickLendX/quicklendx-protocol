@@ -372,6 +372,247 @@ impl EscrowStorage {
     }
 }
 
+/// Create escrow: transfer `amount` from investor to contract and store escrow record.
+///
+/// ## One-Escrow-Per-Invoice Guard
+/// If an escrow record already exists for `invoice_id` (regardless of its status),
+/// this function returns [`QuickLendXError::InvoiceAlreadyFunded`] **before** any
+/// token transfer occurs. This is the innermost uniqueness guard; see also
+/// `escrow::load_accept_bid_context` for the outer guard and `test_escrow_uniqueness.rs`
+/// for the full attack-vector test suite.
+///
+/// # Returns
+/// * `Ok(escrow_id)` - The new escrow ID
+///
+/// # Errors
+/// * [`QuickLendXError::InvalidAmount`] - `amount` is zero or negative.
+/// * [`QuickLendXError::InvalidStatus`] - reserve repair is active for this token.
+/// * [`QuickLendXError::InvoiceAlreadyFunded`] - an escrow record already exists for this invoice.
+/// * [`QuickLendXError::InsufficientFunds`] - investor balance is below `amount`.
+/// * [`QuickLendXError::OperationNotAllowed`] - investor has not approved the contract for `amount`.
+/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; no funds moved and
+///   no escrow record is written.
+///
+/// # Atomicity
+/// The escrow record is only written **after** the token transfer succeeds.
+/// If the transfer fails the invoice and bid states are left unchanged.
+pub fn create_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    business: &Address,
+    amount: i128,
+    currency: &Address,
+) -> Result<BytesN<32>, QuickLendXError> {
+    if amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some() {
+        return Err(QuickLendXError::InvoiceAlreadyFunded);
+    }
+
+    EscrowStorage::require_no_active_reserve_repair(env, currency)?;
+    let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
+
+    crate::qlx_log!(env, "payment", "Creating escrow: amount={}", amount);
+
+    // Move funds from investor into contract-controlled escrow
+    let contract_address = env.current_contract_address();
+    transfer_funds(env, currency, investor, &contract_address, amount)?;
+
+    let escrow_id = EscrowStorage::generate_unique_escrow_id(env);
+    let escrow = Escrow {
+        escrow_id: escrow_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        business: business.clone(),
+        amount,
+        currency: currency.clone(),
+        created_at: env.ledger().timestamp(),
+        status: EscrowStatus::Held,
+    };
+
+    EscrowStorage::store_escrow(env, &escrow);
+    EscrowStorage::set_held_reserve_record(env, currency, &next_held_reserve);
+    EscrowStorage::mark_reserve_accounted(env, &escrow_id);
+    crate::qlx_log!(env, "payment", "Escrow created successfully");
+    emit_escrow_created(env, &escrow);
+    Ok(escrow_id)
+}
+
+/// Release escrow funds to business (contract -> business).
+///
+/// # Requirements
+/// - Escrow must be in `Held` status.
+/// - The invoice should ideally be in `Funded` or `Paid` status (enforced by caller in `lib.rs`).
+///
+/// # Security
+/// - Idempotency: Once released, status becomes `Released`, preventing repeated transfers.
+/// - Atomic: Funds are transferred before updating status in storage; if transfer fails,
+///   the operation can be safely retried.
+///
+/// # Errors
+/// * [`QuickLendXError::StorageKeyNotFound`] - no escrow record exists for this invoice.
+/// * [`QuickLendXError::InvalidStatus`] - escrow is not in `Held` status (already released/refunded).
+///   Also returned while reserve repair is active for this token.
+/// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount
+///   (should never happen in normal operation; indicates a critical invariant violation).
+/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
+///   **not** updated so the release can be safely retried.
+pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .unwrap();
+
+    if escrow.status != EscrowStatus::Held {
+        // Prevents repeated release (idempotency)
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    EscrowStorage::require_no_active_reserve_repair(env, &escrow.currency)?;
+    let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {
+        Some(EscrowStorage::held_reserve_after_decrease(
+            env,
+            &escrow.currency,
+            escrow.amount,
+        )?)
+    } else {
+        None
+    };
+
+    // Transfer funds from escrow (contract) to business
+    let contract_address = env.current_contract_address();
+    transfer_funds(
+        env,
+        &escrow.currency,
+        &contract_address,
+        &escrow.business,
+        escrow.amount,
+    )?;
+
+    // Update escrow status
+    if let Some(next_held_reserve) = next_held_reserve {
+        EscrowStorage::set_held_reserve_record(env, &escrow.currency, &next_held_reserve);
+        EscrowStorage::clear_reserve_accounted(env, &escrow.escrow_id);
+    }
+    escrow.status = EscrowStatus::Released;
+    EscrowStorage::update_escrow(env, &escrow);
+    crate::qlx_log!(
+        env,
+        "payment",
+        "Escrow released to business: amount={}",
+        escrow.amount
+    );
+
+    Ok(())
+}
+
+/// Refund escrow funds to investor (contract -> investor). Escrow must be Held.
+///
+/// # Errors
+/// * [`QuickLendXError::StorageKeyNotFound`] - no escrow record exists for this invoice.
+/// * [`QuickLendXError::InvalidStatus`] - escrow is not in `Held` status.
+///   Also returned while reserve repair is active for this token.
+/// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount.
+/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
+///   **not** updated so the refund can be safely retried.
+pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .unwrap();
+
+    if escrow.status != EscrowStatus::Held {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    EscrowStorage::require_no_active_reserve_repair(env, &escrow.currency)?;
+    let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {
+        Some(EscrowStorage::held_reserve_after_decrease(
+            env,
+            &escrow.currency,
+            escrow.amount,
+        )?)
+    } else {
+        None
+    };
+
+    // Refund funds from escrow (contract) back to investor
+    let contract_address = env.current_contract_address();
+    transfer_funds(
+        env,
+        &escrow.currency,
+        &contract_address,
+        &escrow.investor,
+        escrow.amount,
+    )?;
+
+    // Update escrow status
+    if let Some(next_held_reserve) = next_held_reserve {
+        EscrowStorage::set_held_reserve_record(env, &escrow.currency, &next_held_reserve);
+        EscrowStorage::clear_reserve_accounted(env, &escrow.escrow_id);
+    }
+    escrow.status = EscrowStatus::Refunded;
+    EscrowStorage::update_escrow(env, &escrow);
+    crate::qlx_log!(
+        env,
+        "payment",
+        "Escrow refunded to investor: amount={}",
+        escrow.amount
+    );
+
+    Ok(())
+}
+
+/// Transfer token funds from one address to another. Uses allowance when `from` is not the contract.
+///
+/// # Errors
+/// * [`QuickLendXError::InvalidAmount`] - `amount` is zero or negative.
+/// * [`QuickLendXError::InsufficientFunds`] - `from` balance is below `amount`.
+/// * [`QuickLendXError::OperationNotAllowed`] - allowance granted to the contract is below `amount`.
+/// * [`QuickLendXError::TokenTransferFailed`] - the underlying Stellar token call panicked or
+///   returned an error. No funds moved when this error is returned.
+///
+/// # Security
+/// - Balance and allowance are checked **before** the token call so that the contract
+///   never enters a partial-transfer state.
+/// - When `from == to` the function is a no-op (returns `Ok(())`).
+pub fn transfer_funds(
+    env: &Env,
+    currency: &Address,
+    from: &Address,
+    to: &Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
+    if amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if from == to {
+        return Err(QuickLendXError::SelfTransfer);
+    }
+
+    let token_client = token::Client::new(env, currency);
+    let contract_address = env.current_contract_address();
+
+    // Ensure sufficient balance exists before attempting transfer
+    let available_balance = token_client.balance(from);
+    if available_balance < amount {
+        return Err(QuickLendXError::InsufficientFunds);
+    }
+
+    if from == &contract_address {
+        token_client.transfer(from, to, &amount);
+        return Ok(());
+    }
+
+    let allowance = token_client.allowance(from, &contract_address);
+    if allowance < amount {
+        return Err(QuickLendXError::OperationNotAllowed);
+    }
+
+    token_client.transfer_from(&contract_address, from, to, &amount);
+    Ok(())
+}
+
 #[cfg(test)]
 mod payments_tests {
     use super::*;
@@ -633,245 +874,4 @@ mod payments_tests {
         });
         assert_eq!(r2, Err(QuickLendXError::InvoiceAlreadyFunded));
     }
-}
-
-/// Create escrow: transfer `amount` from investor to contract and store escrow record.
-///
-/// ## One-Escrow-Per-Invoice Guard
-/// If an escrow record already exists for `invoice_id` (regardless of its status),
-/// this function returns [`QuickLendXError::InvoiceAlreadyFunded`] **before** any
-/// token transfer occurs. This is the innermost uniqueness guard; see also
-/// `escrow::load_accept_bid_context` for the outer guard and `test_escrow_uniqueness.rs`
-/// for the full attack-vector test suite.
-///
-/// # Returns
-/// * `Ok(escrow_id)` - The new escrow ID
-///
-/// # Errors
-/// * [`QuickLendXError::InvalidAmount`] - `amount` is zero or negative.
-/// * [`QuickLendXError::InvalidStatus`] - reserve repair is active for this token.
-/// * [`QuickLendXError::InvoiceAlreadyFunded`] - an escrow record already exists for this invoice.
-/// * [`QuickLendXError::InsufficientFunds`] - investor balance is below `amount`.
-/// * [`QuickLendXError::OperationNotAllowed`] - investor has not approved the contract for `amount`.
-/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; no funds moved and
-///   no escrow record is written.
-///
-/// # Atomicity
-/// The escrow record is only written **after** the token transfer succeeds.
-/// If the transfer fails the invoice and bid states are left unchanged.
-pub fn create_escrow(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-    investor: &Address,
-    business: &Address,
-    amount: i128,
-    currency: &Address,
-) -> Result<BytesN<32>, QuickLendXError> {
-    if amount <= 0 {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some() {
-        return Err(QuickLendXError::InvoiceAlreadyFunded);
-    }
-
-    EscrowStorage::require_no_active_reserve_repair(env, currency)?;
-    let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
-
-    crate::qlx_log!(env, "payment", "Creating escrow: amount={}", amount);
-
-    // Move funds from investor into contract-controlled escrow
-    let contract_address = env.current_contract_address();
-    transfer_funds(env, currency, investor, &contract_address, amount)?;
-
-    let escrow_id = EscrowStorage::generate_unique_escrow_id(env);
-    let escrow = Escrow {
-        escrow_id: escrow_id.clone(),
-        invoice_id: invoice_id.clone(),
-        investor: investor.clone(),
-        business: business.clone(),
-        amount,
-        currency: currency.clone(),
-        created_at: env.ledger().timestamp(),
-        status: EscrowStatus::Held,
-    };
-
-    EscrowStorage::store_escrow(env, &escrow);
-    EscrowStorage::set_held_reserve_record(env, currency, &next_held_reserve);
-    EscrowStorage::mark_reserve_accounted(env, &escrow_id);
-    crate::qlx_log!(env, "payment", "Escrow created successfully");
-    emit_escrow_created(env, &escrow);
-    Ok(escrow_id)
-}
-
-/// Release escrow funds to business (contract -> business).
-///
-/// # Requirements
-/// - Escrow must be in `Held` status.
-/// - The invoice should ideally be in `Funded` or `Paid` status (enforced by caller in `lib.rs`).
-///
-/// # Security
-/// - Idempotency: Once released, status becomes `Released`, preventing repeated transfers.
-/// - Atomic: Funds are transferred before updating status in storage; if transfer fails,
-///   the operation can be safely retried.
-///
-/// # Errors
-/// * [`QuickLendXError::StorageKeyNotFound`] - no escrow record exists for this invoice.
-/// * [`QuickLendXError::InvalidStatus`] - escrow is not in `Held` status (already released/refunded).
-///   Also returned while reserve repair is active for this token.
-/// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount
-///   (should never happen in normal operation; indicates a critical invariant violation).
-/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
-///   **not** updated so the release can be safely retried.
-pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-    if escrow.status != EscrowStatus::Held {
-        // Prevents repeated release (idempotency)
-        return Err(QuickLendXError::InvalidStatus);
-    }
-
-    EscrowStorage::require_no_active_reserve_repair(env, &escrow.currency)?;
-    let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {
-        Some(EscrowStorage::held_reserve_after_decrease(
-            env,
-            &escrow.currency,
-            escrow.amount,
-        )?)
-    } else {
-        None
-    };
-
-    // Transfer funds from escrow (contract) to business
-    let contract_address = env.current_contract_address();
-    transfer_funds(
-        env,
-        &escrow.currency,
-        &contract_address,
-        &escrow.business,
-        escrow.amount,
-    )?;
-
-    // Update escrow status
-    if let Some(next_held_reserve) = next_held_reserve {
-        EscrowStorage::set_held_reserve_record(env, &escrow.currency, &next_held_reserve);
-        EscrowStorage::clear_reserve_accounted(env, &escrow.escrow_id);
-    }
-    escrow.status = EscrowStatus::Released;
-    EscrowStorage::update_escrow(env, &escrow);
-    crate::qlx_log!(
-        env,
-        "payment",
-        "Escrow released to business: amount={}",
-        escrow.amount
-    );
-
-    Ok(())
-}
-
-/// Refund escrow funds to investor (contract -> investor). Escrow must be Held.
-///
-/// # Errors
-/// * [`QuickLendXError::StorageKeyNotFound`] - no escrow record exists for this invoice.
-/// * [`QuickLendXError::InvalidStatus`] - escrow is not in `Held` status.
-///   Also returned while reserve repair is active for this token.
-/// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount.
-/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
-///   **not** updated so the refund can be safely retried.
-pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-    if escrow.status != EscrowStatus::Held {
-        return Err(QuickLendXError::InvalidStatus);
-    }
-
-    EscrowStorage::require_no_active_reserve_repair(env, &escrow.currency)?;
-    let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {
-        Some(EscrowStorage::held_reserve_after_decrease(
-            env,
-            &escrow.currency,
-            escrow.amount,
-        )?)
-    } else {
-        None
-    };
-
-    // Refund funds from escrow (contract) back to investor
-    let contract_address = env.current_contract_address();
-    transfer_funds(
-        env,
-        &escrow.currency,
-        &contract_address,
-        &escrow.investor,
-        escrow.amount,
-    )?;
-
-    // Update escrow status
-    if let Some(next_held_reserve) = next_held_reserve {
-        EscrowStorage::set_held_reserve_record(env, &escrow.currency, &next_held_reserve);
-        EscrowStorage::clear_reserve_accounted(env, &escrow.escrow_id);
-    }
-    escrow.status = EscrowStatus::Refunded;
-    EscrowStorage::update_escrow(env, &escrow);
-    crate::qlx_log!(
-        env,
-        "payment",
-        "Escrow refunded to investor: amount={}",
-        escrow.amount
-    );
-
-    Ok(())
-}
-
-/// Transfer token funds from one address to another. Uses allowance when `from` is not the contract.
-///
-/// # Errors
-/// * [`QuickLendXError::InvalidAmount`] - `amount` is zero or negative.
-/// * [`QuickLendXError::InsufficientFunds`] - `from` balance is below `amount`.
-/// * [`QuickLendXError::OperationNotAllowed`] - allowance granted to the contract is below `amount`.
-/// * [`QuickLendXError::TokenTransferFailed`] - the underlying Stellar token call panicked or
-///   returned an error. No funds moved when this error is returned.
-///
-/// # Security
-/// - Balance and allowance are checked **before** the token call so that the contract
-///   never enters a partial-transfer state.
-/// - When `from == to` the function is a no-op (returns `Ok(())`).
-pub fn transfer_funds(
-    env: &Env,
-    currency: &Address,
-    from: &Address,
-    to: &Address,
-    amount: i128,
-) -> Result<(), QuickLendXError> {
-    if amount <= 0 {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    if from == to {
-        return Err(QuickLendXError::SelfTransfer);
-    }
-
-    let token_client = token::Client::new(env, currency);
-    let contract_address = env.current_contract_address();
-
-    // Ensure sufficient balance exists before attempting transfer
-    let available_balance = token_client.balance(from);
-    if available_balance < amount {
-        return Err(QuickLendXError::InsufficientFunds);
-    }
-
-    if from == &contract_address {
-        token_client.transfer(from, to, &amount);
-        return Ok(());
-    }
-
-    let allowance = token_client.allowance(from, &contract_address);
-    if allowance < amount {
-        return Err(QuickLendXError::OperationNotAllowed);
-    }
-
-    token_client.transfer_from(&contract_address, from, to, &amount);
-    Ok(())
 }

@@ -158,7 +158,7 @@ fn test_full_capacity_accepts_50_rejects_51st() {
 
     let records = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
     assert_eq!(
-        records.len() as u32,
+        records.len(),
         MAX_BIDS_PER_INVOICE,
         "all 50 bids must be recorded"
     );
@@ -207,7 +207,7 @@ fn test_rank_bids_full_capacity_orders_by_documented_chain() {
         if i == 0 {
             first_bid_id = Some(bid_id.clone());
         }
-        if i as u32 == MAX_BIDS_PER_INVOICE - 1 {
+        if i == MAX_BIDS_PER_INVOICE - 1
             last_bid_id = Some(bid_id);
         }
     }
@@ -234,7 +234,7 @@ fn test_rank_bids_full_capacity_orders_by_documented_chain() {
     // implementation uses. compare_bids(prev, cur) must NEVER return
     // Greater when prev and cur are already in ranked order.
     for i in 1..ranked.len() {
-        let prev = ranked.get(i as u32 - 1).unwrap();
+        let prev = ranked.get(i - 1).unwrap();
         let cur = ranked.get(i as u32).unwrap();
         assert!(
             BidStorage::compare_bids(&prev, &cur) != core::cmp::Ordering::Greater,
@@ -319,7 +319,7 @@ fn test_full_capacity_pure_bid_id_tiebreaker() {
     assert_eq!(records.len() as u32, MAX_BIDS_PER_INVOICE);
     let now = env.ledger().timestamp();
     for idx in 0..records.len() {
-        let bid = records.get(idx as u32).unwrap();
+        let bid = records.get(idx).unwrap();
         assert_eq!(
             bid.timestamp, now,
             "test invariant broken: timestamp differs at idx {} (now={}, bid_ts={})",
