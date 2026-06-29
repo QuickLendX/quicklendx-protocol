@@ -490,4 +490,40 @@ impl QuickLendXContract {
         BackupStorage::remove_from_backup_list(&env, &backup_id);
         Ok(())
     }
+
+    /// Rebuild customer, tax_id, and tag secondary indexes from the canonical invoice list.
+    /// Admin-only. Returns the number of invoices processed.
+    pub fn admin_reindex_invoices(env: Env, admin: Address) -> Result<u32, QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        admin.require_auth();
+
+        let all_ids = InvoiceStorage::get_all_invoice_ids(&env);
+        let mut count: u32 = 0;
+
+        for invoice_id in all_ids.iter() {
+            let invoice = match InvoiceStorage::get(&env, &invoice_id) {
+                Some(inv) => inv,
+                None => continue,
+            };
+
+            // Rebuild customer index
+            if let Some(ref name) = invoice.metadata_customer_name {
+                InvoiceStorage::add_to_customer_index(&env, name, &invoice_id);
+            }
+
+            // Rebuild tax_id index
+            if let Some(ref tax_id) = invoice.metadata_tax_id {
+                InvoiceStorage::add_to_tax_id_index(&env, tax_id, &invoice_id);
+            }
+
+            // Rebuild tag indexes
+            for tag in invoice.tags.iter() {
+                InvoiceStorage::add_tag_index(&env, &tag, &invoice_id);
+            }
+
+            count += 1;
+        }
+
+        Ok(count)
+    }
 }
