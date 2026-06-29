@@ -200,7 +200,14 @@ impl QuickLendXContract {
         salt: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         // Idempotency check
-        let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
+        let idem_key = idempotency_key(
+            &invoice_id,
+            &investor,
+            bid_amount,
+            expected_return,
+            &salt,
+            &env,
+        );
         if idempotency_exists(&env, &idem_key) {
             return Err(QuickLendXError::DuplicateBid);
         }

@@ -1563,7 +1563,14 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &investor)?;
         // Idempotency check
-        let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
+        let idem_key = idempotency_key(
+            &invoice_id,
+            &investor,
+            bid_amount,
+            expected_return,
+            &salt,
+            &env,
+        );
         if idempotency_exists(&env, &idem_key) {
             return Err(QuickLendXError::DuplicateBid);
         }
