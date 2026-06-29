@@ -186,6 +186,10 @@ pub enum QuickLendXError {
     DuplicateDefaultTransition = 2202,
     BackupVersionUnsupported = 2203,
     DuplicateBid = 2204,
+    /// Caller supplied ledger sequence 0, which is not a valid Soroban ledger sequence.
+    /// Ledger sequences start at 1; sequence 0 indicates an uninitialised or default-constructed value.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidLedgerSequence = 2205,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -283,6 +287,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
             QuickLendXError::SelfTransfer => symbol_short!("SELF_TR"),
             QuickLendXError::DuplicateBid => symbol_short!("BID_DUP"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("LGR_SEQ"),
         }
     }
 }

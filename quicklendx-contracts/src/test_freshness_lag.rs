@@ -63,7 +63,7 @@ mod test_freshness_lag {
         let now = 1_700_000_000u64;
         env.ledger().set_timestamp(now);
 
-        let result = client.get_freshness(&500u32, &now, &0u32);
+        let result = client.get_freshness(&500u32, &now, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert_eq!(lag, 0, "lag must be exactly 0 when indexed == current");
@@ -76,7 +76,7 @@ mod test_freshness_lag {
         let now = 1_700_000_000u64;
         env.ledger().set_timestamp(now);
 
-        let result = client.get_freshness(&500u32, &now, &0u32);
+        let result = client.get_freshness(&500u32, &now, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert!(
@@ -85,16 +85,39 @@ mod test_freshness_lag {
         );
     }
 
-    /// Zero lag holds at the Unix epoch boundary (timestamp = 0).
+    /// Zero lag holds at the Unix epoch boundary (timestamp = 0, ledger_seq = 1).
+    ///
+    /// Note: `indexed_ledger_seq = 0` is now rejected with
+    /// `InvalidLedgerSequence` (see issue #1485). This test verifies that
+    /// supplying the minimum valid sequence (1) at timestamp 0 still produces
+    /// zero lag, and that supplying 0 is correctly rejected.
     #[test]
     fn lag_is_zero_at_unix_epoch_when_indexed_equals_current() {
         let (env, client, _) = setup();
         env.ledger().set_timestamp(0);
+        env.ledger().set_sequence_number(1);
 
-        let result = client.get_freshness(&0u32, &0u64, &0u32);
+        // Minimum valid ledger sequence (1) at epoch boundary => zero lag.
+        let result = client.get_freshness(&1u32, &0u64, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
-
         assert_eq!(lag, 0, "lag must be 0 at epoch boundary when timestamps match");
+    }
+
+    /// Ledger sequence 0 is rejected: it is not a valid Soroban sequence number
+    /// and would allow callers to inject a sentinel that bypasses freshness
+    /// checks (see issue #1485).
+    #[test]
+    fn ledger_seq_zero_is_rejected() {
+        let (env, client, _) = setup();
+        env.ledger().set_timestamp(0);
+
+        let err = client.try_get_freshness(&0u32, &0u64, &0u32)
+            .expect_err("ledger_seq 0 must be rejected");
+        assert_eq!(
+            err,
+            Ok(crate::errors::QuickLendXError::InvalidLedgerSequence),
+            "expected InvalidLedgerSequence error for ledger_seq = 0"
+        );
     }
 
     // =========================================================================
@@ -110,7 +133,7 @@ mod test_freshness_lag {
         let elapsed = 60u64;
         env.ledger().set_timestamp(indexed + elapsed);
 
-        let result = client.get_freshness(&500u32, &indexed, &0u32);
+        let result = client.get_freshness(&500u32, &indexed, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert_eq!(lag, elapsed as i64, "lag must equal elapsed seconds");
@@ -123,7 +146,7 @@ mod test_freshness_lag {
         let indexed = 1_700_000_000u64;
         env.ledger().set_timestamp(indexed + 1);
 
-        let result = client.get_freshness(&500u32, &indexed, &0u32);
+        let result = client.get_freshness(&500u32, &indexed, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert_eq!(lag, 1);
@@ -141,7 +164,7 @@ mod test_freshness_lag {
         let indexed = 1_700_000_000u64;
         env.ledger().set_timestamp(indexed + bound);
 
-        let result = client.get_freshness(&500u32, &indexed, &0u32);
+        let result = client.get_freshness(&500u32, &indexed, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert_eq!(lag, DEFAULT_MAX_FRESHNESS_DRIFT_SECS);
@@ -159,7 +182,7 @@ mod test_freshness_lag {
         let indexed = 1_700_000_000u64;
         env.ledger().set_timestamp(indexed + bound + 1);
 
-        let result = client.get_freshness(&500u32, &indexed, &0u32);
+        let result = client.get_freshness(&500u32, &indexed, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert_eq!(lag, DEFAULT_MAX_FRESHNESS_DRIFT_SECS + 1);
@@ -179,7 +202,7 @@ mod test_freshness_lag {
 
         for &elapsed in &steps {
             env.ledger().set_timestamp(indexed + elapsed);
-            let result = client.get_freshness(&500u32, &indexed, &0u32);
+            let result = client.get_freshness(&500u32, &indexed, &0u32).unwrap();
             let lag = lag_from_response(&env, &result);
 
             assert!(
@@ -207,7 +230,7 @@ mod test_freshness_lag {
         let skew = 5u64;
         env.ledger().set_timestamp(now);
 
-        let result = client.get_freshness(&500u32, &(now + skew), &0u32);
+        let result = client.get_freshness(&500u32, &(now + skew), &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert_eq!(lag, -(skew as i64), "future indexed timestamp gives negative lag");
@@ -234,7 +257,7 @@ mod test_freshness_lag {
         client.pause(&admin);
 
         // get_freshness must still succeed — it is not gated by require_not_paused.
-        let result = client.get_freshness(&500u32, &indexed, &0u32);
+        let result = client.get_freshness(&500u32, &indexed, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert_eq!(
@@ -253,7 +276,7 @@ mod test_freshness_lag {
 
         client.pause(&admin);
 
-        let result = client.get_freshness(&500u32, &now, &0u32);
+        let result = client.get_freshness(&500u32, &now, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert_eq!(lag, 0, "zero lag must be reported correctly while paused");
@@ -274,7 +297,7 @@ mod test_freshness_lag {
         let elapsed_while_paused = 90u64;
         env.ledger().set_timestamp(indexed + 10 + elapsed_while_paused);
 
-        let result = client.get_freshness(&500u32, &indexed, &0u32);
+        let result = client.get_freshness(&500u32, &indexed, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert_eq!(
@@ -297,7 +320,7 @@ mod test_freshness_lag {
         env.ledger().set_timestamp(indexed + 90);
         client.unpause(&admin);
 
-        let result = client.get_freshness(&500u32, &indexed, &0u32);
+        let result = client.get_freshness(&500u32, &indexed, &0u32).unwrap();
         let lag = lag_from_response(&env, &result);
 
         assert_eq!(
