@@ -338,3 +338,73 @@ Before every production deployment, verify:
 ---
 
 *Last updated: 2026-06-21 — covers tenant isolation hardening (feature/tenant-isolation-tests)*
+
+---
+
+## 12. Validator Fuzz Testing Strategy
+
+### 12.1 Overview
+
+All Zod validators in `backend/src/validators/` are covered by property-based fuzz tests
+implemented in `backend/tests/validators.fuzz.test.ts` using the `fast-check` library.
+
+The goal is to confirm that **no input — however malformed — can cause an unhandled exception**
+that would crash the Node.js process. Every call to `schema.safeParse(input)` must either
+return `{ success: true, data: ... }` or `{ success: false, error: ... }`.
+
+### 12.2 Fuzz Categories
+
+| Category | Description | fast-check Arbitrary |
+|----------|-------------|----------------------|
+| Unicode / grapheme clusters | Multi-byte characters, combining marks, emoji, bidirectional text | `fc.string({ unit: "grapheme" })` |
+| Very large integers | Values at/beyond `Number.MAX_SAFE_INTEGER`, `2^53` | `fc.integer({ min: MAX_SAFE_INTEGER - 10, ... })` |
+| NaN / Infinity | IEEE-754 special values that bypass `isNaN` checks | `fc.constant(NaN)`, `fc.constant(Infinity)` |
+| Deep nesting | Objects/arrays nested beyond depth 100 | Manual loop constructing 110-level objects |
+| Prototype pollution | `__proto__`, `constructor.prototype` keys injected via `JSON.parse` | Hard-coded payloads from OWASP prototype-pollution guide |
+| Type confusion | Objects with `toString`/`valueOf` overrides that coerce to valid values | `{ toString: () => "1" }` payloads |
+| Integer overflow | Timestamps and amounts at `Number.MAX_VALUE` and `2^53` | `fc.constant(Number.MAX_VALUE)` |
+| ISO date edge-cases | Leap days, month 13, year 9999, empty string | Hard-coded list of edge-date strings |
+| Arbitrary objects | Random key/value combinations at depth 3-5 | `fc.object({ maxDepth: 5 })` |
+
+### 12.3 Prototype-Pollution Assertions
+
+Every schema test suite includes a dedicated prototype-pollution block that:
+
+1. Captures `Object.getOwnPropertyNames(Object.prototype)` before parsing.
+2. Passes the four canonical pollution payloads through `schema.safeParse`.
+3. Asserts `Object.prototype` keys are unchanged after parsing.
+4. Asserts `(Object.prototype as any).polluted === undefined`.
+
+This ensures Zod's parsing pipeline does not inadvertently merge `__proto__` keys from
+user-supplied JSON into the prototype chain.
+
+### 12.4 Running the Fuzz Tests
+
+```bash
+cd backend
+npm test -- validators.fuzz
+```
+
+Expected output: all tests pass with no unhandled exceptions.
+
+To increase the number of generated samples (default is 100 per property):
+
+```bash
+FC_NUM_RUNS=1000 npm test -- validators.fuzz
+```
+
+### 12.5 Coverage Map
+
+| Schema | File | Fuzz test section |
+|--------|------|-------------------|
+| `hexStringSchema` | `src/validators/shared.ts` | §1 hexStringSchema — fuzz |
+| `stellarAddressSchema` | `src/validators/shared.ts` | §2 stellarAddressSchema — fuzz |
+| `positiveAmountSchema` | `src/validators/shared.ts` | §3 positiveAmountSchema — fuzz |
+| `paginationSchema` | `src/validators/shared.ts` | §4 paginationSchema — fuzz |
+| `createInvoiceBodySchema` | `src/validators/invoices.ts` | §5 createInvoiceBodySchema — fuzz |
+| `createBidBodySchema` | `src/validators/bids.ts` | §6 createBidBodySchema — fuzz |
+| `transitionInputSchema` | `src/validators/settlements.ts` | §7 transitionInputSchema — fuzz |
+| `getSettlementsQuerySchema` | `src/validators/settlements.ts` | §8 getSettlementsQuerySchema — fuzz |
+| `getInvoicesQuerySchema` | `src/validators/shared.ts` | §9 query schemas — fuzz |
+| `getBidsQuerySchema` | `src/validators/shared.ts` | §9 query schemas — fuzz |
+| `invoiceIdParamSchema` | `src/validators/shared.ts` | §9 query schemas — fuzz |
