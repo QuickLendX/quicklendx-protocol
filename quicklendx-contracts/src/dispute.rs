@@ -165,6 +165,7 @@ pub fn create_dispute(
         created_at: env.ledger().timestamp(),
         reason: reason.clone(),
         evidence: evidence.clone(),
+        evidence_hash: None,
         resolution: String::from_str(env, ""),
         resolved_by: creator.clone(), // Placeholder — overwritten on resolution
         resolved_at: 0,
@@ -177,6 +178,34 @@ pub fn create_dispute(
     // Lifecycle trigger: emits dispute-opened notifications to business and investor.
     let _ = crate::notifications::NotificationSystem::notify_dispute_opened(env, &invoice);
 
+    Ok(())
+}
+
+pub fn attach_evidence_hash(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    creator: &Address,
+    hash: &BytesN<32>,
+) -> Result<(), QuickLendXError> {
+    creator.require_auth();
+
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    if invoice.dispute_status != DisputeStatus::Disputed {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+    if invoice.dispute.created_by != *creator {
+        return Err(QuickLendXError::DisputeNotAuthorized);
+    }
+    if invoice.dispute.evidence_hash.is_some() {
+        return Err(QuickLendXError::InvalidDisputeEvidence);
+    }
+
+    invoice.dispute.evidence_hash = Some(hash.clone());
+    InvoiceStorage::update_invoice(env, &invoice);
+    add_to_dispute_index(env, invoice_id);
+    crate::events::emit_dispute_evidence_committed(env, invoice_id, creator, hash);
     Ok(())
 }
 

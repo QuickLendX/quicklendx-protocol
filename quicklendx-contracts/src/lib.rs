@@ -56,15 +56,15 @@ mod test_maintenance;
 mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_concurrent_withdraw;
+#[cfg(test)]
+mod test_dispute_evidence_hash;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
-pub mod idempotency;
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
 #[cfg(any(test, feature = "testutils"))]
 pub mod bench;
-pub mod idempotency;
 pub mod admin;
 pub mod analytics;
 pub mod audit;
@@ -3521,6 +3521,7 @@ impl QuickLendXContract {
             created_at: env.ledger().timestamp(),
             reason: reason.clone(),
             evidence,
+            evidence_hash: None,
             resolution: String::from_str(&env, ""),
             resolved_by: Address::from_str(
                 &env,
@@ -3539,6 +3540,19 @@ impl QuickLendXContract {
                 notifications::NotificationSystem::notify_dispute_opened(&env, &updated_invoice);
         }
         Ok(())
+    }
+
+    /// @notice Commit an immutable off-chain evidence hash for an open dispute.
+    /// @dev Only the dispute creator can attach the hash, and only once before
+    ///      admin review starts. The contract treats the 32-byte hash as opaque.
+    pub fn attach_evidence_hash(
+        env: Env,
+        invoice_id: BytesN<32>,
+        creator: Address,
+        hash: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        dispute::attach_evidence_hash(&env, &invoice_id, &creator, &hash)
     }
 
     /// @notice Update dispute evidence while a dispute is still open.

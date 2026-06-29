@@ -9,8 +9,8 @@
 //! - Type safety: strong typing for status and categories
 //! - Addresses are used for identity to leverage Soroban's built-in access control
 
-use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 use crate::DisputeResolution as OtherDisputeResolution;
+use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
 /// Invoice status enumeration representing the lifecycle of an invoice
 #[contracttype]
@@ -137,6 +137,7 @@ pub struct Dispute {
     pub created_at: u64,
     pub reason: String,
     pub evidence: String,
+    pub evidence_hash: Option<BytesN<32>>,
     pub resolution: String,
     pub resolved_by: Address,
     pub resolved_at: u64,

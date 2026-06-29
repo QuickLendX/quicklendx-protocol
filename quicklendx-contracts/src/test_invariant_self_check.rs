@@ -81,6 +81,7 @@ fn make_invoice(env: &Env, invoice_id: &BytesN<32>) -> Invoice {
             created_at: 0,
             reason: String::from_str(env, ""),
             evidence: String::from_str(env, ""),
+            evidence_hash: None,
             resolution: String::from_str(env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,

@@ -61,6 +61,8 @@ pub const TOPIC_DISPUTE_CREATED: &str = "dispute_created";
 pub const TOPIC_DISPUTE_UNDER_REVIEW: &str = "dispute_under_review";
 /// Topic for `DisputeResolved` events.
 pub const TOPIC_DISPUTE_RESOLVED: &str = "dispute_resolved";
+/// Topic for `DisputeEvidenceCommitted` events.
+pub const TOPIC_DISPUTE_EVIDENCE_COMMITTED: &str = "dispute_evidence_committed";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -585,6 +587,18 @@ pub struct DisputeResolved {
     pub invoice_id: BytesN<32>,
     pub resolved_by: Address,
     pub resolution: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when a dispute creator commits to off-chain evidence.
+///
+/// Topic: [`TOPIC_DISPUTE_EVIDENCE_COMMITTED`] (`"dispute_evidence_committed"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct DisputeEvidenceCommitted {
+    pub invoice_id: BytesN<32>,
+    pub committed_by: Address,
+    pub evidence_hash: BytesN<32>,
     pub timestamp: u64,
 }
 
@@ -1266,6 +1280,21 @@ pub fn emit_dispute_resolved(
         invoice_id: invoice_id.clone(),
         resolved_by: resolved_by.clone(),
         resolution: resolution.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_dispute_evidence_committed(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    committed_by: &Address,
+    evidence_hash: &BytesN<32>,
+) {
+    DisputeEvidenceCommitted {
+        invoice_id: invoice_id.clone(),
+        committed_by: committed_by.clone(),
+        evidence_hash: evidence_hash.clone(),
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);

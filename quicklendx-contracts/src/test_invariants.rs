@@ -71,6 +71,7 @@ fn create_test_invoice(
             created_at: 0,
             reason: String::from_str(env, ""),
             evidence: String::from_str(env, ""),
+            evidence_hash: None,
             resolution: String::from_str(env, ""),
             resolved_by: Address::generate(env),
             resolved_at: 0,
