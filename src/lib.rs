@@ -1,6 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Env};
-use crate::errors::QuickLendXError; // Fixes the import error
+use soroban_sdk::{contract, contractimpl};
 
 pub mod admin;
 pub mod errors;
