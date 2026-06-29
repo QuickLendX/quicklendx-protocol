@@ -1219,4 +1219,88 @@ mod test_investor_kyc {
             .unwrap();
         assert_eq!(err, QuickLendXError::BusinessNotVerified);
     }
+
+    // ============================================================================
+    // Category: Admin revoke investor KYC (#1550)
+    // ============================================================================
+
+    /// A verified investor can bid, but once their KYC is revoked by the admin
+    /// every further bid is rejected with `BusinessNotVerified` until they are
+    /// re-verified. This is the core defence-in-depth behaviour: revocation must
+    /// immediately block new investment activity.
+    #[test]
+    fn revoked_investor_cannot_place_further_bids() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Verify the investor and confirm they can bid.
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+        let first_bid =
+            client.try_place_bid(&investor, &invoice_id, &10_000i128, &12_000i128);
+        assert!(
+            first_bid.is_ok(),
+            "verified investor must be able to bid before revocation"
+        );
+
+        // Admin revokes the investor's KYC.
+        let revoke = client.try_revoke_investor_kyc(
+            &investor,
+            &String::from_str(&env, "Sanctions screening hit"),
+        );
+        assert!(revoke.is_ok(), "admin revoke of verified investor must succeed");
+
+        // Status must have moved to Rejected.
+        let verification = client
+            .get_investor_verification(&investor)
+            .expect("verification record must still exist after revoke");
+        assert_eq!(verification.status, BusinessVerificationStatus::Rejected);
+
+        // Any further bid must now be blocked.
+        let invoice_id2 = create_verified_invoice(&env, &client, &business, 50_000);
+        let err = client
+            .try_place_bid(&investor, &invoice_id2, &5_000i128, &6_000i128)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::BusinessNotVerified,
+            "revoked investor must be blocked from bidding"
+        );
+    }
+
+    /// Revoking an investor who is not currently `Verified` (here: still
+    /// `Pending`) is rejected with `InvalidKYCStatus`, keeping the state machine
+    /// auditable.
+    #[test]
+    fn revoke_non_verified_investor_fails() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+
+        let _ = client
+            .try_submit_investor_kyc(&investor, &String::from_str(&env, "Pending KYC data"));
+
+        let err = client
+            .try_revoke_investor_kyc(&investor, &String::from_str(&env, "no reason"))
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::InvalidKYCStatus);
+    }
+
+    /// Revoking an investor that has no KYC record at all returns `KYCNotFound`.
+    #[test]
+    fn revoke_investor_without_record_fails() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+
+        let err = client
+            .try_revoke_investor_kyc(&investor, &String::from_str(&env, "no reason"))
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::KYCNotFound);
+    }
 }
