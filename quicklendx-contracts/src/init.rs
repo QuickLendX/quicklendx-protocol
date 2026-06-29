@@ -33,12 +33,11 @@
 
 use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
 use crate::audit::{
-    address_to_audit_string, log_config_change, write_i128_to_buf, write_u64_to_buf,
-    AuditOperation,
+    address_to_audit_string, log_config_change, write_i128_to_buf, write_u64_to_buf, AuditOperation,
 };
 use crate::errors::QuickLendXError;
 use crate::storage::StorageManager;
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol, Vec};
 
 /// Storage key for protocol initialization flag
 const PROTOCOL_INITIALIZED_KEY: Symbol = symbol_short!("proto_in");
@@ -567,7 +566,12 @@ impl ProtocolInitializer {
 
             // Capture old value before write
             let old_str = Self::get_protocol_config(env).map(|c| {
-                fmt_proto_cfg(env, c.min_invoice_amount, c.max_due_date_days, c.grace_period_seconds)
+                fmt_proto_cfg(
+                    env,
+                    c.min_invoice_amount,
+                    c.max_due_date_days,
+                    c.grace_period_seconds,
+                )
             });
 
             // Update configuration
@@ -587,7 +591,12 @@ impl ProtocolInitializer {
                 admin.clone(),
                 "proto_cfg",
                 old_str,
-                Some(fmt_proto_cfg(env, min_invoice_amount, max_due_date_days, grace_period_seconds)),
+                Some(fmt_proto_cfg(
+                    env,
+                    min_invoice_amount,
+                    max_due_date_days,
+                    grace_period_seconds,
+                )),
             );
 
             // Emit event
@@ -639,44 +648,45 @@ impl ProtocolInitializer {
         StorageManager::with_view_only(env, || {
             AdminStorage::with_admin_auth(env, admin, || {
                 // ── Read current on-chain values (no writes below this line) ────
-            let current_config = Self::get_protocol_config(env);
-            let before_min_invoice_amount = current_config
-                .as_ref()
-                .map(|c| c.min_invoice_amount)
-                .unwrap_or(DEFAULT_MIN_INVOICE_AMOUNT);
-            let before_max_due_date_days = current_config
-                .as_ref()
-                .map(|c| c.max_due_date_days)
-                .unwrap_or(DEFAULT_MAX_DUE_DATE_DAYS);
-            let before_grace_period_seconds = current_config
-                .as_ref()
-                .map(|c| c.grace_period_seconds)
-                .unwrap_or(DEFAULT_GRACE_PERIOD_SECONDS);
-            let before_fee_bps = Self::get_fee_bps(env);
+                let current_config = Self::get_protocol_config(env);
+                let before_min_invoice_amount = current_config
+                    .as_ref()
+                    .map(|c| c.min_invoice_amount)
+                    .unwrap_or(DEFAULT_MIN_INVOICE_AMOUNT);
+                let before_max_due_date_days = current_config
+                    .as_ref()
+                    .map(|c| c.max_due_date_days)
+                    .unwrap_or(DEFAULT_MAX_DUE_DATE_DAYS);
+                let before_grace_period_seconds = current_config
+                    .as_ref()
+                    .map(|c| c.grace_period_seconds)
+                    .unwrap_or(DEFAULT_GRACE_PERIOD_SECONDS);
+                let before_fee_bps = Self::get_fee_bps(env);
 
-            // ── Validate proposed params (mirrors set_protocol_config + set_fee_config) ──
-            let (would_succeed, validation_error_code) = Self::validate_config_params(&params);
+                // ── Validate proposed params (mirrors set_protocol_config + set_fee_config) ──
+                let (would_succeed, validation_error_code) = Self::validate_config_params(&params);
 
-            // ── Compute no-op flag ───────────────────────────────────────────
-            let is_noop = params.min_invoice_amount == before_min_invoice_amount
-                && params.max_due_date_days == before_max_due_date_days
-                && params.grace_period_seconds == before_grace_period_seconds
-                && params.fee_bps == before_fee_bps;
+                // ── Compute no-op flag ───────────────────────────────────────────
+                let is_noop = params.min_invoice_amount == before_min_invoice_amount
+                    && params.max_due_date_days == before_max_due_date_days
+                    && params.grace_period_seconds == before_grace_period_seconds
+                    && params.fee_bps == before_fee_bps;
 
-            Ok(ProtocolConfigDiff {
-                before_min_invoice_amount,
-                before_max_due_date_days,
-                before_grace_period_seconds,
-                before_fee_bps,
-                after_min_invoice_amount: params.min_invoice_amount,
-                after_max_due_date_days: params.max_due_date_days,
-                after_grace_period_seconds: params.grace_period_seconds,
-                after_fee_bps: params.fee_bps,
-                is_noop,
-                would_succeed,
-                validation_error_code,
+                Ok(ProtocolConfigDiff {
+                    before_min_invoice_amount,
+                    before_max_due_date_days,
+                    before_grace_period_seconds,
+                    before_fee_bps,
+                    after_min_invoice_amount: params.min_invoice_amount,
+                    after_max_due_date_days: params.max_due_date_days,
+                    after_grace_period_seconds: params.grace_period_seconds,
+                    after_fee_bps: params.fee_bps,
+                    is_noop,
+                    would_succeed,
+                    validation_error_code,
+                })
             })
-        }) })
+        })
     }
 
     /// Validate proposed config params without touching storage.

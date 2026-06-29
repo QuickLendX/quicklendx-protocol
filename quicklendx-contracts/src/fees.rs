@@ -179,7 +179,11 @@ fn fmt_fee_structure(
     buf[pos..pos + p.len()].copy_from_slice(p);
     pos += p.len();
     pos += write_i128_to_buf(&mut buf[pos..], max_fee);
-    let p: &[u8] = if is_active { b";active:true" } else { b";active:false" };
+    let p: &[u8] = if is_active {
+        b";active:true"
+    } else {
+        b";active:false"
+    };
     buf[pos..pos + p.len()].copy_from_slice(p);
     pos += p.len();
     String::from_str(
@@ -188,13 +192,7 @@ fn fmt_fee_structure(
     )
 }
 
-fn fmt_rev_dist(
-    env: &Env,
-    treasury_bps: u32,
-    dev_bps: u32,
-    plt_bps: u32,
-    min_amt: i128,
-) -> String {
+fn fmt_rev_dist(env: &Env, treasury_bps: u32, dev_bps: u32, plt_bps: u32, min_amt: i128) -> String {
     // "t:{u32};d:{u32};p:{u32};min:{i128}" — max ~67 chars
     let mut buf = [0u8; 80];
     let mut pos = 0usize;
@@ -214,10 +212,7 @@ fn fmt_rev_dist(
     buf[pos..pos + p.len()].copy_from_slice(p);
     pos += p.len();
     pos += write_i128_to_buf(&mut buf[pos..], min_amt);
-    String::from_str(
-        env,
-        core::str::from_utf8(&buf[..pos]).unwrap_or("rev_dist"),
-    )
+    String::from_str(env, core::str::from_utf8(&buf[..pos]).unwrap_or("rev_dist"))
 }
 
 fn fee_type_label(fee_type: &FeeType) -> &'static str {
@@ -624,7 +619,13 @@ impl FeeManager {
 
         // Tamper-evident audit entry (atomic with storage write above via Soroban tx semantics)
         let old_str = if found {
-            Some(fmt_fee_structure(env, old_bps, old_min_fee, old_max_fee, old_is_active))
+            Some(fmt_fee_structure(
+                env,
+                old_bps,
+                old_min_fee,
+                old_max_fee,
+                old_is_active,
+            ))
         } else {
             None
         };
@@ -634,7 +635,13 @@ impl FeeManager {
             admin.clone(),
             fee_type_label(&fee_type),
             old_str,
-            Some(fmt_fee_structure(env, base_fee_bps, min_fee, max_fee, is_active)),
+            Some(fmt_fee_structure(
+                env,
+                base_fee_bps,
+                min_fee,
+                max_fee,
+                is_active,
+            )),
         );
 
         Ok(updated_structure)
@@ -1209,7 +1216,11 @@ impl FeeManager {
         let now = env.ledger().timestamp();
 
         // Enforce minimum delay: cannot confirm before min_delay has elapsed.
-        if now < request.initiated_at.saturating_add(MIN_ROTATION_DELAY_SECONDS) {
+        if now
+            < request
+                .initiated_at
+                .saturating_add(MIN_ROTATION_DELAY_SECONDS)
+        {
             return Err(QuickLendXError::RotationTimelockNotElapsed);
         }
 

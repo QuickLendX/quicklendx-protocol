@@ -147,8 +147,7 @@ const ProgressArc: React.FC<ProgressArcProps> = ({
   progressPct,
   reducedMotion,
 }) => {
-  const offset =
-    PROGRESS_ARC_CIRCUMFERENCE * (1 - progressPct / 100);
+  const offset = PROGRESS_ARC_CIRCUMFERENCE * (1 - progressPct / 100);
 
   if (reducedMotion) {
     return (
@@ -391,10 +390,7 @@ const HoldButton: React.FC<HoldButtonProps> = ({
       ) : null}
       <span>{label}</span>
       {isHolding && (
-        <ProgressArc
-          progressPct={progressPct}
-          reducedMotion={reducedMotion}
-        />
+        <ProgressArc progressPct={progressPct} reducedMotion={reducedMotion} />
       )}
     </button>
   );
@@ -564,7 +560,7 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
     };
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, state.phase]);
 
   const handleHoldStart = useCallback(() => {
@@ -629,12 +625,10 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
   if (!mounted || !isOpen) return null;
 
   const isSubmitting = state.phase === "submitting";
-  const progressPct =
-    state.phase === "holding" ? state.progressPct : 0;
+  const progressPct = state.phase === "holding" ? state.progressPct : 0;
 
   // Determine viewport for animation class
-  const isMobile =
-    typeof window !== "undefined" && window.innerWidth < 768;
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const noAnim = reducedMotion || window.innerWidth < 375;
 
   const panelAnimClass = noAnim
@@ -713,10 +707,7 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
 
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
-          <h2
-            id={titleId}
-            className="text-2xl font-semibold text-gray-900"
-          >
+          <h2 id={titleId} className="text-2xl font-semibold text-gray-900">
             Accept bid
           </h2>
           <button
@@ -780,10 +771,7 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
               onHoldStart={handleHoldStart}
               onHoldEnd={handleHoldEnd}
             />
-            <TwoStepButton
-              phase={state.phase}
-              onConfirm={handleSubmit}
-            />
+            <TwoStepButton phase={state.phase} onConfirm={handleSubmit} />
           </div>
 
           {/* Cancel / Dismiss row */}

@@ -63,7 +63,13 @@ fn fund_invoice(
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 100),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
 
     invoice_id
@@ -129,7 +135,10 @@ fn concurrent_defaults_same_timestamp_only_one_state_write() {
     // Invoice appears in Defaulted list exactly once.
     let defaulted = client.get_invoices_by_status(&InvoiceStatus::Defaulted);
     let count = defaulted.iter().filter(|id| *id == invoice_id).count();
-    assert_eq!(count, 1, "invoice must appear in Defaulted list exactly once");
+    assert_eq!(
+        count, 1,
+        "invoice must appear in Defaulted list exactly once"
+    );
 
     // Invoice must no longer be in Funded list.
     let funded = client.get_invoices_by_status(&InvoiceStatus::Funded);
@@ -170,7 +179,10 @@ fn check_expiration_then_mark_defaulted_second_returns_duplicate_error() {
 
     // Path A: automated scan defaults the invoice.
     let did_default = client.check_invoice_expiration(&invoice_id, &Some(GRACE));
-    assert!(did_default, "check_invoice_expiration must default the invoice");
+    assert!(
+        did_default,
+        "check_invoice_expiration must default the invoice"
+    );
 
     // Path B: concurrent manual call arrives after path A.
     let err = client

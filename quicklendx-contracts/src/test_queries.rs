@@ -16,10 +16,10 @@
 //! The tests use only the self-contained `pagination` module plus `alloc`
 //! types - no Soroban storage, no contract client, no legacy modules.
 
+use crate::errors::QuickLendXError;
+use crate::pagination::validate_query_params;
 use alloc::string::{String, ToString};
 use alloc::vec;
-use crate::pagination::validate_query_params;
-use crate::errors::QuickLendXError;
 use alloc::vec::Vec;
 
 use crate::pagination::{
@@ -68,7 +68,10 @@ fn test_validate_limit_zero_yields_zero_effective_limit() {
     let (safe_off, eff_lim, has_more) = validate_pagination_params(0, 0, 50);
     assert_eq!(safe_off, 0);
     assert_eq!(eff_lim, 0);
-    assert!(has_more, "zero-size page still leaves items past the cursor");
+    assert!(
+        has_more,
+        "zero-size page still leaves items past the cursor"
+    );
 }
 
 /// `limit = 0` at the end of the collection: `has_more` must be `false`.
@@ -208,8 +211,7 @@ fn test_paginate_slice_equals_underlying_slice() {
     let items = build_u64_items(100);
     for &(offset, limit) in &[(0u32, 10u32), (10, 20), (33, 17), (90, 10), (95, 50)] {
         let page = paginate_slice(&items, offset, limit);
-        let (start, end) =
-            calculate_safe_bounds(offset, limit, items.len() as u32);
+        let (start, end) = calculate_safe_bounds(offset, limit, items.len() as u32);
         let expected: Vec<u64> = items[(start as usize)..(end as usize)].to_vec();
         assert_eq!(page, expected, "mismatch for offset={offset} limit={limit}");
     }
@@ -270,10 +272,15 @@ fn test_no_duplicates_across_pages_various_sizes() {
 #[test]
 fn test_validate_params_u32_max_extremes_do_not_panic() {
     for total in [0u32, 1, MAX_QUERY_LIMIT, MAX_QUERY_LIMIT + 10] {
-        let (safe_off, eff_lim, has_more) =
-            validate_pagination_params(u32::MAX, u32::MAX, total);
-        assert_eq!(safe_off, total, "safe_off must clamp to total for total={total}");
-        assert_eq!(eff_lim, 0, "no items available past the end for total={total}");
+        let (safe_off, eff_lim, has_more) = validate_pagination_params(u32::MAX, u32::MAX, total);
+        assert_eq!(
+            safe_off, total,
+            "safe_off must clamp to total for total={total}"
+        );
+        assert_eq!(
+            eff_lim, 0,
+            "no items available past the end for total={total}"
+        );
         assert!(!has_more, "has_more must be false when past the end");
     }
 }
@@ -282,8 +289,7 @@ fn test_validate_params_u32_max_extremes_do_not_panic() {
 #[test]
 fn test_calculate_safe_bounds_u32_max_inputs_are_safe() {
     for collection_size in [0u32, 1, MAX_QUERY_LIMIT, MAX_QUERY_LIMIT + 10, 5_000] {
-        let (start, end) =
-            calculate_safe_bounds(u32::MAX, u32::MAX, collection_size);
+        let (start, end) = calculate_safe_bounds(u32::MAX, u32::MAX, collection_size);
         assert!(start <= end);
         assert!(end <= collection_size);
         assert!(end.saturating_sub(start) <= MAX_QUERY_LIMIT);
@@ -358,7 +364,10 @@ fn test_offset_zero_limit_max_on_full_collection_has_no_more() {
         validate_pagination_params(0, MAX_QUERY_LIMIT, MAX_QUERY_LIMIT);
     assert_eq!(safe_off, 0);
     assert_eq!(eff_lim, MAX_QUERY_LIMIT);
-    assert!(!has_more, "entire collection fits in one page, has_more must be false");
+    assert!(
+        !has_more,
+        "entire collection fits in one page, has_more must be false"
+    );
 }
 
 /// When `offset=0, limit=MAX_QUERY_LIMIT` on a collection of exactly
@@ -404,7 +413,10 @@ fn test_cross_consistency_at_max_query_limit_boundary() {
     ] {
         let (safe_off, eff_lim, _has_more) = validate_pagination_params(offset, limit, total);
         let (start, end) = calculate_safe_bounds(offset, limit, total);
-        assert_eq!(start, safe_off, "start != safe_off for ({offset}, {limit}, {total})");
+        assert_eq!(
+            start, safe_off,
+            "start != safe_off for ({offset}, {limit}, {total})"
+        );
         assert_eq!(
             end.saturating_sub(start),
             eff_lim,
@@ -470,10 +482,14 @@ fn test_cross_consistency_validate_vs_bounds() {
         (100, 50, 250),
     ];
     for &(offset, limit, total) in cases {
-        let (safe_off, eff_lim, _has_more) =
-            validate_pagination_params(offset, limit, total);
+        let (safe_off, eff_lim, _has_more) = validate_pagination_params(offset, limit, total);
         let (start, end) = calculate_safe_bounds(offset, limit, total);
-        assert_eq!(start, safe_off, "start != safe_off for case {:?}", (offset, limit, total));
+        assert_eq!(
+            start,
+            safe_off,
+            "start != safe_off for case {:?}",
+            (offset, limit, total)
+        );
         assert_eq!(
             end.saturating_sub(start),
             eff_lim,
@@ -693,7 +709,13 @@ mod escrow_query_consistency {
         );
         client.verify_invoice(&invoice_id);
 
-        let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500), &BytesN::from_array(&env, &[0u8; 32]));
+        let bid_id = client.place_bid(
+            &investor,
+            &invoice_id,
+            &amount,
+            &(amount + 500),
+            &BytesN::from_array(&env, &[0u8; 32]),
+        );
         client.accept_bid(&invoice_id, &bid_id);
 
         (business, investor, currency, invoice_id, bid_id)
@@ -848,8 +870,14 @@ mod escrow_query_consistency {
         );
         client.verify_invoice(&invoice_id);
 
-        let de = client.try_get_escrow_details(&invoice_id).unwrap_err().unwrap();
-        let se = client.try_get_escrow_status(&invoice_id).unwrap_err().unwrap();
+        let de = client
+            .try_get_escrow_details(&invoice_id)
+            .unwrap_err()
+            .unwrap();
+        let se = client
+            .try_get_escrow_status(&invoice_id)
+            .unwrap_err()
+            .unwrap();
 
         assert_eq!(de, QuickLendXError::StorageKeyNotFound);
         assert_eq!(se, QuickLendXError::StorageKeyNotFound);

@@ -824,7 +824,10 @@ impl StorageManager {
 
     /// Return `true` if the current context is marked as view-only.
     pub fn is_view_only(env: &Env) -> bool {
-        env.storage().instance().get(&VIEW_ONLY_KEY).unwrap_or(false)
+        env.storage()
+            .instance()
+            .get(&VIEW_ONLY_KEY)
+            .unwrap_or(false)
     }
 
     /// Mark the current context as view-only or normal.

@@ -12,7 +12,9 @@ use soroban_sdk::{Address, BytesN, Env, String, Vec};
 use crate::invariants::{run_invariant_checks, InvariantReport};
 use crate::investment::InvestmentStorage;
 use crate::storage::InvoiceStorage;
-use crate::types::{Investment, InvestmentStatus, Invoice, InvoiceStatus, InvoiceCategory, Dispute, DisputeStatus};
+use crate::types::{
+    Dispute, DisputeStatus, Investment, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus,
+};
 use crate::{QuickLendXContract, QuickLendXContractClient};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
@@ -97,8 +99,8 @@ fn test_fresh_contract_all_pass() {
 
     let report = client.invariant_self_check(&admin);
 
-    // Seven composed checks, all green on an empty protocol.
-    assert_eq!(report.checks.len(), 7);
+    // Eight composed checks, all green on an empty protocol.
+    assert_eq!(report.checks.len(), 8);
     assert!(report.all_passed);
 }
 
@@ -119,7 +121,9 @@ fn test_populated_healthy_state_passes() {
 
     let report = env.as_contract(&contract_id, || {
         let investment = make_active_investment(&env);
-        let invoice = make_invoice(&env, &investment.invoice_id);
+        let mut invoice = make_invoice(&env, &investment.invoice_id);
+        invoice.status = InvoiceStatus::Paid;
+        invoice.total_paid = investment.amount;
         InvoiceStorage::store_invoice(&env, &invoice);
         InvestmentStorage::store_investment(&env, &investment);
         run_invariant_checks(&env)
@@ -131,6 +135,7 @@ fn test_populated_healthy_state_passes() {
     assert!(passed_for(&env, &report, "sum_investments_le_sum_invoices"));
     assert!(passed_for(&env, &report, "escrow_uniqueness"));
     assert!(passed_for(&env, &report, "settlement_accounting_identity"));
+    assert!(passed_for(&env, &report, "settlement_total_invariant"));
 }
 
 #[test]
@@ -269,5 +274,37 @@ fn test_settlement_accounting_identity_violation() {
     });
 
     assert!(!passed_for(&env, &report, "settlement_accounting_identity"));
+    assert!(!report.all_passed);
+}
+
+#[test]
+fn test_settlement_total_invariant_violation() {
+    let (env, _client, contract_id, _admin) = setup();
+
+    let report = env.as_contract(&contract_id, || {
+        let investment = make_active_investment(&env);
+        let mut invoice = make_invoice(&env, &investment.invoice_id);
+        invoice.status = InvoiceStatus::Paid;
+        invoice.total_paid = investment.amount; // healthy state: total_paid matches investment.amount
+        InvoiceStorage::store_invoice(&env, &invoice);
+        InvestmentStorage::store_investment(&env, &investment);
+
+        // Verify it passes first
+        let healthy_report = run_invariant_checks(&env);
+        assert!(passed_for(
+            &env,
+            &healthy_report,
+            "settlement_total_invariant"
+        ));
+
+        // Tamper: corrupt investment amount to be different from total_paid (without profit)
+        let mut tampered_investment = investment.clone();
+        tampered_investment.amount = investment.amount + 500;
+        InvestmentStorage::store_investment(&env, &tampered_investment);
+
+        run_invariant_checks(&env)
+    });
+
+    assert!(!passed_for(&env, &report, "settlement_total_invariant"));
     assert!(!report.all_passed);
 }

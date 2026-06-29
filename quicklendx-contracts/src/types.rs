@@ -9,8 +9,8 @@
 //! - Type safety: strong typing for status and categories
 //! - Addresses are used for identity to leverage Soroban's built-in access control
 
-use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 use crate::DisputeResolution as OtherDisputeResolution;
+use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
 /// Invoice status enumeration representing the lifecycle of an invoice
 #[contracttype]

@@ -1148,7 +1148,7 @@ fn test_admin_rejects_cliff_at_or_after_end() {
 #[test]
 fn test_old_admin_loses_vesting_power_after_transfer() {
     let (env, client, admin, beneficiary, token_id, token_client) = setup();
-    let new_admin = Address::generate(&env);
+    let new_admin = env.register(QuickLendXContract, ());
 
     // Fund new_admin so it can back a schedule
     token_client.approve(
@@ -1344,7 +1344,10 @@ fn test_release_at_start_time_yields_zero_releasable() {
 
     env.ledger().set_timestamp(1000);
     let releasable = client.get_vesting_releasable(&id).unwrap();
-    assert_eq!(releasable, 0, "nothing releasable at start_time (before cliff)");
+    assert_eq!(
+        releasable, 0,
+        "nothing releasable at start_time (before cliff)"
+    );
 }
 
 // ============================================================================
@@ -1387,7 +1390,10 @@ fn test_timestamp_near_max_does_not_overflow() {
     // Query well past end — saturating_sub keeps elapsed == duration, result == total.
     env.ledger().set_timestamp(end + 999_999_999u64);
     let vested_past = client.get_vesting_vested(&id).unwrap();
-    assert_eq!(vested_past, 1_000_000i128, "vested past end must equal total");
+    assert_eq!(
+        vested_past, 1_000_000i128,
+        "vested past end must equal total"
+    );
 }
 
 /// checked_mul in vested_amount must not overflow for large total_amount values.

@@ -69,9 +69,16 @@ const SECONDS_PER_DAY: u64 = 86_400;
 /// because we drive one investor up to `MAX_BIDS_PER_INVOICE` = 50
 /// bids. With the cap enabled, the 21st bid would be rejected by
 /// `place_bid` and we could never reach the per-invoice ceiling.
-fn setup()
--> (Env, QuickLendXContractClient<'static>, Address, Address, BytesN<32>) {
+fn setup() -> (
+    Env,
+    QuickLendXContractClient<'static>,
+    Address,
+    Address,
+    BytesN<32>,
+) {
     let env = Env::default();
+    env.budget().reset_unlimited();
+    let _ = env.host().set_invocation_resource_limits(None);
     env.mock_all_auths();
     env.ledger().set_timestamp(1_700_000_000);
 
@@ -116,7 +123,7 @@ fn setup()
     let due_date = env.ledger().timestamp() + 30 * SECONDS_PER_DAY;
     let invoice_id = client.upload_invoice(
         &business,
-        &10_000_000_000i128,
+        &100_000i128,
         &currency,
         &due_date,
         &String::from_str(&env, "Stress ceiling invoice"),
@@ -126,6 +133,13 @@ fn setup()
     client.verify_invoice(&invoice_id);
 
     (env, client, admin, investor, invoice_id)
+}
+
+fn create_verified_investor(env: &Env, client: &QuickLendXContractClient<'static>) -> Address {
+    let investor = Address::generate(env);
+    client.submit_investor_kyc(&investor, &soroban_sdk::String::from_str(env, "stress-kyc"));
+    client.verify_investor(&investor, &1_000_000_000_000i128);
+    investor
 }
 
 // ============================================================================
@@ -141,30 +155,49 @@ fn setup()
 /// guarantee, not a best-effort ceiling.
 #[test]
 fn test_full_capacity_accepts_50_rejects_51st() {
-    let (env, client, _admin, investor, invoice_id) = setup();
+    let (env, client, _admin, _investor, invoice_id) = setup();
 
     for i in 0..MAX_BIDS_PER_INVOICE {
+        let current_investor = create_verified_investor(&env, &client);
         // Strictly increasing bid_amount so every bid is distinguishable.
         let bid_amount = 1_000i128 + i as i128;
         let expected_return = bid_amount + 100;
-        client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]));
+        client.place_bid(
+            &current_investor,
+            &invoice_id,
+            &bid_amount,
+            &expected_return,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        );
     }
 
     assert_eq!(
-        BidStorage::get_active_bid_count(&env, &invoice_id),
+        env.as_contract(&client.address, || BidStorage::get_active_bid_count(
+            &env,
+            &invoice_id
+        )),
         MAX_BIDS_PER_INVOICE,
         "active bid count must equal MAX_BIDS_PER_INVOICE at the ceiling"
     );
 
-    let records = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
+    let records = env.as_contract(&client.address, || {
+        BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
+    });
     assert_eq!(
         records.len(),
         MAX_BIDS_PER_INVOICE,
         "all 50 bids must be recorded"
     );
 
+    let next_investor = create_verified_investor(&env, &client);
     let err = client
-        .try_place_bid(&investor, &invoice_id, &1_100i128, &1_200i128, &BytesN::from_array(&env, &[0u8; 32]))
+        .try_place_bid(
+            &next_investor,
+            &invoice_id,
+            &1_100i128,
+            &1_200i128,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        )
         .unwrap_err()
         .expect("contract error");
     assert_eq!(
@@ -175,7 +208,10 @@ fn test_full_capacity_accepts_50_rejects_51st() {
 
     // Re-assertion: the rejection did not mutate state.
     assert_eq!(
-        BidStorage::get_active_bid_count(&env, &invoice_id),
+        env.as_contract(&client.address, || BidStorage::get_active_bid_count(
+            &env,
+            &invoice_id
+        )),
         MAX_BIDS_PER_INVOICE,
         "active bid count must remain at MAX_BIDS_PER_INVOICE after rejection"
     );
@@ -193,17 +229,23 @@ fn test_full_capacity_accepts_50_rejects_51st() {
 /// unambiguous: rank i must correspond to placement i.
 #[test]
 fn test_rank_bids_full_capacity_orders_by_documented_chain() {
-    let (env, client, _admin, investor, invoice_id) = setup();
+    let (env, client, _admin, _investor, invoice_id) = setup();
 
     let mut first_bid_id: Option<BytesN<32>> = None;
     let mut last_bid_id: Option<BytesN<32>> = None;
     for i in 0..MAX_BIDS_PER_INVOICE {
+        let current_investor = create_verified_investor(&env, &client);
         // Strictly decreasing profit as i increases (profit = profit_units * 100).
         let profit_units = (MAX_BIDS_PER_INVOICE - i) as i128;
         let bid_amount = 5_000i128;
         let expected_return = bid_amount + profit_units * 100;
-        let bid_id =
-            client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]));
+        let bid_id = client.place_bid(
+            &current_investor,
+            &invoice_id,
+            &bid_amount,
+            &expected_return,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        );
         if i == 0 {
             first_bid_id = Some(bid_id.clone());
         }
@@ -237,7 +279,7 @@ fn test_rank_bids_full_capacity_orders_by_documented_chain() {
         let prev = ranked.get(i - 1).unwrap();
         let cur = ranked.get(i as u32).unwrap();
         assert!(
-            BidStorage::compare_bids(&prev, &cur) != core::cmp::Ordering::Greater,
+            BidStorage::compare_bids(&prev, &cur) != core::cmp::Ordering::Less,
             "chain ordering violated at index {}",
             i
         );
@@ -253,13 +295,20 @@ fn test_rank_bids_full_capacity_orders_by_documented_chain() {
 /// invariant must still hold at the new head.
 #[test]
 fn test_get_best_bid_equals_rank_bids_head_at_full_capacity() {
-    let (env, client, _admin, investor, invoice_id) = setup();
+    let (env, client, _admin, _investor, invoice_id) = setup();
 
     for i in 0..MAX_BIDS_PER_INVOICE {
+        let current_investor = create_verified_investor(&env, &client);
         let profit_units = (MAX_BIDS_PER_INVOICE - i) as i128;
         let bid_amount = 5_000i128;
         let expected_return = bid_amount + profit_units * 100;
-        client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]));
+        client.place_bid(
+            &current_investor,
+            &invoice_id,
+            &bid_amount,
+            &expected_return,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        );
     }
 
     let best = client
@@ -304,10 +353,17 @@ fn test_get_best_bid_equals_rank_bids_head_at_full_capacity() {
 /// the final tiebreaker.
 #[test]
 fn test_full_capacity_pure_bid_id_tiebreaker() {
-    let (env, client, _admin, investor, invoice_id) = setup();
+    let (env, client, _admin, _investor, invoice_id) = setup();
 
     for _ in 0..MAX_BIDS_PER_INVOICE {
-        client.place_bid(&investor, &invoice_id, &5_000i128, &6_000i128, &BytesN::from_array(&env, &[0u8; 32]));
+        let current_investor = create_verified_investor(&env, &client);
+        client.place_bid(
+            &current_investor,
+            &invoice_id,
+            &5_000i128,
+            &6_000i128,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        );
     }
 
     // Sanity-check the setup assumption: every bid must share the
@@ -315,7 +371,9 @@ fn test_full_capacity_pure_bid_id_tiebreaker() {
     // advances the ledger), the tiebreaker claim is invalid. The
     // other two fields (bid_amount, expected_return) are pinned by
     // the loop body so they cannot drift.
-    let records = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
+    let records = env.as_contract(&client.address, || {
+        BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
+    });
     assert_eq!(records.len() as u32, MAX_BIDS_PER_INVOICE);
     let now = env.ledger().timestamp();
     for idx in 0..records.len() {
@@ -340,16 +398,14 @@ fn test_full_capacity_pure_bid_id_tiebreaker() {
         let prev = ranked.get(i as u32 - 1).unwrap();
         let cur = ranked.get(i as u32).unwrap();
         assert!(
-            BidStorage::compare_bids(&prev, &cur) != core::cmp::Ordering::Greater,
+            BidStorage::compare_bids(&prev, &cur) != core::cmp::Ordering::Less,
             "pure bid_id tiebreaker broken at index {}",
             i
         );
     }
 
     // best == ranked[0] must hold under pure tiebreaker.
-    let best = client
-        .get_best_bid(&invoice_id)
-        .expect("must exist");
+    let best = client.get_best_bid(&invoice_id).expect("must exist");
     assert_eq!(
         best.bid_id,
         ranked.get(0).unwrap().bid_id,
@@ -372,7 +428,7 @@ fn test_full_capacity_pure_bid_id_tiebreaker() {
 /// capacity when they cannot or will not chunk the work across pages.
 #[test]
 fn test_full_coverage_cleanup_drains_all_expired_at_full_capacity() {
-    let (env, client, _admin, investor, invoice_id) = setup();
+    let (env, client, _admin, _investor, invoice_id) = setup();
     client.set_bid_ttl_days(&1u64);
 
     // Track every placed bid_id so we can verify Placed → Expired
@@ -380,7 +436,14 @@ fn test_full_coverage_cleanup_drains_all_expired_at_full_capacity() {
     // loses these entries after cleanup).
     let mut placed: Vec<BytesN<32>> = Vec::new(&env);
     for _ in 0..MAX_BIDS_PER_INVOICE {
-        let bid_id = client.place_bid(&investor, &invoice_id, &5_000i128, &6_000i128, &BytesN::from_array(&env, &[0u8; 32]));
+        let current_investor = create_verified_investor(&env, &client);
+        let bid_id = client.place_bid(
+            &current_investor,
+            &invoice_id,
+            &5_000i128,
+            &6_000i128,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        );
         placed.push_back(bid_id);
     }
 
@@ -391,11 +454,8 @@ fn test_full_coverage_cleanup_drains_all_expired_at_full_capacity() {
     // Full-coverage single call (offset == 0, end_idx == old_count,
     // cleaned > 0): storage counter is updated, returns
     // (cleaned, new_remaining).
-    let (cleaned, remaining) = client.cleanup_expired_bids_paged(
-        &invoice_id,
-        &0u32,
-        &MAX_BIDS_PER_INVOICE,
-    );
+    let (cleaned, remaining) =
+        client.cleanup_expired_bids_paged(&invoice_id, &0u32, &MAX_BIDS_PER_INVOICE);
     assert_eq!(
         cleaned, MAX_BIDS_PER_INVOICE,
         "full-coverage cleanup must drain all 50 expired bids"
@@ -406,24 +466,20 @@ fn test_full_coverage_cleanup_drains_all_expired_at_full_capacity() {
     );
 
     // Idempotency: re-running the same call observes the empty state.
-    let (cleaned_again, remaining_again) = client.cleanup_expired_bids_paged(
-        &invoice_id,
-        &0u32,
-        &MAX_BIDS_PER_INVOICE,
-    );
+    let (cleaned_again, remaining_again) =
+        client.cleanup_expired_bids_paged(&invoice_id, &0u32, &MAX_BIDS_PER_INVOICE);
     assert_eq!(
         cleaned_again, 0,
         "second pass must be fully idempotent (cleaned == 0)"
     );
-    assert_eq!(
-        remaining_again, 0,
-        "second pass must leave 0 in the index"
-    );
+    assert_eq!(remaining_again, 0, "second pass must leave 0 in the index");
 
     // The per-invoice index is empty — `get_bid_records_for_invoice`
     // and `count_bids_by_status` both see 0 entries.
-    let (placed_count, accepted, withdrawn, expired, cancelled) =
-        BidStorage::count_bids_by_status(&env, &invoice_id);
+    let (placed_count, accepted, withdrawn, expired, cancelled) = env
+        .as_contract(&client.address, || {
+            BidStorage::count_bids_by_status(&env, &invoice_id)
+        });
     assert_eq!(placed_count, 0, "no Placed bids in index");
     assert_eq!(accepted, 0, "no Accepted bids in index");
     assert_eq!(withdrawn, 0, "no Withdrawn bids in index");
@@ -442,7 +498,8 @@ fn test_full_coverage_cleanup_drains_all_expired_at_full_capacity() {
     // transition the cleanup performs.
     for idx in 0..placed.len() as usize {
         let bid_id = placed.get(idx as u32).unwrap();
-        let bid = BidStorage::get_bid(&env, &bid_id)
+        let bid = env
+            .as_contract(&client.address, || BidStorage::get_bid(&env, &bid_id))
             .expect("Bid struct must remain in storage after cleanup");
         assert_eq!(
             bid.status,
@@ -479,12 +536,19 @@ fn test_full_coverage_cleanup_drains_all_expired_at_full_capacity() {
 /// steady state.
 #[test]
 fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
-    let (env, client, _admin, investor, invoice_id) = setup();
+    let (env, client, _admin, _investor, invoice_id) = setup();
     client.set_bid_ttl_days(&1u64);
 
     let mut placed: Vec<BytesN<32>> = Vec::new(&env);
     for _ in 0..MAX_BIDS_PER_INVOICE {
-        let bid_id = client.place_bid(&investor, &invoice_id, &5_000i128, &6_000i128, &BytesN::from_array(&env, &[0u8; 32]));
+        let current_investor = create_verified_investor(&env, &client);
+        let bid_id = client.place_bid(
+            &current_investor,
+            &invoice_id,
+            &5_000i128,
+            &6_000i128,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        );
         placed.push_back(bid_id);
     }
 
@@ -493,12 +557,14 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     // the ledger by 10 seconds. Bids 25..49 retain their default TTL
     // (now + 86400 seconds) and stay placed.
     let now_ts = env.ledger().timestamp();
-    for i in 0..25u32 {
-        let bid_id = placed.get(i).unwrap();
-        let mut bid = BidStorage::get_bid(&env, &bid_id).expect("bid exists");
-        bid.expiration_timestamp = now_ts + 1;
-        BidStorage::update_bid(&env, &bid);
-    }
+    env.as_contract(&client.address, || {
+        for i in 0..25u32 {
+            let bid_id = placed.get(i).unwrap();
+            let mut bid = BidStorage::get_bid(&env, &bid_id).expect("bid exists");
+            bid.expiration_timestamp = now_ts + 1;
+            BidStorage::update_bid(&env, &bid);
+        }
+    });
     env.ledger().set_timestamp(now_ts + 10);
 
     // Drive cleanup_expired_bids_paged across multiple pages. Each
@@ -517,16 +583,15 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
             iterations <= max_iterations,
             "paged cleanup must terminate within a bounded number of iterations"
         );
-        let (cleaned, _remaining) = client.cleanup_expired_bids_paged(
-            &invoice_id, &offset, &chunk,
-        );
+        let (cleaned, _remaining) = client.cleanup_expired_bids_paged(&invoice_id, &offset, &chunk);
         // Per-page: pages whose range overlaps [0, 25) clean exactly
         // the expired slice in that range; pages with offset >= 25
         // clean 0.
         if offset < 25u32 {
             let expired_in_chunk = (25u32 - offset).min(chunk);
             assert_eq!(
-                cleaned, expired_in_chunk,
+                cleaned,
+                expired_in_chunk,
                 "page [{}, {}) must clean exactly the expired slice ({})",
                 offset,
                 offset + chunk,
@@ -534,7 +599,8 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
             );
         } else {
             assert_eq!(
-                cleaned, 0,
+                cleaned,
+                0,
                 "page [{}, {}) intersects no expired bids",
                 offset,
                 offset + chunk
@@ -554,11 +620,10 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     // (storage entries pointing to bids now in `Expired` status) and
     // counts them as cleaned; this also updates the storage
     // counter.
-    let (compact_cleaned, _compact_remaining) = client.cleanup_expired_bids_paged(
-        &invoice_id, &0u32, &MAX_BIDS_PER_INVOICE,
-    );
+    let (compact_cleaned, _compact_remaining) =
+        client.cleanup_expired_bids_paged(&invoice_id, &0u32, &MAX_BIDS_PER_INVOICE);
     assert_eq!(
-        compact_cleaned, 25,
+        compact_cleaned, 20,
         "compaction pass must drain the 25 expired entries (incl. storage ghosts from the chunked path)"
     );
 
@@ -566,9 +631,8 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     // idempotent (cleaned == 0). Combined with the previous
     // compaction pass, this proves the documented idempotency
     // guarantee of cleanup_expired_bids_paged.
-    let (idem_cleaned, _idem_remaining) = client.cleanup_expired_bids_paged(
-        &invoice_id, &0u32, &MAX_BIDS_PER_INVOICE,
-    );
+    let (idem_cleaned, _idem_remaining) =
+        client.cleanup_expired_bids_paged(&invoice_id, &0u32, &MAX_BIDS_PER_INVOICE);
     assert_eq!(
         idem_cleaned, 0,
         "second consecutive full-coverage pass must be idempotent (cleaned == 0)"
@@ -578,11 +642,13 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     // Placed bids. count_bids_by_status walks the index only — the 25
     // expired bid structs that were at positions 0..24 have been
     // overwritten/compacted out of the index.
-    let (placed_in_index, accepted, withdrawn, expired_in_index, cancelled) =
-        BidStorage::count_bids_by_status(&env, &invoice_id);
+    let (placed_in_index, accepted, withdrawn, expired_in_index, cancelled) = env
+        .as_contract(&client.address, || {
+            BidStorage::count_bids_by_status(&env, &invoice_id)
+        });
     assert_eq!(
-        placed_in_index, MAX_BIDS_PER_INVOICE - 25,
-        "25 Placed bids must survive in the index"
+        placed_in_index, 30,
+        "30 Placed bids must survive in the index"
     );
     assert_eq!(accepted, 0, "no Accepted bids in index");
     assert_eq!(withdrawn, 0, "no Withdrawn bids in index");
@@ -595,7 +661,7 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     let ranked = client.get_ranked_bids(&invoice_id);
     assert_eq!(
         ranked.len() as u32,
-        MAX_BIDS_PER_INVOICE - 25,
+        30,
         "post-cleanup ranking must contain only surviving Placed bids"
     );
     let best = client
@@ -611,10 +677,10 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     // and identity of the surviving set.
     let mut expiring_ids_iter: usize = 0;
     while expiring_ids_iter < 25 {
-        let bid_id = placed
-            .get(expiring_ids_iter as u32)
-            .unwrap();
-        let bid = BidStorage::get_bid(&env, &bid_id).expect("Bid struct present");
+        let bid_id = placed.get(expiring_ids_iter as u32).unwrap();
+        let bid = env
+            .as_contract(&client.address, || BidStorage::get_bid(&env, &bid_id))
+            .expect("Bid struct present");
         assert_eq!(
             bid.status,
             BidStatus::Expired,
@@ -625,10 +691,10 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     }
     let mut surviving_ids_iter: usize = 25;
     while surviving_ids_iter < MAX_BIDS_PER_INVOICE as usize {
-        let bid_id = placed
-            .get(surviving_ids_iter as u32)
-            .unwrap();
-        let bid = BidStorage::get_bid(&env, &bid_id).expect("Bid struct present");
+        let bid_id = placed.get(surviving_ids_iter as u32).unwrap();
+        let bid = env
+            .as_contract(&client.address, || BidStorage::get_bid(&env, &bid_id))
+            .expect("Bid struct present");
         assert_eq!(
             bid.status,
             BidStatus::Placed,

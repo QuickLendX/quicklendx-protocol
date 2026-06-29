@@ -1466,8 +1466,6 @@ pub fn determine_risk_level(risk_score: u32) -> InvestorRiskLevel {
     }
 }
 
-
-
 /// Calculate investment limit based on tier and risk level
 pub fn calculate_investment_limit(
     tier: &InvestorTier,
@@ -1693,8 +1691,8 @@ pub fn recompute_investor_tier(
         return Err(QuickLendXError::NotAdmin);
     }
 
-    let mut verification = InvestorVerificationStorage::get(env, investor)
-        .ok_or(QuickLendXError::KYCNotFound)?;
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
 
     if !matches!(verification.status, BusinessVerificationStatus::Verified) {
         return Err(QuickLendXError::InvalidKYCStatus);
@@ -1725,12 +1723,12 @@ pub fn recompute_investor_tier(
     verification.risk_level = risk_level;
     verification.tier = tier;
     verification.investment_limit = investment_limit;
-    verification.compliance_notes = Some(String::from_str(env, "Investor tier recomputed by admin"));
+    verification.compliance_notes =
+        Some(String::from_str(env, "Investor tier recomputed by admin"));
 
     InvestorVerificationStorage::update(env, &verification);
     Ok(())
 }
-
 
 /// Validate structured invoice metadata against the invoice amount
 pub fn validate_invoice_metadata(

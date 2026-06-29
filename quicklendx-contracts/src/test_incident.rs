@@ -42,10 +42,7 @@ fn test_enter_incident_mode_sets_pause_and_maintenance() {
     assert_eq!(snapshot.timestamp, env.ledger().timestamp());
     assert!(client.is_paused());
     assert!(client.is_maintenance_mode());
-    assert_eq!(
-        client.get_maintenance_reason().unwrap(),
-        reason(&env, msg)
-    );
+    assert_eq!(client.get_maintenance_reason().unwrap(), reason(&env, msg));
 }
 
 #[test]

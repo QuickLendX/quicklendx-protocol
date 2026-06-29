@@ -32,7 +32,7 @@ fn make_complex_invoice(
     customer_name: &str,
     tax_id: &str,
 ) -> Invoice {
-    use crate::types::{Dispute};
+    use crate::types::Dispute;
 
     let mut id_bytes = [0u8; 32];
     id_bytes[28..32].copy_from_slice(&idx.to_be_bytes());

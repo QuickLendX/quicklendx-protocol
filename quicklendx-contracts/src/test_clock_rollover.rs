@@ -64,23 +64,14 @@ fn make_verified_business(
     business
 }
 
-fn make_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn make_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &limit);
     investor
 }
 
-fn make_token(
-    env: &Env,
-    contract_id: &Address,
-    business: &Address,
-    investor: &Address,
-) -> Address {
+fn make_token(env: &Env, contract_id: &Address, business: &Address, investor: &Address) -> Address {
     let token_admin = Address::generate(env);
     let currency = env
         .register_stellar_asset_contract_v2(token_admin)
@@ -541,7 +532,13 @@ fn bid_placed_at_u64_max_minus_one_has_expiration_saturated_to_u64_max() {
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &5_000,
+        &6_000,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     let bid = client.get_bid(&bid_id).unwrap();
 
     assert_eq!(
@@ -581,7 +578,13 @@ fn cleanup_does_not_remove_bid_whose_expiration_saturated_to_u64_max() {
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &5_000,
+        &6_000,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid.expiration_timestamp, u64::MAX);
 

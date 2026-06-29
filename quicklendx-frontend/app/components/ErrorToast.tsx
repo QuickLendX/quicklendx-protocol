@@ -14,8 +14,18 @@ interface ErrorToastProps {
 type IconProps = { className?: string };
 
 const AlertOctagonIcon: React.FC<IconProps> = ({ className }) => (
-  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86" />
     <line x1="12" y1="8" x2="12" y2="12" />
     <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -23,8 +33,18 @@ const AlertOctagonIcon: React.FC<IconProps> = ({ className }) => (
 );
 
 const AlertTriangleIcon: React.FC<IconProps> = ({ className }) => (
-  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
     <line x1="12" y1="9" x2="12" y2="13" />
     <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -32,8 +52,18 @@ const AlertTriangleIcon: React.FC<IconProps> = ({ className }) => (
 );
 
 const InfoIcon: React.FC<IconProps> = ({ className }) => (
-  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <circle cx="12" cy="12" r="10" />
     <line x1="12" y1="16" x2="12" y2="12" />
     <line x1="12" y1="8" x2="12.01" y2="8" />
@@ -41,8 +71,18 @@ const InfoIcon: React.FC<IconProps> = ({ className }) => (
 );
 
 const CloseIcon: React.FC<IconProps> = ({ className }) => (
-  <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <line x1="18" y1="6" x2="6" y2="18" />
     <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
@@ -61,10 +101,30 @@ type SeverityVisual = {
 };
 
 const SEVERITY_VISUALS: Record<ErrorSeverity, SeverityVisual> = {
-  [ErrorSeverity.CRITICAL]: { accent: "#EF4444", Icon: AlertOctagonIcon, role: "alert", ariaLive: "assertive" },
-  [ErrorSeverity.HIGH]: { accent: "#EF4444", Icon: AlertTriangleIcon, role: "alert", ariaLive: "assertive" },
-  [ErrorSeverity.MEDIUM]: { accent: "#F59E0B", Icon: AlertTriangleIcon, role: "status", ariaLive: "polite" },
-  [ErrorSeverity.LOW]: { accent: "#3B82F6", Icon: InfoIcon, role: "status", ariaLive: "polite" },
+  [ErrorSeverity.CRITICAL]: {
+    accent: "#EF4444",
+    Icon: AlertOctagonIcon,
+    role: "alert",
+    ariaLive: "assertive",
+  },
+  [ErrorSeverity.HIGH]: {
+    accent: "#EF4444",
+    Icon: AlertTriangleIcon,
+    role: "alert",
+    ariaLive: "assertive",
+  },
+  [ErrorSeverity.MEDIUM]: {
+    accent: "#F59E0B",
+    Icon: AlertTriangleIcon,
+    role: "status",
+    ariaLive: "polite",
+  },
+  [ErrorSeverity.LOW]: {
+    accent: "#3B82F6",
+    Icon: InfoIcon,
+    role: "status",
+    ariaLive: "polite",
+  },
 };
 
 const CATEGORY_LABELS: Record<ErrorCategory, string> = {
@@ -79,7 +139,8 @@ const CATEGORY_LABELS: Record<ErrorCategory, string> = {
 };
 
 export const ErrorToast: React.FC<ErrorToastProps> = ({ error, toastId }) => {
-  const visual = SEVERITY_VISUALS[error.severity] ?? SEVERITY_VISUALS[ErrorSeverity.LOW];
+  const visual =
+    SEVERITY_VISUALS[error.severity] ?? SEVERITY_VISUALS[ErrorSeverity.LOW];
   const label = CATEGORY_LABELS[error.category] ?? "Error";
   const { Icon } = visual;
 
@@ -106,7 +167,9 @@ export const ErrorToast: React.FC<ErrorToastProps> = ({ error, toastId }) => {
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-[#0F172A]">{label}</p>
-        <p className="mt-0.5 break-words text-xs text-[#334155]">{error.message}</p>
+        <p className="mt-0.5 break-words text-xs text-[#334155]">
+          {error.message}
+        </p>
         {error.retryable && error.retryCount < 3 && (
           <button
             type="button"

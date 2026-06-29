@@ -49,7 +49,7 @@
 mod test_dispute {
     use crate::errors::QuickLendXError;
     use crate::invoice::{DisputeStatus, InvoiceCategory};
-    use crate::types::{DisputeResolution};
+    use crate::types::DisputeResolution;
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
@@ -534,10 +534,7 @@ mod test_dispute {
             .expect("Dispute should be stored");
         assert_eq!(dispute.resolution, note);
         assert_eq!(dispute.resolved_by, admin);
-        assert_eq!(
-            dispute.resolution_outcome,
-            DisputeResolution::FavorInvestor
-        );
+        assert_eq!(dispute.resolution_outcome, DisputeResolution::FavorInvestor);
     }
 
     /// [TC-21] Resolving a dispute with structured outcome skipping review is rejected.

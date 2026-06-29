@@ -184,7 +184,13 @@ fn test_place_bid_zero_amount() {
     let invoice_id = verified_invoice(&env, &client, &admin);
 
     assert_contract_err(
-        client.try_place_bid(&investor, &invoice_id, &0, &1, &BytesN::from_array(&env, &[0u8; 32])),
+        client.try_place_bid(
+            &investor,
+            &invoice_id,
+            &0,
+            &1,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        ),
         QuickLendXError::InvalidAmount,
     );
 }
@@ -196,7 +202,13 @@ fn test_place_bid_negative_amount() {
     let invoice_id = verified_invoice(&env, &client, &admin);
 
     assert_contract_err(
-        client.try_place_bid(&investor, &invoice_id, &-1, &1, &BytesN::from_array(&env, &[0u8; 32])),
+        client.try_place_bid(
+            &investor,
+            &invoice_id,
+            &-1,
+            &1,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        ),
         QuickLendXError::InvalidAmount,
     );
 }

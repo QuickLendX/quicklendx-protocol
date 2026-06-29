@@ -104,7 +104,13 @@ fn build_cancel_accept_fixture() -> CancelAcceptFixture {
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &bid_amount,
+        &invoice_amount,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     CancelAcceptFixture {
         env,

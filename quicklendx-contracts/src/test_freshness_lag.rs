@@ -94,7 +94,10 @@ mod test_freshness_lag {
         let result = client.get_freshness(&0u32, &0u64, &0u32);
         let lag = lag_from_response(&env, &result);
 
-        assert_eq!(lag, 0, "lag must be 0 at epoch boundary when timestamps match");
+        assert_eq!(
+            lag, 0,
+            "lag must be 0 at epoch boundary when timestamps match"
+        );
     }
 
     // =========================================================================
@@ -210,7 +213,11 @@ mod test_freshness_lag {
         let result = client.get_freshness(&500u32, &(now + skew), &0u32);
         let lag = lag_from_response(&env, &result);
 
-        assert_eq!(lag, -(skew as i64), "future indexed timestamp gives negative lag");
+        assert_eq!(
+            lag,
+            -(skew as i64),
+            "future indexed timestamp gives negative lag"
+        );
         assert!(
             lag <= DEFAULT_MAX_FRESHNESS_DRIFT_SECS,
             "negative lag (clock skew) must not be treated as stale"
@@ -272,7 +279,8 @@ mod test_freshness_lag {
 
         // Advance time further while paused.
         let elapsed_while_paused = 90u64;
-        env.ledger().set_timestamp(indexed + 10 + elapsed_while_paused);
+        env.ledger()
+            .set_timestamp(indexed + 10 + elapsed_while_paused);
 
         let result = client.get_freshness(&500u32, &indexed, &0u32);
         let lag = lag_from_response(&env, &result);
@@ -300,9 +308,6 @@ mod test_freshness_lag {
         let result = client.get_freshness(&500u32, &indexed, &0u32);
         let lag = lag_from_response(&env, &result);
 
-        assert_eq!(
-            lag, 90,
-            "lag must equal total elapsed time after unpause"
-        );
+        assert_eq!(lag, 90, "lag must equal total elapsed time after unpause");
     }
 }

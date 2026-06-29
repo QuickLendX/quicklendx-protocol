@@ -141,7 +141,8 @@ fn upload_verified_invoice(
     amount: i128,
     due_date_offset: u64,
 ) -> BytesN<32> {
-    let invoice_id = upload_pending_invoice(env, client, business, currency, amount, due_date_offset);
+    let invoice_id =
+        upload_pending_invoice(env, client, business, currency, amount, due_date_offset);
     client
         .try_verify_invoice(&invoice_id)
         .expect("verify_invoice must succeed")
@@ -157,7 +158,9 @@ fn place_bid(
     invoice_id: &BytesN<32>,
     bid_amount: i128,
 ) -> BytesN<32> {
-    let expected_return = bid_amount.saturating_add(bid_amount / 10).max(bid_amount + 1);
+    let expected_return = bid_amount
+        .saturating_add(bid_amount / 10)
+        .max(bid_amount + 1);
     client
         .try_place_bid(investor, invoice_id, &bid_amount, &expected_return)
         .expect("place_bid must succeed during setup")
