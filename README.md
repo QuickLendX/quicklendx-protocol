@@ -75,6 +75,7 @@ npm run dev
 - `docs/BID_RANKING.md`: Deterministic bid ranking ordering function — tier-by-tier tie-breaker logic, invariants, and contributor workflow.
 - [`docs/CURRENCY_WHITELIST.md`](docs/CURRENCY_WHITELIST.md): How tokens are added to and removed from the currency whitelist — contributor guide covering entrypoints, auth model, enforcement points, and test patterns.
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
+- [`docs/FEATURE_FLAGS.md`](docs/FEATURE_FLAGS.md): How to add a feature gate (runtime pause gate or compile-time Cargo feature), roll it out, and clean it up — contributor guide.
 
 ## Contribution
 
