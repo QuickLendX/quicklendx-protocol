@@ -4022,6 +4022,18 @@ impl QuickLendXContract {
         AdminStorage::require_admin(&env, &admin)?;
         EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
     }
+
+    /// Query the total locked escrow value across a caller-supplied bounded list of currencies.
+    ///
+    /// At most `max_currencies` entries from `currencies` are aggregated in one call.
+    /// Use this to stay within Soroban resource limits when many currencies exist.
+    pub fn get_total_locked_escrow(
+        env: Env,
+        currencies: Vec<Address>,
+        max_currencies: u32,
+    ) -> i128 {
+        EscrowStorage::get_total_locked_escrow_bounded(&env, &currencies, max_currencies)
+    }
 }
 
 // =============================================================================
