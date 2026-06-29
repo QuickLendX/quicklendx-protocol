@@ -303,6 +303,10 @@ mod test_seed;
 mod test_treasury_split_overflow_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_volume_tier_props;
+// Issue #1482 — "cannot withdraw more than deposited" invariant: hard-coded sad
+// path (always runs) + proptest property (requires fuzz-tests feature).
+#[cfg(test)]
+mod test_cannot_withdraw_more_than_deposited;
 pub mod types;
 pub use types::*;
 pub mod verification;
