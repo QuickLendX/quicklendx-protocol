@@ -62,6 +62,7 @@ npm run dev
 - `docs/`: Project-wide design, implementation, and audit documentation.
 - [Platform Fee & Treasury Split Operations Guide](file:///c:/Users/HP/quicklendx-protocol/docs/contracts/platform-fee-ops.md): Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
+- [Invoice Lifecycle](docs/INVOICE_LIFECYCLE.md): State diagram and entrypoint reference — Pending → Verified → Funded → Settled/Defaulted.
 - [Dispute Lifecycle](file:///c:/Users/HP/quicklendx-protocol/docs/DISPUTE.md): Who can open, who resolves, timeout behaviour, and fund implications.
 - [`docs/QUERIES.md`](docs/QUERIES.md): Catalog of common read-only entrypoints with concrete invocation examples and return values — the quickest way to find the query you need.
 - `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
