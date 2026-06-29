@@ -411,10 +411,12 @@ fn test_diagnostics_feature_gating_behavior() {
     #[cfg(not(feature = "diagnostics"))]
     {
         // Assert that the feature flag is disabled under cargo test without feature
-        assert!(
-            !cfg!(feature = "diagnostics"),
-            "Expected diagnostics feature to be disabled"
-        );
+        const {
+            assert!(
+                !cfg!(feature = "diagnostics"),
+                "Expected diagnostics feature to be disabled"
+            );
+        }
     }
 }
 

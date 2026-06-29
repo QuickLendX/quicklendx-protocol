@@ -279,10 +279,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
-            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
-            QuickLendXError::SelfTransfer => symbol_short!("SELF_TR"),
-            QuickLendXError::DuplicateBid => symbol_short!("BID_DUP"),
+            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER")
         }
     }
 }

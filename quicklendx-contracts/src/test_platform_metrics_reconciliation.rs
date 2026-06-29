@@ -128,7 +128,7 @@ fn compute_independent_metrics(env: &Env, contract_id: &Address) -> IndependentM
 
         let total_invoices = all_invoices.len() as u32;
         let expected_total_volume: i128 = all_invoices.iter().map(|i| i.amount).sum();
-        let total_investments = (funded.len() + paid.len() + defaulted.len()) as u32;
+        let total_investments = (funded.len() + paid.len() + defaulted.len());
 
         let expected_average_invoice_amount = if total_invoices > 0 {
             // integer division truncates toward zero
@@ -159,7 +159,7 @@ fn compute_independent_metrics(env: &Env, contract_id: &Address) -> IndependentM
 
         // denominator is total_investments, scaled by 10000
         let expected_default_rate = if total_investments > 0 {
-            ((defaulted.len() as u32).saturating_mul(10_000)) / total_investments
+            ((defaulted.len()).saturating_mul(10_000)) / total_investments
         } else {
             0
         } as i128;

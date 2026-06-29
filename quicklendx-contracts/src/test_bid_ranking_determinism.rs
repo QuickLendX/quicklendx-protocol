@@ -22,9 +22,6 @@ use alloc::vec::Vec;
 ///   (feature-gated `fuzz-tests`).
 /// * Integration with the full contract call stack — those live in `test_bid_ranking`
 ///   (feature-gated `legacy-tests`).
-
-#[cfg(test)]
-mod test_bid_ranking_determinism {
     use crate::bid::{Bid, BidStatus, BidStorage};
 use alloc::vec::Vec;
     use core::cmp::Ordering;
@@ -581,4 +578,3 @@ use alloc::vec::Vec;
             "negative profit bid must rank last"
         );
     }
-}

@@ -79,7 +79,7 @@ pub(crate) fn load_accept_bid_context(
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    let bid = BidStorage::get_bid(env, bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let bid = BidStorage::get_bid(env, bid_id).unwrap();
 
     if bid.invoice_id != *invoice_id {
         return Err(QuickLendXError::Unauthorized);
@@ -226,7 +226,7 @@ pub fn refund_escrow_funds(
 
     // 4. Retrieve Escrow
     let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        .unwrap();
 
     // 5. Transfer funds and update escrow state
     // This calls payments::refund_escrow which handles the token transfer and status update
@@ -323,7 +323,7 @@ pub fn withdraw_investment(
 
     // 2. Validate investment exists, is Active, and belongs to caller
     let mut investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        .unwrap();
 
     if investment.status != InvestmentStatus::Active {
         return Err(QuickLendXError::InvalidStatus);
@@ -343,7 +343,7 @@ pub fn withdraw_investment(
 
     // 4. Validate escrow exists and is still Held
     let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        .unwrap();
 
     if escrow.status != EscrowStatus::Held {
         return Err(QuickLendXError::InvalidStatus);
@@ -353,7 +353,7 @@ pub fn withdraw_investment(
     refund_escrow(env, invoice_id)?;
 
     // 6. Restore invoice to Verified state and clear funded fields
-    let previous_status = invoice.status.clone();
+    let previous_status = invoice.status;
     invoice.status = InvoiceStatus::Verified;
     invoice.funded_amount = 0;
     invoice.funded_at = None;

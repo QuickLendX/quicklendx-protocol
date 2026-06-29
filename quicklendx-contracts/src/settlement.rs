@@ -416,7 +416,7 @@ pub fn settle_invoice(
         .ok_or(QuickLendXError::InvalidAmount)?;
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        .unwrap();
 
     if projected_total < invoice.amount || projected_total < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -543,7 +543,7 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     ensure_payable_status(&invoice)?;
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        .unwrap();
 
     if invoice.total_paid < invoice.amount || invoice.total_paid < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);

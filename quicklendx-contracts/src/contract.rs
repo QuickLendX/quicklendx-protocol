@@ -229,7 +229,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvoiceFrozen);
         }
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         
         invoice.mark_as_funded(&env, bid.investor.clone(), bid.bid_amount, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
@@ -271,7 +271,7 @@ impl QuickLendXContract {
     }
 
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let mut bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         bid.status = BidStatus::Withdrawn;
         BidStorage::store_bid(&env, &bid);
         Ok(())
@@ -394,7 +394,7 @@ impl QuickLendXContract {
     }
 
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
         escrow.status = EscrowStatus::Released;
         escrow.released_at = Some(env.ledger().timestamp());
         EscrowStorage::update_escrow(&env, &escrow);
@@ -403,7 +403,7 @@ impl QuickLendXContract {
 
     pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>, admin: Address) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
-        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
         escrow.status = EscrowStatus::Refunded;
         escrow.refunded_at = Some(env.ledger().timestamp());
         EscrowStorage::update_escrow(&env, &escrow);

@@ -1192,7 +1192,7 @@ impl InvoiceStorage {
 
         let now = env.ledger().timestamp();
         let all_ids = Self::get_all_invoice_ids(env);
-        let total = all_ids.len() as u32;
+        let total = all_ids.len();
 
         let start = offset.min(total);
         let end = start.saturating_add(capped).min(total);

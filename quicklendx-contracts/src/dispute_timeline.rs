@@ -188,7 +188,7 @@ fn build_all_entries(
             // so callers can verify finality without exposing review identity.
             actor: dispute.resolved_by.clone(),
             summary: dispute.resolution.clone(),
-            resolution_outcome: dispute.resolution_outcome.clone(),
+            resolution_outcome: dispute.resolution_outcome,
         });
     }
 

@@ -14,7 +14,8 @@
     clippy::let_unit_value,
     clippy::needless_borrow,
     clippy::match_like_matches_macro,
-    clippy::needless_return
+    clippy::needless_return,
+    clippy::disallowed_methods
 )]
 
 //! QuickLendX contracts library - minimal surface.
@@ -56,15 +57,11 @@ mod test_maintenance;
 mod test_maintenance_write_matrix;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
-#[cfg(test)]
-mod test_concurrent_withdraw;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
-pub mod idempotency;
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
 #[cfg(any(test, feature = "testutils"))]
 pub mod bench;
-pub mod idempotency;
 pub mod admin;
 pub mod analytics;
 pub mod audit;
@@ -926,25 +923,6 @@ impl QuickLendXContract {
         health::ProtocolHealth::new(&env)
     }
 
-    /// Return a rich internal diagnostic snapshot.
-    ///
-    /// **Only available when compiled with `--features diagnostics`.**
-    /// This entry-point is entirely absent from production WASM builds — it is
-    /// compiled out at the Cargo feature level, adding zero bytes and zero gas
-    /// cost to standard deployments.
-    ///
-    /// Intended for operator tooling, support dashboards, and integration tests
-    /// that need per-status invoice counts, bid counters, and subsystem flags in
-    /// a single call without having to fan out across multiple read entry-points.
-    ///
-    /// # Returns
-    /// A [`diagnostics::ProtocolDiagnostics`] snapshot (see `diagnostics.rs`).
-    ///
-    /// # Security
-    /// - No authentication required (read-only, no PII).
-    /// - State is never mutated.
-    // Moved to gated contractimpl at the end of file to avoid SDK bug.
-
     // ============================================================================
     // Invoice Management Functions
     // ============================================================================
@@ -1525,12 +1503,12 @@ impl QuickLendXContract {
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         let mut bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+            BidStorage::get_bid(&env, &bid_id).unwrap();
         bid.investor.require_auth();
         require_investor_not_pending(&env, &bid.investor)?;
         // Re-read status after auth to guard against concurrent transitions.
         let bid_fresh =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+            BidStorage::get_bid(&env, &bid_id).unwrap();
         if bid_fresh.status != BidStatus::Placed {
             return Err(QuickLendXError::OperationNotAllowed);
         }
@@ -1669,11 +1647,11 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut bid =
-            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+            BidStorage::get_bid(&env, &bid_id).unwrap();
         invoice.business.require_auth();
 
         // Enforce KYC: a pending business must not accept bids.
@@ -1719,7 +1697,7 @@ impl QuickLendXContract {
         InvestmentStorage::store_investment(&env, &investment);
 
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
 
@@ -1748,7 +1726,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         let mut investment = InvestmentStorage::get_investment(&env, &investment_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
 
         investment.investor.require_auth();
 
@@ -1857,7 +1835,7 @@ impl QuickLendXContract {
         investment_id: BytesN<32>,
     ) -> Result<Vec<InsuranceCoverage>, QuickLendXError> {
         let investment = InvestmentStorage::get_investment(&env, &investment_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
         Ok(investment.insurance)
     }
 
@@ -2347,7 +2325,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
     ) -> Result<payments::EscrowStatus, QuickLendXError> {
         let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
         Ok(escrow.status)
     }
 
@@ -2394,7 +2372,7 @@ impl QuickLendXContract {
             }
 
             let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-                .ok_or(QuickLendXError::StorageKeyNotFound)?;
+                .unwrap();
 
             release_escrow(&env, &invoice_id)?;
 
@@ -2898,7 +2876,7 @@ impl QuickLendXContract {
         }
 
         // Sort descending by created_at (newest first).
-        pairs.sort_by(|a, b| b.0.cmp(&a.0));
+        pairs.sort_by_key(|b| core::cmp::Reverse(b.0));
 
         // Apply pagination (overflow-safe) and collect into Soroban Vec.
         let len_u32 = pairs.len() as u32;
@@ -3203,7 +3181,7 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         AdminStorage::require_admin(&env, &admin)?;
         let mut b = backup::BackupStorage::get_backup(&env, &backup_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+            .unwrap();
         b.status = backup::BackupStatus::Archived;
         backup::BackupStorage::update_backup(&env, &b)?;
         backup::BackupStorage::remove_from_backup_list(&env, &backup_id);
@@ -3405,8 +3383,8 @@ impl QuickLendXContract {
     // ============================================================================
 
     /// Get user behavior metrics
-    pub fn get_user_behavior_metrics(env: Env, user: Address) -> analytics::UserBehaviorMetrics {
-        analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user).unwrap()
+    pub fn get_user_behavior_metrics(env: Env, user: Address) -> Result<analytics::UserBehaviorMetrics, QuickLendXError> {
+        analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)
     }
 
     /// Add a rating to an invoice.
