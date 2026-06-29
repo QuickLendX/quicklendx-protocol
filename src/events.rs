@@ -18,6 +18,11 @@
 /// sequence of each topic.  See [`crate::pause`] for the entrypoint-symbol
 /// constants that appear in the `entrypoint` field.
 
+#[cfg(any(test, feature = "test-support"))]
+extern crate alloc;
+#[cfg(any(test, feature = "test-support"))]
+use alloc::vec::Vec;
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Topic constants
 // ─────────────────────────────────────────────────────────────────────────────

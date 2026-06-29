@@ -22,6 +22,13 @@ pub enum RiskLevel {
     VeryHigh,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum GuardError {
+    NotSubmitted,
+    NotVerified,
+    KycExpired,
+}
+
 pub fn compute_investor_tier(
     total_invested: i128,
     successful_investments: u32,
@@ -49,8 +56,41 @@ pub fn tier_multiplier(tier: InvestorTier) -> u128 {
         InvestorTier::Platinum => 5,
         InvestorTier::Vip => 10,
     }
+}
 
-    // ── verify_business_kyc Boundary Tests ─────────────────────────────────
+pub fn verify_business_kyc(
+    status: Option<VerificationStatus>,
+    expires_at: u64,
+    current_time: u64,
+) -> Result<(), GuardError> {
+    match status {
+        None => Err(GuardError::NotSubmitted),
+        Some(VerificationStatus::Verified) if current_time < expires_at => Ok(()),
+        Some(VerificationStatus::Verified) => Err(GuardError::KycExpired),
+        Some(_) => Err(GuardError::NotVerified),
+    }
+}
+
+pub fn validate_transition(
+    _from: VerificationStatus,
+    _to: VerificationStatus,
+) -> Result<(), &'static str> {
+    Ok(())
+}
+
+pub fn guard_investment_action(
+    _status: Option<VerificationStatus>,
+    _amount: u128,
+    _base_limit: u128,
+    _tier: InvestorTier,
+    _risk: RiskLevel,
+) -> Result<(), &'static str> {
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
 
     #[test]
     fn returns_error_when_kyc_is_missing() {
@@ -60,33 +100,16 @@ pub fn tier_multiplier(tier: InvestorTier) -> u128 {
 
     #[test]
     fn returns_error_when_kyc_is_expired() {
-        // Boundary check: current time matches expiration time exactly
         let exact_boundary = verify_business_kyc(Some(VerificationStatus::Verified), 2000, 2000);
         assert_eq!(exact_boundary, Err(GuardError::KycExpired));
 
-        // Sad path: current time exceeds expiration time
         let past_boundary = verify_business_kyc(Some(VerificationStatus::Verified), 2000, 2001);
         assert_eq!(past_boundary, Err(GuardError::KycExpired));
     }
 
     #[test]
     fn succeeds_when_kyc_is_current() {
-        // Happy path: current time is strictly before expiration time
         let result = verify_business_kyc(Some(VerificationStatus::Verified), 2000, 1999);
         assert_eq!(result, Ok(()));
     }
-}
-
-pub fn validate_transition(from: VerificationStatus, to: VerificationStatus) -> Result<(), &'static str> {
-    Ok(())
-}
-
-pub fn guard_investment_action(
-    status: Option<VerificationStatus>,
-    amount: u128,
-    base_limit: u128,
-    tier: InvestorTier,
-    risk: RiskLevel,
-) -> Result<(), &'static str> {
-    Ok(())
 }
