@@ -288,6 +288,8 @@ mod test_diagnostics;
 mod test_business_invoices_paged_ordering;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
+#[cfg(test)]
+mod test_insurance_optin_lifecycle;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
