@@ -370,6 +370,36 @@ impl EscrowStorage {
 
         BytesN::from_array(env, &id_bytes)
     }
+
+    /// Return the total locked escrow value for `currency` across all held escrows.
+    ///
+    /// Uses the pre-computed `HeldEscrowReserve` accumulator stored by
+    /// `store_escrow`/`update_escrow`, so this is an O(1) read — no unbounded scan.
+    /// Returns 0 if no escrows have been created for this currency.
+    pub fn get_total_locked_escrow_for_currency(env: &Env, currency: &Address) -> i128 {
+        Self::get_held_reserve(env, currency)
+    }
+
+    /// Return the total locked escrow value summed across up to `max_currencies`
+    /// currencies found in the held-reserve index.
+    ///
+    /// `currencies` is a caller-supplied bounded list of currency addresses to
+    /// aggregate. Callers should obtain the list from `get_whitelisted_currencies`
+    /// or an off-chain index and paginate to stay within resource limits.
+    pub fn get_total_locked_escrow_bounded(
+        env: &Env,
+        currencies: &Vec<Address>,
+        max_currencies: u32,
+    ) -> i128 {
+        let mut total: i128 = 0;
+        let limit = currencies.len().min(max_currencies);
+        for i in 0..limit {
+            let currency = currencies.get_unchecked(i);
+            let held = Self::get_held_reserve(env, &currency);
+            total = total.saturating_add(held);
+        }
+        total
+    }
 }
 
 /// Create escrow: transfer `amount` from investor to contract and store escrow record.
