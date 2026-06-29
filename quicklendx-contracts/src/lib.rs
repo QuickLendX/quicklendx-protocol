@@ -3219,6 +3219,11 @@ impl QuickLendXContract {
         backup::BackupStorage::cleanup_old_backups(&env)
     }
 
+    /// Preview which backups cleanup_backups would purge without mutating state.
+    pub fn preview_cleanup_backups(env: Env) -> backup::BackupCleanupDryRunReport {
+        backup::BackupStorage::preview_cleanup_old_backups(&env)
+    }
+
     /// Configure backup retention policy (admin only).
     pub fn set_backup_retention_policy(
         env: Env,

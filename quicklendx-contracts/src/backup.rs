@@ -79,6 +79,18 @@ impl Default for BackupRetentionPolicy {
 /// point for restoring data.
 pub struct BackupStorage;
 
+/// Report returned by the backup cleanup dry-run.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupCleanupDryRunReport {
+    /// Number of backups that would be purged.
+    pub would_purge_count: u32,
+    /// Number of backups that would survive.
+    pub would_retain_count: u32,
+    /// Auto-cleanup is disabled; no actual purge would occur.
+    pub cleanup_disabled: bool,
+}
+
 impl BackupStorage {
     fn validate_backup_metadata(
         backup: &Backup,
@@ -476,6 +488,76 @@ impl BackupStorage {
         }
 
         Ok(removed_count)
+    }
+
+    /// Preview which backups `cleanup_old_backups` would purge without mutating state.
+    ///
+    /// Returns a `BackupCleanupDryRunReport` describing how many entries would be
+    /// removed and how many would survive under the current retention policy.
+    pub fn preview_cleanup_old_backups(env: &Env) -> BackupCleanupDryRunReport {
+        let policy = Self::get_retention_policy(env);
+
+        if !policy.auto_cleanup_enabled {
+            return BackupCleanupDryRunReport {
+                would_purge_count: 0,
+                would_retain_count: Self::get_all_backups(env).len(),
+                cleanup_disabled: true,
+            };
+        }
+
+        let backups = Self::get_all_backups(env);
+        let current_time = env.ledger().timestamp();
+        let mut active: Vec<(BytesN<32>, u64)> = Vec::new(env);
+
+        for backup_id in backups.iter() {
+            if let Some(backup) = Self::get_backup(env, &backup_id) {
+                if backup.status == BackupStatus::Active {
+                    active.push_back((backup_id, backup.timestamp));
+                }
+            }
+        }
+
+        // Sort oldest first (bubble sort, same as cleanup_old_backups).
+        let len = active.len();
+        for i in 0..len {
+            for j in 0..len.saturating_sub(i + 1) {
+                if active.get(j).unwrap().1 > active.get(j + 1).unwrap().1 {
+                    let tmp = active.get(j).unwrap().clone();
+                    active.set(j, active.get(j + 1).unwrap().clone());
+                    active.set(j + 1, tmp);
+                }
+            }
+        }
+
+        let mut would_purge: u32 = 0;
+
+        // Count age-expired entries.
+        if policy.max_age_seconds > 0 {
+            let mut i = 0;
+            while i < active.len() {
+                let age = current_time.saturating_sub(active.get(i).unwrap().1);
+                if age > policy.max_age_seconds {
+                    would_purge = would_purge.saturating_add(1);
+                    active.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+        }
+
+        // Count oldest entries exceeding max_backups.
+        if policy.max_backups > 0 {
+            while active.len() > policy.max_backups {
+                would_purge = would_purge.saturating_add(1);
+                active.remove(0);
+            }
+        }
+
+        BackupCleanupDryRunReport {
+            would_purge_count: would_purge,
+            would_retain_count: active.len(),
+            cleanup_disabled: false,
+        }
     }
 
     /// Retrieve all invoices from storage across all possible statuses.
