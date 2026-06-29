@@ -575,6 +575,98 @@ pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) 
     amount.max(0).saturating_add(yield_amount)
 }
 
+/// Compute the simple interest yield on a principal amount.
+///
+/// # Formula
+/// ```text
+/// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
+/// ```
+///
+/// All arithmetic uses `saturating_mul` / integer division to stay within
+/// `i128` bounds without panicking and to preserve `#![no_std]` discipline.
+///
+/// # Arguments
+/// * `amount`        — Principal (must be >= 0; negative input returns 0)
+/// * `rate_bps`      — Annual rate in basis points, e.g. 500 = 5 %
+/// * `duration_days` — Holding period in days
+///
+/// # Returns
+/// Simple interest yield (non-negative).
+pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 {
+    if amount <= 0 || rate_bps <= 0 || duration_days <= 0 {
+        return 0;
+    }
+    // amount * rate_bps * duration_days / (10_000 * 365)
+    let numerator = amount
+        .saturating_mul(rate_bps)
+        .saturating_mul(duration_days);
+    let denominator: i128 = BPS_DENOMINATOR.saturating_mul(365);
+    numerator / denominator
+}
+
+/// A single ledger-delta entry for time-weighted average calculations.
+///
+/// Each entry records the `balance` held for `duration_ledgers` ledgers.
+/// The time-weighted average rate is:
+/// ```text
+/// TWA = sum(balance_i * duration_i) / sum(duration_i)
+/// ```
+/// where duration is measured in ledgers.
+#[derive(Clone, Debug)]
+pub struct LedgerDelta {
+    /// Balance (in stroops or protocol units) active during the interval.
+    pub balance: i128,
+    /// Number of ledgers the balance was held.
+    pub duration_ledgers: u32,
+}
+
+/// Compute the time-weighted average balance across a sequence of ledger deltas.
+///
+/// Implements the standard TWA formula:
+/// ```text
+/// TWA = sum(balance_i * duration_i) / total_duration
+/// ```
+///
+/// # Arguments
+/// * `deltas` — Ordered slice of `LedgerDelta` entries (roll-forward model)
+///
+/// # Returns
+/// * Time-weighted average balance, or `0` if `deltas` is empty or all durations are zero.
+///
+/// # no_std
+/// Uses only integer arithmetic; no floating point, no `std::` calls.
+pub fn compute_twa(deltas: &[LedgerDelta]) -> i128 {
+    let mut weighted_sum: i128 = 0;
+    let mut total_duration: i128 = 0;
+    for delta in deltas {
+        let dur = delta.duration_ledgers as i128;
+        weighted_sum = weighted_sum.saturating_add(delta.balance.saturating_mul(dur));
+        total_duration = total_duration.saturating_add(dur);
+    }
+    if total_duration == 0 {
+        return 0;
+    }
+    weighted_sum / total_duration
+}
+
+/// Reference implementation for `compute_twa` used in property tests.
+///
+/// Computes the TWA by iterating and accumulating separately. This mirrors
+/// the roll-forward model and acts as an oracle for the proptest invariant.
+pub fn compute_twa_reference(deltas: &[LedgerDelta]) -> i128 {
+    if deltas.is_empty() {
+        return 0;
+    }
+    let mut num: i128 = 0;
+    let mut den: i128 = 0;
+    for d in deltas {
+        let dur = d.duration_ledgers as i128;
+        num = num.saturating_add(d.balance.saturating_mul(dur));
+        den = den.saturating_add(dur);
+    }
+    if den == 0 { 0 } else { num / den }
+}
+
 // ============================================================================
 // Tests
 // ============================================================================
