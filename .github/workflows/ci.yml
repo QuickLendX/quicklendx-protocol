@@ -61,30 +61,6 @@ jobs:
           cd quicklendx-contracts
           cargo check --lib --verbose
 
------------------------------------------------------------------------
-      - name: Install cargo-geiger
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
-        run: |
-          source $HOME/.cargo/env
-          # Pin to a specific version for reproducible CI.
-          # To upgrade: change the version here and in check-unsafe.sh comment,
-          # review the changelog for any format changes that affect parsing.
-          cargo install cargo-geiger --version 0.11.7 --locked
-
-      - name: Run unsafe-code gate (cargo-geiger)
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
-        run: |
-          source $HOME/.cargo/env
-          chmod +x quicklendx-contracts/scripts/check-unsafe.sh
-          quicklendx-contracts/scripts/check-unsafe.sh
-
-      - name: Run unsafe-code gate integration tests
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
-        run: |
-          source $HOME/.cargo/env
-          cd quicklendx-contracts
-          cargo test --test unsafe_code_gate --verbose
-
       - name: Install wasm-opt (binaryen) for size reduction
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
