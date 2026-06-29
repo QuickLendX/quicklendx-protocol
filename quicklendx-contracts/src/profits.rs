@@ -548,12 +548,20 @@ pub fn validate_calculation_inputs(
 /// For fixed `rate_bps` and `duration_days`, `yield` is non-decreasing in `amount`.
 /// For fixed `amount` and `duration_days`, `yield` is non-decreasing in `rate_bps`.
 /// For fixed `amount` and `rate_bps`, `yield` is non-decreasing in `duration_days`.
+pub fn compute_yield(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+    amount
+        .max(0)
+        .saturating_mul(rate_bps as i128)
+        .saturating_mul(duration_days as i128)
+        .saturating_div(BPS_DENOMINATOR.saturating_mul(365))
+}
+
 /// Compute the expected return on a principal amount.
 ///
 /// # Returns
 /// Total expected return (principal + yield)
 pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
-    let yield_amount = compute_yield(amount, rate_bps.into(), duration_days.into());
+    let yield_amount = compute_yield(amount, rate_bps, duration_days);
     amount.max(0).saturating_add(yield_amount)
 }
 
