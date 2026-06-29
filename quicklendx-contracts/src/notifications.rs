@@ -513,6 +513,23 @@ impl NotificationSystem {
         stats
     }
 
+    /// Return the number of unread notifications for `user` without loading full notification bodies.
+    ///
+    /// "Unread" is defined as delivery_status != Read. The scan is bounded by
+    /// the user's notification-ID list length.
+    pub fn get_notification_unread_count(env: &Env, user: &Address) -> u32 {
+        let notification_ids = Self::get_user_notifications(env, user);
+        let mut unread: u32 = 0;
+        for id in notification_ids.iter() {
+            if let Some(n) = Self::get_notification(env, &id) {
+                if n.delivery_status != NotificationDeliveryStatus::Read {
+                    unread += 1;
+                }
+            }
+        }
+        unread
+    }
+
     // Storage key helpers
     fn get_notification_key(notification_id: &BytesN<32>) -> DataKey {
         DataKey::Notification(notification_id.clone())

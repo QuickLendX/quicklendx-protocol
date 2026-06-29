@@ -3840,6 +3840,11 @@ impl QuickLendXContract {
         notifications::NotificationSystem::get_user_notification_stats(&env, &user)
     }
 
+    /// Return the unread notification count for `investor` in O(n) without loading full bodies.
+    pub fn get_notification_unread_count(env: Env, investor: Address) -> u32 {
+        notifications::NotificationSystem::get_notification_unread_count(&env, &investor)
+    }
+
     pub fn get_financial_metrics(
         env: Env,
         period: analytics::TimePeriod,
