@@ -335,7 +335,8 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
     normalize_tag, reject_business,
-    reject_investor as do_reject_investor, recompute_investor_tier, require_business_not_pending,
+    reject_investor as do_reject_investor, revoke_investor_kyc as do_revoke_investor_kyc,
+    recompute_investor_tier, require_business_not_pending,
     require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
@@ -2046,6 +2047,22 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         do_reject_investor(&env, &admin, &investor, reason)
+    }
+
+    /// Revoke a verified investor's KYC (admin only).
+    ///
+    /// Moves the investor from `Verified` back to `Rejected`, emits a
+    /// `kyc_revoke` event, and blocks all further bids (via
+    /// `validate_investor_investment`) until the investor re-submits KYC and is
+    /// re-verified.
+    pub fn revoke_investor_kyc(
+        env: Env,
+        investor: Address,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        do_revoke_investor_kyc(&env, &admin, &investor, reason)
     }
 
     /// Get investor verification record if available

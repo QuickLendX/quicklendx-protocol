@@ -1228,6 +1228,72 @@ pub fn reject_investor(
     Ok(())
 }
 
+/// Revoke a previously-verified investor's KYC (admin only).
+///
+/// # Threat mitigated
+/// A verified investor whose identity/compliance status is later found to be
+/// invalid (sanctions hit, fraudulent KYC, compromised key) would otherwise
+/// retain the ability to place and fund bids indefinitely. Without an explicit
+/// revoke path, an admin can only set a new investment limit — they cannot stop
+/// the investor from continuing to bid. This entrypoint moves the investor from
+/// `Verified` back to `Rejected`, which causes `validate_investor_investment`
+/// (and therefore `validate_bid`) to fail with `BusinessNotVerified`, blocking
+/// all further bids until the investor re-submits KYC and is re-verified.
+///
+/// Emits a `kyc_revoke` event recording the investor, admin, timestamp, and
+/// reason for the audit trail.
+///
+/// # Errors
+/// - `NotAdmin` if `admin` is not a contract admin
+/// - `KYCNotFound` if the investor has no KYC record
+/// - `InvalidKYCStatus` if the investor is not currently `Verified`
+/// - `InvalidDescription` if `reason` exceeds `MAX_REJECTION_REASON_LENGTH`
+pub fn revoke_investor_kyc(
+    env: &Env,
+    admin: &Address,
+    investor: &Address,
+    reason: String,
+) -> Result<(), QuickLendXError> {
+    check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
+    admin.require_auth();
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
+        return Err(QuickLendXError::NotAdmin);
+    }
+
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
+
+    // Only a currently-verified investor can be revoked. Pending/rejected
+    // investors are already blocked from bidding, so revoking them is a no-op
+    // that we reject explicitly to keep the state machine auditable.
+    if !matches!(verification.status, BusinessVerificationStatus::Verified) {
+        return Err(QuickLendXError::InvalidKYCStatus);
+    }
+
+    verification.status = BusinessVerificationStatus::Rejected;
+    verification.verified_at = Some(env.ledger().timestamp());
+    verification.verified_by = Some(admin.clone());
+    verification.rejection_reason = Some(reason.clone());
+    verification.compliance_notes = Some(String::from_str(env, "KYC revoked by admin"));
+
+    InvestorVerificationStorage::update(env, &verification);
+    emit_investor_kyc_revoked(env, investor, admin, &reason);
+    Ok(())
+}
+
+fn emit_investor_kyc_revoked(env: &Env, investor: &Address, admin: &Address, reason: &String) {
+    #[allow(deprecated)]
+    env.events().publish(
+        (symbol_short!("kyc_revk"),),
+        (
+            investor.clone(),
+            admin.clone(),
+            env.ledger().timestamp(),
+            reason.clone(),
+        ),
+    );
+}
+
 pub fn get_investor_verification(env: &Env, investor: &Address) -> Option<InvestorVerification> {
     InvestorVerificationStorage::get(env, investor)
 }
