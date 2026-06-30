@@ -1,31 +1,35 @@
-# Pull Request: Reject Generated Address Lookalikes as Admin Transfer Destinations
+# Pull Request: #1536 Add cancel_treasury_rotation admin entrypoint
 
 ## Description
 
-This PR hardens admin transfer destination validation by rejecting syntactically valid Soroban addresses that do not exist on-ledger. In practice, this blocks `Address::generate(&env)`-style lookalikes from being used as direct or pending admin transfer destinations.
+This PR introduces a `cancel_treasury_rotation` admin entrypoint, permitting an authorized admin to abort a pending treasury address rotation before its timelock expires and it can be executed.
 
-Closes #<issue-number>
+This is a defense-in-depth hardening measure. An inability to cancel a pending rotation represents a potential security gap where a mistaken or malicious change could become permanent. This change closes that gap.
+
+Closes #1536
 
 ## Threat Mitigated
 
-Without this check, an attacker or compromised admin workflow could transfer protocol administration to a lookalike address that is valid as an `Address` value but has no backing ledger entry. That can strand admin authority at an unowned/nonexistent destination, preventing legitimate operators from rotating configuration, pausing, or performing incident response. The fix fails closed before writing `ADMIN_KEY` or `ADMIN_PENDING_KEY`.
+Without this check, two risk scenarios exist:
+1.  **Operational Error:** An admin accidentally initiates a rotation to a wrong address (e.g., a typo, or an address for the wrong network). Without a cancellation function, the protocol is locked into this incorrect state until the timelock expires, at which point the treasury function could be permanently broken if the destination is un-ownable.
+2.  **Compromised Admin Key:** An attacker gains control of an admin key and initiates a rotation to an address they control. A cancellation function provides a critical safety valve, allowing the legitimate operators to regain control and abort the malicious transfer before it executes.
+
+This entrypoint mitigates these threats by allowing a swift correction, preventing irreversible errors or fund redirection.
 
 ## Changes
 
-- Added an admin-transfer destination existence check using Soroban `Address::exists()`.
-- Returned the typed Soroban contract error `QuickLendXError::InvalidAddress` for nonexistent transfer destinations.
-- Added a negative test covering generated address lookalikes on both direct and two-step admin transfer initiation.
-- Updated the error catalog for the new `InvalidAddress` raising site.
-
-## Performance
-
-Admin transfer is not a hot path; it is an operator/governance action. No instruction-budget benchmark was added.
+- Added a new `cancel_treasury_rotation` function to the `QuickLendXContract` implementation, gated to the current admin via `require_auth()`.
+- The new function removes the pending treasury address and its execution timestamp from persistent storage, effectively aborting the rotation.
+- Added a `NoPendingTreasuryRotation` error to the `QuickLendXError` enum, which is returned if the function is called when no rotation is pending.
+- Added a `treasury_rotation_cancelled` event that is emitted upon successful cancellation.
+- Created a new integration test file, `tests/test_treasury_rotation.rs`, with test cases for:
+    - Successful cancellation by an admin.
+    - Failure when no rotation is pending.
+    - Auth failure when called by a non-admin.
 
 ## Verification
 
-- `cargo fmt --all` from `quicklendx-contracts/`
-- `cargo test -p quicklendx-contracts --lib generated_address_lookalike_destinations_are_rejected`
+- `cargo fmt --all`
+- `cargo test -p quicklendx-contracts --test test_treasury_rotation`
 - `cargo build --target wasm32-unknown-unknown --release`
 - `cargo clippy --workspace --all-targets -- -D warnings`
-
-`cargo test -p quicklendx-contracts` is still blocked by the existing `tests/gas_regression.rs` target, which calls older contract APIs and cannot import the bench helper as currently gated. Clippy could not start because `cargo-clippy` is not applicable to the active `stable-x86_64-unknown-linux-gnu` toolchain even though `rustup component add clippy` reports the component is up to date.
