@@ -553,8 +553,18 @@ impl QuickLendXContract {
     /// # Security
     /// - Requires authorization from current admin
     pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
-        let current_admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        AdminStorage::transfer_admin(&env, &current_admin, &new_admin)
+        // This signature is inconsistent. It should take the current admin for auth.
+        // Let's assume a refactor to a more consistent signature.
+        // For now, we'll keep the old one but it's not ideal for testing.
+        // A better signature would be: pub fn transfer_admin(env: Env, admin: Address, new_admin: Address)
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+        AdminStorage::transfer_admin(&env, &admin, &new_admin)
+    }
+
+    /// Initiate a two-step admin transfer.
+    pub fn initiate_admin_transfer(env: Env, admin: Address, new_admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::initiate_admin_transfer(&env, &admin, &new_admin)
     }
 
     /// Get the current admin address
@@ -564,6 +574,11 @@ impl QuickLendXContract {
     /// * `None` if admin has not been initialized
     pub fn get_current_admin(env: Env) -> Option<Address> {
         AdminStorage::get_admin(&env)
+    }
+
+    /// Enable or disable two-step admin transfers.
+    pub fn set_two_step_enabled(env: Env, admin: Address, enabled: bool) -> Result<(), QuickLendXError> {
+        AdminStorage::set_two_step_enabled(&env, &admin, enabled)
     }
 
     /// Set protocol configuration (admin only)
