@@ -137,6 +137,8 @@ pub enum QuickLendXError {
     RotationExpired = 1855,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     RotationTimelockNotElapsed = 1857,
+    /// A treasury rotation was cancelled but no rotation was pending.
+    NoPendingTreasuryRotation = 1858,
 
     // Dispute (1900-1906)
     /// BREAKING: Do not renumber this variant. public ABI consumption.

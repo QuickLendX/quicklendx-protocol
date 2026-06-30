@@ -29,6 +29,12 @@ where
     extend_persistent_ttl(env, key);
 }
 
+/// Storage key for the pending treasury address during a rotation.
+pub const PENDING_TREASURY_KEY: Symbol = symbol_short!("pnd_trs");
+/// Storage key for the pending treasury execution timestamp.
+pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("pnd_trs_ts");
+}
+
 /// Counter and configuration keys for the contract.
 ///
 /// # BREAKING: Rename Requires Migration
@@ -1080,6 +1086,33 @@ impl StorageIntegrityAudit {
             Err(all_errors)
         }
     }
+}
+
+/// Check if a treasury rotation is currently pending.
+pub fn has_pending_treasury(env: &Env) -> bool {
+    env.storage().instance().has(&PENDING_TREASURY_KEY)
+}
+
+/// Remove the pending treasury address and timestamp from storage.
+pub fn remove_pending_treasury(env: &Env) {
+    env.storage().instance().remove(&PENDING_TREASURY_KEY);
+    env.storage().instance().remove(&PENDING_TREASURY_TS_KEY);
+}
+
+/// Get the pending treasury address and its execution timestamp.
+/// This is used by tests and potentially by UI components to show pending changes.
+pub fn get_pending_treasury(env: &Env) -> Option<(Address, u64)> {
+    if !has_pending_treasury(env) {
+        return None;
+    }
+    // We can safely unwrap here because we've already checked with `has()`.
+    let address = env.storage().instance().get(&PENDING_TREASURY_KEY).unwrap();
+    let timestamp = env
+        .storage()
+        .instance()
+        .get(&PENDING_TREASURY_TS_KEY)
+        .unwrap();
+    Some((address, timestamp))
 }
 
 // ============================================================================

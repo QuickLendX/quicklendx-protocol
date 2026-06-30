@@ -618,6 +618,23 @@ impl QuickLendXContract {
         init::ProtocolInitializer::set_treasury(&env, &admin, &treasury)
     }
 
+    /// Admin-only: cancel a pending treasury address rotation before it executes.
+    ///
+    /// # Arguments
+    /// * `admin` - The address of the caller, must be the current admin.
+    pub fn cancel_treasury_rotation(
+        env: Env,
+        admin: Address,
+    ) -> Result<(), QuickLendXError> {
+        admin::cancel_treasury_rotation(&env, &admin)
+    }
+
+    /// Get the pending treasury address and its execution timestamp, if any.
+    /// This is a view-only function for UI and testing purposes.
+    pub fn get_pending_treasury(env: Env) -> Option<(Address, u64)> {
+        storage::get_pending_treasury(&env)
+    }
+
     /// Get current fee in basis points
     pub fn get_fee_bps(env: Env) -> u32 {
         init::ProtocolInitializer::get_fee_bps(&env)
