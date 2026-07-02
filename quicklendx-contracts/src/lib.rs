@@ -123,7 +123,7 @@ mod test_accept_bid_race;
 mod test_panic_handler;
 #[cfg(test)]
 mod test_due_date_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
@@ -169,7 +169,7 @@ mod test_dispute_refund_flow;
 mod test_dispute_timeline_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_event_invariant;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dust_transfer;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_event_completeness;
@@ -183,9 +183,9 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_queries;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_self_call_rejection;

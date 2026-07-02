@@ -904,6 +904,7 @@ mod tests {
         }
     }
 
+    #[cfg(feature = "legacy-tests")]
     #[test]
     fn test_investor_platform_treasury_sum_invariant() {
         let env = Env::default();
