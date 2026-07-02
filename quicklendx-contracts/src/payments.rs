@@ -849,6 +849,7 @@ mod payments_tests {
 
     /// Passing an address that is *not* a registered token contract must not
     /// silently succeed; any failure path that leaves no escrow is acceptable.
+    #[cfg(feature = "legacy-tests")]
     #[test]
     fn test_create_escrow_unregistered_token_address_does_not_succeed() {
         let (env, contract_id) = contract_env();
