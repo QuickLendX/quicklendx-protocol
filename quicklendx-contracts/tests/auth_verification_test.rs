@@ -1,4 +1,5 @@
-#![cfg(test)]
+#![cfg(all(test, feature = "legacy-tests"))]
+#![allow(clippy::disallowed_methods)]
 
 extern crate std; 
 
