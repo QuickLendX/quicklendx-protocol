@@ -1,4 +1,6 @@
 
+#![allow(clippy::needless_borrows_for_generic_args, clippy::while_let_on_iterator)]
+
 //! # Unsafe-Code Gate – Negative-Test Regression Guard
 //!
 //! Validates that:

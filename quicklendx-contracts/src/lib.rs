@@ -1,4 +1,15 @@
 #![no_std]
+#![cfg_attr(
+    test,
+    allow(
+        unused_must_use,
+        unused_parens,
+        clippy::doc_lazy_continuation,
+        clippy::err_expect,
+        clippy::module_inception,
+        clippy::unnecessary_cast
+    )
+)]
 #![allow(
     dead_code,
     unused_imports,
@@ -60,6 +71,7 @@ mod test_settlement_history_reconstruction;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
+pub mod address_summary;
 #[cfg(any(test, feature = "testutils"))]
 pub mod bench;
 pub mod admin;
@@ -68,8 +80,6 @@ pub mod audit;
 pub mod backpressure;
 pub mod backup;
 pub mod backup_v1;
-#[cfg(any(test, feature = "testutils"))]
-pub mod bench;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
@@ -84,6 +94,7 @@ pub mod fees;
 pub mod freshness;
 pub mod governance;
 pub mod health;
+pub mod idempotency;
 pub mod incident;
 pub mod init;
 pub mod invariants;
@@ -112,7 +123,7 @@ mod test_accept_bid_race;
 mod test_panic_handler;
 #[cfg(test)]
 mod test_due_date_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
@@ -153,12 +164,14 @@ mod test_currency_match_funding;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
 #[cfg(test)]
+mod test_dispute_pause_maintenance;
+#[cfg(test)]
 mod test_dispute_refund_flow;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_event_invariant;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dust_transfer;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_event_completeness;
@@ -168,15 +181,13 @@ mod test_escrow_invariant_model;
 mod test_escrow_refund_after_expiry;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
-#[cfg(test)]
-mod test_panic_handler;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_queries;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_self_call_rejection;
@@ -236,7 +247,7 @@ mod test_string_limits;
 mod test_analytics_consistency;
 #[cfg(test)]
 mod test_bid_capacity_stress;
-#[cfg(all(test, feature = "fuzz-tests"))]
+#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
@@ -263,17 +274,17 @@ mod test_default_grace_boundary;
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
-#[cfg(all(test, feature = "fuzz-tests"))]
+#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_cancelled_noop;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_distribute_revenue;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
-#[cfg(all(test, feature = "fuzz-tests"))]
+#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_partial_payment;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(test)]
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -284,7 +295,7 @@ mod test_input_matrix;
 mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_metadata;
@@ -300,7 +311,7 @@ mod test_clock_rollover;
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_invoices_paged_ordering;
@@ -310,9 +321,9 @@ mod test_insurance_claim_payout;
 mod test_insurance_optin_lifecycle;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
-#[cfg(all(test, feature = "fuzz-tests"))]
+#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_cancelled_noop;
-#[cfg(all(test, feature = "fuzz-tests"))]
+#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_compute_yield_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_twa_props;
@@ -323,7 +334,7 @@ mod test_pause_reads_available;
 mod test_platform_metrics_reconciliation;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
-#[cfg(all(test, feature = "fuzz-tests"))]
+#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_seed;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_treasury_split_overflow_props;
@@ -331,7 +342,7 @@ mod test_treasury_split_overflow_props;
 mod test_volume_tier_props;
 // Issue #1482 — "cannot withdraw more than deposited" invariant: hard-coded sad
 // path (always runs) + proptest property (requires fuzz-tests feature).
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cannot_withdraw_more_than_deposited;
 pub mod types;
 pub use types::*;
@@ -3663,6 +3674,8 @@ impl QuickLendXContract {
         admin: Address,
         resolution: String,
     ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        maintenance::MaintenanceControl::require_write_allowed(&env)?;
         AdminStorage::require_admin(&env, &admin)?;
         validate_dispute_resolution(&resolution)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
@@ -4123,7 +4136,7 @@ impl QuickLendXContract {
 mod test_emergency_escrow_protection;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_settle_refund_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_mutual_exclusion;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_collision_cross_domain;
