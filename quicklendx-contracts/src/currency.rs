@@ -22,6 +22,14 @@ const WHITELIST_KEY: soroban_sdk::Symbol = symbol_short!("curr_wl");
 pub struct CurrencyWhitelist;
 
 impl CurrencyWhitelist {
+    fn require_no_active_held_escrow(env: &Env, currency: &Address) -> Result<(), QuickLendXError> {
+        if crate::payments::EscrowStorage::get_total_locked_escrow_for_currency(env, currency) > 0 {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        Ok(())
+    }
+
     /// Add a token address to the whitelist (admin only).
     ///
     /// # Parameters
@@ -129,6 +137,10 @@ impl CurrencyWhitelist {
         admin.require_auth();
 
         let list = Self::get_whitelisted_currencies(env);
+        if list.iter().any(|a| a == *currency) {
+            Self::require_no_active_held_escrow(env, currency)?;
+        }
+
         let mut new_list = Vec::new(env);
         for a in list.iter() {
             if a != *currency {
@@ -185,6 +197,10 @@ impl CurrencyWhitelist {
         }
 
         if !to_remove.is_empty() {
+            for currency in to_remove.iter() {
+                Self::require_no_active_held_escrow(env, &currency)?;
+            }
+
             let mut new_list: Vec<Address> = Vec::new(env);
             for a in list.iter() {
                 if !to_remove.iter().any(|r: Address| r == a) {
@@ -274,6 +290,14 @@ impl CurrencyWhitelist {
                 deduped.push_back(currency);
             }
         }
+
+        let current = Self::get_whitelisted_currencies(env);
+        for currency in current.iter() {
+            if !deduped.iter().any(|a| a == currency) {
+                Self::require_no_active_held_escrow(env, &currency)?;
+            }
+        }
+
         env.storage().instance().set(&WHITELIST_KEY, &deduped);
         Ok(())
     }

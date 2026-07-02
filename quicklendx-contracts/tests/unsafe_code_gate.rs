@@ -1,3 +1,7 @@
+#![allow(
+    clippy::needless_borrows_for_generic_args,
+    clippy::while_let_on_iterator
+)]
 
 //! # Unsafe-Code Gate – Negative-Test Regression Guard
 //!
@@ -226,9 +230,8 @@ fn first_party_sources_contain_no_unsafe_keyword() {
     let mut violations: Vec<String> = Vec::new();
 
     for file_path in &rs_files {
-        let content = fs::read_to_string(file_path).unwrap_or_else(|e| {
-            panic!("Could not read {}: {e}", file_path.display())
-        });
+        let content = fs::read_to_string(file_path)
+            .unwrap_or_else(|e| panic!("Could not read {}: {e}", file_path.display()));
 
         for (line_num, line) in content.lines().enumerate() {
             let trimmed = line.trim();

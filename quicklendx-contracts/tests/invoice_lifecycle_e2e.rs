@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods)]
+
 //! Full invoice lifecycle end-to-end integration tests (Issue #1103).
 //!
 //! These tests exercise the complete on-chain lifecycle of an invoice from
@@ -419,9 +421,13 @@ fn test_invoice_lifecycle_default_branch() {
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
     // Investor places a bid.
-    let bid_id = fx
-        .client
-        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]));
+    let bid_id = fx.client.place_bid(
+        &fx.investor,
+        &invoice_id,
+        &bid_amount,
+        &invoice_amount,
+        &BytesN::from_array(&fx.client.env, &[0u8; 32]),
+    );
     assert_eq!(
         fx.client.get_bid(&bid_id).unwrap().status,
         BidStatus::Placed,
@@ -580,9 +586,13 @@ fn test_partial_then_full_settle() {
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
     // Investor places a bid.
-    let bid_id = fx
-        .client
-        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]));
+    let bid_id = fx.client.place_bid(
+        &fx.investor,
+        &invoice_id,
+        &bid_amount,
+        &invoice_amount,
+        &BytesN::from_array(&fx.client.env, &[0u8; 32]),
+    );
     assert_eq!(
         fx.client.get_bid(&bid_id).unwrap().bid_amount,
         bid_amount,
