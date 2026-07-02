@@ -50,6 +50,15 @@ interface SnapshotPoolLike extends SnapshotQueryable {
   connect(): Promise<SnapshotClient>;
 }
 
+type SnapshotReadableDerivedStore = DerivedTableStore & {
+  listInvoices?: () => Promise<any[]>;
+  listBids?: () => Promise<any[]>;
+  listSettlements?: () => Promise<any[]>;
+  listDisputes?: () => Promise<any[]>;
+  listNotifications?: () => Promise<any[]>;
+  getTableCounts?: () => TableCounts;
+};
+
 // ── PII redaction helpers ─────────────────────────────────────────────────────
 
 /**
@@ -132,10 +141,7 @@ export class SnapshotScheduler {
   private snapshotCounter = 0;
 
   private constructor(
-    private readonly derivedStore: DerivedTableStore & {
-      listInvoices?: () => Promise<any[]>;
-      getTableCounts?: () => { invoices: number; bids: number; settlements: number; disputes: number; notifications: number };
-    },
+    private readonly derivedStore: SnapshotReadableDerivedStore,
     config: Partial<SnapshotScheduleConfig> = {},
   ) {
     this.config = {
@@ -146,7 +152,7 @@ export class SnapshotScheduler {
   }
 
   static getInstance(
-    derivedStore: DerivedTableStore & { listInvoices?: () => Promise<any[]>; getTableCounts?: () => any },
+    derivedStore: SnapshotReadableDerivedStore,
     config: Partial<SnapshotScheduleConfig> = {},
   ): SnapshotScheduler {
     if (!SnapshotScheduler.instance) {
@@ -204,17 +210,35 @@ export class SnapshotScheduler {
     const rawInvoices: any[] = this.derivedStore.listInvoices
       ? await this.derivedStore.listInvoices()
       : [];
+    const rawBids: any[] = this.derivedStore.listBids
+      ? await this.derivedStore.listBids()
+      : [];
+    const rawSettlements: any[] = this.derivedStore.listSettlements
+      ? await this.derivedStore.listSettlements()
+      : [];
+    const rawDisputes: any[] = this.derivedStore.listDisputes
+      ? await this.derivedStore.listDisputes()
+      : [];
+    const rawNotifications: any[] = this.derivedStore.listNotifications
+      ? await this.derivedStore.listNotifications()
+      : [];
 
     const counts: TableCounts = this.derivedStore.getTableCounts
       ? this.derivedStore.getTableCounts()
-      : { invoices: rawInvoices.length, bids: 0, settlements: 0, disputes: 0, notifications: 0 };
+      : {
+          invoices: rawInvoices.length,
+          bids: rawBids.length,
+          settlements: rawSettlements.length,
+          disputes: rawDisputes.length,
+          notifications: rawNotifications.length,
+        };
 
     const tables: RedactedTablePayload = {
       invoices: redactRows(rawInvoices, this.config.hmacSecret),
-      bids: [],
-      settlements: [],
-      disputes: [],
-      notifications: [],
+      bids: redactRows(rawBids, this.config.hmacSecret),
+      settlements: redactRows(rawSettlements, this.config.hmacSecret),
+      disputes: redactRows(rawDisputes, this.config.hmacSecret),
+      notifications: redactRows(rawNotifications, this.config.hmacSecret),
     };
 
     const snapshotId = `snap_${++this.snapshotCounter}_${Date.now()}`;

@@ -153,6 +153,22 @@ export class InMemoryDerivedTableStore implements DerivedTableStore {
     return Array.from(this.tables.invoices.values());
   }
 
+  async listBids(): Promise<any[]> {
+    return Array.from(this.tables.bids.values());
+  }
+
+  async listSettlements(): Promise<any[]> {
+    return Array.from(this.tables.settlements.values());
+  }
+
+  async listDisputes(): Promise<any[]> {
+    return Array.from(this.tables.disputes.values());
+  }
+
+  async listNotifications(): Promise<any[]> {
+    return Array.from(this.tables.notifications.values());
+  }
+
   async getBid(id: string): Promise<any | null> {
     return this.tables.bids.get(id) || null;
   }
