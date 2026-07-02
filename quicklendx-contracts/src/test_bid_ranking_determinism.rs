@@ -23,7 +23,6 @@ use alloc::vec::Vec;
 /// * Integration with the full contract call stack — those live in `test_bid_ranking`
 ///   (feature-gated `legacy-tests`).
     use crate::bid::{Bid, BidStatus, BidStorage};
-    use alloc::vec::Vec;
     use core::cmp::Ordering;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},

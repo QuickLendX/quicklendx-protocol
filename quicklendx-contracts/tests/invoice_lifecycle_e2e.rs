@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods)]
+
 //! Full invoice lifecycle end-to-end integration tests (Issue #1103).
 //!
 //! These tests exercise the complete on-chain lifecycle of an invoice from

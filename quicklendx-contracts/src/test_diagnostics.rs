@@ -538,6 +538,78 @@ fn test_diagnostics_tag_uniqueness() {
     }
 }
 
+#[test]
+fn diagnostics_summary_empty_protocol_returns_zero_counters() {
+    let (_env, client) = setup();
+
+    let summary = client.get_diagnostics_summary();
+
+    assert_eq!(summary.total_invoices, 0);
+    assert_eq!(summary.pending_invoices, 0);
+    assert_eq!(summary.verified_invoices, 0);
+    assert_eq!(summary.funded_invoices, 0);
+    assert_eq!(summary.paid_invoices, 0);
+    assert_eq!(summary.defaulted_invoices, 0);
+    assert_eq!(summary.cancelled_invoices, 0);
+    assert_eq!(summary.refunded_invoices, 0);
+    assert_eq!(summary.active_bids, 0);
+    assert_eq!(summary.open_disputes, 0);
+    assert_eq!(summary.held_escrows, 0);
+    assert!(!summary.scan_truncated);
+}
+
+#[test]
+fn diagnostics_summary_counts_statuses_active_bids_disputes_and_held_escrows() {
+    let (env, client, admin, contract_addr) = full_setup();
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 25_000);
+    let currency = setup_token(&env, &client, &admin, &business, &investor, &contract_addr);
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &10_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86_400),
+        &String::from_str(&env, "Diagnostics summary invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &10_000,
+        &10_500,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+
+    let with_bid = client.get_diagnostics_summary();
+    assert_eq!(with_bid.total_invoices, 1);
+    assert_eq!(with_bid.verified_invoices, 1);
+    assert_eq!(with_bid.active_bids, 1);
+    assert_eq!(with_bid.held_escrows, 0);
+    assert_eq!(with_bid.open_disputes, 0);
+    assert!(!with_bid.scan_truncated);
+
+    client.accept_bid_and_fund(&invoice_id, &bid_id);
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "dispute reason"),
+        &String::from_str(&env, "dispute evidence"),
+    );
+
+    let funded = client.get_diagnostics_summary();
+    assert_eq!(funded.verified_invoices, 0);
+    assert_eq!(funded.funded_invoices, 1);
+    assert_eq!(funded.active_bids, 0);
+    assert_eq!(funded.held_escrows, 1);
+    assert_eq!(funded.open_disputes, 1);
+    assert_eq!(funded.ledger_sequence, env.ledger().sequence());
+    assert_eq!(funded.ledger_timestamp, env.ledger().timestamp());
+    assert!(!funded.scan_truncated);
+}
+
 #[cfg(feature = "diagnostics")]
 #[test]
 fn test_get_protocol_diagnostics_basic() {

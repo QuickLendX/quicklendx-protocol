@@ -1,3 +1,5 @@
+#![allow(clippy::disallowed_methods, clippy::let_unit_value)]
+
 //! Differential golden-vector harness for profit and fee math.
 //!
 //! Loads a frozen corpus from `tests/fixtures/profit_fee_corpus.json` and
