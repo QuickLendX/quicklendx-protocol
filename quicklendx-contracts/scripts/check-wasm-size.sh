@@ -26,6 +26,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTRACTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+WORKSPACE_DIR="$(cd "$CONTRACTS_DIR/.." && pwd)"
+TARGET_DIR="${CARGO_TARGET_DIR:-$WORKSPACE_DIR/target}"
 cd "$CONTRACTS_DIR"
 
 # ── Budget constants ───────────────────────────────────────────────────────────
@@ -47,20 +49,26 @@ if [[ "$CHECK_ONLY" == false ]]; then
   echo "==> Building contract for WASM (release, no test code)..."
   if command -v stellar &>/dev/null; then
     stellar contract build --verbose
-    WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
+    WASM_PATH="$TARGET_DIR/wasm32v1-none/release/$WASM_NAME"
+  elif rustup target list --installed | grep -qx "wasm32v1-none" \
+    || rustup target add wasm32v1-none >/dev/null 2>&1; then
+    echo "Stellar CLI not found; using cargo wasm32v1-none."
+    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
+    cargo build --target wasm32v1-none --release --lib
+    WASM_PATH="$TARGET_DIR/wasm32v1-none/release/$WASM_NAME"
   else
     echo "Stellar CLI not found; using cargo wasm32-unknown-unknown."
     [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
     rustup target add wasm32-unknown-unknown 2>/dev/null || true
     cargo build --target wasm32-unknown-unknown --release --lib
-    WASM_PATH="target/wasm32-unknown-unknown/release/$WASM_NAME"
+    WASM_PATH="$TARGET_DIR/wasm32-unknown-unknown/release/$WASM_NAME"
   fi
 else
   # --check-only: probe both target directories for an existing artifact
-  if [[ -f "target/wasm32v1-none/release/$WASM_NAME" ]]; then
-    WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
-  elif [[ -f "target/wasm32-unknown-unknown/release/$WASM_NAME" ]]; then
-    WASM_PATH="target/wasm32-unknown-unknown/release/$WASM_NAME"
+  if [[ -f "$TARGET_DIR/wasm32v1-none/release/$WASM_NAME" ]]; then
+    WASM_PATH="$TARGET_DIR/wasm32v1-none/release/$WASM_NAME"
+  elif [[ -f "$TARGET_DIR/wasm32-unknown-unknown/release/$WASM_NAME" ]]; then
+    WASM_PATH="$TARGET_DIR/wasm32-unknown-unknown/release/$WASM_NAME"
   else
     echo "::error::--check-only specified but no WASM artifact found; run without --check-only first."
     exit 1

@@ -1,5 +1,4 @@
 extern crate alloc;
-use alloc::vec::Vec;
 /// # Bid Ranking Determinism Tests  (Issue #1551)
 ///
 /// Verifies that `BidStorage::rank_bids` and `BidStorage::compare_bids` produce
