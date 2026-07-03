@@ -10,6 +10,7 @@ use soroban_sdk::{
 /// Maximum number of idempotency keys to track in the bloom-resistant set.
 /// This provides protection against replay attacks while maintaining reasonable storage.
 const MAX_IDEMPOTENCY_KEYS: u32 = 10_000;
+const SECONDS_PER_DAY: u64 = 86_400;
 
 /// Notification types for different events
 #[contracttype]
@@ -235,6 +236,9 @@ pub struct NotificationPreferences {
     pub system_alerts: bool,
     pub general: bool,
     pub minimum_priority: NotificationPriority,
+    /// Optional [start_seconds, end_seconds] quiet-hours window.
+    /// Values are seconds since midnight and must be less than 86_400.
+    pub quiet_window: Option<Vec<u32>>,
     pub updated_at: u64,
 }
 
@@ -254,6 +258,7 @@ impl NotificationPreferences {
             system_alerts: true,
             general: false,
             minimum_priority: NotificationPriority::Medium,
+            quiet_window: None,
             updated_at: env.ledger().timestamp(),
         }
     }
@@ -263,6 +268,7 @@ impl NotificationPreferences {
         &self,
         notification_type: &NotificationType,
         priority: &NotificationPriority,
+        current_timestamp: u64,
     ) -> bool {
         // Check minimum priority first
         let priority_check = match (&self.minimum_priority, priority) {
@@ -285,6 +291,12 @@ impl NotificationPreferences {
             return false;
         }
 
+        if priority != &NotificationPriority::Critical
+            && self.is_inside_quiet_window(current_timestamp % SECONDS_PER_DAY)
+        {
+            return false;
+        }
+
         // Check notification type preferences
         match notification_type {
             NotificationType::InvoiceCreated => self.invoice_created,
@@ -297,6 +309,36 @@ impl NotificationPreferences {
             NotificationType::InvoiceDefaulted => self.invoice_defaulted,
             NotificationType::SystemAlert => self.system_alerts,
             NotificationType::General => self.general,
+        }
+    }
+
+    fn is_inside_quiet_window(&self, seconds_since_midnight: u64) -> bool {
+        let Some(window) = self.quiet_window.clone() else {
+            return false;
+        };
+
+        if window.len() != 2 {
+            return false;
+        }
+
+        let Some(start) = window.get(0) else {
+            return false;
+        };
+        let Some(end) = window.get(1) else {
+            return false;
+        };
+
+        let start = start as u64;
+        let end = end as u64;
+
+        if start == end {
+            return false;
+        }
+
+        if start < end {
+            seconds_since_midnight >= start && seconds_since_midnight < end
+        } else {
+            seconds_since_midnight >= start || seconds_since_midnight < end
         }
     }
 }
@@ -364,7 +406,7 @@ impl NotificationSystem {
 
         // Check if user wants this type of notification
         let preferences = Self::get_user_preferences(env, &recipient);
-        if !preferences.should_notify(&notification_type, &priority) {
+        if !preferences.should_notify(&notification_type, &priority, env.ledger().timestamp()) {
             return Err(crate::errors::QuickLendXError::NotificationBlocked);
         }
 
@@ -472,13 +514,32 @@ impl NotificationSystem {
         env: &Env,
         user: &Address,
         preferences: NotificationPreferences,
-    ) {
+    ) -> Result<(), crate::errors::QuickLendXError> {
+        if let Some(window) = preferences.quiet_window.clone() {
+            if window.len() != 2 {
+                return Err(crate::errors::QuickLendXError::InvalidTimestamp);
+            }
+
+            let Some(start) = window.get(0) else {
+                return Err(crate::errors::QuickLendXError::InvalidTimestamp);
+            };
+            let Some(end) = window.get(1) else {
+                return Err(crate::errors::QuickLendXError::InvalidTimestamp);
+            };
+
+            if start >= SECONDS_PER_DAY as u32 || end >= SECONDS_PER_DAY as u32 {
+                return Err(crate::errors::QuickLendXError::InvalidTimestamp);
+            }
+        }
+
         let key = DataKey::UserPreferences(user.clone());
         env.storage().instance().set(&key, &preferences);
 
         // Emit preferences update event
         env.events()
             .publish((symbol_short!("pref_up"),), (user.clone(),));
+
+        Ok(())
     }
 
     /// Get notification statistics for a user
