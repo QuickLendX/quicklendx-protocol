@@ -4143,6 +4143,8 @@ mod test_view_only;
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_audit_hash;
 
 #[cfg(feature = "diagnostics")]
 #[contractimpl]
