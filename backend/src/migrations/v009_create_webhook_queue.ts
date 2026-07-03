@@ -26,8 +26,11 @@ export default {
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
         payload TEXT NOT NULL,
-        status TEXT NOT NULL CHECK(status IN ('pending','processing','success','failed')),
-        enqueued_at TEXT NOT NULL DEFAULT (datetime('now'))
+        status TEXT NOT NULL CHECK(status IN ('pending','processing','success','failed','dead_letter')),
+        enqueued_at TEXT NOT NULL DEFAULT (datetime('now')),
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 5,
+        next_attempt_at TEXT
       )
     `);
 
@@ -35,6 +38,12 @@ export default {
     await ctx.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_webhook_queue_status_enqueued
       ON webhook_queue(status, enqueued_at)
+    `);
+
+    // Create index for scheduler claim checks by status and next attempt time
+    await ctx.db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_webhook_queue_status_next_attempt
+      ON webhook_queue(status, next_attempt_at)
     `);
 
     // Create queue metadata table for overflow count

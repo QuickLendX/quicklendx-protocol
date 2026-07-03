@@ -86,7 +86,8 @@ function rowToDelivery(row: WebhookDeliveryRow): WebhookDelivery {
 
 export function computeNextRetry(attemptCount: number): string | null {
   if (attemptCount >= MAX_RETRY_ATTEMPTS) return null;
-  const baseDelay = RETRY_DELAYS_MS[attemptCount];
+  const delayIndex = Math.max(0, attemptCount - 1);
+  const baseDelay = RETRY_DELAYS_MS[delayIndex] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1];
   const jitter = Math.round(Math.random() * baseDelay * 0.5);
   return new Date(Date.now() + baseDelay + jitter).toISOString();
 }
@@ -168,8 +169,12 @@ export class WebhookDeliveryRepo {
   }
 
   getPending(): WebhookDelivery[] {
+    return this.claimDue(new Date());
+  }
+
+  claimDue(now: Date): WebhookDelivery[] {
     const db = getDatabase();
-    const now = new Date().toISOString();
+    const nowIso = now.toISOString();
     const rows = db
       .prepare(
         `SELECT * FROM webhook_deliveries
@@ -177,7 +182,7 @@ export class WebhookDeliveryRepo {
             OR (status = 'failed' AND next_retry_at <= ?)
          ORDER BY enqueued_at ASC`
       )
-      .all(now, now) as WebhookDeliveryRow[];
+      .all(nowIso, nowIso) as WebhookDeliveryRow[];
     return rows.map(rowToDelivery);
   }
 

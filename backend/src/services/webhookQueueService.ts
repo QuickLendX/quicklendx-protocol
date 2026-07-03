@@ -44,6 +44,7 @@ const WebhookQueueStatsSchema = z.object({
   pendingCount: z.number().int().min(0),
   successCount: z.number().int().min(0),
   failureCount: z.number().int().min(0),
+  deadLetterCount: z.number().int().min(0),
   oldestTimestamp: z.string().datetime().nullable(),
 });
 
@@ -70,11 +71,7 @@ class WebhookQueueService {
   }
 
   public static resetInstance(): void {
-    if (WebhookQueueService.instance) {
-      WebhookQueueService.instance.db = getDatabase();
-    } else {
-      WebhookQueueService.instance = new WebhookQueueService();
-    }
+    WebhookQueueService.instance = new WebhookQueueService();
   }
 
   enqueue(type: string, payload?: unknown): WebhookEvent {
@@ -132,6 +129,7 @@ class WebhookQueueService {
       pendingCount: s.pending,
       successCount: s.success,
       failureCount: s.failed,
+      deadLetterCount: s.deadLetter,
       oldestTimestamp: s.oldestPending,
     };
   }
@@ -150,6 +148,10 @@ class WebhookQueueService {
 
   getPendingDeliveries(): WebhookDelivery[] {
     return webhookDeliveryRepo.getPending();
+  }
+
+  claimDue(now: Date = new Date()): WebhookEvent[] {
+    return webhookDeliveryRepo.claimDue(now).map(deliveryToEvent);
   }
 
   getDeadLetters(): WebhookDelivery[] {

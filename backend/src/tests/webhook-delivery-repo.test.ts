@@ -252,9 +252,28 @@ describe("WebhookDeliveryRepo", () => {
   });
 
   describe("computeNextRetry", () => {
+    let dateNowSpy: jest.SpyInstance<number, []>;
+    let randomSpy: jest.SpyInstance<number, []>;
+
+    beforeEach(() => {
+      dateNowSpy = jest.spyOn(Date, "now").mockReturnValue(
+        new Date("2026-07-03T00:00:00.000Z").getTime()
+      );
+      randomSpy = jest.spyOn(Math, "random").mockReturnValue(0);
+    });
+
+    afterEach(() => {
+      dateNowSpy.mockRestore();
+      randomSpy.mockRestore();
+    });
+
     it("should return null beyond max attempts", () => {
       expect(computeNextRetry(MAX_RETRY_ATTEMPTS)).toBeNull();
       expect(computeNextRetry(99)).toBeNull();
+    });
+
+    it("should compute a deterministic first retry delay with zero jitter", () => {
+      expect(computeNextRetry(1)).toBe("2026-07-03T00:01:00.000Z");
     });
 
     it("should return a future date for valid attempts", () => {
@@ -324,6 +343,34 @@ describe("WebhookQueueService integration", () => {
 
     const deadLetters = webhookQueueService.getDeadLetters();
     expect(deadLetters.length).toBe(2);
+
+    const stats = webhookQueueService.getStats();
+    expect(stats.deadLetterCount).toBe(2);
+  });
+
+  it("should claim only immediately due retryable deliveries", () => {
+    const db = getDatabase();
+    const ready = webhookQueueService.enqueue("ready.pending", {});
+    const dueRetry = webhookQueueService.enqueue("due.retry", {});
+    const futureRetry = webhookQueueService.enqueue("future.retry", {});
+    const deadLetter = webhookQueueService.enqueueWithSubscriber("dead.retry", {}, "sub-1");
+
+    webhookQueueService.markFailed(dueRetry.id);
+    webhookQueueService.markFailed(futureRetry.id);
+    for (let i = 0; i < 5; i++) {
+      webhookQueueService.markFailed(deadLetter.id);
+    }
+
+    db.prepare(
+      "UPDATE webhook_deliveries SET next_retry_at = ? WHERE id = ?"
+    ).run("2026-07-03T00:00:00.000Z", dueRetry.id);
+    db.prepare(
+      "UPDATE webhook_deliveries SET next_retry_at = ? WHERE id = ?"
+    ).run("2026-07-03T00:10:00.000Z", futureRetry.id);
+
+    const claimed = webhookQueueService.claimDue(new Date("2026-07-03T00:05:00.000Z"));
+    expect(claimed.map((event) => event.id).sort()).toEqual([dueRetry.id, ready.id].sort());
+    expect(claimed.every((event) => event.status !== "dead_letter")).toBe(true);
   });
 
   it("should cleanup old deliveries", () => {
