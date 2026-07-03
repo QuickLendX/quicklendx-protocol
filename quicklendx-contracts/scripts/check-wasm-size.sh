@@ -45,14 +45,18 @@ done
 # ── Build step ─────────────────────────────────────────────────────────────────
 if [[ "$CHECK_ONLY" == false ]]; then
   echo "==> Building contract for WASM (release, no test code)..."
+  [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
   if command -v stellar &>/dev/null; then
     stellar contract build --verbose
     WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
+  elif rustup target list --installed | grep -qx "wasm32v1-none"; then
+    echo "Stellar CLI not found; using cargo wasm32v1-none."
+    cargo build --target wasm32v1-none --target-dir target --release --lib
+    WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
   else
     echo "Stellar CLI not found; using cargo wasm32-unknown-unknown."
-    [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
     rustup target add wasm32-unknown-unknown 2>/dev/null || true
-    cargo build --target wasm32-unknown-unknown --release --lib
+    cargo build --target wasm32-unknown-unknown --target-dir target --release --lib
     WASM_PATH="target/wasm32-unknown-unknown/release/$WASM_NAME"
   fi
 else
