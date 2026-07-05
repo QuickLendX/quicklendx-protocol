@@ -331,6 +331,29 @@ impl EscrowStorage {
         }
     }
 
+    pub fn extend_invoice_escrow_ttl(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+        let invoice_key = (symbol_short!("escrow"), invoice_id);
+        let escrow_id: Option<BytesN<32>> = env.storage().persistent().get(&invoice_key);
+        let mut refreshed = 0u32;
+
+        if let Some(escrow_id) = escrow_id {
+            extend_persistent_ttl(env, &invoice_key);
+            refreshed = refreshed.saturating_add(1);
+
+            let escrow: Option<Escrow> = env.storage().persistent().get(&escrow_id);
+            if escrow
+                .as_ref()
+                .map(|escrow| escrow.invoice_id == invoice_id.clone())
+                .unwrap_or(false)
+            {
+                extend_persistent_ttl(env, &escrow_id);
+                refreshed = refreshed.saturating_add(1);
+            }
+        }
+
+        refreshed
+    }
+
     pub fn update_escrow(env: &Env, escrow: &Escrow) {
         env.storage().persistent().set(&escrow.escrow_id, escrow);
         extend_persistent_ttl(env, &escrow.escrow_id);
@@ -491,8 +514,7 @@ pub fn create_escrow(
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the release can be safely retried.
 pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .unwrap();
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
 
     if escrow.status != EscrowStatus::Held {
         // Prevents repeated release (idempotency)
@@ -547,8 +569,7 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the refund can be safely retried.
 pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .unwrap();
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
 
     if escrow.status != EscrowStatus::Held {
         return Err(QuickLendXError::InvalidStatus);

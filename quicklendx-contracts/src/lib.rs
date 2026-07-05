@@ -526,6 +526,15 @@ impl QuickLendXContract {
         maintenance::MaintenanceControl::extend_protocol_ttl(&env, &admin)
     }
 
+    /// Admin-only: extends TTL for one invoice and its associated storage keys.
+    pub fn extend_invoice_ttl(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+    ) -> Result<maintenance::ExtendReport, QuickLendXError> {
+        maintenance::MaintenanceControl::extend_invoice_ttl(&env, &admin, &invoice_id)
+    }
+
     /// Admin-gated protocol heartbeat. Authenticates `admin` as the stored protocol
     /// admin, then runs every composed invariant check read-only.
     pub fn invariant_self_check(

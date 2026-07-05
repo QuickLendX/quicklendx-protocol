@@ -83,7 +83,7 @@ use crate::errors::QuickLendXError;
 use crate::events::{emit_invoice_settled, emit_partial_payment};
 use crate::investment::InvestmentStorage;
 use crate::payments::transfer_funds;
-use crate::storage::InvoiceStorage;
+use crate::storage::{extend_persistent_ttl, InvoiceStorage};
 use crate::types::InvestmentStatus;
 use crate::types::{Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
@@ -415,8 +415,7 @@ pub fn settle_invoice(
         .checked_add(applied_preview)
         .ok_or(QuickLendXError::InvalidAmount)?;
 
-    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .unwrap();
+    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
     if projected_total < invoice.amount || projected_total < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -522,6 +521,39 @@ pub fn get_payment_records(
     Ok(records)
 }
 
+pub fn extend_invoice_payment_ttl(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+    let count_key = SettlementDataKey::PaymentCount(invoice_id.clone());
+    let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+    let mut refreshed = 0u32;
+
+    if count > 0 {
+        extend_persistent_ttl(env, &count_key);
+        refreshed = refreshed.saturating_add(1);
+    }
+
+    let mut idx = 0u32;
+    while idx < count {
+        let payment_key = SettlementDataKey::Payment(invoice_id.clone(), idx);
+        let payment: Option<SettlementPaymentRecord> = env.storage().persistent().get(&payment_key);
+        if payment.is_some() {
+            extend_persistent_ttl(env, &payment_key);
+            refreshed = refreshed.saturating_add(1);
+        }
+        idx += 1;
+    }
+
+    let finalized_key = SettlementDataKey::Finalized(invoice_id.clone());
+    let finalized: Option<bool> = env.storage().persistent().get(&finalized_key);
+    if finalized.is_some() {
+        extend_persistent_ttl(env, &finalized_key);
+        refreshed = refreshed.saturating_add(1);
+    }
+
+    // PaymentNonce keys are replay markers keyed by caller-provided nonce and
+    // are not enumerable in the current storage layout.
+    refreshed
+}
+
 /// Returns whether an invoice has been finalized (settlement completed).
 pub fn is_invoice_finalized(env: &Env, invoice_id: &BytesN<32>) -> Result<bool, QuickLendXError> {
     ensure_invoice_exists(env, invoice_id)?;
@@ -542,8 +574,7 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
 
-    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .unwrap();
+    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
     if invoice.total_paid < invoice.amount || invoice.total_paid < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);

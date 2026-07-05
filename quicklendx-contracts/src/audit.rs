@@ -34,6 +34,7 @@
 //! See `src/test_audit.rs` for comprehensive integrity tests.
 
 use crate::errors::QuickLendXError;
+use crate::storage::extend_instance_ttl;
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{
     contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Symbol, Vec,
@@ -539,6 +540,25 @@ impl AuditStorage {
             .instance()
             .get(&key)
             .unwrap_or_else(|| Vec::new(env))
+    }
+
+    pub fn extend_invoice_audit_ttl(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+        let trail = Self::get_invoice_audit_trail(env, invoice_id);
+        if trail.len() == 0 {
+            return 0;
+        }
+
+        let mut refreshed = 1u32;
+        for audit_id in trail.iter() {
+            if Self::get_audit_entry(env, &audit_id).is_some() {
+                refreshed = refreshed.saturating_add(1);
+            }
+        }
+
+        // Audit data uses instance storage, whose TTL is extended for the whole
+        // instance rather than one key at a time.
+        extend_instance_ttl(env);
+        refreshed
     }
 
     /// Get audit entries by operation type

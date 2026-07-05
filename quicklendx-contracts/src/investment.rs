@@ -396,6 +396,29 @@ impl InvestmentStorage {
             .filter(|inv| inv.invoice_id == *invoice_id)
     }
 
+    pub fn extend_invoice_investment_ttl(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+        let index_key = Self::invoice_index_key(invoice_id);
+        let investment_id: Option<BytesN<32>> = env.storage().persistent().get(&index_key);
+        let mut refreshed = 0u32;
+
+        if let Some(investment_id) = investment_id {
+            extend_persistent_ttl(env, &index_key);
+            refreshed = refreshed.saturating_add(1);
+
+            let investment: Option<Investment> = env.storage().persistent().get(&investment_id);
+            if investment
+                .as_ref()
+                .map(|investment| investment.invoice_id == invoice_id.clone())
+                .unwrap_or(false)
+            {
+                extend_persistent_ttl(env, &investment_id);
+                refreshed = refreshed.saturating_add(1);
+            }
+        }
+
+        refreshed
+    }
+
     /// Update an investment, enforcing the transition guard and maintaining the
     /// active-investment index so no orphan `Active` records can accumulate.
     ///

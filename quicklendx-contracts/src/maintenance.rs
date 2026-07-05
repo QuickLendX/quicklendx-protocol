@@ -7,13 +7,15 @@
 //! - Admin operations that toggle maintenance mode itself are always allowed.
 
 use crate::admin::AdminStorage;
+use crate::audit::AuditStorage;
 use crate::bid::BidStorage;
 use crate::currency::CurrencyWhitelist;
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
 use crate::payments::EscrowStorage;
+use crate::settlement;
 use crate::storage::{extend_persistent_ttl, DataKey, InvoiceStorage};
-use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol};
 
 /// Storage key for the maintenance mode boolean flag.
 pub const MAINTENANCE_MODE_KEY: Symbol = symbol_short!("maint");
@@ -37,6 +39,9 @@ pub const MAX_REASON_LEN: u32 = 256;
 /// * `escrows_refreshed`   — Number of escrow records extended.
 /// * `currencies_refreshed` — Number of whitelisted currency entries extended.
 ///
+/// The targeted invoice path also fills payment and audit counts when those
+/// record sets exist.
+///
 /// # Idempotency
 /// Calling `extend_protocol_ttl` multiple times within the same ledger is safe:
 /// `extend_ttl` is itself idempotent, and the report always reflects the current
@@ -53,6 +58,10 @@ pub struct ExtendReport {
     pub investments_refreshed: u32,
     /// Number of escrow records whose TTL was extended.
     pub escrows_refreshed: u32,
+    /// Number of payment storage keys whose TTL was extended.
+    pub payments_refreshed: u32,
+    /// Number of audit storage keys covered by an instance TTL extension.
+    pub audit_refreshed: u32,
     /// Number of whitelisted currency entries whose TTL was extended.
     pub currencies_refreshed: u32,
 }
@@ -60,6 +69,34 @@ pub struct ExtendReport {
 pub struct MaintenanceControl;
 
 impl MaintenanceControl {
+    fn empty_report() -> ExtendReport {
+        ExtendReport {
+            invoices_refreshed: 0,
+            bids_refreshed: 0,
+            investments_refreshed: 0,
+            escrows_refreshed: 0,
+            payments_refreshed: 0,
+            audit_refreshed: 0,
+            currencies_refreshed: 0,
+        }
+    }
+
+    fn emit_ttl_event(env: &Env, kind: &str, count: u32) {
+        if count > 0 {
+            crate::events::emit_ttl_extended(env, &String::from_str(env, kind), count);
+        }
+    }
+
+    fn emit_extend_report_events(env: &Env, report: &ExtendReport) {
+        Self::emit_ttl_event(env, "invoice", report.invoices_refreshed);
+        Self::emit_ttl_event(env, "bid", report.bids_refreshed);
+        Self::emit_ttl_event(env, "investment", report.investments_refreshed);
+        Self::emit_ttl_event(env, "escrow", report.escrows_refreshed);
+        Self::emit_ttl_event(env, "payment", report.payments_refreshed);
+        Self::emit_ttl_event(env, "audit", report.audit_refreshed);
+        Self::emit_ttl_event(env, "currency", report.currencies_refreshed);
+    }
+
     /// Return `true` if the protocol is currently in maintenance mode.
     pub fn is_maintenance_mode(env: &Env) -> bool {
         env.storage()
@@ -147,13 +184,7 @@ impl MaintenanceControl {
     ) -> Result<ExtendReport, QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
 
-        let mut report = ExtendReport {
-            invoices_refreshed: 0,
-            bids_refreshed: 0,
-            investments_refreshed: 0,
-            escrows_refreshed: 0,
-            currencies_refreshed: 0,
-        };
+        let mut report = Self::empty_report();
 
         // 1. Extend Invoices
         for invoice_id in InvoiceStorage::get_all_invoice_ids(env).iter() {
@@ -187,42 +218,33 @@ impl MaintenanceControl {
             report.currencies_refreshed += 1;
         }
 
-        // Emit events for each kind that was refreshed
-        if report.invoices_refreshed > 0 {
-            crate::events::emit_ttl_extended(
-                env,
-                &String::from_str(env, "invoice"),
-                report.invoices_refreshed,
-            );
-        }
-        if report.bids_refreshed > 0 {
-            crate::events::emit_ttl_extended(
-                env,
-                &String::from_str(env, "bid"),
-                report.bids_refreshed,
-            );
-        }
-        if report.investments_refreshed > 0 {
-            crate::events::emit_ttl_extended(
-                env,
-                &String::from_str(env, "investment"),
-                report.investments_refreshed,
-            );
-        }
-        if report.escrows_refreshed > 0 {
-            crate::events::emit_ttl_extended(
-                env,
-                &String::from_str(env, "escrow"),
-                report.escrows_refreshed,
-            );
-        }
-        if report.currencies_refreshed > 0 {
-            crate::events::emit_ttl_extended(
-                env,
-                &String::from_str(env, "currency"),
-                report.currencies_refreshed,
-            );
-        }
+        Self::emit_extend_report_events(env, &report);
+
+        Ok(report)
+    }
+
+    /// Admin-only: extends TTL for one invoice and its associated storage keys.
+    pub fn extend_invoice_ttl(
+        env: &Env,
+        admin: &Address,
+        invoice_id: &BytesN<32>,
+    ) -> Result<ExtendReport, QuickLendXError> {
+        AdminStorage::require_admin(env, admin)?;
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        let mut report = Self::empty_report();
+
+        extend_persistent_ttl(env, &DataKey::Invoice(invoice_id.clone()));
+        report.invoices_refreshed = 1;
+
+        report.bids_refreshed = BidStorage::extend_invoice_bid_ttl(env, invoice_id);
+        report.investments_refreshed =
+            InvestmentStorage::extend_invoice_investment_ttl(env, invoice_id);
+        report.escrows_refreshed = EscrowStorage::extend_invoice_escrow_ttl(env, invoice_id);
+        report.payments_refreshed = settlement::extend_invoice_payment_ttl(env, invoice_id);
+        report.audit_refreshed = AuditStorage::extend_invoice_audit_ttl(env, invoice_id);
+
+        Self::emit_extend_report_events(env, &report);
 
         Ok(report)
     }

@@ -25,19 +25,27 @@ use crate::events::TtlExtended;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::maintenance::{ExtendReport, MaintenanceControl, MAX_REASON_LEN};
 use crate::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
+use soroban_sdk::{
+    testutils::{Address as _, Ledger},
+    token, Address, BytesN, Env, String, Vec,
+};
 
 // ============================================================================
 // Helpers
 // ============================================================================
 
 fn setup(env: &Env) -> (QuickLendXContractClient<'static>, Address) {
+    let (client, admin, _) = setup_with_id(env);
+    (client, admin)
+}
+
+fn setup_with_id(env: &Env) -> (QuickLendXContractClient<'static>, Address, Address) {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(env, &contract_id);
     let admin = Address::generate(env);
     client.initialize_admin(&admin);
-    (client, admin)
+    (client, admin, contract_id)
 }
 
 fn reason(env: &Env, msg: &str) -> String {
@@ -60,6 +68,55 @@ fn make_invoice(
         &InvoiceCategory::Services,
         &Vec::new(env),
     )
+}
+
+fn init_currency_for_test(
+    env: &Env,
+    contract_id: &Address,
+    business: &Address,
+    investor: &Address,
+) -> Address {
+    let token_admin = Address::generate(env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(env, &currency);
+    let sac_client = token::StellarAssetClient::new(env, &currency);
+    let initial_balance = 10_000i128;
+
+    sac_client.mint(business, &initial_balance);
+    sac_client.mint(investor, &initial_balance);
+
+    let expiration = env.ledger().sequence() + 1_000;
+    token_client.approve(investor, contract_id, &initial_balance, &expiration);
+    token_client.approve(business, contract_id, &initial_balance, &expiration);
+
+    currency
+}
+
+fn make_funded_invoice_with_payment(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    admin: &Address,
+    business: &Address,
+    investor: &Address,
+    currency: &Address,
+) -> BytesN<32> {
+    client.set_admin(admin);
+    client.add_currency(admin, currency);
+
+    client.submit_kyc_application(business, &String::from_str(env, "Business KYC"));
+    client.verify_business(admin, business);
+    client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
+    client.verify_investor(investor, &10_000i128);
+
+    let invoice_id = make_invoice(env, client, business, currency);
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(investor, &invoice_id, &500i128, &1_000i128);
+    client.accept_bid(&invoice_id, &bid_id);
+    client.process_partial_payment(&invoice_id, &100i128, &String::from_str(env, "pmt-1"));
+
+    invoice_id
 }
 
 // ============================================================================
@@ -481,6 +538,8 @@ fn test_extend_ttl_empty_indexes() {
             bids_refreshed: 0,
             investments_refreshed: 0,
             escrows_refreshed: 0,
+            payments_refreshed: 0,
+            audit_refreshed: 0,
             currencies_refreshed: 0,
         },
         "report must be all-zero when no data exists"
@@ -567,12 +626,126 @@ fn test_extend_ttl_emits_events() {
         + (report.bids_refreshed > 0) as usize
         + (report.investments_refreshed > 0) as usize
         + (report.escrows_refreshed > 0) as usize
+        + (report.payments_refreshed > 0) as usize
+        + (report.audit_refreshed > 0) as usize
         + (report.currencies_refreshed > 0) as usize;
 
     assert_eq!(
         after - before,
         expected_events,
         "must emit one TtlExtended event per non-zero kind"
+    );
+}
+
+#[test]
+fn test_extend_invoice_ttl_unknown_invoice_rejected() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let unknown_invoice = BytesN::from_array(&env, &[9u8; 32]);
+
+    let result = client.try_extend_invoice_ttl(&admin, &unknown_invoice);
+
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvoiceNotFound,
+        "unknown invoice IDs must be rejected with a typed error"
+    );
+}
+
+#[test]
+fn test_extend_invoice_ttl_non_admin_rejected() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let invoice_id = make_invoice(&env, &client, &business, &currency);
+    let attacker = Address::generate(&env);
+
+    let result = client.try_extend_invoice_ttl(&attacker, &invoice_id);
+
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::NotAdmin,
+        "non-admin must receive NotAdmin"
+    );
+}
+
+#[test]
+fn test_extend_invoice_ttl_invoice_only() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let invoice_id = make_invoice(&env, &client, &business, &currency);
+
+    let before = count_ttl_extended_events(&env);
+    let report = client.extend_invoice_ttl(&admin, &invoice_id);
+    let after = count_ttl_extended_events(&env);
+
+    assert_eq!(report.invoices_refreshed, 1);
+    assert_eq!(report.bids_refreshed, 0);
+    assert_eq!(report.investments_refreshed, 0);
+    assert_eq!(report.escrows_refreshed, 0);
+    assert_eq!(report.payments_refreshed, 0);
+    assert_eq!(report.audit_refreshed, 0);
+    assert_eq!(report.currencies_refreshed, 0);
+    assert_eq!(
+        after - before,
+        1,
+        "only invoice TTL event should be emitted"
+    );
+}
+
+#[test]
+fn test_extend_invoice_ttl_full_record_set() {
+    let env = Env::default();
+    let (client, admin, contract_id) = setup_with_id(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        make_funded_invoice_with_payment(&env, &client, &admin, &business, &investor, &currency);
+    let invoice = client.get_invoice(&invoice_id);
+
+    env.as_contract(&contract_id, || {
+        crate::audit::log_invoice_uploaded(
+            &env,
+            invoice_id.clone(),
+            business.clone(),
+            invoice.amount,
+        );
+    });
+
+    let before = count_ttl_extended_events(&env);
+    let report = client.extend_invoice_ttl(&admin, &invoice_id);
+    let after = count_ttl_extended_events(&env);
+
+    assert_eq!(report.invoices_refreshed, 1);
+    assert_eq!(
+        report.bids_refreshed, 3,
+        "bid count key, invoice bid entry key, and bid record"
+    );
+    assert_eq!(
+        report.investments_refreshed, 2,
+        "invoice investment index and investment record"
+    );
+    assert_eq!(
+        report.escrows_refreshed, 2,
+        "invoice escrow index and escrow record"
+    );
+    assert_eq!(
+        report.payments_refreshed, 2,
+        "payment count key and one payment record"
+    );
+    assert_eq!(
+        report.audit_refreshed, 2,
+        "invoice audit trail key and one audit entry"
+    );
+    assert_eq!(report.currencies_refreshed, 0);
+    assert_eq!(
+        after - before,
+        6,
+        "one event should be emitted for each non-zero targeted kind"
     );
 }
 

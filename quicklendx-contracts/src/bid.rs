@@ -243,6 +243,36 @@ impl BidStorage {
         bids
     }
 
+    pub fn extend_invoice_bid_ttl(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+        let count_key = Self::invoice_bid_count_key(invoice_id);
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        let mut refreshed = 0u32;
+
+        if count > 0 {
+            extend_persistent_ttl(env, &count_key);
+            refreshed = refreshed.saturating_add(1);
+        }
+
+        let mut idx: u32 = 0;
+        while idx < count {
+            let entry_key = Self::invoice_bid_entry_key(invoice_id, idx);
+            let bid_id: Option<BytesN<32>> = env.storage().persistent().get(&entry_key);
+            if let Some(bid_id) = bid_id {
+                extend_persistent_ttl(env, &entry_key);
+                refreshed = refreshed.saturating_add(1);
+
+                let bid: Option<Bid> = env.storage().persistent().get(&bid_id);
+                if bid.is_some() {
+                    extend_persistent_ttl(env, &bid_id);
+                    refreshed = refreshed.saturating_add(1);
+                }
+            }
+            idx += 1;
+        }
+
+        refreshed
+    }
+
     pub fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let _ = Self::refresh_expired_bids(env, invoice_id);
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);

@@ -22,6 +22,11 @@ where
     env.storage().persistent().extend_ttl(key, ttl_u32, ttl_u32);
 }
 
+pub fn extend_instance_ttl(env: &Env) {
+    let ttl_u32: u32 = PERSISTENT_TTL_THRESHOLD.try_into().unwrap_or(0);
+    env.storage().instance().extend_ttl(ttl_u32, ttl_u32);
+}
+
 pub fn bump_persistent<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
