@@ -1116,6 +1116,7 @@ Additional documentation is available in the `docs/` directory:
 - **[Notifications Idempotency](docs/notifications-idempotency.md)**: Notification delivery guarantees
 - **[Storage TTL Policy](docs/storage-ttl-policy.md)**: Storage lifetime management
 - **[Storage TTL Map](../docs/STORAGE_TTL.md)**: Detailed mapping of each contract storage key to its bump amount
+- **[Emergency Withdraw](docs/EMERGENCY_WITHDRAW.md)**: Timelock, expiration, nonce cancellation, and operator runbook for last-resort recovery
 - **[Protocol Health](docs/protocol-health.md)**: Health check endpoints and monitoring
 - **[Error Catalog](docs/error-catalog.md)**: Complete error reference
 
