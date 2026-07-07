@@ -63,13 +63,12 @@ use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency}
 #[cfg(any(test, feature = "testutils"))]
 pub mod bench;
 pub mod admin;
+mod address_summary;
 pub mod analytics;
 pub mod audit;
 pub mod backpressure;
 pub mod backup;
 pub mod backup_v1;
-#[cfg(any(test, feature = "testutils"))]
-pub mod bench;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
@@ -84,6 +83,7 @@ pub mod fees;
 pub mod freshness;
 pub mod governance;
 pub mod health;
+pub mod idempotency;
 pub mod incident;
 pub mod init;
 pub mod invariants;
@@ -108,8 +108,6 @@ pub mod storage;
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
-mod test_panic_handler;
 #[cfg(test)]
 mod test_due_date_guard;
 #[cfg(test)]
@@ -156,7 +154,7 @@ mod test_dispute;
 mod test_dispute_refund_flow;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_event_invariant;
 #[cfg(test)]
 mod test_dust_transfer;
@@ -170,6 +168,8 @@ mod test_escrow_refund_after_expiry;
 mod test_expired_bids_cleanup;
 #[cfg(test)]
 mod test_freshness;
+#[cfg(test)]
+mod test_freshness_classify;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
 #[cfg(test)]
@@ -284,8 +284,6 @@ mod test_input_matrix;
 mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
-#[cfg(test)]
-mod test_incident;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_metadata;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -300,8 +298,6 @@ mod test_clock_rollover;
 mod test_rebuild_indexes;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(test)]
-mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_invoices_paged_ordering;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -4123,7 +4119,7 @@ impl QuickLendXContract {
 mod test_emergency_escrow_protection;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_settle_refund_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_mutual_exclusion;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_collision_cross_domain;

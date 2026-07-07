@@ -28,6 +28,18 @@ The boundary is inclusive: `120` seconds is still usable, while `121` seconds
 is stale. Tests in `src/test_freshness_bounds.rs` pin that one-ledger-second
 transition so future changes cannot silently move the threshold.
 
+## Tier Classification
+
+`FreshnessMetadata::classify(fresh_max, stale_max)` maps lag to
+`FreshnessTier::Fresh`, `FreshnessTier::Stale`, or `FreshnessTier::Critical`.
+Both thresholds are inclusive. Invalid ordering (`fresh_max > stale_max`) fails
+closed to `Critical`; callers that need a typed rejection can use
+`try_classify`, which returns `FreshnessError::InvalidConfigValue`.
+
+```rust
+let tier = metadata.classify(30, 120);
+```
+
 ## Monotonicity
 
 For a fixed current ledger timestamp, increasing elapsed time must never report

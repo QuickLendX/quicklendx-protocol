@@ -12,6 +12,8 @@
 //! | `test_invoice_lifecycle_default_branch` | Upload → Verify → Bid → Fund → Expire → Refund |
 //! | `test_partial_then_full_settle`       | Upload → Verify → Bid → Fund → Multiple partials → Final settle |
 
+#![allow(clippy::disallowed_methods)]
+
 use quicklendx_contracts::{
     types::{BidStatus, InvestmentStatus, InvoiceCategory, InvoiceStatus},
     QuickLendXContract, QuickLendXContractClient,

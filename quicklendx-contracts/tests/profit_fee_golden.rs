@@ -9,6 +9,8 @@
 //! ALLOW_PROFIT_FEE_CORPUS_REFRESH=1 ./scripts/refresh-profit-fee-corpus.sh
 //! ```
 
+#![allow(clippy::disallowed_methods)]
+
 use quicklendx_contracts::fees::FeeManager;
 use quicklendx_contracts::profits::{calculate_treasury_split, verify_no_dust, PlatformFee};
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
@@ -90,7 +92,7 @@ fn evaluate_transaction_fee(
     let admin = Address::generate(&env);
     let user = Address::generate(&env);
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let _ = client.initialize_admin(&admin);
+    client.initialize_admin(&admin);
 
     env.as_contract(&contract_id, || {
         FeeManager::initialize(&env, &admin).unwrap();
@@ -308,7 +310,7 @@ fn profit_fee_golden_contract_calculate_profit_matches_corpus_subset() {
     let contract_id = env.register(QuickLendXContract, ());
     let admin = Address::generate(&env);
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    let _ = client.initialize_admin(&admin);
+    client.initialize_admin(&admin);
 
     let corpus = load_corpus();
     for vector in corpus.vectors.iter().take(50) {

@@ -5,6 +5,7 @@
 //! AnalyticsCalculator::calculate_platform_metrics.
 
 #![cfg(test)]
+#![allow(clippy::unnecessary_cast, unused_must_use, unused_parens)]
 
 extern crate alloc;
 

@@ -16,6 +16,7 @@
 //! These cases are deterministic (no `Date.now()`/randomness) and run on the
 //! default test build so they execute on every CI matrix entry.
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 mod test_insurance_optin_lifecycle {
     use crate::investment::{
         Investment, InvestmentStatus, InvestmentStorage, MAX_COVERAGE_PERCENTAGE,

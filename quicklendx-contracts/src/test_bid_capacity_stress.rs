@@ -46,6 +46,8 @@
 //! Tests that need to confirm the `Placed → Expired` transition on the
 //! underlying `Bid` struct use `BidStorage::get_bid` directly.
 
+#![allow(clippy::doc_lazy_continuation, clippy::unnecessary_cast)]
+
 use super::*;
 use crate::bid::{BidStatus, BidStorage, MAX_BIDS_PER_INVOICE};
 use crate::errors::QuickLendXError;
@@ -249,7 +251,7 @@ fn test_rank_bids_full_capacity_orders_by_documented_chain() {
         if i == 0 {
             first_bid_id = Some(bid_id.clone());
         }
-        if i == MAX_BIDS_PER_INVOICE - 1
+        if i == MAX_BIDS_PER_INVOICE - 1 {
             last_bid_id = Some(bid_id);
         }
     }

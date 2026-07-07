@@ -23,6 +23,26 @@ pub enum FreshnessError {
     InvalidConfigValue = 3,
 }
 
+/// Client-facing freshness severity for indexed data.
+///
+/// The tier is computed from `FreshnessMetadata::index_lag_seconds` and two
+/// inclusive thresholds:
+///
+/// ```rust,ignore
+/// let tier = metadata.classify(30, 120);
+/// assert_eq!(tier, FreshnessTier::Fresh);
+/// ```
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FreshnessTier {
+    /// Drift is less than or equal to the configured fresh threshold.
+    Fresh,
+    /// Drift is above the fresh threshold but still within the stale threshold.
+    Stale,
+    /// Drift is above the stale threshold, or thresholds are invalid.
+    Critical,
+}
+
 /// Transport-friendly freshness metadata returned by `lib.rs::get_freshness`.
 ///
 /// See `quicklendx-contracts/docs/freshness.md` for the documented stale-data
@@ -57,6 +77,43 @@ impl FreshnessMetadata {
             index_lag_seconds: lag,
             last_updated_at: iso8601_from_unix_timestamp(env, indexed_ledger_timestamp),
             cursor: String::from_str(env, &format!("{indexed_ledger_seq}_{offset}")),
+        }
+    }
+
+    /// Classify this metadata's lag into a [`FreshnessTier`].
+    ///
+    /// `fresh_max` and `stale_max` are inclusive bounds in seconds:
+    /// - `index_lag_seconds <= fresh_max` returns [`FreshnessTier::Fresh`]
+    /// - `index_lag_seconds <= stale_max` returns [`FreshnessTier::Stale`]
+    /// - larger drift returns [`FreshnessTier::Critical`]
+    ///
+    /// If `fresh_max > stale_max`, this method fails closed and returns
+    /// [`FreshnessTier::Critical`]. Call [`Self::try_classify`] when the caller
+    /// needs a typed rejection instead.
+    pub fn classify(&self, fresh_max: i64, stale_max: i64) -> FreshnessTier {
+        self.try_classify(fresh_max, stale_max)
+            .unwrap_or(FreshnessTier::Critical)
+    }
+
+    /// Classify this metadata's lag, rejecting invalid threshold ordering.
+    ///
+    /// Returns [`FreshnessError::InvalidConfigValue`] when `fresh_max` is greater
+    /// than `stale_max`.
+    pub fn try_classify(
+        &self,
+        fresh_max: i64,
+        stale_max: i64,
+    ) -> Result<FreshnessTier, FreshnessError> {
+        if fresh_max > stale_max {
+            return Err(FreshnessError::InvalidConfigValue);
+        }
+
+        if self.index_lag_seconds <= fresh_max {
+            Ok(FreshnessTier::Fresh)
+        } else if self.index_lag_seconds <= stale_max {
+            Ok(FreshnessTier::Stale)
+        } else {
+            Ok(FreshnessTier::Critical)
         }
     }
 }
