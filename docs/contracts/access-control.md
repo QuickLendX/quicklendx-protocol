@@ -2,6 +2,10 @@
 
 QuickLendX uses an explicit single-admin role model for protocol configuration and emergency recovery.
 
+For a source-grounded map of every exported contract entrypoint, including
+business, investor, public read, maintenance, and internal-style helpers, see
+[`../AUTH_MATRIX.md`](../AUTH_MATRIX.md).
+
 ## Role Model
 
 - `admin` is the only privileged governance role.
