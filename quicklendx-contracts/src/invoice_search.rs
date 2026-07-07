@@ -4,8 +4,15 @@ use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
 use crate::types::{Invoice, InvoiceStatus, SearchRank, SearchResult};
 
-/// Maximum number of search results to return
+/// Maximum number of search results returned by one invoice-search page.
 pub const MAX_SEARCH_RESULTS: u32 = 50;
+
+/// Largest starting offset accepted by paged invoice search.
+///
+/// The search implementation still scans the indexed invoice IDs, but this
+/// bound prevents callers from requesting an unbounded ranked window before the
+/// page slice is produced.
+pub const MAX_SEARCH_OFFSET: u32 = 1_000;
 
 /// Invoice search functionality with safe query semantics and relevance ranking
 pub struct InvoiceSearch;
@@ -46,14 +53,23 @@ impl InvoiceSearch {
         Ok(String::from_str(query.env(), trimmed_str))
     }
 
-    /// Search invoices with relevance ranking
+    /// Search invoices with relevance ranking.
+    ///
+    /// This compatibility wrapper returns the first full page.
+    pub fn search_invoices(env: &Env, query: String) -> Result<Vec<SearchResult>, QuickLendXError> {
+        Self::search_invoices_paged(env, query, 0, MAX_SEARCH_RESULTS)
+    }
+
+    /// Search invoices with relevance ranking and bounded paging.
     ///
     /// # Arguments
     /// * `env` - Soroban environment
     /// * `query` - Search query string (will be sanitized)
+    /// * `offset` - Number of ranked matches to skip
+    /// * `limit` - Requested page size, clamped to MAX_SEARCH_RESULTS
     ///
     /// # Returns
-    /// * `Vec<SearchResult>` - Ranked search results, limited to MAX_SEARCH_RESULTS
+    /// * `Vec<SearchResult>` - Ranked page, limited to MAX_SEARCH_RESULTS
     ///
     /// # Ranking Logic
     /// 1. Exact matches on invoice_id (highest priority)
@@ -64,8 +80,24 @@ impl InvoiceSearch {
     /// - Input sanitization prevents injection attacks
     /// - Memory-safe: bounded result set prevents DoS
     /// - Case-insensitive search
-    pub fn search_invoices(env: &Env, query: String) -> Result<Vec<SearchResult>, QuickLendXError> {
+    pub fn search_invoices_paged(
+        env: &Env,
+        query: String,
+        offset: u32,
+        limit: u32,
+    ) -> Result<Vec<SearchResult>, QuickLendXError> {
+        if offset > MAX_SEARCH_OFFSET {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
         let sanitized_query = Self::sanitize_query(&query)?;
+        let capped_limit = limit.min(MAX_SEARCH_RESULTS);
+
+        if capped_limit == 0 {
+            return Ok(Vec::new(env));
+        }
+
+        let retain_limit = offset.saturating_add(capped_limit);
 
         // Get all invoices (in a real implementation, this might be paginated or indexed)
         // For now, we'll search through all invoices
@@ -82,6 +114,11 @@ impl InvoiceSearch {
                         rank,
                         created_at: invoice.created_at,
                     });
+
+                    if results.len() > retain_limit {
+                        Self::sort_results(&mut results);
+                        let _ = results.pop_back();
+                    }
                 }
             }
         }
@@ -89,16 +126,29 @@ impl InvoiceSearch {
         // Sort by rank (descending) then by created_at (descending)
         Self::sort_results(&mut results);
 
-        // Limit results
+        Ok(Self::page_results(env, &results, offset, capped_limit))
+    }
+
+    /// Slice a sorted result set into a bounded page.
+    fn page_results(
+        env: &Env,
+        results: &Vec<SearchResult>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<SearchResult> {
         let mut limited_results = Vec::new(env);
-        let max_results = MAX_SEARCH_RESULTS.min(results.len());
-        for i in 0..max_results {
+        if offset >= results.len() {
+            return limited_results;
+        }
+
+        let end = offset.saturating_add(limit).min(results.len());
+        for i in offset..end {
             if let Some(result) = results.get(i) {
                 limited_results.push_back(result);
             }
         }
 
-        Ok(limited_results)
+        limited_results
     }
 
     /// Calculate search relevance rank for an invoice
@@ -231,7 +281,7 @@ impl InvoiceSearch {
 
     /// Sort search results by rank (desc) then created_at (desc)
     fn sort_results(results: &mut Vec<SearchResult>) {
-        // Simple bubble sort for small result sets (MAX_SEARCH_RESULTS = 50)
+        // Simple bubble sort for the bounded retained search window.
         let len = results.len();
         for i in 0..len {
             for j in 0..(len - i - 1) {
