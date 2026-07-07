@@ -2,7 +2,10 @@
 mod test_invoice_search {
     use super::*;
     use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus};
+    use crate::invoice_search::{InvoiceSearch, MAX_SEARCH_OFFSET, MAX_SEARCH_RESULTS};
+    use crate::storage::InvoiceStorage;
     use crate::types::{SearchRank, SearchResult};
+    use crate::QuickLendXContract;
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::{Address, Env, String, Vec};
 
@@ -10,6 +13,11 @@ mod test_invoice_search {
         let env = Env::default();
         env.mock_all_auths();
         env
+    }
+
+    fn with_contract<T>(env: &Env, f: impl FnOnce() -> T) -> T {
+        let contract_id = env.register(QuickLendXContract, ());
+        env.as_contract(&contract_id, f)
     }
 
     fn create_test_invoice(
@@ -69,7 +77,13 @@ mod test_invoice_search {
 
         // Create invoice with known ID
         let test_id = "test_invoice_123";
-        let invoice = create_test_invoice(&env, &business, "consulting services", Some("ABC Corp"), Some(test_id));
+        let invoice = create_test_invoice(
+            &env,
+            &business,
+            "consulting services",
+            Some("ABC Corp"),
+            Some(test_id),
+        );
 
         // Mock storage - store the invoice
         InvoiceStorage::store_invoice(&env, &invoice);
@@ -89,8 +103,20 @@ mod test_invoice_search {
         let business = Address::generate(&env);
 
         // Create invoices
-        let invoice1 = create_test_invoice(&env, &business, "software development services", Some("XYZ Ltd"), None);
-        let invoice2 = create_test_invoice(&env, &business, "marketing campaign", Some("ABC Corp"), None);
+        let invoice1 = create_test_invoice(
+            &env,
+            &business,
+            "software development services",
+            Some("XYZ Ltd"),
+            None,
+        );
+        let invoice2 = create_test_invoice(
+            &env,
+            &business,
+            "marketing campaign",
+            Some("ABC Corp"),
+            None,
+        );
 
         // Store invoices
         InvoiceStorage::store_invoice(&env, &invoice1);
@@ -111,7 +137,8 @@ mod test_invoice_search {
         let business = Address::generate(&env);
 
         // Create invoices
-        let invoice1 = create_test_invoice(&env, &business, "consulting", Some("ABC Corporation"), None);
+        let invoice1 =
+            create_test_invoice(&env, &business, "consulting", Some("ABC Corporation"), None);
         let invoice2 = create_test_invoice(&env, &business, "development", Some("XYZ Ltd"), None);
 
         // Store invoices
@@ -134,10 +161,22 @@ mod test_invoice_search {
 
         // Create invoice with exact ID match
         let test_id = "exact_match_123";
-        let invoice_exact = create_test_invoice(&env, &business, "general services", Some("Test Corp"), Some(test_id));
+        let invoice_exact = create_test_invoice(
+            &env,
+            &business,
+            "general services",
+            Some("Test Corp"),
+            Some(test_id),
+        );
 
         // Create invoice with partial match
-        let invoice_partial = create_test_invoice(&env, &business, "software development", Some("Other Corp"), None);
+        let invoice_partial = create_test_invoice(
+            &env,
+            &business,
+            "software development",
+            Some("Other Corp"),
+            None,
+        );
 
         // Store invoices
         InvoiceStorage::store_invoice(&env, &invoice_exact);
@@ -166,7 +205,13 @@ mod test_invoice_search {
         let business = Address::generate(&env);
 
         // Create invoice
-        let invoice = create_test_invoice(&env, &business, "consulting services", Some("ABC Corp"), None);
+        let invoice = create_test_invoice(
+            &env,
+            &business,
+            "consulting services",
+            Some("ABC Corp"),
+            None,
+        );
         InvoiceStorage::store_invoice(&env, &invoice);
 
         // Search for non-existent term
@@ -182,7 +227,13 @@ mod test_invoice_search {
         let business = Address::generate(&env);
 
         // Create invoice with uppercase
-        let invoice = create_test_invoice(&env, &business, "SOFTWARE DEVELOPMENT", Some("ABC CORP"), None);
+        let invoice = create_test_invoice(
+            &env,
+            &business,
+            "SOFTWARE DEVELOPMENT",
+            Some("ABC CORP"),
+            None,
+        );
         InvoiceStorage::store_invoice(&env, &invoice);
 
         // Search with lowercase
@@ -236,15 +287,135 @@ mod test_invoice_search {
     }
 
     #[test]
+    fn test_search_invoices_paged_zero_limit_returns_empty() {
+        let env = setup_test_env();
+        let business = Address::generate(&env);
+        let invoice = create_test_invoice(&env, &business, "paged service", None, None);
+
+        let query = String::from_str(&env, "paged");
+        let results = with_contract(&env, || {
+            InvoiceStorage::store_invoice(&env, &invoice);
+            InvoiceSearch::search_invoices_paged(&env, query, 0, 0).unwrap()
+        });
+
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_search_invoices_paged_clamps_limit_to_cap() {
+        let env = setup_test_env();
+        let business = Address::generate(&env);
+
+        let query = String::from_str(&env, "paged");
+        let results = with_contract(&env, || {
+            for i in 0..60 {
+                let description = format!("paged service {}", i);
+                let mut invoice = create_test_invoice(&env, &business, &description, None, None);
+                invoice.created_at = i;
+                InvoiceStorage::store_invoice(&env, &invoice);
+            }
+
+            InvoiceSearch::search_invoices_paged(&env, query, 0, u32::MAX).unwrap()
+        });
+
+        assert_eq!(results.len() as u32, MAX_SEARCH_RESULTS);
+    }
+
+    #[test]
+    fn test_search_invoices_paged_offset_past_end_returns_empty() {
+        let env = setup_test_env();
+        let business = Address::generate(&env);
+        let invoice = create_test_invoice(&env, &business, "paged service", None, None);
+
+        let query = String::from_str(&env, "paged");
+        let results = with_contract(&env, || {
+            InvoiceStorage::store_invoice(&env, &invoice);
+            InvoiceSearch::search_invoices_paged(&env, query, 2, 10).unwrap()
+        });
+
+        assert_eq!(results.len(), 0);
+    }
+
+    #[test]
+    fn test_search_invoices_paged_rejects_absurd_offset() {
+        let env = setup_test_env();
+        let query = String::from_str(&env, "paged");
+
+        let result = InvoiceSearch::search_invoices_paged(&env, query, MAX_SEARCH_OFFSET + 1, 1);
+
+        assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
+    }
+
+    #[test]
+    fn test_search_invoices_paged_preserves_ranking_across_pages() {
+        let env = setup_test_env();
+        let business = Address::generate(&env);
+
+        let mut old_invoice = create_test_invoice(&env, &business, "paged old", None, None);
+        old_invoice.created_at = 1000;
+        let mut mid_invoice = create_test_invoice(&env, &business, "paged mid", None, None);
+        mid_invoice.created_at = 2000;
+        let mut new_invoice = create_test_invoice(&env, &business, "paged new", None, None);
+        new_invoice.created_at = 3000;
+
+        let query_first = String::from_str(&env, "paged");
+        let query_second = String::from_str(&env, "paged");
+        let (first_page, second_page) = with_contract(&env, || {
+            InvoiceStorage::store_invoice(&env, &old_invoice);
+            InvoiceStorage::store_invoice(&env, &mid_invoice);
+            InvoiceStorage::store_invoice(&env, &new_invoice);
+
+            (
+                InvoiceSearch::search_invoices_paged(&env, query_first, 0, 2).unwrap(),
+                InvoiceSearch::search_invoices_paged(&env, query_second, 2, 2).unwrap(),
+            )
+        });
+
+        assert_eq!(first_page.len(), 2);
+        assert_eq!(second_page.len(), 1);
+        assert_eq!(first_page.get(0).unwrap().invoice_id, new_invoice.id);
+        assert_eq!(first_page.get(1).unwrap().invoice_id, mid_invoice.id);
+        assert_eq!(second_page.get(0).unwrap().invoice_id, old_invoice.id);
+    }
+
+    #[test]
+    fn test_search_invoices_wrapper_matches_first_max_page() {
+        let env = setup_test_env();
+        let business = Address::generate(&env);
+
+        let query_full = String::from_str(&env, "paged");
+        let query_paged = String::from_str(&env, "paged");
+        let (wrapped, paged) = with_contract(&env, || {
+            for i in 0..55 {
+                let description = format!("paged service {}", i);
+                let mut invoice = create_test_invoice(&env, &business, &description, None, None);
+                invoice.created_at = i;
+                InvoiceStorage::store_invoice(&env, &invoice);
+            }
+
+            (
+                InvoiceSearch::search_invoices(&env, query_full).unwrap(),
+                InvoiceSearch::search_invoices_paged(&env, query_paged, 0, MAX_SEARCH_RESULTS)
+                    .unwrap(),
+            )
+        });
+
+        assert_eq!(wrapped, paged);
+        assert_eq!(wrapped.len() as u32, MAX_SEARCH_RESULTS);
+    }
+
+    #[test]
     fn test_search_invoices_relevance_ordering() {
         let env = setup_test_env();
         let business = Address::generate(&env);
 
         // Create invoices at different times
-        let mut invoice1 = create_test_invoice(&env, &business, "old service", Some("Test Corp"), None);
+        let mut invoice1 =
+            create_test_invoice(&env, &business, "old service", Some("Test Corp"), None);
         invoice1.created_at = 1000;
 
-        let mut invoice2 = create_test_invoice(&env, &business, "new service", Some("Test Corp"), None);
+        let mut invoice2 =
+            create_test_invoice(&env, &business, "new service", Some("Test Corp"), None);
         invoice2.created_at = 2000;
 
         // Store invoices
