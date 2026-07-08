@@ -1110,6 +1110,7 @@ Additional documentation is available in the `docs/` directory:
 - **[Bid Ranking](../docs/BID_RANKING.md)**: Deterministic ordering function — tier-by-tier tie-breaker logic, invariants, and contributor workflow.
 - **[Escrow Invariants](docs/escrow-invariants.md)**: Escrow state guarantees and safety properties
 - **[Investment Lifecycle](docs/investment-lifecycle.md)**: Investment states and transitions
+- **[Settlement & Fund Distribution](docs/SETTLEMENT.md)**: How invoice settlement splits funds across investors, treasury, and the platform.
 - **[Settlement & Dispute Interaction](docs/settlement-dispute-interaction.md)**: How settlements interact with disputes
 - **[Invoice Search](docs/invoice-search-ranking.md)**: Invoice search and ranking algorithms
 - **[Insurance Stacking](docs/insurance-stacking.md)**: Multiple insurance providers per investment
