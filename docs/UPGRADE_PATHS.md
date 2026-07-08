@@ -59,6 +59,24 @@ soroban contract invoke \
 
 `get_version()` returns the value written to storage during `initialize()`, so it reflects the protocol version that was active when the contract was first set up — not the version of the currently-running WASM. After a WASM-only upgrade that does not bump `PROTOCOL_VERSION`, `get_version()` still returns the old value.
 
+### Release ratchet CI gate
+
+The repository treats a change to `quicklendx-contracts/Cargo.toml`
+`[package].version` as a contract package release. CI runs
+`scripts/check-protocol-version-bump.sh` and fails if that package version
+changes without a matching increase to `PROTOCOL_VERSION` in `src/init.rs`.
+
+Run the same gate locally before opening a release PR:
+
+```bash
+scripts/check-protocol-version-bump.sh
+scripts/check-protocol-version-bump.test.sh
+```
+
+The ratchet makes release visibility explicit for operators and downstream
+integrators. Storage compatibility is still governed by the migration guidance
+below: a version increase does not by itself mean a storage migration is needed.
+
 ---
 
 ## Upgrade compatibility matrix
