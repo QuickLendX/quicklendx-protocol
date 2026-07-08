@@ -24,8 +24,6 @@ jobs:
           filters: |
             contracts:
               - 'quicklendx-contracts/**'
-              - '!quicklendx-contracts/**/*.md'
-              - '!quicklendx-contracts/docs/**'
 
       - name: Skip contract build for docs-only PRs
         if: github.event_name == 'pull_request' && steps.changes.outputs.contracts != 'true'
@@ -98,13 +96,11 @@ jobs:
           cargo test --test wasm_build_size_budget --verbose
 
       - name: Run Cargo tests
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
           cargo test --verbose
 
       - name: Test coverage (baseline + admin gate)
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
           cargo install cargo-llvm-cov
