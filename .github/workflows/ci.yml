@@ -21,10 +21,10 @@ jobs:
       - name: Check protocol version release ratchet
         env:
           BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
-        run: scripts/check-protocol-version-bump.sh
+        run: bash scripts/check-protocol-version-bump.sh
 
       - name: Test protocol version release ratchet
-        run: scripts/check-protocol-version-bump.test.sh
+        run: bash scripts/check-protocol-version-bump.test.sh
 
       - name: Detect contract-impacting changes
         id: changes
