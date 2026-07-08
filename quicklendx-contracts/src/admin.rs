@@ -7,6 +7,7 @@
 #![allow(dead_code)]
 
 use crate::errors::QuickLendXError;
+use crate::storage;
 use soroban_sdk::{symbol_short, Address, Env, Symbol};
 
 /// Current admin storage key.
@@ -374,5 +375,26 @@ pub fn require_not_self(env: &Env, caller: &Address) -> Result<(), QuickLendXErr
     if *caller == env.current_contract_address() {
         return Err(QuickLendXError::SelfCallNotAllowed);
     }
+    Ok(())
+}
+
+/// Cancel a pending treasury address rotation.
+///
+/// # Arguments
+/// * `env` - The contract environment.
+/// * `admin` - The address of the caller, must be the current admin.
+///
+/// # Errors
+/// * `NotAdmin` - If the caller is not the current admin.
+/// * `NoPendingTreasuryRotation` - If no treasury rotation is pending.
+pub fn cancel_treasury_rotation(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
+    AdminStorage::require_admin_auth(env, admin)?;
+
+    if !storage::has_pending_treasury(env) {
+        return Err(QuickLendXError::NoPendingTreasuryRotation);
+    }
+
+    storage::remove_pending_treasury(env);
+    crate::events::treasury_rotation_cancelled(env, admin);
     Ok(())
 }

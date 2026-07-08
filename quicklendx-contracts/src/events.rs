@@ -1522,3 +1522,10 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
     env.events()
         .publish((symbol_short!("adm_init"),), (admin.clone(),));
 }
+
+pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
+    env.events().publish(
+        (symbol_short!("tr_rot_cncl"), admin.clone()),
+        (),
+    );
+}
