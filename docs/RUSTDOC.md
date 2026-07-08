@@ -6,21 +6,23 @@
 
 ## Where to find the docs
 
-The CI pipeline auto-publishes rustdoc for the **latest tagged release** to GitHub Pages every time a tag is pushed:
+The CI pipeline auto-publishes rustdoc for the latest `main` branch build to GitHub Pages on every push to `main`:
 
 ```
-https://<org>.github.io/quicklendx/quicklendx_contracts/
+https://<org>.github.io/quicklendx-protocol/quicklendx-contracts/quicklendx_contracts/
 ```
 
-Replace `<org>` with the GitHub organisation that owns this repository (e.g. `quicklendx-labs`). The URL is stable across releases — it always points to the most recently tagged version.
+Replace `<org>` with the GitHub organisation that owns this repository (e.g. `quicklendx-labs`). The URL is stable across `main` updates and points to the most recently published `main` build.
 
-> **Tip:** Bookmark the top-level index at the URL above. Each tagged release overwrites the previous one, so you are always reading the current stable API.
+> **Tip:** Bookmark the top-level index at the URL above. Each successful `main`
+> publish overwrites the previous one, so you are always reading the current
+> branch API.
 
 ---
 
 ## What is covered
 
-The published docs are generated from the `quicklendx-contracts/` crate with `cargo doc`. They include:
+The published docs are generated from each Cargo package with `cargo doc --no-deps`. Today the workspace package list contains `quicklendx-contracts`; future packages should be added to the `package` matrix in `.github/workflows/rustdoc.yml`. The generated docs include:
 
 | Section | What you will find |
 |---|---|
@@ -76,27 +78,30 @@ match result {
 
 ## Generating the docs locally
 
-If you need to browse the docs offline, or you are reviewing a branch that has not been tagged yet:
+If you need to browse the docs offline, or you are reviewing a branch that has not been published yet:
 
 ```bash
-cd quicklendx-contracts
-
-# Generate HTML docs (output: target/doc/)
-cargo doc --no-deps --target wasm32-unknown-unknown
+# Generate HTML docs for the contract package (output: target/doc/)
+cargo doc -p quicklendx-contracts --no-deps
 
 # Open in your default browser (macOS / Linux)
 open target/doc/quicklendx_contracts/index.html
 ```
 
-Omit `--target wasm32-unknown-unknown` if you only need to read the docs and do not need to verify the WASM build at the same time.
+The workflow also runs this command for pull requests that touch the contract
+package, but it publishes only for pushes to `main`.
 
 ---
 
 ## Staying up to date
 
-The published URL is updated automatically on every tag push — no manual step is needed. To be notified of new releases, watch the repository on GitHub and select **Releases only**.
+The published URL is updated automatically on every successful `main` push —
+no manual step is needed.
 
-If the published URL returns a 404, the most likely cause is that no tag has been pushed yet for the current development cycle. Generate the docs locally using the command above, or check the repository's Actions tab to confirm the publish workflow ran successfully.
+If the published URL returns a 404, the most likely cause is that GitHub Pages
+has not been enabled for the repository yet or the latest publish workflow has
+not completed successfully. Generate the docs locally using the command above,
+or check the repository's Actions tab for the `Rustdoc` workflow.
 
 ---
 
