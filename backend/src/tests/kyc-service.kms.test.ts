@@ -8,10 +8,13 @@ import {
   KmsKeyProvider,
   KycService,
   SENSITIVE_FIELDS,
+  redactPii,
   type KycPayload,
   type EncryptedRecord,
   type KmsClient,
 } from "../services/kycService";
+import { withRequestContext } from "../lib/requestContext";
+import { auditLogService } from "../services/auditLogService";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -23,7 +26,18 @@ const VALID_HEX_KEY_2 = "b".repeat(64);
 function makePayload(overrides: Partial<KycPayload> = {}): KycPayload {
   return {
     userId: "user-123",
+    tax_id: "TAX-SNAKE-001",
+    customer_name: "Alice Example",
+    customer_address: "123 Main Street",
+    date_of_birth: "1990-01-01",
     ssn: "123-45-6789",
+    passport_number: "P7654321",
+    national_id: "NAT-123",
+    phone_number: "+15551234567",
+    email: "alice@example.com",
+    bank_account: "987654321000",
+    kyc_document: "passport-scan",
+    kyc_data: "raw-kyc-payload",
     taxId: "TAX-001",
     dateOfBirth: "1990-01-01",
     passportNumber: "P1234567",
@@ -180,8 +194,13 @@ describe("KycService — encrypt/decrypt", () => {
   let service: KycService;
 
   beforeEach(() => {
+    auditLogService.clear();
     provider = new LocalKeyProvider(VALID_HEX_KEY);
     service = new KycService(provider);
+  });
+
+  afterEach(() => {
+    auditLogService.clear();
   });
 
   it("encrypts and decrypts a payload round-trip", async () => {
@@ -278,6 +297,98 @@ describe("KycService — encrypt/decrypt", () => {
     expect(logStr).not.toContain("123-45-6789"); // ssn
     expect(logStr).not.toContain("TAX-001");      // taxId
     expect(logStr).not.toContain(VALID_HEX_KEY);  // KEK
+  });
+
+  it("persists field-level decrypt audit rows with actor and request id", async () => {
+    const payload = makePayload({ customer_name: "Alice Example" });
+    const record = await service.encrypt(payload);
+
+    await withRequestContext(
+      { requestId: "req-kyc-001", actor: "support-admin-1" },
+      async () => service.decrypt(record),
+    );
+
+    const entries = auditLogService.listEntries(20);
+    const decryptEntries = entries.filter((entry) => entry.action === "kyc.decrypt_sensitive_field");
+    const loggedFields = decryptEntries.map((entry) => entry.field_name);
+
+    expect(loggedFields).toEqual(
+      expect.arrayContaining([
+        "ssn",
+        "taxId",
+        "dateOfBirth",
+        "passportNumber",
+        "bankAccountNumber",
+        "routingNumber",
+        "customer_name",
+      ]),
+    );
+    for (const entry of decryptEntries) {
+      expect(entry.actor).toBe("support-admin-1");
+      expect(entry.request_id).toBe("req-kyc-001");
+      expect(entry.timestamp).toEqual(expect.any(String));
+      expect(entry.metadata).toMatchObject({ key_id: "local-v1", status: "success" });
+    }
+  });
+
+  it("does not persist decrypted plaintext in audit rows", async () => {
+    const record = await service.encrypt(makePayload());
+    await withRequestContext(
+      { requestId: "req-kyc-plaintext", actor: "security-admin" },
+      async () => service.decrypt(record),
+    );
+
+    const logStr = JSON.stringify(auditLogService.listEntries(20));
+    expect(logStr).not.toContain("123-45-6789");
+    expect(logStr).not.toContain("TAX-001");
+    expect(logStr).not.toContain("000123456789");
+    expect(logStr).not.toContain(VALID_HEX_KEY);
+  });
+
+  it("uses system actor and a generated request id outside request context", async () => {
+    const record = await service.encrypt(makePayload());
+    await service.decrypt(record);
+
+    const entry = auditLogService
+      .listEntries(20)
+      .find((candidate) => candidate.action === "kyc.decrypt_sensitive_field");
+
+    expect(entry).toBeDefined();
+    expect(entry!.actor).toBe("system");
+    expect(typeof entry!.request_id).toBe("string");
+    expect(entry!.request_id!.length).toBeGreaterThan(0);
+  });
+
+  it("logs a failed decrypt attempt without plaintext", async () => {
+    const record = await service.encrypt(makePayload());
+    const tampered: EncryptedRecord = {
+      ...record,
+      authTag: Buffer.alloc(16, 0xff).toString("base64"),
+    };
+
+    await withRequestContext(
+      { requestId: "req-kyc-failure", actor: "support-admin-2" },
+      async () => expect(service.decrypt(tampered)).rejects.toThrow(
+        "Payload decryption failed: authentication tag mismatch",
+      ),
+    );
+
+    const [entry] = auditLogService.listEntries(5);
+    expect(entry).toMatchObject({
+      action: "kyc.decrypt_sensitive_field",
+      actor: "support-admin-2",
+      field_name: "__record__",
+      request_id: "req-kyc-failure",
+      metadata: { key_id: "local-v1", status: "failure" },
+    });
+    expect(JSON.stringify(entry)).not.toContain("123-45-6789");
+  });
+
+  it("does not write decrypt audit rows for redaction-only paths", () => {
+    const redacted = redactPii({ ssn: "123-45-6789", nested: { email: "a@example.com" } });
+
+    expect(redacted.ssn).toBe("12****89");
+    expect(auditLogService.listEntries(5)).toHaveLength(0);
   });
 
   it("getAccessLog returns a copy (immutable)", async () => {
