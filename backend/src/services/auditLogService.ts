@@ -12,6 +12,9 @@ export interface AuditLogEntry {
   method: string;
   path: string;
   ip: string;
+  actor?: string;
+  field_name?: string;
+  request_id?: string;
   reason?: string;
   metadata?: Record<string, unknown>;
 }
@@ -33,6 +36,14 @@ interface AuditAdminActionEvent {
   path: string;
   ip: string;
   metadata?: Record<string, unknown>;
+}
+
+interface AuditKycDecryptAccessEvent {
+  actor: string;
+  fieldName: string;
+  requestId: string;
+  keyId?: string;
+  status: "success" | "failure";
 }
 
 class AuditLogService {
@@ -62,6 +73,25 @@ class AuditLogService {
       path: event.path,
       ip: event.ip,
       metadata: event.metadata,
+    });
+  }
+
+  public recordKycDecryptAccess(event: AuditKycDecryptAccessEvent): void {
+    this.push({
+      timestamp: new Date().toISOString(),
+      action: "kyc.decrypt_sensitive_field",
+      outcome: "performed",
+      role: "anonymous",
+      method: "KycService.decrypt",
+      path: "kyc.decryptSensitiveData",
+      ip: "system",
+      actor: event.actor,
+      field_name: event.fieldName,
+      request_id: event.requestId,
+      metadata: {
+        key_id: event.keyId,
+        status: event.status,
+      },
     });
   }
 
