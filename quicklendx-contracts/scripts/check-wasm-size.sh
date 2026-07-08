@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # WASM build and size budget regression checks for QuickLendX contracts.
 #
-# Builds the contract for Soroban (wasm32v1-none or wasm32-unknown-unknown)
+# Builds the contract for Soroban (wasm32v1-none)
 # and applies a three-tier size classification:
 #
 #   OK      : size <= WARN_BYTES (90 % of hard limit)     – healthy
@@ -26,6 +26,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTRACTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+TARGET_DIR="${CARGO_TARGET_DIR:-$(cd "$CONTRACTS_DIR/.." && pwd)/target}"
 cd "$CONTRACTS_DIR"
 
 # ── Budget constants ───────────────────────────────────────────────────────────
@@ -49,18 +50,18 @@ if [[ "$CHECK_ONLY" == false ]]; then
     stellar contract build --verbose
     WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
   else
-    echo "Stellar CLI not found; using cargo wasm32-unknown-unknown."
+    echo "Stellar CLI not found; using cargo wasm32v1-none."
     [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-    rustup target add wasm32-unknown-unknown 2>/dev/null || true
-    cargo build --target wasm32-unknown-unknown --release --lib
-    WASM_PATH="target/wasm32-unknown-unknown/release/$WASM_NAME"
+    rustup target add wasm32v1-none 2>/dev/null || true
+    CARGO_TARGET_DIR="$TARGET_DIR" cargo build --target wasm32v1-none --release --lib
+    WASM_PATH="$TARGET_DIR/wasm32v1-none/release/$WASM_NAME"
   fi
 else
   # --check-only: probe both target directories for an existing artifact
-  if [[ -f "target/wasm32v1-none/release/$WASM_NAME" ]]; then
-    WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
-  elif [[ -f "target/wasm32-unknown-unknown/release/$WASM_NAME" ]]; then
-    WASM_PATH="target/wasm32-unknown-unknown/release/$WASM_NAME"
+  if [[ -f "$TARGET_DIR/wasm32v1-none/release/$WASM_NAME" ]]; then
+    WASM_PATH="$TARGET_DIR/wasm32v1-none/release/$WASM_NAME"
+  elif [[ -f "$TARGET_DIR/wasm32-unknown-unknown/release/$WASM_NAME" ]]; then
+    WASM_PATH="$TARGET_DIR/wasm32-unknown-unknown/release/$WASM_NAME"
   else
     echo "::error::--check-only specified but no WASM artifact found; run without --check-only first."
     exit 1
