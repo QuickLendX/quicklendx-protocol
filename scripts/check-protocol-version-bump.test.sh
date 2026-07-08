@@ -59,7 +59,7 @@ expect_success() {
 
   (
     cd "${dir}"
-    BASE_REF=HEAD~1 HEAD_REF=HEAD "${CHECK_SCRIPT}" >/tmp/protocol-version-success.log 2>&1
+    BASE_REF=HEAD~1 HEAD_REF=HEAD bash "${CHECK_SCRIPT}" >/tmp/protocol-version-success.log 2>&1
   ) || {
     echo "FAIL: expected success for ${label}" >&2
     cat /tmp/protocol-version-success.log >&2
@@ -73,7 +73,7 @@ expect_failure() {
 
   if (
     cd "${dir}"
-    BASE_REF=HEAD~1 HEAD_REF=HEAD "${CHECK_SCRIPT}" >/tmp/protocol-version-failure.log 2>&1
+    BASE_REF=HEAD~1 HEAD_REF=HEAD bash "${CHECK_SCRIPT}" >/tmp/protocol-version-failure.log 2>&1
   ); then
     echo "FAIL: expected failure for ${label}" >&2
     cat /tmp/protocol-version-failure.log >&2
