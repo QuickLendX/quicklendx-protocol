@@ -1111,6 +1111,7 @@ Additional documentation is available in the `docs/` directory:
 - **[Escrow Invariants](docs/escrow-invariants.md)**: Escrow state guarantees and safety properties
 - **[Investment Lifecycle](docs/investment-lifecycle.md)**: Investment states and transitions
 - **[Settlement & Dispute Interaction](docs/settlement-dispute-interaction.md)**: How settlements interact with disputes
+- **[Audit Hash Chain](docs/AUDIT_HASH_CHAIN.md)**: Tamper-evidence model for invoice-local and config-change audit trails
 - **[Invoice Search](docs/invoice-search-ranking.md)**: Invoice search and ranking algorithms
 - **[Insurance Stacking](docs/insurance-stacking.md)**: Multiple insurance providers per investment
 - **[Notifications Idempotency](docs/notifications-idempotency.md)**: Notification delivery guarantees
