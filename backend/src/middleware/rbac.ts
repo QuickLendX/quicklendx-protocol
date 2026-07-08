@@ -3,6 +3,7 @@ import { auditLogService } from "../services/auditLogService";
 import { AdminRole } from "../types/rbac";
 import { apiKeyService } from "../services/api-key-service";
 import { roleFromScopes } from "../config/scopes";
+import { setRequestActor } from "../lib/requestContext";
 
 export interface AdminContext {
   role: AdminRole;
@@ -155,6 +156,7 @@ export function requireAdminRoles(
     };
 
     (req as RequestWithAdminContext).adminContext = adminContext;
+    setRequestActor(adminContext.envName);
     auditLogService.recordAuthorization({
       action,
       outcome: "allowed",
