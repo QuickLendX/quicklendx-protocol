@@ -1,0 +1,82 @@
+name: Rustdoc
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/rustdoc.yml"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - "quicklendx-contracts/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rustdoc-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  cargo-doc:
+    name: cargo doc (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - quicklendx-contracts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        run: |
+          rustup show
+          rustup target add wasm32v1-none
+
+      - name: Generate rustdoc
+        run: cargo doc -p "${{ matrix.package }}" --no-deps
+
+      - name: Stage package docs
+        run: |
+          mkdir -p "public/${{ matrix.package }}"
+          cp -R target/doc/. "public/${{ matrix.package }}/"
+
+      - name: Upload package rustdoc artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: rustdoc-${{ matrix.package }}
+          path: public/${{ matrix.package }}
+          retention-days: 14
+
+      - name: Upload GitHub Pages artifact
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+  deploy-pages:
+    name: Publish rustdoc to GitHub Pages
+    needs: cargo-doc
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Deploy rustdoc
+        id: deployment
+        uses: actions/deploy-pages@v4
