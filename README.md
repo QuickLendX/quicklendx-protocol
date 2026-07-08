@@ -1,4 +1,3 @@
-
  # QuickLendX Protocol
     
     QuickLendX is a monorepo containing the complete protocol stack for decentralized invoice financing on Stellar Soroban.
