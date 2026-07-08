@@ -14,6 +14,8 @@
 
 import * as crypto from "crypto";
 import { getPreparedStatement } from "../lib/database";
+import { getOrGenerateCorrelationId, getRequestActor, getRequestId } from "../lib/requestContext";
+import { auditLogService } from "./auditLogService";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -291,6 +293,31 @@ export function isPiiField(fieldName: string): boolean {
   return PII_FIELDS.includes(fieldName as PiiField);
 }
 
+const SYSTEM_KYC_ACTOR = "system";
+const UNKNOWN_KYC_FIELD = "__record__";
+
+function collectSensitiveFieldNames(value: unknown, prefix = ""): string[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return [];
+  }
+
+  return Object.entries(value as Record<string, unknown>).flatMap(([key, fieldValue]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    const current = isSensitiveField(key) || isPiiField(key) ? [path] : [];
+    if (fieldValue && typeof fieldValue === "object" && !Array.isArray(fieldValue)) {
+      return current.concat(collectSensitiveFieldNames(fieldValue, path));
+    }
+    return current;
+  });
+}
+
+function getKycAuditContext(): { actor: string; requestId: string } {
+  return {
+    actor: getRequestActor() ?? SYSTEM_KYC_ACTOR,
+    requestId: getRequestId() ?? getOrGenerateCorrelationId(),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // KMS + Local key providers and KycService (exported for tests)
 // ---------------------------------------------------------------------------
@@ -419,6 +446,24 @@ export class KycService {
     return out;
   }
 
+  private recordDecryptAccess(
+    fieldNames: string[],
+    context: { actor: string; requestId: string },
+    keyId: string,
+    status: "success" | "failure",
+  ): void {
+    const fields = fieldNames.length > 0 ? fieldNames : [UNKNOWN_KYC_FIELD];
+    for (const fieldName of fields) {
+      auditLogService.recordKycDecryptAccess({
+        actor: context.actor,
+        fieldName,
+        requestId: context.requestId,
+        keyId,
+        status,
+      });
+    }
+  }
+
   async encrypt(payload: KycPayload): Promise<EncryptedRecord> {
     // Obtain DEK from KMS provider when applicable, otherwise generate locally
     let dek: Buffer;
@@ -458,12 +503,15 @@ export class KycService {
   }
 
   async decrypt(record: EncryptedRecord): Promise<KycPayload> {
+    const context = getKycAuditContext();
     const encDek = Buffer.from(record.encryptedDek, "base64");
     const dekIv = Buffer.from(record.dekIv || "", "base64");
     const dekAuthTag = Buffer.from(record.dekAuthTag || "", "base64");
 
-    const dek = await this.provider.unwrapKey(encDek, dekIv, dekAuthTag, record.keyId);
+    let dek: Buffer | null = null;
+    let accessLogged = false;
     try {
+      dek = await this.provider.unwrapKey(encDek, dekIv, dekAuthTag, record.keyId);
       try {
         const iv = Buffer.from(record.iv, "base64");
         const authTag = Buffer.from(record.authTag, "base64");
@@ -472,13 +520,22 @@ export class KycService {
         const pt = Buffer.concat([decipher.update(Buffer.from(record.ciphertext, "base64")), decipher.final()]);
         const parsed = JSON.parse(pt.toString("utf8"));
         const redacted = this.redact(parsed);
+        this.recordDecryptAccess(collectSensitiveFieldNames(parsed), context, record.keyId, "success");
+        accessLogged = true;
         this.accessLog.push({ action: "decrypt", userId: parsed.userId, timestamp: new Date().toISOString(), keyId: record.keyId });
         return redacted;
       } catch (e) {
+        this.recordDecryptAccess([UNKNOWN_KYC_FIELD], context, record.keyId, "failure");
+        accessLogged = true;
         throw new Error("Payload decryption failed: authentication tag mismatch");
       }
+    } catch (e) {
+      if (!accessLogged) {
+        this.recordDecryptAccess([UNKNOWN_KYC_FIELD], context, record.keyId, "failure");
+      }
+      throw e;
     } finally {
-      dek.fill(0);
+      dek?.fill(0);
     }
   }
 
@@ -562,5 +619,4 @@ export function getKycStatus(businessId: string): { status: string; verifiedAt?:
     throw err;
   }
 }
-
 
