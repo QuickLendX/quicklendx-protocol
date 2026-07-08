@@ -15,6 +15,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check protocol version release ratchet
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: scripts/check-protocol-version-bump.sh
+
+      - name: Test protocol version release ratchet
+        run: scripts/check-protocol-version-bump.test.sh
 
       - name: Detect contract-impacting changes
         id: changes
@@ -96,11 +106,13 @@ jobs:
           cargo test --test wasm_build_size_budget --verbose
 
       - name: Run Cargo tests
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
           cargo test --verbose
 
       - name: Test coverage (baseline + admin gate)
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
           cargo install cargo-llvm-cov
