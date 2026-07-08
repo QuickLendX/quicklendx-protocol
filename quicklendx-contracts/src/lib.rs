@@ -64,6 +64,7 @@ use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency}
 pub mod bench;
 pub mod admin;
 pub mod analytics;
+pub mod address_summary;
 pub mod audit;
 pub mod backpressure;
 pub mod backup;
@@ -84,6 +85,7 @@ pub mod fees;
 pub mod freshness;
 pub mod governance;
 pub mod health;
+pub mod idempotency;
 pub mod incident;
 pub mod init;
 pub mod invariants;
