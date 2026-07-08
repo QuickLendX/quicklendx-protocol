@@ -6,9 +6,14 @@ import { getDatabase, closeDatabase } from '../lib/database';
 import { apiKeyService } from '../services/api-key-service';
 import { db } from '../db/database';
 import { requireAdminRoles, getAdminContext } from '../middleware/rbac';
+import { getRequestActor, withCorrelationId } from '../lib/requestContext';
 
 describe('rbac middleware (API-key backed)', () => {
   const next = jest.fn();
+  const flushAsyncAudit = async () => {
+    await new Promise((resolve) => setImmediate(resolve));
+    await new Promise((resolve) => setImmediate(resolve));
+  };
 
   const buildRes = () => {
     const res: Partial<Response> = {};
@@ -31,6 +36,7 @@ describe('rbac middleware (API-key backed)', () => {
       CREATE TABLE IF NOT EXISTS api_keys (
         id TEXT PRIMARY KEY,
         key_hash TEXT NOT NULL,
+        signing_secret_hash TEXT,
         prefix TEXT NOT NULL,
         name TEXT NOT NULL,
         scopes TEXT NOT NULL,
@@ -61,7 +67,8 @@ describe('rbac middleware (API-key backed)', () => {
     `);
   });
 
-  afterAll(() => {
+  afterAll(async () => {
+    await flushAsyncAudit();
     closeDatabase();
     try {
       if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
@@ -73,6 +80,10 @@ describe('rbac middleware (API-key backed)', () => {
   beforeEach(() => {
     next.mockReset();
     db.clear();
+  });
+
+  afterEach(async () => {
+    await flushAsyncAudit();
   });
 
   it('allows a support-scoped key for support actions', async () => {
@@ -92,11 +103,16 @@ describe('rbac middleware (API-key backed)', () => {
     const res = buildRes();
 
     const handler = requireAdminRoles(['support'], 'test_action');
-    await handler(req, res, next);
+    let requestActor: string | null = null;
+    await withCorrelationId('req-rbac-actor', async () => {
+      await handler(req, res, next);
+      requestActor = getRequestActor();
+    });
 
     expect(next).toHaveBeenCalled();
     const ctx = getAdminContext(req);
     expect(ctx.role).toBe('support');
+    expect(requestActor).toBe(`api_key:${created.id}`);
   });
 
   it('denies insufficient role', async () => {
