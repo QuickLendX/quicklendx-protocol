@@ -50,6 +50,29 @@ stellar-cli contract invoke \
 
 The current protocol version is **1**. All `0.1.x` deployments report `1`.
 
+#### Release ratchet
+
+CI enforces an explicit release ratchet: if
+[`quicklendx-contracts/Cargo.toml`](../quicklendx-contracts/Cargo.toml)
+changes its `[package].version`, then
+[`PROTOCOL_VERSION`](../quicklendx-contracts/src/init.rs) must increase in the
+same change. The gate is implemented by
+[`scripts/check-protocol-version-bump.sh`](../scripts/check-protocol-version-bump.sh)
+and is tested by
+[`scripts/check-protocol-version-bump.test.sh`](../scripts/check-protocol-version-bump.test.sh).
+
+Run it locally before cutting a contract package release:
+
+```bash
+scripts/check-protocol-version-bump.sh
+scripts/check-protocol-version-bump.test.sh
+```
+
+This ratchet is intentionally stricter than the storage compatibility policy
+below. Patch and minor releases can remain backward-compatible, but a packaged
+contract release still increments `PROTOCOL_VERSION` so operators can detect the
+new release with `get_version`.
+
 #### Upgrade policy
 
 The bump rules are documented next to the constant in
@@ -142,6 +165,9 @@ When you bump the contract WASM:
 
 - [ ] Decide the release type (patch / minor / major) using the
       [upgrade policy](#upgrade-policy) table.
+- [ ] If `quicklendx-contracts/Cargo.toml` `[package].version` changes, bump
+      `PROTOCOL_VERSION` in [`src/init.rs`](../quicklendx-contracts/src/init.rs)
+      and run `scripts/check-protocol-version-bump.sh`.
 - [ ] For a **major** release, bump `PROTOCOL_VERSION` in
       [`src/init.rs`](../quicklendx-contracts/src/init.rs) **before** building
       the WASM, and document the migration.
