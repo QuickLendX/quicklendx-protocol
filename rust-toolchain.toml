@@ -1,5 +1,4 @@
 [toolchain]
-# Use a platform-agnostic channel so CI runners pick the correct host-specific
-# toolchain (e.g., x86_64-unknown-linux-gnu on Ubuntu, x86_64-pc-windows-msvc on Windows).
-channel = "stable"
+# Pin below Rust 1.97 until the current ethnum dependency is compatible with it.
+channel = "1.96.1"
 components = ["rustfmt"]
