@@ -6,6 +6,8 @@ use crate::types::{Invoice, InvoiceStatus, SearchRank, SearchResult};
 
 /// Maximum number of search results to return
 pub const MAX_SEARCH_RESULTS: u32 = 50;
+/// Maximum allowed page offset for ranked invoice searches.
+pub const MAX_SEARCH_OFFSET: u32 = 10_000;
 
 /// Invoice search functionality with safe query semantics and relevance ranking
 pub struct InvoiceSearch;
@@ -46,14 +48,24 @@ impl InvoiceSearch {
         Ok(String::from_str(query.env(), trimmed_str))
     }
 
-    /// Search invoices with relevance ranking
+    /// Search invoices with relevance ranking.
+    ///
+    /// Compatibility wrapper for the first result page. New callers that need
+    /// deterministic pagination should use `search_invoices_paged`.
+    pub fn search_invoices(env: &Env, query: String) -> Result<Vec<SearchResult>, QuickLendXError> {
+        Self::search_invoices_paged(env, query, 0, MAX_SEARCH_RESULTS)
+    }
+
+    /// Search invoices with relevance ranking, offset pagination, and a clamped page size.
     ///
     /// # Arguments
     /// * `env` - Soroban environment
     /// * `query` - Search query string (will be sanitized)
+    /// * `offset` - Number of ranked matches to skip before returning a page
+    /// * `limit` - Requested page size, clamped to MAX_SEARCH_RESULTS
     ///
     /// # Returns
-    /// * `Vec<SearchResult>` - Ranked search results, limited to MAX_SEARCH_RESULTS
+    /// * `Vec<SearchResult>` - Ranked search results for the requested page
     ///
     /// # Ranking Logic
     /// 1. Exact matches on invoice_id (highest priority)
@@ -62,10 +74,24 @@ impl InvoiceSearch {
     ///
     /// # Security Notes
     /// - Input sanitization prevents injection attacks
-    /// - Memory-safe: bounded result set prevents DoS
+    /// - Memory-safe: returned pages are bounded by MAX_SEARCH_RESULTS
+    /// - Rejects offsets above MAX_SEARCH_OFFSET to avoid absurd page walks
     /// - Case-insensitive search
-    pub fn search_invoices(env: &Env, query: String) -> Result<Vec<SearchResult>, QuickLendXError> {
+    pub fn search_invoices_paged(
+        env: &Env,
+        query: String,
+        offset: u32,
+        limit: u32,
+    ) -> Result<Vec<SearchResult>, QuickLendXError> {
+        if offset > MAX_SEARCH_OFFSET {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
         let sanitized_query = Self::sanitize_query(&query)?;
+        let page_limit = limit.min(MAX_SEARCH_RESULTS);
+        if page_limit == 0 {
+            return Ok(Vec::new(env));
+        }
 
         // Get all invoices (in a real implementation, this might be paginated or indexed)
         // For now, we'll search through all invoices
@@ -89,16 +115,30 @@ impl InvoiceSearch {
         // Sort by rank (descending) then by created_at (descending)
         Self::sort_results(&mut results);
 
-        // Limit results
-        let mut limited_results = Vec::new(env);
-        let max_results = MAX_SEARCH_RESULTS.min(results.len());
-        for i in 0..max_results {
+        Ok(Self::page_results(env, &results, offset, page_limit))
+    }
+
+    /// Return a bounded result page after ranking has been applied.
+    fn page_results(
+        env: &Env,
+        results: &Vec<SearchResult>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<SearchResult> {
+        let mut page = Vec::new(env);
+        let len = results.len();
+        if offset >= len {
+            return page;
+        }
+
+        let end = offset.saturating_add(limit).min(len);
+        for i in offset..end {
             if let Some(result) = results.get(i) {
-                limited_results.push_back(result);
+                page.push_back(result);
             }
         }
 
-        Ok(limited_results)
+        page
     }
 
     /// Calculate search relevance rank for an invoice
@@ -260,12 +300,18 @@ mod tests {
     use soroban_sdk::testutils::Address as _;
     use soroban_sdk::{Address, Env, String, Vec};
 
+    use crate::storage::InvoiceStorage;
     use crate::types::{Invoice, InvoiceCategory, InvoiceStatus, SearchRank};
 
     fn setup_test_env() -> Env {
         let env = Env::default();
         env.mock_all_auths();
         env
+    }
+
+    fn with_contract<T>(env: &Env, f: impl FnOnce() -> T) -> T {
+        let contract_id = env.register(crate::QuickLendXContract, ());
+        env.as_contract(&contract_id, f)
     }
 
     fn create_test_invoice(
@@ -387,5 +433,99 @@ mod tests {
                 "1234abcd00000000000000000000000000000000000000000000000000000000"
             )
         );
+    }
+
+    #[test]
+    fn test_search_invoices_paged_clamps_limit_and_keeps_order() {
+        let env = setup_test_env();
+        let business = Address::generate(&env);
+
+        let results = with_contract(&env, || {
+            for i in 0..60 {
+                let mut invoice = create_test_invoice(&env, &business, "service", None);
+                invoice.created_at = 1_000 + i;
+                InvoiceStorage::store_invoice(&env, &invoice);
+            }
+
+            InvoiceSearch::search_invoices_paged(
+                &env,
+                String::from_str(&env, "service"),
+                0,
+                MAX_SEARCH_RESULTS + 25,
+            )
+            .unwrap()
+        });
+
+        assert_eq!(results.len(), MAX_SEARCH_RESULTS);
+        assert_eq!(results.get(0).unwrap().created_at, 1_059);
+        assert_eq!(results.get(49).unwrap().created_at, 1_010);
+    }
+
+    #[test]
+    fn test_search_invoices_paged_offset_and_limit() {
+        let env = setup_test_env();
+        let business = Address::generate(&env);
+
+        let page = with_contract(&env, || {
+            for i in 0..5 {
+                let mut invoice = create_test_invoice(&env, &business, "service", None);
+                invoice.created_at = 10 + i;
+                InvoiceStorage::store_invoice(&env, &invoice);
+            }
+
+            InvoiceSearch::search_invoices_paged(&env, String::from_str(&env, "service"), 2, 2)
+                .unwrap()
+        });
+
+        assert_eq!(page.len(), 2);
+        assert_eq!(page.get(0).unwrap().created_at, 12);
+        assert_eq!(page.get(1).unwrap().created_at, 11);
+    }
+
+    #[test]
+    fn test_search_invoices_paged_limit_zero_returns_empty_page() {
+        let env = setup_test_env();
+        let business = Address::generate(&env);
+
+        let page = with_contract(&env, || {
+            let invoice = create_test_invoice(&env, &business, "service", None);
+            InvoiceStorage::store_invoice(&env, &invoice);
+
+            InvoiceSearch::search_invoices_paged(&env, String::from_str(&env, "service"), 0, 0)
+                .unwrap()
+        });
+
+        assert!(page.is_empty());
+    }
+
+    #[test]
+    fn test_search_invoices_paged_offset_past_end_returns_empty_page() {
+        let env = setup_test_env();
+        let business = Address::generate(&env);
+
+        let page = with_contract(&env, || {
+            let invoice = create_test_invoice(&env, &business, "service", None);
+            InvoiceStorage::store_invoice(&env, &invoice);
+
+            InvoiceSearch::search_invoices_paged(&env, String::from_str(&env, "service"), 10, 5)
+                .unwrap()
+        });
+
+        assert!(page.is_empty());
+    }
+
+    #[test]
+    fn test_search_invoices_paged_absurd_offset_rejected() {
+        let env = setup_test_env();
+
+        let err = InvoiceSearch::search_invoices_paged(
+            &env,
+            String::from_str(&env, "service"),
+            MAX_SEARCH_OFFSET + 1,
+            5,
+        )
+        .unwrap_err();
+
+        assert_eq!(err, QuickLendXError::InvalidAmount);
     }
 }

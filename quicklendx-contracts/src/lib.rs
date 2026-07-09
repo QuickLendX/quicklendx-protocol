@@ -1307,6 +1307,19 @@ impl QuickLendXContract {
         InvoiceSearch::search_invoices(&env, query)
     }
 
+    /// Search invoices with relevance ranking and deterministic offset pagination
+    ///
+    /// `limit` is clamped to the protocol maximum page size, `limit = 0`
+    /// returns an empty page, and absurdly large offsets are rejected.
+    pub fn search_invoices_paged(
+        env: Env,
+        query: String,
+        offset: u32,
+        limit: u32,
+    ) -> Result<Vec<SearchResult>, QuickLendXError> {
+        InvoiceSearch::search_invoices_paged(&env, query, offset, limit)
+    }
+
     /// Get all invoices by status
     pub fn get_invoices_by_status(env: Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_status(&env, status)

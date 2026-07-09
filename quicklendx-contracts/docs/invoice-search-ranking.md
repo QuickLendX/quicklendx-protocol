@@ -41,4 +41,5 @@ graph TD
 
 - **Case-Insensitive UI**: The contract automatically sanitizes queries and converts them to lowercase. UI elements do not need to convert queries before invoking the contract search.
 - **ID Formatting**: If a user is searching by invoice ID, supply the full 64-character hex string of the `BytesN<32>` ID. This triggers the `ExactId` tier and guarantees that specific invoice surfaces first.
-- **Result Limits**: The result vector is capped at 50 elements by the contract to ensure predictable WASM memory usage and low gas consumption.
+- **Result Limits**: `search_invoices` returns the first page capped at 50 elements by the contract to ensure predictable WASM memory usage and low gas consumption.
+- **Paged Search**: Use `search_invoices_paged(query, offset, limit)` for deterministic pagination. `limit` is clamped to 50, `limit = 0` returns an empty page, offsets beyond the current result set return an empty page, and offsets above the protocol sanity cap are rejected.
