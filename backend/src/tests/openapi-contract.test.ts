@@ -68,7 +68,7 @@ const KNOWN_SETTLEMENT_ID = "0xsettle123";
  */
 const UNKNOWN_SETTLEMENT_ID = "0xdeadbeef";
 
-/** The investor value used in MOCK_PORTFOLIO (controllers/v1/portfolio.ts). */
+/** Investor value used for portfolio contract-shape requests. */
 const KNOWN_INVESTOR = "GA...ABC";
 
 // ─── Schema helpers ──────────────────────────────────────────────────────────

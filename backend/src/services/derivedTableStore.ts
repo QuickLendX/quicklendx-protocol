@@ -153,6 +153,14 @@ export class InMemoryDerivedTableStore implements DerivedTableStore {
     return Array.from(this.tables.invoices.values());
   }
 
+  async listBids(): Promise<any[]> {
+    return Array.from(this.tables.bids.values());
+  }
+
+  async listDisputes(): Promise<any[]> {
+    return Array.from(this.tables.disputes.values());
+  }
+
   async getBid(id: string): Promise<any | null> {
     return this.tables.bids.get(id) || null;
   }
@@ -417,9 +425,21 @@ export class FileSystemDerivedTableStore implements DerivedTableStore {
   }
 
   async listInvoices(): Promise<any[]> {
+    return this.listRecords("invoices");
+  }
+
+  async listBids(): Promise<any[]> {
+    return this.listRecords("bids");
+  }
+
+  async listDisputes(): Promise<any[]> {
+    return this.listRecords("disputes");
+  }
+
+  private async listRecords(table: keyof typeof this.tablesFiles): Promise<any[]> {
     const fs = require("fs").promises;
     const path = require("path");
-    const filePath = path.join(this.dataDir, this.tablesFiles.invoices);
+    const filePath = path.join(this.dataDir, this.tablesFiles[table]);
     try {
       const data = await fs.readFile(filePath, "utf8");
       const lines = data.trim().split("\n").filter((l: string) => l.length > 0);

@@ -142,6 +142,12 @@ export interface DerivedTableStore {
   
   // List invoices currently persisted by the indexer
   listInvoices?(): Promise<any[]>;
+
+  // List bids currently persisted by the indexer
+  listBids?(): Promise<any[]>;
+
+  // List disputes currently persisted by the indexer
+  listDisputes?(): Promise<any[]>;
 }
 
 // Security validation interface

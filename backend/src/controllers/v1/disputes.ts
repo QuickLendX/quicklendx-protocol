@@ -1,20 +1,8 @@
 import { Request, Response, NextFunction } from "express";
-import { Dispute, DisputeStatus } from "../../types/contract";
-import { freshnessService } from "../../services/freshnessService";
-import { labelRecord } from "../../services/versioningService";
+import { Dispute } from "../../types/contract";
 import { applyCacheHeaders, CC_NO_STORE } from "../../middleware/cache-headers";
 import { parsePaginationParams, PaginationError, applyPagination } from "../../utils/pagination";
-
-export const MOCK_DISPUTES: Dispute[] = [
-  labelRecord<Omit<Dispute, "contract_version" | "event_schema_version" | "indexed_at">>({
-    id: "0xcccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
-    invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-    initiator: "GA...BUYER",
-    reason: "Goods not delivered as per description",
-    status: DisputeStatus.UnderReview,
-    created_at: Math.floor(Date.now() / 1000) - 86400,
-  }),
-];
+import { derivedTableStore } from "../../services/replayService";
 
 export const getDisputes = async (
   req: Request,
@@ -25,7 +13,7 @@ export const getDisputes = async (
     const params = parsePaginationParams(req.query);
     const { id: invoice_id } = req.params;
 
-    let filtered = [...MOCK_DISPUTES];
+    let filtered = await listIndexedDisputes();
     if (invoice_id) {
       filtered = filtered.filter((d) => d.invoice_id === invoice_id);
     }
@@ -41,3 +29,10 @@ export const getDisputes = async (
     next(error);
   }
 };
+
+async function listIndexedDisputes(): Promise<Dispute[]> {
+  if (!derivedTableStore.listDisputes) {
+    return [];
+  }
+  return (await derivedTableStore.listDisputes()) as Dispute[];
+}
