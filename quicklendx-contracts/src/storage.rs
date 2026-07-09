@@ -33,7 +33,6 @@ where
 pub const PENDING_TREASURY_KEY: Symbol = symbol_short!("pnd_trs");
 /// Storage key for the pending treasury execution timestamp.
 pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("pnd_trs_ts");
-}
 
 /// Counter and configuration keys for the contract.
 ///
