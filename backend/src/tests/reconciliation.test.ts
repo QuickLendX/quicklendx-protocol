@@ -8,6 +8,20 @@ let mockDb: any;
 
 const statementCache = new Map<string, any>();
 
+const createSnapshotTable = () => {
+  mockDb.exec(`
+    CREATE TABLE IF NOT EXISTS reconciliation_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      run_at TEXT NOT NULL,
+      checked_count INTEGER NOT NULL CHECK(checked_count >= 0),
+      drift_count INTEGER NOT NULL CHECK(drift_count >= 0),
+      severity TEXT NOT NULL CHECK(severity IN ('LOW', 'MEDIUM', 'HIGH'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_reconciliation_snapshots_run_at
+      ON reconciliation_snapshots(run_at DESC);
+  `);
+};
+
 jest.mock("../lib/database", () => ({
   getDatabase: () => mockDb,
   closeDatabase: jest.fn(),
@@ -54,6 +68,8 @@ describe("ReconciliationWorker", () => {
         invoice_id TEXT
       );
     `);
+    createSnapshotTable();
+
     // Reset internal state if needed (static members are shared)
     (ReconciliationWorker as any).reports = [];
     (ReconciliationWorker as any).isRunning = false;
@@ -144,5 +160,63 @@ describe("ReconciliationWorker", () => {
     
     const reports = ReconciliationWorker.getAllReports();
     expect(reports.length).toBeGreaterThan(0);
+  });
+
+  test("should return an empty drift trend before snapshots exist", () => {
+    expect(ReconciliationWorker.getDriftTrend()).toEqual([]);
+  });
+
+  test("should persist a reconciliation snapshot per run", async () => {
+    const report = await ReconciliationWorker.runReconciliation();
+
+    const trend = ReconciliationWorker.getDriftTrend(10);
+
+    expect(trend).toHaveLength(1);
+    expect(trend[0]).toEqual({
+      runAt: new Date(report.timestamp * 1000).toISOString(),
+      checkedCount: 3,
+      driftCount: 2,
+      severity: "MEDIUM",
+    });
+  });
+
+  test("should order trend by most recent run and clamp limits", () => {
+    const insert = mockDb.prepare(
+      `INSERT INTO reconciliation_snapshots
+         (run_at, checked_count, drift_count, severity)
+       VALUES (?, ?, ?, ?)`
+    );
+    insert.run("2026-07-09T00:00:00.000Z", 10, 0, "LOW");
+    insert.run("2026-07-09T00:01:00.000Z", 10, 2, "MEDIUM");
+    insert.run("2026-07-09T00:02:00.000Z", 10, 101, "HIGH");
+
+    expect(ReconciliationWorker.getDriftTrend(0)).toEqual([
+      {
+        runAt: "2026-07-09T00:02:00.000Z",
+        checkedCount: 10,
+        driftCount: 101,
+        severity: "HIGH",
+      },
+    ]);
+
+    expect(ReconciliationWorker.getDriftTrend(999)).toHaveLength(3);
+  });
+
+  test("should classify snapshot severity at drift-count boundaries", async () => {
+    (rpcClient.call as jest.Mock).mockResolvedValueOnce([
+      { id: "invoice_2", status: "Funded" },
+    ]);
+
+    await ReconciliationWorker.runReconciliation();
+    expect(ReconciliationWorker.getDriftTrend(1)[0].severity).toBe("LOW");
+
+    const highDriftInvoices = Array.from({ length: 101 }, (_, index) => ({
+      id: `missing_invoice_${index}`,
+      status: "Funded",
+    }));
+    (rpcClient.call as jest.Mock).mockResolvedValueOnce(highDriftInvoices);
+
+    await ReconciliationWorker.runReconciliation();
+    expect(ReconciliationWorker.getDriftTrend(1)[0].severity).toBe("HIGH");
   });
 });

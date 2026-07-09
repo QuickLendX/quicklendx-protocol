@@ -2,6 +2,8 @@ import {
   DriftReport,
   DriftItem,
   BackfillResult,
+  ReconciliationSnapshot,
+  Severity,
 } from "../types/reconciliation";
 import { Invoice } from "../types/contract";
 import { rpcClient } from "./rpcClient";
@@ -9,12 +11,15 @@ import { derivedTableStore } from "./replayService";
 import { MockDataProviders } from "./mockDataProviders";
 import { backfillService } from "./backfillService";
 import { withSpan } from "../lib/tracing";
+import { getPreparedStatement } from "../lib/database";
 
 export class ReconciliationWorker {
   private static reports: DriftReport[] = [];
   private static isRunning: boolean = false;
   private static backfillBatchSize: number = 10;
   public static failBackfill: boolean = false;
+  private static readonly defaultTrendLimit: number = 10;
+  private static readonly maxTrendLimit: number = 100;
 
   static async runReconciliation(): Promise<DriftReport> {
     return withSpan("reconciliation.runReconciliation", {}, async () => {
@@ -52,8 +57,7 @@ export class ReconciliationWorker {
               error: rpcErr instanceof Error ? rpcErr.message : String(rpcErr),
             } as any;
 
-            this.reports.push(report);
-            return report;
+            return this.finalizeReport(report);
           }
         }
         const drifts: DriftItem[] = [];
@@ -86,8 +90,7 @@ export class ReconciliationWorker {
           drifts,
         };
 
-        this.reports.push(report);
-        return report;
+        return this.finalizeReport(report);
       } finally {
         this.isRunning = false;
       }
@@ -126,11 +129,75 @@ export class ReconciliationWorker {
     );
   }
 
+  static getDriftTrend(
+    limit = ReconciliationWorker.defaultTrendLimit,
+  ): ReconciliationSnapshot[] {
+    return withSpan(
+      "reconciliation.getDriftTrend",
+      { limit },
+      () => {
+        const safeLimit = this.clampTrendLimit(limit);
+        const rows = getPreparedStatement(
+          `SELECT run_at, checked_count, drift_count, severity
+           FROM reconciliation_snapshots
+           ORDER BY run_at DESC, id DESC
+           LIMIT ?`
+        ).all(safeLimit) as Array<{
+          run_at: string;
+          checked_count: number;
+          drift_count: number;
+          severity: Severity;
+        }>;
+
+        return rows.map((row) => ({
+          runAt: row.run_at,
+          checkedCount: row.checked_count,
+          driftCount: row.drift_count,
+          severity: row.severity,
+        }));
+      },
+    );
+  }
+
   static isReconciliationRunning(): boolean {
     return withSpan(
       "reconciliation.isReconciliationRunning",
       {},
       () => this.isRunning,
     );
+  }
+
+  private static finalizeReport(report: DriftReport): DriftReport {
+    this.reports.push(report);
+    this.persistSnapshot(report);
+    return report;
+  }
+
+  private static persistSnapshot(report: DriftReport): void {
+    getPreparedStatement(
+      `INSERT INTO reconciliation_snapshots
+         (run_at, checked_count, drift_count, severity)
+       VALUES (?, ?, ?, ?)`
+    ).run(
+      new Date(report.timestamp * 1000).toISOString(),
+      Math.max(0, report.totalRecordsChecked),
+      Math.max(0, report.driftCount),
+      this.classifySnapshotSeverity(report.driftCount)
+    );
+  }
+
+  private static classifySnapshotSeverity(driftCount: number): Severity {
+    if (driftCount > 100) return Severity.HIGH;
+    if (driftCount >= 2) return Severity.MEDIUM;
+    return Severity.LOW;
+  }
+
+  private static clampTrendLimit(limit: number): number {
+    if (!Number.isFinite(limit)) {
+      return this.defaultTrendLimit;
+    }
+
+    const integerLimit = Math.floor(limit);
+    return Math.min(Math.max(integerLimit, 1), this.maxTrendLimit);
   }
 }

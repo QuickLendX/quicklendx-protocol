@@ -2,15 +2,32 @@ import { ReconciliationWorker } from "../services/reconciliationWorker";
 import { derivedTableStore } from "../services/replayService";
 import { rpcClient } from "../services/rpcClient";
 import { InvoiceStatus } from "../types/contract";
+import { closeDatabase, getDatabase } from "../lib/database";
 
 describe("ReconciliationWorker (real)", () => {
   beforeEach(async () => {
+    process.env.DATABASE_PATH = ":memory:";
+    closeDatabase();
+    getDatabase().exec(`
+      CREATE TABLE IF NOT EXISTS reconciliation_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_at TEXT NOT NULL,
+        checked_count INTEGER NOT NULL CHECK(checked_count >= 0),
+        drift_count INTEGER NOT NULL CHECK(drift_count >= 0),
+        severity TEXT NOT NULL CHECK(severity IN ('LOW', 'MEDIUM', 'HIGH'))
+      );
+    `);
+
     (ReconciliationWorker as any).reports = [];
     (ReconciliationWorker as any).isRunning = false;
     // Reset derived store
     try {
       await derivedTableStore.clearDerivedTables();
     } catch {}
+  });
+
+  afterEach(() => {
+    closeDatabase();
   });
 
   test("detects missing and status mismatch using indexed store + rpc", async () => {

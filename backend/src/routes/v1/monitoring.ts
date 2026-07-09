@@ -224,6 +224,17 @@ router.get("/reconciliation", async (_req: AuthenticatedRequest, res: Response) 
   }
 });
 
+router.get("/reconciliation/trend", async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const rawLimit = Number((req.query as Record<string, unknown>).limit);
+    const trend = ReconciliationWorker.getDriftTrend(rawLimit);
+    res.json({ trend });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Failed to read reconciliation trend";
+    res.status(500).json({ error: { message, code: "RECONCILIATION_TREND_READ_ERROR" } });
+  }
+});
+
 /**
  * GET /api/v1/admin/monitoring/latency
  *

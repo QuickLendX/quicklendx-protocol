@@ -5,6 +5,13 @@ export interface DriftReport {
   drifts: DriftItem[];
 }
 
+export interface ReconciliationSnapshot {
+  runAt: string;
+  checkedCount: number;
+  driftCount: number;
+  severity: Severity;
+}
+
 export interface DriftItem {
   id: string;
   type: "Invoice" | "Bid" | "Settlement";
