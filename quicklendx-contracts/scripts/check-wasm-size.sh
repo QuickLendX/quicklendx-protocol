@@ -53,7 +53,11 @@ if [[ "$CHECK_ONLY" == false ]]; then
     [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
     rustup target add wasm32v1-none 2>/dev/null || true
     cargo build --target wasm32v1-none --release --lib
-    WASM_PATH="$(find target/wasm32v1-none/release -maxdepth 1 -type f -name '*.wasm' | sort | head -n 1)"
+    WASM_PATH="$(
+      for dir in target/wasm32v1-none/release ../target/wasm32v1-none/release; do
+        [[ -d "$dir" ]] && find "$dir" -maxdepth 1 -type f -name '*.wasm'
+      done | sort | head -n 1
+    )"
   fi
 else
   # --check-only: probe both target directories for an existing artifact
