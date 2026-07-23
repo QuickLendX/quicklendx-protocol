@@ -1,0 +1,5 @@
+[toolchain]
+# Use a platform-agnostic channel so CI runners pick the correct host-specific
+# toolchain (e.g., x86_64-unknown-linux-gnu on Ubuntu, x86_64-pc-windows-msvc on Windows).
+channel = "stable"
+components = ["rustfmt"]

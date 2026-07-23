@@ -165,6 +165,62 @@ The WASM size budget enforced by `scripts/check-wasm-size.sh` (256 KB) is not af
 
 ---
 
+---
+
+## `get_protocol_diagnostics` Entry-Point
+
+The contract exposes a `get_protocol_diagnostics` entry-point that returns a `ProtocolDiagnostics` struct with a rich internal snapshot — per-status invoice counts, bid counters, subsystem flags, fee config, and ledger info — in a single call.
+
+**This entry-point is only compiled when `--features diagnostics` is set.** It is completely absent from standard production WASM builds: zero bytes, zero gas cost, and it does not appear in the ABI.
+
+### Returned fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `total_invoices` | `u64` | All invoices ever created |
+| `pending_invoices` | `u32` | Invoices in `Pending` status |
+| `verified_invoices` | `u32` | Invoices in `Verified` status |
+| `funded_invoices` | `u32` | Invoices in `Funded` status |
+| `paid_invoices` | `u32` | Invoices in `Paid` status |
+| `defaulted_invoices` | `u32` | Invoices in `Defaulted` status |
+| `total_bids_ever` | `u64` | Monotonic bid counter |
+| `is_paused` | `bool` | Protocol pause flag |
+| `is_maintenance` | `bool` | Maintenance mode flag |
+| `backpressure_active` | `bool` | Load-shedding flag |
+| `fee_bps` | `u32` | Current fee in basis points |
+| `currency_count` | `u32` | Whitelisted currency count |
+| `ledger_sequence` | `u32` | Ledger sequence at snapshot time |
+| `ledger_timestamp` | `u64` | Ledger timestamp at snapshot time |
+
+### Invoking
+
+```bash
+# Build a diagnostics-enabled binary (never deploy this to production)
+stellar contract build --profile release-with-logs --features diagnostics
+
+# Invoke
+stellar contract invoke \
+  --id <CONTRACT_ID> \
+  --source <ACCOUNT> \
+  --network testnet \
+  -- get_protocol_diagnostics
+```
+
+### In tests
+
+```rust
+#[cfg(feature = "diagnostics")]
+#[test]
+fn my_test() {
+    // ... setup ...
+    let diag = client.get_protocol_diagnostics();
+    assert_eq!(diag.verified_invoices, 1);
+    assert!(!diag.is_paused);
+}
+```
+
+---
+
 ## Adding New Log Points
 
 To add structured diagnostics to a new function or module:

@@ -38,7 +38,9 @@ describe('rbac middleware (API-key backed)', () => {
         last_used_at TEXT,
         expires_at TEXT,
         revoked INTEGER NOT NULL DEFAULT 0,
-        created_by TEXT NOT NULL
+        created_by TEXT NOT NULL,
+        prev_signing_secret_hash TEXT,
+        prev_secret_expires_at TEXT
       )
     `);
     conn.exec(`

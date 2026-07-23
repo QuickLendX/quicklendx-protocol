@@ -9,7 +9,7 @@
     "test:coverage": "jest --coverage",
     "dev": "ts-node-dev src/index.ts",
     "start": "ts-node src/index.ts",
-    "security:scan": "node scripts/dependency-scan.js audit-report.json high",
+    "security:scan": "node scripts/dependency-scan.js audit-report.json high && node scripts/secret-scan.js",
     "sbom:generate": "node scripts/generate-sbom.js sbom/backend-sbom.cdx.json",
     "sbom:check": "node scripts/validate-sbom.js sbom/backend-sbom.cdx.json",
     "migrate": "ts-node src/lib/migrations/cli.ts",
@@ -41,6 +41,7 @@
   },
   "devDependencies": {
     "@jest/expect": "^30.4.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/helmet": "^0.0.48",

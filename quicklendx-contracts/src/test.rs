@@ -115,7 +115,8 @@ pub fn create_funded_invoice(
         &Vec::new(env),
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let salt = BytesN::from_array(&env, &[0u8; 32]);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &salt);
     client.accept_bid(&invoice_id, &bid_id);
     (invoice_id, business, investor, currency, contract_id)
 }
@@ -5132,7 +5133,7 @@ fn test_cancel_invoice_funded() {
     // Investor places bid
     let bid_amount = amount;
     let expected_return = amount + 100000;
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Business accepts bid (invoice becomes Funded)
     client.accept_bid(&invoice_id, &bid_id);

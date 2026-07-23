@@ -1,0 +1,76 @@
+# Storage key layout snapshot for QuickLendX protocol
+#
+# PURPOSE: Detect silent renames of on-chain storage keys.
+# Any diff in this file indicates a BREAKING change that orphans existing
+# contract data and MUST be accompanied by a migration plan.
+# See docs/storage-key-stability.md for the full policy.
+#
+# FORMAT: <storage_class> | <key_name> | <symbol_string>
+# Storage classes: persistent, instance, temporary
+
+# ── StorageKeys (counters / config) ─────────────────────────────────────────
+instance   | platform_fees      | fees
+persistent | invoice_count      | inv_count
+persistent | bid_count          | bid_count
+persistent | investment_count   | inv_cnt
+
+# ── Indexes: invoice secondary indexes ──────────────────────────────────────
+persistent | invoices_by_business          | inv_bus
+persistent | invoices_by_status            | inv_st
+persistent | invoices_by_customer          | inv_cust
+persistent | invoices_by_tax_id            | inv_taxid
+persistent | invoices_by_tag               | inv_tag
+persistent | invoices_by_category          | inv_cat
+
+# ── Indexes: bid secondary indexes ──────────────────────────────────────────
+persistent | bids_by_invoice               | bids_inv
+persistent | bids_by_investor              | bids_invr
+persistent | bids_by_status                | bids_stat
+
+# ── Indexes: investment secondary indexes ───────────────────────────────────
+persistent | investments_by_invoice        | invst_inv
+persistent | investments_by_investor       | inv_invst
+persistent | investments_by_status         | inv_st
+
+# ── BidStorage: additional bid keys ─────────────────────────────────────────
+persistent | all_bids                      | all_bids
+instance   | bid_ttl                       | bid_ttl
+instance   | max_active_bids_per_investor  | mx_actbd
+
+# ── InvestmentStorage: additional investment keys ────────────────────────────
+persistent | invoice_to_investment_map     | inv_map
+instance   | investment_id_counter         | invst_cnt
+
+# ── InvoiceStatus variant symbols ────────────────────────────────────────────
+symbol | InvoiceStatus::Pending    | pending
+symbol | InvoiceStatus::Verified   | verified
+symbol | InvoiceStatus::Funded     | funded
+symbol | InvoiceStatus::Paid       | paid
+symbol | InvoiceStatus::Defaulted  | defaulted
+symbol | InvoiceStatus::Cancelled  | cancelled
+symbol | InvoiceStatus::Refunded   | refunded
+
+# ── BidStatus variant symbols ─────────────────────────────────────────────────
+symbol | BidStatus::Placed     | placed
+symbol | BidStatus::Withdrawn  | withdrawn
+symbol | BidStatus::Accepted   | accepted
+symbol | BidStatus::Expired    | expired
+symbol | BidStatus::Cancelled  | cancelled
+
+# ── InvestmentStatus variant symbols ─────────────────────────────────────────
+symbol | InvestmentStatus::Active     | active
+symbol | InvestmentStatus::Withdrawn  | withdrawn
+symbol | InvestmentStatus::Completed  | completed
+symbol | InvestmentStatus::Defaulted  | defaulted
+symbol | InvestmentStatus::Refunded   | refunded
+
+# ── InvoiceCategory variant symbols ──────────────────────────────────────────
+symbol | InvoiceCategory::Services      | services
+symbol | InvoiceCategory::Goods         | goods
+symbol | InvoiceCategory::Consulting    | consult
+symbol | InvoiceCategory::Logistics     | logist
+symbol | InvoiceCategory::Products      | products
+symbol | InvoiceCategory::Manufacturing | manufac
+symbol | InvoiceCategory::Technology    | tech
+symbol | InvoiceCategory::Healthcare    | health
+symbol | InvoiceCategory::Other         | other

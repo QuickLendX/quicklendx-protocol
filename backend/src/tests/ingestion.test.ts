@@ -13,6 +13,7 @@ function makeEvent(ledger: number, i = 0): IndexedEvent {
   return {
     ledger,
     txHash: `0xabc${ledger}${i}`,
+    eventIndex: i,
     type: "InvoiceCreated",
     payload: { id: `inv-${ledger}-${i}` },
   };
@@ -106,7 +107,7 @@ describe("ingestBatch — idempotency", () => {
 describe("ingestBatch — validation and rollback", () => {
   it("rejects a batch containing an event with no txHash", async () => {
     const store = new InMemoryIngestionStore();
-    const bad = { ledger: 10, txHash: "", type: "X", payload: {} };
+    const bad = { ledger: 10, txHash: "", eventIndex: 0, type: "X", payload: {} };
 
     await expect(ingestBatch(store, [bad], 10)).rejects.toThrow("txHash");
 
@@ -117,7 +118,7 @@ describe("ingestBatch — validation and rollback", () => {
 
   it("rejects a batch containing an event with a negative ledger", async () => {
     const store = new InMemoryIngestionStore();
-    const bad = { ledger: -1, txHash: "0xabc", type: "X", payload: {} };
+    const bad = { ledger: -1, txHash: "0xabc", eventIndex: 0, type: "X", payload: {} };
 
     await expect(ingestBatch(store, [bad], 10)).rejects.toThrow("ledger");
 
@@ -126,7 +127,7 @@ describe("ingestBatch — validation and rollback", () => {
 
   it("rejects a batch containing an event with no type", async () => {
     const store = new InMemoryIngestionStore();
-    const bad = { ledger: 10, txHash: "0xabc", type: "", payload: {} };
+    const bad = { ledger: 10, txHash: "0xabc", eventIndex: 0, type: "", payload: {} };
 
     await expect(ingestBatch(store, [bad], 10)).rejects.toThrow("type");
   });
@@ -135,7 +136,7 @@ describe("ingestBatch — validation and rollback", () => {
     const store = new InMemoryIngestionStore();
     const events: IndexedEvent[] = [
       makeEvent(10, 0),
-      { ledger: 10, txHash: "", type: "Bad", payload: {} }, // invalid
+      { ledger: 10, txHash: "", eventIndex: 0, type: "Bad", payload: {} }, // invalid
       makeEvent(10, 2),
     ];
 
@@ -150,7 +151,7 @@ describe("ingestBatch — validation and rollback", () => {
     const store = new InMemoryIngestionStore();
     await ingestBatch(store, [makeEvent(5)], 5); // good batch first
 
-    const bad = { ledger: 10, txHash: "", type: "X", payload: {} };
+    const bad = { ledger: 10, txHash: "", eventIndex: 0, type: "X", payload: {} };
     await expect(ingestBatch(store, [bad], 10)).rejects.toThrow();
 
     // Cursor must stay at 5, not advance to 10

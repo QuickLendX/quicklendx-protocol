@@ -39,3 +39,11 @@ When restoring or retrieving a backup, the contract evaluates the format version
 * **Best-Effort Decoding Prohibited**: The contract will not attempt to decode or restore backup payloads containing unknown future versions (v3 and newer).
 * **Deterministic Failures**: Any validation or restore attempt on unsupported versions immediately returns `QuickLendXError::BackupVersionUnsupported`.
 * **Malformed Payloads**: Truncated or malformed payloads that fail structural deserialization fail safely with `QuickLendXError::StorageError` or `QuickLendXError::StorageKeyNotFound`.
+
+---
+
+## See also
+
+For how `format_version` fits alongside the protocol version and analytics
+schema version — and the overall rules for which contract versions interoperate
+— see [CONTRACT_VERSION_COMPATIBILITY.md](CONTRACT_VERSION_COMPATIBILITY.md).

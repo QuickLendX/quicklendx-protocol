@@ -119,8 +119,7 @@ impl Investment {
     pub fn calculate_premium(amount: i128, coverage_percentage: u32) -> i128 {
         // Reject invalid inputs before any arithmetic.
         if amount <= 0
-            || coverage_percentage < MIN_COVERAGE_PERCENTAGE
-            || coverage_percentage > MAX_COVERAGE_PERCENTAGE
+            || !(MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE).contains(&coverage_percentage)
         {
             return 0;
         }
@@ -186,9 +185,7 @@ impl Investment {
         premium: i128,
     ) -> Result<i128, QuickLendXError> {
         // Validate coverage percentage bounds.
-        if coverage_percentage < MIN_COVERAGE_PERCENTAGE
-            || coverage_percentage > MAX_COVERAGE_PERCENTAGE
-        {
+        if !(MIN_COVERAGE_PERCENTAGE..=MAX_COVERAGE_PERCENTAGE).contains(&coverage_percentage) {
             return Err(QuickLendXError::InvalidCoveragePercentage);
         }
 
@@ -316,11 +313,11 @@ impl Investment {
 pub struct InvestmentStorage;
 
 /// Storage operations for investments.
-/// 
+///
 /// ## Invariants Maintained
 /// - Each invoice can have at most one investment record. The `get_investment_by_invoice`
 ///   lookup enforces this via a single invoice-to-investment mapping key.
-/// - Each investment exists in exactly one status index (Active, Completed, Defaulted, 
+/// - Each investment exists in exactly one status index (Active, Completed, Defaulted,
 ///   Refunded, or Withdrawn) based on its `status` field.
 /// - The active investment index (`act_inv`) contains ONLY investments with `status == Active`.
 ///   During any status transition leaving Active, the investment is removed from this index.
@@ -359,13 +356,16 @@ impl InvestmentStorage {
     }
 
     pub fn store_investment(env: &Env, investment: &Investment) {
+        crate::assert_view_only!(env);
         env.storage()
             .persistent()
             .set(&investment.investment_id, investment);
         extend_persistent_ttl(env, &investment.investment_id);
 
         let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
-        env.storage().persistent().set(&invoice_index_key, &investment.investment_id);
+        env.storage()
+            .persistent()
+            .set(&invoice_index_key, &investment.investment_id);
         extend_persistent_ttl(env, &invoice_index_key);
 
         // Add to investor index
@@ -407,6 +407,7 @@ impl InvestmentStorage {
     /// Panics (contract error) if the transition `old_status -> new_status` is
     /// not in the allowed set defined by `InvestmentStatus::validate_transition`.
     pub fn update_investment(env: &Env, investment: &Investment) {
+        crate::assert_view_only!(env);
         // Retrieve the previous status to validate the transition.
         let previous_status = env
             .storage()
@@ -432,7 +433,9 @@ impl InvestmentStorage {
         extend_persistent_ttl(env, &investment.investment_id);
 
         let invoice_index_key = Self::invoice_index_key(&investment.invoice_id);
-        env.storage().persistent().set(&invoice_index_key, &investment.investment_id);
+        env.storage()
+            .persistent()
+            .set(&invoice_index_key, &investment.investment_id);
         extend_persistent_ttl(env, &invoice_index_key);
     }
 

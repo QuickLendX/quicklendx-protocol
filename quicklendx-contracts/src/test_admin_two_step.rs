@@ -39,7 +39,9 @@ mod test_admin_two_step {
         current_admin: &Address,
         new_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::transfer_admin(env, current_admin, new_admin))
+        env.as_contract(contract_id, || {
+            AdminStorage::transfer_admin(env, current_admin, new_admin)
+        })
     }
 
     fn initiate_admin_transfer(
@@ -58,7 +60,9 @@ mod test_admin_two_step {
         contract_id: &Address,
         pending_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::accept_admin_transfer(env, pending_admin))
+        env.as_contract(contract_id, || {
+            AdminStorage::accept_admin_transfer(env, pending_admin)
+        })
     }
 
     fn cancel_admin_transfer(
@@ -66,7 +70,9 @@ mod test_admin_two_step {
         contract_id: &Address,
         current_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::cancel_admin_transfer(env, current_admin))
+        env.as_contract(contract_id, || {
+            AdminStorage::cancel_admin_transfer(env, current_admin)
+        })
     }
 
     fn set_two_step_enabled(
@@ -75,7 +81,9 @@ mod test_admin_two_step {
         admin: &Address,
         enabled: bool,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || AdminStorage::set_two_step_enabled(env, admin, enabled))
+        env.as_contract(contract_id, || {
+            AdminStorage::set_two_step_enabled(env, admin, enabled)
+        })
     }
 
     fn get_admin(env: &Env, contract_id: &Address) -> Option<Address> {

@@ -1,6 +1,6 @@
 use crate::errors::QuickLendXError;
 use crate::types::Invoice;
-use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, Vec, TryFromVal};
+use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, TryFromVal, Vec};
 
 const RETENTION_POLICY_KEY: soroban_sdk::Symbol = symbol_short!("bkup_pol");
 const BACKUP_COUNTER_KEY: soroban_sdk::Symbol = symbol_short!("bkup_cnt");
@@ -79,6 +79,18 @@ impl Default for BackupRetentionPolicy {
 /// point for restoring data.
 pub struct BackupStorage;
 
+/// Report returned by the backup cleanup dry-run.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupCleanupDryRunReport {
+    /// Number of backups that would be purged.
+    pub would_purge_count: u32,
+    /// Number of backups that would survive.
+    pub would_retain_count: u32,
+    /// Auto-cleanup is disabled; no actual purge would occur.
+    pub cleanup_disabled: bool,
+}
+
 impl BackupStorage {
     fn validate_backup_metadata(
         backup: &Backup,
@@ -88,7 +100,7 @@ impl BackupStorage {
             return Err(QuickLendXError::StorageError);
         }
 
-        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
+        if backup.description.is_empty() || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
         {
             return Err(QuickLendXError::InvalidDescription);
         }
@@ -112,7 +124,7 @@ impl BackupStorage {
         env.storage()
             .instance()
             .get(&RETENTION_POLICY_KEY)
-            .unwrap_or_else(|| BackupRetentionPolicy::default())
+            .unwrap_or_default()
     }
 
     /// Set the backup retention policy (admin only - caller must enforce auth).
@@ -173,10 +185,13 @@ impl BackupStorage {
     pub fn get_backup(env: &Env, backup_id: &BytesN<32>) -> Option<Backup> {
         let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)?;
 
-        if let Ok(map) = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val) {
+        if let Ok(map) =
+            soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
+        {
             let version_key = soroban_sdk::Symbol::new(env, "format_version");
             if map.contains_key(version_key.clone()) {
-                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v)) {
+                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v))
+                {
                     if version == 2 {
                         Backup::try_from_val(env, &raw_val).ok()
                     } else if version == 1 {
@@ -198,14 +213,23 @@ impl BackupStorage {
     }
 
     /// Verify version of a stored backup and reject unsupported/malformed payloads.
-    pub fn verify_backup_version(env: &Env, backup_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
-        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    pub fn verify_backup_version(
+        env: &Env,
+        backup_id: &BytesN<32>,
+    ) -> Result<u32, QuickLendXError> {
+        let raw_val: soroban_sdk::Val = env
+            .storage()
+            .instance()
+            .get(backup_id)
+            .unwrap();
 
-        if let Ok(map) = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val) {
+        if let Ok(map) =
+            soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
+        {
             let version_key = soroban_sdk::Symbol::new(env, "format_version");
             if map.contains_key(version_key.clone()) {
-                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v)) {
+                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v))
+                {
                     if version == 2 {
                         Ok(2)
                     } else if version == 1 {
@@ -292,16 +316,16 @@ impl BackupStorage {
     /// 4. Every invoice in the payload has a positive `amount`.
     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
         let _version = Self::verify_backup_version(env, backup_id)?;
-        let backup = Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let backup = Self::get_backup(env, backup_id).unwrap();
 
         // Validate metadata alone first (cheap).
         Self::validate_backup_metadata(&backup, None)?;
 
         // Fetch the payload and validate together with the count.
         let data =
-            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+            Self::get_backup_data(env, backup_id).unwrap();
 
-        if data.len() as u32 != backup.invoice_count {
+        if data.len() != backup.invoice_count {
             return Err(QuickLendXError::StorageError);
         }
 
@@ -373,7 +397,7 @@ impl BackupStorage {
 
         // Fetch the validated payload.
         let data =
-            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+            Self::get_backup_data(env, backup_id).unwrap();
 
         let restored_count = data.len();
 
@@ -464,6 +488,76 @@ impl BackupStorage {
         }
 
         Ok(removed_count)
+    }
+
+    /// Preview which backups `cleanup_old_backups` would purge without mutating state.
+    ///
+    /// Returns a `BackupCleanupDryRunReport` describing how many entries would be
+    /// removed and how many would survive under the current retention policy.
+    pub fn preview_cleanup_old_backups(env: &Env) -> BackupCleanupDryRunReport {
+        let policy = Self::get_retention_policy(env);
+
+        if !policy.auto_cleanup_enabled {
+            return BackupCleanupDryRunReport {
+                would_purge_count: 0,
+                would_retain_count: Self::get_all_backups(env).len(),
+                cleanup_disabled: true,
+            };
+        }
+
+        let backups = Self::get_all_backups(env);
+        let current_time = env.ledger().timestamp();
+        let mut active: Vec<(BytesN<32>, u64)> = Vec::new(env);
+
+        for backup_id in backups.iter() {
+            if let Some(backup) = Self::get_backup(env, &backup_id) {
+                if backup.status == BackupStatus::Active {
+                    active.push_back((backup_id, backup.timestamp));
+                }
+            }
+        }
+
+        // Sort oldest first (bubble sort, same as cleanup_old_backups).
+        let len = active.len();
+        for i in 0..len {
+            for j in 0..len.saturating_sub(i + 1) {
+                if active.get(j).unwrap().1 > active.get(j + 1).unwrap().1 {
+                    let tmp = active.get(j).unwrap().clone();
+                    active.set(j, active.get(j + 1).unwrap().clone());
+                    active.set(j + 1, tmp);
+                }
+            }
+        }
+
+        let mut would_purge: u32 = 0;
+
+        // Count age-expired entries.
+        if policy.max_age_seconds > 0 {
+            let mut i = 0;
+            while i < active.len() {
+                let age = current_time.saturating_sub(active.get(i).unwrap().1);
+                if age > policy.max_age_seconds {
+                    would_purge = would_purge.saturating_add(1);
+                    active.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+        }
+
+        // Count oldest entries exceeding max_backups.
+        if policy.max_backups > 0 {
+            while active.len() > policy.max_backups {
+                would_purge = would_purge.saturating_add(1);
+                active.remove(0);
+            }
+        }
+
+        BackupCleanupDryRunReport {
+            would_purge_count: would_purge,
+            would_retain_count: active.len(),
+            cleanup_disabled: false,
+        }
     }
 
     /// Retrieve all invoices from storage across all possible statuses.

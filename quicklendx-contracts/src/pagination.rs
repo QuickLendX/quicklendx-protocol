@@ -18,16 +18,11 @@
 //! 5. **No panics** - Only `saturating_*` arithmetic is used and all indexing
 //!    goes through pre-computed safe bounds.
 
-extern crate alloc;
-
+use crate::errors::QuickLendXError;
 use alloc::vec::Vec;
 
-/// Maximum number of records any paginated query endpoint may return in a
-/// single response.
-///
-/// Raising this constant requires a security review because it raises the
-/// worst-case memory consumption and gas cost of every query endpoint.
-pub const MAX_QUERY_LIMIT: u32 = 100;
+/// Maximum number of records returned by paginated query endpoints.
+pub const MAX_QUERY_LIMIT: u32 = 50;
 
 /// Clamp a caller-supplied `limit` to [`MAX_QUERY_LIMIT`].
 ///
@@ -44,6 +39,23 @@ pub const fn cap_query_limit(limit: u32) -> u32 {
     } else {
         limit
     }
+}
+
+/// Validate query parameters for security and resource protection.
+///
+/// # Arguments
+/// * `offset` - Pagination offset starting index.
+/// * `_limit` - Pagination limit.
+///
+/// # Returns
+/// * `Ok(())` if valid.
+/// * `Err(QuickLendXError::InvalidAmount)` on potential offset overflow.
+#[inline]
+pub const fn validate_query_params(offset: u32, _limit: u32) -> Result<(), QuickLendXError> {
+    if offset > u32::MAX - MAX_QUERY_LIMIT {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+    Ok(())
 }
 
 /// Validate pagination parameters against a known collection size.
@@ -92,11 +104,7 @@ pub const fn validate_pagination_params(
 /// * `limit` - Number of records requested.
 /// * `collection_size` - Size of the collection being paginated.
 #[inline]
-pub const fn calculate_safe_bounds(
-    offset: u32,
-    limit: u32,
-    collection_size: u32,
-) -> (u32, u32) {
+pub const fn calculate_safe_bounds(offset: u32, limit: u32, collection_size: u32) -> (u32, u32) {
     let capped_limit = cap_query_limit(limit);
     let start = if offset > collection_size {
         collection_size
@@ -123,7 +131,13 @@ pub const fn calculate_safe_bounds(
 /// * Enforces [`MAX_QUERY_LIMIT`] to bound allocation size.
 /// * Preserves ordering - no sorting, no deduplication.
 pub fn paginate_slice<T: Clone>(items: &[T], offset: u32, limit: u32) -> Vec<T> {
-    let collection_size = u32::try_from(items.len()).unwrap_or(u32::MAX);
+    // Cast failure must surface as typed error, not panic.
+    // Use try_from and fall back safely; callers in paged endpoints already
+    // validate before reaching here. On failure we return empty (no panic).
+    let collection_size = match u32::try_from(items.len()) {
+        Ok(n) => n,
+        Err(_) => return Vec::new(),
+    };
     let (start, end) = calculate_safe_bounds(offset, limit, collection_size);
     if start >= end {
         return Vec::new();

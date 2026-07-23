@@ -13,7 +13,10 @@ mod test_investor_kyc {
     use crate::errors::QuickLendXError;
     use crate::invoice::InvoiceCategory;
     use crate::invoice::InvoiceStatus;
-    use crate::verification::{BusinessVerificationStatus, InvestorRiskLevel, InvestorTier};
+    use crate::verification::{
+        BusinessVerificationStatus, InvestorRiskLevel, InvestorTier,
+        InvestorVerificationStorage,
+    };
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
@@ -578,6 +581,86 @@ mod test_investor_kyc {
     }
 
     #[test]
+    fn test_admin_can_recompute_investor_tier_after_successful_history() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Comprehensive KYC data for investor promotion");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        // Simulate strong performance history
+        let mut verification = client.get_investor_verification(&investor).unwrap();
+        verification.total_invested = 1_200_000;
+        verification.successful_investments = 22;
+        verification.defaulted_investments = 1;
+        InvestorVerificationStorage::update(&env, &verification);
+
+        let result = client.try_recompute_investor_tier(&admin, &investor);
+        assert!(result.is_ok(), "Recompute investor tier must succeed");
+
+        let verification_after = client.get_investor_verification(&investor).unwrap();
+        assert_eq!(verification_after.tier, InvestorTier::Platinum);
+        assert_eq!(verification_after.risk_level, InvestorRiskLevel::Low);
+        assert!(verification_after.investment_limit > 100_000);
+
+        let platinum_investors = client.get_investors_by_tier(&InvestorTier::Platinum);
+        assert!(
+            platinum_investors.contains(&investor),
+            "Investor should appear in Platinum tier after recompute"
+        );
+    }
+
+    #[test]
+    fn test_recompute_investor_tier_is_idempotent() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Comprehensive KYC data for investor promotion");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        let mut verification = client.get_investor_verification(&investor).unwrap();
+        verification.total_invested = 5_500_000;
+        verification.successful_investments = 60;
+        verification.defaulted_investments = 2;
+        InvestorVerificationStorage::update(&env, &verification);
+
+        let first = client.try_recompute_investor_tier(&admin, &investor);
+        assert!(first.is_ok());
+        let after_first = client.get_investor_verification(&investor).unwrap();
+
+        let second = client.try_recompute_investor_tier(&admin, &investor);
+        assert!(second.is_ok());
+        let after_second = client.get_investor_verification(&investor).unwrap();
+
+        assert_eq!(after_first.tier, after_second.tier);
+        assert_eq!(after_first.investment_limit, after_second.investment_limit);
+    }
+
+    #[test]
+    fn test_recompute_investor_tier_blocks_high_default_rate() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Comprehensive KYC data");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        let mut verification = client.get_investor_verification(&investor).unwrap();
+        verification.total_invested = 2_000_000;
+        verification.successful_investments = 20;
+        verification.defaulted_investments = 20; // 50% default rate
+        InvestorVerificationStorage::update(&env, &verification);
+
+        let result = client.try_recompute_investor_tier(&admin, &investor);
+        assert!(result.is_ok(), "Recompute should succeed even with poor history");
+
+        let after = client.get_investor_verification(&investor).unwrap();
+        assert_eq!(after.tier, InvestorTier::Basic, "High default rate should block promotion");
+    }
+
+    #[test]
     fn test_admin_can_query_investors_by_tier() {
         let (env, client, _admin) = setup();
         let investor = Address::generate(&env);
@@ -599,6 +682,117 @@ mod test_investor_kyc {
             !gold_investors.contains(&investor),
             "New investor should not be in Gold tier"
         );
+    }
+
+    #[test]
+    fn test_admin_can_recompute_investor_tier_after_successful_history() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Comprehensive KYC data for investor promotion");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        // Simulate strong performance history
+        let mut verification = client.get_investor_verification(&investor).unwrap();
+        verification.total_invested = 1_200_000;
+        verification.successful_investments = 22;
+        verification.defaulted_investments = 1;
+        InvestorVerificationStorage::update(&env, &verification);
+
+        let result = client.try_recompute_investor_tier(&admin, &investor);
+        assert!(result.is_ok(), "Recompute investor tier must succeed");
+
+        let verification_after = client.get_investor_verification(&investor).unwrap();
+        assert_eq!(verification_after.tier, InvestorTier::Platinum);
+        assert_eq!(verification_after.risk_level, InvestorRiskLevel::Low);
+        assert!(verification_after.investment_limit > 100_000);
+
+        let platinum_investors = client.get_investors_by_tier(&InvestorTier::Platinum);
+        assert!(
+            platinum_investors.contains(&investor),
+            "Investor should appear in Platinum tier after recompute"
+        );
+    }
+
+    #[test]
+    fn test_recompute_investor_tier_is_idempotent() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Comprehensive KYC data for investor promotion");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        let mut verification = client.get_investor_verification(&investor).unwrap();
+        verification.total_invested = 5_500_000;
+        verification.successful_investments = 60;
+        verification.defaulted_investments = 2;
+        InvestorVerificationStorage::update(&env, &verification);
+
+        let first = client.try_recompute_investor_tier(&admin, &investor);
+        assert!(first.is_ok());
+        let after_first = client.get_investor_verification(&investor).unwrap();
+
+        let second = client.try_recompute_investor_tier(&admin, &investor);
+        assert!(second.is_ok());
+        let after_second = client.get_investor_verification(&investor).unwrap();
+
+        assert_eq!(after_first.tier, after_second.tier);
+        assert_eq!(after_first.investment_limit, after_second.investment_limit);
+    }
+
+    #[test]
+    fn test_recompute_investor_tier_does_not_promote_rejected_investor() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_reject_investor(&investor, &String::from_str(&env, "Rejected"));
+
+        let result = client.try_recompute_investor_tier(&admin, &investor);
+        assert!(result.is_err(), "Recompute on rejected investor must fail");
+
+        let error = result.unwrap_err().unwrap();
+        assert_eq!(error, QuickLendXError::InvalidKYCStatus);
+    }
+
+    #[test]
+    fn test_recompute_investor_tier_does_not_promote_pending_investor() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+
+        let result = client.try_recompute_investor_tier(&admin, &investor);
+        assert!(result.is_err(), "Recompute on pending investor must fail");
+
+        let error = result.unwrap_err().unwrap();
+        assert_eq!(error, QuickLendXError::InvalidKYCStatus);
+    }
+
+    #[test]
+    fn test_recompute_investor_tier_blocks_high_default_rate() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Comprehensive KYC data");
+
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        let mut verification = client.get_investor_verification(&investor).unwrap();
+        verification.total_invested = 2_000_000;
+        verification.successful_investments = 20;
+        verification.defaulted_investments = 20; // 50% default rate
+        InvestorVerificationStorage::update(&env, &verification);
+
+        let result = client.try_recompute_investor_tier(&admin, &investor);
+        assert!(result.is_ok(), "Recompute should succeed even with poor history");
+
+        let after = client.get_investor_verification(&investor).unwrap();
+        assert_eq!(after.tier, InvestorTier::Basic, "High default rate should block promotion");
     }
 
     #[test]
@@ -1024,5 +1218,89 @@ mod test_investor_kyc {
             .unwrap_err()
             .unwrap();
         assert_eq!(err, QuickLendXError::BusinessNotVerified);
+    }
+
+    // ============================================================================
+    // Category: Admin revoke investor KYC (#1550)
+    // ============================================================================
+
+    /// A verified investor can bid, but once their KYC is revoked by the admin
+    /// every further bid is rejected with `BusinessNotVerified` until they are
+    /// re-verified. This is the core defence-in-depth behaviour: revocation must
+    /// immediately block new investment activity.
+    #[test]
+    fn revoked_investor_cannot_place_further_bids() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Verify the investor and confirm they can bid.
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+        let first_bid =
+            client.try_place_bid(&investor, &invoice_id, &10_000i128, &12_000i128);
+        assert!(
+            first_bid.is_ok(),
+            "verified investor must be able to bid before revocation"
+        );
+
+        // Admin revokes the investor's KYC.
+        let revoke = client.try_revoke_investor_kyc(
+            &investor,
+            &String::from_str(&env, "Sanctions screening hit"),
+        );
+        assert!(revoke.is_ok(), "admin revoke of verified investor must succeed");
+
+        // Status must have moved to Rejected.
+        let verification = client
+            .get_investor_verification(&investor)
+            .expect("verification record must still exist after revoke");
+        assert_eq!(verification.status, BusinessVerificationStatus::Rejected);
+
+        // Any further bid must now be blocked.
+        let invoice_id2 = create_verified_invoice(&env, &client, &business, 50_000);
+        let err = client
+            .try_place_bid(&investor, &invoice_id2, &5_000i128, &6_000i128)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::BusinessNotVerified,
+            "revoked investor must be blocked from bidding"
+        );
+    }
+
+    /// Revoking an investor who is not currently `Verified` (here: still
+    /// `Pending`) is rejected with `InvalidKYCStatus`, keeping the state machine
+    /// auditable.
+    #[test]
+    fn revoke_non_verified_investor_fails() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+
+        let _ = client
+            .try_submit_investor_kyc(&investor, &String::from_str(&env, "Pending KYC data"));
+
+        let err = client
+            .try_revoke_investor_kyc(&investor, &String::from_str(&env, "no reason"))
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::InvalidKYCStatus);
+    }
+
+    /// Revoking an investor that has no KYC record at all returns `KYCNotFound`.
+    #[test]
+    fn revoke_investor_without_record_fails() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+
+        let err = client
+            .try_revoke_investor_kyc(&investor, &String::from_str(&env, "no reason"))
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::KYCNotFound);
     }
 }

@@ -268,6 +268,42 @@ Expected output:
 3. File follow-up tasks for missing metrics/alerts and automation gaps.
 4. Add regression tests for failure-handling logic if code changes were needed.
 
+## Streaming Data Export
+
+### Overview
+
+`POST /api/v1/exports/generate` creates a file on disk containing the user's
+invoices, bids, and settlements in JSON or CSV. The file is streamed to disk
+via `fs.createWriteStream` to avoid building the entire payload in memory.
+A signed one-shot token is returned.
+
+`GET /api/v1/exports/download/:token` streams the file from disk to the client,
+then deletes it. The token is single-use and TTL-bound (default 1 hour).
+
+### Export directory
+
+Files are written to `config.EXPORT_DIR` (default `.data/exports/`) with
+`0o600` permissions. Each export is a single file named `{safe_token}.{json|csv}`.
+A `.tmp` file is used during writing and atomically renamed on completion.
+If the write fails, the `.tmp` file is cleaned up automatically.
+
+### Retention & cleanup
+
+- Files are deleted immediately after the first successful download (one-shot).
+- Expired files (mtime older than `EXPORT_TTL_MS`) are removed by
+  `cleanupExpiredFiles()` — call this from a cron job or scheduled task.
+- There is no automatic sweep in the request path; the admin must invoke
+  the cleanup periodically to reclaim space.
+
+### Troubleshooting
+
+| Symptom | Likely cause | Resolution |
+|---------|-------------|------------|
+| `INVALID_TOKEN` on download | Token expired, already used, or tampered | Generate a new export |
+| `INVALID_FORMAT` on generate | `format` query param not `json` or `csv` | Use one of the supported formats |
+| Export file not found on disk after generate | Disk full or permission error | Check `EXPORT_DIR` permissions and disk space |
+| Large export (10k+ rows) uses high memory | ExportService writes via stream, so RSS stays low | Verify with `ps` / RSS monitoring |
+
 ## Gaps to Track (if observed)
 
 If any of the following are missing in runtime telemetry, create follow-up issues:
@@ -276,3 +312,82 @@ If any of the following are missing in runtime telemetry, create follow-up issue
 - Webhook queue depth, success/failure by status class, retry age histogram.
 - DB pool saturation metrics from each backend service.
 
+
+---
+
+## Runbook 4: Ordered Service Shutdown (Issue #1190)
+
+### Overview
+
+The backend performs a deterministic, ordered shutdown whenever it receives
+`SIGTERM` or `SIGINT`.  Each long-lived service is registered as a
+`ShutdownStep` with an explicit priority number; `runAll()` sorts by priority
+ascending and executes them sequentially.  A second signal while the sequence
+is in progress forces an immediate `process.exit(1)`.
+
+### Dependency Chain and Step Order
+
+| Priority | Step name        | Service / action                                      |
+|----------|-----------------|-------------------------------------------------------|
+| 1        | `http-listener`  | Mark instance not-ready; stop accepting connections; drain in-flight requests. |
+| 2        | `scheduler`      | Call `lagMonitor.stopPolling()` to silence transition alerts. |
+| 3        | `ingestion`      | Signal ingestion pipeline to reject new batches; in-flight batch drains. |
+| 4        | `webhook-delivery` | Call `webhookQueueService.flush()`; log any undelivered events. |
+| 5        | `reconciliation` | Poll `ReconciliationWorker.isRunning` until clear (max 5 s). |
+| 6        | `notifications`  | Call `notificationService.closeTransport()` to drain SMTP sends. |
+| 7        | `database`       | Call `closeDatabase()` (WAL checkpoint, prevents corruption). |
+
+**Rationale**: The HTTP listener stops first so no new work enters the system
+while other services are winding down.  The scheduler is stopped early to
+prevent spurious lag-degraded alerts.  Ingestion halts before webhook delivery
+because delivered webhooks must reflect fully-indexed events.  Reconciliation
+and notifications run before the database so they can complete any final reads
+or writes.  The database is closed last.
+
+### Key Invariants
+
+- An error in one step is caught, logged, and does not block later steps.
+- The total shutdown sequence is bounded by `SHUTDOWN_DRAIN_TIMEOUT_MS`
+  (default 30 s, overridable via environment variable).
+- `isShuttingDown()` returns `true` from the moment the first signal arrives;
+  middleware can use this to reject new work immediately.
+
+### Adding a New Step
+
+```typescript
+import { register, PRIORITY_INGESTION } from './lib/shutdown';
+
+register({
+  name: 'my-service',
+  priority: PRIORITY_INGESTION + 1, // run right after ingestion
+  fn: async (signal) => {
+    await myService.stop();
+  },
+});
+```
+
+### Verifying the Order
+
+```bash
+cd backend
+npm test -- shutdown-ordering
+```
+
+All tests in `src/tests/shutdown-ordering.test.ts` must pass.  They cover:
+priority ordering, error isolation (later steps still run), total timeout
+enforcement, second-signal forced exit, and the `isShuttingDown` guard.
+
+### Operator Actions During Shutdown
+
+1. Send `SIGTERM`; wait up to 30 s for graceful completion.
+2. If the process has not exited after 30 s, send a second `SIGTERM` or
+   `SIGKILL` — the process exits with code 1.
+3. After restart, verify the indexer cursor resumed correctly and no webhook
+   events were lost (check application logs for "webhook event(s) not
+   delivered" warnings).
+
+### Environment Variables
+
+| Variable                    | Default | Description                                    |
+|-----------------------------|---------|------------------------------------------------|
+| `SHUTDOWN_DRAIN_TIMEOUT_MS` | 30000   | Total budget (ms) for the shutdown sequence.   |

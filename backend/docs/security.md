@@ -1,4 +1,14 @@
-# Backend Browser Security
+# Backend Security
+
+## Event Ingest Endpoint Hardening
+
+The `POST /api/v1/events` endpoint (used by indexers to ingest Soroban events has additional security hardening:
+
+- **Content-Type Enforcement**: Requests must use `application/json` content type; unsupported content types are rejected with `415 Invalid Content Type`.
+- **Content-Length Requirement**: A valid `Content-Length` header must be present, with maximum of 256 KB; exceeding this limit returns `413 Payload Too Large`.
+- **Chunked Encoding Rejection**: Chunked transfer encoding is rejected unless the allowlisted header `X-Allow-Chunked-Encoding` is present (to prevent smuggling via intermediate proxies).
+
+These protections are applied exclusively to the `/api/v1/events` route to preserve flexibility for other endpoints.
 
 ## CORS Policy
 

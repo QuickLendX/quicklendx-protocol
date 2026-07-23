@@ -22,6 +22,18 @@ import { getDatabase, closeDatabase } from '../lib/database';
 import { NotificationService } from '../services/notificationService';
 import { NotificationEvent, NotificationType } from '../types/contract';
 
+// Mock CircuitBreaker to disable retries for idempotency tests
+jest.mock('../lib/circuitBreaker', () => ({
+  CircuitBreaker: class {
+    execute(action: any) {
+      return action();
+    }
+    getState() {
+      return 'CLOSED';
+    }
+  }
+}));
+
 // ---------------------------------------------------------------------------
 // Isolated test database
 // ---------------------------------------------------------------------------

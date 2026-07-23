@@ -18,8 +18,7 @@ use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 use crate::errors::QuickLendXError;
 use crate::invoice::{
-    Invoice, InvoiceCategory, InvoiceMetadata, MAX_INVOICE_TAGS,
-    MAX_RATINGS_PER_INVOICE,
+    Invoice, InvoiceCategory, InvoiceMetadata, MAX_INVOICE_TAGS, MAX_RATINGS_PER_INVOICE,
 };
 use crate::storage::{Indexes, InvoiceStorage};
 use crate::types::LineItemRecord;
@@ -43,7 +42,8 @@ fn make_invoice(env: &Env, business: &Address) -> Invoice {
         String::from_str(env, "Test invoice"),
         InvoiceCategory::Services,
         tags,
-    ).unwrap()
+    )
+    .unwrap()
 }
 
 /// Build valid metadata with sensible defaults.
@@ -102,10 +102,7 @@ fn test_owner_can_update_metadata() {
         let result = invoice.update_metadata(&env, &business, metadata.clone());
 
         assert!(result.is_ok());
-        assert_eq!(
-            invoice.metadata_customer_name,
-            Some(metadata.customer_name)
-        );
+        assert_eq!(invoice.metadata_customer_name, Some(metadata.customer_name));
         assert_eq!(
             invoice.metadata_customer_address,
             Some(metadata.customer_address)
@@ -155,9 +152,7 @@ fn test_non_owner_clear_metadata_returns_unauthorized() {
 
         // First set metadata as owner
         let metadata = make_metadata(&env);
-        invoice
-            .update_metadata(&env, &business, metadata)
-            .unwrap();
+        invoice.update_metadata(&env, &business, metadata).unwrap();
 
         // Attacker tries to clear
         let result = invoice.clear_metadata(&env, &attacker);
@@ -257,9 +252,7 @@ fn test_owner_can_clear_metadata() {
     let metadata = make_metadata(&env);
 
     env.as_contract(&contract_id, || {
-        invoice
-            .update_metadata(&env, &business, metadata)
-            .unwrap();
+        invoice.update_metadata(&env, &business, metadata).unwrap();
     });
 
     env.as_contract(&contract_id, || {
@@ -359,9 +352,7 @@ fn test_indexes_unchanged_after_unauthorized_update() {
         // Attacker's indexes should NOT exist
         let alt_key = Indexes::invoices_by_customer(&alt.customer_name);
         let alt_ids: Option<Vec<BytesN<32>>> = env.storage().persistent().get(&alt_key);
-        assert!(
-            alt_ids.is_none() || !alt_ids.unwrap().iter().any(|id| id == invoice.id)
-        );
+        assert!(alt_ids.is_none() || !alt_ids.unwrap().iter().any(|id| id == invoice.id));
     });
 }
 
@@ -395,16 +386,12 @@ fn test_indexes_removed_on_owner_clear() {
         // Customer index should no longer contain invoice ID
         let key = Indexes::invoices_by_customer(&metadata.customer_name);
         let ids: Option<Vec<BytesN<32>>> = env.storage().persistent().get(&key);
-        assert!(
-            ids.is_none() || !ids.unwrap().iter().any(|id| id == invoice.id)
-        );
+        assert!(ids.is_none() || !ids.unwrap().iter().any(|id| id == invoice.id));
 
         // Tax ID index should no longer contain invoice ID
         let key = Indexes::invoices_by_tax_id(&metadata.tax_id);
         let ids: Option<Vec<BytesN<32>>> = env.storage().persistent().get(&key);
-        assert!(
-            ids.is_none() || !ids.unwrap().iter().any(|id| id == invoice.id)
-        );
+        assert!(ids.is_none() || !ids.unwrap().iter().any(|id| id == invoice.id));
     });
 }
 
@@ -444,9 +431,7 @@ fn test_indexes_swap_on_owner_metadata_change() {
         // Old customer index should NOT contain invoice ID
         let old_key = Indexes::invoices_by_customer(&original.customer_name);
         let old_ids: Option<Vec<BytesN<32>>> = env.storage().persistent().get(&old_key);
-        assert!(
-            old_ids.is_none() || !old_ids.unwrap().iter().any(|id| id == invoice.id)
-        );
+        assert!(old_ids.is_none() || !old_ids.unwrap().iter().any(|id| id == invoice.id));
 
         // New customer index should contain invoice ID
         let new_key = Indexes::invoices_by_customer(&alt.customer_name);
@@ -550,10 +535,7 @@ fn test_owner_succeeds_after_attacker_fails() {
         // Owner succeeds
         let result = invoice.update_metadata(&env, &business, metadata.clone());
         assert!(result.is_ok());
-        assert_eq!(
-            invoice.metadata_customer_name,
-            Some(metadata.customer_name)
-        );
+        assert_eq!(invoice.metadata_customer_name, Some(metadata.customer_name));
     });
 }
 
@@ -664,17 +646,17 @@ fn test_add_rating_rejects_when_max_rating_count_reached() {
 fn test_search_index_resolves_after_clearing_metadata() {
     let env = Env::default();
     env.mock_all_auths();
-    
+
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    
+
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    
+
     let business = Address::generate(&env);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC"));
     client.verify_business(&admin, &business);
-    
+
     let currency = Address::generate(&env);
     let invoice_id = client.upload_invoice(
         &business,
@@ -685,7 +667,7 @@ fn test_search_index_resolves_after_clearing_metadata() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    
+
     let mut items = Vec::new(&env);
     items.push_back(LineItemRecord(
         String::from_str(&env, "Service"),
@@ -701,18 +683,26 @@ fn test_search_index_resolves_after_clearing_metadata() {
         line_items: items,
         notes: String::from_str(&env, "Notes"),
     };
-    
+
     client.update_invoice_metadata(&invoice_id, &metadata);
-    
+
     let results = client.search_invoices(&String::from_str(&env, "SearchTarget"));
     assert_eq!(results.len(), 1);
-    
+
     client.clear_invoice_metadata(&invoice_id);
-    
+
     let results_after = client.search_invoices(&String::from_str(&env, "SearchTarget"));
-    assert_eq!(results_after.len(), 0, "Derived indexing data must not match post-clear");
+    assert_eq!(
+        results_after.len(),
+        0,
+        "Derived indexing data must not match post-clear"
+    );
 
     let results_desc = client.search_invoices(&String::from_str(&env, "UniqueDescription"));
-    assert_eq!(results_desc.len(), 1, "Base invoice properties must still resolve post-clear");
+    assert_eq!(
+        results_desc.len(),
+        1,
+        "Base invoice properties must still resolve post-clear"
+    );
     assert_eq!(results_desc.get(0).unwrap().invoice_id, invoice_id);
 }

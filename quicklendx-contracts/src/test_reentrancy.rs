@@ -131,9 +131,9 @@ fn run_nested_attempt<R, F>(fixture: &PaymentFixture, operation: F) -> Result<R,
 where
     F: FnOnce() -> Result<R, QuickLendXError>,
 {
-    fixture
-        .env
-        .as_contract(&fixture.contract_id, || with_payment_guard(&fixture.env, operation))
+    fixture.env.as_contract(&fixture.contract_id, || {
+        with_payment_guard(&fixture.env, operation)
+    })
 }
 
 #[test]
@@ -145,7 +145,10 @@ fn test_guard_rejects_direct_nested_execution_and_clears_lock() {
     });
 
     assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
-    assert!(!fixture.guard_locked(), "guard must clear after nested rejection");
+    assert!(
+        !fixture.guard_locked(),
+        "guard must clear after nested rejection"
+    );
 }
 
 #[test]
@@ -157,7 +160,10 @@ fn test_guard_clears_after_inner_error() {
     });
 
     assert_eq!(result, Err(QuickLendXError::InvoiceNotFound));
-    assert!(!fixture.guard_locked(), "guard must clear after inner errors");
+    assert!(
+        !fixture.guard_locked(),
+        "guard must clear after inner errors"
+    );
 }
 
 #[test]
@@ -166,11 +172,7 @@ fn test_nested_accept_bid_is_rejected_without_state_change() {
     let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 1_000);
 
     let result = run_nested_attempt(&fixture, || {
-        QuickLendXContract::accept_bid(
-            fixture.env.clone(),
-            invoice_id.clone(),
-            bid_id.clone(),
-        )
+        QuickLendXContract::accept_bid(fixture.env.clone(), invoice_id.clone(), bid_id.clone())
     });
 
     assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
@@ -311,7 +313,10 @@ fn test_guard_clears_after_successful_accept_bid() {
     let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 1_000);
 
     fixture.client().accept_bid(&invoice_id, &bid_id).unwrap();
-    assert!(!fixture.guard_locked(), "guard must clear after successful guard-protected operation");
+    assert!(
+        !fixture.guard_locked(),
+        "guard must clear after successful guard-protected operation"
+    );
 }
 
 #[test]
@@ -324,7 +329,10 @@ fn test_settle_invoice_failure_clears_guard() {
     });
 
     assert_eq!(result, Err(QuickLendXError::InvoiceNotFound));
-    assert!(!fixture.guard_locked(), "guard must clear after payment entrypoint error");
+    assert!(
+        !fixture.guard_locked(),
+        "guard must clear after payment entrypoint error"
+    );
 }
 
 #[test]
@@ -347,14 +355,14 @@ fn test_cross_function_reentrancy_accept_then_release_is_blocked() {
     // Enter guard via accept_bid (simulated)
     let result = run_nested_attempt(&fixture, || {
         // While inside one guarded call, try to call another guarded entrypoint
-        QuickLendXContract::release_escrow_funds(
-            fixture.env.clone(),
-            invoice_id.clone(),
-        )
+        QuickLendXContract::release_escrow_funds(fixture.env.clone(), invoice_id.clone())
     });
 
     assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
-    assert!(!fixture.guard_locked(), "guard must clear after cross-function rejection");
+    assert!(
+        !fixture.guard_locked(),
+        "guard must clear after cross-function rejection"
+    );
 }
 
 #[test]
@@ -385,13 +393,8 @@ fn test_cross_function_reentrancy_partial_payment_blocks_others() {
     fixture.fund_invoice(&invoice_id, &bid_id);
 
     let result = run_nested_attempt(&fixture, || {
-        QuickLendXContract::accept_bid(
-            fixture.env.clone(),
-            invoice_id.clone(),
-            bid_id.clone(),
-        )
+        QuickLendXContract::accept_bid(fixture.env.clone(), invoice_id.clone(), bid_id.clone())
     });
 
     assert_eq!(result, Err(QuickLendXError::OperationNotAllowed));
-}
 }

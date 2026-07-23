@@ -45,12 +45,13 @@ This endpoint requires an API key with the `admin:keys` scope.
     "created_at": "2026-04-29T10:00:00Z",
     "expires_at": "2027-12-31T23:59:59Z",
     "created_by": "admin-user-id",
-    "warning": "Store this key securely. It will not be shown again."
+    "signing_secret": "28f2...78a",
+    "warning": "Store this key and signing secret securely. They will not be shown again."
   }
 }
 ```
 
-**Important**: The plaintext key is only returned once at creation time. Store it securely immediately.
+**Important**: The plaintext key and signing secret are only returned once at creation time. Store them securely immediately.
 
 ### Example cURL Request
 
@@ -80,6 +81,46 @@ Authorization: Bearer qlx_live_xxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```bash
 curl https://api.quicklendx.com/api/v1/invoices \
   -H "Authorization: Bearer qlx_live_xxxxxxxxxxxxxxxxxxxxxxxxxxx"
+```
+
+## Request Signing for High-Value Writes
+
+To protect against replay attacks if a Bearer token leaks, high-value write endpoints (e.g. `POST /api/v1/bids`, `POST /api/v1/settlements`, `POST /api/v1/exports/generate`) require a cryptographic signature.
+
+### Signature Headers
+
+When calling a signed endpoint, you must include:
+
+1. `X-Timestamp`: The current UNIX timestamp in milliseconds. Must be within 5 minutes of the server's time.
+2. `X-Nonce`: A unique random string for each request (to prevent replays within the 5-minute window).
+3. `X-Signature`: The computed HMAC-SHA256 signature.
+
+### Signature Computation
+
+The signature is computed using your API key's `signing_secret` (returned when the key is created).
+
+1. Construct the payload string:
+   `Payload = METHOD + PATH + BODY_SHA256 + TIMESTAMP + NONCE`
+
+   - `METHOD`: The uppercase HTTP method (e.g., `POST`).
+   - `PATH`: The request path including query parameters (e.g., `/api/v1/bids`).
+   - `BODY_SHA256`: The SHA-256 hash of the raw request body, encoded as a hex string. For empty bodies, use the hash of an empty string.
+   - `TIMESTAMP`: The value of the `X-Timestamp` header.
+   - `NONCE`: The value of the `X-Nonce` header.
+
+2. Compute the HMAC-SHA256 of the payload using your `signing_secret`:
+   `X-Signature = HMAC-SHA256(signing_secret, Payload)` (encoded as hex)
+
+### Example Request
+
+```bash
+curl -X POST https://api.quicklendx.com/api/v1/bids \
+  -H "Authorization: Bearer qlx_live_xxxxxxxx" \
+  -H "X-Timestamp: 1686658000000" \
+  -H "X-Nonce: random-nonce-1234" \
+  -H "X-Signature: abc123def456..." \
+  -H "Content-Type: application/json" \
+  -d '{"invoice_id": "inv_123", "bid_amount": 1000}'
 ```
 
 ## Scope Reference
@@ -213,7 +254,8 @@ POST /api/v1/keys/:id/rotate-signing-secret
     "scopes": ["read:users", "write:jobs"],
     "created_at": "2026-04-29T10:00:00Z",
     "prev_secret_expires_at": "2026-04-30T10:00:00Z",
-    "warning": "Store this new secret securely. The old secret will expire after the grace window."
+    "signing_secret": "39b3...22c",
+    "warning": "Store this new signing secret securely. The old secret will expire after the grace window."
   }
 }
 ```

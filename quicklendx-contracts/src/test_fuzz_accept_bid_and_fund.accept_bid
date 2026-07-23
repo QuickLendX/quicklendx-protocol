@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc f62c1713ed86cdb6b1d1c4210e411c451b313e240e1a24c479c585213a9bc252 # shrinks to scenario = AcceptBidScenario { paused: false, business_pending: false, bid_expired: false, token_fail_mode: TransferPanic, investor_balance_zero: false, investor_allowance_zero: false, double_accept: true, invoice_amount: 100 }

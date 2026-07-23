@@ -1,5 +1,6 @@
 #![allow(deprecated)]
 
+use crate::audit::OpType;
 use crate::fees::FeeType;
 use crate::payments::Escrow;
 use crate::types::Bid;
@@ -42,6 +43,8 @@ pub const TOPIC_BID_PLACED: &str = "bid_placed";
 pub const TOPIC_BID_ACCEPTED: &str = "bid_accepted";
 /// Topic for `BidWithdrawn` events.
 pub const TOPIC_BID_WITHDRAWN: &str = "bid_withdrawn";
+/// Topic for `BidCancelled` events.
+pub const TOPIC_BID_CANCELLED: &str = "bid_cancelled";
 /// Topic for `BidExpired` events.
 pub const TOPIC_BID_EXPIRED: &str = "bid_expired";
 /// Topic for `EscrowCreated` / `FundsLocked` events.
@@ -50,12 +53,16 @@ pub const TOPIC_ESCROW_CREATED: &str = "escrow_created";
 pub const TOPIC_ESCROW_RELEASED: &str = "escrow_released";
 /// Topic for `EscrowRefunded` events.
 pub const TOPIC_ESCROW_REFUNDED: &str = "escrow_refunded";
+/// Topic for `InvestmentWithdrawn` events.
+pub const TOPIC_INVESTMENT_WITHDRAWN: &str = "investment_withdrawn";
 /// Topic for `DisputeCreated` / `DisputeOpened` events.
 pub const TOPIC_DISPUTE_CREATED: &str = "dispute_created";
 /// Topic for `DisputeUnderReview` events.
 pub const TOPIC_DISPUTE_UNDER_REVIEW: &str = "dispute_under_review";
 /// Topic for `DisputeResolved` events.
 pub const TOPIC_DISPUTE_RESOLVED: &str = "dispute_resolved";
+/// Topic for `DisputeRejected` events.
+pub const TOPIC_DISPUTE_REJECTED: &str = "dispute_rejected";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -134,6 +141,16 @@ pub struct InvoiceCancelled {
 ///
 /// Topic: [`TOPIC_INVOICE_SETTLED`] (`"inv_set"`)
 ///
+/// # Fields
+/// - `invoice_id` – Unique 32-byte invoice identifier.
+/// - `amount` – Total amount settled (sum of all payments applied to this invoice).
+/// - `ledger` – Ledger sequence number at the time of settlement.
+/// - `business` – Address of the business that owns the invoice.
+/// - `investor` – Address of the investor who funded the invoice.
+/// - `investor_return` – Amount returned to the investor after fees.
+/// - `platform_fee` – Fee taken by the platform.
+/// - `timestamp` – Ledger timestamp at emission time.
+///
 /// # Security
 /// No PII is included. `investor_return` and `platform_fee` are derived
 /// from validated contract state only.
@@ -141,6 +158,8 @@ pub struct InvoiceCancelled {
 #[contractevent]
 pub struct InvoiceSettled {
     pub invoice_id: BytesN<32>,
+    pub amount: i128,
+    pub ledger: u32,
     pub business: Address,
     pub investor: Address,
     pub investor_return: i128,
@@ -263,6 +282,19 @@ pub struct BidWithdrawn {
     pub timestamp: u64,
 }
 
+/// Emitted when a bid is cancelled by its investor.
+///
+/// Topic: [`TOPIC_BID_CANCELLED`] (`"bid_cancelled"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct BidCancelled {
+    pub bid_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub bid_amount: i128,
+    pub timestamp: u64,
+}
+
 /// Emitted when a bid expires past its TTL.
 ///
 /// Topic: [`TOPIC_BID_EXPIRED`] (`"bid_exp"`)
@@ -318,6 +350,18 @@ pub struct EscrowReleased {
 #[contractevent]
 pub struct EscrowRefunded {
     pub escrow_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub amount: i128,
+}
+
+/// Emitted when an investor withdraws their investment before settlement.
+///
+/// Topic: [`TOPIC_INVESTMENT_WITHDRAWN`] (`"inv_wd"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvestmentWithdrawn {
+    pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
     pub investor: Address,
     pub amount: i128,
@@ -475,7 +519,7 @@ pub struct AuditValidation {
 
 #[contractevent]
 pub struct AuditQuery {
-    pub query_type: String,
+    pub query_type: OpType,
     pub result_count: u32,
 }
 
@@ -546,6 +590,18 @@ pub struct DisputeResolved {
     pub timestamp: u64,
 }
 
+/// Emitted when a dispute is rejected (dismissed) by an admin.
+///
+/// Topic: [`TOPIC_DISPUTE_REJECTED`] (`"dsp_rj"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct DisputeRejected {
+    pub invoice_id: BytesN<32>,
+    pub rejected_by: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
 #[contractevent]
 pub struct ProfitFeeBreakdown {
     pub invoice_id: BytesN<32>,
@@ -580,9 +636,6 @@ pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     .publish(env);
 }
 
-
-
-
 #[contractevent]
 pub struct RevenueDistributed {
     pub period: u64,
@@ -611,6 +664,33 @@ pub struct ProtocolInitialized {
     pub max_due_date_days: u64,
     pub grace_period_seconds: u64,
     pub timestamp: u64,
+}
+
+// ============================================================================
+// Pause Control Events
+
+#[contractevent]
+pub struct Paused {
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct Unpaused {
+    pub admin: Address,
+}
+
+pub fn emit_paused(env: &Env, admin: &Address) {
+    Paused {
+        admin: admin.clone(),
+    }
+    .publish(env);
+}
+
+pub fn emit_unpaused(env: &Env, admin: &Address) {
+    Unpaused {
+        admin: admin.clone(),
+    }
+    .publish(env);
 }
 
 // ============================================================================
@@ -655,7 +735,7 @@ pub fn emit_invoice_metadata_updated(env: &Env, invoice: &Invoice, metadata: &In
 
     InvoiceMetadataUpdated {
         invoice_id: invoice.id.clone(),
-        line_item_count: metadata.line_items.len() as u32,
+        line_item_count: metadata.line_items.len(),
         total_value: total,
         timestamp: env.ledger().timestamp(),
     }
@@ -687,6 +767,8 @@ pub fn emit_invoice_settled(
 ) {
     InvoiceSettled {
         invoice_id: invoice.id.clone(),
+        amount: invoice.total_paid,
+        ledger: env.ledger().sequence(),
         business: invoice.business.clone(),
         investor: invoice.investor.clone().unwrap_or(Address::from_str(
             env,
@@ -956,6 +1038,22 @@ pub fn emit_escrow_refunded(
     .publish(env);
 }
 
+pub fn emit_investment_withdrawn(
+    env: &Env,
+    investment_id: &BytesN<32>,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    amount: i128,
+) {
+    InvestmentWithdrawn {
+        investment_id: investment_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        amount,
+    }
+    .publish(env);
+}
+
 // ============================================================================
 // Bid Event Emitters
 // ============================================================================
@@ -975,6 +1073,17 @@ pub fn emit_bid_placed(env: &Env, bid: &Bid) {
 
 pub fn emit_bid_withdrawn(env: &Env, bid: &Bid) {
     BidWithdrawn {
+        bid_id: bid.bid_id.clone(),
+        invoice_id: bid.invoice_id.clone(),
+        investor: bid.investor.clone(),
+        bid_amount: bid.bid_amount,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_bid_cancelled(env: &Env, bid: &Bid) {
+    BidCancelled {
         bid_id: bid.bid_id.clone(),
         invoice_id: bid.invoice_id.clone(),
         investor: bid.investor.clone(),
@@ -1083,7 +1192,7 @@ pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool)
     .publish(env);
 }
 
-pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
+pub fn emit_audit_query(env: &Env, query_type: OpType, result_count: u32) {
     AuditQuery {
         query_type,
         result_count,
@@ -1105,8 +1214,8 @@ pub fn emit_invoice_category_updated(
     InvoiceCategoryUpdated {
         invoice_id: invoice_id.clone(),
         business: business.clone(),
-        old_category: old_category.clone(),
-        new_category: new_category.clone(),
+        old_category: *old_category,
+        new_category: *new_category,
     }
     .publish(env);
 }
@@ -1177,6 +1286,21 @@ pub fn emit_dispute_resolved(
         invoice_id: invoice_id.clone(),
         resolved_by: resolved_by.clone(),
         resolution: resolution.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_dispute_rejected(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    rejected_by: &Address,
+    reason: &String,
+) {
+    DisputeRejected {
+        invoice_id: invoice_id.clone(),
+        rejected_by: rejected_by.clone(),
+        reason: reason.clone(),
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
@@ -1397,4 +1521,11 @@ pub fn emit_protocol_initialized(
 pub fn emit_admin_initialized(env: &Env, admin: &Address) {
     env.events()
         .publish((symbol_short!("adm_init"),), (admin.clone(),));
+}
+
+pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
+    env.events().publish(
+        (symbol_short!("tr_rot_cncl"), admin.clone()),
+        (),
+    );
 }

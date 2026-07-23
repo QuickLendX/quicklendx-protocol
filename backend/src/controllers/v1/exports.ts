@@ -1,11 +1,12 @@
 import { Request, Response, NextFunction } from "express";
 import { exportService, ExportFormat } from "../../services/exportService";
 import { auditLogService } from "../../services/auditLogService";
+import { config } from "../../config";
 import { getUser } from "../../middleware/userAuth";
+import fs from "fs";
+import { assertExportToken } from "../../lib/entityId";
+import { exportConcurrencyService } from "../../services/exportConcurrency";
 
-/**
- * Initiates an export request and returns a signed download link.
- */
 export const requestExport = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = getUser(req);
@@ -20,15 +21,31 @@ export const requestExport = async (req: Request, res: Response, next: NextFunct
       });
     }
 
-    const token = exportService.generateSignedToken(userId, format);
-    
-    // Audit log the request
-    // We use recordAdminAction as a generic way to log performed actions, 
-    // even though this is a user action. In a real system, we might have recordUserAction.
+    // Determine the key for concurrency limiting: use API key ID if available, otherwise user ID
+    const key = req.apiKey ? req.apiKey.id : userId;
+
+    // Try to acquire a concurrency slot
+    if (!exportConcurrencyService.tryAcquire(key)) {
+      return res.status(429).json({
+        error: {
+          message: "Too many concurrent export jobs. Please try again later.",
+          code: "EXPORT_CONCURRENCY_EXCEEDED",
+        },
+      });
+    }
+
+    let token: string;
+    try {
+      token = await exportService.generateExportFile(userId, format);
+    } finally {
+      // Release the slot once the export file generation is complete (whether success or failure)
+      exportConcurrencyService.release(key);
+    }
+
     auditLogService.recordAuthorization({
       action: "data_export_requested",
       outcome: "allowed",
-      role: "anonymous", // role refers to AdminRole in this service, so we use anonymous for users
+      role: "anonymous",
       method: req.method,
       path: req.path,
       ip: req.ip || "unknown",
@@ -40,22 +57,20 @@ export const requestExport = async (req: Request, res: Response, next: NextFunct
     res.json({
       success: true,
       download_url: downloadUrl,
-      expires_in: "1 hour",
+      expires_in: `${config.EXPORT_TTL_MS / 1000} seconds`,
     });
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * Validates the signed token and serves the export file.
- */
 export const downloadExport = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const token = req.params.token as string;
-    const validated = exportService.validateToken(token);
+    assertExportToken(token);
+    const filePath = await exportService.getFilePath(token);
 
-    if (!validated) {
+    if (!filePath) {
       return res.status(401).json({
         error: {
           message: "Invalid or expired download link.",
@@ -64,21 +79,31 @@ export const downloadExport = async (req: Request, res: Response, next: NextFunc
       });
     }
 
+    const validated = exportService.validateToken(token)!;
     const { userId, format } = validated;
-    const data = await exportService.getUserData(userId);
-    const content = exportService.formatData(data, format);
 
     const filename = `quicklendx-export-${userId}-${new Date().toISOString().split("T")[0]}.${format}`;
     const contentType = format === ExportFormat.JSON ? "application/json" : "text/csv";
 
+    const readStream = fs.createReadStream(filePath);
+    readStream.on("error", () => {
+      if (!res.headersSent) {
+        res.status(500).json({ error: { message: "Failed to read export file.", code: "READ_ERROR" } });
+      }
+    });
+
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-Type", contentType);
-    res.send(content);
 
-    // Audit log the actual download
+    readStream.pipe(res);
+
+    readStream.on("end", async () => {
+      await exportService.deleteFile(filePath);
+    });
+
     auditLogService.recordAdminAction({
       action: "data_export_downloaded",
-      role: "support", // lowest privileged admin role — used as proxy for user actions
+      role: "support",
       method: req.method,
       path: req.path,
       ip: req.ip || "unknown",

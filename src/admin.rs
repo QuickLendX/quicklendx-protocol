@@ -111,13 +111,9 @@ pub fn validate_protocol_config(cfg: &ProtocolConfig) -> Result<(), ContractErro
 /// Callers **must** have already called [`require_admin`].
 pub fn apply_protocol_config(env: &Env, cfg: &ProtocolConfig) -> Result<(), ContractError> {
     validate_protocol_config(cfg)?;
-    env.storage()
-        .instance()
-        .set(&DataKey::ProtocolConfig, cfg);
-    env.events().publish(
-        (symbol_short!("proto_cfg"),),
-        cfg.clone(),
-    );
+    env.storage().instance().set(&DataKey::ProtocolConfig, cfg);
+    env.events()
+        .publish((symbol_short!("proto_cfg"),), cfg.clone());
     Ok(())
 }
 
@@ -153,13 +149,9 @@ pub fn validate_fee_config(cfg: &FeeConfig) -> Result<(), ContractError> {
 /// Callers **must** have already called [`require_admin`].
 pub fn apply_fee_config(env: &Env, cfg: &FeeConfig) -> Result<(), ContractError> {
     validate_fee_config(cfg)?;
-    env.storage()
-        .instance()
-        .set(&DataKey::FeeConfig, cfg);
-    env.events().publish(
-        (symbol_short!("fee_cfg"),),
-        cfg.clone(),
-    );
+    env.storage().instance().set(&DataKey::FeeConfig, cfg);
+    env.events()
+        .publish((symbol_short!("fee_cfg"),), cfg.clone());
     Ok(())
 }
 
@@ -178,17 +170,12 @@ impl AdminContract {
 
     /// One-time admin initialization.  Can only be called once.
     pub fn initialize(env: Env, admin: Address) -> Result<(), ContractError> {
-        if env
-            .storage()
-            .instance()
-            .has(&DataKey::Admin)
-        {
+        if env.storage().instance().has(&DataKey::Admin) {
             return Err(ContractError::AlreadyInitialized);
         }
         admin.require_auth();
         env.storage().instance().set(&DataKey::Admin, &admin);
-        env.events()
-            .publish((symbol_short!("adm_init"),), admin);
+        env.events().publish((symbol_short!("adm_init"),), admin);
         Ok(())
     }
 

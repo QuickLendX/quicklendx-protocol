@@ -6,8 +6,8 @@ use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 use crate::storage::InvoiceStorage;
 pub use crate::types::{
-    Dispute, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating,
-    InvoiceStatus,
+    Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata,
+    InvoiceRating, InvoiceStatus,
 };
 
 /// Maximum normalized tags allowed per invoice.
@@ -35,6 +35,10 @@ impl Invoice {
     ) -> Result<Self, QuickLendXError> {
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
+        }
+
+        if due_date <= env.ledger().timestamp() {
+            return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
 
         let mut normalized_tags = Vec::new(env);
@@ -112,6 +116,7 @@ impl Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: zero_address(env),
             resolved_at: 0,
+            resolution_outcome: DisputeResolution::None,
         }
     }
 
@@ -389,7 +394,7 @@ fn eq_trimmed_lower_ascii(lhs: &String, rhs: &String) -> bool {
     }
 
     for idx in 0..rhs_len {
-        if lhs_buf[lhs_start + idx].to_ascii_lowercase() != rhs_buf[idx].to_ascii_lowercase() {
+        if !lhs_buf[lhs_start + idx].eq_ignore_ascii_case(&rhs_buf[idx]) {
             return false;
         }
     }

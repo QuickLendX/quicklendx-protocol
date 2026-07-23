@@ -37,10 +37,27 @@ jest.mock('../services/webhookQueueService', () => ({
   WebhookQueueService: jest.requireActual('../services/webhookQueueService').WebhookQueueService,
 }));
 
-jest.mock('../lib/database', () => ({
-  closeDatabase: jest.fn(),
-  getDatabase: jest.fn(),
-}));
+jest.mock('../lib/database', () => {
+  let dbInstance: any = null;
+  return {
+    closeDatabase: jest.fn(() => {
+      if (dbInstance) {
+        try { dbInstance.close(); } catch { /* ignore */ }
+        dbInstance = null;
+      }
+    }),
+    getDatabase: jest.fn(() => {
+      if (!dbInstance) {
+        const Database = require('better-sqlite3');
+        dbInstance = new Database(process.env.DATABASE_PATH || '.data/test-shutdown.db');
+        dbInstance.pragma('journal_mode = WAL');
+        dbInstance.pragma('synchronous = NORMAL');
+        dbInstance.pragma('foreign_keys = ON');
+      }
+      return dbInstance;
+    }),
+  };
+});
 
 jest.mock('../services/statusService', () => ({
   statusService: {
@@ -52,6 +69,8 @@ jest.mock('../services/statusService', () => ({
 // Imports — after mocks
 // ---------------------------------------------------------------------------
 import http from 'http';
+import path from 'path';
+import crypto from 'crypto';
 import {
   createShutdownHandler,
   resetShuttingDown,
@@ -61,7 +80,7 @@ import {
 } from '../lib/shutdown';
 import { getActiveRequests } from '../middleware/load-shedding';
 import { webhookQueueService } from '../services/webhookQueueService';
-import { closeDatabase } from '../lib/database';
+import { closeDatabase, getDatabase } from '../lib/database';
 import { statusService } from '../services/statusService';
 import type { WebhookEvent } from '../services/webhookQueueService';
 
@@ -411,14 +430,59 @@ describe('shutdown constants', () => {
 // WebhookQueueService.flush — tested against the REAL implementation
 // ---------------------------------------------------------------------------
 describe('WebhookQueueService.flush (real implementation)', () => {
+  const FLUSH_TEST_DB_DIR = path.resolve(__dirname, "../../.data");
+  const FLUSH_TEST_DB_PATH = path.join(FLUSH_TEST_DB_DIR, `test-shutdown-flush-${crypto.randomUUID()}.db`);
+
+  beforeAll(() => {
+    process.env.DATABASE_PATH = FLUSH_TEST_DB_PATH;
+    const conn = getDatabase();
+    conn.exec(`
+      CREATE TABLE IF NOT EXISTS webhook_deliveries (
+        id TEXT PRIMARY KEY,
+        event_type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        subscriber_id TEXT,
+        status TEXT NOT NULL DEFAULT 'pending'
+          CHECK(status IN ('pending','processing','success','failed','dead_letter')),
+        enqueued_at TEXT NOT NULL DEFAULT (datetime('now')),
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 5,
+        next_retry_at TEXT,
+        last_error TEXT,
+        last_attempt_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    conn.exec(`
+      CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status_next_retry
+      ON webhook_deliveries(status, next_retry_at)
+    `);
+    conn.exec(`
+      CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created_at
+      ON webhook_deliveries(created_at)
+    `);
+  });
+
+  afterAll(() => {
+    closeDatabase();
+    try {
+      require("fs").unlinkSync(FLUSH_TEST_DB_PATH);
+    } catch {
+      // ignore
+    }
+  });
+
   // Bypass the module-level mock and use the actual class directly.
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { WebhookQueueService } = jest.requireActual<
     typeof import('../services/webhookQueueService')
   >('../services/webhookQueueService');
 
-  function freshQueue(maxSize = 10) {
+  function freshQueue() {
     WebhookQueueService.resetInstance();
+    const conn = getDatabase();
+    conn.exec("DELETE FROM webhook_deliveries");
     return WebhookQueueService.getInstance();
   }
 
@@ -459,7 +523,7 @@ describe('WebhookQueueService.flush (real implementation)', () => {
   it('returns only pending events from a mixed queue', () => {
     const q = freshQueue();
     const e1 = q.enqueue('a');
-    q.enqueue('b'); // stays pending
+    q.enqueue('b');
     const e3 = q.enqueue('c');
     q.markSuccess(e1.id);
     q.markFailed(e3.id);
@@ -483,26 +547,9 @@ describe('WebhookQueueService.flush (real implementation)', () => {
     const q = freshQueue();
     q.enqueue('snapshot-test');
     const [copy] = q.flush();
-    (copy as any).status = 'success'; // mutate the copy
+    (copy as any).status = 'success';
 
-    // Flush again — queue is empty, so no event is present at all
     expect(q.flush()).toEqual([]);
-  });
-
-  it('returns correct events after queue has wrapped around (circular buffer)', () => {
-    const q = freshQueue(3); // capacity 3
-    q.enqueue('first');
-    q.enqueue('second');
-    q.enqueue('third');
-    // Adding a 4th overwrites the oldest
-    q.enqueue('fourth');
-
-    // Only 3 slots, so 3 events are in the buffer
-    expect(q.getDepth()).toBe(3);
-
-    const flushed = q.flush();
-    expect(flushed).toHaveLength(3);
-    expect(q.getDepth()).toBe(0);
   });
 
   it('queue is reusable after flush', () => {

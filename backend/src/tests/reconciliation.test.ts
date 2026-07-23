@@ -1,7 +1,24 @@
+import Database from "better-sqlite3";
 import { ReconciliationWorker } from "../services/reconciliationWorker";
 import { MockDataProviders } from "../services/mockDataProviders";
 import { rpcClient } from "../services/rpcClient";
 import { derivedTableStore } from "../services/replayService";
+
+let mockDb: any;
+
+const statementCache = new Map<string, any>();
+
+jest.mock("../lib/database", () => ({
+  getDatabase: () => mockDb,
+  closeDatabase: jest.fn(),
+  getPreparedStatement: (sql: string) => {
+    if (!statementCache.has(sql)) {
+      const stmt = mockDb.prepare(sql);
+      statementCache.set(sql, stmt);
+    }
+    return statementCache.get(sql);
+  },
+}));
 
 jest.mock("../services/rpcClient", () => ({
   rpcClient: { call: jest.fn() },
@@ -13,6 +30,30 @@ jest.mock("../services/replayService", () => ({
 
 describe("ReconciliationWorker", () => {
   beforeEach(() => {
+    // Create a fresh in-memory database with required tables
+    mockDb = new (Database as any)(":memory:");
+    mockDb.exec(`
+      CREATE TABLE IF NOT EXISTS backfill_progress (
+        id TEXT PRIMARY KEY,
+        audit_id INTEGER,
+        run_id TEXT NOT NULL,
+        last_processed_id TEXT,
+        remaining_count INTEGER NOT NULL,
+        total_count INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('running','paused','completed','failed')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS backfill_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        metadata TEXT DEFAULT '{}',
+        invoice_id TEXT
+      );
+    `);
     // Reset internal state if needed (static members are shared)
     (ReconciliationWorker as any).reports = [];
     (ReconciliationWorker as any).isRunning = false;
@@ -20,6 +61,14 @@ describe("ReconciliationWorker", () => {
     // Wire mock data sources
     (rpcClient.call as jest.Mock).mockResolvedValue(MockDataProviders.getOnChainInvoices());
     (derivedTableStore.listInvoices as jest.Mock).mockResolvedValue(MockDataProviders.getIndexedInvoices());
+  });
+
+  afterEach(() => {
+    if (mockDb) {
+      mockDb.close();
+      mockDb = null;
+    }
+    statementCache.clear();
   });
 
   test("should detect drift accurately", async () => {

@@ -311,6 +311,30 @@ fn test_rejected_kyc_returns_business_not_verified() {
     );
 }
 
+    #[test]
+    fn test_deleted_business_cannot_create_invoice() {
+        let (env, client, admin) = setup();
+        let business = verified_business(&env, &client, &admin);
+        // delete the business
+        client.delete_business(&business).expect("delete should succeed");
+        let (amount, currency, due_date, description, category, tags) = invoice_params(&env);
+        let result = client.try_store_invoice(
+            &business,
+            &amount,
+            &currency,
+            &due_date,
+            &description,
+            &category,
+            &tags,
+        );
+        assert!(result.is_err(), "Deleted business must be blocked");
+        assert_eq!(
+            result.unwrap_err().unwrap(),
+            QuickLendXError::BusinessDeleted,
+            "Expected BusinessDeleted for deleted business"
+        );
+    }
+
 // ============================================================================
 // Anti-spam / storage DoS prevention
 // ============================================================================

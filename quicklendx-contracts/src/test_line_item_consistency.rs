@@ -32,10 +32,7 @@ fn make_invoice_with_amount(env: &Env, business: &Address, amount: i128) -> Invo
     .unwrap()
 }
 
-fn make_valid_metadata_with_items(
-    env: &Env,
-    items: Vec<LineItemRecord>,
-) -> InvoiceMetadata {
+fn make_valid_metadata_with_items(env: &Env, items: Vec<LineItemRecord>) -> InvoiceMetadata {
     InvoiceMetadata {
         customer_name: String::from_str(env, "Acme Corp"),
         customer_address: String::from_str(env, "123 Main St"),
@@ -87,7 +84,12 @@ fn test_mismatched_line_item_total_rejected() {
         // quantity * unit_price (2 * 300 = 600) != total (599)
         let items = Vec::from_array(
             &env,
-            [LineItemRecord(String::from_str(&env, "Consulting"), 2, 300, 599)],
+            [LineItemRecord(
+                String::from_str(&env, "Consulting"),
+                2,
+                300,
+                599,
+            )],
         );
         let metadata = make_valid_metadata_with_items(&env, items);
 
@@ -159,7 +161,12 @@ fn test_sum_mismatch_to_invoice_amount_rejected() {
         // Sum of line items totals is 900 (not 1000)
         let items = Vec::from_array(
             &env,
-            [LineItemRecord(String::from_str(&env, "Consulting"), 3, 300, 900)],
+            [LineItemRecord(
+                String::from_str(&env, "Consulting"),
+                3,
+                300,
+                900,
+            )],
         );
         let metadata = make_valid_metadata_with_items(&env, items);
 
@@ -181,7 +188,12 @@ fn test_zero_quantity_rejected() {
         // quantity is 0
         let items = Vec::from_array(
             &env,
-            [LineItemRecord(String::from_str(&env, "Consulting"), 0, 1000, 0)],
+            [LineItemRecord(
+                String::from_str(&env, "Consulting"),
+                0,
+                1000,
+                0,
+            )],
         );
         let metadata = make_valid_metadata_with_items(&env, items);
 

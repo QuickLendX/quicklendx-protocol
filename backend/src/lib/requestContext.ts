@@ -31,10 +31,19 @@ export function runWithContext<T>(correlationId: string, fn: () => T): T {
 
 /**
  * Get the correlation ID for the current async context.
- * Returns undefined if called outside a request context.
+ * Returns null if called outside a request context.
  */
-export function getCorrelationId(): string | undefined {
-  return storage.getStore()?.correlationId;
+export function getCorrelationId(): string | null {
+  return storage.getStore()?.correlationId ?? null;
+}
+
+/**
+ * Return the correlation ID for the current async context, or generate a new
+ * ULID when no context is active. Useful for code paths (background workers,
+ * scheduled jobs) that may run with or without an inbound request.
+ */
+export function getOrGenerateCorrelationId(): string {
+  return getCorrelationId() ?? generateCorrelationId();
 }
 
 /**
@@ -55,13 +64,41 @@ export function generateCorrelationId(): string {
 
 /**
  * Sanitize a client-supplied correlation ID to prevent log injection.
- * Accepts only alphanumeric characters and hyphens, max 128 chars.
- * Returns null if the value fails validation.
+ *
+ * Leading/trailing whitespace is trimmed, then the value must consist solely
+ * of alphanumerics, hyphens, and underscores and be 1–128 characters long.
+ * Any other character (newlines, carriage returns, tabs, ANSI escapes, null
+ * bytes, internal spaces, …) causes the value to be rejected. Returns null
+ * when validation fails.
  */
 export function sanitizeCorrelationId(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
-  const sanitized = raw.replace(/[^a-zA-Z0-9\-]/g, "");
-  if (sanitized.length === 0 || sanitized.length > 128) return null;
-  if (sanitized !== raw) return null;
-  return sanitized;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.length > 128) return null;
+  if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) return null;
+  return trimmed;
+}
+
+/**
+ * Express middleware that establishes the async-local-storage request context
+ * from an already-resolved correlation/request id on the request object.
+ *
+ * It prefers `req.correlationId`, falling back to `req.requestId`. When neither
+ * is present the request proceeds without a context (downstream callers fall
+ * back to generating their own id). All downstream async work — audit writes,
+ * outbound RPC calls, event processing — can read the id via getCorrelationId().
+ */
+export function createRequestContextMiddleware() {
+  return function requestContextMiddleware(
+    req: { correlationId?: string; requestId?: string },
+    _res: unknown,
+    next: () => void
+  ): void {
+    const id = req.correlationId ?? req.requestId;
+    if (id) {
+      runWithContext(id, next);
+    } else {
+      next();
+    }
+  };
 }
