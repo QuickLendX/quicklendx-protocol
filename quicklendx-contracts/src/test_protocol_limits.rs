@@ -275,54 +275,178 @@ fn test_initialize_rejects_invalid_limit_combination_before_state_commit() {
     assert_eq!(client.get_current_admin(), None);
 }
 
+// ---------------------------------------------------------------------------
+// Tests for set_protocol_limits_full (Issue: expose min_bid_amount / min_bid_bps)
+// ---------------------------------------------------------------------------
+
 #[test]
-fn update_minimum_bid_returns_new_amount_when_admin_calls_with_valid_floor_value() {
-    let (env, client, admin, _, _) = setup();
+fn test_set_protocol_limits_full_round_trips_all_fields() {
+    let (_, client, admin, _, _) = setup();
     client.set_admin(&admin);
 
-    let result = client.update_minimum_bid(&admin, &protocol_limits::MIN_BID_FLOOR);
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), protocol_limits::MIN_BID_FLOOR);
+    client.set_protocol_limits_full(
+        &admin,
+        &500i128,  // min_invoice_amount
+        &50i128,   // min_bid_amount
+        &200u32,   // min_bid_bps  (2 %)
+        &180u64,   // max_due_date_days
+        &3_600u64, // grace_period_seconds
+        &10u32,    // max_invoices_per_business
+    );
 
     let limits = client.get_protocol_limits();
-    assert_eq!(limits.min_bid_amount, protocol_limits::MIN_BID_FLOOR);
+    assert_eq!(limits.min_invoice_amount, 500);
+    assert_eq!(limits.min_bid_amount, 50);
+    assert_eq!(limits.min_bid_bps, 200);
+    assert_eq!(limits.max_due_date_days, 180);
+    assert_eq!(limits.grace_period_seconds, 3_600);
+    assert_eq!(limits.max_invoices_per_business, 10);
 }
 
 #[test]
-fn update_minimum_bid_returns_new_amount_when_admin_calls_with_value_above_floor() {
-    let (env, client, admin, _, _) = setup();
-    client.set_admin(&admin);
-
-    let higher = protocol_limits::MIN_BID_FLOOR + 100;
-    let result = client.update_minimum_bid(&admin, &higher);
-    assert!(result.is_ok());
-    assert_eq!(result.unwrap(), higher);
-
-    let limits = client.get_protocol_limits();
-    assert_eq!(limits.min_bid_amount, higher);
-}
-
-#[test]
-fn update_minimum_bid_rejects_amount_below_floor() {
-    let (env, client, admin, _, _) = setup();
-    client.set_admin(&admin);
-
-    let below_floor = protocol_limits::MIN_BID_FLOOR.saturating_sub(1);
-    let result = client.try_update_minimum_bid(&admin, &below_floor);
-    assert_eq!(result, Err(Ok(QuickLendXError::InvalidAmount)));
-
-    let limits = client.get_protocol_limits();
-    assert_eq!(limits.min_bid_amount, protocol_limits::DEFAULT_MIN_BID_AMOUNT);
-}
-
-#[test]
-fn update_minimum_bid_rejects_non_admin() {
+fn test_set_protocol_limits_full_non_admin_rejected() {
     let (_, client, admin, non_admin, _) = setup();
     client.set_admin(&admin);
 
-    let result = client.try_update_minimum_bid(&non_admin, &protocol_limits::MIN_BID_FLOOR);
+    let result = client.try_set_protocol_limits_full(
+        &non_admin,
+        &10i128,
+        &10i128,
+        &100u32,
+        &365u64,
+        &0u64,
+        &100u32,
+    );
     assert_eq!(result, Err(Ok(QuickLendXError::NotAdmin)));
+}
+
+#[test]
+fn test_set_protocol_limits_full_rejects_zero_min_bid_amount() {
+    let (_, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    let result = client.try_set_protocol_limits_full(
+        &admin,
+        &10i128,
+        &0i128, // invalid
+        &100u32,
+        &365u64,
+        &0u64,
+        &100u32,
+    );
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidAmount)));
+}
+
+#[test]
+fn test_set_protocol_limits_full_rejects_min_bid_bps_above_10000() {
+    let (_, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    let result = client.try_set_protocol_limits_full(
+        &admin,
+        &10i128,
+        &10i128,
+        &10_001u32, // invalid (> 100 %)
+        &365u64,
+        &0u64,
+        &100u32,
+    );
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidAmount)));
+}
+
+#[test]
+fn test_narrow_set_protocol_limits_preserves_bid_fields() {
+    // set_protocol_limits / update_protocol_limits must NOT silently overwrite
+    // min_bid_amount or min_bid_bps that were previously set via
+    // set_protocol_limits_full.
+    let (_, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    // First set custom bid limits via the full entrypoint.
+    client.set_protocol_limits_full(
+        &admin, &10i128, &75i128, &300u32, &365u64, &0u64, &100u32,
+    );
+
+    // Now call the narrow helper — it must preserve min_bid_amount=75 and min_bid_bps=300.
+    client.set_protocol_limits(&admin, &20i128, &180u64, &0u64);
 
     let limits = client.get_protocol_limits();
-    assert_eq!(limits.min_bid_amount, protocol_limits::DEFAULT_MIN_BID_AMOUNT);
+    assert_eq!(limits.min_invoice_amount, 20, "min_invoice_amount updated");
+    assert_eq!(limits.min_bid_amount, 75, "min_bid_amount preserved");
+    assert_eq!(limits.min_bid_bps, 300, "min_bid_bps preserved");
+}
+
+#[test]
+fn test_update_protocol_limits_preserves_bid_fields() {
+    let (_, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    client.set_protocol_limits_full(
+        &admin, &10i128, &50i128, &250u32, &365u64, &0u64, &100u32,
+    );
+
+    client.update_protocol_limits(&admin, &15i128, &90u64, &0u64);
+
+    let limits = client.get_protocol_limits();
+    assert_eq!(limits.min_bid_amount, 50, "min_bid_amount preserved by update_protocol_limits");
+    assert_eq!(limits.min_bid_bps, 250, "min_bid_bps preserved by update_protocol_limits");
+}
+
+// ---------------------------------------------------------------------------
+// Tests for get_bid_limit_config / reset_max_active_bids_per_investor
+// ---------------------------------------------------------------------------
+
+#[test]
+fn test_get_bid_limit_config_returns_defaults_before_any_admin_set() {
+    let (_, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    let cfg = client.get_bid_limit_config();
+    // Default limit is 20 (DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR).
+    assert_eq!(cfg.limit, 20);
+    assert_eq!(cfg.default_limit, 20);
+    assert!(!cfg.is_disabled, "limit of 20 is not disabled");
+    assert!(!cfg.is_custom, "no admin override yet");
+}
+
+#[test]
+fn test_set_and_get_bid_limit_config_round_trip() {
+    let (_, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    client.set_max_active_bids_per_investor(&5u32);
+
+    let cfg = client.get_bid_limit_config();
+    assert_eq!(cfg.limit, 5);
+    assert!(!cfg.is_disabled);
+    assert!(cfg.is_custom);
+}
+
+#[test]
+fn test_set_bid_limit_to_zero_marks_disabled() {
+    let (_, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    client.set_max_active_bids_per_investor(&0u32);
+
+    let cfg = client.get_bid_limit_config();
+    assert_eq!(cfg.limit, 0);
+    assert!(cfg.is_disabled, "limit of 0 means disabled");
+    assert!(cfg.is_custom);
+}
+
+#[test]
+fn test_reset_max_active_bids_per_investor_clears_custom_flag() {
+    let (_, client, admin, _, _) = setup();
+    client.set_admin(&admin);
+
+    client.set_max_active_bids_per_investor(&3u32);
+    assert!(client.get_bid_limit_config().is_custom);
+
+    client.reset_max_active_bids_per_investor();
+
+    let cfg = client.get_bid_limit_config();
+    assert_eq!(cfg.limit, 20, "reset restores compile-time default");
+    assert!(!cfg.is_custom, "is_custom cleared after reset");
+    assert!(!cfg.is_disabled);
 }
