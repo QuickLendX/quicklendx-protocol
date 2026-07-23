@@ -80,7 +80,7 @@ npm run dev
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
 - [`docs/READ_MODEL_CONSISTENCY.md`](docs/READ_MODEL_CONSISTENCY.md): Contributor-facing guide for how write entrypoints map to the later read/view model used by `get_*` queries.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
-- [`docs/cadence-retention-consumers.md`](docs/cadence-retention-consumers.md): Ingestion cadences, database/contract retention policies, and downstream event consumers.
+- [`docs/CAPS.md`](docs/CAPS.md): Every soft and hard protocol limit in one place — investor position caps, business supply limits, per-batch scan ceiling, bid TTL range, string field lengths, fee caps, and pagination limit.
 
 ## Contribution
 
