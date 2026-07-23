@@ -73,6 +73,7 @@ fn test_unauthorized_tag_addition_fails() {
         },
     ]);
 
+    // This should fail because the contract expects 'business' to sign, not 'malicious_user'
     let result = client.try_add_invoice_tag(&invoice_id, &new_tag);
     assert!(result.is_err());
 }
@@ -148,6 +149,7 @@ fn test_invoice_cancel_authorization() {
     let category = InvoiceCategory::Services;
     let tags = Vec::new(&env);
 
+    // Create an invoice owned by business
     let mut invoice = env.as_contract(&contract_id, || {
         Invoice::new(
             &env,
@@ -161,6 +163,7 @@ fn test_invoice_cancel_authorization() {
         )
     }).expect("Invoice creation should succeed");
 
+    // Attempt to cancel as attacker (not business owner) - should fail in contract context
     let result = env.as_contract(&contract_id, || {
         invoice.cancel(&env, attacker)
     });
@@ -172,6 +175,7 @@ fn test_invoice_cancel_authorization() {
 
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 
+    // Cancel as business owner - should succeed in contract context
     let result = env.as_contract(&contract_id, || {
         invoice.cancel(&env, business.clone())
     });
@@ -190,6 +194,7 @@ fn test_invoice_cancel_no_state_preconditions() {
     let category = InvoiceCategory::Services;
     let tags = Vec::new(&env);
 
+    // Test cancellation from various states
     let test_states = soroban_sdk::vec![
         &env,
         InvoiceStatus::Pending,
@@ -215,63 +220,294 @@ fn test_invoice_cancel_no_state_preconditions() {
 
         invoice.status = status.clone();
 
+        // Cancel should succeed regardless of state (only authorization matters)
         let result = env.as_contract(&contract_id, || {
             invoice.cancel(&env, business.clone())
         });
         assert!(result.is_ok(), "Cancel should succeed");
+
+        // Status should be Cancelled
         assert_eq!(invoice.status, InvoiceStatus::Cancelled);
     }
 }
 
 // ============================================================================
-// DIRECT OWNERSHIP GUARD UNIT TESTS (Issue #1980)
+// MIXED-OWNER ATTACK SECURITY TESTS (Issue #1981)
 // ============================================================================
 
+/// Sad path: Verification that different Business B cannot update the metadata
+/// of Business A's invoice, and fails auth checks.
 #[test]
-fn test_ownership_guard_fails_for_mismatched_business() {
+fn test_rejects_invoice_metadata_update_by_different_business() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
-    let business_a = Address::generate(&env);
-    let business_b = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    
+    env.mock_all_auths();
+    let _ = client.try_initialize_admin(&admin);
+    client.set_admin(&admin);
 
-    let invoice = env.as_contract(&contract_id, || {
-        Invoice::new(
-            &env,
-            business_a.clone(),
-            10_000,
-            Address::generate(&env),
-            env.ledger().timestamp() + 86400,
-            String::from_str(&env, "Test invoice"),
-            InvoiceCategory::Services,
-            Vec::new(&env),
-        )
-    }).expect("Invoice creation should succeed");
+    let business_a = setup_verified_business(&env, &client, &admin);
+    let business_b = setup_verified_business(&env, &client, &admin);
+    let invoice_id = create_test_invoice(&env, &client, &business_a, 100_000);
 
-    // Call the guard helper directly with mismatched business_b
-    let result = crate::invoice::require_matching_business_invoice_ownership(&env, &business_b, &invoice);
-    assert_eq!(result.unwrap_err(), QuickLendXError::Unauthorized);
+    let mut line_items = Vec::new(&env);
+    line_items.push_back(LineItemRecord(
+        String::from_str(&env, "Item 1"),
+        1,
+        100_000,
+        100_000,
+    ));
+
+    let metadata = InvoiceMetadata {
+        customer_name: String::from_str(&env, "Customer A"),
+        customer_address: String::from_str(&env, "Address A"),
+        tax_id: String::from_str(&env, "Tax A"),
+        line_items,
+        notes: String::from_str(&env, "Notes A"),
+    };
+
+    // targeted auth mocking: only Business B signs
+    env.mock_auths(&[
+        MockAuth {
+            address: &business_b,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "update_invoice_metadata",
+                args: (invoice_id.clone(), metadata.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        },
+    ]);
+
+    let result = client.try_update_invoice_metadata(&invoice_id, &metadata);
+    assert!(result.is_err(), "Different business B must not be allowed to update metadata");
 }
 
+/// Happy path: Verification that Business A can successfully update the
+/// metadata of their own invoice.
 #[test]
-fn test_ownership_guard_succeeds_for_matching_business() {
+fn test_allows_invoice_metadata_update_by_owner_business() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
-    let business_a = Address::generate(&env);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    
+    env.mock_all_auths();
+    let _ = client.try_initialize_admin(&admin);
+    client.set_admin(&admin);
 
-    let invoice = env.as_contract(&contract_id, || {
-        Invoice::new(
-            &env,
-            business_a.clone(),
-            10_000,
-            Address::generate(&env),
-            env.ledger().timestamp() + 86400,
-            String::from_str(&env, "Test invoice"),
-            InvoiceCategory::Services,
-            Vec::new(&env),
-        )
-    }).expect("Invoice creation should succeed");
+    let business_a = setup_verified_business(&env, &client, &admin);
+    let invoice_id = create_test_invoice(&env, &client, &business_a, 100_000);
 
-    // Call the guard helper directly with matching business_a
-    let result = crate::invoice::require_matching_business_invoice_ownership(&env, &business_a, &invoice);
-    assert!(result.is_ok());
+    let mut line_items = Vec::new(&env);
+    line_items.push_back(LineItemRecord(
+        String::from_str(&env, "Item 1"),
+        1,
+        100_000,
+        100_000,
+    ));
+
+    let metadata = InvoiceMetadata {
+        customer_name: String::from_str(&env, "Customer A"),
+        customer_address: String::from_str(&env, "Address A"),
+        tax_id: String::from_str(&env, "Tax A"),
+        line_items,
+        notes: String::from_str(&env, "Notes A"),
+    };
+
+    // targeted auth mocking: Business A signs
+    env.mock_auths(&[
+        MockAuth {
+            address: &business_a,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "update_invoice_metadata",
+                args: (invoice_id.clone(), metadata.clone()).into_val(&env),
+                sub_invokes: &[],
+            },
+        },
+    ]);
+
+    let result = client.try_update_invoice_metadata(&invoice_id, &metadata);
+    assert!(result.is_ok(), "Business owner must succeed updating own metadata");
+
+    let invoice = client.get_invoice(&invoice_id);
+    let updated = invoice.metadata().unwrap();
+    assert_eq!(updated.customer_name, String::from_str(&env, "Customer A"));
+}
+
+/// Sad path: Verification that different Business B cannot clear the metadata
+/// of Business A's invoice.
+#[test]
+fn test_rejects_invoice_metadata_clear_by_different_business() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    
+    env.mock_all_auths();
+    let _ = client.try_initialize_admin(&admin);
+    client.set_admin(&admin);
+
+    let business_a = setup_verified_business(&env, &client, &admin);
+    let business_b = setup_verified_business(&env, &client, &admin);
+    let invoice_id = create_test_invoice(&env, &client, &business_a, 100_000);
+
+    let mut line_items = Vec::new(&env);
+    line_items.push_back(LineItemRecord(
+        String::from_str(&env, "Item 1"),
+        1,
+        100_000,
+        100_000,
+    ));
+
+    let metadata = InvoiceMetadata {
+        customer_name: String::from_str(&env, "Customer A"),
+        customer_address: String::from_str(&env, "Address A"),
+        tax_id: String::from_str(&env, "Tax A"),
+        line_items,
+        notes: String::from_str(&env, "Notes A"),
+    };
+    client.update_invoice_metadata(&invoice_id, &metadata);
+
+    // targeted auth mocking: only Business B signs
+    env.mock_auths(&[
+        MockAuth {
+            address: &business_b,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "clear_invoice_metadata",
+                args: (invoice_id.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        },
+    ]);
+
+    let result = client.try_clear_invoice_metadata(&invoice_id);
+    assert!(result.is_err(), "Different business B must not clear metadata");
+}
+
+/// Happy path: Verification that Business A can successfully clear the
+/// metadata of their own invoice.
+#[test]
+fn test_allows_invoice_metadata_clear_by_owner_business() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    
+    env.mock_all_auths();
+    let _ = client.try_initialize_admin(&admin);
+    client.set_admin(&admin);
+
+    let business_a = setup_verified_business(&env, &client, &admin);
+    let invoice_id = create_test_invoice(&env, &client, &business_a, 100_000);
+
+    let mut line_items = Vec::new(&env);
+    line_items.push_back(LineItemRecord(
+        String::from_str(&env, "Item 1"),
+        1,
+        100_000,
+        100_000,
+    ));
+
+    let metadata = InvoiceMetadata {
+        customer_name: String::from_str(&env, "Customer A"),
+        customer_address: String::from_str(&env, "Address A"),
+        tax_id: String::from_str(&env, "Tax A"),
+        line_items,
+        notes: String::from_str(&env, "Notes A"),
+    };
+    client.update_invoice_metadata(&invoice_id, &metadata);
+
+    // targeted auth mocking: Business A signs
+    env.mock_auths(&[
+        MockAuth {
+            address: &business_a,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "clear_invoice_metadata",
+                args: (invoice_id.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        },
+    ]);
+
+    let result = client.try_clear_invoice_metadata(&invoice_id);
+    assert!(result.is_ok(), "Business owner must succeed clearing own metadata");
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert!(invoice.metadata().is_none());
+}
+
+/// Sad path: Verification that different Business B cannot cancel
+/// Business A's invoice.
+#[test]
+fn test_rejects_invoice_cancellation_by_different_business() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    
+    env.mock_all_auths();
+    let _ = client.try_initialize_admin(&admin);
+    client.set_admin(&admin);
+
+    let business_a = setup_verified_business(&env, &client, &admin);
+    let business_b = setup_verified_business(&env, &client, &admin);
+    let invoice_id = create_test_invoice(&env, &client, &business_a, 100_000);
+
+    // targeted auth mocking: only Business B signs
+    env.mock_auths(&[
+        MockAuth {
+            address: &business_b,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "cancel_invoice",
+                args: (invoice_id.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        },
+    ]);
+
+    let result = client.try_cancel_invoice(&invoice_id);
+    assert!(result.is_err(), "Different business B must not cancel invoice");
+}
+
+/// Happy path: Verification that Business A can successfully cancel their
+/// own invoice.
+#[test]
+fn test_allows_invoice_cancellation_by_owner_business() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = Address::generate(&env);
+    
+    env.mock_all_auths();
+    let _ = client.try_initialize_admin(&admin);
+    client.set_admin(&admin);
+
+    let business_a = setup_verified_business(&env, &client, &admin);
+    let invoice_id = create_test_invoice(&env, &client, &business_a, 100_000);
+
+    // targeted auth mocking: Business A signs
+    env.mock_auths(&[
+        MockAuth {
+            address: &business_a,
+            invoke: &MockAuthInvoke {
+                contract: &contract_id,
+                fn_name: "cancel_invoice",
+                args: (invoice_id.clone(),).into_val(&env),
+                sub_invokes: &[],
+            },
+        },
+    ]);
+
+    let result = client.try_cancel_invoice(&invoice_id);
+    assert!(result.is_ok(), "Business owner must succeed cancelling own invoice");
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Cancelled);
 }

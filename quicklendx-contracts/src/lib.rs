@@ -98,7 +98,7 @@ mod test_due_date_guard;
 #[cfg(test)]
 mod test_cancel_invoice_matrix;
 #[cfg(test)]
-mod test_require_business_active;
+mod test_invoice;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]

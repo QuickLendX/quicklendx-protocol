@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 /// # store_invoice Authentication Policy Tests (Issue #790)
 ///
 /// This module locks the intended authentication and KYC-gating policy for
@@ -18,7 +20,6 @@
 /// - Admin cannot bypass the business signature requirement.
 /// - A third party cannot create invoices on behalf of a business.
 /// - Only after KYC approval can a business write invoice data on-chain.
-#![cfg(test)]
 
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
