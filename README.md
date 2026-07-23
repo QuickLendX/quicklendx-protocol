@@ -60,7 +60,9 @@ npm run dev
 ## Documentation
 
 - `docs/`: Project-wide design, implementation, and audit documentation.
-- [`docs/DASHBOARD_QUERIES.md`](docs/DASHBOARD_QUERIES.md): Operator-ready SQL for indexer freshness, event flow, invoices, bids, settlements, and best-bid snapshots.
+- [Cursor Guarantees & Snapshot Generations](docs/CURSOR_GUARANTEES.md): Pagination cursor stability and data snapshot semantics for downstream integrators.
+- [Fee Recipient Rotation Guide](docs/FEE_RECIPIENT_ROTATION.md): Operator guide for the two-step timelocked treasury rotation flow.
+- [Invoice Rating Overrides](docs/RATING_OVERRIDES.md): Policy and operational process for handling abusive invoice ratings.
 - [Platform Fee & Treasury Split Operations Guide](file:///c:/Users/HP/quicklendx-protocol/docs/contracts/platform-fee-ops.md): Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
 - [Invoice Lifecycle](docs/INVOICE_LIFECYCLE.md): State diagram and entrypoint reference — Pending → Verified → Funded → Settled/Defaulted.
