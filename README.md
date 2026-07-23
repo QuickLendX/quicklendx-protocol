@@ -72,7 +72,7 @@ npm run dev
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
 - [`docs/READ_MODEL_CONSISTENCY.md`](docs/READ_MODEL_CONSISTENCY.md): Contributor-facing guide for how write entrypoints map to the later read/view model used by `get_*` queries.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
-- [`docs/INDEXING_CONTRACT.md`](docs/INDEXING_CONTRACT.md): Smart contract interface guide for off-chain indexers — events, topics, storage layout, and data structures.
+- [`docs/APPEALS.md`](docs/APPEALS.md): Appeals process — who reviews, timeline, outcomes, and how they affect funds — operator-facing.
 
 ## Contribution
 
