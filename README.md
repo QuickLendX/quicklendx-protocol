@@ -61,21 +61,9 @@ npm run dev
 
 ## Documentation
 
-- `docs/`: Project-wide design, implementation, and audit documentation.
-- [Protocol Reasons and Operational Playbooks](docs/OPERATIONAL_PLAYBOOKS.md): Operator playbooks and explanations for core protocol behaviors (e.g. disputes, fee adjustments).
-- [`docs/DASHBOARD_QUERIES.md`](docs/DASHBOARD_QUERIES.md): Operator-ready SQL for indexer freshness, event flow, invoices, bids, settlements, and best-bid snapshots.
-- [Platform Fee & Treasury Split Operations Guide](file:///c:/Users/HP/quicklendx-protocol/docs/contracts/platform-fee-ops.md): Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
-- `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
-- [Invoice Lifecycle](docs/INVOICE_LIFECYCLE.md): State diagram and entrypoint reference — Pending → Verified → Funded → Settled/Defaulted.
-- [Investment States](docs/QLX_INVESTMENT_STATES.md): Full investment state machine — Active, Completed, Defaulted, Refunded, Withdrawn — with entrypoints, status coupling, and worked examples.
-- [Dispute Lifecycle](file:///c:/Users/HP/quicklendx-protocol/docs/DISPUTE.md): Who can open, who resolves, timeout behaviour, and fund implications.
-- [`docs/QUERIES.md`](docs/QUERIES.md): Catalog of common read-only entrypoints with concrete invocation examples and return values — the quickest way to find the query you need.
-- [`docs/CROSS_INVOICE_ANALYTICS.md`](docs/CROSS_INVOICE_ANALYTICS.md): Cross-invoice read patterns, supported analytics entrypoints, and their pagination bounds for contributors and integrators.
-- [`docs/contracts/settlement-formula.md`](docs/contracts/settlement-formula.md): Contributor-facing explanation of the settlement formula, inputs, and when fee updates take effect.
-- `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
-- `docs/KYC.md`: Business KYC vs investor KYC, what each gates.
-- `quicklendx-contracts/README.md`: Smart contract-specific documentation.
-- `quicklendx-contracts/docs/contracts/deterministic-time.md`: Smart contract deterministic ledger time semantics.
+- [`docs/README.md`](docs/README.md): Full documentation index — **start here**.
+  - [`docs/contracts/contributor-guide.md`](docs/contracts/contributor-guide.md): Contract contributor guide (module layout, lifecycle, error/event stability contracts, test patterns, WASM budget).
+- `quicklendx-contracts/README.md`: Smart contract build, deploy, and API reference.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
 - `backend/docs/REPLAY_RUNBOOK.md`: Step-by-step operator runbook for replaying ingestion from a specific ledger — covers reorg recovery, gap backfill, force rebuild after schema migration, and troubleshooting stuck runs.
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
