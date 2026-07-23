@@ -1785,19 +1785,29 @@ fn test_release_escrow_funds_insufficient_contract_balance() {
 
     // Fund the invoice (creates escrow and moves tokens to contract)
     client.accept_bid_and_fund(&invoice_id, &bid_id);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
     assert_eq!(token_client.balance(&contract_id), amount);
 
     // Drain the contract's token balance to simulate an invariant violation.
     let contract_balance = token_client.balance(&contract_id);
     sac_client.burn(&contract_id, &contract_balance);
-    assert_eq!(token_client.balance(&contract_id), 0, "Contract balance should be zero after burn");
+    assert_eq!(
+        token_client.balance(&contract_id),
+        0,
+        "Contract balance should be zero after burn"
+    );
 
     let business_balance_before = token_client.balance(&business);
 
     // Release should fail because the contract has no balance to send.
     let result = client.try_release_escrow_funds(&invoice_id);
-    assert!(result.is_err(), "release_escrow_funds must fail when contract has no balance");
+    assert!(
+        result.is_err(),
+        "release_escrow_funds must fail when contract has no balance"
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::InsufficientFunds,
@@ -1813,7 +1823,11 @@ fn test_release_escrow_funds_insufficient_contract_balance() {
 
     // Escrow status must remain Held (retryable).
     let escrow = client.get_escrow_details(&invoice_id);
-    assert_eq!(escrow.status, EscrowStatus::Held, "Escrow must remain Held after failed release");
+    assert_eq!(
+        escrow.status,
+        EscrowStatus::Held,
+        "Escrow must remain Held after failed release"
+    );
 
     // Invoice must remain Funded.
     let invoice = client.get_invoice(&invoice_id);
@@ -1865,7 +1879,10 @@ fn test_release_escrow_funds_retry_after_balance_restored() {
 
     // Second release attempt succeeds.
     let result = client.try_release_escrow_funds(&invoice_id);
-    assert!(result.is_ok(), "release should succeed after balance restored");
+    assert!(
+        result.is_ok(),
+        "release should succeed after balance restored"
+    );
 
     // Business received funds.
     assert_eq!(
@@ -1913,7 +1930,10 @@ fn test_query_details_status_match_held() {
 
     assert_eq!(details.status, EscrowStatus::Held);
     assert_eq!(status, EscrowStatus::Held);
-    assert_eq!(details.status, status, "details.status must equal get_escrow_status()");
+    assert_eq!(
+        details.status, status,
+        "details.status must equal get_escrow_status()"
+    );
 }
 
 /// `get_escrow_details().status` and `get_escrow_status()` agree in Released state.
@@ -1937,7 +1957,10 @@ fn test_query_details_status_match_released() {
 
     assert_eq!(details.status, EscrowStatus::Released);
     assert_eq!(status, EscrowStatus::Released);
-    assert_eq!(details.status, status, "details.status must equal get_escrow_status()");
+    assert_eq!(
+        details.status, status,
+        "details.status must equal get_escrow_status()"
+    );
 }
 
 /// `get_escrow_details().status` and `get_escrow_status()` agree in Refunded state.
@@ -1961,7 +1984,10 @@ fn test_query_details_status_match_refunded() {
 
     assert_eq!(details.status, EscrowStatus::Refunded);
     assert_eq!(status, EscrowStatus::Refunded);
-    assert_eq!(details.status, status, "details.status must equal get_escrow_status()");
+    assert_eq!(
+        details.status, status,
+        "details.status must equal get_escrow_status()"
+    );
 }
 
 /// Immutable fields (escrow_id, invoice_id, investor, business, amount, currency,
@@ -1984,13 +2010,22 @@ fn test_query_immutable_fields_stable_across_release() {
     client.release_escrow_funds(&invoice_id);
     let after = client.get_escrow_details(&invoice_id);
 
-    assert_eq!(before.escrow_id, after.escrow_id, "escrow_id must not change");
-    assert_eq!(before.invoice_id, after.invoice_id, "invoice_id must not change");
+    assert_eq!(
+        before.escrow_id, after.escrow_id,
+        "escrow_id must not change"
+    );
+    assert_eq!(
+        before.invoice_id, after.invoice_id,
+        "invoice_id must not change"
+    );
     assert_eq!(before.investor, after.investor, "investor must not change");
     assert_eq!(before.business, after.business, "business must not change");
     assert_eq!(before.amount, after.amount, "amount must not change");
     assert_eq!(before.currency, after.currency, "currency must not change");
-    assert_eq!(before.created_at, after.created_at, "created_at must not change");
+    assert_eq!(
+        before.created_at, after.created_at,
+        "created_at must not change"
+    );
     assert_ne!(before.status, after.status, "only status should differ");
 }
 
@@ -2031,8 +2066,14 @@ fn test_query_missing_record_both_surfaces_return_storage_key_not_found() {
 
     let ghost_id = BytesN::from_array(&env, &[0xAB; 32]);
 
-    let details_err = client.try_get_escrow_details(&ghost_id).unwrap_err().unwrap();
-    let status_err = client.try_get_escrow_status(&ghost_id).unwrap_err().unwrap();
+    let details_err = client
+        .try_get_escrow_details(&ghost_id)
+        .unwrap_err()
+        .unwrap();
+    let status_err = client
+        .try_get_escrow_status(&ghost_id)
+        .unwrap_err()
+        .unwrap();
 
     assert_eq!(
         details_err,
@@ -2058,15 +2099,30 @@ fn test_query_missing_record_error_is_deterministic() {
 
     let ghost_id = BytesN::from_array(&env, &[0xFF; 32]);
 
-    let err1 = client.try_get_escrow_details(&ghost_id).unwrap_err().unwrap();
-    let err2 = client.try_get_escrow_details(&ghost_id).unwrap_err().unwrap();
-    let err3 = client.try_get_escrow_status(&ghost_id).unwrap_err().unwrap();
-    let err4 = client.try_get_escrow_status(&ghost_id).unwrap_err().unwrap();
+    let err1 = client
+        .try_get_escrow_details(&ghost_id)
+        .unwrap_err()
+        .unwrap();
+    let err2 = client
+        .try_get_escrow_details(&ghost_id)
+        .unwrap_err()
+        .unwrap();
+    let err3 = client
+        .try_get_escrow_status(&ghost_id)
+        .unwrap_err()
+        .unwrap();
+    let err4 = client
+        .try_get_escrow_status(&ghost_id)
+        .unwrap_err()
+        .unwrap();
 
     assert_eq!(err1, QuickLendXError::StorageKeyNotFound);
     assert_eq!(err1, err2, "repeated calls must return the same error");
     assert_eq!(err3, QuickLendXError::StorageKeyNotFound);
-    assert_eq!(err3, err4, "repeated status calls must return the same error");
+    assert_eq!(
+        err3, err4,
+        "repeated status calls must return the same error"
+    );
 }
 
 /// Querying an invoice ID that exists but has no escrow also returns
@@ -2084,8 +2140,14 @@ fn test_query_verified_invoice_without_escrow_returns_storage_key_not_found() {
     // Invoice is created and verified but never funded — no escrow exists.
     let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
 
-    let details_err = client.try_get_escrow_details(&invoice_id).unwrap_err().unwrap();
-    let status_err = client.try_get_escrow_status(&invoice_id).unwrap_err().unwrap();
+    let details_err = client
+        .try_get_escrow_details(&invoice_id)
+        .unwrap_err()
+        .unwrap();
+    let status_err = client
+        .try_get_escrow_status(&invoice_id)
+        .unwrap_err()
+        .unwrap();
 
     assert_eq!(details_err, QuickLendXError::StorageKeyNotFound);
     assert_eq!(status_err, QuickLendXError::StorageKeyNotFound);
@@ -2151,7 +2213,11 @@ fn test_query_independent_escrows_do_not_cross_contaminate() {
 
     assert_eq!(escrow_a.status, EscrowStatus::Released);
     assert_eq!(status_a, EscrowStatus::Released);
-    assert_eq!(escrow_b.status, EscrowStatus::Held, "escrow B must stay Held");
+    assert_eq!(
+        escrow_b.status,
+        EscrowStatus::Held,
+        "escrow B must stay Held"
+    );
     assert_eq!(status_b, EscrowStatus::Held);
 
     assert_ne!(escrow_a.invoice_id, escrow_b.invoice_id);

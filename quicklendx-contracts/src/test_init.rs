@@ -433,6 +433,73 @@ mod test_init {
         assert!(result.is_ok(), "Zero grace period must succeed");
     }
 
+    #[test]
+    fn test_initialize_with_all_zero_numeric_args_fails() {
+        let (env, client) = setup();
+        let params = InitializationParams {
+            admin: Address::generate(&env),
+            treasury: Address::generate(&env),
+            fee_bps: 0,
+            min_invoice_amount: 0,
+            max_due_date_days: 0,
+            grace_period_seconds: 0,
+            initial_currencies: Vec::new(&env),
+        };
+
+        let result = client.try_initialize(&params);
+        assert_eq!(
+            result,
+            Err(Ok(QuickLendXError::InvalidAmount)),
+            "Initialization with all-zero numeric args must fail"
+        );
+    }
+
+    #[test]
+    fn test_initialize_with_zero_address_in_currencies_fails() {
+        let (env, client) = setup();
+        let zero_address = Address::from_str(
+            &env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        );
+        let currencies = Vec::from_array(&env, [zero_address.clone()]);
+
+        let mut params = create_valid_params(&env);
+        params.initial_currencies = currencies.clone();
+
+        let result = client.try_initialize(&params);
+        assert_eq!(
+            result,
+            Err(Ok(QuickLendXError::InvalidCurrency)),
+            "Zero address in initial currencies must fail"
+        );
+    }
+
+    #[test]
+    fn test_initialize_with_zero_address_admin_or_treasury_fails() {
+        let (env, client) = setup();
+        let zero_address = Address::from_str(
+            &env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        );
+
+        let params = InitializationParams {
+            admin: zero_address.clone(),
+            treasury: zero_address,
+            fee_bps: 0,
+            min_invoice_amount: 0,
+            max_due_date_days: 0,
+            grace_period_seconds: 0,
+            initial_currencies: Vec::new(&env),
+        };
+
+        let result = client.try_initialize(&params);
+        assert_eq!(
+            result,
+            Err(Ok(QuickLendXError::InvalidAddress)),
+            "Zero address admin/treasury must fail"
+        );
+    }
+
     // ============================================================================
     // 7. Address Validation Tests
     // ============================================================================

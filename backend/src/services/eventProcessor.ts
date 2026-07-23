@@ -162,8 +162,7 @@ export class EventProcessor {
         break;
 
       default:
-        const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
-        console.log(`${correlationPrefix}Unhandled event type: ${event.type}`);
+        throw new Error(`Unknown event type: ${event.type}`);
     }
   }
 }

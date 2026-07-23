@@ -81,12 +81,23 @@ impl MaintenanceControl {
         reason: &String,
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
+        Self::apply_maintenance_mode(env, enabled, reason, admin)
+    }
 
+    /// Write maintenance flags without re-checking admin (caller must authorize).
+    pub(crate) fn apply_maintenance_mode(
+        env: &Env,
+        enabled: bool,
+        reason: &String,
+        actor: &Address,
+    ) -> Result<(), QuickLendXError> {
         if enabled && reason.len() > MAX_REASON_LEN {
             return Err(QuickLendXError::InvalidDescription);
         }
 
-        env.storage().instance().set(&MAINTENANCE_MODE_KEY, &enabled);
+        env.storage()
+            .instance()
+            .set(&MAINTENANCE_MODE_KEY, &enabled);
 
         if enabled {
             env.storage()
@@ -100,7 +111,7 @@ impl MaintenanceControl {
             env.storage().instance().remove(&MAINTENANCE_REASON_KEY);
             env.events().publish(
                 (symbol_short!("MAINT"), symbol_short!("disabled")),
-                admin.clone(),
+                actor.clone(),
             );
         }
 
@@ -178,19 +189,39 @@ impl MaintenanceControl {
 
         // Emit events for each kind that was refreshed
         if report.invoices_refreshed > 0 {
-            crate::events::emit_ttl_extended(env, &String::from_str(env, "invoice"), report.invoices_refreshed);
+            crate::events::emit_ttl_extended(
+                env,
+                &String::from_str(env, "invoice"),
+                report.invoices_refreshed,
+            );
         }
         if report.bids_refreshed > 0 {
-            crate::events::emit_ttl_extended(env, &String::from_str(env, "bid"), report.bids_refreshed);
+            crate::events::emit_ttl_extended(
+                env,
+                &String::from_str(env, "bid"),
+                report.bids_refreshed,
+            );
         }
         if report.investments_refreshed > 0 {
-            crate::events::emit_ttl_extended(env, &String::from_str(env, "investment"), report.investments_refreshed);
+            crate::events::emit_ttl_extended(
+                env,
+                &String::from_str(env, "investment"),
+                report.investments_refreshed,
+            );
         }
         if report.escrows_refreshed > 0 {
-            crate::events::emit_ttl_extended(env, &String::from_str(env, "escrow"), report.escrows_refreshed);
+            crate::events::emit_ttl_extended(
+                env,
+                &String::from_str(env, "escrow"),
+                report.escrows_refreshed,
+            );
         }
         if report.currencies_refreshed > 0 {
-            crate::events::emit_ttl_extended(env, &String::from_str(env, "currency"), report.currencies_refreshed);
+            crate::events::emit_ttl_extended(
+                env,
+                &String::from_str(env, "currency"),
+                report.currencies_refreshed,
+            );
         }
 
         Ok(report)

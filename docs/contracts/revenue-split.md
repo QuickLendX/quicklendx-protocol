@@ -304,6 +304,7 @@ Returns analytics including:
 
 ## Related Documentation
 
+- [Platform Fee & Treasury Split Operations Guide](./platform-fee-ops.md)
 - [Fees Documentation](./fees.md)
 - [Escrow Documentation](./escrow.md)
 - [Security Documentation](./security.md)

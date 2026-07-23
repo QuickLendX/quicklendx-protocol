@@ -61,12 +61,7 @@ fn make_invoice_unit(env: &Env) -> (Invoice, Address) {
 fn make_metadata_with_items(env: &Env, item_count: u32) -> (InvoiceMetadata, i128) {
     let mut items = SVec::new(env);
     for _ in 0..item_count {
-        items.push_back(LineItemRecord(
-            SStr::from_str(env, "item"),
-            1,
-            1,
-            1,
-        ));
+        items.push_back(LineItemRecord(SStr::from_str(env, "item"), 1, 1, 1));
     }
     let invoice_amount = item_count as i128;
     let metadata = InvoiceMetadata {
@@ -505,8 +500,7 @@ fn tag_index_no_orphan_after_remove() {
             .persistent()
             .get(&Indexes::invoices_by_tag(&tag));
         assert!(
-            ids_after
-                .map_or(true, |v| !v.iter().any(|id| id == inv.id)),
+            ids_after.map_or(true, |v| !v.iter().any(|id| id == inv.id)),
             "orphan: invoice still in tag index after removal"
         );
     });

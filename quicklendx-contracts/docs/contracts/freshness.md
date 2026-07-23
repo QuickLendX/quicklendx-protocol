@@ -62,6 +62,13 @@ use them for access control.
 - The ISO 8601 timestamp is computed from the ledger close time using pure
   integer arithmetic — no external time source is used.
 
+## See also
+
+- [Deterministic Ledger Time](deterministic-time.md): contract guidance on when
+  to use `env.ledger().timestamp()` versus off-chain wall-clock time.
+- The ISO 8601 timestamp is computed from the ledger close time using pure
+  integer arithmetic — no external time source is used.
+
 ## Example Response
 
 ```json

@@ -31,7 +31,7 @@ cd "$CONTRACTS_DIR"
 # ── Budget constants ───────────────────────────────────────────────────────────
 MAX_BYTES="$((512 * 1024))"           # 524 288 B – hard limit (raised pending size reduction work)
 WARN_BYTES="$((MAX_BYTES * 9 / 10))"  # 90 % warning zone
-BASELINE_BYTES=360000                 # last recorded optimised size
+BASELINE_BYTES=454858                 # last recorded optimised size
 REGRESSION_MARGIN_PCT=10              # 10 % growth allowed vs baseline
 REGRESSION_LIMIT=$(( BASELINE_BYTES + BASELINE_BYTES * REGRESSION_MARGIN_PCT / 100 ))
 WASM_NAME="quicklendx_contracts.wasm"

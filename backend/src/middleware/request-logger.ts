@@ -30,6 +30,7 @@ import {
   generateCorrelationId,
   withCorrelationId,
 } from "../lib/requestContext";
+import { latencyTracker } from "../services/latencyTracker";
 
 // ── Structured log entry ──────────────────────────────────────────────────────
 
@@ -141,6 +142,15 @@ export function createRequestLogger(
 
     // Emit the log line after the response has been fully sent
     res.on("finish", () => {
+      const durationMs = Date.now() - startMs;
+
+      // Record latency for SLO tracking (non-throwing — must not affect response)
+      try {
+        latencyTracker.record(req.path, durationMs);
+      } catch {
+        // intentionally swallowed — tracker failure must never impact request logging
+      }
+
       try {
         const entry: RequestLogEntry = {
           requestId: correlationId,
@@ -148,7 +158,7 @@ export function createRequestLogger(
           method: req.method,
           path: req.path,
           statusCode: res.statusCode,
-          durationMs: Date.now() - startMs,
+          durationMs,
           request: safeRequest,
           response: sanitiseResponse(res.statusCode, capturedBody),
         };
@@ -161,7 +171,10 @@ export function createRequestLogger(
       }
     });
 
-    next();
+    // Establish the async-local-storage context for the remainder of the
+    // request. Every downstream handler, audit write, and outbound RPC call
+    // can now read this id via getCorrelationId() without manual threading.
+    withCorrelationId(correlationId, next);
   };
 }
 

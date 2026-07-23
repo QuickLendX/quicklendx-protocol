@@ -30,16 +30,16 @@ impl InvoiceSearch {
         // Convert to lowercase for case-insensitive search
         let mut sanitized_bytes = alloc::vec::Vec::new();
         for byte in query.to_bytes().iter() {
-            if byte >= b'A' && byte <= b'Z' {
+            if byte.is_ascii_uppercase() {
                 sanitized_bytes.push(byte + 32); // Convert to lowercase
-            } else if byte >= b'a' && byte <= b'z' || byte >= b'0' && byte <= b'9' || byte == b' ' {
+            } else if byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b' ' {
                 sanitized_bytes.push(byte);
             }
             // Skip other characters (punctuation, etc.)
         }
 
         let trimmed_str = core::str::from_utf8(&sanitized_bytes).unwrap_or("").trim();
-        if trimmed_str.len() == 0 {
+        if trimmed_str.is_empty() {
             return Err(QuickLendXError::InvalidDescription);
         }
 
@@ -91,7 +91,7 @@ impl InvoiceSearch {
 
         // Limit results
         let mut limited_results = Vec::new(env);
-        let max_results = MAX_SEARCH_RESULTS.min(results.len() as u32);
+        let max_results = MAX_SEARCH_RESULTS.min(results.len());
         for i in 0..max_results {
             if let Some(result) = results.get(i) {
                 limited_results.push_back(result);
@@ -157,7 +157,7 @@ impl InvoiceSearch {
     fn to_lowercase(s: &String) -> String {
         let mut result_bytes = alloc::vec::Vec::new();
         for byte in s.to_bytes().iter() {
-            if byte >= b'A' && byte <= b'Z' {
+            if byte.is_ascii_uppercase() {
                 result_bytes.push(byte + 32);
             } else {
                 result_bytes.push(byte);

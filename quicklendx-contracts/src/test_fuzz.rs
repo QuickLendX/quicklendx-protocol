@@ -154,7 +154,7 @@ proptest! {
 
         let bid_amount = invoice_amount.saturating_mul(bid_amount_factor as i128) / 100;
         let expected_return = invoice_amount;
-        let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return);
+        let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]));
 
         let _ = client.try_accept_bid(&invoice_id, &bid_id);
 

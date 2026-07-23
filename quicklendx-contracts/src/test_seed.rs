@@ -10,14 +10,9 @@ pub const SEED_ENV_VAR: &str = "QUICKLENDX_SEED";
 #[cfg(feature = "fuzz-tests")]
 pub fn seed() -> Option<u64> {
     match env::var(SEED_ENV_VAR) {
-        Ok(seed_str) => {
-            seed_str.parse::<u64>()
-                .map(Some)
-                .unwrap_or_else(|_| panic!(
-                    "Invalid {}={}: must be a valid u64", 
-                    SEED_ENV_VAR, seed_str
-                ))
-        }
+        Ok(seed_str) => seed_str.parse::<u64>().map(Some).unwrap_or_else(|_| {
+            panic!("Invalid {}={}: must be a valid u64", SEED_ENV_VAR, seed_str)
+        }),
         Err(_) => None,
     }
 }

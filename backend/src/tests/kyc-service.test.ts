@@ -6,12 +6,15 @@
  * - PII redaction
  * - Access logging
  * - Security assumptions
+ * - Mixed v1/v2 records
  */
 
 import {
   initializeEncryption,
   encryptSensitiveData,
+  encryptSensitiveDataV2,
   decryptSensitiveData,
+  decryptSensitiveDataAny,
   redactPii,
   isSensitiveField,
   isPiiField,
@@ -24,10 +27,17 @@ import {
 } from "../services/kycService";
 
 describe("KYC Service", () => {
-  const testMasterKey = "test-master-key-for-encryption-12345678901234567890";
+  const testMasterKeyV1 = "test-master-key-for-encryption-12345678901234567890";
+  const testMasterKeyV2 = "test-master-key-for-encryption-09876543210987654321";
 
   beforeAll(() => {
-    initializeEncryption(testMasterKey);
+    initializeEncryption({
+      activeKeyId: "v2",
+      keys: {
+        "v1": testMasterKeyV1,
+        "v2": testMasterKeyV2
+      }
+    });
   });
 
   describe("Encryption", () => {
@@ -35,7 +45,8 @@ describe("KYC Service", () => {
       expect(isEncryptionInitialized()).toBe(true);
     });
 
-    it("should encrypt and decrypt data correctly", () => {
+    it("should encrypt and decrypt data correctly (v1)", () => {
+      initializeEncryption(testMasterKeyV1);
       const plaintext = "Sensitive KYC data: John Doe, SSN: 123-45-6789";
       const encrypted = encryptSensitiveData(plaintext);
       
@@ -46,37 +57,90 @@ describe("KYC Service", () => {
       expect(decrypted).toBe(plaintext);
     });
 
-    it("should produce different ciphertext for same plaintext", () => {
+    it("should encrypt and decrypt data correctly (v2)", () => {
+      const plaintext = "Sensitive KYC data: Jane Smith, SSN: 987-65-4321";
+      const encrypted = encryptSensitiveDataV2(plaintext);
+      
+      expect(encrypted).not.toBe(plaintext);
+      expect(encrypted.length).toBeGreaterThan(plaintext.length);
+      expect(encrypted).toStartWith("v2:");
+      
+      const decrypted = decryptSensitiveDataAny(encrypted);
+      expect(decrypted).toBe(plaintext);
+    });
+
+    it("should decrypt mixed v1 and v2 records", () => {
+      const plaintext = "Mixed format test data";
+      
+      // Encrypt with v1
+      initializeEncryption(testMasterKeyV1);
+      const v1Encrypted = encryptSensitiveData(plaintext);
+      
+      // Encrypt with v2
+      initializeEncryption({
+        activeKeyId: "v2",
+        keys: {
+          "v1": testMasterKeyV1,
+          "v2": testMasterKeyV2
+        }
+      });
+      const v2Encrypted = encryptSensitiveDataV2(plaintext);
+      
+      // Decrypt both
+      expect(decryptSensitiveDataAny(v1Encrypted)).toBe(plaintext);
+      expect(decryptSensitiveDataAny(v2Encrypted)).toBe(plaintext);
+    });
+
+    it("should produce different ciphertext for same plaintext (v1 and v2)", () => {
       const plaintext = "Same data";
-      const encrypted1 = encryptSensitiveData(plaintext);
-      const encrypted2 = encryptSensitiveData(plaintext);
+      const encrypted1V1 = encryptSensitiveData(plaintext);
+      const encrypted2V1 = encryptSensitiveData(plaintext);
+      const encrypted1V2 = encryptSensitiveDataV2(plaintext);
+      const encrypted2V2 = encryptSensitiveDataV2(plaintext);
       
       // Due to random IV, same plaintext should produce different ciphertext
-      expect(encrypted1).not.toBe(encrypted2);
+      expect(encrypted1V1).not.toBe(encrypted2V1);
+      expect(encrypted1V2).not.toBe(encrypted2V2);
+      expect(encrypted1V1).not.toBe(encrypted1V2);
     });
 
-    it("should handle empty string", () => {
+    it("should handle empty string (v1 and v2)", () => {
       const plaintext = "";
-      const encrypted = encryptSensitiveData(plaintext);
-      const decrypted = decryptSensitiveData(encrypted);
       
-      expect(decrypted).toBe(plaintext);
+      const encryptedV1 = encryptSensitiveData(plaintext);
+      const decryptedV1 = decryptSensitiveDataAny(encryptedV1);
+      
+      const encryptedV2 = encryptSensitiveDataV2(plaintext);
+      const decryptedV2 = decryptSensitiveDataAny(encryptedV2);
+      
+      expect(decryptedV1).toBe(plaintext);
+      expect(decryptedV2).toBe(plaintext);
     });
 
-    it("should handle unicode characters", () => {
+    it("should handle unicode characters (v1 and v2)", () => {
       const plaintext = "Name: 张三, ID: 身份证123456789012345";
-      const encrypted = encryptSensitiveData(plaintext);
-      const decrypted = decryptSensitiveData(encrypted);
       
-      expect(decrypted).toBe(plaintext);
+      const encryptedV1 = encryptSensitiveData(plaintext);
+      const decryptedV1 = decryptSensitiveDataAny(encryptedV1);
+      
+      const encryptedV2 = encryptSensitiveDataV2(plaintext);
+      const decryptedV2 = decryptSensitiveDataAny(encryptedV2);
+      
+      expect(decryptedV1).toBe(plaintext);
+      expect(decryptedV2).toBe(plaintext);
     });
 
-    it("should handle long data", () => {
+    it("should handle long data (v1 and v2)", () => {
       const plaintext = "A".repeat(10000);
-      const encrypted = encryptSensitiveData(plaintext);
-      const decrypted = decryptSensitiveData(encrypted);
       
-      expect(decrypted).toBe(plaintext);
+      const encryptedV1 = encryptSensitiveData(plaintext);
+      const decryptedV1 = decryptSensitiveDataAny(encryptedV1);
+      
+      const encryptedV2 = encryptSensitiveDataV2(plaintext);
+      const decryptedV2 = decryptSensitiveDataAny(encryptedV2);
+      
+      expect(decryptedV1).toBe(plaintext);
+      expect(decryptedV2).toBe(plaintext);
     });
 
     it("should throw error when not initialized", () => {

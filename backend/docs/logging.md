@@ -59,6 +59,42 @@ X-Request-Id: client-123  ──►   X-Request-Id: client-123  (if valid)
                               X-Request-Id: 01H9K4W2... (if invalid/missing)
 ```
 
+### Down-Stack Propagation: Audit Log & Outbound RPC
+
+The correlation id (request id) flows through the entire backend call stack
+without manual threading. The chain is:
+
+```
+Inbound HTTP request
+  │  X-Request-Id: client-123   (or absent → server-generated ULID)
+  ▼
+request-logger middleware
+  │  sanitize / generate id, echo X-Request-Id response header,
+  │  open AsyncLocalStorage context: withCorrelationId(id, next)
+  ▼
+Route handlers & service layer (run inside the ALS context)
+  ├─► auditService.append()      → getCorrelationId() → AuditEntry.requestId
+  └─► rpcClient.call()           → getCorrelationId() → X-Request-Id header
+                                                         on the outbound
+                                                         Soroban RPC request
+```
+
+Because the context is opened with `AsyncLocalStorage`, the id survives
+`await`, `setTimeout`, `setImmediate`, and Promise chains, so async callbacks
+observe the correct id and concurrent requests never cross-contaminate.
+
+**Audit entries** (`src/services/auditService.ts`): every entry written within a
+request scope is stamped with `requestId` taken from the active context, so a
+backend mutation (e.g. `WEBHOOK_SECRET_ROTATE`) can be traced back to the API
+call that triggered it. An explicit `requestId` on the entry takes precedence;
+otherwise the field is omitted when no context is active (background workers).
+See [`docs/audit-log.md`](./audit-log.md).
+
+**Outbound RPC** (`src/services/rpcClient.ts`): the reliable RPC client forwards
+the active id as an `X-Request-Id` header on every JSON-RPC call to the upstream
+Soroban RPC, extending the trace beyond the QuickLendX backend. When there is no
+request context the header is simply omitted.
+
 ### Implementation Details
 
 **Request Context Storage**
@@ -66,6 +102,8 @@ X-Request-Id: client-123  ──►   X-Request-Id: client-123  (if valid)
 - Uses Node.js `AsyncLocalStorage` for thread-safe context propagation
 - Automatic context isolation prevents bleeding between concurrent requests
 - Context is automatically available in all downstream async operations
+- `request-logger.ts` opens the context via `withCorrelationId(id, next)`, so
+  the id is live for the full duration of request handling
 
 **Middleware Integration**
 

@@ -732,4 +732,114 @@ mod test_dispute_timeline {
         let t3 = client.get_dispute_timeline(&invoice_id, &0u32, &10u32);
         assert_eq!(t3.current_status, DisputeStatus::Resolved);
     }
+
+    // -----------------------------------------------------------------------
+    // NEW: Comprehensive pagination boundary and monotonic-sequence test
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_pagination_boundary_and_monotonic_sequence() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        let invoice_id = create_invoice(&env, &client, &admin, &business);
+
+        // Create a fully resolved dispute (3 entries total)
+        client.create_dispute(
+            &invoice_id,
+            &business,
+            &String::from_str(&env, "Payment dispute"),
+            &String::from_str(&env, "Evidence"),
+        );
+        client.put_dispute_under_review(&invoice_id, &admin);
+        client.resolve_dispute(
+            &invoice_id,
+            &admin,
+            &String::from_str(&env, "Refund approved"),
+        );
+
+        // Test 1: Pagination at exact boundary (offset=0, limit=3 for 3 entries)
+        let page1 = client.get_dispute_timeline(&invoice_id, &0u32, &3u32);
+        assert_eq!(page1.entries.len(), 3);
+        assert_eq!(page1.total, 3);
+        assert!(!page1.has_more);
+        // Verify sequence monotonicity
+        assert_eq!(page1.entries.get(0).unwrap().sequence, 0);
+        assert_eq!(page1.entries.get(1).unwrap().sequence, 1);
+        assert_eq!(page1.entries.get(2).unwrap().sequence, 2);
+
+        // Test 2: Pagination one past boundary (offset=0, limit=4 for 3 entries)
+        let page2 = client.get_dispute_timeline(&invoice_id, &0u32, &4u32);
+        assert_eq!(page2.entries.len(), 3);
+        assert_eq!(page2.total, 3);
+        assert!(!page2.has_more);
+
+        // Test 3: Pagination at offset boundary (offset=2, limit=1 for last entry)
+        let page3 = client.get_dispute_timeline(&invoice_id, &2u32, &1u32);
+        assert_eq!(page3.entries.len(), 1);
+        assert_eq!(page3.total, 3);
+        assert!(!page3.has_more);
+        assert_eq!(page3.entries.get(0).unwrap().sequence, 2);
+
+        // Test 4: Pagination just past offset boundary (offset=3, limit=1)
+        let page4 = client.get_dispute_timeline(&invoice_id, &3u32, &1u32);
+        assert_eq!(page4.entries.len(), 0);
+        assert_eq!(page4.total, 3);
+        assert!(!page4.has_more);
+
+        // Test 5: Verify monotonic timestamps across different page sizes
+        let page5 = client.get_dispute_timeline(&invoice_id, &0u32, &2u32);
+        let page6 = client.get_dispute_timeline(&invoice_id, &2u32, &2u32);
+        
+        // First page should have entries 0 and 1
+        assert_eq!(page5.entries.len(), 2);
+        assert!(page5.has_more);
+        let e0 = page5.entries.get(0).unwrap();
+        let e1 = page5.entries.get(1).unwrap();
+        assert_eq!(e0.sequence, 0);
+        assert_eq!(e1.sequence, 1);
+        assert!(e0.timestamp <= e1.timestamp);
+
+        // Second page should have entry 2
+        assert_eq!(page6.entries.len(), 1);
+        assert!(!page6.has_more);
+        let e2 = page6.entries.get(0).unwrap();
+        assert_eq!(e2.sequence, 2);
+        assert!(e1.timestamp <= e2.timestamp);
+
+        // Test 6: Verify monotonic sequence with limit=1 pagination
+        let mut prev_timestamp = 0u64;
+        let mut prev_sequence = 0u32;
+        for offset in 0..3 {
+            let page = client.get_dispute_timeline(&invoice_id, &offset, &1u32);
+            assert_eq!(page.entries.len(), 1);
+            let entry = page.entries.get(0).unwrap();
+            assert_eq!(entry.sequence, offset);
+            
+            if offset > 0 {
+                assert!(entry.sequence > prev_sequence, "Sequence must be strictly increasing");
+                assert!(entry.timestamp >= prev_timestamp, "Timestamp must be non-decreasing");
+            }
+            
+            prev_timestamp = entry.timestamp;
+            prev_sequence = entry.sequence;
+        }
+
+        // Test 7: Verify has_more flag correctness at boundaries
+        let page7 = client.get_dispute_timeline(&invoice_id, &0u32, &1u32);
+        assert!(page7.has_more, "has_more should be true when more entries exist");
+        
+        let page8 = client.get_dispute_timeline(&invoice_id, &1u32, &1u32);
+        assert!(page8.has_more, "has_more should be true when more entries exist");
+        
+        let page9 = client.get_dispute_timeline(&invoice_id, &2u32, &1u32);
+        assert!(!page9.has_more, "has_more should be false at last entry");
+
+        // Test 8: Verify total count consistency across all pagination scenarios
+        for offset in 0..5 {
+            for limit in 0..5 {
+                let page = client.get_dispute_timeline(&invoice_id, &offset, &limit);
+                assert_eq!(page.total, 3, "Total count must always be 3 regardless of pagination");
+            }
+        }
+    }
 }

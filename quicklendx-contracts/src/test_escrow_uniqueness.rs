@@ -1,4 +1,4 @@
-﻿//! Escrow uniqueness tests: one escrow per invoice; prevent overwrite/poisoning.
+//! Escrow uniqueness tests: one escrow per invoice; prevent overwrite/poisoning.
 //!
 //! ## Security Invariant
 //! Each invoice maps to **at most one** escrow record for its entire lifetime.
@@ -590,10 +590,7 @@ fn test_failed_accept_leaves_no_escrow_and_no_state_change() {
 
 /// Asserts that there is exactly one escrow record for the given invoice_id.
 /// Panics if there are zero or more than one escrow records.
-fn assert_exactly_one_escrow_for_invoice(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-) {
+fn assert_exactly_one_escrow_for_invoice(env: &Env, invoice_id: &BytesN<32>) {
     // The storage only allows zero or one escrow per invoice_id.
     // We check that there is exactly one.
     let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id);
@@ -602,7 +599,7 @@ fn assert_exactly_one_escrow_for_invoice(
         "Expected exactly one escrow for invoice, found none"
     );
     // We could also check for more than one, but the storage map from invoice_id to escrow_id is a singleton.
-    // However, to be safe, we can check that there is no second escrow by trying to get a second escrow with a different key? 
+    // However, to be safe, we can check that there is no second escrow by trying to get a second escrow with a different key?
     // That doesn't make sense. We trust the storage design.
 }
 
@@ -650,7 +647,11 @@ fn test_double_layer_guard_both_sites_active() {
         .try_accept_bid(&invoice_id, &bid_id)
         .unwrap_err()
         .unwrap();
-    assert_eq!(err, QuickLendXError::InvalidStatus, "outer guard must reject");
+    assert_eq!(
+        err,
+        QuickLendXError::InvalidStatus,
+        "outer guard must reject"
+    );
 
     // Step 3: Attempt to create second escrow via direct call again
     // This exercises the inner guard in payments::create_escrow
@@ -665,7 +666,10 @@ fn test_double_layer_guard_both_sites_active() {
 
     // Verify only one escrow still exists
     let escrow_after = client.get_escrow_details(&invoice_id);
-    assert_eq!(escrow_after.escrow_id, escrow.escrow_id, "escrow ID must not change");
+    assert_eq!(
+        escrow_after.escrow_id, escrow.escrow_id,
+        "escrow ID must not change"
+    );
     assert_eq!(escrow_after.amount, amount, "escrow amount must not change");
 }
 

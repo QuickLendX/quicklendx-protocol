@@ -26,8 +26,8 @@ use crate::admin::AdminStorage;
 use crate::audit::AuditStorage;
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
-use crate::payments::{EscrowStorage, EscrowStatus};
-use crate::storage::InvoiceStorage;
+use crate::payments::{EscrowStatus, EscrowStorage};
+use crate::storage::{InvoiceStorage, StorageManager};
 use crate::types::InvoiceStatus;
 
 /// A single invariant check result row.
@@ -234,7 +234,11 @@ fn check_escrow_uniqueness(env: &Env) -> InvariantCheck {
     let mut passed = true;
     for id in InvoiceStorage::get_all_invoice_ids(env).iter() {
         let invoice_key = (soroban_sdk::symbol_short!("escrow"), &id);
-        if let Some(escrow_id) = env.storage().persistent().get::<_, BytesN<32>>(&invoice_key) {
+        if let Some(escrow_id) = env
+            .storage()
+            .persistent()
+            .get::<_, BytesN<32>>(&invoice_key)
+        {
             if let Some(escrow) = EscrowStorage::get_escrow(env, &escrow_id) {
                 if escrow.invoice_id != id {
                     passed = false;
@@ -264,20 +268,25 @@ fn check_settlement_accounting_identity(env: &Env) -> InvariantCheck {
     for id in InvoiceStorage::get_by_status(env, InvoiceStatus::Paid).iter() {
         if let Some(invoice) = InvoiceStorage::get_invoice(env, &id) {
             if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, &id) {
-                let (investor_return, platform_fee) = match crate::fees::FeeManager::calculate_platform_fee(
-                    env,
-                    investment.amount,
-                    invoice.total_paid,
-                ) {
-                    Ok(result) => result,
-                    Err(crate::errors::QuickLendXError::StorageKeyNotFound) => {
-                        crate::profits::calculate_profit(env, investment.amount, invoice.total_paid)
-                    }
-                    Err(_) => {
-                        passed = false;
-                        break;
-                    }
-                };
+                let (investor_return, platform_fee) =
+                    match crate::fees::FeeManager::calculate_platform_fee(
+                        env,
+                        investment.amount,
+                        invoice.total_paid,
+                    ) {
+                        Ok(result) => result,
+                        Err(crate::errors::QuickLendXError::StorageKeyNotFound) => {
+                            crate::profits::calculate_profit(
+                                env,
+                                investment.amount,
+                                invoice.total_paid,
+                            )
+                        }
+                        Err(_) => {
+                            passed = false;
+                            break;
+                        }
+                    };
 
                 let disbursement_total = match investor_return.checked_add(platform_fee) {
                     Some(val) => val,
@@ -306,6 +315,76 @@ fn check_settlement_accounting_identity(env: &Env) -> InvariantCheck {
     row(env, "settlement_accounting_identity", passed, evidence)
 }
 
+/// Settlement total invariant check: recalculate total settlement and verify
+/// that `total_settlement == total_bid_amount + total_profit`.
+///
+/// **Cost:** O(N_paid) persistent reads to inspect all Paid invoices and their corresponding investments.
+fn check_settlement_total_invariant(env: &Env) -> InvariantCheck {
+    let mut total_settlement: i128 = 0;
+    let mut total_bid_amount: i128 = 0;
+    let mut total_profit: i128 = 0;
+    let mut passed = true;
+
+    for id in InvoiceStorage::get_by_status(env, InvoiceStatus::Paid).iter() {
+        if let Some(invoice) = InvoiceStorage::get_invoice(env, &id) {
+            if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, &id) {
+                let breakdown = crate::profits::PlatformFee::calculate_breakdown(
+                    env,
+                    investment.amount,
+                    invoice.total_paid,
+                );
+
+                total_settlement = match total_settlement.checked_add(invoice.total_paid) {
+                    Some(val) => val,
+                    None => {
+                        passed = false;
+                        break;
+                    }
+                };
+
+                total_bid_amount = match total_bid_amount.checked_add(investment.amount) {
+                    Some(val) => val,
+                    None => {
+                        passed = false;
+                        break;
+                    }
+                };
+
+                total_profit = match total_profit.checked_add(breakdown.gross_profit) {
+                    Some(val) => val,
+                    None => {
+                        passed = false;
+                        break;
+                    }
+                };
+            } else {
+                passed = false;
+                break;
+            }
+        }
+    }
+
+    if passed {
+        let expected_settlement = match total_bid_amount.checked_add(total_profit) {
+            Some(val) => val,
+            None => {
+                passed = false;
+                0
+            }
+        };
+        if passed && total_settlement != expected_settlement {
+            passed = false;
+        }
+    }
+
+    let evidence = if passed {
+        "Total settlement matches total bid amount plus total profit across all Paid invoices."
+    } else {
+        "Settlement invariant violation: total settlement does not match total bid amount plus total profit."
+    };
+    row(env, "settlement_total_invariant", passed, evidence)
+}
+
 /// Run every composed invariant check and assemble the report.
 ///
 /// Read-only and independent of admin gating, so tests can exercise it directly
@@ -320,6 +399,7 @@ pub fn run_invariant_checks(env: &Env) -> InvariantReport {
     checks.push_back(check_sum_investments_le_sum_invoices(env));
     checks.push_back(check_escrow_uniqueness(env));
     checks.push_back(check_settlement_accounting_identity(env));
+    checks.push_back(check_settlement_total_invariant(env));
 
     let mut all_passed = true;
     for c in checks.iter() {
@@ -347,5 +427,8 @@ pub fn invariant_self_check(
     admin: &Address,
 ) -> Result<InvariantReport, QuickLendXError> {
     AdminStorage::require_admin_auth(env, admin)?;
-    Ok(run_invariant_checks(env))
+    // Enforce view-only context for all invariant checks
+    Ok(StorageManager::with_view_only(env, || {
+        run_invariant_checks(env)
+    }))
 }

@@ -9,6 +9,7 @@
 //! - Type safety: strong typing for status and categories
 //! - Addresses are used for identity to leverage Soroban's built-in access control
 
+use crate::DisputeResolution as OtherDisputeResolution;
 use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
 /// Invoice status enumeration representing the lifecycle of an invoice
@@ -22,6 +23,18 @@ pub enum InvoiceStatus {
     Defaulted,
     Cancelled,
     Refunded,
+}
+
+impl InvoiceStatus {
+    pub fn is_terminal(&self) -> bool {
+        matches!(
+            self,
+            InvoiceStatus::Paid
+                | InvoiceStatus::Defaulted
+                | InvoiceStatus::Cancelled
+                | InvoiceStatus::Refunded
+        )
+    }
 }
 
 /// Bid status enumeration
@@ -60,6 +73,29 @@ pub enum DisputeStatus {
     Disputed,
     UnderReview,
     Resolved,
+}
+
+/// Dispute resolution outcome enumeration
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum DisputeResolution {
+    None,
+    FavorBusiness,
+    FavorInvestor,
+    Split,
+    Dismissed,
+}
+
+impl DisputeResolution {
+    pub fn code(self) -> u32 {
+        match self {
+            Self::None => 0,
+            Self::FavorBusiness => 1,
+            Self::FavorInvestor => 2,
+            Self::Split => 3,
+            Self::Dismissed => 4
+        }
+    }
 }
 
 /// Invoice category for classification
@@ -103,6 +139,7 @@ pub struct Dispute {
     pub resolution: String,
     pub resolved_by: Address,
     pub resolved_at: u64,
+    pub resolution_outcome: DisputeResolution,
 }
 
 /// Invoice rating structure
@@ -247,6 +284,21 @@ pub struct RebuildReport {
     pub scanned: u32,
     /// Number of records repaired or rewritten by the rebuild helper.
     pub reindexed: u32,
+    /// Offset to pass on the next call.
+    pub next_offset: u32,
+}
+
+/// Report returned by paginated admin prune helpers.
+///
+/// The prune is paginated and resumable. Pass `next_offset` as the `offset`
+/// on the next call. The last page is reached when `next_offset` stops advancing.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PruneReport {
+    /// Number of invoice IDs examined in this page.
+    pub scanned: u32,
+    /// Number of invoices actually pruned (deleted).
+    pub pruned: u32,
     /// Offset to pass on the next call.
     pub next_offset: u32,
 }

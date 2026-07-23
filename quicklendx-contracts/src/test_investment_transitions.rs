@@ -293,18 +293,15 @@ fn test_transition_active_to_withdrawn() {
     // Verify initial state
     let investment = ctx.get_investment(&invoice_id);
     assert_eq!(investment.status, InvestmentStatus::Active);
+    assert!(ctx.is_in_active_index(&investment.investment_id));
 
-    // Investor withdraws (before settlement or other terminal event)
-    // Note: This depends on the contract having a withdraw_investment function
-    // For now, we document the expectation
-    let _investment_id = investment.investment_id.clone();
+    // Investor withdraws
+    ctx.client.withdraw_investment(&invoice_id, &investor);
 
-    // If withdraw is possible from Active state:
-    // ctx.client.withdraw_investment(&_investment_id);
-    // let withdrawn_investment = ctx.get_investment(&invoice_id);
-    // assert_eq!(withdrawn_investment.status, InvestmentStatus::Withdrawn);
-    // assert!(!ctx.is_in_active_index(&_investment_id));
-    // ctx.assert_no_orphans();
+    let withdrawn_investment = ctx.get_investment(&invoice_id);
+    assert_eq!(withdrawn_investment.status, InvestmentStatus::Withdrawn);
+    assert!(!ctx.is_in_active_index(&withdrawn_investment.investment_id));
+    ctx.assert_no_orphans();
 }
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -677,7 +674,11 @@ fn test_active_index_cant_contain_terminal_investments() {
             "active index must not contain terminal investments"
         );
     }
-    assert_eq!(active_ids.len(), 0, "no active investments should remain after all terminal transitions");
+    assert_eq!(
+        active_ids.len(),
+        0,
+        "no active investments should remain after all terminal transitions"
+    );
 }
 
 /// Test: Active set excludes terminal investments after invalid retry paths

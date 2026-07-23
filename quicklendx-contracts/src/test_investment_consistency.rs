@@ -165,14 +165,8 @@ fn test_bid_index_multiple_invoices_isolation() {
         BidStorage::add_bid_to_invoice(env, &invoice_1, &make_bid_id(env, 11));
         BidStorage::add_bid_to_invoice(env, &invoice_2, &make_bid_id(env, 20));
 
-        assert_eq!(
-            BidStorage::get_bids_for_invoice(env, &invoice_1).len(),
-            2
-        );
-        assert_eq!(
-            BidStorage::get_bids_for_invoice(env, &invoice_2).len(),
-            1
-        );
+        assert_eq!(BidStorage::get_bids_for_invoice(env, &invoice_1).len(), 2);
+        assert_eq!(BidStorage::get_bids_for_invoice(env, &invoice_2).len(), 1);
     });
 }
 
@@ -208,18 +202,12 @@ fn test_bid_index_expired_cleanup() {
         BidStorage::store_bid(env, &bid);
         BidStorage::add_bid_to_invoice(env, &invoice_id, &bid_id);
 
-        assert_eq!(
-            BidStorage::get_bids_for_invoice(env, &invoice_id).len(),
-            1
-        );
+        assert_eq!(BidStorage::get_bids_for_invoice(env, &invoice_id).len(), 1);
 
         let cleaned = BidStorage::refresh_expired_bids(env, &invoice_id);
         assert_eq!(cleaned, 1, "one bid should be cleaned");
 
-        assert_eq!(
-            BidStorage::get_bids_for_invoice(env, &invoice_id).len(),
-            0
-        );
+        assert_eq!(BidStorage::get_bids_for_invoice(env, &invoice_id).len(), 0);
     });
 }
 
@@ -261,10 +249,7 @@ fn test_bid_index_cleanup_keeps_terminal_bids() {
         BidStorage::store_bid(env, &accepted);
         BidStorage::add_bid_to_invoice(env, &invoice_id, &accepted_id);
 
-        assert_eq!(
-            BidStorage::get_bids_for_invoice(env, &invoice_id).len(),
-            2
-        );
+        assert_eq!(BidStorage::get_bids_for_invoice(env, &invoice_id).len(), 2);
 
         let cleaned = BidStorage::refresh_expired_bids(env, &invoice_id);
         assert_eq!(cleaned, 1, "only the placed bid should be cleaned");

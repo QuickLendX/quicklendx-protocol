@@ -18,6 +18,9 @@
  */
 
 import { createHash } from "crypto";
+import { readFileSync } from "fs";
+import { join } from "path";
+import { z } from "zod";
 
 // ── Tier definitions ──────────────────────────────────────────────────────────
 
@@ -32,6 +35,49 @@ export const FieldTier = {
 
 export type FieldTier = (typeof FieldTier)[keyof typeof FieldTier];
 
+// ── Policy Schema (Zod validation) ───────────────────────────────────────────
+
+const RedactionPolicySchema = z.object({
+  public: z.array(z.string()),
+  private: z.array(z.string()),
+  secret: z.array(z.string()),
+});
+
+type RedactionPolicy = z.infer<typeof RedactionPolicySchema>;
+
+// ── Load and validate policy from JSON ───────────────────────────────────────
+
+let loadedPolicy: RedactionPolicy;
+let fieldTierMap: Record<string, FieldTier>;
+
+function loadPolicy(): void {
+  const policyPath = join(__dirname, "redaction-policy.json");
+  const policyContent = readFileSync(policyPath, "utf-8");
+  const parsedPolicy = JSON.parse(policyContent);
+  loadedPolicy = RedactionPolicySchema.parse(parsedPolicy);
+  
+  // Build the field tier map
+  fieldTierMap = {};
+  for (const field of loadedPolicy.public) {
+    fieldTierMap[field] = FieldTier.PUBLIC;
+  }
+  for (const field of loadedPolicy.private) {
+    fieldTierMap[field] = FieldTier.PRIVATE;
+  }
+  for (const field of loadedPolicy.secret) {
+    fieldTierMap[field] = FieldTier.SECRET;
+  }
+}
+
+// Initialize policy on module load
+loadPolicy();
+
+// ── Expose policy for other modules ───────────────────────────────────────────
+
+export function getPolicyFields(tier: FieldTier): string[] {
+  return loadedPolicy[tier];
+}
+
 // ── Field classification registry ─────────────────────────────────────────────
 
 /**
@@ -39,81 +85,7 @@ export type FieldTier = (typeof FieldTier)[keyof typeof FieldTier];
  *
  * Fields not listed here default to PRIVATE (deny-by-default).
  */
-const FIELD_POLICY: Record<string, FieldTier> = {
-  // ── Public fields (safe to log verbatim) ────────────────────────────────
-  id:                      FieldTier.PUBLIC,
-  invoice_id:              FieldTier.PUBLIC,
-  bid_id:                  FieldTier.PUBLIC,
-  settlement_id:           FieldTier.PUBLIC,
-  dispute_id:              FieldTier.PUBLIC,
-  status:                  FieldTier.PUBLIC,
-  timestamp:               FieldTier.PUBLIC,
-  created_at:              FieldTier.PUBLIC,
-  updated_at:              FieldTier.PUBLIC,
-  method:                  FieldTier.PUBLIC,
-  path:                    FieldTier.PUBLIC,
-  url:                     FieldTier.PUBLIC,
-  statusCode:              FieldTier.PUBLIC,
-  duration:                FieldTier.PUBLIC,
-  requestId:               FieldTier.PUBLIC,
-  version:                 FieldTier.PUBLIC,
-  category:                FieldTier.PUBLIC,
-  currency:                FieldTier.PUBLIC,
-  due_date:                FieldTier.PUBLIC,
 
-  // ── Private fields (hashed before logging) ──────────────────────────────
-  business:                FieldTier.PRIVATE,
-  investor:                FieldTier.PRIVATE,
-  payer:                   FieldTier.PRIVATE,
-  recipient:               FieldTier.PRIVATE,
-  actor:                   FieldTier.PRIVATE,
-  user_id:                 FieldTier.PRIVATE,
-  userId:                  FieldTier.PRIVATE,
-  initiator:               FieldTier.PRIVATE,
-  amount:                  FieldTier.PRIVATE,
-  bid_amount:              FieldTier.PRIVATE,
-  expected_return:         FieldTier.PRIVATE,
-  ipAddress:               FieldTier.PRIVATE,
-  ip:                      FieldTier.PRIVATE,
-  userAgent:               FieldTier.PRIVATE,
-  user_agent:              FieldTier.PRIVATE,
-  description:             FieldTier.PRIVATE,
-  reason:                  FieldTier.PRIVATE,
-  tags:                    FieldTier.PRIVATE,
-  notes:                   FieldTier.PRIVATE,
-
-  // ── Secret fields (must NEVER appear in logs) ───────────────────────────
-  // Wallet / authentication
-  signature:               FieldTier.SECRET,
-  wallet_signature:        FieldTier.SECRET,
-  private_key:             FieldTier.SECRET,
-  secret:                  FieldTier.SECRET,
-  token:                   FieldTier.SECRET,
-  access_token:            FieldTier.SECRET,
-  refresh_token:           FieldTier.SECRET,
-  api_key:                 FieldTier.SECRET,
-  authorization:           FieldTier.SECRET,
-  password:                FieldTier.SECRET,
-  // KYC / PII
-  tax_id:                  FieldTier.SECRET,
-  ssn:                     FieldTier.SECRET,
-  national_id:             FieldTier.SECRET,
-  passport_number:         FieldTier.SECRET,
-  date_of_birth:           FieldTier.SECRET,
-  bank_account:            FieldTier.SECRET,
-  kyc_document:            FieldTier.SECRET,
-  kyc_data:                FieldTier.SECRET,
-  customer_name:           FieldTier.SECRET,
-  customer_address:        FieldTier.SECRET,
-  phone_number:            FieldTier.SECRET,
-  email:                   FieldTier.SECRET,
-  // Crypto secrets
-  mnemonic:                FieldTier.SECRET,
-  seed_phrase:             FieldTier.SECRET,
-  // Webhook
-  webhook_secret:          FieldTier.SECRET,
-  signing_secret:          FieldTier.SECRET,
-} as const;
 
 // ── Classification helpers ────────────────────────────────────────────────────
 
@@ -122,7 +94,7 @@ const FIELD_POLICY: Record<string, FieldTier> = {
  * Unknown fields default to PRIVATE (deny-by-default).
  */
 export function classifyField(name: string): FieldTier {
-  return (FIELD_POLICY[name] as FieldTier | undefined) ?? FieldTier.PRIVATE;
+  return (fieldTierMap[name] as FieldTier | undefined) ?? FieldTier.PRIVATE;
 }
 
 /** True when a field must never appear in any log output. */

@@ -158,7 +158,12 @@ pub fn process_partial_payment(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     let payer = invoice.business.clone();
 
-    crate::qlx_log!(env, "settlement", "Recording partial payment: amount={}", payment_amount);
+    crate::qlx_log!(
+        env,
+        "settlement",
+        "Recording partial payment: amount={}",
+        payment_amount
+    );
 
     let progress = record_payment(
         env,
@@ -177,6 +182,17 @@ pub fn process_partial_payment(
         progress.progress_percent,
         transaction_id,
     );
+
+    if let Some(updated_invoice) = InvoiceStorage::get_invoice(env, invoice_id) {
+        // Lifecycle trigger: emits `NotificationType::PaymentReceived` for each
+        // applied partial payment. Notification failures must not roll back funds.
+        let applied = get_last_applied_amount(env, invoice_id).unwrap_or(payment_amount);
+        let _ = crate::notifications::NotificationSystem::notify_payment_received(
+            env,
+            &updated_invoice,
+            applied,
+        );
+    }
 
     if progress.total_paid >= progress.total_due {
         settle_invoice_internal(env, invoice_id)?;
@@ -230,6 +246,10 @@ pub fn record_payment(
         return Err(QuickLendXError::InvalidAmount);
     }
 
+    if crate::storage::InvoiceStorage::is_frozen(env, invoice_id) {
+        return Err(QuickLendXError::InvoiceFrozen);
+    }
+
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
@@ -240,7 +260,7 @@ pub fn record_payment(
     payer.require_auth();
 
     // Replay protection: reject duplicate nonces.
-    if payment_nonce.len() > 0 {
+    if !payment_nonce.is_empty() {
         let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
         let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
         if seen {
@@ -302,7 +322,7 @@ pub fn record_payment(
         &next_count,
     );
 
-    if payment_nonce.len() > 0 {
+    if !payment_nonce.is_empty() {
         env.storage().persistent().set(
             &SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce),
             &true,
@@ -358,11 +378,20 @@ pub fn settle_invoice(
         return Err(QuickLendXError::InvalidAmount);
     }
 
-    crate::qlx_log!(env, "settlement", "Full settlement initiated: payment={}", payment_amount);
+    crate::qlx_log!(
+        env,
+        "settlement",
+        "Full settlement initiated: payment={}",
+        payment_amount
+    );
 
     // Early double-settle guard: reject if already finalized.
     if is_finalized(env, invoice_id) {
         return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if crate::storage::InvoiceStorage::is_frozen(env, invoice_id) {
+        return Err(QuickLendXError::InvoiceFrozen);
     }
 
     let invoice =
@@ -387,7 +416,7 @@ pub fn settle_invoice(
         .ok_or(QuickLendXError::InvalidAmount)?;
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        .unwrap();
 
     if projected_total < invoice.amount || projected_total < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -514,7 +543,7 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     ensure_payable_status(&invoice)?;
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        .unwrap();
 
     if invoice.total_paid < invoice.amount || invoice.total_paid < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -577,14 +606,14 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     // Mark finalized before status transition to prevent re-entry.
     mark_finalized(env, invoice_id);
 
-    let previous_status = invoice.status.clone();
+    let previous_status = invoice.status;
     let paid_at = env.ledger().timestamp();
     invoice.mark_as_paid(env, business_address.clone(), env.ledger().timestamp());
     InvoiceStorage::update_invoice(env, &invoice);
 
     if previous_status != invoice.status {
-        InvoiceStorage::remove_from_status_invoices(env, previous_status.clone(), invoice_id);
-        InvoiceStorage::add_to_status_invoices(env, invoice.status.clone(), invoice_id);
+        InvoiceStorage::remove_from_status_invoices(env, previous_status, invoice_id);
+        InvoiceStorage::add_to_status_invoices(env, invoice.status, invoice_id);
     }
 
     let mut updated_investment = investment;
@@ -601,6 +630,15 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
 
     emit_invoice_settled(env, &invoice, investor_return, platform_fee);
     emit_invoice_settled_final(env, invoice_id, invoice.total_paid, paid_at);
+
+    // Lifecycle trigger: emits `NotificationType::InvoiceStatusChanged` when an
+    // invoice reaches the terminal `Paid` state during final settlement.
+    let _ = crate::notifications::NotificationSystem::notify_invoice_status_changed(
+        env,
+        &invoice,
+        &previous_status,
+        &invoice.status,
+    );
 
     Ok(())
 }
@@ -718,7 +756,7 @@ fn emit_payment_recorded(
             payer.clone(),
             applied_amount,
             total_paid,
-            status.clone(),
+            *status,
         ),
     );
 }

@@ -2,7 +2,7 @@
 
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
-use crate::types::{RebuildReport, InvoiceCategory};
+use crate::types::{InvoiceCategory, RebuildReport};
 use crate::{QuickLendXContract, QuickLendXContractClient};
 
 fn setup() -> (Env, Address, QuickLendXContractClient<'static>, Address) {
@@ -44,7 +44,7 @@ fn test_rebuild_empty_range() {
 #[test]
 fn test_rebuild_pagination() {
     let (env, _cid, client, admin) = setup();
-    
+
     for _ in 0..3 {
         make_invoice(&env, &client);
     }
@@ -61,7 +61,7 @@ fn test_rebuild_pagination() {
     assert_eq!(p3.scanned, 0);
 }
 
-#[test] 
+#[test]
 fn test_rebuild_single_invoice() {
     let (env, _cid, client, admin) = setup();
     let _invoice_id = make_invoice(&env, &client);

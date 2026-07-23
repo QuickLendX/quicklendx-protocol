@@ -1,6 +1,8 @@
 # Rust's output directory
 target
-test_snapshots
+
+*.rlib
+*.rmeta
 
 # Local settings
 .soroban

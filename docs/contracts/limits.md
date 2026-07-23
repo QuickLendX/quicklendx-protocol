@@ -81,49 +81,30 @@ store_invoice / upload_invoice
 - The grace-period/horizon constraint prevents impossible configurations.
 - String limits prevent storage DoS from oversized payloads.
 
-## Admin API for Setting Limits
+## Operational Limits (single-read getter)
 
-### `set_protocol_limits_full` (preferred)
+`get_operational_limits()` returns an `OperationalLimits` struct combining the
+three most commonly-probed operational ceilings in one call, instead of
+requiring a separate call (or trial and error) per value:
 
-Sets **all six** configurable protocol limits in a single transaction.  This is
-the recommended entrypoint for operators and admin dashboards that need to
-configure `min_bid_amount` or `min_bid_bps`.
+| Field | Value | Source |
+|-------|-------|--------|
+| `max_batch` | 100 | `defaults::max_overdue_scan_batch_limit()` — cap on funded-invoice batch size per overdue-scan call |
+| `max_limit` | 100 | `MAX_QUERY_LIMIT` — cap on items returned per paginated query, see [queries.md](./queries.md) |
+| `max_fee` | 1000 | `init::MAX_FEE_BPS` — cap on protocol fees in basis points (10%) accepted by `set_protocol_config`/`set_fee_config` |
 
+This is a pure read: it requires no authorization and stores no new state.
+Defined in `src/operational_limits.rs`.
+
+```bash
+soroban contract invoke \
+  --id <CONTRACT_ID> \
+  --source <READONLY_ACCOUNT> \
+  --network <NETWORK> \
+  -- get_operational_limits
 ```
-set_protocol_limits_full(
-    admin: Address,
-    min_invoice_amount: i128,
-    min_bid_amount: i128,          // ← was previously hardcoded
-    min_bid_bps: u32,              // ← was previously hardcoded
-    max_due_date_days: u64,
-    grace_period_seconds: u64,
-    max_invoices_per_business: u32,
-) -> Result<(), QuickLendXError>
-```
 
-### Narrow helpers (backwards-compatible)
-
-The older, narrower helpers (`set_protocol_limits`, `update_protocol_limits`,
-`update_limits_max_invoices`, `initialize_protocol_limits`) **preserve** the
-currently-stored `min_bid_amount`, `min_bid_bps` (and where applicable
-`max_invoices_per_business`) rather than overwriting them with hardcoded
-defaults.  Existing callers are unaffected.
-
-### Bid-limit config
-
-| Entrypoint | Description |
-|-----------|-------------|
-| `get_bid_limit_config()` | Returns [`BidLimitConfig`] snapshot: active limit, compile-time default, `is_disabled`, `is_custom`. |
-| `set_max_active_bids_per_investor(limit)` | Set per-investor concurrent-bid cap. Pass `0` to disable. |
-| `reset_max_active_bids_per_investor()` | Reset to compile-time default (20) and clear `is_custom` flag. |
-| `get_bid_ttl_config()` | Returns [`BidTtlConfig`] snapshot including `is_custom` flag. |
-| `set_bid_ttl_days(days)` | Set bid TTL in days (1–30). |
-| `reset_bid_ttl_to_default()` | Reset to compile-time default (7 days). |
-
-All admin-mutating entrypoints require the caller to be the current admin
-(`AdminStorage::require_admin` is enforced inside the implementation).
-
-## Test Coverage
+## Test Coverage (Issue #826)
 
 `src/test_protocol_limits_boundary.rs` — 35 tests across 10 groups:
 

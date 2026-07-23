@@ -21,8 +21,8 @@ use core::convert::TryInto;
 use soroban_sdk::{symbol_short, BytesN, Env, Vec};
 
 use crate::bid::BidStorage;
-use crate::invoice::Invoice;
 use crate::investment::InvestmentStorage;
+use crate::invoice::Invoice;
 use crate::payments::EscrowStorage;
 use crate::storage::StorageKeys;
 
@@ -65,12 +65,22 @@ fn fix_ledger(env: &Env) {
     env.ledger().set_sequence_number(FIXED_SEQUENCE);
 }
 
-fn set_counters(env: &Env, invoice_count: u64, bid_count: u64, escrow_count: u64, investment_count: u64) {
+fn set_counters(
+    env: &Env,
+    invoice_count: u64,
+    bid_count: u64,
+    escrow_count: u64,
+    investment_count: u64,
+) {
     env.storage()
         .persistent()
         .set(&StorageKeys::invoice_count(), &invoice_count);
-    env.storage().instance().set(&symbol_short!("bid_cnt"), &bid_count);
-    env.storage().instance().set(&symbol_short!("esc_cnt"), &escrow_count);
+    env.storage()
+        .instance()
+        .set(&symbol_short!("bid_cnt"), &bid_count);
+    env.storage()
+        .instance()
+        .set(&symbol_short!("esc_cnt"), &escrow_count);
     env.storage()
         .instance()
         .set(&symbol_short!("invst_cnt"), &investment_count);
@@ -101,23 +111,41 @@ fn test_cross_domain_id_uniqueness_and_monotonicity() {
 
         let escrow_id = EscrowStorage::generate_unique_escrow_id(&env);
         assert_eq!(prefix(&escrow_id), [0xE5, 0xC0]);
-        assert_eq!(dom_counter(&escrow_id), (expected_invoice_counter + 1) as u64);
+        assert_eq!(
+            dom_counter(&escrow_id),
+            (expected_invoice_counter + 1) as u64
+        );
 
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         assert_eq!(prefix(&investment_id), [0x1A, 0x4E]);
-        assert_eq!(dom_counter(&investment_id), (expected_invoice_counter + 1) as u64);
+        assert_eq!(
+            dom_counter(&investment_id),
+            (expected_invoice_counter + 1) as u64
+        );
 
         if let Some(last) = last_invoice_counter {
-            assert!(invoice_counter(&invoice_id) > last, "invoice counter must advance monotonically");
+            assert!(
+                invoice_counter(&invoice_id) > last,
+                "invoice counter must advance monotonically"
+            );
         }
         if let Some(last) = last_bid_counter {
-            assert!(dom_counter(&bid_id) > last, "bid counter must advance monotonically");
+            assert!(
+                dom_counter(&bid_id) > last,
+                "bid counter must advance monotonically"
+            );
         }
         if let Some(last) = last_escrow_counter {
-            assert!(dom_counter(&escrow_id) > last, "escrow counter must advance monotonically");
+            assert!(
+                dom_counter(&escrow_id) > last,
+                "escrow counter must advance monotonically"
+            );
         }
         if let Some(last) = last_investment_counter {
-            assert!(dom_counter(&investment_id) > last, "investment counter must advance monotonically");
+            assert!(
+                dom_counter(&investment_id) > last,
+                "investment counter must advance monotonically"
+            );
         }
 
         for id in [&invoice_id, &bid_id, &escrow_id, &investment_id] {
@@ -135,7 +163,11 @@ fn test_cross_domain_id_uniqueness_and_monotonicity() {
         last_investment_counter = Some(dom_counter(&investment_id));
     }
 
-    assert_eq!(seen.len(), SAMPLE_COUNT.saturating_mul(4), "must produce all unique IDs across domains");
+    assert_eq!(
+        seen.len(),
+        SAMPLE_COUNT.saturating_mul(4),
+        "must produce all unique IDs across domains"
+    );
 }
 
 #[test]

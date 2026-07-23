@@ -1,10 +1,8 @@
 use crate::admin::AdminStorage;
-use crate::dispute_timeline::{
-    clear_under_review_timestamp, set_under_review_timestamp,
-};
+use crate::dispute_timeline::{clear_under_review_timestamp, set_under_review_timestamp};
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
-use crate::types::{Dispute, DisputeStatus};
+use crate::types::{Dispute, DisputeResolution, DisputeStatus};
 use crate::verification::{
     validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
     validate_dispute_resolution,
@@ -65,7 +63,6 @@ use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 /// ### Documentation
 /// See `docs/settlement-dispute-interaction.md` for complete state machine diagrams
 /// and resolution outcome specifications.
-
 fn dispute_index_key() -> soroban_sdk::Symbol {
     symbol_short!("dispute")
 }
@@ -171,10 +168,14 @@ pub fn create_dispute(
         resolution: String::from_str(env, ""),
         resolved_by: creator.clone(), // Placeholder — overwritten on resolution
         resolved_at: 0,
+        resolution_outcome: DisputeResolution::None,
     };
 
     InvoiceStorage::update_invoice(env, &invoice);
     add_to_dispute_index(env, invoice_id);
+
+    // Lifecycle trigger: emits dispute-opened notifications to business and investor.
+    let _ = crate::notifications::NotificationSystem::notify_dispute_opened(env, &invoice);
 
     Ok(())
 }
@@ -297,7 +298,73 @@ pub fn resolve_dispute(
     invoice.dispute.resolution = resolution.clone();
     invoice.dispute.resolved_by = admin.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
+    invoice.dispute.resolution_outcome = DisputeResolution::None;
     InvoiceStorage::update_invoice(env, &invoice);
+
+    // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
+    let _ = crate::notifications::NotificationSystem::notify_dispute_resolved(env, &invoice);
+
+    Ok(())
+}
+
+/// Finalize a dispute with a structured resolution outcome.
+///
+/// This is the preferred terminal step of the dispute lifecycle, providing
+/// programmatic distinguishability between outcomes.
+///
+/// # Preconditions
+/// - `admin` must be the registered platform admin.
+/// - The invoice identified by `invoice_id` must exist.
+/// - `invoice.dispute_status` must be exactly [`DisputeStatus::UnderReview`].
+/// - `note` must be 1–`MAX_DISPUTE_RESOLUTION_LENGTH` (2 000) chars.
+///
+/// # Postconditions
+/// - `invoice.dispute_status` is set to [`DisputeStatus::Resolved`].
+/// - `invoice.dispute.resolution` stores `note`.
+/// - `invoice.dispute.resolution_outcome` stores the structured outcome.
+/// - `invoice.dispute.resolved_by` stores `admin`.
+/// - `invoice.dispute.resolved_at` stores the current ledger timestamp.
+///
+/// # Authorization
+/// Caller: platform admin only.
+///
+/// # Errors
+/// | Error | Condition |
+/// |---|---|
+/// | [`QuickLendXError::Unauthorized`] / [`QuickLendXError::NotAdmin`] | Caller is not the admin |
+/// | [`QuickLendXError::InvoiceNotFound`] | `invoice_id` does not exist |
+/// | [`QuickLendXError::DisputeNotFound`] | No dispute exists |
+/// | [`QuickLendXError::DisputeNotUnderReview`] | Status is not UnderReview |
+/// | [`QuickLendXError::InvalidDisputeReason`] | `note` empty or > 2 000 chars |
+pub fn resolve_dispute_structured(
+    env: &Env,
+    admin: &Address,
+    invoice_id: &BytesN<32>,
+    outcome: DisputeResolution,
+    note: &String,
+) -> Result<(), QuickLendXError> {
+    AdminStorage::require_admin(env, admin)?;
+
+    validate_dispute_resolution(note)?;
+
+    let mut invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    // Guard: only UnderReview disputes may be resolved.
+    if invoice.dispute_status != DisputeStatus::UnderReview {
+        return Err(QuickLendXError::DisputeNotUnderReview);
+    }
+
+    invoice.dispute_status = DisputeStatus::Resolved;
+    invoice.dispute.resolution = note.clone();
+    invoice.dispute.resolution_outcome = outcome;
+    invoice.dispute.resolved_by = admin.clone();
+    invoice.dispute.resolved_at = env.ledger().timestamp();
+    InvoiceStorage::update_invoice(env, &invoice);
+
+    // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
+    let _ = crate::notifications::NotificationSystem::notify_dispute_resolved(env, &invoice);
+
     Ok(())
 }
 

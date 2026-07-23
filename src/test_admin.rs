@@ -8,9 +8,7 @@ mod test_admin {
         vec, Address, Env, IntoVal,
     };
 
-    use crate::{
-        AdminContract, AdminContractClient, ContractError, FeeConfig, ProtocolConfig,
-    };
+    use crate::{AdminContract, AdminContractClient, ContractError, FeeConfig, ProtocolConfig};
 
     // -----------------------------------------------------------------------
     // Helpers

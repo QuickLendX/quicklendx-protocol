@@ -102,6 +102,20 @@ fn test_revenue_accumulation_overflow() {
     assert_eq!(analytics.total_fees, large_val * 2);
 }
 
+/// Fee collection map overflow returns a clean arithmetic error instead of a generic configuration failure.
+#[test]
+fn test_fee_collection_map_overflow_errors() {
+    let (env, client, _admin) = setup_test();
+    let user = Address::generate(&env);
+
+    let mut fees = Map::new(&env);
+    fees.set(FeeType::Platform, i128::MAX);
+    fees.set(FeeType::Processing, 1);
+
+    let res = client.collect_transaction_fees(&user, &fees, &1);
+    assert_eq!(res.unwrap_err(), QuickLendXError::ArithmeticOverflow);
+}
+
 /// Revenue total_collected saturates at i128::MAX when adding would overflow.
 #[test]
 fn test_revenue_accumulation_saturates_at_max() {

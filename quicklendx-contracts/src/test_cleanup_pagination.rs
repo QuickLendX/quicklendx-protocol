@@ -386,20 +386,17 @@ fn test_cleanup_pagination_idempotency_across_boundaries() {
     env.ledger().set_timestamp(2000);
 
     // First pass: clean all bids
-    let (cleaned1, remaining1) =
-        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 10);
+    let (cleaned1, remaining1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 10);
     assert_eq!(cleaned1, 10);
     assert_eq!(remaining1, 0);
 
     // Second pass: should return 0 (idempotent)
-    let (cleaned2, remaining2) =
-        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 10);
+    let (cleaned2, remaining2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 10);
     assert_eq!(cleaned2, 0, "Second pass should be idempotent");
     assert_eq!(remaining2, 0);
 
     // Third pass with different offset: should still return 0
-    let (cleaned3, remaining3) =
-        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 5, 5);
+    let (cleaned3, remaining3) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 5, 5);
     assert_eq!(cleaned3, 0, "Different offset should still be idempotent");
     assert_eq!(remaining3, 0);
 }
@@ -426,8 +423,7 @@ fn test_cleanup_pagination_mixed_active_and_expired() {
     env.ledger().set_timestamp(1_005);
 
     // Process first 5 bids (should clean 5)
-    let (cleaned1, remaining1) =
-        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5);
+    let (cleaned1, remaining1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5);
     assert_eq!(cleaned1, 5, "Should clean first 5 expired bids");
     assert_eq!(remaining1, 5, "5 active bids should remain");
 
@@ -435,8 +431,7 @@ fn test_cleanup_pagination_mixed_active_and_expired() {
     env.ledger().set_timestamp(2000);
 
     // Process remaining 5 bids (should clean 5)
-    let (cleaned2, remaining2) =
-        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 5, 5);
+    let (cleaned2, remaining2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 5, 5);
     assert_eq!(cleaned2, 5, "Should clean remaining 5 expired bids");
     assert_eq!(remaining2, 0, "No bids should remain");
 }
@@ -503,9 +498,11 @@ fn test_cleanup_pagination_preserves_terminal_bids() {
     env.ledger().set_timestamp(2000);
 
     // Cleanup should not remove accepted bid
-    let (cleaned, remaining) =
-        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5);
-    assert_eq!(cleaned, 4, "Should clean 4 expired bids, not the accepted one");
+    let (cleaned, remaining) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5);
+    assert_eq!(
+        cleaned, 4,
+        "Should clean 4 expired bids, not the accepted one"
+    );
     assert_eq!(remaining, 1, "Accepted bid should remain");
 
     // Verify accepted bid is still there

@@ -25,9 +25,9 @@ export enum WebhookSecretStatus {
 export interface WebhookSubscriberSecret {
   /** Unique subscriber identifier (opaque string, e.g. UUID). */
   subscriber_id: string;
-  /** The currently active signing secret (hex). */
+  /** The currently active signing secret (hex or PEM private key). */
   primary_secret: string;
-  /** A newly generated secret awaiting promotion (hex), or null. */
+  /** A newly generated secret awaiting promotion (hex or PEM private key), or null. */
   pending_secret: string | null;
   /** ISO-8601 timestamp when the pending secret was created. */
   pending_created_at: string | null;
@@ -38,6 +38,8 @@ export interface WebhookSubscriberSecret {
   grace_period_seconds: number;
   /** Current rotation status. */
   status: WebhookSecretStatus;
+  /** Preferred algorithm ("hmac-sha256" | "ed25519") */
+  algorithm: "hmac-sha256" | "ed25519";
   /** ISO-8601 timestamp of record creation. */
   created_at: string;
   /** ISO-8601 timestamp of last update. */
@@ -75,6 +77,10 @@ export const RegisterSubscriberRequestSchema = z.object({
     .max(86_400)
     .optional()
     .default(3600),
+  algorithm: z
+    .enum(["hmac-sha256", "ed25519"])
+    .optional()
+    .default("hmac-sha256"),
 });
 
 export type RegisterSubscriberRequest = z.infer<
@@ -92,6 +98,7 @@ export interface SubscriberSecretPublicView {
   has_pending_secret: boolean;
   pending_created_at: string | null;
   grace_period_seconds: number;
+  algorithm: "hmac-sha256" | "ed25519";
   created_at: string;
   updated_at: string;
 }

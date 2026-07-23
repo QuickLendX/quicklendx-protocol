@@ -39,13 +39,14 @@ export class ApiKeyService {
     }
 
     // Generate key
-    const { key, prefix, hash } = generateApiKey();
+    const { key, prefix, hash, signingSecret, signingSecretHash } = generateApiKey();
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
     const dbKey: DbApiKey = {
       id,
       key_hash: hash,
+      signing_secret_hash: signingSecretHash,
       prefix,
       name: input.name,
       scopes: JSON.stringify(input.scopes),
@@ -67,6 +68,7 @@ export class ApiKeyService {
     return {
       ...this.dbKeyToApiKey(dbKey),
       plaintext_key: key,
+      plaintext_signing_secret: signingSecret,
     };
   }
 
@@ -155,7 +157,7 @@ export class ApiKeyService {
     }
 
     // Generate new key
-    const { key, prefix, hash } = generateApiKey();
+    const { key, prefix, hash, signingSecret, signingSecretHash } = generateApiKey();
     const newId = crypto.randomUUID();
     const now = new Date().toISOString();
 
@@ -164,6 +166,7 @@ export class ApiKeyService {
     const newDbKey: DbApiKey = {
       id: newId,
       key_hash: hash,
+      signing_secret_hash: signingSecretHash,
       prefix,
       name: oldKey.name,
       scopes: oldKey.scopes,
@@ -188,6 +191,7 @@ export class ApiKeyService {
     return {
       ...this.dbKeyToApiKey(newDbKey),
       plaintext_key: key,
+      plaintext_signing_secret: signingSecret,
     };
   }
 
@@ -222,11 +226,15 @@ export class ApiKeyService {
     const newPlaintextKey = oldKey.prefix + randomBytes;
     const newHash = hashApiKey(newPlaintextKey);
 
+    const newSigningSecret = crypto.randomBytes(32).toString('hex');
+    const newSigningSecretHash = newSigningSecret; // Must store plaintext to verify HMAC
+
     const prevSecretExpiresAt = new Date(Date.now() + graceWindowHours * 60 * 60 * 1000).toISOString();
 
     db.updateApiKey(keyId, {
       key_hash: newHash,
-      prev_signing_secret_hash: oldKey.key_hash,
+      signing_secret_hash: newSigningSecretHash,
+      prev_signing_secret_hash: oldKey.signing_secret_hash || oldKey.key_hash,
       prev_secret_expires_at: prevSecretExpiresAt,
     });
 
@@ -239,6 +247,7 @@ export class ApiKeyService {
     return {
       ...this.dbKeyToApiKey(updatedDbKey),
       plaintext_key: newPlaintextKey,
+      plaintext_signing_secret: newSigningSecret,
     };
   }
 
@@ -284,6 +293,7 @@ export class ApiKeyService {
     return {
       id: dbKey.id,
       key_hash: dbKey.key_hash,
+      signing_secret_hash: dbKey.signing_secret_hash ?? null,
       prefix: dbKey.prefix,
       name: dbKey.name,
       scopes: JSON.parse(dbKey.scopes),

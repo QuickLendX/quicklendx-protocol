@@ -25,6 +25,8 @@ The worker reads its policy from `src/config.ts`.
 | Batch size | `RETENTION_BATCH_SIZE` | 500 rows per store per run | Limits blast radius and run latency. |
 | Schedule | `RETENTION_INTERVAL_MS` | 24 hours | Default daily enforcement cadence. |
 | Archive dir | `RETENTION_ARCHIVE_DIR` | `.data/retention-archives` | Stores purge batches before deletion. |
+| Cold storage dir | `ARCHIVE_DIR` | `.data/archives` | Gzip-archive storage directory for raw events. |
+| Archival enabled | `ARCHIVE_ENABLED` | `true` | Enables or disables cold storage archiving. |
 
 ## Safety rules
 
@@ -52,14 +54,37 @@ Every successful live run appends a `RETENTION_RUN` entry through
 If the audit summary cannot be written, the worker rolls back the purge so that
 every live deletion remains auditable.
 
+## Cold Storage Archival & Recovery
+
+For `raw_events`, outright deletion is avoided by using a cold storage archival tier:
+- **Archival Tier**: Expired events are grouped by year-month (based on `indexedAt` timestamp) and appended using gzip streaming to `<ARCHIVE_DIR>/raw-events-YYYY-MM.jsonl.gz`.
+- **Integrity**: A SHA-256 checksum is calculated for the archive file and written to `<ARCHIVE_DIR>/raw-events-YYYY-MM.jsonl.gz.sha256`. Checksums are verified before any recovery occurs.
+- **Dry-run**: Dry-runs simulate planning but do not write archives or delete live events.
+
+### Restoring Archived Events
+
+You can restore a date range of archived raw events back into the live event store using the recovery CLI:
+
+```bash
+# From backend directory
+npx ts-node scripts/restore-archived-events.ts --start 2026-04-01 --end 2026-04-30
+```
+
+The recovery process:
+- Locates gzip files matching the range.
+- Verifies their checksums.
+- Decompresses and parses event lines.
+- Enforces event-level idempotency by skipping events already present in the live store.
+
 ## Running tests
 
 ```bash
 cd backend
 npm test -- retention.test.ts
+npm test -- archival-restore.test.ts
 ```
 
-The retention test suite covers:
+The retention and archival test suites cover:
 
 - nothing to purge
 - TTL boundary timestamps
@@ -67,3 +92,6 @@ The retention test suite covers:
 - archive-then-delete failure rollback
 - large batch truncation
 - dry-run behavior
+- gzip-streaming output format & checksum integrity
+- recovery date filtering and idempotency
+
