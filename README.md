@@ -36,8 +36,9 @@ npm run dev
 
 ## Documentation
 
-- `docs/`: Project-wide design, implementation, and audit documentation.
-- `quicklendx-contracts/README.md`: Smart contract-specific documentation.
+- [`docs/README.md`](docs/README.md): Full documentation index — **start here**.
+  - [`docs/contracts/contributor-guide.md`](docs/contracts/contributor-guide.md): Contract contributor guide (module layout, lifecycle, error/event stability contracts, test patterns, WASM budget).
+- `quicklendx-contracts/README.md`: Smart contract build, deploy, and API reference.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
 
