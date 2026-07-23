@@ -979,3 +979,109 @@ fn test_cancel_bid_after_expiry_is_noop() {
     assert_eq!(client.get_bid(&bid_id).unwrap().status, crate::bid::BidStatus::Expired,
         "Expired status must be immutable");
 }
+
+#[test]
+fn partial_cancel_releases_paid_portion_and_refunds_remaining_balance_successfully() {
+    let (env, client, admin) = setup_env();
+    let contract_id = client.address.clone();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, 10_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+
+    let amount = 1_000i128;
+    let partial_payment = 300i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Partial refund test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let business_before_cancel = token_client.balance(&business);
+    let investor_before_cancel = token_client.balance(&investor);
+    let contract_before_cancel = token_client.balance(&contract_id);
+
+    client.process_partial_payment(
+        &invoice_id,
+        &partial_payment,
+        &String::from_str(&env, "partial-1"),
+    );
+
+    let invoice_before = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_before.total_paid, partial_payment);
+    assert_eq!(invoice_before.status, InvoiceStatus::Funded);
+
+    client.refund_escrow_funds(&invoice_id, &business);
+
+    let invoice_after = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_after.status, InvoiceStatus::Refunded);
+    assert_eq!(invoice_after.total_paid, partial_payment);
+
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.status, EscrowStatus::Refunded);
+
+    assert_eq!(
+        token_client.balance(&business) - business_before_cancel,
+        partial_payment,
+    );
+    assert_eq!(
+        token_client.balance(&investor) - investor_before_cancel,
+        amount - partial_payment,
+    );
+    assert_eq!(
+        contract_before_cancel - token_client.balance(&contract_id),
+        amount,
+    );
+}
+
+#[test]
+fn partial_cancel_fails_when_escrow_has_already_been_released() {
+    let (env, client, admin) = setup_env();
+    let contract_id = client.address.clone();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, 10_000);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+    let token_client = token::Client::new(&env, &currency);
+
+    let amount = 1_000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Released escrow partial cancel test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    client.accept_bid(&invoice_id, &bid_id);
+    client.process_partial_payment(&invoice_id, &250, &String::from_str(&env, "partial-2"));
+    client.release_escrow_funds(&invoice_id);
+
+    let business_before = token_client.balance(&business);
+    let investor_before = token_client.balance(&investor);
+    let contract_before = token_client.balance(&contract_id);
+
+    let result = client.try_refund_escrow_funds(&invoice_id, &business);
+    assert!(result.is_err(), "refund must fail after escrow release");
+
+    assert_eq!(token_client.balance(&business), business_before);
+    assert_eq!(token_client.balance(&investor), investor_before);
+    assert_eq!(token_client.balance(&contract_id), contract_before);
+
+    let invoice_after = client.get_invoice(&invoice_id);
+    assert_eq!(invoice_after.status, InvoiceStatus::Funded);
+    assert_eq!(invoice_after.total_paid, 250);
+}

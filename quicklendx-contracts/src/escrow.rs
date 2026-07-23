@@ -6,10 +6,10 @@
 use crate::admin::AdminStorage;
 use crate::bid::{BidStatus, BidStorage};
 use crate::errors::QuickLendXError;
-use crate::events::{emit_escrow_refunded, emit_invoice_funded};
+use crate::events::{emit_escrow_refunded, emit_escrow_released, emit_invoice_funded};
 use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
 use crate::invoice::{InvoiceStatus, InvoiceStorage};
-use crate::payments::{create_escrow, refund_escrow, EscrowStorage};
+use crate::payments::{create_escrow, transfer_funds, EscrowStatus, EscrowStorage};
 use crate::verification::require_business_not_pending;
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
@@ -153,10 +153,16 @@ pub fn accept_bid_and_fund(
     Ok(escrow_id)
 }
 
-/// Explicitly refund escrowed funds to the investor.
+/// Explicitly close a funded escrow through the refund path.
 ///
 /// Can be triggered by the Admin or the Business owner of the invoice.
 /// Invoice must be in Funded status.
+///
+/// If the business has already recorded partial repayments on the invoice, the
+/// escrow is unwound proportionally:
+/// - the repaid portion is released to the business, because that value has
+///   already been returned to the investor off-chain/accounting-wise; and
+/// - only the remaining unpaid portion is refunded to the investor.
 ///
 /// # Errors
 /// * `InvoiceNotFound`, `StorageKeyNotFound`, `InvalidStatus`, `Unauthorized`, `NotAdmin`
@@ -188,12 +194,52 @@ pub fn refund_escrow_funds(
     }
 
     // 4. Retrieve Escrow
-    let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+    let mut escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     // 5. Transfer funds and update escrow state
-    // This calls payments::refund_escrow which handles the token transfer and status update
-    refund_escrow(env, invoice_id)?;
+    if escrow.status != EscrowStatus::Held {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    let paid_portion = if invoice.total_paid <= 0 {
+        0
+    } else if invoice.total_paid >= escrow.amount {
+        escrow.amount
+    } else {
+        invoice.total_paid
+    };
+    let refund_portion = escrow
+        .amount
+        .checked_sub(paid_portion)
+        .ok_or(QuickLendXError::InvalidAmount)?;
+
+    let contract_address = env.current_contract_address();
+
+    // Recorded partial repayments reduce the outstanding balance. Release only
+    // the repaid share back to the business and refund the unpaid remainder.
+    if paid_portion > 0 {
+        transfer_funds(
+            env,
+            &escrow.currency,
+            &contract_address,
+            &escrow.business,
+            paid_portion,
+        )?;
+    }
+
+    if refund_portion > 0 {
+        transfer_funds(
+            env,
+            &escrow.currency,
+            &contract_address,
+            &escrow.investor,
+            refund_portion,
+        )?;
+    }
+
+    escrow.status = EscrowStatus::Refunded;
+    EscrowStorage::update_escrow(env, &escrow);
 
     // 6. Update internal states
 
@@ -229,8 +275,18 @@ pub fn refund_escrow_funds(
         &escrow.escrow_id,
         invoice_id,
         &escrow.investor,
-        escrow.amount,
+        refund_portion,
     );
+
+    if paid_portion > 0 {
+        emit_escrow_released(
+            env,
+            &escrow.escrow_id,
+            invoice_id,
+            &escrow.business,
+            paid_portion,
+        );
+    }
 
     Ok(())
 }
