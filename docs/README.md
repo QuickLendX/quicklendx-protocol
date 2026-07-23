@@ -20,6 +20,16 @@
 | [backup.md](contracts/backup.md) | Backup and restore |
 | [audit.md](contracts/audit.md) | Audit trail and hash chain |
 
+## Backend reference
+
+| Document | What it covers |
+|----------|---------------|
+| [quicklendx-backend/docs/contributor-guide.md](../quicklendx-backend/docs/contributor-guide.md) | **Start here if you are new to the backend.** Module layout, request pipeline, export/audit wiring, metrics, how to add an endpoint. |
+| [quicklendx-backend/docs/configuration.md](../quicklendx-backend/docs/configuration.md) | All environment variables with types, defaults, and production rules |
+| [quicklendx-backend/docs/exports.md](../quicklendx-backend/docs/exports.md) | Export limits, streaming, formats, and integrity digest |
+| [quicklendx-backend/docs/observability.md](../quicklendx-backend/docs/observability.md) | Prometheus metrics, Grafana queries, alert rules |
+| [quicklendx-backend/docs/testing.md](../quicklendx-backend/docs/testing.md) | Contract testing, fixtures, and coverage requirements |
+
 ## UX / frontend reference
 
 See [ux/](ux/) for component-level design specifications.
