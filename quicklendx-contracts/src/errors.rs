@@ -258,6 +258,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::RotationNotFound => symbol_short!("ROT_NF"),
             QuickLendXError::RotationExpired => symbol_short!("ROT_EXP"),
             QuickLendXError::RotationTimelockNotElapsed => symbol_short!("ROT_TLK"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NOPND"),
             // Dispute
             QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
             QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
@@ -285,7 +286,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
-            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER")
+            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LEDG")
         }
     }
 }
