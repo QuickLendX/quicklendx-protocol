@@ -35,8 +35,8 @@ mod test_compute_yield_props {
             duration_days in 0u32..=MAX_DURATION_DAYS,
         ) {
             let (a, b) = if lo <= hi { (lo, hi) } else { (hi, lo) };
-            let y_a = compute_yield(a, rate_bps, duration_days);
-            let y_b = compute_yield(b, rate_bps, duration_days);
+            let y_a = compute_yield(a, rate_bps.into(), duration_days.into());
+            let y_b = compute_yield(b, rate_bps.into(), duration_days.into());
             prop_assert!(
                 y_a <= y_b,
                 "yield must be non-decreasing in amount: \
@@ -55,8 +55,8 @@ mod test_compute_yield_props {
             duration_days in 0u32..=MAX_DURATION_DAYS,
         ) {
             let (r_lo, r_hi) = if lo_rate <= hi_rate { (lo_rate, hi_rate) } else { (hi_rate, lo_rate) };
-            let y_lo = compute_yield(amount, r_lo, duration_days);
-            let y_hi = compute_yield(amount, r_hi, duration_days);
+            let y_lo = compute_yield(amount, r_lo.into(), duration_days.into());
+            let y_hi = compute_yield(amount, r_hi.into(), duration_days.into());
             prop_assert!(
                 y_lo <= y_hi,
                 "yield must be non-decreasing in rate_bps: \
@@ -75,8 +75,8 @@ mod test_compute_yield_props {
             hi_dur in 0u32..=MAX_DURATION_DAYS,
         ) {
             let (d_lo, d_hi) = if lo_dur <= hi_dur { (lo_dur, hi_dur) } else { (hi_dur, lo_dur) };
-            let y_lo = compute_yield(amount, rate_bps, d_lo);
-            let y_hi = compute_yield(amount, rate_bps, d_hi);
+            let y_lo = compute_yield(amount, rate_bps.into(), d_lo.into());
+            let y_hi = compute_yield(amount, rate_bps.into(), d_hi.into());
             prop_assert!(
                 y_lo <= y_hi,
                 "yield must be non-decreasing in duration_days: \
@@ -93,11 +93,11 @@ mod test_compute_yield_props {
             rate_bps in 0u32..=MAX_RATE_BPS,
             duration_days in 0u32..=MAX_DURATION_DAYS,
         ) {
-            prop_assert_eq!(compute_yield(0, rate_bps, duration_days), 0,
+            prop_assert_eq!(compute_yield(0, rate_bps.into(), duration_days.into()), 0,
                 "zero amount must yield 0");
-            prop_assert_eq!(compute_yield(amount, 0, duration_days), 0,
+            prop_assert_eq!(compute_yield(amount, 0, duration_days.into()), 0,
                 "zero rate must yield 0");
-            prop_assert_eq!(compute_yield(amount, rate_bps, 0), 0,
+            prop_assert_eq!(compute_yield(amount, rate_bps.into(), 0), 0,
                 "zero duration must yield 0");
         }
         // ── Expected Return ────────────────────────────────────────────────

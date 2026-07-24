@@ -6,7 +6,7 @@ use crate::payments::Escrow;
 use crate::types::Bid;
 use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
 
 // ============================================================================
 // Topic Constants
@@ -1525,7 +1525,7 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
 
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
     env.events().publish(
-        (soroban_sdk::Symbol::new(env, "tr_rot_cncl"), admin.clone()),
+        (Symbol::new(env, "tr_rot_cncl"), admin.clone()),
         (),
     );
 }

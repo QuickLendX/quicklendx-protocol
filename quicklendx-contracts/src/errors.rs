@@ -294,7 +294,6 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
             QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_PEND"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
-            QuickLendXError::InsuranceNotActive => symbol_short!("INS_NA"),
         }
     }
 }

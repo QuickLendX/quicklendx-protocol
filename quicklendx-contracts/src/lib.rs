@@ -282,6 +282,8 @@ mod test_max_invoices_per_business;
 mod test_insurance_claim_payout;
 #[cfg(test)]
 mod test_insurance_optin_lifecycle;
+#[cfg(test)]
+mod test_invoice;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
