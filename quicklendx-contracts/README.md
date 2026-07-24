@@ -140,6 +140,10 @@ let bid_id = contract.place_bid(
 
 See [Deterministic Ledger Time](docs/contracts/deterministic-time.md) for guidelines on using `env.ledger().timestamp()` instead of off-chain wall-clock time in contract logic.
 
+### Settlement formula and update timing
+
+See [Settlement formula, inputs, and update timing](../docs/contracts/settlement-formula.md) for the contributor-facing explanation of the settlement formula and when fee updates apply.
+
 ### Core Functions
 
 #### Invoice Management
