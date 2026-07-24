@@ -9,6 +9,33 @@ use crate::types::RebuildReport;
 use soroban_sdk::token;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, TryFromVal, Val, Vec};
 
+/// Validate that `currency` is a registered token contract by attempting a safe
+/// cross-contract `balance` call.
+///
+/// This is a **compliance-layer seam** — the check currently only verifies that
+/// the address hosts a contract with a `balance` entry-point. Future compliance
+/// logic (token allowlists, KYC-registered tokens, etc.) can be layered in here
+/// without touching call-sites.
+///
+/// # Errors
+/// Returns [`QuickLendXError::InvalidCurrency`] when `currency` is not a
+/// registered token contract.
+fn validate_token_address(
+    env: &Env,
+    currency: &Address,
+    account: &Address,
+) -> Result<(), QuickLendXError> {
+    let result: Result<Result<i128, _>, _> = env.try_invoke_contract::<i128, QuickLendXError>(
+        currency,
+        &symbol_short!("balance"),
+        soroban_sdk::vec![env, account.to_val()],
+    );
+    match result {
+        Ok(_) => Ok(()),
+        Err(_) => Err(QuickLendXError::InvalidCurrency),
+    }
+}
+
 /// Minimum transfer amount to prevent dust transfers.
 /// Matches the test-mode MIN_TRANSFER from protocol_limits.rs.
 #[cfg(not(test))]
@@ -451,6 +478,10 @@ pub fn create_escrow(
 
     EscrowStorage::require_no_active_reserve_repair(env, currency)?;
     let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
+
+    // Compliance-layer seam: verify the token address is a registered contract
+    // before issuing any cross-contract calls to it.
+    validate_token_address(env, currency, investor)?;
 
     crate::qlx_log!(env, "payment", "Creating escrow: amount={}", amount);
 
