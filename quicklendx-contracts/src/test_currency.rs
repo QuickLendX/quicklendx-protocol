@@ -1131,3 +1131,32 @@ fn test_set_currencies_blocks_old_and_allows_new_for_store_invoice() {
         "currency_b must be accepted after set_currencies"
     );
 }
+// Test that zero address is rejected by add_currency
+#[test]
+fn test_add_currency_zero_address_fails() {
+    let (env, client, admin) = setup();
+    let zero = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
+    let res = client.try_add_currency(&admin, &zero);
+    assert!(res.is_err(), "add_currency should reject zero address");
+}
+
+// Test that zero address in batch is rejected
+#[test]
+fn test_add_currencies_batch_zero_address_fails() {
+    let (env, client, admin) = setup();
+    let zero = Address::from_string(&String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
+    let other = Address::generate(&env);
+    // Using Vec::new and push to create list
+    let mut list = Vec::new(&env);
+    list.push_back(other.clone());
+    list.push_back(zero.clone());
+    let res = client.try_add_currencies_batch(&admin, &list);
+    assert!(res.is_err(), "batch add should reject zero address");
+}
+

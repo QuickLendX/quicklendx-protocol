@@ -11,6 +11,7 @@ import { DriftReport, BackfillResult } from "../types/reconciliation";
 
 const DEFAULT_MAX_LEDGER_RANGE = 5000;
 const DEFAULT_MAX_CONCURRENCY = 4;
+const DEFAULT_MAX_BATCH_SIZE = 100;
 const CHUNK_SIZE_PER_WORKER = 25;
 
 class BackfillError extends Error {
@@ -169,6 +170,18 @@ export class BackfillService {
   }
 
   public async triggerDriftBackfill(report: DriftReport, batchSize: number, failBackfill: boolean = false): Promise<BackfillResult> {
+    if (batchSize <= 0) {
+      throw new BackfillError("batchSize must be greater than 0", "INVALID_BATCH_SIZE", 400);
+    }
+    const maxBatch = this.getMaxBatchSize();
+    if (batchSize > maxBatch) {
+      throw new BackfillError(
+        `Requested batch size exceeds maximum of ${maxBatch}`,
+        "MAX_BATCH_SIZE_EXCEEDED",
+        422,
+      );
+    }
+
     const db = getDatabase();
     const runId = `drift_${report.timestamp}`;
 
@@ -404,6 +417,12 @@ export class BackfillService {
     const raw = process.env.BACKFILL_MAX_CONCURRENCY;
     const parsed = raw ? Number(raw) : DEFAULT_MAX_CONCURRENCY;
     return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_MAX_CONCURRENCY;
+  }
+
+  private getMaxBatchSize(): number {
+    const raw = process.env.BACKFILL_MAX_BATCH_SIZE || process.env.backfill_max_batch_size;
+    const parsed = raw ? Number(raw) : DEFAULT_MAX_BATCH_SIZE;
+    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : DEFAULT_MAX_BATCH_SIZE;
   }
 
   private createRunId(): string {

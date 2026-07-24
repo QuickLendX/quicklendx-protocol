@@ -22,7 +22,7 @@ use crate::events::{emit_escrow_refunded, emit_investment_withdrawn, emit_invoic
 use crate::payments::{create_escrow, refund_escrow, EscrowStatus, EscrowStorage};
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
-use crate::verification::require_business_not_pending;
+use crate::verification::{require_business_active, require_business_not_pending};
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 /// Loaded and validated state required to accept a bid.
@@ -55,6 +55,7 @@ pub(crate) fn load_accept_bid_context(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     invoice.business.require_auth();
+    require_business_active(env, &invoice.business)?;
     require_business_not_pending(env, &invoice.business)?;
 
     if invoice.status == InvoiceStatus::Funded {

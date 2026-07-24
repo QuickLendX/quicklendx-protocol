@@ -90,6 +90,9 @@ pub enum QuickLendXError {
     AlreadyRated = 1502,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotRater = 1503,
+    /// Admin rating override was requested without a non-empty, bounded-length audit reason.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidRatingOverrideReason = 1504,
 
     // KYC / verification (1600-1604)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -188,10 +191,11 @@ pub enum QuickLendXError {
     DuplicateDefaultTransition = 2202,
     BackupVersionUnsupported = 2203,
     DuplicateBid = 2204,
-    /// Caller supplied ledger sequence 0, which is not a valid Soroban ledger sequence.
-    /// Ledger sequences start at 1; sequence 0 indicates an uninitialised or default-constructed value.
+    /// Caller supplied a cursor from a different snapshot generation.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidLedgerSequence = 2205,
+    /// Insurance coverage is not active at the time of default/settlement.
+    InsuranceNotActive = 2206,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -235,6 +239,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotFunded => symbol_short!("NOT_FD"),
             QuickLendXError::AlreadyRated => symbol_short!("ALR_RT"),
             QuickLendXError::NotRater => symbol_short!("NOT_RT"),
+            QuickLendXError::InvalidRatingOverrideReason => symbol_short!("RT_OV_RSN"),
             // KYC / verification
             QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
             QuickLendXError::KYCAlreadyPending => symbol_short!("KYC_PD"),
@@ -258,6 +263,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::RotationNotFound => symbol_short!("ROT_NF"),
             QuickLendXError::RotationExpired => symbol_short!("ROT_EXP"),
             QuickLendXError::RotationTimelockNotElapsed => symbol_short!("ROT_TLK"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NOPND"),
             // Dispute
             QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
             QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
@@ -286,8 +292,13 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
+<<<<<<< HEAD
             QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NPD"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LSQ"),
+=======
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_ROT"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
+>>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
         }
     }
 }

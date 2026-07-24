@@ -15,6 +15,7 @@ Read queries never modify contract state. They are the primary way to inspect in
 - [Bid Queries](#bid-queries)
 - [Investment & Portfolio Queries](#investment--portfolio-queries)
 - [Escrow Queries](#escrow-queries)
+- [Settlement Queries](#settlement-queries)
 - [KYC / Verification Queries](#kyc--verification-queries)
 - [Dispute Queries](#dispute-queries)
 - [Analytics & Reporting](#analytics--reporting)
@@ -120,6 +121,59 @@ pub fn get_maintenance_reason(env: Env) -> Option<String>
 ```
 
 Check these before dispatching mutating calls; paused entrypoints will reject with `ContractPaused`.
+
+### `get_settlement_batch_size_soft_cap`
+
+Returns the suggested default page size for fetching settlement (payment) records. This is a soft hint — not a hard enforcement — to help indexers and off-chain consumers standardize their pagination. The contract does not require callers to use this value.
+
+```rust
+pub fn get_settlement_batch_size_soft_cap(env: Env) -> u32
+```
+
+**Return value:** `25` — recommended number of payment records per `get_payment_records` call.
+
+**Invocation example:**
+
+```json
+{
+  "function": "get_settlement_batch_size_soft_cap",
+  "args": []
+}
+```
+
+**Usage pattern for indexers:**
+
+```rust
+// Discover the hint at startup
+let batch_size = contract.get_settlement_batch_size_soft_cap(env.clone());
+
+// Paginate payment records using the hint
+let mut offset = 0u32;
+loop {
+    let page = contract.get_payment_records(env.clone(), invoice_id, offset, batch_size)?;
+    if page.is_empty() {
+        break;
+    }
+    // process page...
+    offset = offset.saturating_add(batch_size);
+}
+```
+
+### `get_settlement_batch_size_soft_cap_max`
+
+Returns the hard upper bound for settlement batch queries. Requests to `get_payment_records` exceeding this value are silently clamped to this limit by the contract.
+
+```rust
+pub fn get_settlement_batch_size_soft_cap_max(env: Env) -> u32
+```
+
+**Return value:** `50` — maximum number of payment records per query.
+
+| | Default | Max |
+|---|---|---|
+| Settlement batch soft cap | `25` | `50` |
+| Overdue scan batch limit | `25` | `100` |
+| General `MAX_QUERY_LIMIT` | `50` | `50` |
 
 ---
 
@@ -407,6 +461,102 @@ pub fn get_escrow_status(env: Env, invoice_id: BytesN<32>) -> Result<payments::E
 ```
 
 Lighter-weight than `get_escrow_details` when only the status is needed. Returns `Held`, `Released`, or `Refunded`.
+
+---
+
+## Settlement Queries
+
+### `get_payment_records`
+
+Returns a paginated slice of payment records for an invoice in chronological order. Indexers should page through these using `get_settlement_batch_size_soft_cap` as the recommended batch size.
+
+```rust
+pub fn get_payment_records(
+    env: Env,
+    invoice_id: BytesN<32>,
+    from: u32,
+    limit: u32,
+) -> Result<Vec<settlement::SettlementPaymentRecord>, QuickLendXError>
+```
+
+**Parameters:**
+- `from`: Starting index (0-based, inclusive)
+- `limit`: Maximum records to return (capped at `MAX_QUERY_LIMIT` = 50)
+
+**Return value:**
+
+```rust
+Vec<SettlementPaymentRecord {
+    payer: business_addr,
+    amount: 12_500_000_000,
+    timestamp: 1702051200,
+    nonce: String("tx_abc123"),
+}>
+```
+
+**Recommended pagination:**
+
+```rust
+let batch = contract.get_settlement_batch_size_soft_cap(env.clone()); // 25
+let mut offset = 0u32;
+loop {
+    let page = contract.get_payment_records(env.clone(), invoice_id.clone(), offset, batch)?;
+    if page.is_empty() { break; }
+    // process records...
+    offset = offset.saturating_add(batch);
+}
+```
+
+### `get_invoice_progress`
+
+Returns aggregate payment progress for an invoice — total due, total paid, remaining due, progress percentage, payment count, and current status.
+
+```rust
+pub fn get_invoice_progress(
+    env: Env,
+    invoice_id: BytesN<32>,
+) -> Result<settlement::Progress, QuickLendXError>
+```
+
+**Return value:**
+
+```rust
+Progress {
+    total_due: 50_000_000_000,
+    total_paid: 25_000_000_000,
+    remaining_due: 25_000_000_000,
+    progress_percent: 50,
+    payment_count: 3,
+    status: Funded,
+}
+```
+
+### `get_payment_count`
+
+Returns the total number of recorded payments for an invoice.
+
+```rust
+pub fn get_payment_count(env: Env, invoice_id: BytesN<32>) -> Result<u32, QuickLendXError>
+```
+
+### `is_invoice_finalized`
+
+Returns whether an invoice has been settlement-finalized (i.e., its status has reached `Paid` and no further payments can be recorded).
+
+```rust
+pub fn is_invoice_finalized(env: Env, invoice_id: BytesN<32>) -> Result<bool, QuickLendXError>
+```
+
+### Settlement Batch Size Configuration
+
+The contract exposes two read-only hints to help indexers discover the recommended and maximum page sizes for payment record queries:
+
+| Entrypoint | Return value | Description |
+|---|---|---|
+| `get_settlement_batch_size_soft_cap` | `25` | Recommended default page size |
+| `get_settlement_batch_size_soft_cap_max` | `50` | Hard upper bound enforced by the contract |
+
+See [Configuration & Protocol State](#configuration--protocol-state) for full documentation of these entrypoints.
 
 ---
 
@@ -712,7 +862,7 @@ Aggregate across all schedules for a user: total vested, total released, total r
 
 ## Pagination Conventions
 
-All paginated endpoints (`*_paged`) follow the same conventions:
+All paginated endpoints (`*_paged`) follow the same conventions. For a detailed specification of ordering guarantees, snapshot consistency, cursor stability, and multi-page concurrency behavior, see [Query Semantics & Paged Read Guarantees](QUERY_SEMANTICS.md).
 
 | Rule | Behaviour |
 |---|---|

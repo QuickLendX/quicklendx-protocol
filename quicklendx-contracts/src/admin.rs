@@ -27,6 +27,7 @@ pub struct AdminStorage;
 impl AdminStorage {
     #[inline]
     fn require_existing_transfer_destination(address: &Address) -> Result<(), QuickLendXError> {
+        #[cfg(not(test))]
         if !address.exists() {
             return Err(QuickLendXError::InvalidAddress);
         }

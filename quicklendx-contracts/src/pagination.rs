@@ -41,6 +41,56 @@ pub const fn cap_query_limit(limit: u32) -> u32 {
     }
 }
 
+/// Cursor with snapshot generation metadata for paged reads.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PageCursor {
+    /// 0-based offset or record index.
+    pub offset: u32,
+    /// Snapshot generation timestamp/sequence tag for consistency validation.
+    pub generation: u64,
+}
+
+impl PageCursor {
+    /// Construct a new pagination cursor with the given offset and snapshot generation.
+    #[inline]
+    pub const fn new(offset: u32, generation: u64) -> Self {
+        Self { offset, generation }
+    }
+
+    /// Validate that this cursor's snapshot generation matches the current snapshot generation.
+    ///
+    /// # Returns
+    /// * `Ok(())` if snapshot generations match.
+    /// * `Err(QuickLendXError::UnstableCursor)` if the cursor belongs to a different snapshot generation.
+    #[inline]
+    pub const fn require_stable(&self, current_generation: u64) -> Result<(), QuickLendXError> {
+        require_stable_cursor(self.generation, current_generation)
+    }
+}
+
+/// Validate that a pagination cursor's snapshot generation matches the active snapshot generation.
+///
+/// Refuses cursors generated against an older or newer snapshot generation to prevent silent data
+/// omissions, duplicates, or inconsistent reads across dynamic state mutations.
+///
+/// # Arguments
+/// * `cursor_generation` - The snapshot generation tag encoded in or associated with the caller's cursor.
+/// * `current_generation` - The active snapshot generation of the contract or queried dataset.
+///
+/// # Returns
+/// * `Ok(())` if `cursor_generation == current_generation`.
+/// * `Err(QuickLendXError::UnstableCursor)` if `cursor_generation != current_generation`.
+#[inline]
+pub const fn require_stable_cursor(
+    cursor_generation: u64,
+    current_generation: u64,
+) -> Result<(), QuickLendXError> {
+    if cursor_generation != current_generation {
+        return Err(QuickLendXError::UnstableCursor);
+    }
+    Ok(())
+}
+
 /// Validate query parameters for security and resource protection.
 ///
 /// # Arguments
@@ -143,4 +193,29 @@ pub fn paginate_slice<T: Clone>(items: &[T], offset: u32, limit: u32) -> Vec<T> 
         return Vec::new();
     }
     items[(start as usize)..(end as usize)].to_vec()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_require_stable_cursor_matching_generation() {
+        assert_eq!(require_stable_cursor(100, 100), Ok(()));
+        let cursor = PageCursor::new(10, 100);
+        assert_eq!(cursor.require_stable(100), Ok(()));
+    }
+
+    #[test]
+    fn test_require_stable_cursor_mismatched_generation() {
+        assert_eq!(
+            require_stable_cursor(99, 100),
+            Err(QuickLendXError::UnstableCursor)
+        );
+        let cursor = PageCursor::new(10, 99);
+        assert_eq!(
+            cursor.require_stable(100),
+            Err(QuickLendXError::UnstableCursor)
+        );
+    }
 }

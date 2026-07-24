@@ -547,16 +547,23 @@ pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 
         / denominator
 }
 
+<<<<<<< HEAD
 /// Compute the simple interest yield on a principal amount.
 /// Accepts `u32` rate and duration for ergonomic use from typed call sites.
+=======
+/// Compute the simple interest yield on a principal amount (u32 version).
+>>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
 ///
 /// # Formula
 /// ```text
 /// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
 /// ```
+<<<<<<< HEAD
 pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
     compute_yield(amount, rate_bps as i128, duration_days as i128)
 }
+=======
+>>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
 ///
 /// All arithmetic uses `saturating_mul` / integer division to stay within
 /// `i128` bounds without panicking and to preserve `#![no_std]` discipline.
@@ -570,6 +577,7 @@ pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i12
 /// For fixed `rate_bps` and `duration_days`, `yield` is non-decreasing in `amount`.
 /// For fixed `amount` and `duration_days`, `yield` is non-decreasing in `rate_bps`.
 /// For fixed `amount` and `rate_bps`, `yield` is non-decreasing in `duration_days`.
+<<<<<<< HEAD
 /// Compute the expected return on a principal amount.
 ///
 /// # Returns
@@ -580,6 +588,19 @@ pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) 
 }
 
 
+=======
+pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+    let safe_amount = amount.max(0);
+    let safe_rate = rate_bps as i128;
+    let safe_days = duration_days as i128;
+
+    let numerator = safe_amount
+        .saturating_mul(safe_rate)
+        .saturating_mul(safe_days);
+    let denominator = BPS_DENOMINATOR.saturating_mul(365);
+    numerator / denominator
+}
+>>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
 
 /// A single ledger-delta entry for time-weighted average calculations.
 ///
@@ -916,6 +937,7 @@ mod tests {
     #[test]
     fn test_investor_platform_treasury_sum_invariant() {
         let env = Env::default();
+        let contract_id = env.register(crate::QuickLendXContract, ());
         let cases = vec![
             (0i128, 0i128),
             (1000, 1100),
@@ -925,7 +947,9 @@ mod tests {
             (1000, 2000),
         ];
         for (investment, payment) in cases {
-            let breakdown = PlatformFee::calculate_breakdown(&env, investment, payment);
+            let breakdown = env.as_contract(&contract_id, || {
+                PlatformFee::calculate_breakdown(&env, investment, payment)
+            });
             // Verify investor profit + platform fee = gross profit
             assert_eq!(
                 breakdown.investor_profit + breakdown.platform_fee,

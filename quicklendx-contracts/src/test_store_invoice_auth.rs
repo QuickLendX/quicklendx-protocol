@@ -1,4 +1,28 @@
 #![cfg(test)]
+<<<<<<< HEAD
+=======
+
+/// # store_invoice Authentication Policy Tests (Issue #790)
+///
+/// This module locks the intended authentication and KYC-gating policy for
+/// `store_invoice`. Every test here is a **policy regression test**: if the
+/// policy changes without updating these tests, CI will fail.
+///
+/// ## Policy under test
+///
+/// `store_invoice` requires **both**:
+/// 1. A valid Soroban authorization from the `business` address.
+/// 2. A `Verified` KYC record for that business.
+///
+/// ## Security invariants validated
+/// - Unverified businesses cannot create invoices (storage DoS prevention).
+/// - Pending businesses are explicitly blocked with `KYCAlreadyPending`.
+/// - Rejected businesses are blocked with `BusinessNotVerified`.
+/// - No KYC record -> `BusinessNotVerified`.
+/// - Admin cannot bypass the business signature requirement.
+/// - A third party cannot create invoices on behalf of a business.
+/// - Only after KYC approval can a business write invoice data on-chain.
+>>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
 
 //! # store_invoice Authentication Policy Tests (Issue #790)
 //!

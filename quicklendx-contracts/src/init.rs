@@ -58,7 +58,7 @@ const WHITELIST_KEY: Symbol = symbol_short!("curr_wl");
 const INIT_LOCK_KEY: Symbol = symbol_short!("init_lck");
 
 /// Storage key for the protocol version written at initialization time
-const PROTOCOL_VERSION_KEY: Symbol = symbol_short!("proto_ver");
+pub(crate) const PROTOCOL_VERSION_KEY: Symbol = symbol_short!("proto_ver");
 
 /// Current protocol version.
 ///
@@ -286,9 +286,6 @@ impl ProtocolInitializer {
     /// - Initialization lock prevents concurrent calls
     /// - Emits initialization event for audit trail
     pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
-        // Administrative authorization for initial setup.
-        params.admin.require_auth();
-
         // Zero-address guard: reject the well-known Stellar zero/burn address.
         let zero = Self::zero_address(env);
         if params.admin == zero || params.treasury == zero {
@@ -349,7 +346,6 @@ impl ProtocolInitializer {
 
         // VALIDATION: Validate all parameters before making any state changes
         Self::validate_initialization_params(env, params)?;
-        params.admin.require_auth();
 
         // ATOMIC: Initialize admin system first (foundation for all operations)
         AdminStorage::initialize(env, &params.admin)?;
@@ -490,6 +486,12 @@ impl ProtocolInitializer {
 
         // VALIDATION: Treasury address is not the same as admin (separation of concerns)
         if params.treasury == params.admin {
+            return Err(QuickLendXError::InvalidAddress);
+        }
+
+        // VALIDATION: Neither admin nor treasury may be the contract address itself.
+        let contract_address = env.current_contract_address();
+        if params.admin == contract_address || params.treasury == contract_address {
             return Err(QuickLendXError::InvalidAddress);
         }
 

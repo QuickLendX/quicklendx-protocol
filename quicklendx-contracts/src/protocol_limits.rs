@@ -77,6 +77,8 @@ pub const MAX_KYC_DATA_LENGTH: u32 = 5000;
 pub const MAX_REJECTION_REASON_LENGTH: u32 = 500;
 /// Maximum length for invoice feedback (1000 bytes)
 pub const MAX_FEEDBACK_LENGTH: u32 = 1000;
+/// Maximum length for the mandatory reason on an admin rating override (500 bytes)
+pub const MAX_RATING_OVERRIDE_REASON_LENGTH: u32 = 500;
 
 pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXError> {
     if s.len() > max_len {
@@ -302,6 +304,14 @@ pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> 
 
 /// Maximum number of active invoices allowed per business
 pub const MAX_ACTIVE_INVOICES_PER_BUSINESS: u32 = 100;
+
+/// Maximum number of invoices that can be created in a single batch call.
+///
+/// This constant caps the size of a `store_invoices_batch` submission to
+/// prevent a single transaction from consuming an unbounded amount of CPU and
+/// storage budget. Callers that need to submit more than this many invoices
+/// should split the work across multiple calls.
+pub const MAX_BATCH_INVOICES: u32 = 10;
 
 /// Determine if an invoice status is considered "active" for limit enforcement.
 ///

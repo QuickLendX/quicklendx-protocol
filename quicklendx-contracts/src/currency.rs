@@ -14,7 +14,7 @@
 //!
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use soroban_sdk::{symbol_short, Address, Env, Vec};
+use soroban_sdk::{symbol_short, Address, Env, Vec, String};
 
 const WHITELIST_KEY: soroban_sdk::Symbol = symbol_short!("curr_wl");
 
@@ -36,12 +36,19 @@ impl CurrencyWhitelist {
     ///
     /// # Errors
     /// - `NotAdmin` - `admin` does not match the stored admin or no admin is set.
+    /// - `InvalidCurrency` - `currency` is the admin address, zero address, or self.
     pub fn add_currency(
         env: &Env,
         admin: &Address,
         currency: &Address,
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
+
+        // Ensure currency is not a reserved address
+        let zero = Self::zero_address(env);
+        if currency == admin || currency == &zero || currency == &env.current_contract_address() {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
 
         let mut list = Self::get_whitelisted_currencies(env);
         if list.iter().any(|a| a == *currency) {
@@ -77,6 +84,15 @@ impl CurrencyWhitelist {
         currencies: &Vec<Address>,
     ) -> Result<Vec<bool>, QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
+
+        // Reject reserved addresses in batch
+        let zero = Self::zero_address(env);
+        let contract_addr = env.current_contract_address();
+        for currency in currencies.iter() {
+            if currency == *admin || currency == zero || currency == contract_addr {
+                return Err(QuickLendXError::InvalidCurrency);
+            }
+        }
 
         let mut results: Vec<bool> = Vec::new(env);
         if currencies.is_empty() {
@@ -219,6 +235,14 @@ impl CurrencyWhitelist {
             .instance()
             .get(&WHITELIST_KEY)
             .unwrap_or_else(|| Vec::new(env))
+    }
+    
+    /// Returns the canonical zero address used for validation.
+    fn zero_address(env: &Env) -> Address {
+        Address::from_string(&String::from_str(
+            env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        ))
     }
 
     /// Assert that `currency` is permitted, respecting empty-list backward compatibility.

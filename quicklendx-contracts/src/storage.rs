@@ -32,7 +32,11 @@ where
 /// Storage key for the pending treasury address during a rotation.
 pub const PENDING_TREASURY_KEY: Symbol = symbol_short!("pnd_trs");
 /// Storage key for the pending treasury execution timestamp.
+<<<<<<< HEAD
 pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("pnd_trs_t");
+=======
+pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("pnd_tr_ts");
+>>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
 
 /// Counter and configuration keys for the contract.
 ///
@@ -269,24 +273,40 @@ impl InvoiceStorage {
         Self::store(env, invoice)
     }
 
-    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+    pub fn set_invoice_lock(env: &Env, invoice_id: &BytesN<32>, lock: InvoiceLock) {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
-        if frozen {
-            env.storage().persistent().set(&key, &true);
-            extend_persistent_ttl(env, &key);
-        } else {
+        if lock == InvoiceLock::None {
             env.storage().persistent().remove(&key);
+        } else {
+            env.storage().persistent().set(&key, &lock);
+            extend_persistent_ttl(env, &key);
         }
     }
 
-    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
+    pub fn get_invoice_lock(env: &Env, invoice_id: &BytesN<32>) -> InvoiceLock {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
-        if let Some(frozen) = env.storage().persistent().get::<_, bool>(&key) {
+        if let Some(lock) = env.storage().persistent().get::<_, InvoiceLock>(&key) {
             extend_persistent_ttl(env, &key);
-            frozen
+            lock
         } else {
-            false
+            InvoiceLock::None
         }
+    }
+
+    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+        Self::set_invoice_lock(
+            env,
+            invoice_id,
+            if frozen {
+                InvoiceLock::Frozen
+            } else {
+                InvoiceLock::None
+            },
+        );
+    }
+
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
+        Self::get_invoice_lock(env, invoice_id) == InvoiceLock::Frozen
     }
 
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
