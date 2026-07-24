@@ -547,10 +547,16 @@ pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 
         / denominator
 }
 
+/// Compute the expected return on a principal amount.
+///
+/// # Returns
+/// Total expected return (principal + yield)
 pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
     let yield_amount = compute_yield(amount, rate_bps.into(), duration_days.into());
     amount.max(0).saturating_add(yield_amount)
 }
+
+/// A single ledger-delta entry for time-weighted average calculations.
 ///
 /// Each entry records the `balance` held for `duration_ledgers` ledgers.
 /// The time-weighted average rate is:

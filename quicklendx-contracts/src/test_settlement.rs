@@ -1005,3 +1005,124 @@ fn test_settlement_idempotency_no_side_effects() {
     assert_eq!(investment.status, InvestmentStatus::Completed);
 }
 
+
+// ============================================================================
+// Settlement Batch Size Configuration Tests
+// ============================================================================
+
+/// Test that get_settlement_batch_size_soft_cap returns the expected default value.
+#[test]
+fn test_get_settlement_batch_size_soft_cap_returns_default() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let batch_size = client.get_settlement_batch_size_soft_cap();
+    assert_eq!(batch_size, 25, "Default settlement batch size soft cap should be 25");
+}
+
+/// Test that get_settlement_batch_size_soft_cap_max returns the expected maximum value.
+#[test]
+fn test_get_settlement_batch_size_soft_cap_max_returns_maximum() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let max_batch_size = client.get_settlement_batch_size_soft_cap_max();
+    assert_eq!(max_batch_size, 50, "Maximum settlement batch size soft cap should be 50");
+}
+
+/// Test that settlement batch size configuration is consistent with MAX_QUERY_LIMIT.
+#[test]
+fn test_settlement_batch_size_consistency_with_query_limit() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let max_batch_size = client.get_settlement_batch_size_soft_cap_max();
+    let default_batch_size = client.get_settlement_batch_size_soft_cap();
+
+    // Max should match MAX_QUERY_LIMIT (50)
+    assert_eq!(max_batch_size, 50);
+    
+    // Default should be less than or equal to max
+    assert!(default_batch_size <= max_batch_size, 
+        "Default batch size ({}) should not exceed max ({})", 
+        default_batch_size, max_batch_size);
+    
+    // Default should be a reasonable value for pagination
+    assert!(default_batch_size > 0, "Default batch size should be positive");
+}
+
+/// Test that settlement batch size values are usable for pagination in get_payment_records.
+#[test]
+fn test_settlement_batch_size_usable_for_pagination() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id = setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Make some partial payments
+    client.process_partial_payment(&invoice_id, &100, &String::from_str(&env, "payment1"));
+    client.process_partial_payment(&invoice_id, &200, &String::from_str(&env, "payment2"));
+    client.process_partial_payment(&invoice_id, &300, &String::from_str(&env, "payment3"));
+
+    // Get the recommended batch size
+    let batch_size = client.get_settlement_batch_size_soft_cap();
+
+    // Verify we can query with the recommended batch size
+    let records_result = env.as_contract(&contract_id, || {
+        get_payment_records(&env, &invoice_id, 0, batch_size)
+    });
+    assert!(records_result.is_ok(), "Should be able to query with recommended batch size");
+    
+    let records = records_result.unwrap();
+    assert_eq!(records.len(), 3, "Should retrieve all 3 payment records");
+
+    // Verify we can query with the max batch size
+    let max_batch_size = client.get_settlement_batch_size_soft_cap_max();
+    let records_result_max = env.as_contract(&contract_id, || {
+        get_payment_records(&env, &invoice_id, 0, max_batch_size)
+    });
+    assert!(records_result_max.is_ok(), "Should be able to query with max batch size");
+}
+
+/// Test that settlement batch size configuration remains stable across different contract states.
+#[test]
+fn test_settlement_batch_size_stable_across_states() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    // Read batch sizes before initialization
+    let default_before = client.get_settlement_batch_size_soft_cap();
+    let max_before = client.get_settlement_batch_size_soft_cap_max();
+
+    // Initialize contract
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
+    let token = Address::generate(&env);
+    let _ = client.try_initialize(
+        &admin,
+        &treasury,
+        &50u32,
+        &1_000_000i128,
+        &365u64,
+        &604_800u64,
+        &Vec::from_array(&env, [token]),
+    );
+
+    // Read batch sizes after initialization
+    let default_after = client.get_settlement_batch_size_soft_cap();
+    let max_after = client.get_settlement_batch_size_soft_cap_max();
+
+    // Values should be stable
+    assert_eq!(default_before, default_after, "Default batch size should remain stable");
+    assert_eq!(max_before, max_after, "Max batch size should remain stable");
+}

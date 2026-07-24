@@ -90,6 +90,9 @@ pub enum QuickLendXError {
     AlreadyRated = 1502,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotRater = 1503,
+    /// Admin rating override was requested without a non-empty, bounded-length audit reason.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidRatingOverrideReason = 1504,
 
     // KYC / verification (1600-1604)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -235,6 +238,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotFunded => symbol_short!("NOT_FD"),
             QuickLendXError::AlreadyRated => symbol_short!("ALR_RT"),
             QuickLendXError::NotRater => symbol_short!("NOT_RT"),
+            QuickLendXError::InvalidRatingOverrideReason => symbol_short!("RT_OV_RSN"),
             // KYC / verification
             QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
             QuickLendXError::KYCAlreadyPending => symbol_short!("KYC_PD"),
@@ -258,6 +262,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::RotationNotFound => symbol_short!("ROT_NF"),
             QuickLendXError::RotationExpired => symbol_short!("ROT_EXP"),
             QuickLendXError::RotationTimelockNotElapsed => symbol_short!("ROT_TLK"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NOPND"),
             // Dispute
             QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
             QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
@@ -286,8 +291,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_ROT"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LED")
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LEDG")
         }
     }
 }

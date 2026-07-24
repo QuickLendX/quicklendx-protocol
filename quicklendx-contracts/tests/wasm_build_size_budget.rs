@@ -352,6 +352,15 @@ fn classify_at_warning_threshold_is_ok() {
     assert_eq!(classify_size(WASM_SIZE_WARNING_BYTES), SizeTier::Ok);
 }
 
+/// One byte below the warning threshold is also `Ok`.
+#[test]
+fn classify_one_below_warning_is_ok() {
+    assert_eq!(
+        classify_size(WASM_SIZE_WARNING_BYTES.saturating_sub(1)),
+        SizeTier::Ok
+    );
+}
+
 /// One byte above the warning threshold enters the `Warning` tier.
 #[test]
 fn classify_one_above_warning_is_warning() {
@@ -372,6 +381,15 @@ fn classify_midpoint_warning_to_budget_is_warning() {
 #[test]
 fn classify_at_hard_budget_is_warning() {
     assert_eq!(classify_size(WASM_SIZE_BUDGET_BYTES), SizeTier::Warning);
+}
+
+/// One byte below the hard budget is also `Warning`.
+#[test]
+fn classify_one_below_budget_is_warning() {
+    assert_eq!(
+        classify_size(WASM_SIZE_BUDGET_BYTES.saturating_sub(1)),
+        SizeTier::Warning
+    );
 }
 
 /// One byte above the hard budget is `Over` (CI must fail).

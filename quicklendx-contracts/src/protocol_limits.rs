@@ -77,6 +77,8 @@ pub const MAX_KYC_DATA_LENGTH: u32 = 5000;
 pub const MAX_REJECTION_REASON_LENGTH: u32 = 500;
 /// Maximum length for invoice feedback (1000 bytes)
 pub const MAX_FEEDBACK_LENGTH: u32 = 1000;
+/// Maximum length for the mandatory reason on an admin rating override (500 bytes)
+pub const MAX_RATING_OVERRIDE_REASON_LENGTH: u32 = 500;
 
 pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXError> {
     if s.len() > max_len {

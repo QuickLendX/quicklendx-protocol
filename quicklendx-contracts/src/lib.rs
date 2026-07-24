@@ -59,6 +59,9 @@ mod test_maintenance_write_matrix;
 mod test_settlement_history_reconstruction;
 #[cfg(test)]
 mod test_settlement_capacity_stress;
+// Issue #1920 — confirm require_regulatory_ok is truly a no-op by default.
+#[cfg(test)]
+mod test_regulatory_gate;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
@@ -129,6 +132,8 @@ mod test_admin_two_step;
 mod test_audit;
 #[cfg(test)]
 mod test_audit_config;
+#[cfg(test)]
+mod test_rating_override;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -157,6 +162,8 @@ mod test_currency_match_funding;
 mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
+#[cfg(test)]
+mod test_evidence_size_cap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
@@ -314,6 +321,8 @@ mod test_volume_tier_props;
 // path (always runs) + proptest property (requires fuzz-tests feature).
 #[cfg(test)]
 mod test_cannot_withdraw_more_than_deposited;
+#[cfg(test)]
+mod test_tier_boundary;
 pub mod types;
 pub use types::*;
 pub mod verification;
@@ -357,6 +366,13 @@ use verification::{
 };
 
 use crate::storage::{BidStorage, InvoiceStorage};
+
+/// Render a 1-5 rating score as a decimal `String` for audit-log serialization.
+fn fmt_rating(env: &Env, value: u32) -> String {
+    let mut buf = [0u8; 10];
+    let len = audit::write_u64_to_buf(&mut buf, value as u64);
+    String::from_str(env, core::str::from_utf8(&buf[..len]).unwrap_or("0"))
+}
 
 #[contract]
 pub struct QuickLendXContract;
@@ -688,6 +704,26 @@ impl QuickLendXContract {
     pub fn set_max_active_bids_per_investor(env: Env, limit: u32) -> Result<u32, QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         bid::BidStorage::set_max_active_bids_per_investor(&env, &admin, limit)
+    }
+
+    /// Get full snapshot of the investor active-bid limit policy.
+    ///
+    /// Returns a [`BidLimitConfig`] with the active limit, the compile-time
+    /// default, and convenience flags (`is_disabled`, `is_custom`).  Use this
+    /// instead of [`get_max_active_bids_per_investor`] when you need to
+    /// distinguish "default" from "admin-set to the same value as the default".
+    pub fn get_bid_limit_config(env: Env) -> bid::BidLimitConfig {
+        bid::BidStorage::get_bid_limit_config(&env)
+    }
+
+    /// Reset the per-investor active-bid limit to the compile-time default (20).
+    ///
+    /// Removes the stored override so [`get_bid_limit_config`] reports
+    /// `is_custom = false` and `is_disabled = false`.  Useful for reverting a
+    /// previous [`set_max_active_bids_per_investor(0)`] call.
+    pub fn reset_max_active_bids_per_investor(env: Env) -> Result<u32, QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        bid::BidStorage::reset_max_active_bids_per_investor(&env, &admin)
     }
 
     /// Initiate emergency withdraw for stuck funds (admin only). Timelock applies before execute.
@@ -2175,6 +2211,9 @@ impl QuickLendXContract {
     }
 
     /// Initialize protocol limits (admin only). Sets min amount, max due date days, grace period.
+    ///
+    /// `min_bid_amount` and `min_bid_bps` are preserved at their current/default values.
+    /// Use [`set_protocol_limits_full`] to set every limit in a single call.
     pub fn initialize_protocol_limits(
         env: Env,
         admin: Address,
@@ -2187,15 +2226,19 @@ impl QuickLendXContract {
             &env,
             &admin,
             min_invoice_amount,
-            10,  // min_bid_amount
-            100, // min_bid_bps (default)
+            existing.min_bid_amount,
+            existing.min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
-            100, // max_invoices_per_business (default)
+            existing.max_invoices_per_business,
         )
     }
 
     /// Update protocol limits (admin only).
+    ///
+    /// `min_bid_amount`, `min_bid_bps`, and `max_invoices_per_business` are
+    /// preserved at their current values.  Use [`set_protocol_limits_full`] to
+    /// update every limit in a single call.
     pub fn set_protocol_limits(
         env: Env,
         admin: Address,
@@ -2204,19 +2247,25 @@ impl QuickLendXContract {
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        // Preserve current bid limits; fall back to compile-time defaults if not yet set.
+        let existing = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
             min_invoice_amount,
-            10,  // min_bid_amount
-            100, // min_bid_bps (default)
+            existing.min_bid_amount,
+            existing.min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
-            100, // max_invoices_per_business (default)
+            existing.max_invoices_per_business,
         )
     }
 
     /// Update protocol limits (admin only).
+    ///
+    /// `min_bid_amount`, `min_bid_bps`, and `max_invoices_per_business` are
+    /// preserved at their current values.  Use [`set_protocol_limits_full`] to
+    /// update every limit in a single call.
     pub fn update_protocol_limits(
         env: Env,
         admin: Address,
@@ -2225,19 +2274,24 @@ impl QuickLendXContract {
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        // Preserve current bid limits; fall back to compile-time defaults if not yet set.
+        let existing = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
             min_invoice_amount,
-            10,  // min_bid_amount
-            100, // min_bid_bps (default)
+            existing.min_bid_amount,
+            existing.min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
-            100, // max_invoices_per_business (default)
+            existing.max_invoices_per_business,
         )
     }
 
     /// Update protocol limits with max invoices per business (admin only).
+    ///
+    /// `min_bid_amount` and `min_bid_bps` are preserved at their current values.
+    /// Use [`set_protocol_limits_full`] to update every limit in a single call.
     pub fn update_limits_max_invoices(
         env: Env,
         admin: Address,
@@ -2247,12 +2301,60 @@ impl QuickLendXContract {
         max_invoices_per_business: u32,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        // Preserve current bid limits; fall back to compile-time defaults if not yet set.
+        let existing = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
             min_invoice_amount,
-            10,  // min_bid_amount
-            100, // min_bid_bps (default)
+            existing.min_bid_amount,
+            existing.min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+            max_invoices_per_business,
+        )
+    }
+
+    /// Update **all** protocol limits in a single call (admin only).
+    ///
+    /// This is the preferred entrypoint when operators need to configure
+    /// `min_bid_amount` or `min_bid_bps` alongside the other limits.  The
+    /// narrower helpers (`set_protocol_limits`, `update_protocol_limits`,
+    /// `update_limits_max_invoices`) preserve the current bid-limit values for
+    /// backwards compatibility.
+    ///
+    /// # Parameters
+    /// - `min_invoice_amount`       – minimum invoice face value (inclusive).
+    /// - `min_bid_amount`           – minimum absolute bid amount (inclusive).
+    ///                                Pass [`DEFAULT_MIN_BID_AMOUNT`] (10) to
+    ///                                keep the compile-time default.
+    /// - `min_bid_bps`              – minimum bid rate in basis points (inclusive).
+    ///                                Pass [`DEFAULT_MIN_BID_BPS`] (100) to keep
+    ///                                the compile-time default.
+    /// - `max_due_date_days`        – maximum invoice horizon in days (1..=730).
+    /// - `grace_period_seconds`     – grace period after due date (0..=2_592_000).
+    /// - `max_invoices_per_business`– per-business active-invoice cap; 0 = unlimited.
+    ///
+    /// # Errors
+    /// Delegates to `ProtocolLimitsContract::set_protocol_limits` for all
+    /// parameter validation; see that function's docs for error codes.
+    pub fn set_protocol_limits_full(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        min_bid_amount: i128,
+        min_bid_bps: u32,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+        max_invoices_per_business: u32,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
+            min_bid_amount,
+            min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
@@ -2532,6 +2634,23 @@ impl QuickLendXContract {
     /// @return Hard upper bound accepted by `scan_overdue_invoices`.
     pub fn get_overdue_scan_batch_limit_max(_env: Env) -> u32 {
         defaults::max_overdue_scan_batch_limit()
+    }
+
+    /// @notice Returns the suggested default page size for settlement/payment record queries.
+    /// @dev This is a soft hint for off-chain indexers. Actual query limits are enforced by
+    ///      the contract's MAX_QUERY_LIMIT. Indexers should use this value as a starting point
+    ///      for pagination to balance efficiency and memory usage.
+    /// @return Default settlement batch size (25) — recommended number of payment records per page.
+    pub fn get_settlement_batch_size_soft_cap(_env: Env) -> u32 {
+        settlement::default_settlement_batch_size_soft_cap()
+    }
+
+    /// @notice Returns the maximum page size for settlement/payment record queries.
+    /// @dev This represents the hard upper bound enforced by the contract. Query requests
+    ///      exceeding this limit will be automatically clamped to this value by `get_payment_records`.
+    /// @return Maximum settlement batch size (50) — hard cap for payment records per query.
+    pub fn get_settlement_batch_size_soft_cap_max(_env: Env) -> u32 {
+        settlement::max_settlement_batch_size_soft_cap()
     }
 
     /// Check whether a specific invoice has expired and trigger default handling when necessary
@@ -3457,6 +3576,64 @@ impl QuickLendXContract {
         let ts = env.ledger().timestamp();
         invoice.add_rating(rating, feedback, rater, ts)?;
         InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// Admin-only: override an invoice's computed average rating.
+    ///
+    /// A one-off manual override for correcting a fraudulent or erroneous
+    /// rating discovered off-chain. Every use is recorded in the append-only
+    /// audit trail together with the caller-supplied `reason`.
+    ///
+    /// # Threat model
+    /// Without a mandatory, logged reason, an admin could silently rewrite an
+    /// invoice's displayed rating — e.g. to bury a legitimate bad-faith
+    /// complaint or inflate a business's track record — leaving investors who
+    /// rely on that score with no way to detect or attribute the change after
+    /// the fact. Requiring a non-empty, length-bounded reason and routing the
+    /// mutation through the tamper-evident audit trail (see `audit.rs`) closes
+    /// that accountability gap; the reason check happens before the storage
+    /// write so an override can never be applied without a corresponding
+    /// audit entry.
+    ///
+    /// # Errors
+    /// * `NotAdmin` / `OperationNotAllowed` — caller is not the current admin.
+    /// * `InvalidRatingOverrideReason` — `reason` is empty or exceeds
+    ///   `protocol_limits::MAX_RATING_OVERRIDE_REASON_LENGTH`.
+    /// * `InvoiceNotFound` — `invoice_id` does not exist.
+    /// * `InvalidRating` — `new_rating` is not in `1..=5`.
+    pub fn rating_override(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        new_rating: u32,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin_auth(&env, &admin)?;
+
+        if reason.is_empty() || reason.len() > protocol_limits::MAX_RATING_OVERRIDE_REASON_LENGTH {
+            return Err(QuickLendXError::InvalidRatingOverrideReason);
+        }
+
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        let old_value = invoice.average_rating.map(|r| fmt_rating(&env, r));
+
+        invoice.override_rating(new_rating)?;
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        audit::log_operation(
+            &env,
+            invoice_id,
+            audit::AuditOperation::RatingOverridden,
+            admin,
+            old_value,
+            Some(fmt_rating(&env, new_rating)),
+            None,
+            Some(reason),
+        );
+
         Ok(())
     }
 

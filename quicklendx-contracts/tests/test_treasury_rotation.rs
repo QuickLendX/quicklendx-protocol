@@ -32,7 +32,16 @@ fn test_set_treasury_succeeds() {
 fn test_get_pending_treasury_returns_none() {
     let (_env, client, _admin) = setup();
 
-    assert!(client.get_pending_treasury().is_none());
+    // This event structure uses the old `publish` format to be consistent
+    // with other admin events like `emit_admin_transfer_cancelled`.
+    assert_eq!(
+        last_event,
+        (
+            client.address.clone(),
+            (soroban_sdk::symbol_short!("tr_rot_cn"), admin).into_val(&env),
+            ().into_val(&env)
+        )
+    );
 }
 
 #[test]
