@@ -1437,6 +1437,80 @@ fn test_updated_limit_enforced_in_bidding() {
     assert!(result.is_ok(), "Bid should succeed after limit increase");
 }
 
+/// Test: Accepts multiple bids up to exactly the investment limit
+#[test]
+fn test_accepts_bids_up_to_exact_cap_for_same_investor() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    // Create investor with limit of 10_000
+    let investor = add_verified_investor(&env, &client, 10_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 50_000);
+
+    // First bid of 5_000 should succeed
+    let result = client.try_place_bid(&investor, &invoice_id, &5_000, &6_000);
+    assert!(result.is_ok(), "First bid should succeed");
+
+    // Second bid of 5_000 (total exactly 10_000) should succeed
+    let result = client.try_place_bid(&investor, &invoice_id, &5_000, &6_000);
+    assert!(result.is_ok(), "Second bid should succeed at exact cap");
+}
+
+/// Test: Rejects bid that would exceed the investment limit by 1
+#[test]
+fn test_rejects_bid_exceeding_cap_by_one() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    // Create investor with limit of 10_000
+    let investor = add_verified_investor(&env, &client, 10_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 50_000);
+
+    // First bid of 5_000 should succeed
+    let _ = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+
+    // Try second bid of 5_001 (total 10_001) should fail
+    let result = client.try_place_bid(&investor, &invoice_id, &5_001, &6_000);
+    assert!(result.is_err(), "Bid exceeding cap by 1 should fail");
+}
+
+/// Test: Multiple small bids add up and are checked against total limit
+#[test]
+fn test_multiple_small_bids_summed_correctly() {
+    let (env, client) = setup();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let _ = client.set_admin(&admin);
+
+    // Create investor with limit of 10_000
+    let investor = add_verified_investor(&env, &client, 10_000);
+    let business = Address::generate(&env);
+
+    let invoice_id = create_verified_invoice(&env, &client, &admin, &business, 50_000);
+
+    // Place four small bids (each 2_000, total 8_000)
+    for _ in 0..4 {
+        let result = client.try_place_bid(&investor, &invoice_id, &2_000, &2_500);
+        assert!(result.is_ok(), "Small bid should succeed");
+    }
+
+    // Place fifth bid of 2_000 (total 10_000) should succeed
+    let result = client.try_place_bid(&investor, &invoice_id, &2_000, &2_500);
+    assert!(result.is_ok(), "Final bid at exact cap should succeed");
+
+    // Place sixth bid of 1 (total 10_001) should fail
+    let result = client.try_place_bid(&investor, &invoice_id, &1, &2);
+    assert!(result.is_err(), "Bid over cap should fail");
+}
+
 /// Test: cancel_bid transitions Placed → Cancelled
 #[test]
 fn test_cancel_bid_succeeds() {

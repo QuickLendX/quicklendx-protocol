@@ -926,7 +926,9 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::BusinessNotVerified)?;
         match verification.status {
             BusinessVerificationStatus::Verified => {
-                if bid_amount > verification.investment_limit {
+                let current_active_sum = bid::BidStorage::get_active_bid_amount_sum_for_investor(&env, &investor);
+                let total = current_active_sum.saturating_add(bid_amount);
+                if total > verification.investment_limit {
                     return Err(QuickLendXError::InvalidAmount);
                 }
             }
