@@ -8,6 +8,68 @@ incremental token distribution.
 
 ---
 
+## Settlement Batch Size Configuration
+
+### Overview
+
+The protocol provides soft caps for paginating settlement and payment record queries,
+helping indexers and off-chain consumers standardize their pagination patterns while
+maintaining flexibility.
+
+### Query Configuration
+
+The settlement module exposes two read-only configuration values for off-chain consumers:
+
+* **Default Batch Size**: `get_settlement_batch_size_soft_cap()` → 25
+  * Recommended page size for `get_payment_records` queries
+  * Balances query efficiency with memory usage
+  * Suitable for most indexing workflows
+
+* **Maximum Batch Size**: `get_settlement_batch_size_soft_cap_max()` → 50
+  * Hard upper bound enforced by the contract
+  * Matches the protocol-wide `MAX_QUERY_LIMIT`
+  * Requests exceeding this value are automatically clamped
+
+### Usage Recommendations
+
+**For Indexers:**
+```rust
+// Recommended: Use the default batch size for efficient pagination
+let batch_size = contract.get_settlement_batch_size_soft_cap();
+let payments = contract.get_payment_records(invoice_id, offset, batch_size);
+
+// Advanced: Use the maximum for fewer round trips (higher memory usage)
+let max_batch = contract.get_settlement_batch_size_soft_cap_max();
+let payments = contract.get_payment_records(invoice_id, offset, max_batch);
+```
+
+**Pagination Pattern:**
+```rust
+let mut offset = 0u32;
+let batch_size = contract.get_settlement_batch_size_soft_cap();
+
+loop {
+    let page = contract.get_payment_records(invoice_id, offset, batch_size)?;
+    
+    if page.is_empty() {
+        break; // No more records
+    }
+    
+    // Process page...
+    
+    offset = offset.saturating_add(batch_size);
+}
+```
+
+### Design Rationale
+
+* **Soft Cap (Not Hard Limit)**: Indexers can request any page size up to the maximum
+* **Backwards Compatible**: Existing queries continue to work unchanged
+* **Standards Alignment**: Matches the pattern used for overdue invoice scanning
+* **Resource Protection**: Hard cap prevents excessive memory allocation per query
+
+---
+
 ## Vesting Release Idempotency and Progression
 
 ### Idempotent Release Behavior

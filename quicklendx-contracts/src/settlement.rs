@@ -94,6 +94,17 @@ const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
 /// Prevents unbounded storage growth and protects against payment-count overflow.
 const MAX_PAYMENT_COUNT: u32 = 1_000;
 
+/// Suggested default page size for off-chain consumers fetching settlement/payment records.
+/// This is a soft hint, not a hard limit. Indexers can request fewer or more records per query
+/// up to `MAX_QUERY_LIMIT` (currently 50). The soft cap helps standardize pagination patterns
+/// across different clients while allowing flexibility for specific use cases.
+pub const DEFAULT_SETTLEMENT_BATCH_SIZE_SOFT_CAP: u32 = 25;
+
+/// Hard upper bound for settlement batch queries enforced by the contract.
+/// This matches `crate::MAX_QUERY_LIMIT` and represents the maximum number of payment
+/// records that can be returned in a single `get_payment_records` query.
+pub const MAX_SETTLEMENT_BATCH_SIZE_SOFT_CAP: u32 = 50;
+
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
@@ -526,6 +537,26 @@ pub fn get_payment_records(
 pub fn is_invoice_finalized(env: &Env, invoice_id: &BytesN<32>) -> Result<bool, QuickLendXError> {
     ensure_invoice_exists(env, invoice_id)?;
     Ok(is_finalized(env, invoice_id))
+}
+
+/// Returns the suggested default page size for fetching settlement/payment records.
+/// This is a soft hint for off-chain indexers and query clients. The actual limit
+/// enforced by `get_payment_records` may differ based on `MAX_QUERY_LIMIT`.
+///
+/// # Returns
+/// `DEFAULT_SETTLEMENT_BATCH_SIZE_SOFT_CAP` (25) — the recommended batch size.
+pub fn default_settlement_batch_size_soft_cap() -> u32 {
+    DEFAULT_SETTLEMENT_BATCH_SIZE_SOFT_CAP
+}
+
+/// Returns the maximum page size for fetching settlement/payment records.
+/// This represents the hard upper bound enforced by the contract. Query requests
+/// exceeding this limit will be clamped to this value.
+///
+/// # Returns
+/// `MAX_SETTLEMENT_BATCH_SIZE_SOFT_CAP` (50) — the maximum allowed batch size.
+pub fn max_settlement_batch_size_soft_cap() -> u32 {
+    MAX_SETTLEMENT_BATCH_SIZE_SOFT_CAP
 }
 
 // ---------------------------------------------------------------------------
