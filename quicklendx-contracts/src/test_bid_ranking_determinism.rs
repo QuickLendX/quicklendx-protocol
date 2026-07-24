@@ -21,8 +21,8 @@ extern crate alloc;
 ///   (feature-gated `fuzz-tests`).
 /// * Integration with the full contract call stack — those live in `test_bid_ranking`
 ///   (feature-gated `legacy-tests`).
-use crate::bid::{Bid, BidStatus, BidStorage};
-use core::cmp::Ordering;
+    use crate::bid::{Bid, BidStatus, BidStorage};
+    use core::cmp::Ordering;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
         Address, BytesN, Env,

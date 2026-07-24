@@ -578,7 +578,6 @@ pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) 
     amount.max(0).saturating_add(yield_amount)
 }
 
-
 /// A single ledger-delta entry for time-weighted average calculations.
 ///
 /// Each entry records the `balance` held for `duration_ledgers` ledgers.

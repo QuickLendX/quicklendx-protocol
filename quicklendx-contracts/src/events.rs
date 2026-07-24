@@ -1525,7 +1525,7 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
 
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
     env.events().publish(
-        (symbol_short!("tr_cnl"), admin.clone()),
+        (soroban_sdk::Symbol::new(env, "tr_rot_cncl"), admin.clone()),
         (),
     );
 }

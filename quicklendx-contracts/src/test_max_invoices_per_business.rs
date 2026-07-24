@@ -86,3 +86,4 @@ fn test_check_invoice_limit_below_limit_passes() {
 fn test_store_invoice_respects_cap() {
     // ... keep full main implementation
 }
+}
