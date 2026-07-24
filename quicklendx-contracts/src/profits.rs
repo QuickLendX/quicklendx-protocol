@@ -529,25 +529,25 @@ pub fn validate_calculation_inputs(
 // Yield Calculation
 // ============================================================================
 
-/// Compute the simple interest yield on a principal amount.
-///
-/// # Formula
-/// ```text
-/// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
-/// ```
-///
-/// All arithmetic uses `saturating_mul` / integer division to stay within
-/// `i128` bounds without panicking and to preserve `#![no_std]` discipline.
-///
-/// # Arguments
-/// * `amount`        — Principal (must be >= 0; negative input returns 0)
-/// * `rate_bps`      — Annual rate in basis points, e.g. 500 = 5 %
-/// * `duration_days` — Holding period in days
-///
-/// # Monotonicity invariant
-/// For fixed `rate_bps` and `duration_days`, `yield` is non-decreasing in `amount`.
-/// For fixed `amount` and `duration_days`, `yield` is non-decreasing in `rate_bps`.
-/// For fixed `amount` and `rate_bps`, `yield` is non-decreasing in `duration_days`.
+pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 {
+    let safe_amount = amount.max(0);
+    let safe_rate = rate_bps.max(0);
+    let safe_days = duration_days.max(0);
+
+    if safe_amount == 0 || safe_rate == 0 || safe_days == 0 {
+        return 0;
+    }
+
+    let days_in_year = 365i128;
+    let denominator = BPS_DENOMINATOR.saturating_mul(days_in_year);
+
+    safe_amount
+        .saturating_mul(safe_rate)
+        .saturating_mul(safe_days)
+        / denominator
+}
+
+
 /// Compute the expected return on a principal amount.
 ///
 /// # Returns
@@ -556,6 +556,8 @@ pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) 
     let yield_amount = compute_yield(amount, rate_bps.into(), duration_days.into());
     amount.max(0).saturating_add(yield_amount)
 }
+
+
 
 /// A single ledger-delta entry for time-weighted average calculations.
 ///
@@ -892,6 +894,7 @@ mod tests {
     #[test]
     fn test_investor_platform_treasury_sum_invariant() {
         let env = Env::default();
+        let contract_id = env.register(crate::QuickLendXContract, ());
         let cases = vec![
             (0i128, 0i128),
             (1000, 1100),
@@ -901,7 +904,9 @@ mod tests {
             (1000, 2000),
         ];
         for (investment, payment) in cases {
-            let breakdown = PlatformFee::calculate_breakdown(&env, investment, payment);
+            let breakdown = env.as_contract(&contract_id, || {
+                PlatformFee::calculate_breakdown(&env, investment, payment)
+            });
             // Verify investor profit + platform fee = gross profit
             assert_eq!(
                 breakdown.investor_profit + breakdown.platform_fee,
