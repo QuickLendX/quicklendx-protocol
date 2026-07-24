@@ -65,6 +65,7 @@ npm run dev
 - [Invoice Lifecycle](docs/INVOICE_LIFECYCLE.md): State diagram and entrypoint reference — Pending → Verified → Funded → Settled/Defaulted.
 - [Dispute Lifecycle](file:///c:/Users/HP/quicklendx-protocol/docs/DISPUTE.md): Who can open, who resolves, timeout behaviour, and fund implications.
 - [`docs/QUERIES.md`](docs/QUERIES.md): Catalog of common read-only entrypoints with concrete invocation examples and return values — the quickest way to find the query you need.
+- [`docs/contracts/settlement-formula.md`](docs/contracts/settlement-formula.md): Contributor-facing explanation of the settlement formula, inputs, and when fee updates take effect.
 - `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
 - `docs/KYC.md`: Business KYC vs investor KYC, what each gates.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
