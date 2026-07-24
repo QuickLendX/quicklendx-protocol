@@ -264,6 +264,10 @@ mod test_incident;
 mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
+#[cfg(test)]
+mod test_investment_withdrawal;
+#[cfg(test)]
+mod test_investment_active_guard;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
 #[cfg(all(test, feature = "legacy-tests"))]
