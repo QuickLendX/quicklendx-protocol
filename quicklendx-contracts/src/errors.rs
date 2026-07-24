@@ -25,6 +25,8 @@ pub enum QuickLendXError {
     InvoiceAlreadyDefaulted = 1006,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceFrozen = 1007,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidFreezeReason = 1008,
 
     // Authorization (1100-1104)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -212,6 +214,7 @@ impl From<QuickLendXError> for Symbol {
             // Authorization
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
+            QuickLendXError::InvalidFreezeReason => symbol_short!("INV_FRZ_RSN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
             QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
             QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
