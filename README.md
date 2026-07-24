@@ -80,7 +80,7 @@ npm run dev
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
 - [`docs/DEFAULT_ACCOUNTING.md`](docs/DEFAULT_ACCOUNTING.md): How defaults roll into investor risk scores, business performance reports, and the append-only audit trail — contributor-facing.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
-- [Timelocked & Queued Operations Lifecycle](docs/contracts/timelocked-operations.md): Contributor guide documenting Proposal → Queue → Execute → Cancel patterns with time gates (timelocks and expirations).
+- [`docs/GENERATION_COUNTER.md`](docs/GENERATION_COUNTER.md): What the on-chain protocol version (generation counter) is, who reads it, and the generation-bump invariant.
 
 ## Contribution
 
