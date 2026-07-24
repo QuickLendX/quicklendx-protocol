@@ -44,6 +44,7 @@
   migration, and troubleshooting stuck runs.
   •  quicklendx-frontend/README.md : Frontend-specific documentation.
   •  docs/PLATFORM_FEES.md : Fee schedule and tenant override documentation.
+  •  docs/INDEXING_CONTRACT.md : What the indexer relies on from the Soroban smart contracts — events, topics, data structures, and storage keys.
 
   ## Contribution
 
@@ -71,7 +72,7 @@ npm run dev
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
 - [`docs/READ_MODEL_CONSISTENCY.md`](docs/READ_MODEL_CONSISTENCY.md): Contributor-facing guide for how write entrypoints map to the later read/view model used by `get_*` queries.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
-- [`docs/CAPS.md`](docs/CAPS.md): Every soft and hard protocol limit in one place — investor position caps, business supply limits, per-batch scan ceiling, bid TTL range, string field lengths, fee caps, and pagination limit.
+- [`docs/INDEXING_CONTRACT.md`](docs/INDEXING_CONTRACT.md): Smart contract interface guide for off-chain indexers — events, topics, storage layout, and data structures.
 
 ## Contribution
 
