@@ -1042,6 +1042,11 @@ pub fn verify_invoice_data(
 
     // Validate due date bounds using protocol limits (Default 365 days)
     let limits = crate::protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+
+    if amount < limits.min_invoice_amount {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
     let max_horizon = limits.max_due_date_days.saturating_mul(86400);
     let max_due_date = current_timestamp.saturating_add(max_horizon);
 
