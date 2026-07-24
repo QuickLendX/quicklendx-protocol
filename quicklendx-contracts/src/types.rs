@@ -37,6 +37,20 @@ impl InvoiceStatus {
     }
 }
 
+/// Invoice lock state controlled by admin holds.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvoiceLock {
+    None,
+    Frozen,
+}
+
+impl InvoiceLock {
+    pub fn is_locked(&self) -> bool {
+        *self != Self::None
+    }
+}
+
 /// Bid status enumeration
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
