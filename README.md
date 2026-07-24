@@ -37,6 +37,7 @@
   •  docs/contracts/platform-fee-ops.md  /docs/contracts/platform-fee-ops.md: Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
   •  docs/RUNBOOK_INCIDENT_RESPONSE.md : Operator playbook for unexpected contract behavior and incident-mode recovery.
   •  docs/INVESTOR_TIER.md : How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
+  •  docs/BID_OVERBID_POLICY.md : What happens when a bid exceeds the invoice amount — rejection path and error code.
   •  quicklendx-contracts/README.md : Smart contract-specific documentation.
   •  quicklendx-contracts/docs/contracts/deterministic-time.md : Smart contract deterministic ledger time semantics.
   •  quicklendx-backend/README.md : Backend-specific documentation.
@@ -82,8 +83,7 @@ npm run dev
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
 - [`docs/FEES_GRACE_DEFAULT.md`](docs/FEES_GRACE_DEFAULT.md): Unified contributor reference — platform fees, grace period resolution, and default trigger rules in one place.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
-- [`docs/APPEALS.md`](docs/APPEALS.md): Appeals process — who reviews, timeline, outcomes, and how they affect funds — operator-facing.
-- [`docs/QLX_SETTLEMENT_TERMS.md`](docs/QLX_SETTLEMENT_TERMS.md): How settlement terms are represented per invoice — Invoice fields, durable storage keys, partial-payment entrypoints, the fee formula, and finalization invariants. Contributor reference.
+- [`docs/GENERATION_COUNTER.md`](docs/GENERATION_COUNTER.md): What the on-chain protocol version (generation counter) is, who reads it, and the generation-bump invariant.
 
 ## Contribution
 
