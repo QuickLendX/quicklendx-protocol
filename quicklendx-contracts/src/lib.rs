@@ -706,22 +706,12 @@ impl QuickLendXContract {
         bid::BidStorage::set_max_active_bids_per_investor(&env, &admin, limit)
     }
 
-    /// Get full snapshot of the investor active-bid limit policy.
-    ///
-    /// Returns a [`BidLimitConfig`] with the active limit, the compile-time
-    /// default, and convenience flags (`is_disabled`, `is_custom`).  Use this
-    /// instead of [`get_max_active_bids_per_investor`] when you need to
-    /// distinguish "default" from "admin-set to the same value as the default".
-    pub fn get_bid_limit_config(env: Env) -> bid::BidLimitConfig {
-        bid::BidStorage::get_bid_limit_config(&env)
-    }
-
     /// Reset the per-investor active-bid limit to the compile-time default (20).
     ///
     /// Removes the stored override so [`get_bid_limit_config`] reports
     /// `is_custom = false` and `is_disabled = false`.  Useful for reverting a
     /// previous [`set_max_active_bids_per_investor(0)`] call.
-    pub fn reset_max_active_bids_per_investor(env: Env) -> Result<u32, QuickLendXError> {
+    pub fn reset_investor_bid_limit(env: Env) -> Result<u32, QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         bid::BidStorage::reset_max_active_bids_per_investor(&env, &admin)
     }
@@ -2222,6 +2212,7 @@ impl QuickLendXContract {
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
         let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
+        let existing = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits_authed(
             &env,
             &admin,
@@ -2641,7 +2632,7 @@ impl QuickLendXContract {
     ///      the contract's MAX_QUERY_LIMIT. Indexers should use this value as a starting point
     ///      for pagination to balance efficiency and memory usage.
     /// @return Default settlement batch size (25) — recommended number of payment records per page.
-    pub fn get_settlement_batch_size_soft_cap(_env: Env) -> u32 {
+    pub fn get_settlement_batch_size(_env: Env) -> u32 {
         settlement::default_settlement_batch_size_soft_cap()
     }
 
@@ -2649,7 +2640,7 @@ impl QuickLendXContract {
     /// @dev This represents the hard upper bound enforced by the contract. Query requests
     ///      exceeding this limit will be automatically clamped to this value by `get_payment_records`.
     /// @return Maximum settlement batch size (50) — hard cap for payment records per query.
-    pub fn get_settlement_batch_size_soft_cap_max(_env: Env) -> u32 {
+    pub fn get_settlement_batch_size_max(_env: Env) -> u32 {
         settlement::max_settlement_batch_size_soft_cap()
     }
 
