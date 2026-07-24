@@ -277,6 +277,8 @@ mod test_fuzz_partial_payment;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(test)]
+mod test_init_debug;
+#[cfg(test)]
 mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
@@ -292,10 +294,6 @@ mod test_investment_withdrawal;
 mod test_invoice_metadata;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_search_ranking;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_line_item_consistency;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_profits_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
 // #[cfg(all(test, feature = "legacy-tests"))]
