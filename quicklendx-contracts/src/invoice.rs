@@ -334,6 +334,24 @@ impl Invoice {
         Ok(())
     }
 
+    /// Admin override of the invoice's computed average rating.
+    ///
+    /// A one-off manual correction (e.g. for a fraudulent or erroneous rating
+    /// discovered off-chain). Callers are responsible for authorization and
+    /// for recording the mandatory audit reason; this method only validates
+    /// and applies the new score.
+    ///
+    /// Note: a subsequent [`Self::add_rating`] call recomputes `average_rating`
+    /// purely from the underlying `ratings` vector, which silently replaces
+    /// this override — it is a one-off correction, not a persistent pin.
+    pub fn override_rating(&mut self, new_rating: u32) -> Result<(), QuickLendXError> {
+        if new_rating == 0 || new_rating > 5 {
+            return Err(QuickLendXError::InvalidRating);
+        }
+        self.average_rating = Some(new_rating);
+        Ok(())
+    }
+
     pub fn get_highest_rating(&self) -> Option<u32> {
         let mut highest: Option<u32> = None;
         for entry in self.ratings.iter() {

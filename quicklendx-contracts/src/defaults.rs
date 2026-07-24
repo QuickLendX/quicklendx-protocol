@@ -212,6 +212,32 @@ fn resolve_scan_limit(limit: Option<u32>) -> u32 {
         .clamp(1, MAX_OVERDUE_SCAN_BATCH_LIMIT)
 }
 
+#[cfg(test)]
+mod scan_limit_tests {
+    use super::{resolve_scan_limit, MAX_OVERDUE_SCAN_BATCH_LIMIT};
+
+    #[test]
+    fn zero_scan_limit_is_clamped_to_one() {
+        assert_eq!(resolve_scan_limit(Some(0)), 1);
+    }
+
+    #[test]
+    fn maximum_scan_limit_is_accepted() {
+        assert_eq!(
+            resolve_scan_limit(Some(MAX_OVERDUE_SCAN_BATCH_LIMIT)),
+            MAX_OVERDUE_SCAN_BATCH_LIMIT
+        );
+    }
+
+    #[test]
+    fn scan_limit_above_maximum_is_clamped() {
+        assert_eq!(
+            resolve_scan_limit(Some(MAX_OVERDUE_SCAN_BATCH_LIMIT + 1)),
+            MAX_OVERDUE_SCAN_BATCH_LIMIT
+        );
+    }
+}
+
 /// @notice Scans funded invoices in a deterministic bounded window for overdue/default handling.
 /// @dev Uses a rotating cursor stored in instance storage so repeated calls eventually inspect
 ///      the full funded set without any single call walking every invoice. The function reads a
