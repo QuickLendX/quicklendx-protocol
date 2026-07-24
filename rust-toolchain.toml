@@ -1,5 +1,7 @@
 [toolchain]
-# Use a platform-agnostic channel so CI runners pick the correct host-specific
-# toolchain (e.g., x86_64-unknown-linux-gnu on Ubuntu, x86_64-pc-windows-msvc on Windows).
-channel = "stable"
+# Pinned to 1.81.0 because soroban-sdk v25.3.1's build.rs rejects Rust >= 1.82
+# when the wasm32-unknown-unknown target is installed.  Bump this when the SDK
+# or target is updated to wasm32v1-none.
+channel = "1.81.0"
 components = ["rustfmt"]
+targets = ["wasm32-unknown-unknown"]
