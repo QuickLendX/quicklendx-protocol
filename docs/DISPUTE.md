@@ -183,3 +183,4 @@ it blocks settlement:
 - [quicklendx-contracts/docs/contracts/dispute.md](../quicklendx-contracts/docs/contracts/dispute.md) — Full contract-level entrypoint and field-length reference.
 - [docs/dispute-timeline-invariants.md](dispute-timeline-invariants.md) — Executable invariant reference for timeline property tests.
 - [quicklendx-contracts/docs/settlement-dispute-interaction.md](../quicklendx-contracts/docs/settlement-dispute-interaction.md) — How settlement is blocked and resumed across dispute boundaries.
+- [`APPEALS.md`](APPEALS.md) — Appeals process: who reviews, timeline, and outcomes after a dispute is resolved.
