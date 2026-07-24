@@ -96,6 +96,8 @@ mod test_panic_handler;
 #[cfg(test)]
 mod test_due_date_guard;
 #[cfg(test)]
+mod test_auto_resolution_boundary;
+#[cfg(test)]
 mod test_cancel_invoice_matrix;
 #[cfg(test)]
 mod test_invoice;
