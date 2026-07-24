@@ -178,6 +178,7 @@ it blocks settlement:
 
 ## Related documentation
 
+- [Resolution Policy Per Contract](contracts/resolution-policy.md) — Expected downstream effect of each resolution outcome on invoice, settlement, escrow, bids, and investments.
 - [ESCROW](ESCROW.md) — How funds are locked and released.
 - [quicklendx-contracts/docs/contracts/dispute.md](../quicklendx-contracts/docs/contracts/dispute.md) — Full contract-level entrypoint and field-length reference.
 - [docs/dispute-timeline-invariants.md](dispute-timeline-invariants.md) — Executable invariant reference for timeline property tests.

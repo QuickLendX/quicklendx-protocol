@@ -85,6 +85,7 @@ pub mod payments;
 pub mod profits;
 pub mod protocol_limits;
 pub mod reentrancy;
+pub mod resolution_policy;
 pub mod settlement;
 pub mod storage;
 #[cfg(all(test, feature = "legacy-tests"))]
