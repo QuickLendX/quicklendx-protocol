@@ -104,6 +104,7 @@ pub mod payments;
 pub mod profits;
 pub mod protocol_limits;
 pub mod reentrancy;
+pub mod regulatory;
 pub mod settlement;
 pub mod storage;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -193,6 +194,8 @@ mod test_invariant_self_check;
 mod test_investment_consistency;
 #[cfg(test)]
 mod test_operational_limits;
+#[cfg(test)]
+mod test_regulatory;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 // #[cfg(test)]
@@ -1039,6 +1042,12 @@ impl QuickLendXContract {
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&env, &tags)?;
 
+        // Regulatory compliance gate (reserved seam — no-op today).
+        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
+        // jurisdiction-specific or on-chain oracle-based compliance checks without
+        // touching this call site.
+        crate::regulatory::require_regulatory_ok(&env, &business)?;
+
         // Create new invoice
         let invoice = Invoice::new(
             &env,
@@ -1588,6 +1597,11 @@ impl QuickLendXContract {
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &investor)?;
+        // Regulatory compliance gate (reserved seam — no-op today).
+        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
+        // jurisdiction-specific or on-chain oracle-based compliance checks without
+        // touching this call site.
+        crate::regulatory::require_regulatory_ok(&env, &investor)?;
         // Idempotency check
         let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
         if idempotency_exists(&env, &idem_key) {
