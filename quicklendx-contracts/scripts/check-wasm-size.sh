@@ -52,8 +52,18 @@ if [[ "$CHECK_ONLY" == false ]]; then
     echo "Stellar CLI not found; using cargo wasm32v1-none."
     [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
     rustup target add wasm32v1-none 2>/dev/null || true
-    cargo build --target wasm32v1-none --release --lib
+    cargo build --target wasm32v1-none --release
+  fi
+  # Probe expected paths for the WASM artifact
+  if [[ -f "target/wasm32v1-none/release/$WASM_NAME" ]]; then
     WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
+  elif [[ -f "target/wasm32-unknown-unknown/release/$WASM_NAME" ]]; then
+    WASM_PATH="target/wasm32-unknown-unknown/release/$WASM_NAME"
+  else
+    FOUND=$(find target -name "$WASM_NAME" -type f 2>/dev/null | head -1)
+    if [[ -n "$FOUND" ]]; then
+      WASM_PATH="$FOUND"
+    fi
   fi
 else
   # --check-only: probe both target directories for an existing artifact
