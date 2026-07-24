@@ -277,6 +277,8 @@ mod test_fuzz_partial_payment;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(test)]
+mod test_init_debug;
+#[cfg(test)]
 mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
