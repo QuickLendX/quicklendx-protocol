@@ -3266,7 +3266,6 @@ impl QuickLendXContract {
 
         // Apply pagination (overflow-safe) and collect into Soroban Vec.
         let len_u32 = pairs.len() as u32;
-        let capped_limit = cap_query_limit(limit);
         let start = offset.min(len_u32) as usize;
         let capped_limit = cap_query_limit(limit);
         let end = (offset.saturating_add(capped_limit).min(len_u32)) as usize;
