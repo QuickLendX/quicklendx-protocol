@@ -120,7 +120,8 @@ fn test_settle_invoice_allows_when_dispute_is_resolved() {
     let token_client = token::Client::new(&env, &currency);
     let token_admin = token::StellarAssetClient::new(&env, &currency);
     token_admin.mint(&business, &amount);
-    token_client.approve(&business, &contract_id, &amount, &(env.ledger().timestamp() + 1000));
+    let expiry = env.ledger().sequence() + 10_000;
+    token_client.approve(&business, &contract_id, &amount, &expiry);
 
     // Settle invoice should SUCCEED
     let result = client.try_settle_invoice(&invoice_id, &amount);
@@ -155,7 +156,8 @@ fn test_settle_invoice_allows_when_no_dispute_exists() {
     let token_client = token::Client::new(&env, &currency);
     let token_admin = token::StellarAssetClient::new(&env, &currency);
     token_admin.mint(&business, &amount);
-    token_client.approve(&business, &contract_id, &amount, &(env.ledger().timestamp() + 1000));
+    let expiry = env.ledger().sequence() + 10_000;
+    token_client.approve(&business, &contract_id, &amount, &expiry);
 
     // Settle invoice should SUCCEED
     let result = client.try_settle_invoice(&invoice_id, &amount);
