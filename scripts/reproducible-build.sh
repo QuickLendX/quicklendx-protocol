@@ -16,8 +16,8 @@
 # Prerequisites
 # -------------
 #   • rustup + cargo (channel pinned by rust-toolchain.toml)
-#   • wasm32-unknown-unknown target installed
-#       rustup target add wasm32-unknown-unknown
+#   • wasm32v1-none target installed
+#       rustup target add wasm32v1-none
 #   • sha256sum (coreutils) or shasum (macOS fallback)
 #
 # Usage
@@ -37,10 +37,10 @@ set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-WASM_TARGET="wasm32-unknown-unknown"
+WASM_TARGET="wasm32v1-none"
 PACKAGE="quicklendx-contracts"
 WASM_FILE="quicklendx_contracts.wasm"
-WASM_PATH="quicklendx-contracts/target/${WASM_TARGET}/release/${WASM_FILE}"
+WASM_PATH="target/${WASM_TARGET}/release/${WASM_FILE}"
 
 # Extra flags forwarded to every `cargo build` call.
 # --locked  : honour the committed Cargo.lock exactly
