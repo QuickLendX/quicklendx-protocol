@@ -22,8 +22,10 @@
 mod test_evidence_size_cap {
     use crate::errors::QuickLendXError;
     use crate::protocol_limits::MAX_DISPUTE_EVIDENCE_LENGTH;
+    use crate::types::{EvidenceKind, InvoiceCategory};
     use crate::verification::validate_dispute_evidence;
-    use soroban_sdk::{Env, String};
+    use crate::{QuickLendXContract, QuickLendXContractClient};
+    use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
 
     // ------------------------------------------------------------------
     // Helper
@@ -206,7 +208,7 @@ mod test_evidence_size_cap {
         // Open a dispute with minimal (1-char) evidence so we have a Disputed invoice.
         let reason = String::from_str(&env, "reason");
         let initial_evidence = make_evidence(&env, 1);
-        client.create_dispute(&invoice_id, &business, &reason, &initial_evidence);
+        client.create_dispute(&invoice_id, &business, &reason, &initial_evidence, &EvidenceKind::Document);
 
         // Happy path: update with evidence at the cap (2000 chars) must succeed.
         let at_cap = make_evidence(&env, MAX_DISPUTE_EVIDENCE_LENGTH as usize);
@@ -229,5 +231,203 @@ mod test_evidence_size_cap {
             QuickLendXError::InvalidDisputeEvidence,
             "update_dispute_evidence with 2001-char evidence should be rejected (one over cap)"
         );
+    }
+
+    #[test]
+    fn test_dispute_creator_and_evidence_kind_matrix() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let admin = Address::generate(&env);
+
+        let business = Address::generate(&env);
+        let investor = Address::generate(&env);
+        let amount = 1000i128;
+        let due_date = env.ledger().timestamp() + 86400;
+
+        // Set admin, verify business and investor so KYC checks pass.
+        client.set_admin(&admin);
+        client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+        client.verify_business(&admin, &business);
+        client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC"));
+        client.verify_investor(&investor, &(amount * 2));
+
+        // Register a token for place_bid / accept_bid
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin.clone())
+            .address();
+        let sac = token::StellarAssetClient::new(&env, &currency);
+        let tok = token::Client::new(&env, &currency);
+        sac.mint(&investor, &(amount * 10));
+        let expiry = env.ledger().sequence() + 10_000;
+        tok.approve(&investor, &contract_id, &(amount * 10), &expiry);
+
+        let description = String::from_str(&env, "Test invoice");
+
+        // Test cases for Business Creator
+        // Case 1: Business + Document -> Ok
+        {
+            let invoice_id = client.upload_invoice(
+                &business,
+                &amount,
+                &currency,
+                &due_date,
+                &description,
+                &InvoiceCategory::Services,
+                &Vec::new(&env),
+            );
+            client.verify_invoice(&invoice_id);
+
+            let result = client.try_create_dispute(
+                &invoice_id,
+                &business,
+                &String::from_str(&env, "reason"),
+                &String::from_str(&env, "evidence"),
+                &EvidenceKind::Document,
+            );
+            assert!(result.is_ok());
+        }
+
+        // Case 2: Business + Transcript -> Ok
+        {
+            let invoice_id = client.upload_invoice(
+                &business,
+                &amount,
+                &currency,
+                &due_date,
+                &description,
+                &InvoiceCategory::Services,
+                &Vec::new(&env),
+            );
+            client.verify_invoice(&invoice_id);
+
+            let result = client.try_create_dispute(
+                &invoice_id,
+                &business,
+                &String::from_str(&env, "reason"),
+                &String::from_str(&env, "evidence"),
+                &EvidenceKind::Transcript,
+            );
+            assert!(result.is_ok());
+        }
+
+        // Case 3: Business + Other -> Error (InvalidDisputeEvidenceKind)
+        {
+            let invoice_id = client.upload_invoice(
+                &business,
+                &amount,
+                &currency,
+                &due_date,
+                &description,
+                &InvoiceCategory::Services,
+                &Vec::new(&env),
+            );
+            client.verify_invoice(&invoice_id);
+
+            let result = client.try_create_dispute(
+                &invoice_id,
+                &business,
+                &String::from_str(&env, "reason"),
+                &String::from_str(&env, "evidence"),
+                &EvidenceKind::Other,
+            );
+            assert_eq!(result, Err(Ok(QuickLendXError::InvalidDisputeEvidenceKind)));
+        }
+
+        // Test cases for Investor Creator
+        // Case 4: Investor + Document -> Ok
+        {
+            let invoice_id = client.upload_invoice(
+                &business,
+                &amount,
+                &currency,
+                &due_date,
+                &description,
+                &InvoiceCategory::Services,
+                &Vec::new(&env),
+            );
+            client.verify_invoice(&invoice_id);
+            let bid_id = client.place_bid(
+                &investor,
+                &invoice_id,
+                &amount,
+                &(amount + 100),
+                &BytesN::from_array(&env, &[0u8; 32]),
+            );
+            client.accept_bid_and_fund(&invoice_id, &bid_id);
+
+            let result = client.try_create_dispute(
+                &invoice_id,
+                &investor,
+                &String::from_str(&env, "reason"),
+                &String::from_str(&env, "evidence"),
+                &EvidenceKind::Document,
+            );
+            assert!(result.is_ok());
+        }
+
+        // Case 5: Investor + Transcript -> Ok
+        {
+            let invoice_id = client.upload_invoice(
+                &business,
+                &amount,
+                &currency,
+                &due_date,
+                &description,
+                &InvoiceCategory::Services,
+                &Vec::new(&env),
+            );
+            client.verify_invoice(&invoice_id);
+            let bid_id = client.place_bid(
+                &investor,
+                &invoice_id,
+                &amount,
+                &(amount + 100),
+                &BytesN::from_array(&env, &[0u8; 32]),
+            );
+            client.accept_bid_and_fund(&invoice_id, &bid_id);
+
+            let result = client.try_create_dispute(
+                &invoice_id,
+                &investor,
+                &String::from_str(&env, "reason"),
+                &String::from_str(&env, "evidence"),
+                &EvidenceKind::Transcript,
+            );
+            assert!(result.is_ok());
+        }
+
+        // Case 6: Investor + Other -> Error (InvalidDisputeEvidenceKind)
+        {
+            let invoice_id = client.upload_invoice(
+                &business,
+                &amount,
+                &currency,
+                &due_date,
+                &description,
+                &InvoiceCategory::Services,
+                &Vec::new(&env),
+            );
+            client.verify_invoice(&invoice_id);
+            let bid_id = client.place_bid(
+                &investor,
+                &invoice_id,
+                &amount,
+                &(amount + 100),
+                &BytesN::from_array(&env, &[0u8; 32]),
+            );
+            client.accept_bid_and_fund(&invoice_id, &bid_id);
+
+            let result = client.try_create_dispute(
+                &invoice_id,
+                &investor,
+                &String::from_str(&env, "reason"),
+                &String::from_str(&env, "evidence"),
+                &EvidenceKind::Other,
+            );
+            assert_eq!(result, Err(Ok(QuickLendXError::InvalidDisputeEvidenceKind)));
+        }
     }
 }

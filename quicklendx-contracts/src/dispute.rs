@@ -2,10 +2,10 @@ use crate::admin::AdminStorage;
 use crate::dispute_timeline::{clear_under_review_timestamp, set_under_review_timestamp};
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
-use crate::types::{Dispute, DisputeResolution, DisputeStatus};
+use crate::types::{Dispute, DisputeResolution, DisputeStatus, EvidenceKind};
 use crate::verification::{
-    validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
-    validate_dispute_resolution,
+    validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_evidence_kind,
+    validate_dispute_reason, validate_dispute_resolution,
 };
 use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Vec};
 
@@ -147,6 +147,7 @@ pub fn create_dispute(
     creator: &Address,
     reason: &String,
     evidence: &String,
+    evidence_kind: &EvidenceKind,
 ) -> Result<(), QuickLendXError> {
     creator.require_auth();
 
@@ -155,6 +156,7 @@ pub fn create_dispute(
 
     validate_dispute_reason(reason)?;
     validate_dispute_evidence(evidence)?;
+    validate_dispute_evidence_kind(evidence_kind)?;
     validate_dispute_eligibility(&invoice, creator)?;
     clear_under_review_timestamp(env, invoice_id);
 
@@ -165,6 +167,7 @@ pub fn create_dispute(
         created_at: env.ledger().timestamp(),
         reason: reason.clone(),
         evidence: evidence.clone(),
+        evidence_kind: evidence_kind.clone(),
         resolution: String::from_str(env, ""),
         resolved_by: creator.clone(), // Placeholder — overwritten on resolution
         resolved_at: 0,

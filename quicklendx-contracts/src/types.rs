@@ -86,6 +86,19 @@ pub enum DisputeResolution {
     Dismissed,
 }
 
+/// Evidence kind categories for dispute evidence
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum EvidenceKind {
+    /// Generic supporting document
+    Document,
+    /// Transcript or communication log
+    Transcript,
+    /// Any other evidence type
+    Other,
+}
+
+
 impl DisputeResolution {
     pub fn code(self) -> u32 {
         match self {
@@ -136,6 +149,7 @@ pub struct Dispute {
     pub created_at: u64,
     pub reason: String,
     pub evidence: String,
+    pub evidence_kind: EvidenceKind,
     pub resolution: String,
     pub resolved_by: Address,
     pub resolved_at: u64,

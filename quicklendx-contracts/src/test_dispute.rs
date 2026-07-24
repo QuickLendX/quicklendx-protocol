@@ -117,7 +117,7 @@ mod test_dispute {
         let reason = String::from_str(&env, "Invoice amount discrepancy");
         let evidence = String::from_str(&env, "Supporting documentation provided");
 
-        let result = client.try_create_dispute(&invoice_id, &business, &reason, &evidence);
+        let result = client.try_create_dispute(&invoice_id, &business, &reason, &evidence, &EvidenceKind::Document);
         assert!(
             result.is_ok(),
             "Business should be able to create a dispute"
@@ -151,6 +151,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         assert!(result.is_err(), "Non-existent invoice must be rejected");
     }
@@ -172,6 +173,7 @@ mod test_dispute {
             &outsider,
             &String::from_str(&env, "Unauthorized attempt"),
             &String::from_str(&env, "Evidence"),
+            &EvidenceKind::Document,
         );
         assert!(result.is_err());
         let err = result.unwrap_err().expect("expected contract error");
@@ -197,6 +199,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "First dispute"),
             &String::from_str(&env, "Evidence 1"),
+            &EvidenceKind::Document,
         );
 
         let result = client.try_create_dispute(
@@ -204,6 +207,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "Second dispute"),
             &String::from_str(&env, "Evidence 2"),
+            &EvidenceKind::Document,
         );
         assert!(result.is_err());
         let err = result.unwrap_err().expect("expected contract error");
@@ -222,6 +226,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, ""),
             &String::from_str(&env, "Valid evidence"),
+            &EvidenceKind::Document,
         );
         assert!(result.is_err());
         let err = result.unwrap_err().expect("expected contract error");
@@ -241,6 +246,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, long_reason.as_str()),
             &String::from_str(&env, "Valid evidence"),
+            &EvidenceKind::Document,
         );
         assert!(result.is_err());
         let err = result.unwrap_err().expect("expected contract error");
@@ -259,6 +265,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "Valid reason"),
             &String::from_str(&env, ""),
+            &EvidenceKind::Document,
         );
         assert!(result.is_err());
         let err = result.unwrap_err().expect("expected contract error");
@@ -278,6 +285,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "Valid reason"),
             &String::from_str(&env, long_evidence.as_str()),
+            &EvidenceKind::Document,
         );
         assert!(result.is_err());
         let err = result.unwrap_err().expect("expected contract error");
@@ -296,6 +304,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "A"),
             &String::from_str(&env, "Valid evidence"),
+            &EvidenceKind::Document,
         );
         assert!(result.is_ok(), "1-char reason should be accepted");
     }
@@ -313,6 +322,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, max_reason.as_str()),
             &String::from_str(&env, "Valid evidence"),
+            &EvidenceKind::Document,
         );
         assert!(result.is_ok(), "1000-char reason should be accepted");
     }
@@ -333,6 +343,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "Valid reason"),
             &String::from_str(&env, "Valid evidence"),
+            &EvidenceKind::Document,
         );
 
         // Verify initial status
@@ -380,6 +391,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -405,6 +417,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(
@@ -439,6 +452,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -465,7 +479,7 @@ mod test_dispute {
         // Step 1: Create dispute
         let reason = String::from_str(&env, "Service quality issue");
         let evidence = String::from_str(&env, "Documentation attached");
-        client.create_dispute(&invoice_id, &business, &reason, &evidence);
+        client.create_dispute(&invoice_id, &business, &reason, &evidence, &EvidenceKind::Document);
         assert_eq!(
             client.get_invoice(&invoice_id).dispute_status,
             DisputeStatus::Disputed
@@ -509,6 +523,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -549,6 +564,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
 
         let result = client.try_resolve_dispute_structured(
@@ -578,6 +594,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute_structured(
@@ -614,6 +631,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -648,6 +666,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
 
         // Attempt to resolve without going through UnderReview first
@@ -681,6 +700,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(
@@ -716,6 +736,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -737,6 +758,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -781,8 +803,8 @@ mod test_dispute {
 
         let reason = String::from_str(&env, "Dispute");
         let evidence = String::from_str(&env, "Evidence");
-        client.create_dispute(&id1, &business, &reason, &evidence);
-        client.create_dispute(&id2, &business, &reason, &evidence);
+        client.create_dispute(&id1, &business, &reason, &evidence, &EvidenceKind::Document);
+        client.create_dispute(&id2, &business, &reason, &evidence, &EvidenceKind::Document);
         // id3 has no dispute
 
         let list = client.get_invoices_with_disputes();
@@ -803,9 +825,9 @@ mod test_dispute {
 
         let reason = String::from_str(&env, "Test dispute");
         let evidence = String::from_str(&env, "Test evidence");
-        client.create_dispute(&id1, &business, &reason, &evidence);
-        client.create_dispute(&id2, &business, &reason, &evidence);
-        client.create_dispute(&id3, &business, &reason, &evidence);
+        client.create_dispute(&id1, &business, &reason, &evidence, &EvidenceKind::Document);
+        client.create_dispute(&id2, &business, &reason, &evidence, &EvidenceKind::Document);
+        client.create_dispute(&id3, &business, &reason, &evidence, &EvidenceKind::Document);
 
         // Move id2 to UnderReview
         client.put_dispute_under_review(&id2, &admin);
@@ -827,8 +849,8 @@ mod test_dispute {
 
         let reason = String::from_str(&env, "Test dispute");
         let evidence = String::from_str(&env, "Test evidence");
-        client.create_dispute(&id1, &business, &reason, &evidence);
-        client.create_dispute(&id2, &business, &reason, &evidence);
+        client.create_dispute(&id1, &business, &reason, &evidence, &EvidenceKind::Document);
+        client.create_dispute(&id2, &business, &reason, &evidence, &EvidenceKind::Document);
 
         client.put_dispute_under_review(&id1, &admin);
 
@@ -848,8 +870,8 @@ mod test_dispute {
 
         let reason = String::from_str(&env, "Test dispute");
         let evidence = String::from_str(&env, "Test evidence");
-        client.create_dispute(&id1, &business, &reason, &evidence);
-        client.create_dispute(&id2, &business, &reason, &evidence);
+        client.create_dispute(&id1, &business, &reason, &evidence, &EvidenceKind::Document);
+        client.create_dispute(&id2, &business, &reason, &evidence, &EvidenceKind::Document);
 
         // Fully resolve id1
         client.put_dispute_under_review(&id1, &admin);
@@ -874,6 +896,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
 
         let none_list = client.get_invoices_by_dispute_status(&DisputeStatus::None);
@@ -898,8 +921,8 @@ mod test_dispute {
 
         let reason = String::from_str(&env, "Dispute");
         let evidence = String::from_str(&env, "Evidence");
-        client.create_dispute(&id1, &business, &reason, &evidence);
-        client.create_dispute(&id2, &business, &reason, &evidence);
+        client.create_dispute(&id1, &business, &reason, &evidence, &EvidenceKind::Document);
+        client.create_dispute(&id2, &business, &reason, &evidence, &EvidenceKind::Document);
 
         // Advance id1 to UnderReview; id2 should remain Disputed
         client.put_dispute_under_review(&id1, &admin);
@@ -930,7 +953,7 @@ mod test_dispute {
         let reason = String::from_str(&env, "Dispute");
         let evidence = String::from_str(&env, "Evidence");
         for id in [&id0, &id1, &id2, &id3, &id4] {
-            client.create_dispute(id, &business, &reason, &evidence);
+            client.create_dispute(id, &business, &reason, &evidence, &EvidenceKind::Document);
         }
 
         // id2, id3, id4 -> UnderReview
@@ -968,7 +991,7 @@ mod test_dispute {
 
         let reason = String::from_str(&env, "Payment delay");
         let evidence = String::from_str(&env, "Invoice was 30 days late");
-        client.create_dispute(&invoice_id, &business, &reason, &evidence);
+        client.create_dispute(&invoice_id, &business, &reason, &evidence, &EvidenceKind::Document);
 
         // Invoice must appear in the global dispute list
         assert!(client.get_invoices_with_disputes().contains(&invoice_id));
@@ -1030,6 +1053,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "Original reason"),
             &String::from_str(&env, "Original evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(
@@ -1086,6 +1110,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(
@@ -1118,6 +1143,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
 
         // Before resolution: resolved_at must be 0
@@ -1163,6 +1189,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
 
         // Status is Disputed - resolve must fail
@@ -1197,6 +1224,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -1221,6 +1249,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
 
         let result = client.try_put_dispute_under_review(&invoice_id, &attacker);
@@ -1269,6 +1298,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(
@@ -1310,6 +1340,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         assert!(create_result.is_err());
         assert_eq!(
@@ -1350,6 +1381,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, max_evidence.as_str()),
+            &EvidenceKind::Document,
         );
         assert!(ok.is_ok(), "2000-char evidence must be accepted");
 
@@ -1361,6 +1393,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, over_evidence.as_str()),
+            &EvidenceKind::Document,
         );
         assert!(err.is_err());
         assert_eq!(
@@ -1383,6 +1416,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&id1, &admin);
         let max_resolution = "r".repeat(2000);
@@ -1400,6 +1434,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&id2, &admin);
         let over_resolution = "r".repeat(2001);
@@ -1442,8 +1477,8 @@ mod test_dispute {
 
         let reason = String::from_str(&env, "reason");
         let evidence = String::from_str(&env, "evidence");
-        client.create_dispute(&id1, &business, &reason, &evidence);
-        client.create_dispute(&id2, &business, &reason, &evidence);
+        client.create_dispute(&id1, &business, &reason, &evidence, &EvidenceKind::Document);
+        client.create_dispute(&id2, &business, &reason, &evidence, &EvidenceKind::Document);
 
         // Fully resolve id1
         client.put_dispute_under_review(&id1, &admin);
@@ -1477,6 +1512,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "Incorrect settlement amount"),
             &String::from_str(&env, "Initial evidence"),
+            &EvidenceKind::Document,
         );
         client.update_dispute_evidence(
             &invoice_id,
@@ -1516,6 +1552,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
 
         let err = client
@@ -1541,6 +1578,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -1579,12 +1617,14 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "r1"),
             &String::from_str(&env, "e1"),
+            &EvidenceKind::Document,
         );
         client.create_dispute(
             &id2,
             &business,
             &String::from_str(&env, "r2"),
             &String::from_str(&env, "e2"),
+            &EvidenceKind::Document,
         );
 
         let all_disputes = client.get_invoices_with_disputes();
@@ -1648,6 +1688,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
 
         assert_eq!(
@@ -1707,6 +1748,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "first"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         assert_eq!(
             client.get_invoice(&invoice_id).dispute_status,
@@ -1726,7 +1768,8 @@ mod test_dispute {
         // Status unchanged
         assert_eq!(
             client.get_invoice(&invoice_id).dispute_status,
-            DisputeStatus::Disputed
+            DisputeStatus::Disputed,
+            &EvidenceKind::Document,
         );
     }
 
@@ -1742,6 +1785,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -1763,6 +1807,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
 
         let err = client
@@ -1791,6 +1836,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         assert_eq!(
@@ -1810,7 +1856,8 @@ mod test_dispute {
         assert_eq!(err, QuickLendXError::DisputeAlreadyExists);
         assert_eq!(
             client.get_invoice(&invoice_id).dispute_status,
-            DisputeStatus::UnderReview
+            DisputeStatus::UnderReview,
+            &EvidenceKind::Document,
         );
     }
 
@@ -1826,6 +1873,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -1852,6 +1900,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(
@@ -1880,6 +1929,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "done"));
@@ -1900,7 +1950,8 @@ mod test_dispute {
         assert_eq!(err, QuickLendXError::DisputeAlreadyExists);
         assert_eq!(
             client.get_invoice(&invoice_id).dispute_status,
-            DisputeStatus::Resolved
+            DisputeStatus::Resolved,
+            &EvidenceKind::Document,
         );
     }
 
@@ -1916,6 +1967,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "done"));
@@ -1947,6 +1999,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(
@@ -1996,6 +2049,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
 
         let tl = client.get_dispute_timeline(&invoice_id, &0u32, &10u32);
@@ -2017,6 +2071,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
 
@@ -2039,6 +2094,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "done"));
@@ -2071,6 +2127,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "reason"),
             &String::from_str(&env, "evidence"),
+            &EvidenceKind::Document,
         );
         client.put_dispute_under_review(&invoice_id, &admin);
         client.resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "done"));
@@ -2127,7 +2184,8 @@ mod test_dispute {
             err == QuickLendXError::InvoiceNotAvailableForFunding
                 || err == QuickLendXError::DisputeNotAuthorized,
             "Cancelled invoice must not accept a new dispute, got: {:?}",
-            err
+            err,
+            &EvidenceKind::Document,
         );
     }
 
@@ -2154,7 +2212,8 @@ mod test_dispute {
             err == QuickLendXError::InvoiceNotAvailableForFunding
                 || err == QuickLendXError::DisputeNotAuthorized,
             "Defaulted invoice must not accept a new dispute, got: {:?}",
-            err
+            err,
+            &EvidenceKind::Document,
         );
     }
 
@@ -2179,6 +2238,7 @@ mod test_dispute {
             &business,
             &String::from_str(&env, "Payment was correct but service not delivered"),
             &String::from_str(&env, "Supporting evidence"),
+            &EvidenceKind::Document,
         );
         assert!(
             result.is_ok(),

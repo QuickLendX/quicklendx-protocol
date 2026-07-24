@@ -856,6 +856,7 @@ fn test_dispute_lifecycle_field_orders() {
         &biz,
         &reason,
         &String::from_str(&env, "Evidence: invoice #42 shows discrepancy"),
+        &EvidenceKind::Document,
     );
 
     let p0: DisputeCreated = latest_payload(&env, TOPIC_DISPUTE_CREATED);
@@ -1124,6 +1125,7 @@ fn test_dispute_opened_event_schema() {
         &biz,
         &reason,
         &String::from_str(&env, "Supporting evidence"),
+        &EvidenceKind::Document,
     );
 
     // DisputeOpened == DisputeCreated; topic is TOPIC_DISPUTE_CREATED
@@ -1185,7 +1187,7 @@ fn test_no_events_on_duplicate_dispute() {
     client.accept_bid(&id, &bid_id);
 
     let reason = String::from_str(&env, "First dispute");
-    client.create_dispute(&id, &biz, &reason, &String::from_str(&env, "Evidence A"));
+    client.create_dispute(&id, &biz, &reason, &String::from_str(&env, "Evidence A"), &EvidenceKind::Document);
 
     let event_count_after_first = env.events().all().events().len();
 
@@ -1195,6 +1197,7 @@ fn test_no_events_on_duplicate_dispute() {
         &biz,
         &String::from_str(&env, "Second dispute"),
         &String::from_str(&env, "Evidence B"),
+        &EvidenceKind::Document,
     );
     assert!(result.is_err(), "duplicate dispute must fail");
 

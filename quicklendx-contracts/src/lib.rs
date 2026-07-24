@@ -356,7 +356,7 @@ use verification::{
     normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
     require_business_not_pending, require_investor_not_pending,
     revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
-    submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
+    submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_evidence_kind, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
     verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
     BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
@@ -3717,6 +3717,7 @@ impl QuickLendXContract {
         creator: Address,
         reason: String,
         evidence: String,
+        evidence_kind: EvidenceKind,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         creator.require_auth();
@@ -3728,6 +3729,8 @@ impl QuickLendXContract {
         if reason.is_empty() {
             return Err(QuickLendXError::InvalidDisputeReason);
         }
+        // Validate evidence kind
+        validate_dispute_evidence_kind(&evidence_kind)?;
         dispute_timeline::clear_under_review_timestamp(&env, &invoice_id);
         invoice.dispute_status = DisputeStatus::Disputed;
         invoice.dispute = crate::types::Dispute {
@@ -3735,6 +3738,7 @@ impl QuickLendXContract {
             created_at: env.ledger().timestamp(),
             reason: reason.clone(),
             evidence,
+            evidence_kind: evidence_kind.clone(),
             resolution: String::from_str(&env, ""),
             resolved_by: Address::from_str(
                 &env,

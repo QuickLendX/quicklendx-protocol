@@ -7,7 +7,7 @@ use soroban_sdk::{Address, BytesN, Env, String, Vec};
 use crate::storage::InvoiceStorage;
 pub use crate::types::{
     Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata,
-    InvoiceRating, InvoiceStatus,
+    InvoiceRating, InvoiceStatus, EvidenceKind,
 };
 
 /// Maximum normalized tags allowed per invoice.
@@ -113,6 +113,7 @@ impl Invoice {
             created_at: 0,
             reason: String::from_str(env, ""),
             evidence: String::from_str(env, ""),
+            evidence_kind: EvidenceKind::Other,
             resolution: String::from_str(env, ""),
             resolved_by: zero_address(env),
             resolved_at: 0,

@@ -337,6 +337,7 @@ fn test_maintenance_blocks_create_dispute() {
         &creator,
         &String::from_str(&env, "Payment not received"),
         &String::from_str(&env, "evidence.json"),
+        &EvidenceKind::Document,
     );
     assert_eq!(
         result.unwrap_err().unwrap(),

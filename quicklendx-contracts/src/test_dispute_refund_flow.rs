@@ -137,6 +137,7 @@ fn dispute_resolved_against_business_refund_aligns_terminal_statuses() {
         &fx.investor,
         &String::from_str(&fx.env, "Delivered goods were rejected by buyer"),
         &String::from_str(&fx.env, "Inspection record and delivery photos"),
+        &EvidenceKind::Document,
     );
     fx.client
         .put_dispute_under_review(&fx.invoice_id, &fx.admin);

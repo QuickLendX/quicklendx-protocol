@@ -7,7 +7,7 @@ use crate::protocol_limits::{
     MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
 };
 use crate::types::BidStatus;
-use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
+use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus, EvidenceKind};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
 
 /// Maximum normalized tags allowed on an invoice.
@@ -1835,7 +1835,12 @@ pub fn validate_dispute_evidence(evidence: &String) -> Result<(), QuickLendXErro
     }
     Ok(())
 }
-
+pub fn validate_dispute_evidence_kind(evidence_kind: &EvidenceKind) -> Result<(), QuickLendXError> {
+    match evidence_kind {
+        EvidenceKind::Document | EvidenceKind::Transcript => Ok(()),
+        _ => Err(QuickLendXError::InvalidDisputeEvidenceKind),
+    }
+}
 /// @notice Validate dispute resolution string.
 /// @dev Rejects empty strings and strings exceeding MAX_DISPUTE_RESOLUTION_LENGTH (2000 chars).
 /// @param resolution The resolution text to validate.
