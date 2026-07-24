@@ -547,23 +547,16 @@ pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 
         / denominator
 }
 
-<<<<<<< HEAD
 /// Compute the simple interest yield on a principal amount.
 /// Accepts `u32` rate and duration for ergonomic use from typed call sites.
-=======
-/// Compute the simple interest yield on a principal amount (u32 version).
->>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
 ///
 /// # Formula
 /// ```text
 /// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
 /// ```
-<<<<<<< HEAD
 pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
     compute_yield(amount, rate_bps as i128, duration_days as i128)
 }
-=======
->>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
 ///
 /// All arithmetic uses `saturating_mul` / integer division to stay within
 /// `i128` bounds without panicking and to preserve `#![no_std]` discipline.
@@ -577,7 +570,6 @@ pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i12
 /// For fixed `rate_bps` and `duration_days`, `yield` is non-decreasing in `amount`.
 /// For fixed `amount` and `duration_days`, `yield` is non-decreasing in `rate_bps`.
 /// For fixed `amount` and `rate_bps`, `yield` is non-decreasing in `duration_days`.
-<<<<<<< HEAD
 /// Compute the expected return on a principal amount.
 ///
 /// # Returns

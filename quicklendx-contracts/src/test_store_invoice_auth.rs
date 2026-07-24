@@ -1,6 +1,4 @@
 #![cfg(test)]
-<<<<<<< HEAD
-=======
 
 /// # store_invoice Authentication Policy Tests (Issue #790)
 ///

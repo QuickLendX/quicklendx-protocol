@@ -32,11 +32,7 @@ where
 /// Storage key for the pending treasury address during a rotation.
 pub const PENDING_TREASURY_KEY: Symbol = symbol_short!("pnd_trs");
 /// Storage key for the pending treasury execution timestamp.
-<<<<<<< HEAD
 pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("pnd_trs_t");
-=======
-pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("pnd_tr_ts");
->>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
 
 /// Counter and configuration keys for the contract.
 ///

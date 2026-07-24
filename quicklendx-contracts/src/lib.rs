@@ -310,11 +310,11 @@ mod test_volume_tier_props;
 #[cfg(test)]
 mod test_cannot_withdraw_more_than_deposited;
 #[cfg(test)]
-<<<<<<< HEAD
 mod test_store_invoice_auth;
-=======
+#[cfg(test)]
 mod test_tier_boundary;
->>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
+#[cfg(test)]
+mod test_verification_matrix;
 pub mod types;
 pub use types::*;
 pub mod verification;

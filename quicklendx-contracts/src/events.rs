@@ -1525,11 +1525,7 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
 
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
     env.events().publish(
-<<<<<<< HEAD
         (symbol_short!("trs_cncl"), admin.clone()),
-=======
-        (symbol_short!("tr_rot_cn"), admin.clone()),
->>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
         (),
     );
 }
