@@ -85,3 +85,4 @@ npm run dev
 ## Contribution
 
 Please follow the repository guidelines in `AGENTS.md` and include tests for any behavior changes.
+- `docs/QLX_OWNERSHIP_MODEL.md`: Ownership model for invoices and investor bids.
