@@ -192,6 +192,8 @@ pub enum QuickLendXError {
     /// Ledger sequences start at 1; sequence 0 indicates an uninitialised or default-constructed value.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidLedgerSequence = 2205,
+    /// Batch size exceeds backfill max batch size configuration
+    BatchSizeTooLarge = 2206,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -275,7 +277,9 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
-            QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
+            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_PND_TR"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_L_SEQ"),
             QuickLendXError::EmergencyWithdrawTimelockNotElapsed => symbol_short!("EMG_TLK"),
             QuickLendXError::EmergencyWithdrawExpired => symbol_short!("EMG_EXP"),
             QuickLendXError::EmergencyWithdrawCancelled => symbol_short!("EMG_CNL"),
@@ -285,7 +289,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
-            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER")
+            QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
+            QuickLendXError::BatchSizeTooLarge => symbol_short!("BAT_SZ"),
         }
     }
 }

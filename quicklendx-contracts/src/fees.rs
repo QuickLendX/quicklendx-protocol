@@ -42,6 +42,7 @@ pub enum FeeType {
     Verification,
     EarlyPayment,
     LatePayment,
+    Origination,
 }
 
 /// Volume tier for discounted fees
@@ -222,6 +223,7 @@ fn fee_type_label(fee_type: &FeeType) -> &'static str {
         FeeType::Verification => "Verification",
         FeeType::EarlyPayment => "EarlyPayment",
         FeeType::LatePayment => "LatePayment",
+        FeeType::Origination => "Origination",
     }
 }
 
@@ -485,8 +487,8 @@ impl FeeManager {
                     return Err(QuickLendXError::InvalidFeeConfiguration);
                 }
             }
-            FeeType::EarlyPayment | FeeType::LatePayment => {
-                // Early/late payment fees may have different thresholds
+            FeeType::EarlyPayment | FeeType::LatePayment | FeeType::Origination => {
+                // Early/late/origination payment fees may have different thresholds
                 // Allow more flexibility but still bounded
                 let calculated_max_threshold = (base_fee_bps as i128)
                     .saturating_mul(500)

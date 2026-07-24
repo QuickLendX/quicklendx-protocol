@@ -43,6 +43,9 @@ proptest! {
             &String::from_str(&env, "Test Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
+
+            &None,
+
         );
 
         client.verify_invoice(&invoice_id);

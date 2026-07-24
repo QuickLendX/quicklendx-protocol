@@ -529,41 +529,6 @@ pub fn validate_calculation_inputs(
 // Yield Calculation
 // ============================================================================
 
-pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 {
-    let safe_amount = amount.max(0);
-    let safe_rate = rate_bps.max(0);
-    let safe_days = duration_days.max(0);
-
-    if safe_amount == 0 || safe_rate == 0 || safe_days == 0 {
-        return 0;
-    }
-
-    let days_in_year = 365i128;
-    let denominator = BPS_DENOMINATOR.saturating_mul(days_in_year);
-
-    safe_amount
-        .saturating_mul(safe_rate)
-        .saturating_mul(safe_days)
-        / denominator
-}
-
-/// Compute the simple interest yield on a principal amount.
-///
-/// # Formula
-/// ```text
-/// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
-/// ```
-pub fn compute_yield(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
-    let safe_amount = amount.max(0);
-    let safe_rate = rate_bps as i128;
-    let safe_days = duration_days as i128;
-
-    let numerator = safe_amount
-        .saturating_mul(safe_rate)
-        .saturating_mul(safe_days);
-    let denominator = BPS_DENOMINATOR.saturating_mul(365);
-    numerator / denominator
-}
 ///
 /// All arithmetic uses `saturating_mul` / integer division to stay within
 /// `i128` bounds without panicking and to preserve `#![no_std]` discipline.

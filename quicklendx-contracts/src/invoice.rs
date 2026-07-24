@@ -32,6 +32,7 @@ impl Invoice {
         description: String,
         category: InvoiceCategory,
         tags: Vec<String>,
+        origination_fee_bps: Option<u32>,
     ) -> Result<Self, QuickLendXError> {
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -86,6 +87,7 @@ impl Invoice {
             dispute: Self::empty_dispute(env),
             total_paid: 0,
             payment_history: Vec::new(env),
+            origination_fee_bps,
         })
     }
 

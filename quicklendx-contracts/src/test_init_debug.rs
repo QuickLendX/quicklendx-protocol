@@ -22,6 +22,7 @@ fn base_params(admin: Address, treasury: Address, currencies: Vec<Address>) -> I
         max_due_date_days: 365,
         grace_period_seconds: 604800,
         initial_currencies: currencies,
+        backfill_max_batch_size: 100,
     }
 }
 

@@ -119,6 +119,9 @@ fn test_invoice_cancel_authorization() {
         description,
         category,
         tags,
+
+        None,
+
     ).expect("Invoice creation should succeed");
 
     // Attempt to cancel as attacker (not business owner) - should fail
@@ -177,6 +180,9 @@ fn test_invoice_cancel_no_state_preconditions() {
             description.clone(),
             category,
             tags.clone(),
+
+            None,
+
         ).expect("Invoice creation should succeed");
 
         // Set the invoice to the test state

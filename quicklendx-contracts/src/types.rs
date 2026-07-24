@@ -186,6 +186,7 @@ pub struct Invoice {
     pub dispute: Dispute,
     pub total_paid: i128,
     pub payment_history: Vec<PaymentRecord>,
+    pub origination_fee_bps: Option<u32>,
 }
 
 /// Helper struct for metadata updates

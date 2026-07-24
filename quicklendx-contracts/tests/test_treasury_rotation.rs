@@ -2,7 +2,7 @@
 
 extern crate std;
 
-use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient, QuickLendXError};
+use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient, quicklendx_contracts::errors::QuickLendXError};
 use soroban_sdk::{
     testutils::{Address as _, Events},
     Address, Env, IntoVal,
@@ -10,10 +10,10 @@ use soroban_sdk::{
 
 // Helper to setup the test environment.
 // This assumes a similar setup to other tests in the project.
-fn setup() -> (Env, QuickLendXContractClient, Address) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, QuickLendXContract);
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     // The main `initialize` function takes a complex `InitializationParams` struct.
@@ -44,7 +44,7 @@ fn test_cancel_treasury_rotation_by_admin_succeeds() {
 
     // Verify event was emitted
     let events = env.events().all();
-    let last_event = events.last().unwrap();
+    let last_event = events.0.last().unwrap().unwrap();
 
     // This event structure uses the old `publish` format to be consistent
     // with other admin events like `emit_admin_transfer_cancelled`.
@@ -52,7 +52,7 @@ fn test_cancel_treasury_rotation_by_admin_succeeds() {
         last_event,
         (
             client.address.clone(),
-            (soroban_sdk::symbol_short!("tr_rot_cncl"), admin).into_val(&env),
+            (soroban_sdk::symbol_short!("tr_rot_cl"), admin).into_val(&env),
             ().into_val(&env)
         )
     );

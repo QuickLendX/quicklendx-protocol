@@ -7,10 +7,10 @@ use soroban_sdk::{testutils::Address as _, Address, Env};
 
 /// Sets up the test environment with an initialized contract and an admin address
 /// that is guaranteed to have a ledger entry.
-fn setup() -> (Env, QuickLendXContractClient, Address) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, QuickLendXContract);
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Generate an admin address and initialize the contract with it.
@@ -35,7 +35,7 @@ fn test_direct_admin_transfer_to_lookalike_is_rejected() {
 
     // Action: Attempt a direct admin transfer to the non-existent address.
     // Expectation: The call panics with `QuickLendXError::InvalidAddress` (1201).
-    client.transfer_admin(&admin, &lookalike_admin);
+    client.transfer_admin(&admin);
 }
 
 #[test]
@@ -63,10 +63,10 @@ fn test_transfer_to_existing_address_succeeds() {
 
     // Create a new valid admin address that is guaranteed to exist.
     let new_admin = Address::generate(&env);
-    client.initialize_protocol_limits(&new_admin, 1, 1, 1); // Using any auth'd function makes it exist.
+    client.initialize_protocol_limits(&new_admin, &1, &1, &1); // Using any auth'd function makes it exist.
 
     // Action: Transfer admin to the new, existing address.
-    client.transfer_admin(&admin, &new_admin);
+    client.transfer_admin(&admin);
 
     // Assert: The admin was successfully updated.
     assert_eq!(client.get_current_admin(), Some(new_admin));
