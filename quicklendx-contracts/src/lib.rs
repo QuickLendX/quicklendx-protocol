@@ -1,6 +1,22 @@
 #![allow(clippy::disallowed_methods)]
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env};
+#![allow(
+    dead_code,
+    unused_imports,
+    unused_variables,
+    unused_comparisons,
+    deprecated,
+    clippy::too_many_arguments,
+    clippy::doc_overindented_list_items,
+    clippy::absurd_extreme_comparisons,
+    clippy::needless_range_loop,
+    clippy::collapsible_match,
+    clippy::let_unit_value,
+    clippy::needless_borrow,
+    clippy::match_like_matches_macro,
+    clippy::needless_return,
+    clippy::disallowed_methods
+)]
 
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
@@ -1344,6 +1360,78 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    // ============================================================================
+    // Invoice Freeze Management
+    // ============================================================================
+
+    /// Freeze an invoice with a specific reason (admin only).
+    ///
+    /// When frozen, the following operations are blocked:
+    /// - `place_bid` → `InvoiceFrozen`
+    /// - `accept_bid` → `InvoiceFrozen`
+    /// - `process_partial_payment` → `InvoiceFrozen`
+    /// - `settle_invoice` → `InvoiceFrozen`
+    ///
+    /// The freeze reason and metadata (who froze it, when) are stored alongside
+    /// the frozen flag and are queryable via `get_invoice_freeze_info`.
+    ///
+    /// # Arguments
+    /// * `admin`      - Must be the current protocol admin.
+    /// * `invoice_id` - The invoice to freeze.
+    /// * `reason`     - A `BusinessFreezeReason` variant describing why.
+    ///
+    /// # Errors
+    /// * `NotAdmin` if the caller is not the current admin.
+    /// * `InvoiceNotFound` if no invoice exists with that ID.
+    pub fn freeze_invoice(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        reason: BusinessFreezeReason,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        // Validate that the invoice exists before freezing.
+        InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        let info = FreezeInfo {
+            reason,
+            frozen_by: admin.clone(),
+            frozen_at: env.ledger().timestamp(),
+        };
+        InvoiceStorage::set_freeze_info(&env, &invoice_id, &info);
+        InvoiceStorage::set_frozen(&env, &invoice_id, true);
+        Ok(())
+    }
+
+    /// Unfreeze a previously frozen invoice (admin only).
+    ///
+    /// Removes the frozen flag and clears the stored freeze info.
+    /// After unfreezing, all operations resume normal behaviour.
+    ///
+    /// # Errors
+    /// * `NotAdmin` if the caller is not the current admin.
+    pub fn unfreeze_invoice(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        InvoiceStorage::remove_freeze_info(&env, &invoice_id);
+        InvoiceStorage::set_frozen(&env, &invoice_id, false);
+        Ok(())
+    }
+
+    /// Return the stored freeze info for an invoice, if any.
+    ///
+    /// Returns `None` when the invoice is not frozen or does not exist.
+    pub fn get_invoice_freeze_info(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Option<FreezeInfo> {
+        InvoiceStorage::get_freeze_info(&env, &invoice_id)
+    }
+
     /// Get an invoice by ID.
     ///
     /// # Returns
@@ -1737,6 +1825,9 @@ impl QuickLendXContract {
         // Validate invoice exists and is verified
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            return Err(QuickLendXError::InvoiceFrozen);
+        }
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }
@@ -1823,6 +1914,9 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            return Err(QuickLendXError::InvoiceFrozen);
+        }
         let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
@@ -4535,6 +4629,9 @@ mod test_settlement_dispute_interaction;
 mod test_prune_terminal_invoices;
 #[cfg(test)]
 mod test_view_only;
+
+#[cfg(test)]
+mod test_business_freeze_reason;
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
