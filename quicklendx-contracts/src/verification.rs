@@ -8,7 +8,7 @@ use crate::protocol_limits::{
 };
 use crate::types::BidStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, vec, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, vec, Address, Bytes, Env, String, Vec};
 
 /// Maximum normalized tags allowed on an invoice.
 pub const MAX_INVOICE_TAG_COUNT: u32 = 10;
@@ -1855,15 +1855,18 @@ pub fn validate_dispute_evidence(evidence: &String) -> Result<(), QuickLendXErro
     Ok(())
 }
 
+/// Required length for an evidence hash (`BytesN<32>` / SHA-256 digest size).
+pub const EVIDENCE_HASH_LENGTH: u32 = 32;
+
 /// @notice Validate evidence hash format (32-byte BytesN required).
-/// @dev Evidence hashes must be exactly 32 bytes to match cryptographic hash outputs (SHA-256, etc.).
-///      This validation ensures that evidence references use the standard hash format.
-/// @param evidence_hash The evidence hash to validate.
-/// @return Ok(()) if valid, Err(InvalidDisputeEvidence) otherwise.
-pub fn validate_evidence_hash(evidence_hash: &BytesN<32>) -> Result<(), QuickLendXError> {
-    // BytesN<32> is compile-time guaranteed to be exactly 32 bytes.
-    // This function exists to document the requirement and provide a validation hook
-    // for future enhancements (e.g., checking for non-zero values, specific patterns, etc.).
+/// @dev Evidence hashes must be exactly [`EVIDENCE_HASH_LENGTH`] bytes so callers can
+///      safely convert the payload to `BytesN<32>` (SHA-256 and similar digests).
+/// @param evidence_hash The raw evidence hash bytes to validate.
+/// @return Ok(()) if `evidence_hash.len() == 32`, Err(InvalidDisputeEvidence) otherwise.
+pub fn validate_evidence_hash(evidence_hash: &Bytes) -> Result<(), QuickLendXError> {
+    if evidence_hash.len() != EVIDENCE_HASH_LENGTH {
+        return Err(QuickLendXError::InvalidDisputeEvidence);
+    }
     Ok(())
 }
 
