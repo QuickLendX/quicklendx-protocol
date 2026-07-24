@@ -1295,6 +1295,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
+- [Pause Taxonomy & Operational Guidance](../docs/PAUSE_TAXONOMY.md)
 - [Token Decimals — how non-standard decimals are handled internally](../docs/contracts/token-decimals.md)
 - [Stellar Documentation](https://developers.stellar.org/)
 - [Soroban Documentation](https://soroban.stellar.org/)
