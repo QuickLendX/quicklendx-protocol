@@ -194,9 +194,10 @@ pub enum QuickLendXError {
     /// Caller supplied a cursor from a different snapshot generation.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidLedgerSequence = 2205,
-    /// Pagination cursor originates from a different snapshot generation.
+    /// The `store_invoices_batch` call was rejected because the `inputs` vector
+    /// was either empty or exceeded `MAX_BATCH_INVOICES` (= 10).
     /// BREAKING: Do not renumber this variant. public ABI consumption.
-    UnstableCursor = 2206,
+    BatchSizeExceeded = 2206,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -293,8 +294,9 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NP"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_ROT"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
+            QuickLendXError::BatchSizeExceeded => symbol_short!("BATCH_SZ"),
         }
     }
 }

@@ -276,8 +276,10 @@ mod test_line_item_consistency;
 mod test_invoice_search_ranking;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
-// #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_max_invoices_per_business;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_max_invoices_per_business;
+#[cfg(test)]
+mod test_store_invoices_batch;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
 #[cfg(test)]
@@ -1126,6 +1128,117 @@ impl QuickLendXContract {
         emit_invoice_uploaded(&env, &invoice);
 
         Ok(invoice.id)
+    }
+
+    /// Upload multiple invoices for the same business in a single transaction.
+    ///
+    /// Businesses commonly create N invoices per billing cycle. Without this
+    /// entrypoint they must submit N separate transactions, each paying a
+    /// separate resource fee and incurring an extra round-trip latency.
+    /// `store_invoices_batch` fixes that: one auth, one transaction, up to
+    /// `MAX_BATCH_INVOICES` invoices created atomically.
+    ///
+    /// # Authentication & KYC Policy
+    ///
+    /// Identical to [`upload_invoice`]:
+    /// 1. **Business signature** — `business.require_auth()` is called once for
+    ///    the whole batch.
+    /// 2. **Verified KYC** — the business must hold a `Verified` KYC record.
+    ///
+    /// # Atomicity
+    ///
+    /// Either **all** invoices in the batch are stored, or **none** are
+    /// (Soroban's transaction semantics roll back on any error).
+    ///
+    /// # Arguments
+    /// * `env`      — The contract environment.
+    /// * `business` — The address of the invoice-issuing business (must sign).
+    /// * `inputs`   — A `Vec<InvoiceInput>` of length 1 ..= `MAX_BATCH_INVOICES`.
+    ///
+    /// # Returns
+    /// * `Ok(Vec<BytesN<32>>)` — Ordered list of newly assigned invoice IDs, one
+    ///   per input entry.
+    ///
+    /// # Errors
+    /// * `ContractPaused`                  — protocol is paused.
+    /// * `BatchSizeExceeded`               — `inputs` is empty or exceeds
+    ///   `MAX_BATCH_INVOICES` (= 10).
+    /// * `BusinessNotVerified`  (1600)     — business has no KYC record or was rejected.
+    /// * `KYCAlreadyPending`    (1601)     — business KYC is still pending review.
+    /// * `MaxInvoicesPerBusinessExceeded`  — the batch would push the business over
+    ///   its active-invoice cap.
+    /// * Any per-invoice validation error (propagated immediately, aborting the batch).
+    pub fn store_invoices_batch(
+        env: Env,
+        business: Address,
+        inputs: Vec<InvoiceInput>,
+    ) -> Result<Vec<BytesN<32>>, QuickLendXError> {
+        // ── Pause gate ────────────────────────────────────────────────────────
+        pause::PauseControl::require_not_paused(&env)?;
+
+        // ── Auth ──────────────────────────────────────────────────────────────
+        require_not_self(&env, &business)?;
+        business.require_auth();
+
+        // ── KYC gate ──────────────────────────────────────────────────────────
+        require_business_not_pending(&env, &business)?;
+
+        // ── Batch size guard ──────────────────────────────────────────────────
+        let batch_len = inputs.len();
+        if batch_len == 0 || batch_len > protocol_limits::MAX_BATCH_INVOICES {
+            return Err(QuickLendXError::BatchSizeExceeded);
+        }
+
+        // ── Per-business active-invoice cap ───────────────────────────────────
+        // Pre-flight: the entire batch must fit within the remaining headroom.
+        let limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+        if limits.max_invoices_per_business > 0 {
+            let active_count = InvoiceStorage::count_active_business_invoices(&env, &business);
+            let remaining = limits
+                .max_invoices_per_business
+                .saturating_sub(active_count);
+            if batch_len > remaining {
+                return Err(QuickLendXError::MaxInvoicesPerBusinessExceeded);
+            }
+        }
+
+        // ── Validate every input before writing any storage ───────────────────
+        // Two-pass approach: validate all, then write all. This makes the
+        // atomicity guarantee easier to reason about and avoids partial writes.
+        for input in inputs.iter() {
+            verify_invoice_data(
+                &env,
+                &business,
+                input.amount,
+                &input.currency,
+                input.due_date,
+                &input.description,
+            )?;
+            currency::CurrencyWhitelist::require_allowed_currency(&env, &input.currency)?;
+            verification::validate_invoice_category(&input.category)?;
+            verification::validate_invoice_tags(&env, &input.tags)?;
+        }
+
+        // ── Create & store invoices ───────────────────────────────────────────
+        let mut ids: Vec<BytesN<32>> = Vec::new(&env);
+        for input in inputs.iter() {
+            let invoice = Invoice::new(
+                &env,
+                business.clone(),
+                input.amount,
+                input.currency.clone(),
+                input.due_date,
+                input.description.clone(),
+                input.category,
+                input.tags.clone(),
+            )?;
+            let id = invoice.id.clone();
+            InvoiceStorage::store_invoice(&env, &invoice);
+            emit_invoice_uploaded(&env, &invoice);
+            ids.push_back(id);
+        }
+
+        Ok(ids)
     }
 
     /// Accept a bid and fund the invoice using escrow (transfer in from investor).

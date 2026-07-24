@@ -305,6 +305,14 @@ pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> 
 /// Maximum number of active invoices allowed per business
 pub const MAX_ACTIVE_INVOICES_PER_BUSINESS: u32 = 100;
 
+/// Maximum number of invoices that can be created in a single batch call.
+///
+/// This constant caps the size of a `store_invoices_batch` submission to
+/// prevent a single transaction from consuming an unbounded amount of CPU and
+/// storage budget. Callers that need to submit more than this many invoices
+/// should split the work across multiple calls.
+pub const MAX_BATCH_INVOICES: u32 = 10;
+
 /// Determine if an invoice status is considered "active" for limit enforcement.
 ///
 /// Active invoices are those that are still in the lifecycle and not yet resolved.
