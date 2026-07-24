@@ -6,12 +6,12 @@ use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, String};
 
-fn setup(env: &Env) -> (QuickLendXContractClient<'static>, Address) {
+fn setup(env: &Env) -> (QuickLendXContractClient, Address) {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(env, &contract_id);
     let admin = Address::generate(env);
-    client.initialize_admin(&admin);
+    client.set_admin(&admin);
     (client, admin)
 }
 
@@ -63,10 +63,7 @@ fn test_enter_incident_mode_over_cap_reason_fails() {
     let over_cap_reason = reason_of_len(&env, (MAX_REASON_LEN + 1) as usize);
     let result = client.try_enter_incident_mode(&admin, &over_cap_reason);
 
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        QuickLendXError::InvalidDescription
-    );
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidDescription)));
     assert!(!client.is_paused());
     assert!(!client.is_maintenance_mode());
 }
