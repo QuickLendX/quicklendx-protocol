@@ -311,6 +311,8 @@ mod test_volume_tier_props;
 // path (always runs) + proptest property (requires fuzz-tests feature).
 #[cfg(test)]
 mod test_cannot_withdraw_more_than_deposited;
+#[cfg(test)]
+mod test_tier_boundary;
 pub mod types;
 pub use types::*;
 pub mod verification;
