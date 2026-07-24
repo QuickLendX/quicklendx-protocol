@@ -128,6 +128,8 @@ mod test_admin_two_step;
 mod test_audit;
 #[cfg(test)]
 mod test_audit_config;
+#[cfg(test)]
+mod test_rating_override;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -356,6 +358,13 @@ use verification::{
 };
 
 use crate::storage::{BidStorage, InvoiceStorage};
+
+/// Render a 1-5 rating score as a decimal `String` for audit-log serialization.
+fn fmt_rating(env: &Env, value: u32) -> String {
+    let mut buf = [0u8; 10];
+    let len = audit::write_u64_to_buf(&mut buf, value as u64);
+    String::from_str(env, core::str::from_utf8(&buf[..len]).unwrap_or("0"))
+}
 
 #[contract]
 pub struct QuickLendXContract;
@@ -3450,6 +3459,64 @@ impl QuickLendXContract {
         let ts = env.ledger().timestamp();
         invoice.add_rating(rating, feedback, rater, ts)?;
         InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// Admin-only: override an invoice's computed average rating.
+    ///
+    /// A one-off manual override for correcting a fraudulent or erroneous
+    /// rating discovered off-chain. Every use is recorded in the append-only
+    /// audit trail together with the caller-supplied `reason`.
+    ///
+    /// # Threat model
+    /// Without a mandatory, logged reason, an admin could silently rewrite an
+    /// invoice's displayed rating — e.g. to bury a legitimate bad-faith
+    /// complaint or inflate a business's track record — leaving investors who
+    /// rely on that score with no way to detect or attribute the change after
+    /// the fact. Requiring a non-empty, length-bounded reason and routing the
+    /// mutation through the tamper-evident audit trail (see `audit.rs`) closes
+    /// that accountability gap; the reason check happens before the storage
+    /// write so an override can never be applied without a corresponding
+    /// audit entry.
+    ///
+    /// # Errors
+    /// * `NotAdmin` / `OperationNotAllowed` — caller is not the current admin.
+    /// * `InvalidRatingOverrideReason` — `reason` is empty or exceeds
+    ///   `protocol_limits::MAX_RATING_OVERRIDE_REASON_LENGTH`.
+    /// * `InvoiceNotFound` — `invoice_id` does not exist.
+    /// * `InvalidRating` — `new_rating` is not in `1..=5`.
+    pub fn rating_override(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        new_rating: u32,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin_auth(&env, &admin)?;
+
+        if reason.is_empty() || reason.len() > protocol_limits::MAX_RATING_OVERRIDE_REASON_LENGTH {
+            return Err(QuickLendXError::InvalidRatingOverrideReason);
+        }
+
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        let old_value = invoice.average_rating.map(|r| fmt_rating(&env, r));
+
+        invoice.override_rating(new_rating)?;
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        audit::log_operation(
+            &env,
+            invoice_id,
+            audit::AuditOperation::RatingOverridden,
+            admin,
+            old_value,
+            Some(fmt_rating(&env, new_rating)),
+            None,
+            Some(reason),
+        );
+
         Ok(())
     }
 
