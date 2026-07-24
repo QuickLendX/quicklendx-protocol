@@ -90,6 +90,9 @@ pub enum QuickLendXError {
     AlreadyRated = 1502,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotRater = 1503,
+    /// Admin rating override was requested without a non-empty, bounded-length audit reason.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidRatingOverrideReason = 1504,
 
     // KYC / verification (1600-1604)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -235,6 +238,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotFunded => symbol_short!("NOT_FD"),
             QuickLendXError::AlreadyRated => symbol_short!("ALR_RT"),
             QuickLendXError::NotRater => symbol_short!("NOT_RT"),
+            QuickLendXError::InvalidRatingOverrideReason => symbol_short!("RT_OV_RSN"),
             // KYC / verification
             QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
             QuickLendXError::KYCAlreadyPending => symbol_short!("KYC_PD"),

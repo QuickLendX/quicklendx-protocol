@@ -69,6 +69,8 @@ pub enum AuditOperation {
     ConfigFeeStructureChanged,
     /// Admin reconfigured revenue-distribution shares.
     ConfigRevenueDistributionChanged,
+    /// Admin manually overrode an invoice's computed average rating.
+    RatingOverridden,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -100,6 +102,7 @@ pub enum OpType {
     ConfigTreasuryChanged,
     ConfigFeeStructureChanged,
     ConfigRevenueDistributionChanged,
+    RatingOverridden,
 }
 
 impl OpType {
@@ -127,6 +130,7 @@ impl OpType {
             OpType::ConfigTreasuryChanged => symbol_short!("cfg_trs"),
             OpType::ConfigFeeStructureChanged => symbol_short!("cfg_fstr"),
             OpType::ConfigRevenueDistributionChanged => symbol_short!("cfg_rev"),
+            OpType::RatingOverridden => symbol_short!("rt_over"),
         }
     }
 
@@ -154,6 +158,7 @@ impl OpType {
             OpType::ConfigTreasuryChanged => 18,
             OpType::ConfigFeeStructureChanged => 19,
             OpType::ConfigRevenueDistributionChanged => 20,
+            OpType::RatingOverridden => 21,
         }
     }
 }
@@ -184,6 +189,7 @@ impl From<AuditOperation> for OpType {
             AuditOperation::ConfigRevenueDistributionChanged => {
                 OpType::ConfigRevenueDistributionChanged
             }
+            AuditOperation::RatingOverridden => OpType::RatingOverridden,
         }
     }
 }
@@ -423,6 +429,7 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::ConfigTreasuryChanged => 18,
         AuditOperation::ConfigFeeStructureChanged => 19,
         AuditOperation::ConfigRevenueDistributionChanged => 20,
+        AuditOperation::RatingOverridden => 21,
     }
 }
 
