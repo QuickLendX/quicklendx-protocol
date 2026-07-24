@@ -2376,7 +2376,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
     ) -> Result<payments::EscrowStatus, QuickLendXError> {
         let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .unwrap();
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         Ok(escrow.status)
     }
 

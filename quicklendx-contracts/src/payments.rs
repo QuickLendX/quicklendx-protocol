@@ -9,6 +9,13 @@ use crate::types::RebuildReport;
 use soroban_sdk::token;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, TryFromVal, Val, Vec};
 
+/// Minimum transfer amount to prevent dust transfers.
+/// Matches the test-mode MIN_TRANSFER from protocol_limits.rs.
+#[cfg(not(test))]
+const MIN_TRANSFER: i128 = 1_000_000; // 1 token (6 decimals)
+#[cfg(test)]
+const MIN_TRANSFER: i128 = 10;
+
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
@@ -616,6 +623,11 @@ pub fn transfer_funds(
         return Err(QuickLendXError::InvalidAmount);
     }
 
+    // Reject amounts below the minimum transfer threshold (dust prevention)
+    if amount < MIN_TRANSFER {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
     if from == to {
         return Err(QuickLendXError::SelfTransfer);
     }
@@ -623,7 +635,7 @@ pub fn transfer_funds(
     let token_client = token::Client::new(env, currency);
     let contract_address = env.current_contract_address();
 
-    // Ensure sufficient balance exists before attempting transfer
+    // Ensure sufficient balance exists before attempting transfer.
     let available_balance = token_client.balance(from);
     if available_balance < amount {
         return Err(QuickLendXError::InsufficientFunds);
