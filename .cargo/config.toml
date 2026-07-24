@@ -1,7 +1,7 @@
 [build]
 rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
 
-[target.wasm32-unknown-unknown]
+[target.wasm32v1-none]
 rustflags = ["--cfg", "getrandom_backend=\"wasm_js\""]
 
 [profile.test]

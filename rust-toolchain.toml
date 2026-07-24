@@ -1,7 +1,4 @@
 [toolchain]
-# Pinned to 1.81.0 because soroban-sdk v25.3.1's build.rs rejects Rust >= 1.82
-# when the wasm32-unknown-unknown target is installed.  Bump this when the SDK
-# or target is updated to wasm32v1-none.
-channel = "1.81.0"
+channel = "stable"
 components = ["rustfmt"]
-targets = ["wasm32-unknown-unknown"]
+targets = ["wasm32v1-none"]
