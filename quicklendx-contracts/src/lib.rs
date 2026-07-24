@@ -161,6 +161,8 @@ mod test_currency_match_funding;
 mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
+#[cfg(test)]
+mod test_evidence_size_cap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
@@ -2537,6 +2539,23 @@ impl QuickLendXContract {
     /// @return Hard upper bound accepted by `scan_overdue_invoices`.
     pub fn get_overdue_scan_batch_limit_max(_env: Env) -> u32 {
         defaults::max_overdue_scan_batch_limit()
+    }
+
+    /// @notice Returns the suggested default page size for settlement/payment record queries.
+    /// @dev This is a soft hint for off-chain indexers. Actual query limits are enforced by
+    ///      the contract's MAX_QUERY_LIMIT. Indexers should use this value as a starting point
+    ///      for pagination to balance efficiency and memory usage.
+    /// @return Default settlement batch size (25) — recommended number of payment records per page.
+    pub fn get_settlement_batch_size_soft_cap(_env: Env) -> u32 {
+        settlement::default_settlement_batch_size_soft_cap()
+    }
+
+    /// @notice Returns the maximum page size for settlement/payment record queries.
+    /// @dev This represents the hard upper bound enforced by the contract. Query requests
+    ///      exceeding this limit will be automatically clamped to this value by `get_payment_records`.
+    /// @return Maximum settlement batch size (50) — hard cap for payment records per query.
+    pub fn get_settlement_batch_size_soft_cap_max(_env: Env) -> u32 {
+        settlement::max_settlement_batch_size_soft_cap()
     }
 
     /// Check whether a specific invoice has expired and trigger default handling when necessary
