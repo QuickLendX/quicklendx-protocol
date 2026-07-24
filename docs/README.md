@@ -21,6 +21,7 @@
 | [backup.md](contracts/backup.md) | Backup and restore |
 | [audit.md](contracts/audit.md) | Audit trail and hash chain |
 | [CROSS_INVOICE_ANALYTICS.md](CROSS_INVOICE_ANALYTICS.md) | Cross-invoice read patterns, supported entrypoints, and pagination bounds for contributors and integrators |
+| [QLX_REPORT_LIFECYCLE.md](QLX_REPORT_LIFECYCLE.md) | Analytics report lifecycle — Requested → Delivered → Archived, entrypoints, storage layout, and invariants |
 | [UPGRADE_QUIESCE.md](UPGRADE_QUIESCE.md) | How writes drain before a contract upgrade — maintenance mode, drain window, and operator checklist |
 
 ## UX / frontend reference
