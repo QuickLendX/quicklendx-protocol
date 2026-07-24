@@ -862,7 +862,7 @@ Aggregate across all schedules for a user: total vested, total released, total r
 
 ## Pagination Conventions
 
-All paginated endpoints (`*_paged`) follow the same conventions:
+All paginated endpoints (`*_paged`) follow the same conventions. For a detailed specification of ordering guarantees, snapshot consistency, cursor stability, and multi-page concurrency behavior, see [Query Semantics & Paged Read Guarantees](QUERY_SEMANTICS.md).
 
 | Rule | Behaviour |
 |---|---|
