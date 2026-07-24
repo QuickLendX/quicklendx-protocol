@@ -52,7 +52,7 @@ fn test_cancel_treasury_rotation_by_admin_succeeds() {
         last_event,
         (
             client.address.clone(),
-            (soroban_sdk::symbol_short!("tr_rot_cncl"), admin).into_val(&env),
+            (soroban_sdk::symbol_short!("tr_rot_cn"), admin).into_val(&env),
             ().into_val(&env)
         )
     );
