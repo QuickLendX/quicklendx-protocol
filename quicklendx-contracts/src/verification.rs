@@ -156,14 +156,12 @@ impl BusinessVerificationStorage {
         new_rejection_reason: &Option<String>,
     ) -> Result<(), QuickLendXError> {
         if let Some(old_ver) = old_verification {
-            // If there was an old rejection reason, the new one must match exactly
+            // If there was an old rejection reason and a new rejection reason is provided, they must match
             if let Some(old_reason) = &old_ver.rejection_reason {
                 if let Some(new_reason) = new_rejection_reason {
                     if old_reason != new_reason {
                         return Err(QuickLendXError::InvalidKYCStatus); // Cannot change rejection reason
                     }
-                } else {
-                    return Err(QuickLendXError::InvalidKYCStatus); // Cannot remove rejection reason
                 }
             }
         }

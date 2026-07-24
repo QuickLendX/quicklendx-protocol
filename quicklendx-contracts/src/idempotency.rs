@@ -1,4 +1,5 @@
-use crate::storage::{bump_persistent, extend_persistent_ttl};
+use soroban_sdk::{symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, Symbol};
+use crate::storage::{extend_persistent_ttl};
 
 /// Storage key for the idempotency map.
 pub const IDEMPOTENCY_MAP_KEY: Symbol = symbol_short!("idem_map");
@@ -12,7 +13,7 @@ pub fn idempotency_key(
     // Hash the concatenation of invoice_id, investor, and salt to produce a unique key
     let mut data = Bytes::new(env);
     data.append(&Bytes::from_array(env, &invoice_id.to_array()));
-    data.append(&investor.to_string().to_bytes());
+    data.append(&investor.to_xdr(env));
     data.append(&Bytes::from_array(env, &salt.to_array()));
     env.crypto().sha256(&data).into()
 }

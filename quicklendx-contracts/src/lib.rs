@@ -311,6 +311,8 @@ mod test_volume_tier_props;
 // path (always runs) + proptest property (requires fuzz-tests feature).
 #[cfg(test)]
 mod test_cannot_withdraw_more_than_deposited;
+#[cfg(test)]
+mod test_store_invoice_auth;
 pub mod types;
 pub use types::*;
 pub mod verification;
@@ -970,10 +972,16 @@ impl QuickLendXContract {
     // Invoice Management Functions
     // ============================================================================
 
-    /// Store an invoice in the contract (unauthenticated; use `upload_invoice` for business flow).
+    /// Store an invoice in the contract.
+    ///
+    /// Requires explicit authorization from the `business` address **and** a
+    /// `Verified` KYC record. Only KYC-verified ("tier-N") businesses may write
+    /// invoice data on-chain. This is the primary anti-spam gate: it prevents
+    /// unvetted addresses from polluting on-chain storage and misleading investors
+    /// with fraudulent invoice listings.
     ///
     /// # Arguments
-    /// * `business` - Address of the business that owns the invoice
+    /// * `business` - Address of the business that owns the invoice (must sign)
     /// * `amount` - Invoice amount in smallest currency unit (e.g. cents)
     /// * `currency` - Token contract address for the invoice currency
     /// * `due_date` - Unix timestamp when the invoice is due
@@ -985,6 +993,8 @@ impl QuickLendXContract {
     /// * `Ok(BytesN<32>)` - The new invoice ID
     ///
     /// # Errors
+    /// * `BusinessNotVerified` (1600) if the business has no KYC record or is rejected
+    /// * `KYCAlreadyPending`   (1601) if the business KYC is awaiting admin review
     /// * `InvalidAmount` if amount <= 0
     /// * `InvoiceDueDateInvalid` if due_date is not in the future
     /// * `InvalidDescription` if description is empty
@@ -1004,6 +1014,18 @@ impl QuickLendXContract {
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &business)?;
+
+        // SECURITY LAYER 1: Require explicit authorization from the business address.
+        // This ensures only the business itself can create invoices — not the admin,
+        // not a third party. Prevents impersonation and unauthorized storage writes.
+        business.require_auth();
+
+        // SECURITY LAYER 2: KYC gate — only Verified ("tier-N") businesses may
+        // create invoices. Pending → KYCAlreadyPending; Rejected/unknown →
+        // BusinessNotVerified. This is the primary anti-spam control and enforces
+        // the invariant documented in docs/KYC.md.
+        require_business_not_pending(&env, &business)?;
+
         // Validate input parameters
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -1029,11 +1051,6 @@ impl QuickLendXContract {
 
         // Enforcement: reject invoices whose currency is not whitelisted (when whitelist is non-empty).
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
-
-        // Check if business is verified (temporarily disabled for debugging)
-        // if !verification::BusinessVerificationStorage::is_business_verified(&env, &business) {
-        //     return Err(QuickLendXError::BusinessNotVerified);
-        // }
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;

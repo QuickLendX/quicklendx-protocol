@@ -548,21 +548,14 @@ pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 
 }
 
 /// Compute the simple interest yield on a principal amount.
+/// Accepts `u32` rate and duration for ergonomic use from typed call sites.
 ///
 /// # Formula
 /// ```text
 /// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
 /// ```
-pub fn compute_yield(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
-    let safe_amount = amount.max(0);
-    let safe_rate = rate_bps as i128;
-    let safe_days = duration_days as i128;
-
-    let numerator = safe_amount
-        .saturating_mul(safe_rate)
-        .saturating_mul(safe_days);
-    let denominator = BPS_DENOMINATOR.saturating_mul(365);
-    numerator / denominator
+pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+    compute_yield(amount, rate_bps as i128, duration_days as i128)
 }
 ///
 /// All arithmetic uses `saturating_mul` / integer division to stay within
@@ -582,38 +575,11 @@ pub fn compute_yield(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
 /// # Returns
 /// Total expected return (principal + yield)
 pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
-    let yield_amount = compute_yield(amount, rate_bps.into(), duration_days.into());
+    let yield_amount = compute_yield_u32(amount, rate_bps, duration_days);
     amount.max(0).saturating_add(yield_amount)
 }
 
-/// Compute the simple interest yield on a principal amount.
-///
-/// # Formula
-/// ```text
-/// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
-/// ```
-///
-/// All arithmetic uses `saturating_mul` / integer division to stay within
-/// `i128` bounds without panicking and to preserve `#![no_std]` discipline.
-///
-/// # Arguments
-/// * `amount`        — Principal (must be >= 0; negative input returns 0)
-/// * `rate_bps`      — Annual rate in basis points, e.g. 500 = 5 %
-/// * `duration_days` — Holding period in days
-///
-/// # Returns
-/// Simple interest yield (non-negative).
-pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 {
-    if amount <= 0 || rate_bps <= 0 || duration_days <= 0 {
-        return 0;
-    }
-    // amount * rate_bps * duration_days / (10_000 * 365)
-    let numerator = amount
-        .saturating_mul(rate_bps)
-        .saturating_mul(duration_days);
-    let denominator: i128 = BPS_DENOMINATOR.saturating_mul(365);
-    numerator / denominator
-}
+
 
 /// A single ledger-delta entry for time-weighted average calculations.
 ///
