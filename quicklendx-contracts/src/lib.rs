@@ -234,6 +234,9 @@ mod test_string_limits;
 mod test_analytics_consistency;
 #[cfg(test)]
 mod test_bid_capacity_stress;
+// Issue #1891 — min-partial-fill amount boundary: at limit, one below, one above.
+#[cfg(test)]
+mod test_min_partial_fill_boundary;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
