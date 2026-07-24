@@ -49,11 +49,11 @@ if [[ "$CHECK_ONLY" == false ]]; then
     stellar contract build --verbose
     WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
   else
-    echo "Stellar CLI not found; using cargo wasm32-unknown-unknown."
+    echo "Stellar CLI not found; using cargo wasm32v1-none."
     [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
-    rustup target add wasm32-unknown-unknown 2>/dev/null || true
-    cargo build --target wasm32-unknown-unknown --release --lib
-    WASM_PATH="target/wasm32-unknown-unknown/release/$WASM_NAME"
+    rustup target add wasm32v1-none 2>/dev/null || true
+    cargo build --target wasm32v1-none --release --lib
+    WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
   fi
 else
   # --check-only: probe both target directories for an existing artifact
