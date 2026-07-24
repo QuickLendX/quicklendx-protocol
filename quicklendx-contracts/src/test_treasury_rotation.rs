@@ -33,6 +33,17 @@ fn test_initiate_rotation_stores_pending_request() {
 
     assert_eq!(req.new_address, new_treasury);
     assert!(req.confirmation_deadline > req.initiated_at);
+    
+    let events = env.events().all();
+    let contains_event = events.iter().any(|e| {
+        let topics = e.2.clone();
+        if let Ok(topic_0) = topics.get(0).unwrap().try_into_val(env) {
+            let topic_0_sym: soroban_sdk::Symbol = topic_0;
+            return topic_0_sym == soroban_sdk::symbol_short!("tr_rot_in") || topic_0_sym == soroban_sdk::Symbol::new(&env, "treasury_rotation_initiated");
+        }
+        false
+    });
+    assert!(contains_event, "Should emit treasury_rotation_initiated event");
 }
 
 #[test]
@@ -119,6 +130,17 @@ fn test_confirm_rotation_updates_treasury_address() {
 
     assert_eq!(confirmed, new_treasury);
     assert_eq!(client.get_treasury_address().unwrap(), new_treasury);
+    
+    let events = env.events().all();
+    let contains_event = events.iter().any(|e| {
+        let topics = e.2.clone();
+        if let Ok(topic_0) = topics.get(0).unwrap().try_into_val(env) {
+            let topic_0_sym: soroban_sdk::Symbol = topic_0;
+            return topic_0_sym == soroban_sdk::Symbol::new(&env, "treasury_rotation_confirmed");
+        }
+        false
+    });
+    assert!(contains_event, "Should emit treasury_rotation_confirmed event");
 }
 
 #[test]
