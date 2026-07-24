@@ -1,5 +1,4 @@
 extern crate alloc;
-use alloc::vec::Vec;
 /// # Bid Ranking Determinism Tests  (Issue #1551)
     use core::cmp::Ordering;
     use soroban_sdk::{
