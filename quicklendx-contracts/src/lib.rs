@@ -156,6 +156,8 @@ mod test_currency_match_funding;
 mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
+#[cfg(test)]
+mod test_evidence_size_cap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
