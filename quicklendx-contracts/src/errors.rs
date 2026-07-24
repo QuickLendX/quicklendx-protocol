@@ -191,10 +191,12 @@ pub enum QuickLendXError {
     DuplicateDefaultTransition = 2202,
     BackupVersionUnsupported = 2203,
     DuplicateBid = 2204,
-    /// Caller supplied ledger sequence 0, which is not a valid Soroban ledger sequence.
-    /// Ledger sequences start at 1; sequence 0 indicates an uninitialised or default-constructed value.
+    /// Caller supplied a cursor from a different snapshot generation.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidLedgerSequence = 2205,
+    /// Pagination cursor originates from a different snapshot generation.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    UnstableCursor = 2206,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -291,7 +293,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LEDG")
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LEDG"),
+            QuickLendXError::UnstableCursor => symbol_short!("STBL_CUR")
         }
     }
 }
