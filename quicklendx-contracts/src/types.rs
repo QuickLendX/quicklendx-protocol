@@ -188,6 +188,29 @@ pub struct Invoice {
     pub payment_history: Vec<PaymentRecord>,
 }
 
+/// Input type for a single invoice within a `store_invoices_batch` call.
+///
+/// Bundles every per-invoice field so the batch entrypoint can accept a
+/// `Vec<InvoiceInput>` with a single-argument list, keeping the public ABI
+/// clean and future-proof (adding optional metadata requires a new struct
+/// version rather than a new variadic argument list).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvoiceInput {
+    /// Invoice face value in the smallest currency unit (must be > 0).
+    pub amount: i128,
+    /// Token contract address for the invoice currency.
+    pub currency: Address,
+    /// Unix timestamp by which the invoice must be settled (must be in the future).
+    pub due_date: u64,
+    /// Human-readable invoice description (max `MAX_DESCRIPTION_LENGTH` bytes).
+    pub description: String,
+    /// Invoice category (Services, Products, etc.).
+    pub category: InvoiceCategory,
+    /// Optional searchable tags (max `MAX_INVOICE_TAGS` entries, each max 50 bytes).
+    pub tags: Vec<String>,
+}
+
 /// Helper struct for metadata updates
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
