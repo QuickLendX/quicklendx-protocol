@@ -246,6 +246,10 @@ mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
 #[cfg(test)]
+mod test_investor_kyc;
+#[cfg(test)]
+mod test_investor_rating_recompute;
+#[cfg(test)]
 mod test_vesting;
 mod test_vesting_summary;
 // Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
