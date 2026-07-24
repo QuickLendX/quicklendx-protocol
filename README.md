@@ -73,6 +73,7 @@ npm run dev
 - [`docs/READ_MODEL_CONSISTENCY.md`](docs/READ_MODEL_CONSISTENCY.md): Contributor-facing guide for how write entrypoints map to the later read/view model used by `get_*` queries.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
 - [`docs/APPEALS.md`](docs/APPEALS.md): Appeals process — who reviews, timeline, outcomes, and how they affect funds — operator-facing.
+- [`docs/EVENT_DASHBOARDS.md`](docs/EVENT_DASHBOARDS.md): Standard operator dashboards — panel URLs, PromQL queries, SQLite indexer queries, and alert rules for protocol health, event throughput, disputes, and settlement pipeline.
 
 ## Contribution
 

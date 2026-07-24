@@ -20,6 +20,15 @@
 | [backup.md](contracts/backup.md) | Backup and restore |
 | [audit.md](contracts/audit.md) | Audit trail and hash chain |
 
+## Operator reference
+
+| Document | What it covers |
+|----------|---------------|
+| [EVENT_DASHBOARDS.md](EVENT_DASHBOARDS.md) | Standard Grafana dashboards — panel URLs, PromQL queries, SQLite indexer queries, and alert rules for protocol health, event throughput, disputes, and settlement pipeline |
+| [MONITORING.md](MONITORING.md) | Per-event alert thresholds for contract events |
+| [DASHBOARD_QUERIES.md](DASHBOARD_QUERIES.md) | Full SQL reference for indexer health and workload queries |
+| [RUNBOOK_INCIDENT_RESPONSE.md](RUNBOOK_INCIDENT_RESPONSE.md) | Step-by-step operator playbook for unexpected contract behavior |
+
 ## UX / frontend reference
 
 See [ux/](ux/) for component-level design specifications.
