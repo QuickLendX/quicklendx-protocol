@@ -12,6 +12,7 @@
 | [protocol-limits.md](contracts/protocol-limits.md) | Configurable numeric limits and string-length caps |
 | [fees.md](contracts/fees.md) | Fee management and revenue distribution |
 | [settlement.md](contracts/settlement.md) | Settlement flows and partial payments |
+| [QLX_SETTLEMENT_TERMS.md](QLX_SETTLEMENT_TERMS.md) | How settlement terms (fields, storage keys, formula, entrypoints, invariants) are represented per invoice — contributor reference |
 | [dispute.md](contracts/dispute.md) | Dispute lifecycle and resolution |
 | [escrow.md](contracts/escrow.md) | Escrow creation, release, and refund |
 | [bidding.md](contracts/bidding.md) | Bid ranking, TTL, and cleanup |

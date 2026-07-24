@@ -73,6 +73,7 @@ npm run dev
 - [`docs/FEES_GRACE_DEFAULT.md`](docs/FEES_GRACE_DEFAULT.md): Unified contributor reference — platform fees, grace period resolution, and default trigger rules in one place.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
 - [`docs/APPEALS.md`](docs/APPEALS.md): Appeals process — who reviews, timeline, outcomes, and how they affect funds — operator-facing.
+- [`docs/QLX_SETTLEMENT_TERMS.md`](docs/QLX_SETTLEMENT_TERMS.md): How settlement terms are represented per invoice — Invoice fields, durable storage keys, partial-payment entrypoints, the fee formula, and finalization invariants. Contributor reference.
 
 ## Contribution
 
