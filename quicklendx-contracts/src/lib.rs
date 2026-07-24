@@ -34,16 +34,14 @@ mod test_maintenance;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
 #[cfg(test)]
-mod test_settlement_history_reconstruction;
+mod test_pause_reason_cap;
 #[cfg(test)]
 mod test_settlement_capacity_stress;
 #[cfg(test)]
-mod test_pause_reason_cap;
+mod test_settlement_history_reconstruction;
+use crate::idempotency::{idempotency_exists, idempotency_key, store_idempotency};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
-use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
-#[cfg(any(test, feature = "testutils"))]
-pub mod bench;
 pub mod address_summary;
 pub mod admin;
 pub mod analytics;
@@ -51,6 +49,8 @@ pub mod audit;
 pub mod backpressure;
 pub mod backup;
 pub mod backup_v1;
+#[cfg(any(test, feature = "testutils"))]
+pub mod bench;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
@@ -65,10 +65,10 @@ pub mod fees;
 pub mod freshness;
 pub mod governance;
 pub mod health;
+pub mod idempotency;
 pub mod incident;
 pub mod init;
 pub mod invariants;
-pub mod idempotency;
 pub mod investment;
 pub mod investment_queries;
 pub mod invoice;
@@ -91,14 +91,6 @@ pub mod storage;
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
-mod test_panic_handler;
-#[cfg(test)]
-mod test_due_date_guard;
-#[cfg(test)]
-mod test_cancel_invoice_matrix;
-#[cfg(test)]
-mod test_invoice;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -111,8 +103,6 @@ mod test_admin_two_step;
 mod test_audit;
 #[cfg(test)]
 mod test_audit_config;
-#[cfg(test)]
-mod test_rating_override;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -127,6 +117,8 @@ mod test_bid_cancel_accept_race;
 mod test_bid_expiry_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
+#[cfg(test)]
+mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(test)]
@@ -141,10 +133,10 @@ mod test_currency_match_funding;
 mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
-#[cfg(test)]
-mod test_evidence_size_cap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
+#[cfg(test)]
+mod test_due_date_guard;
 #[cfg(test)]
 // mod test_dispute_event_invariant;
 #[cfg(test)]
@@ -157,6 +149,8 @@ mod test_escrow_event_completeness;
 mod test_escrow_invariant_model;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund_after_expiry;
+#[cfg(test)]
+mod test_evidence_size_cap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
 #[cfg(test)]
@@ -164,9 +158,17 @@ mod test_expired_bids_cleanup;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
 #[cfg(test)]
+mod test_governance;
+#[cfg(test)]
+mod test_invoice;
+#[cfg(test)]
+mod test_panic_handler;
+#[cfg(test)]
 mod test_payments;
 #[cfg(test)]
 mod test_queries;
+#[cfg(test)]
+mod test_rating_override;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_self_call_rejection;
 // Issue #1541 — lag at zero, lag at positive, lag during pause.
@@ -256,8 +258,6 @@ mod test_fuzz_distribute_revenue;
 mod test_fuzz_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_partial_payment;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_profits_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(test)]
@@ -265,15 +265,17 @@ mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
-mod test_investment_withdrawal;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_metadata;
 #[cfg(all(test, feature = "legacy-tests"))]
-mod test_line_item_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_search_ranking;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_line_item_consistency;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_profits_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -282,12 +284,10 @@ mod test_rebuild_indexes;
 mod test_insurance_claim_payout;
 #[cfg(test)]
 mod test_insurance_optin_lifecycle;
-#[cfg(test)]
-mod test_invoice;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_twa_props;
+#[cfg(test)]
+mod test_invoice;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -297,6 +297,8 @@ mod test_platform_metrics_reconciliation;
 mod test_seed;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_treasury_split_overflow_props;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_twa_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_volume_tier_props;
 // Issue #1482 — "cannot withdraw more than deposited" invariant: hard-coded sad
@@ -321,10 +323,10 @@ use escrow::{
 };
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_dispute_created,
-    emit_dispute_rejected, emit_dispute_resolved, emit_dispute_under_review, emit_escrow_created, emit_escrow_released,
-    emit_insurance_added, emit_insurance_premium_collected, emit_investor_verified,
-    emit_invoice_cancelled, emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
-    emit_invoice_uploaded, emit_invoice_verified,
+    emit_dispute_rejected, emit_dispute_resolved, emit_dispute_under_review, emit_escrow_created,
+    emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
+    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
+    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
@@ -336,10 +338,9 @@ use settlement::{
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
-    normalize_tag, reject_business,
-    reject_investor as do_reject_investor, revoke_investor_kyc as do_revoke_investor_kyc,
-    recompute_investor_tier, require_business_active, require_business_not_pending,
-    require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
+    normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
+    require_business_active, require_business_not_pending, require_investor_not_pending,
+    revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
     verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
@@ -456,7 +457,11 @@ fn early_release_approval_key(
     invoice_id: &BytesN<32>,
     approver: &Address,
 ) -> (soroban_sdk::Symbol, BytesN<32>, Address) {
-    (symbol_short!("er_appr"), invoice_id.clone(), approver.clone())
+    (
+        symbol_short!("er_appr"),
+        invoice_id.clone(),
+        approver.clone(),
+    )
 }
 
 fn has_early_release_approval(env: &Env, invoice_id: &BytesN<32>, approver: &Address) -> bool {
@@ -551,7 +556,11 @@ impl QuickLendXContract {
     }
 
     /// Initiate a two-step admin transfer.
-    pub fn initiate_admin_transfer(env: Env, admin: Address, new_admin: Address) -> Result<(), QuickLendXError> {
+    pub fn initiate_admin_transfer(
+        env: Env,
+        admin: Address,
+        new_admin: Address,
+    ) -> Result<(), QuickLendXError> {
         AdminStorage::initiate_admin_transfer(&env, &admin, &new_admin)
     }
 
@@ -565,7 +574,11 @@ impl QuickLendXContract {
     }
 
     /// Enable or disable two-step admin transfers.
-    pub fn set_two_step_enabled(env: Env, admin: Address, enabled: bool) -> Result<(), QuickLendXError> {
+    pub fn set_two_step_enabled(
+        env: Env,
+        admin: Address,
+        enabled: bool,
+    ) -> Result<(), QuickLendXError> {
         AdminStorage::set_two_step_enabled(&env, &admin, enabled)
     }
 
@@ -625,10 +638,7 @@ impl QuickLendXContract {
     ///
     /// # Arguments
     /// * `admin` - The address of the caller, must be the current admin.
-    pub fn cancel_treasury_rotation(
-        env: Env,
-        admin: Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn cancel_treasury_rotation(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         admin::cancel_treasury_rotation(&env, &admin)
     }
 
@@ -1666,13 +1676,11 @@ impl QuickLendXContract {
     /// preventing double-action execution.
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).unwrap();
+        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         bid.investor.require_auth();
         require_investor_not_pending(&env, &bid.investor)?;
         // Re-read status after auth to guard against concurrent transitions.
-        let bid_fresh =
-            BidStorage::get_bid(&env, &bid_id).unwrap();
+        let bid_fresh = BidStorage::get_bid(&env, &bid_id).unwrap();
         if bid_fresh.status != BidStatus::Placed {
             return Err(QuickLendXError::OperationNotAllowed);
         }
@@ -1814,8 +1822,7 @@ impl QuickLendXContract {
         let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).unwrap();
+        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         invoice.business.require_auth();
 
         // Enforce business is active (not deleted/frozen).
@@ -1863,8 +1870,7 @@ impl QuickLendXContract {
         };
         InvestmentStorage::store_investment(&env, &investment);
 
-        let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
-            .unwrap();
+        let escrow = EscrowStorage::get_escrow(&env, &escrow_id).unwrap();
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
 
@@ -1892,8 +1898,7 @@ impl QuickLendXContract {
         coverage_percentage: u32,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        let mut investment = InvestmentStorage::get_investment(&env, &investment_id)
-            .unwrap();
+        let mut investment = InvestmentStorage::get_investment(&env, &investment_id).unwrap();
 
         investment.investor.require_auth();
 
@@ -2001,8 +2006,7 @@ impl QuickLendXContract {
         env: Env,
         investment_id: BytesN<32>,
     ) -> Result<Vec<InsuranceCoverage>, QuickLendXError> {
-        let investment = InvestmentStorage::get_investment(&env, &investment_id)
-            .unwrap();
+        let investment = InvestmentStorage::get_investment(&env, &investment_id).unwrap();
         Ok(investment.insurance)
     }
 
@@ -2556,8 +2560,7 @@ impl QuickLendXContract {
         env: Env,
         invoice_id: BytesN<32>,
     ) -> Result<payments::EscrowStatus, QuickLendXError> {
-        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .unwrap();
+        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
         Ok(escrow.status)
     }
 
@@ -2608,7 +2611,10 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
 
-        let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
+        let investor = invoice
+            .investor
+            .clone()
+            .ok_or(QuickLendXError::InvoiceNotFunded)?;
         if approver != invoice.business && approver != investor {
             return Err(QuickLendXError::Unauthorized);
         }
@@ -2640,7 +2646,10 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
 
-        let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
+        let investor = invoice
+            .investor
+            .clone()
+            .ok_or(QuickLendXError::InvoiceNotFunded)?;
         if approver != invoice.business && approver != investor {
             return Err(QuickLendXError::Unauthorized);
         }
@@ -2669,7 +2678,10 @@ impl QuickLendXContract {
             if invoice.status != InvoiceStatus::Funded {
                 return Err(QuickLendXError::InvalidStatus);
             }
-            let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
+            let investor = invoice
+                .investor
+                .clone()
+                .ok_or(QuickLendXError::InvoiceNotFunded)?;
             if !has_early_release_approval(&env, &invoice_id, &invoice.business)
                 || !has_early_release_approval(&env, &invoice_id, &investor)
             {
@@ -2703,8 +2715,7 @@ impl QuickLendXContract {
                 return Err(QuickLendXError::InvalidStatus);
             }
 
-            let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-                .unwrap();
+            let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
 
             release_escrow(&env, &invoice_id)?;
 
@@ -3532,8 +3543,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         AdminStorage::require_admin(&env, &admin)?;
-        let mut b = backup::BackupStorage::get_backup(&env, &backup_id)
-            .unwrap();
+        let mut b = backup::BackupStorage::get_backup(&env, &backup_id).unwrap();
         b.status = backup::BackupStatus::Archived;
         backup::BackupStorage::update_backup(&env, &b)?;
         backup::BackupStorage::remove_from_backup_list(&env, &backup_id);
@@ -3740,7 +3750,10 @@ impl QuickLendXContract {
     // ============================================================================
 
     /// Get user behavior metrics
-    pub fn get_user_behavior_metrics(env: Env, user: Address) -> Result<analytics::UserBehaviorMetrics, QuickLendXError> {
+    pub fn get_user_behavior_metrics(
+        env: Env,
+        user: Address,
+    ) -> Result<analytics::UserBehaviorMetrics, QuickLendXError> {
         analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)
     }
 
