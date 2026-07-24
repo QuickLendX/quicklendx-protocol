@@ -230,7 +230,9 @@ mod test_reentrancy_fault_injection;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
 #[cfg(test)]
-mod test_storage_key_layout;
+mod test_settle_during_dispute;
+#[cfg(test)]
+mod test_string_limits;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_string_limits;
 // #[cfg(all(test, feature = "legacy-tests"))]
