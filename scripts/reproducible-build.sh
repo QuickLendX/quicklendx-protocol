@@ -37,7 +37,7 @@ set -euo pipefail
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 
-WASM_TARGET="wasm32-unknown-unknown"
+WASM_TARGET="wasm32v1-none"
 PACKAGE="quicklendx-contracts"
 WASM_FILE="quicklendx_contracts.wasm"
 WASM_PATH="quicklendx-contracts/target/${WASM_TARGET}/release/${WASM_FILE}"

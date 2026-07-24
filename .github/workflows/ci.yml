@@ -39,6 +39,7 @@ jobs:
         run: |
           source $HOME/.cargo/env
           rustup target add wasm32v1-none
+          rustup target remove wasm32-unknown-unknown 2>/dev/null || true
       - name: Detect optional Stellar CLI
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
