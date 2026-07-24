@@ -880,8 +880,15 @@ impl QuickLendXContract {
         currency::CurrencyWhitelist::currency_count(&env)
     }
 
-    /// Return a paginated slice of the whitelist.
-    pub fn get_whitelisted_currencies_paged(env: Env, offset: u32, limit: u32) -> Vec<Address> {
+    /// Return a paginated slice of the whitelist with metadata.
+    ///
+    /// Returns [`PaginatedCurrencies`] bundling the page of currency addresses together
+    /// with `total_count` and `has_more` so consumers do not need a separate count query.
+    pub fn get_whitelisted_currencies_paged(
+        env: Env,
+        offset: u32,
+        limit: u32,
+    ) -> PaginatedCurrencies {
         currency::CurrencyWhitelist::get_whitelisted_currencies_paged(&env, offset, limit)
     }
 
@@ -3389,11 +3396,15 @@ impl QuickLendXContract {
         status_filter: Option<InvoiceStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<BytesN<32>> {
+    ) -> PaginatedBytes32Vec {
         // Validate query parameters for security
         if validate_query_params(offset, limit).is_err() {
             // Return empty result on validation failure
-            return Vec::new(&env);
+            return PaginatedBytes32Vec {
+                items: Vec::new(&env),
+                total_count: 0,
+                has_more: false,
+            };
         }
 
         let all_invoices = InvoiceStorage::get_business_invoices(&env, &business);
@@ -3412,20 +3423,26 @@ impl QuickLendXContract {
             }
         }
 
+        let total_count = pairs.len() as u32;
+
         // Sort descending by created_at (newest first).
         pairs.sort_by_key(|b| core::cmp::Reverse(b.0));
 
         // Apply pagination (overflow-safe) and collect into Soroban Vec.
-        let len_u32 = pairs.len() as u32;
         let capped_limit = cap_query_limit(limit);
-        let start = offset.min(len_u32) as usize;
-        let capped_limit = cap_query_limit(limit);
-        let end = (offset.saturating_add(capped_limit).min(len_u32)) as usize;
+        let start = offset.min(total_count) as usize;
+        let end = (offset.saturating_add(capped_limit).min(total_count)) as usize;
         let mut result = Vec::new(&env);
         for (_, id) in &pairs[start..end] {
             result.push_back(id.clone());
         }
-        result
+
+        let (_, has_more) = pagination::pagination_metadata(offset, limit, total_count);
+        PaginatedBytes32Vec {
+            items: result,
+            total_count,
+            has_more,
+        }
     }
 
     /// Get investments by investor with optional status filter and pagination
@@ -3468,7 +3485,7 @@ impl QuickLendXContract {
         status_filter: Option<InvestmentStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<BytesN<32>> {
+    ) -> PaginatedBytes32Vec {
         investment_queries::InvestmentQueries::get_investor_investments_paginated(
             &env,
             &investor,
@@ -3494,10 +3511,14 @@ impl QuickLendXContract {
         category_filter: Option<InvoiceCategory>,
         offset: u32,
         limit: u32,
-    ) -> Vec<BytesN<32>> {
+    ) -> PaginatedBytes32Vec {
         // Validate query parameters for security
         if validate_query_params(offset, limit).is_err() {
-            return Vec::new(&env);
+            return PaginatedBytes32Vec {
+                items: Vec::new(&env),
+                total_count: 0,
+                has_more: false,
+            };
         }
 
         let verified_invoices =
@@ -3527,10 +3548,11 @@ impl QuickLendXContract {
             }
         }
 
+        let total_count = filtered.len();
+
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len();
-        let (start, end) = pagination::calculate_safe_bounds(offset, limit, len_u32);
+        let (start, end) = pagination::calculate_safe_bounds(offset, limit, total_count);
         let mut idx = start;
         while idx < end {
             if let Some(invoice_id) = filtered.get(idx) {
@@ -3538,7 +3560,13 @@ impl QuickLendXContract {
             }
             idx += 1;
         }
-        result
+
+        let (_, has_more) = pagination::pagination_metadata(offset, limit, total_count);
+        PaginatedBytes32Vec {
+            items: result,
+            total_count,
+            has_more,
+        }
     }
 
     /// Get bid history for an invoice with pagination
@@ -3555,10 +3583,14 @@ impl QuickLendXContract {
         status_filter: Option<BidStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<Bid> {
+    ) -> PaginatedBids {
         // Validate query parameters for security
         if validate_query_params(offset, limit).is_err() {
-            return Vec::new(&env);
+            return PaginatedBids {
+                items: Vec::new(&env),
+                total_count: 0,
+                has_more: false,
+            };
         }
 
         let all_bids = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
@@ -3574,10 +3606,11 @@ impl QuickLendXContract {
             }
         }
 
+        let total_count = filtered.len();
+
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len();
-        let (start, end) = pagination::calculate_safe_bounds(offset, limit, len_u32);
+        let (start, end) = pagination::calculate_safe_bounds(offset, limit, total_count);
         let mut idx = start;
         while idx < end {
             if let Some(bid) = filtered.get(idx) {
@@ -3585,7 +3618,13 @@ impl QuickLendXContract {
             }
             idx += 1;
         }
-        result
+
+        let (_, has_more) = pagination::pagination_metadata(offset, limit, total_count);
+        PaginatedBids {
+            items: result,
+            total_count,
+            has_more,
+        }
     }
 
     /// Get bid history for an investor with pagination
@@ -3602,10 +3641,14 @@ impl QuickLendXContract {
         status_filter: Option<BidStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<Bid> {
+    ) -> PaginatedBids {
         // Validate query parameters for security
         if validate_query_params(offset, limit).is_err() {
-            return Vec::new(&env);
+            return PaginatedBids {
+                items: Vec::new(&env),
+                total_count: 0,
+                has_more: false,
+            };
         }
 
         let all_bid_ids = BidStorage::get_bids_by_investor_all(&env, &investor);
@@ -3623,10 +3666,11 @@ impl QuickLendXContract {
             }
         }
 
+        let total_count = filtered.len();
+
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len();
-        let (start, end) = pagination::calculate_safe_bounds(offset, limit, len_u32);
+        let (start, end) = pagination::calculate_safe_bounds(offset, limit, total_count);
         let mut idx = start;
         while idx < end {
             if let Some(bid) = filtered.get(idx) {
@@ -3634,7 +3678,13 @@ impl QuickLendXContract {
             }
             idx += 1;
         }
-        result
+
+        let (_, has_more) = pagination::pagination_metadata(offset, limit, total_count);
+        PaginatedBids {
+            items: result,
+            total_count,
+            has_more,
+        }
     }
 
     /// Get investments by investor (simple version without pagination for backward compatibility)
