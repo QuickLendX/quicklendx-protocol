@@ -64,8 +64,9 @@ use soroban_sdk::{
         assert_eq!(is_active_status(&InvoiceStatus::Paid), false);
         assert_eq!(is_active_status(&InvoiceStatus::Defaulted), false);
         assert_eq!(is_active_status(&InvoiceStatus::Cancelled), false);
-        assert_eq!(is_active_status(&InvoiceStatus::Refunded), false);
-    }
+    assert_eq!(is_active_status(&InvoiceStatus::Refunded), false);
+}
+
 // =========================================================================
 // Integration tests for invoice limits
 // =========================================================================

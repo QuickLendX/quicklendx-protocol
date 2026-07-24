@@ -534,12 +534,7 @@ impl QuickLendXContract {
     /// # Security
     /// - Requires authorization from current admin
     pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
-        // This signature is inconsistent. It should take the current admin for auth.
-        // Let's assume a refactor to a more consistent signature.
-        // For now, we'll keep the old one but it's not ideal for testing.
-        // A better signature would be: pub fn transfer_admin(env: Env, admin: Address, new_admin: Address)
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        admin.require_auth();
         AdminStorage::transfer_admin(&env, &admin, &new_admin)
     }
 
