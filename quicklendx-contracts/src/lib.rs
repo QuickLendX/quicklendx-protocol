@@ -246,6 +246,10 @@ mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
 #[cfg(test)]
+mod test_investor_kyc;
+#[cfg(test)]
+mod test_investor_rating_recompute;
+#[cfg(test)]
 mod test_vesting;
 mod test_vesting_summary;
 // Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
@@ -274,6 +278,8 @@ mod test_fuzz_distribute_revenue;
 mod test_fuzz_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_partial_payment;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_profits_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(test)]
