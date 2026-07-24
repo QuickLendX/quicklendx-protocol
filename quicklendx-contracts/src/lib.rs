@@ -38,7 +38,7 @@ mod test_settlement_history_reconstruction;
 #[cfg(test)]
 mod test_settlement_capacity_stress;
 #[cfg(test)]
-mod test_min_invoice_amount;
+mod test_pause_reason_cap;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
