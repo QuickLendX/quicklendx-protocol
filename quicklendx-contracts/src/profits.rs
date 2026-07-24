@@ -543,6 +543,12 @@ pub fn validate_calculation_inputs(
         / denominator
 }
 
+/// Compute the simple interest yield on a principal amount (u32 version).
+///
+/// # Formula
+/// ```text
+/// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
+/// ```
 ///
 /// All arithmetic uses `saturating_mul` / integer division to stay within
 /// `i128` bounds without panicking and to preserve `#![no_std]` discipline.
@@ -556,13 +562,16 @@ pub fn validate_calculation_inputs(
 /// For fixed `rate_bps` and `duration_days`, `yield` is non-decreasing in `amount`.
 /// For fixed `amount` and `duration_days`, `yield` is non-decreasing in `rate_bps`.
 /// For fixed `amount` and `rate_bps`, `yield` is non-decreasing in `duration_days`.
-/// Compute the expected return on a principal amount.
-///
-/// # Returns
-/// Total expected return (principal + yield)
-pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
-    let yield_amount = compute_yield(amount, rate_bps.into(), duration_days.into());
-    amount.max(0).saturating_add(yield_amount)
+pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+    let safe_amount = amount.max(0);
+    let safe_rate = rate_bps as i128;
+    let safe_days = duration_days as i128;
+
+    let numerator = safe_amount
+        .saturating_mul(safe_rate)
+        .saturating_mul(safe_days);
+    let denominator = BPS_DENOMINATOR.saturating_mul(365);
+    numerator / denominator
 }
 
 /// A single ledger-delta entry for time-weighted average calculations.
