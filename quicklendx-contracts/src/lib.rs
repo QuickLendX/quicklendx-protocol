@@ -22,24 +22,37 @@ pub struct QuickLendXContract;
 impl QuickLendXContract {
     pub fn freeze(env: Env, admin: Address, target: Address) {
         admin.require_auth();
-        env.storage().persistent().set(&DataKey::Frozen(target.clone()), &true);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Frozen(target.clone()), &true);
     }
 
     pub fn unfreeze(env: Env, admin: Address, target: Address) {
         admin.require_auth();
-        env.storage().persistent().set(&DataKey::Frozen(target.clone()), &false);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Frozen(target.clone()), &false);
     }
 
     pub fn is_frozen(env: Env, target: Address) -> bool {
-        env.storage().persistent().get(&DataKey::Frozen(target)).unwrap_or(false)
+        env.storage()
+            .persistent()
+            .get(&DataKey::Frozen(target))
+            .unwrap_or(false)
     }
 
-    pub fn create_invoice(env: Env, issuer: Address, invoice_id: u64) -> Result<(), QuickLendXError> {
+    pub fn create_invoice(
+        env: Env,
+        issuer: Address,
+        invoice_id: u64,
+    ) -> Result<(), QuickLendXError> {
         issuer.require_auth();
         if Self::is_frozen(env.clone(), issuer.clone()) {
             return Err(QuickLendXError::AccountIsFrozen);
         }
-        env.storage().persistent().set(&DataKey::Invoice(invoice_id), &issuer);
+        env.storage()
+            .persistent()
+            .set(&DataKey::Invoice(invoice_id), &issuer);
         Ok(())
     }
 }
