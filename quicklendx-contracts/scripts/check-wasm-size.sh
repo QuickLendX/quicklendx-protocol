@@ -28,6 +28,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTRACTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$CONTRACTS_DIR"
 
+# Force member-local target dir so cargo respects it even inside a workspace.
+export CARGO_TARGET_DIR="$CONTRACTS_DIR/target"
+
 # ── Budget constants ───────────────────────────────────────────────────────────
 MAX_BYTES="$((512 * 1024))"           # 524 288 B – hard limit (raised pending size reduction work)
 WARN_BYTES="$((MAX_BYTES * 9 / 10))"  # 90 % warning zone
