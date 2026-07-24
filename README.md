@@ -80,7 +80,7 @@ npm run dev
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
 - [`docs/EMERGENCY_RESPONSE.md`](docs/EMERGENCY_RESPONSE.md): Contract emergency response runbook per module — common triggers, step-by-step procedures, concrete parameters, error codes, and runnable examples.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
-- [`docs/GENERATION_COUNTER.md`](docs/GENERATION_COUNTER.md): What the on-chain protocol version (generation counter) is, who reads it, and the generation-bump invariant.
+- [`docs/cadence-retention-consumers.md`](docs/cadence-retention-consumers.md): Ingestion cadences, database/contract retention policies, and downstream event consumers.
 
 ## Contribution
 
