@@ -78,7 +78,7 @@ npm run dev
 - `docs/BID_RANKING.md`: Deterministic bid ranking ordering function — tier-by-tier tie-breaker logic, invariants, and contributor workflow.
 - [`docs/CURRENCY_WHITELIST.md`](docs/CURRENCY_WHITELIST.md): How tokens are added to and removed from the currency whitelist — contributor guide covering entrypoints, auth model, enforcement points, and test patterns.
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
-- [`docs/EMERGENCY_RESPONSE.md`](docs/EMERGENCY_RESPONSE.md): Contract emergency response runbook per module — common triggers, step-by-step procedures, concrete parameters, error codes, and runnable examples.
+- [`docs/PARTIAL_FILLS.md`](docs/PARTIAL_FILLS.md): Contributor-facing notes on the capped payment flow, replay protection, and automatic settlement when a payment completes the invoice.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
 - [`docs/cadence-retention-consumers.md`](docs/cadence-retention-consumers.md): Ingestion cadences, database/contract retention policies, and downstream event consumers.
 
