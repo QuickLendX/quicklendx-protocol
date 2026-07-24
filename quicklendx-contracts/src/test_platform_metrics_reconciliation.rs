@@ -5,6 +5,7 @@
 //! AnalyticsCalculator::calculate_platform_metrics.
 
 #![cfg(test)]
+#![allow(unused_must_use)]
 
 extern crate alloc;
 
@@ -165,7 +166,7 @@ fn compute_independent_metrics(env: &Env, contract_id: &Address) -> IndependentM
         } as i128;
 
         let expected_success_rate = if total_investments > 0 {
-            ((paid.len() as u32).saturating_mul(10_000)) / total_investments
+            (paid.len().saturating_mul(10_000)) / total_investments
         } else {
             0
         } as i128;

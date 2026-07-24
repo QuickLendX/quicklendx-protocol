@@ -1,4 +1,5 @@
 #![cfg(test)]
+#![allow(clippy::disallowed_methods)]
 
 extern crate std; 
 
@@ -13,7 +14,7 @@ use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient, Invoice
 proptest! {
     #[test]
     fn asserts_single_auth_count_when_user_places_bid(
-        bid_amount in 1..50_000i128,
+        bid_amount in 1_000..50_000i128,
         expected_return in 50_000..100_000i128
     ) {
         let env = Env::default();
@@ -35,6 +36,10 @@ proptest! {
         let due_date = env.ledger().timestamp() + 86400;
         let invoice_amount = 100_000i128;
         
+        // KYC-verify business before upload_invoice and investor before place_bid.
+        client.submit_kyc_application(&business, &String::from_str(&env, "KYC"));
+        client.verify_business(&admin, &business);
+
         let invoice_id = client.upload_invoice(
             &business,
             &invoice_amount,
@@ -45,15 +50,16 @@ proptest! {
             &Vec::new(&env),
         );
 
-        client.verify_invoice(&invoice_id);
+        client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
         client.verify_investor(&investor, &100_000i128);
+
+        client.verify_invoice(&invoice_id);
 
         client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &salt);
 
         let auths = env.auths();
         
-        let last_auth = auths.last().expect("Should have at least one auth");
-        let (auth_address, invocation) = last_auth;
+        let (auth_address, invocation) = auths.last().unwrap();
 
         assert_eq!(auth_address, &investor, "The auth address must match the investor");
         

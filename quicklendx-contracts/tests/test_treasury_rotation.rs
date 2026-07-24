@@ -1,4 +1,6 @@
 #![cfg(test)]
+#![allow(clippy::disallowed_methods)]
+#![allow(deprecated)]
 
 extern crate std;
 
@@ -60,7 +62,7 @@ fn test_cancel_treasury_rotation_fails_for_non_admin() {
 
     // Attempt to cancel as a non-admin.
     // Expects panic with auth error since non_admin hasn't signed.
-    client
+    let _ = client
         .try_cancel_treasury_rotation(&non_admin)
         .unwrap_err();
 }

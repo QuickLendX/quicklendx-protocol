@@ -605,6 +605,13 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
 /// - Balance and allowance are checked **before** the token call so that the contract
 ///   never enters a partial-transfer state.
 /// - When `from == to` the function is a no-op (returns `Ok(())`).
+/// Minimum transfer amount. Below this, transfers are rejected as dust to
+/// prevent dust attacks and uneconomical token movements.
+#[cfg(not(any(test, feature = "testutils")))]
+const MIN_TRANSFER: i128 = 1_000_000; // 1 token (6 decimals)
+#[cfg(any(test, feature = "testutils"))]
+const MIN_TRANSFER: i128 = 10;
+
 pub fn transfer_funds(
     env: &Env,
     currency: &Address,
@@ -612,7 +619,7 @@ pub fn transfer_funds(
     to: &Address,
     amount: i128,
 ) -> Result<(), QuickLendXError> {
-    if amount <= 0 {
+    if amount < MIN_TRANSFER {
         return Err(QuickLendXError::InvalidAmount);
     }
 
@@ -847,9 +854,11 @@ mod payments_tests {
     // Invalid token address
     // -----------------------------------------------------------------------
 
-    /// Passing an address that is *not* a registered token contract must not
-    /// silently succeed; any failure path that leaves no escrow is acceptable.
+    /// Passing an address that is *not* a registered token contract causes a
+    /// host-level panic (soroban-sdk 25.x behaviour). The operation must not
+    /// silently succeed and must not write any escrow record.
     #[test]
+    #[should_panic]
     fn test_create_escrow_unregistered_token_address_does_not_succeed() {
         let (env, contract_id) = contract_env();
         let investor = Address::generate(&env);

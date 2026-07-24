@@ -915,6 +915,8 @@ mod tests {
     #[test]
     fn test_investor_platform_treasury_sum_invariant() {
         let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(crate::QuickLendXContract, ());
         let cases = vec![
             (0i128, 0i128),
             (1000, 1100),
@@ -924,7 +926,9 @@ mod tests {
             (1000, 2000),
         ];
         for (investment, payment) in cases {
-            let breakdown = PlatformFee::calculate_breakdown(&env, investment, payment);
+            let breakdown = env.as_contract(&contract_id, || {
+                PlatformFee::calculate_breakdown(&env, investment, payment)
+            });
             // Verify investor profit + platform fee = gross profit
             assert_eq!(
                 breakdown.investor_profit + breakdown.platform_fee,
