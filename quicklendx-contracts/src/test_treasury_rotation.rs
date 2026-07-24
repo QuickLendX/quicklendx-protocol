@@ -554,46 +554,154 @@ fn test_expired_rotation_does_not_update_treasury() {
 
 #[test]
 fn test_confirmation_deadline_boundary_conditions() {
-    // ... keep full yaro implementation
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let old_treasury = Address::generate(&env);
+    let new_treasury = Address::generate(&env);
+
+    client.configure_treasury(&old_treasury);
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // One second before confirmation deadline: succeeds
+    env.ledger().set_timestamp(req.confirmation_deadline - 1);
+    let confirmed = client.confirm_treasury_rotation(&new_treasury);
+    assert_eq!(confirmed, new_treasury);
 }
 
 #[test]
 fn test_rotation_deadline_boundary_conditions() {
-    // ... keep full main implementation
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let old_treasury = Address::generate(&env);
+    let new_treasury = Address::generate(&env);
+
+    client.configure_treasury(&old_treasury);
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // Exactly at confirmation deadline: succeeds
+    env.ledger().set_timestamp(req.confirmation_deadline);
+    let confirmed = client.confirm_treasury_rotation(&new_treasury);
+    assert_eq!(confirmed, new_treasury);
 }
 
 #[test]
 fn test_rotation_ttl_calculation_accuracy() {
-    // ... keep full main implementation
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let new_treasury = Address::generate(&env);
+
+    let start_time = 10_000;
+    env.ledger().set_timestamp(start_time);
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    assert_eq!(req.initiated_at, start_time);
+    // TTL is 7 days (604_800 seconds)
+    assert_eq!(req.confirmation_deadline, start_time + 604_800);
 }
 
 #[test]
 fn test_rotation_expiration_clears_pending_state() {
-    // ... keep full main implementation
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let old_treasury = Address::generate(&env);
+    let new_treasury = Address::generate(&env);
+
+    client.configure_treasury(&old_treasury);
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // Move past confirmation deadline
+    env.ledger().set_timestamp(req.confirmation_deadline + 1);
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(result.is_err());
+
+    // Pending state should be cleared
+    assert!(client.get_pending_treasury_rotation().is_none());
 }
 
 #[test]
 fn test_rotation_deadline_with_different_start_times() {
-    // ... keep full main implementation
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let new_treasury = Address::generate(&env);
+
+    for start_time in [5_000, 100_000, 2_000_000] {
+        env.ledger().set_timestamp(start_time);
+        let req = client.initiate_treasury_rotation(&new_treasury);
+        assert_eq!(req.confirmation_deadline, start_time + 604_800);
+        client.cancel_treasury_rotation();
+    }
 }
 
 // Regression tests for min rotation delay
 #[test]
 fn confirm_at_min_delay_boundary_succeeds() {
-    // ... keep full main implementation
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let old_treasury = Address::generate(&env);
+    let new_treasury = Address::generate(&env);
+
+    client.configure_treasury(&old_treasury);
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // Exactly at min delay (initiated_at + MIN_ROTATION_DELAY_SECONDS)
+    env.ledger().set_timestamp(req.initiated_at + MIN_ROTATION_DELAY_SECONDS);
+    let confirmed = client.confirm_treasury_rotation(&new_treasury);
+    assert_eq!(confirmed, new_treasury);
 }
 
 #[test]
 fn confirm_before_min_delay_elapses_is_rejected() {
-    // ... keep full main implementation
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let old_treasury = Address::generate(&env);
+    let new_treasury = Address::generate(&env);
+
+    client.configure_treasury(&old_treasury);
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // One second before min delay
+    env.ledger().set_timestamp(req.initiated_at + MIN_ROTATION_DELAY_SECONDS - 1);
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(result.is_err());
 }
 
 #[test]
 fn confirm_one_second_past_min_delay_succeeds() {
-    // ... keep full main implementation
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let old_treasury = Address::generate(&env);
+    let new_treasury = Address::generate(&env);
+
+    client.configure_treasury(&old_treasury);
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // One second past min delay
+    env.ledger().set_timestamp(req.initiated_at + MIN_ROTATION_DELAY_SECONDS + 1);
+    let confirmed = client.confirm_treasury_rotation(&new_treasury);
+    assert_eq!(confirmed, new_treasury);
 }
 
 #[test]
 fn confirm_immediately_after_initiation_is_rejected() {
-    // ... keep full main implementation
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let old_treasury = Address::generate(&env);
+    let new_treasury = Address::generate(&env);
+
+    client.configure_treasury(&old_treasury);
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // Zero delay: immediately after initiation
+    env.ledger().set_timestamp(req.initiated_at);
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(result.is_err());
 }
