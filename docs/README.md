@@ -20,6 +20,7 @@
 | [storage-schema.md](contracts/storage-schema.md) | Persistent storage keys and index layout |
 | [backup.md](contracts/backup.md) | Backup and restore |
 | [audit.md](contracts/audit.md) | Audit trail and hash chain |
+| [CROSS_INVOICE_ANALYTICS.md](CROSS_INVOICE_ANALYTICS.md) | Cross-invoice read patterns, supported entrypoints, and pagination bounds for contributors and integrators |
 
 ## UX / frontend reference
 
