@@ -196,6 +196,9 @@ pub enum QuickLendXError {
     InvalidLedgerSequence = 2205,
     /// Insurance coverage is not active at the time of default/settlement.
     InsuranceNotActive = 2206,
+    /// A report/analytics-snapshot was requested while an invoice has an
+    /// unresolved (`Disputed` or `UnderReview`) dispute.
+    ActiveDisputeExists = 2207,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -293,7 +296,9 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
             QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NO_P"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ")
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
+            QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
+            QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
         }
     }
 }
