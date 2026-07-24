@@ -62,6 +62,7 @@ npm run dev
 ## Documentation
 
 - `docs/`: Project-wide design, implementation, and audit documentation.
+- [Protocol Reasons and Operational Playbooks](docs/OPERATIONAL_PLAYBOOKS.md): Operator playbooks and explanations for core protocol behaviors (e.g. disputes, fee adjustments).
 - [`docs/DASHBOARD_QUERIES.md`](docs/DASHBOARD_QUERIES.md): Operator-ready SQL for indexer freshness, event flow, invoices, bids, settlements, and best-bid snapshots.
 - [Platform Fee & Treasury Split Operations Guide](file:///c:/Users/HP/quicklendx-protocol/docs/contracts/platform-fee-ops.md): Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
