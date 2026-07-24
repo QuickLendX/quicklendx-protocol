@@ -158,6 +158,8 @@ pub enum QuickLendXError {
     InvalidDisputeReason = 1905,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDisputeEvidence = 1906,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidFreezeReason = 1907,
 
     // Notification (2000-2002)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -292,8 +294,9 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_ROT"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NP"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("LED_SEQ"),
+            QuickLendXError::InvalidFreezeReason => symbol_short!("FRZ_RSN"),
         }
     }
 }

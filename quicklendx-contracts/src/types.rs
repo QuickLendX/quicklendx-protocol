@@ -166,6 +166,31 @@ pub struct InvoiceRating {
     pub timestamp: u64,
 }
 
+/// Freeze reason enumeration representing why a business invoice was frozen
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BusinessFreezeReason {
+    /// Generic administrative freeze (admin's discretion)
+    AdminAction,
+    /// Business KYC was rejected or revoked
+    KYCRejected,
+    /// Legal or compliance policy violation
+    ComplianceViolation,
+    /// Fraud or suspicious activity detected
+    SuspiciousActivity,
+    /// Court order or legal hold applied
+    LegalHold,
+}
+
+/// Freeze record stored alongside the frozen flag on an invoice
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FreezeInfo {
+    pub reason: BusinessFreezeReason,
+    pub frozen_by: Address,
+    pub frozen_at: u64,
+}
+
 /// Core Invoice data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
