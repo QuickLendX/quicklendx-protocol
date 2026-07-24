@@ -3,19 +3,9 @@
 use crate::contract::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
 use crate::types::{DisputeStatus, InvoiceCategory, InvoiceStatus};
+use crate::test::{setup_verified_business, setup_verified_investor, setup_token};
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{token, Address, Env, String, BytesN};
-
-fn create_token_contract<'a>(
-    env: &Env,
-    admin: &Address,
-) -> (token::Client<'a>, token::StellarAssetClient<'a>) {
-    let contract_address = env.register_stellar_asset_contract(admin.clone());
-    (
-        token::Client::new(env, &contract_address),
-        token::StellarAssetClient::new(env, &contract_address),
-    )
-}
+use soroban_sdk::{token, Address, Env, String, BytesN, Vec};
 
 fn setup_funded_invoice(
     env: &Env,
@@ -25,24 +15,27 @@ fn setup_funded_invoice(
     admin: &Address,
     amount: i128,
 ) -> (BytesN<32>, Address) {
-    let (token_client, token_admin) = create_token_contract(env, admin);
-    let currency = token_client.address.clone();
+    let contract_id = client.address.clone();
+    let currency = setup_token(env, business, investor, &contract_id);
 
-    token_admin.mint(investor, &(amount * 2));
+    // Make sure limits allow this amount
+    client.set_protocol_limits(admin, &amount, &365u64, &0u64);
 
-    let invoice_id = client.create_invoice(
+    let invoice_id = client.store_invoice(
         business,
         &amount,
         &currency,
         &(env.ledger().timestamp() + 86400),
         &String::from_str(env, "Test invoice for dispute settlement test"),
         &InvoiceCategory::Services,
+        &Vec::new(env),
     );
 
-    client.verify_invoice(admin, &invoice_id);
+    client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&invoice_id, investor, &amount, &(amount + 1000));
-    client.accept_bid(business, &invoice_id, &bid_id);
+    let salt = BytesN::from_array(env, &[0u8; 32]);
+    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 1000), &salt);
+    client.accept_bid(&invoice_id, &bid_id);
 
     (invoice_id, currency)
 }
@@ -53,12 +46,12 @@ fn test_settle_invoice_blocks_when_dispute_is_open() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-
-    let contract_id = env.register_contract(None, QuickLendXContract);
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    client.initialize(&admin);
+    client.set_admin(&admin);
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 200_000);
 
     let amount: i128 = 100_000;
     let (invoice_id, _currency) =
@@ -73,7 +66,7 @@ fn test_settle_invoice_blocks_when_dispute_is_open() {
     );
 
     // Verify dispute status is Disputed (Open dispute)
-    let invoice = client.get_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(invoice.dispute_status, DisputeStatus::Disputed);
 
     // Settle invoice should be BLOCKED (returns InvalidStatus)
@@ -81,8 +74,8 @@ fn test_settle_invoice_blocks_when_dispute_is_open() {
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
 
     // Advance to UnderReview
-    client.put_dispute_under_review(&admin, &invoice_id);
-    let invoice_review = client.get_invoice(&invoice_id);
+    client.put_dispute_under_review(&invoice_id, &admin);
+    let invoice_review = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(invoice_review.dispute_status, DisputeStatus::UnderReview);
 
     // Settle invoice should STILL be BLOCKED under review
@@ -96,12 +89,12 @@ fn test_settle_invoice_allows_when_dispute_is_resolved() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-
-    let contract_id = env.register_contract(None, QuickLendXContract);
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    client.initialize(&admin);
+    client.set_admin(&admin);
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 200_000);
 
     let amount: i128 = 100_000;
     let (invoice_id, currency) =
@@ -116,11 +109,11 @@ fn test_settle_invoice_allows_when_dispute_is_resolved() {
     );
 
     // Review dispute
-    client.put_dispute_under_review(&admin, &invoice_id);
+    client.put_dispute_under_review(&invoice_id, &admin);
 
     // Resolve dispute in favor of business (DisputeStatus becomes Resolved)
-    client.resolve_dispute(&admin, &invoice_id, &String::from_str(&env, "dispute resolved"));
-    let invoice = client.get_invoice(&invoice_id);
+    client.resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "dispute resolved"));
+    let invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(invoice.dispute_status, DisputeStatus::Resolved);
 
     // Mint token allowance/balance for business to make payment
@@ -133,7 +126,7 @@ fn test_settle_invoice_allows_when_dispute_is_resolved() {
     let result = client.try_settle_invoice(&invoice_id, &amount);
     assert!(result.is_ok());
 
-    let final_invoice = client.get_invoice(&invoice_id);
+    let final_invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(final_invoice.status, InvoiceStatus::Paid);
 }
 
@@ -143,19 +136,19 @@ fn test_settle_invoice_allows_when_no_dispute_exists() {
     env.mock_all_auths();
 
     let admin = Address::generate(&env);
-    let business = Address::generate(&env);
-    let investor = Address::generate(&env);
-
-    let contract_id = env.register_contract(None, QuickLendXContract);
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    client.initialize(&admin);
+    client.set_admin(&admin);
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 200_000);
 
     let amount: i128 = 100_000;
     let (invoice_id, currency) =
         setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
 
     // Verify dispute status is None (No dispute)
-    let invoice = client.get_invoice(&invoice_id);
+    let invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(invoice.dispute_status, DisputeStatus::None);
 
     // Mint token allowance/balance for business to make payment
@@ -168,6 +161,6 @@ fn test_settle_invoice_allows_when_no_dispute_exists() {
     let result = client.try_settle_invoice(&invoice_id, &amount);
     assert!(result.is_ok());
 
-    let final_invoice = client.get_invoice(&invoice_id);
+    let final_invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(final_invoice.status, InvoiceStatus::Paid);
 }
