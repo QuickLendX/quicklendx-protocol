@@ -38,7 +38,10 @@ mod test_twa_props {
     ///   * duration: 0 .. 17_280 ledgers (≈ 1 day at 5-second ledger pace)
     fn arb_delta() -> impl Strategy<Value = LedgerDelta> {
         (0i128..1_000_000_000_000_000_i128, 0u32..17_280u32).prop_map(
-            |(balance, duration_ledgers)| LedgerDelta { balance, duration_ledgers },
+            |(balance, duration_ledgers)| LedgerDelta {
+                balance,
+                duration_ledgers,
+            },
         )
     }
 
@@ -123,7 +126,10 @@ mod test_twa_props {
     /// Single delta: TWA must equal the balance (duration > 0).
     #[test]
     fn single_delta_returns_balance() {
-        let delta = LedgerDelta { balance: 500_000, duration_ledgers: 100 };
+        let delta = LedgerDelta {
+            balance: 500_000,
+            duration_ledgers: 100,
+        };
         assert_eq!(compute_twa(&[delta]), 500_000);
     }
 
@@ -131,8 +137,14 @@ mod test_twa_props {
     #[test]
     fn returns_zero_when_all_durations_are_zero() {
         let deltas = alloc::vec![
-            LedgerDelta { balance: 1_000, duration_ledgers: 0 },
-            LedgerDelta { balance: 2_000, duration_ledgers: 0 },
+            LedgerDelta {
+                balance: 1_000,
+                duration_ledgers: 0
+            },
+            LedgerDelta {
+                balance: 2_000,
+                duration_ledgers: 0
+            },
         ];
         assert_eq!(compute_twa(&deltas), 0);
     }
@@ -141,8 +153,14 @@ mod test_twa_props {
     #[test]
     fn returns_zero_when_balance_is_zero() {
         let deltas = alloc::vec![
-            LedgerDelta { balance: 0, duration_ledgers: 100 },
-            LedgerDelta { balance: 0, duration_ledgers: 200 },
+            LedgerDelta {
+                balance: 0,
+                duration_ledgers: 100
+            },
+            LedgerDelta {
+                balance: 0,
+                duration_ledgers: 200
+            },
         ];
         assert_eq!(compute_twa(&deltas), 0);
     }

@@ -127,7 +127,10 @@ fn test_cancel_allowed_from_pending() {
     let business = verified_business(&env, &client, &admin);
     let invoice_id = upload(&env, &client, &business);
 
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Pending);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Pending
+    );
     client.cancel_invoice(&invoice_id);
     assert_eq!(
         client.get_invoice(&invoice_id).status,
@@ -144,7 +147,10 @@ fn test_cancel_allowed_from_verified_updates_indexes() {
     let invoice_id = upload(&env, &client, &business);
 
     client.verify_invoice(&invoice_id);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Verified);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Verified
+    );
     assert!(client.get_available_invoices().contains(&invoice_id));
 
     client.cancel_invoice(&invoice_id);
@@ -182,7 +188,10 @@ fn test_cancel_from_funded_currently_succeeds_documents_gap() {
     client.verify_invoice(&invoice_id);
     // Drive the invoice into a Funded state via the admin status setter.
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Funded);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 
     // No status guard today: this transition is accepted.
     let result = client.try_cancel_invoice(&invoice_id);
