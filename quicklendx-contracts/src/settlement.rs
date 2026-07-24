@@ -85,7 +85,7 @@ use crate::investment::InvestmentStorage;
 use crate::payments::transfer_funds;
 use crate::storage::InvoiceStorage;
 use crate::types::InvestmentStatus;
-use crate::types::{Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
+use crate::types::{Invoice, InvoiceStatus, DisputeStatus, PaymentRecord as InvoicePaymentRecord};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
@@ -704,6 +704,12 @@ fn ensure_payable_status(invoice: &Invoice) -> Result<(), QuickLendXError> {
     }
 
     if invoice.status != InvoiceStatus::Funded {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if invoice.dispute_status == DisputeStatus::Disputed
+        || invoice.dispute_status == DisputeStatus::UnderReview
+    {
         return Err(QuickLendXError::InvalidStatus);
     }
 

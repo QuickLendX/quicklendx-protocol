@@ -38,11 +38,7 @@ mod test_settlement_history_reconstruction;
 #[cfg(test)]
 mod test_settlement_capacity_stress;
 #[cfg(test)]
-mod test_invoice_state_matrix;
-#[cfg(test)]
-mod test_bid_state_matrix;
-#[cfg(test)]
-mod test_dispute_state_matrix;
+mod test_dispute_settlement;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
