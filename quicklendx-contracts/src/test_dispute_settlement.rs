@@ -71,7 +71,7 @@ fn test_settle_invoice_blocks_when_dispute_is_open() {
 
     // Settle invoice should be BLOCKED (returns InvalidStatus)
     let result = client.try_settle_invoice(&invoice_id, &amount);
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidStatus)));
 
     // Advance to UnderReview
     client.put_dispute_under_review(&invoice_id, &admin);
@@ -80,7 +80,7 @@ fn test_settle_invoice_blocks_when_dispute_is_open() {
 
     // Settle invoice should STILL be BLOCKED under review
     let result_review = client.try_settle_invoice(&invoice_id, &amount);
-    assert_eq!(result_review.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
+    assert_eq!(result_review, Err(Ok(QuickLendXError::InvalidStatus)));
 }
 
 #[test]
