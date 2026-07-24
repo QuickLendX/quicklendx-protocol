@@ -59,6 +59,9 @@ mod test_maintenance_write_matrix;
 mod test_settlement_history_reconstruction;
 #[cfg(test)]
 mod test_settlement_capacity_stress;
+// Issue #1920 — confirm require_regulatory_ok is truly a no-op by default.
+#[cfg(test)]
+mod test_regulatory_gate;
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 

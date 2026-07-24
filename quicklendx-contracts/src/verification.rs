@@ -995,6 +995,17 @@ pub fn require_investor_not_pending(env: &Env, investor: &Address) -> Result<(),
     }
 }
 
+/// Regulatory compliance gate, reserved for future jurisdiction/sanctions-list
+/// checks (see `docs/contracts/currency-whitelist.md` "Regulatory Compliance").
+///
+/// No such checks exist yet: this is intentionally a no-op by default and
+/// unconditionally returns `Ok(())` for any address and any ledger/storage
+/// state. Call sites can be wired in ahead of the actual regulatory logic
+/// landing so they don't need to change again once it does.
+pub fn require_regulatory_ok(_env: &Env, _address: &Address) -> Result<(), QuickLendXError> {
+    Ok(())
+}
+
 // Keep the existing invoice verification function
 pub fn verify_invoice_data(
     env: &Env,
