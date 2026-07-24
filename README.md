@@ -84,6 +84,7 @@ npm run dev
 - [`docs/FEES_GRACE_DEFAULT.md`](docs/FEES_GRACE_DEFAULT.md): Unified contributor reference — platform fees, grace period resolution, and default trigger rules in one place.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
 - [`docs/GENERATION_COUNTER.md`](docs/GENERATION_COUNTER.md): What the on-chain protocol version (generation counter) is, who reads it, and the generation-bump invariant.
+- [`docs/UPGRADE_QUIESCE.md`](docs/UPGRADE_QUIESCE.md): How writes drain before a contract upgrade — maintenance mode activation, drain window, and operator checklist.
 
 ## Contribution
 
