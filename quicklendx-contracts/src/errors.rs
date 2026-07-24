@@ -294,15 +294,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
             QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NPD"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LSQ"),
-            impl From<QuickLendXError> for Symbol {
-                fn from(error: QuickLendXError) -> Self {
-                    match error {
-                        // ... existing cases ...
-                        QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LSQ"),
-                        QuickLendXError::InsuranceNotActive => symbol_short!("INS_NA"),  // ADD THIS LINE
-                    }
-                }
-            }
+            QuickLendXError::InsuranceNotActive => symbol_short!("INS_NA"),
         }
     }
 }
