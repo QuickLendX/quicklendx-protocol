@@ -975,6 +975,20 @@ pub fn require_business_not_pending(env: &Env, business: &Address) -> Result<(),
     }
 }
 
+/// Enforce that a business is active (not deleted/frozen) before performing an operation.
+///
+/// A deleted/frozen business must not be allowed to mutate any outstanding invoices.
+/// This is a defence-in-depth check that complements the KYC status guards.
+///
+/// # Errors
+/// - `BusinessDeleted` if the business has been deleted/frozen.
+pub fn require_business_active(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    if BusinessVerificationStorage::is_deleted(env, business) {
+        return Err(QuickLendXError::BusinessDeleted);
+    }
+    Ok(())
+}
+
 /// Enforce that an investor is not in KYC-pending state before allowing a sensitive operation.
 ///
 /// Pending investors have submitted KYC but have not yet been approved or rejected.
