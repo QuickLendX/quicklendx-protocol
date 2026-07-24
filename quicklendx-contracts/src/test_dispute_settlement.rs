@@ -48,6 +48,7 @@ fn test_settle_invoice_blocks_when_dispute_is_open() {
     let admin = Address::generate(&env);
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    client.initialize_admin(&admin);
     client.set_admin(&admin);
 
     let business = setup_verified_business(&env, &client, &admin);
@@ -91,6 +92,7 @@ fn test_settle_invoice_allows_when_dispute_is_resolved() {
     let admin = Address::generate(&env);
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    client.initialize_admin(&admin);
     client.set_admin(&admin);
 
     let business = setup_verified_business(&env, &client, &admin);
@@ -139,6 +141,7 @@ fn test_settle_invoice_allows_when_no_dispute_exists() {
     let admin = Address::generate(&env);
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    client.initialize_admin(&admin);
     client.set_admin(&admin);
 
     let business = setup_verified_business(&env, &client, &admin);
