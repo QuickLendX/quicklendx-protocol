@@ -2719,6 +2719,17 @@ impl QuickLendXContract {
                 return Err(QuickLendXError::InvalidStatus);
             }
 
+            // Defence-in-depth: both business and investor must approve release.
+            // Without this check an attacker (or a single party) could call
+            // release_escrow_funds directly to bypass the dual-approval gate on
+            // execute_early_escrow_release.
+            let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
+            if !has_early_release_approval(&env, &invoice_id, &invoice.business)
+                || !has_early_release_approval(&env, &invoice_id, &investor)
+            {
+                return Err(QuickLendXError::OperationNotAllowed);
+            }
+
             let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
 
             release_escrow(&env, &invoice_id)?;
