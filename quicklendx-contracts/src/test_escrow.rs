@@ -731,6 +731,8 @@ fn test_release_escrow_funds_success() {
     let escrow_before = client.get_escrow_details(&invoice_id);
     assert_eq!(escrow_before.status, EscrowStatus::Held);
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
     assert!(result.is_ok(), "release_escrow_funds should succeed");
 
@@ -764,6 +766,8 @@ fn test_release_escrow_funds_idempotency_blocked() {
     let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
 
     client.accept_bid(&invoice_id, &bid_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let result = client.try_release_escrow_funds(&invoice_id);
@@ -1803,6 +1807,8 @@ fn test_release_escrow_funds_insufficient_contract_balance() {
     let business_balance_before = token_client.balance(&business);
 
     // Release should fail because the contract has no balance to send.
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
     assert!(
         result.is_err(),
@@ -1866,6 +1872,8 @@ fn test_release_escrow_funds_retry_after_balance_restored() {
     sac_client.burn(&contract_id, &contract_balance);
 
     // First release attempt fails.
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1950,6 +1958,8 @@ fn test_query_details_status_match_released() {
     let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
     let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
     client.accept_bid(&invoice_id, &bid_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let details = client.get_escrow_details(&invoice_id);
@@ -2007,6 +2017,8 @@ fn test_query_immutable_fields_stable_across_release() {
     client.accept_bid(&invoice_id, &bid_id);
 
     let before = client.get_escrow_details(&invoice_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
     let after = client.get_escrow_details(&invoice_id);
 
@@ -2204,6 +2216,8 @@ fn test_query_independent_escrows_do_not_cross_contaminate() {
     client.accept_bid(&invoice_b, &bid_b);
 
     // Release escrow A only.
+    client.approve_early_escrow_release(&invoice_a, &business);
+    client.approve_early_escrow_release(&invoice_a, &investor);
     client.release_escrow_funds(&invoice_a);
 
     let escrow_a = client.get_escrow_details(&invoice_a);

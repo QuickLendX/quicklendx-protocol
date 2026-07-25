@@ -1,4 +1,6 @@
 #![cfg(test)]
+#![allow(clippy::disallowed_methods)]
+#![allow(deprecated)]
 
 extern crate std;
 

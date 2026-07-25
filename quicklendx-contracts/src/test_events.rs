@@ -27,11 +27,10 @@ use crate::errors::QuickLendXError;
 use crate::events::{
     TOPIC_BID_ACCEPTED, TOPIC_BID_EXPIRED, TOPIC_BID_PLACED, TOPIC_BID_WITHDRAWN,
     TOPIC_DISPUTE_CREATED, TOPIC_DISPUTE_REJECTED, TOPIC_DISPUTE_RESOLVED,
-    TOPIC_DISPUTE_UNDER_REVIEW, TOPIC_ESCROW_CREATED, TOPIC_ESCROW_REFUNDED,
-    TOPIC_ESCROW_RELEASED, TOPIC_INVOICE_CANCELLED, TOPIC_INVOICE_DEFAULTED,
-    TOPIC_INVOICE_EXPIRED, TOPIC_INVOICE_FUNDED, TOPIC_INVOICE_SETTLED,
-    TOPIC_INVOICE_SETTLED_FINAL, TOPIC_INVOICE_UPLOADED, TOPIC_INVOICE_VERIFIED,
-    TOPIC_PARTIAL_PAYMENT, TOPIC_PAYMENT_RECORDED,
+    TOPIC_DISPUTE_UNDER_REVIEW, TOPIC_ESCROW_CREATED, TOPIC_ESCROW_REFUNDED, TOPIC_ESCROW_RELEASED,
+    TOPIC_INVOICE_CANCELLED, TOPIC_INVOICE_DEFAULTED, TOPIC_INVOICE_EXPIRED, TOPIC_INVOICE_FUNDED,
+    TOPIC_INVOICE_SETTLED, TOPIC_INVOICE_SETTLED_FINAL, TOPIC_INVOICE_UPLOADED,
+    TOPIC_INVOICE_VERIFIED, TOPIC_PARTIAL_PAYMENT, TOPIC_PAYMENT_RECORDED,
 };
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::payments::EscrowStatus;
@@ -787,6 +786,8 @@ fn test_escrow_released_field_order() {
     client.accept_bid(&id, &bid_id);
 
     let escrow = client.get_escrow_details(&id);
+    client.approve_early_escrow_release(&id, &biz);
+    client.approve_early_escrow_release(&id, &inv);
     client.release_escrow_funds(&id);
 
     let p: EscrowReleased = latest_payload(&env, TOPIC_ESCROW_RELEASED);
@@ -1438,6 +1439,8 @@ fn test_escrow_released_event_emits_correct_topic_and_payload() {
     let bid_id = client.place_bid(&investor, &invoice_id, &INV_AMOUNT, &EXP_RETURN);
     client.accept_bid(&invoice_id, &bid_id);
     let escrow = client.get_escrow_details(&invoice_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let p_rel: EscrowReleased = latest_payload(&env, TOPIC_ESCROW_RELEASED);

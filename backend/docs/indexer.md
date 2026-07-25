@@ -67,5 +67,8 @@ All events in a batch are validated **before** `commitBatch` is called. If any e
 
 ## Related docs
 
+- [Dashboard indexer queries](../../docs/DASHBOARD_QUERIES.md) — operator-ready
+  SQL for freshness, throughput, replay integrity, and materialized views.
+
 - [Attestation Events — Schema and Lifecycle](../../quicklendx-contracts/docs/ATTESTATIONS.md) — full topic reference, `RawEvent` wire format, and attestation lifecycle for downstream integrators.
 

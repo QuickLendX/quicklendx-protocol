@@ -308,6 +308,8 @@ fn test_pause_blocks_release_escrow_funds() {
 
     client.pause(&admin);
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
     assert!(result.is_err());
     let err = result.unwrap_err().unwrap();
@@ -443,6 +445,8 @@ fn test_pause_blocks_add_investment_insurance() {
     verify_investor_for_test(&env, &client, &investor, 10_000);
     let _bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
     client.accept_bid_and_fund(&invoice_id, &_bid_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let investment = client.get_invoice_investment(&invoice_id);

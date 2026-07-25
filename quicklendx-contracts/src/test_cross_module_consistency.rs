@@ -856,6 +856,8 @@ fn test_escrow_release_on_verify_funded_invariant() {
     assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
 
     // Release escrow via verify_invoice (funded invoice case)
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     // -- Assertions --------------------------------------------------------

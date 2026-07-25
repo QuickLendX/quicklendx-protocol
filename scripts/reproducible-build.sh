@@ -40,7 +40,7 @@ set -euo pipefail
 WASM_TARGET="wasm32v1-none"
 PACKAGE="quicklendx-contracts"
 WASM_FILE="quicklendx_contracts.wasm"
-WASM_PATH="quicklendx-contracts/target/${WASM_TARGET}/release/${WASM_FILE}"
+WASM_PATH="target/${WASM_TARGET}/release/${WASM_FILE}"
 
 # Extra flags forwarded to every `cargo build` call.
 # --locked  : honour the committed Cargo.lock exactly
