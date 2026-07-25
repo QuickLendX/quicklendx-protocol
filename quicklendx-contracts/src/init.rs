@@ -395,6 +395,7 @@ impl ProtocolInitializer {
             params.max_due_date_days,
             params.grace_period_seconds,
             crate::protocol_limits::DEFAULT_MAX_INVOICES_PER_BUSINESS,
+            crate::verification::InvestorTier::Basic,
         )?;
 
         // Initialize currency whitelist with provided currencies

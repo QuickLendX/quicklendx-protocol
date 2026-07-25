@@ -7,8 +7,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus,
-    PlatformFeeConfig, PruneReport, RebuildReport,
+    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory,
+    InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
@@ -290,13 +290,10 @@ impl InvoiceStorage {
             extend_persistent_ttl(env, &key);
         } else {
             env.storage().persistent().remove(&key);
-        } else {
-            env.storage().persistent().set(&key, &lock);
-            extend_persistent_ttl(env, &key);
         }
     }
 
-    pub fn get_invoice_lock(env: &Env, invoice_id: &BytesN<32>) -> InvoiceLock {
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
         if let Some(_frozen) = env.storage().persistent().get::<_, bool>(&key) {
             extend_persistent_ttl(env, &key);
@@ -308,19 +305,6 @@ impl InvoiceStorage {
                 .get::<_, BusinessFreezeReason>(&key)
                 .is_some()
         }
-    }
-
-    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
-        Self::get_invoice_lock(env, invoice_id).is_locked()
-    }
-
-    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
-        let lock = if frozen {
-            InvoiceLock::Frozen
-        } else {
-            InvoiceLock::None
-        };
-        Self::set_invoice_lock(env, invoice_id, lock);
     }
 
     pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {
