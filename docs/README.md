@@ -38,6 +38,7 @@
 
 | Document | What it covers |
 |----------|---------------|
+| [OPERATOR_HANDBOOK.md](OPERATOR_HANDBOOK.md) | Every admin/operator-facing entrypoint with concrete CLI examples — initialization, pause, emergency, currency whitelist, disputes, fees, KYC, backup, upgrade, and common workflows |
 | [EVENT_DASHBOARDS.md](EVENT_DASHBOARDS.md) | Standard Grafana dashboards — panel URLs, PromQL queries, SQLite indexer queries, and alert rules for protocol health, event throughput, disputes, and settlement pipeline |
 | [MONITORING.md](MONITORING.md) | Per-event alert thresholds for contract events |
 | [DASHBOARD_QUERIES.md](DASHBOARD_QUERIES.md) | Full SQL reference for indexer health and workload queries |

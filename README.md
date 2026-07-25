@@ -84,3 +84,4 @@ npm run dev
 Please follow the repository guidelines in `AGENTS.md` and include tests for any behavior changes.
 - `docs/QLX_OWNERSHIP_MODEL.md`: Ownership model for invoices and investor bids.
 - [`docs/QLX_REPORT_LIFECYCLE.md`](docs/QLX_REPORT_LIFECYCLE.md): Analytics report lifecycle — Requested → Delivered → Archived, entrypoints, storage layout, and invariants.
+- [`docs/OPERATOR_HANDBOOK.md`](docs/OPERATOR_HANDBOOK.md): Every admin/operator-facing entrypoint with concrete CLI examples — the quick reference for protocol operators.
