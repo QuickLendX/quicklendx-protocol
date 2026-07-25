@@ -18,12 +18,7 @@
     clippy::disallowed_methods
 )]
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum QuickLendXError {
-    AccountIsFrozen = 1,
-}
+pub use crate::errors::QuickLendXError;
 
 extern crate alloc;
 
@@ -103,6 +98,8 @@ pub mod reentrancy;
 pub mod resolution_policy;
 pub mod settlement;
 pub mod storage;
+#[cfg(any(test, feature = "testutils"))]
+pub mod test_utils;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -334,7 +331,6 @@ use admin::AdminStorage;
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
 };
-use errors::QuickLendXError;
 use escrow::{
     accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
     withdraw_investment as do_withdraw_investment,

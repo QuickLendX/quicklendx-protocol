@@ -12,6 +12,16 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rust: stable
+            target: wasm32-unknown-unknown
+            test_target: no_accidental_mainnet_fixture
+          - rust: stable
+            target: wasm32-unknown-unknown
+            test_target: wasm_build_size_budget
 
     steps:
       - uses: actions/checkout@v4
@@ -34,11 +44,13 @@ jobs:
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
+          rustup toolchain install stable --profile minimal
+          rustup default stable
       - name: Install Rust target for Soroban
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
-          rustup target add wasm32-unknown-unknown
+          rustup target add ${{ matrix.target }}
           rustup target add wasm32v1-none || true
       - name: Detect optional Stellar CLI
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
@@ -54,6 +66,13 @@ jobs:
         run: |
           cd quicklendx-contracts
           cargo build --verbose
+
+      - name: Run targeted regression test
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
+        run: |
+          source $HOME/.cargo/env
+          cd quicklendx-contracts
+          cargo test --test ${{ matrix.test_target }} --verbose
 
       - name: Check code quality
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
@@ -82,19 +101,12 @@ jobs:
           source $HOME/.cargo/env
           quicklendx-contracts/scripts/check-wasm-size.sh
 
-      - name: Run WASM size budget regression tests
-        # Runs tests/wasm_build_size_budget.rs – a self-contained integration test
-        # that does NOT import contract types, so it compiles independently of the
-        # legacy test suite.  It enforces:
-        #   • hard budget  (256 KiB)
-        #   • warning zone (90 % of budget)
-        #   • regression limit (baseline + 5 % margin)
-        # plus ~30 fast unit tests for constants, classify_size, and helpers.
+      - name: Build WASM for release
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
           cd quicklendx-contracts
-          cargo test --test wasm_build_size_budget --verbose
+          cargo build --target ${{ matrix.target }} --release --verbose
 
       - name: Run Cargo tests
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
