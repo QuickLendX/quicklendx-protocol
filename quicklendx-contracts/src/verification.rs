@@ -1,5 +1,6 @@
 use crate::bid::BidStorage;
 use crate::errors::QuickLendXError;
+use crate::storage::InvoiceStorage;
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
@@ -1048,6 +1049,20 @@ pub fn require_investor_not_pending(env: &Env, investor: &Address) -> Result<(),
     }
 }
 
+/// Enforce that an investor is not frozen before performing an operation.
+///
+/// A frozen investor must not be allowed to place bids, withdraw bids, or
+/// perform any investment action until unfrozen by an admin.
+///
+/// # Errors
+/// - `InvestorFrozen` if the investor has a freeze record.
+pub fn require_investor_not_frozen(env: &Env, investor: &Address) -> Result<(), QuickLendXError> {
+    if InvoiceStorage::get_investor_freeze_info(env, investor).is_some() {
+        return Err(QuickLendXError::InvestorFrozen);
+    }
+    Ok(())
+}
+
 /// Regulatory compliance gate, reserved for future jurisdiction/sanctions-list
 /// checks (see `docs/contracts/currency-whitelist.md` "Regulatory Compliance").
 ///
@@ -1662,6 +1677,8 @@ pub fn validate_investor_investment(
     investor: &Address,
     investment_amount: i128,
 ) -> Result<(), QuickLendXError> {
+    require_investor_not_frozen(env, investor)?;
+
     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
 
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
