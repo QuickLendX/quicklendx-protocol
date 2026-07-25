@@ -211,6 +211,8 @@ pub enum QuickLendXError {
     /// A report/analytics-snapshot was requested while an invoice has an
     /// unresolved (`Disputed` or `UnderReview`) dispute.
     ActiveDisputeExists = 2207,
+    /// Settlement attempted with a malformed or unknown transaction hash
+    InvalidTransactionHash = 2208,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -316,6 +318,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
             QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
             QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
+            QuickLendXError::InvalidTransactionHash => symbol_short!("INV_TX_H"),
         }
     }
 }

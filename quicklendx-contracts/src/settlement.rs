@@ -278,13 +278,13 @@ pub fn record_payment(
     payer.require_auth();
 
     // Replay protection: reject duplicate nonces.
-    if !payment_nonce.is_empty() {
-        let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
-        let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
-        if seen {
-            // Deduplicate: If transaction_id is already seen, return current progress to ensure idempotency.
-            return get_invoice_progress(env, invoice_id);
-        }
+    crate::verification::validate_transaction_hash(env, &payment_nonce)?;
+    
+    let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
+    let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
+    if seen {
+        // Deduplicate: If transaction_id is already seen, return current progress to ensure idempotency.
+        return get_invoice_progress(env, invoice_id);
     }
 
     let payment_count = get_payment_count_internal(env, invoice_id);

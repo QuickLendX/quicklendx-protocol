@@ -1915,6 +1915,36 @@ pub fn validate_evidence_hash(evidence_hash: &Bytes) -> Result<(), QuickLendXErr
     Ok(())
 }
 
+/// @notice Validate transaction hash format (64-character hex string required).
+/// @dev Used to validate `transaction_id` during settlement partial payments to prevent
+///      replay bypasses or storage bloat via malformed/empty nonces.
+/// @param hash The transaction hash string to validate.
+/// @return Ok(()) if valid 64-char hex, Err(InvalidTransactionHash) otherwise.
+pub fn validate_transaction_hash(env: &soroban_sdk::Env, hash: &soroban_sdk::String) -> Result<(), crate::errors::QuickLendXError> {
+    if hash.len() != 64 {
+        return Err(crate::errors::QuickLendXError::InvalidTransactionHash);
+    }
+    
+    let mut is_hex = true;
+    let bytes = soroban_sdk::Bytes::from_string(env, hash);
+    for i in 0..64 {
+        let b = bytes.get(i).unwrap();
+        match b {
+            b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {}
+            _ => {
+                is_hex = false;
+                break;
+            }
+        }
+    }
+    
+    if !is_hex {
+        return Err(crate::errors::QuickLendXError::InvalidTransactionHash);
+    }
+    
+    Ok(())
+}
+
 /// @notice Validate dispute resolution string.
 /// @dev Rejects empty strings and strings exceeding MAX_DISPUTE_RESOLUTION_LENGTH (2000 chars).
 /// @param resolution The resolution text to validate.
