@@ -283,3 +283,24 @@ pub trait Governable {
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 }
+
+/// Guard to reject stale governance-proposal references.
+///
+/// Compares a user-provided proposal reference (`gp`) against the on-chain proposal state (`current`).
+/// Returns `QuickLendXError::InvalidStatus` if they do not match.
+pub fn require_matching_governance_proposal(
+    gp: &Proposal,
+    current: &Proposal,
+) -> Result<(), QuickLendXError> {
+    if gp.id != current.id
+        || gp.proposer != current.proposer
+        || gp.votes_for != current.votes_for
+        || gp.votes_against != current.votes_against
+        || gp.voting_ends_at_ledger != current.voting_ends_at_ledger
+        || gp.status != current.status
+    {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+    Ok(())
+}
+
