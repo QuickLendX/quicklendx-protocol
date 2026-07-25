@@ -649,6 +649,14 @@ pub struct BidTtlUpdated {
     pub timestamp: u64,
 }
 
+#[contractevent]
+pub struct BidExpiryGraceUpdated {
+    pub old_seconds: u64,
+    pub new_seconds: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
 pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     TtlExtended {
         kind: kind.clone(),
@@ -1360,6 +1368,16 @@ pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Add
     BidTtlUpdated {
         old_days,
         new_days,
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_bid_expiry_grace_updated(env: &Env, old_seconds: u64, new_seconds: u64, admin: &Address) {
+    BidExpiryGraceUpdated {
+        old_seconds,
+        new_seconds,
         admin: admin.clone(),
         timestamp: env.ledger().timestamp(),
     }
