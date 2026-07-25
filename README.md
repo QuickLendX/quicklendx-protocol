@@ -64,6 +64,7 @@ npm run dev
 - [`docs/README.md`](docs/README.md): Full documentation index — **start here**.
   - [`docs/contracts/contributor-guide.md`](docs/contracts/contributor-guide.md): Contract contributor guide (module layout, lifecycle, error/event stability contracts, test patterns, WASM budget).
   - [`quicklendx-backend/docs/contributor-guide.md`](quicklendx-backend/docs/contributor-guide.md): Backend contributor guide (module layout, request pipeline, export/audit wiring, how to add an endpoint).
+- [Default Flow Diagram](docs/DEFAULT_FLOW_DIAGRAM.md): State-machine diagram from invoice past-due through default to recovery — grace period, finality guards, dispute interception, and a concrete ledger-timestamp walkthrough.
 - `quicklendx-contracts/README.md`: Smart contract build, deploy, and API reference.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
 - `backend/docs/REPLAY_RUNBOOK.md`: Step-by-step operator runbook for replaying ingestion from a specific ledger — covers reorg recovery, gap backfill, force rebuild after schema migration, and troubleshooting stuck runs.
