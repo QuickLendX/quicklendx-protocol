@@ -58,6 +58,7 @@ pub enum DataKey {
     Investment(BytesN<32>),
     FrozenInvoice(BytesN<32>),
     FreezeInfo(BytesN<32>),
+    EscrowExtension(BytesN<32>),
 }
 
 impl StorageKeys {

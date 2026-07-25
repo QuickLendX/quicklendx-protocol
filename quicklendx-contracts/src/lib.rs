@@ -4806,6 +4806,44 @@ impl QuickLendXContract {
         EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
     }
 
+    pub fn extend_escrow_expiry(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        new_due_date: u64,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        admin.require_auth();
+        admin::AdminStorage::require_admin(&env, &admin)?;
+
+        let mut invoice = storage::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        let escrow = payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::OperationNotAllowed)?;
+
+        if escrow.status != payments::EscrowStatus::Held {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        let ext_key = storage::DataKey::EscrowExtension(invoice_id.clone());
+        if env.storage().persistent().has(&ext_key) {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        if new_due_date <= invoice.due_date {
+            return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
+        env.storage().persistent().set(&ext_key, &true);
+        storage::extend_persistent_ttl(&env, &ext_key);
+
+        invoice.due_date = new_due_date;
+        storage::InvoiceStorage::update_invoice(&env, &invoice);
+
+        Ok(())
+    }
+
     /// Query the total locked escrow value across a caller-supplied bounded list of currencies.
     ///
     /// At most `max_currencies` entries from `currencies` are aggregated in one call.
