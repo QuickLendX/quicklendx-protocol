@@ -85,24 +85,24 @@ fn upload(env: &Env, client: &QuickLendXContractClient, business: &Address) -> B
 #[test]
 fn test_cancel_ownership_matrix() {
     let env = Env::default();
+    env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let business = Address::generate(&env);
     let attacker = Address::generate(&env);
 
-    let mut invoice = env
-        .as_contract(&contract_id, || {
-            Invoice::new(
-                &env,
-                business.clone(),
-                10_000,
-                Address::generate(&env),
-                env.ledger().timestamp() + 86_400,
-                String::from_str(&env, "owner matrix"),
-                InvoiceCategory::Services,
-                Vec::new(&env),
-            )
-        })
-        .expect("invoice creation");
+    let mut invoice = env.as_contract(&contract_id, || {
+        Invoice::new(
+        &env,
+        business.clone(),
+        10_000,
+        Address::generate(&env),
+        env.ledger().timestamp() + 86_400,
+        String::from_str(&env, "owner matrix"),
+        InvoiceCategory::Services,
+        Vec::new(&env),
+        )
+    })
+    .expect("invoice creation");
 
     // A cancellable (Pending) invoice has no investor / escrow attached.
     assert!(invoice.investor.is_none());
