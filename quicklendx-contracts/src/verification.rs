@@ -36,7 +36,7 @@ pub struct BusinessVerification {
 }
 
 #[contracttype]
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, PartialOrd, Ord)]
 pub enum InvestorTier {
     Basic,
     Silver,
@@ -1621,7 +1621,13 @@ pub fn validate_investor_investment(
     investor: &Address,
     investment_amount: i128,
 ) -> Result<(), QuickLendXError> {
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
+        if verification.tier < limits.min_investor_tier {
+            return Err(QuickLendXError::InsufficientKYCTier);
+        }
+
         // 1. Verification status check
         if !matches!(verification.status, BusinessVerificationStatus::Verified) {
             return Err(QuickLendXError::BusinessNotVerified);

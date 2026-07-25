@@ -559,6 +559,11 @@ pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i12
 }
 >>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
 
+pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+    let yield_amount = compute_yield_u32(amount, rate_bps, duration_days);
+    amount.max(0).saturating_add(yield_amount)
+}
+
 /// A single ledger-delta entry for time-weighted average calculations.
 ///
 /// Each entry records the `balance` held for `duration_ledgers` ledgers.
@@ -619,7 +624,11 @@ pub fn compute_twa_reference(deltas: &[LedgerDelta]) -> i128 {
         num = num.saturating_add(d.balance.saturating_mul(dur));
         den = den.saturating_add(dur);
     }
-    if den == 0 { 0 } else { num / den }
+    if den == 0 {
+        0
+    } else {
+        num / den
+    }
 }
 
 // ============================================================================

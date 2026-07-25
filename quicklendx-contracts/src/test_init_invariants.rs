@@ -192,7 +192,8 @@ fn test_generation_bump_invariant_version_read_from_storage() {
         "generation-bump invariant: version must be read from storage, not constant"
     );
     assert_ne!(
-        version_after_upgrade, crate::init::PROTOCOL_VERSION,
+        version_after_upgrade,
+        crate::init::PROTOCOL_VERSION,
         "version must not fall back to constant after upgrade"
     );
 }
