@@ -450,6 +450,31 @@ fn require_no_active_freeze(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qu
     Ok(())
 }
 
+/// Load an invoice and assert that the business caller has write access.
+///
+/// Consolidates the common preamble shared by `cancel_invoice`,
+/// `update_invoice_metadata`, and `clear_invoice_metadata`:
+/// - Protocol is not paused
+/// - Invoice exists
+/// - Invoice is not frozen
+/// - Transaction is authorized by the invoice's business address
+/// - Business is active (not deleted/frozen)
+///
+/// Returns the loaded `Invoice` so callers can proceed with their
+/// specific logic without repeating these five guards.
+fn require_invoice_writable_by_business(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+) -> Result<Invoice, QuickLendXError> {
+    pause::PauseControl::require_not_paused(env)?;
+    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
+    require_no_active_freeze(env, invoice_id)?;
+    invoice.business.require_auth();
+    require_business_active(env, &invoice.business)?;
+    Ok(invoice)
+}
+
 /// Write a `u32` as ASCII decimal into `buf`, return byte length.
 #[inline]
 fn u32_to_ascii_lib(mut value: u32, buf: &mut [u8; 10]) -> usize {
@@ -1453,17 +1478,7 @@ impl QuickLendXContract {
 
     /// Cancel an invoice (business only, before funding)
     pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-
-        require_no_active_freeze(&env, &invoice_id)?;
-
-        // Only the business owner can cancel their own invoice
-        invoice.business.require_auth();
-
-        // Enforce business is active (not deleted/frozen).
-        require_business_active(&env, &invoice.business)?;
+        let mut invoice = require_invoice_writable_by_business(&env, &invoice_id)?;
 
         // Enforce KYC: a pending business must not cancel invoices.
         require_business_not_pending(&env, &invoice.business)?;
@@ -1579,14 +1594,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         metadata: InvoiceMetadata,
     ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-
-        require_no_active_freeze(&env, &invoice_id)?;
-
-        invoice.business.require_auth();
-        require_business_active(&env, &invoice.business)?;
+        let mut invoice = require_invoice_writable_by_business(&env, &invoice_id)?;
         validate_invoice_metadata(&metadata, invoice.amount)?;
 
         if let Some(existing) = invoice.metadata() {
@@ -1603,14 +1611,7 @@ impl QuickLendXContract {
 
     /// Clear metadata attached to an invoice
     pub fn clear_invoice_metadata(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-
-        require_no_active_freeze(&env, &invoice_id)?;
-
-        invoice.business.require_auth();
-        require_business_active(&env, &invoice.business)?;
+        let mut invoice = require_invoice_writable_by_business(&env, &invoice_id)?;
 
         if let Some(existing) = invoice.metadata() {
             InvoiceStorage::remove_metadata_indexes(&env, &existing, &invoice.id);
