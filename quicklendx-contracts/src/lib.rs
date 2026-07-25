@@ -4927,6 +4927,9 @@ mod test_business_freeze_reason;
 #[cfg(test)]
 mod test_upgrade_guard;
 
+#[cfg(test)]
+mod test_ratings_snapshot;
+
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
 
