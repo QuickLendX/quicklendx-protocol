@@ -25,6 +25,8 @@ pub enum QuickLendXError {
     InvoiceAlreadyDefaulted = 1006,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceFrozen = 1007,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidFreezeReason = 1008,
 
     // Authorization (1100-1104)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -80,6 +82,8 @@ pub enum QuickLendXError {
     MaxInvoicesPerBusinessExceeded = 1408,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidBidTtl = 1409,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InsufficientKYCTier = 1410,
 
     // Rating (1500-1503)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -158,6 +162,8 @@ pub enum QuickLendXError {
     InvalidDisputeReason = 1905,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDisputeEvidence = 1906,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    DisputeActive = 1907,
 
     // Notification (2000-2002)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -190,12 +196,27 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DuplicateDefaultTransition = 2202,
     BackupVersionUnsupported = 2203,
-    DuplicateBid = 2204,
-    /// Caller supplied a cursor from a different snapshot generation.
+    /// Settlement attempted while a dispute is open on the invoice.
+    ///
+    /// Threat: a business could otherwise race to finalize settlement and
+    /// release escrowed funds before an admin resolves a pending dispute,
+    /// removing the investor's ability to recover their principal.
+    ///
+    /// Distinct from `InvalidStatus` (1401) so callers and monitors can tell
+    /// "wrong lifecycle state" apart from "dispute must be resolved first".
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidLedgerSequence = 2205,
     /// Insurance coverage is not active at the time of default/settlement.
     InsuranceNotActive = 2206,
+    /// Caller supplied a cursor from a different snapshot generation.
+    UnstableCursor = 2207,
+    /// Batch input is empty or exceeds `MAX_BATCH_INVOICES`.
+    BatchSizeExceeded = 2208,
+    /// Account is frozen and cannot create invoices.
+    AccountIsFrozen = 2209,
+    /// A contract upgrade is pending (scheduled but not yet executed or cancelled).
+    /// All writable entrypoints are blocked until the upgrade is resolved.
+    UpgradePending = 2211,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -212,6 +233,7 @@ impl From<QuickLendXError> for Symbol {
             // Authorization
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
+            QuickLendXError::InvalidFreezeReason => symbol_short!("INV_FRZ_RSN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
             QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
             QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
@@ -272,6 +294,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::DisputeNotUnderReview => symbol_short!("DSP_UR"),
             QuickLendXError::InvalidDisputeReason => symbol_short!("DSP_RN"),
             QuickLendXError::InvalidDisputeEvidence => symbol_short!("DSP_EV"),
+            QuickLendXError::DisputeActive => symbol_short!("DSP_ACT"),
             // Notification
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
@@ -280,8 +303,11 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaxActiveBidsPerInvestorExceeded => symbol_short!("MAX_ACT"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
+            QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
-            QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
+            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_PND_TR"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_L_SEQ"),
             QuickLendXError::EmergencyWithdrawTimelockNotElapsed => symbol_short!("EMG_TLK"),
             QuickLendXError::EmergencyWithdrawExpired => symbol_short!("EMG_EXP"),
             QuickLendXError::EmergencyWithdrawCancelled => symbol_short!("EMG_CNL"),
@@ -292,8 +318,13 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_ROT"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NOPND"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
+            QuickLendXError::InsuranceNotActive => symbol_short!("INS_NA"),
+            QuickLendXError::UnstableCursor => symbol_short!("STBL_CUR"),
+            QuickLendXError::BatchSizeExceeded => symbol_short!("BAT_MAX"),
+            QuickLendXError::AccountIsFrozen => symbol_short!("ACCT_FRZ"),
+            QuickLendXError::UpgradePending => symbol_short!("UPG_PND"),
         }
     }
 }

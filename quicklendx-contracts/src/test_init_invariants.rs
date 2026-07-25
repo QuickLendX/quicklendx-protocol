@@ -46,6 +46,7 @@ fn valid_params(env: &Env) -> InitializationParams {
         max_due_date_days: 365,
         grace_period_seconds: 604_800, // 7 days
         initial_currencies: Vec::new(env),
+        backfill_max_batch_size: 100,
     }
 }
 
@@ -53,7 +54,8 @@ fn valid_params(env: &Env) -> InitializationParams {
 fn initialized(env: &Env, client: &QuickLendXContractClient) -> InitializationParams {
     let p = valid_params(env);
     client.initialize(&p);
-    p
+    p,
+        backfill_max_batch_size: 100,
 }
 
 // ===========================================================================
@@ -192,7 +194,8 @@ fn test_generation_bump_invariant_version_read_from_storage() {
         "generation-bump invariant: version must be read from storage, not constant"
     );
     assert_ne!(
-        version_after_upgrade, crate::init::PROTOCOL_VERSION,
+        version_after_upgrade,
+        crate::init::PROTOCOL_VERSION,
         "version must not fall back to constant after upgrade"
     );
 }
@@ -532,25 +535,25 @@ fn test_set_protocol_config_bounds_enforced() {
 
     // Invalid min_invoice_amount
     assert_eq!(
-        client.try_set_protocol_config(&p.admin, &0i128, &365u64, &604_800u64),
+        client.try_set_protocol_config(&p.admin, &0i128, &365u64, &604_800u64, &100),
         Err(Ok(QuickLendXError::InvalidAmount)),
     );
 
     // Invalid max_due_date_days = 0
     assert_eq!(
-        client.try_set_protocol_config(&p.admin, &1_000_000i128, &0u64, &604_800u64),
+        client.try_set_protocol_config(&p.admin, &1_000_000i128, &0u64, &604_800u64, &100),
         Err(Ok(QuickLendXError::InvoiceDueDateInvalid)),
     );
 
     // Invalid max_due_date_days > 730
     assert_eq!(
-        client.try_set_protocol_config(&p.admin, &1_000_000i128, &731u64, &604_800u64),
+        client.try_set_protocol_config(&p.admin, &1_000_000i128, &731u64, &604_800u64, &100),
         Err(Ok(QuickLendXError::InvoiceDueDateInvalid)),
     );
 
     // Invalid grace_period_seconds > 30 days
     assert_eq!(
-        client.try_set_protocol_config(&p.admin, &1_000_000i128, &365u64, &2_592_001u64),
+        client.try_set_protocol_config(&p.admin, &1_000_000i128, &365u64, &2_592_001u64, &100),
         Err(Ok(QuickLendXError::InvalidTimestamp)),
     );
 }
@@ -561,7 +564,7 @@ fn test_set_protocol_config_valid_update_atomic() {
     let (env, client) = setup();
     let p = initialized(&env, &client);
 
-    client.set_protocol_config(&p.admin, &500_000i128, &180u64, &86_400u64);
+    client.set_protocol_config(&p.admin, &500_000i128, &180u64, &86_400u64, &100);
 
     assert_eq!(client.get_min_invoice_amount(), 500_000);
     assert_eq!(client.get_max_due_date_days(), 180);
@@ -575,7 +578,7 @@ fn test_set_protocol_config_non_admin_rejected() {
     initialized(&env, &client);
     let stranger = Address::generate(&env);
     assert_eq!(
-        client.try_set_protocol_config(&stranger, &1_000_000i128, &365u64, &604_800u64),
+        client.try_set_protocol_config(&stranger, &1_000_000i128, &365u64, &604_800u64, &100),
         Err(Ok(QuickLendXError::NotAdmin)),
     );
 }

@@ -6,13 +6,13 @@
 |----------|---------------|
 | [contributor-guide.md](contracts/contributor-guide.md) | **Start here if you are new to the contracts codebase.** Module layout, build commands, invoice lifecycle, bidding, escrow, KYC gates, error/event stability contracts, test auth pattern, WASM budget. |
 | [invoice-lifecycle.md](contracts/invoice-lifecycle.md) | Full invoice state machine, transition table, investment status integration |
+| [DEFAULT_FLOW_DIAGRAM.md](DEFAULT_FLOW_DIAGRAM.md) | State-machine diagram from invoice past-due → default → recovery; grace period, finality guards, dispute interception, and concrete timeline example |
 | [errors.md](contracts/errors.md) | Error code reference (stable integers) |
 | [events.md](contracts/events.md) | Event schema and topic constants |
 | [security.md](contracts/security.md) | Reentrancy guard, pause circuit breaker, access control |
 | [protocol-limits.md](contracts/protocol-limits.md) | Configurable numeric limits and string-length caps |
 | [fees.md](contracts/fees.md) | Fee management and revenue distribution |
 | [settlement.md](contracts/settlement.md) | Settlement flows and partial payments |
-| [QLX_SETTLEMENT_TERMS.md](QLX_SETTLEMENT_TERMS.md) | How settlement terms (fields, storage keys, formula, entrypoints, invariants) are represented per invoice — contributor reference |
 | [dispute.md](contracts/dispute.md) | Dispute lifecycle and resolution |
 | [escrow.md](contracts/escrow.md) | Escrow creation, release, and refund |
 | [bidding.md](contracts/bidding.md) | Bid ranking, TTL, and cleanup |
@@ -20,7 +20,16 @@
 | [storage-schema.md](contracts/storage-schema.md) | Persistent storage keys and index layout |
 | [backup.md](contracts/backup.md) | Backup and restore |
 | [audit.md](contracts/audit.md) | Audit trail and hash chain |
-| [CROSS_INVOICE_ANALYTICS.md](CROSS_INVOICE_ANALYTICS.md) | Cross-invoice read patterns, supported entrypoints, and pagination bounds for contributors and integrators |
+
+## Backend reference
+
+| Document | What it covers |
+|----------|---------------|
+| [quicklendx-backend/docs/contributor-guide.md](../quicklendx-backend/docs/contributor-guide.md) | **Start here if you are new to the backend.** Module layout, request pipeline, export/audit wiring, metrics, how to add an endpoint. |
+| [quicklendx-backend/docs/configuration.md](../quicklendx-backend/docs/configuration.md) | All environment variables with types, defaults, and production rules |
+| [quicklendx-backend/docs/exports.md](../quicklendx-backend/docs/exports.md) | Export limits, streaming, formats, and integrity digest |
+| [quicklendx-backend/docs/observability.md](../quicklendx-backend/docs/observability.md) | Prometheus metrics, Grafana queries, alert rules |
+| [quicklendx-backend/docs/testing.md](../quicklendx-backend/docs/testing.md) | Contract testing, fixtures, and coverage requirements |
 
 ## UX / frontend reference
 

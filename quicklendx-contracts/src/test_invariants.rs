@@ -928,6 +928,8 @@ fn test_invariants_after_full_lifecycle() {
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500));
     client.accept_bid(&invoice_id, &bid_id);
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     client.process_partial_payment(
