@@ -69,6 +69,10 @@ pub const TOPIC_TREASURY_ROTATION_INITIATED: &str = "treasury_rotation_initiated
 pub const TOPIC_TREASURY_ROTATION_CONFIRMED: &str = "treasury_rotation_confirmed";
 /// Topic for `TreasuryRotationCancelled` events.
 pub const TOPIC_TREASURY_ROTATION_CANCELLED: &str = "treasury_rotation_cancelled";
+/// Topic for `IncidentModeEntered` events.
+pub const TOPIC_INCIDENT_MODE_ENTERED: &str = "incident_mode_entered";
+/// Topic for `IncidentModeExited` events.
+pub const TOPIC_INCIDENT_MODE_EXITED: &str = "incident_mode_exited";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -1578,4 +1582,38 @@ pub fn emit_upgrade_executed(env: &Env, admin: &Address, wasm_hash: &BytesN<32>)
         (symbol_short!("upg_exe"),),
         (admin.clone(), wasm_hash.clone()),
     );
+}
+
+// ── Incident mode events ─────────────────────────────────────────────────────
+
+/// Emitted when the admin enters coordinated incident mode (pause + maintenance).
+#[contractevent]
+pub struct IncidentModeEntered {
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when the admin exits coordinated incident mode (unpause + disable maintenance).
+#[contractevent]
+pub struct IncidentModeExited {
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+pub fn emit_incident_mode_entered(env: &Env, admin: &Address, reason: &String) {
+    IncidentModeEntered {
+        admin: admin.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_incident_mode_exited(env: &Env, admin: &Address) {
+    IncidentModeExited {
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }

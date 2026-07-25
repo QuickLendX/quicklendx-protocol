@@ -61,6 +61,8 @@ impl IncidentControl {
         MaintenanceControl::apply_maintenance_mode(env, true, reason, admin)?;
         PauseControl::apply_paused(env, true);
 
+        crate::events::emit_incident_mode_entered(env, admin, reason);
+
         Ok(Self::snapshot_from_state(env))
     }
 
@@ -77,6 +79,8 @@ impl IncidentControl {
 
         PauseControl::apply_paused(env, false);
         MaintenanceControl::apply_maintenance_mode(env, false, &String::from_str(env, ""), admin)?;
+
+        crate::events::emit_incident_mode_exited(env, admin);
 
         Ok(Self::snapshot_from_state(env))
     }
