@@ -39,7 +39,7 @@ fn make_dispute(env: &Env) -> Dispute {
         resolution: String::from_str(env, ""),
         resolved_by: Address::generate(env),
         resolved_at: 0,
-        resolution_outcome: None,
+        resolution_outcome: DisputeResolution::None,
     }
 }
 
@@ -716,7 +716,7 @@ fn test_dispute_unresolved_state() {
         resolution: String::from_str(&env, ""),
         resolved_by: Address::generate(&env),
         resolved_at: 0,
-        resolution_outcome: None,
+        resolution_outcome: DisputeResolution::None,
     };
     assert_eq!(d.resolved_at, 0);
     assert_eq!(d.resolution, String::from_str(&env, ""));

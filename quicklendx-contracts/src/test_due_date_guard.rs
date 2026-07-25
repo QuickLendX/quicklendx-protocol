@@ -106,7 +106,10 @@ fn invoice_new_accepts_due_date_strictly_in_future() {
         )
     });
 
-    assert!(result.is_ok(), "Invoice::new must accept a due_date strictly in the future");
+    assert!(
+        result.is_ok(),
+        "Invoice::new must accept a due_date strictly in the future"
+    );
 }
 
 // ---------------------------------------------------------------------------

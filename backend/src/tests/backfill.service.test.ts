@@ -365,4 +365,72 @@ describe("BackfillService – drift backfill (resumable)", () => {
       .get() as { cnt: number };
     expect(rows.cnt).toBe(1); // exactly one row, no duplicates
   });
+
+  it("resumes from the last persisted progress cursor after a mid-run interruption", async () => {
+    // Process 2 of 5 items — simulates an interrupted run
+    const report = makeDriftReport(5, 11000);
+    await backfillService.triggerDriftBackfill(report, 2);
+
+    const midProgress = mockDb
+      .prepare("SELECT * FROM backfill_progress WHERE run_id = 'drift_11000'")
+      .get() as any;
+    expect(midProgress.last_processed_id).toBe("invoice_2");
+    expect(midProgress.status).toBe("running");
+
+    // Second call must resume from last_processed_id, not restart from invoice_1
+    await backfillService.triggerDriftBackfill(report, 2);
+    const resumedProgress = mockDb
+      .prepare("SELECT * FROM backfill_progress WHERE run_id = 'drift_11000'")
+      .get() as any;
+    expect(resumedProgress.last_processed_id).toBe("invoice_4");
+
+    // Complete remaining
+    await backfillService.triggerDriftBackfill(report, 10);
+    const final = mockDb
+      .prepare("SELECT * FROM backfill_progress WHERE run_id = 'drift_11000'")
+      .get() as any;
+    expect(final.status).toBe("completed");
+    // Audit log should contain exactly 5 distinct invoice IDs
+    const auditRows = mockDb
+      .prepare("SELECT DISTINCT invoice_id FROM backfill_audit WHERE event_type = 'completed'")
+      .all() as any[];
+    const ids = auditRows.map((r) => r.invoice_id);
+    for (let i = 1; i <= 5; i++) {
+      expect(ids).toContain(`invoice_${i}`);
+    }
+  });
+
+  it("throws MAX_BATCH_SIZE_EXCEEDED when batchSize exceeds max allowed batch size", async () => {
+    process.env.BACKFILL_MAX_BATCH_SIZE = "50";
+    const report = makeDriftReport(10, 12000);
+    await expect(
+      backfillService.triggerDriftBackfill(report, 100)
+    ).rejects.toMatchObject<Partial<BackfillError>>({
+      code: "MAX_BATCH_SIZE_EXCEEDED",
+      statusCode: 422,
+    });
+  });
+
+  it("throws INVALID_BATCH_SIZE when batchSize is non-positive", async () => {
+    const report = makeDriftReport(10, 13000);
+    await expect(
+      backfillService.triggerDriftBackfill(report, 0)
+    ).rejects.toMatchObject<Partial<BackfillError>>({
+      code: "INVALID_BATCH_SIZE",
+      statusCode: 400,
+    });
+  });
+
+  it("applies default max batch size when env variable is missing or invalid", async () => {
+    delete process.env.BACKFILL_MAX_BATCH_SIZE;
+    delete process.env.backfill_max_batch_size;
+    const report = makeDriftReport(10, 14000);
+    // default max batch size is 100
+    await expect(
+      backfillService.triggerDriftBackfill(report, 150)
+    ).rejects.toMatchObject<Partial<BackfillError>>({
+      code: "MAX_BATCH_SIZE_EXCEEDED",
+    });
+  });
 });
+

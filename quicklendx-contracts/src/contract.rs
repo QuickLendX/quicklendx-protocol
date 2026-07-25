@@ -38,6 +38,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             initial_currencies,
+        backfill_max_batch_size: 100,
         };
         ProtocolInitializer::initialize(&env, &params)
     }
@@ -134,6 +135,13 @@ impl QuickLendXContract {
         // This is the primary anti-spam control: only vetted businesses may write
         // invoice data to on-chain storage.
         crate::verification::require_business_not_pending(&env, &business)?;
+
+        // POLICY LAYER 3: Regulatory compliance gate (reserved seam — no-op today).
+        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
+        // jurisdiction-specific or on-chain oracle-based compliance checks without
+        // touching this call site.
+        crate::regulatory::require_regulatory_ok(&env, &business)?;
+
         // Enforce per-business invoice cap.
         ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
 
@@ -230,7 +238,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvoiceFrozen);
         }
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        let bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         
         invoice.mark_as_funded(&env, bid.investor.clone(), bid.bid_amount, env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
@@ -272,7 +280,7 @@ impl QuickLendXContract {
     }
 
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let mut bid = BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         bid.status = BidStatus::Withdrawn;
         BidStorage::store_bid(&env, &bid);
         Ok(())
@@ -311,6 +319,21 @@ impl QuickLendXContract {
         crate::admin::AdminStorage::require_admin(&env, &admin)?;
         InvoiceStorage::set_frozen(&env, &invoice_id, true, Some(reason));
         Ok(())
+    }
+
+    pub fn set_invoice_lock(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        lock: InvoiceLock,
+    ) -> Result<(), QuickLendXError> {
+        crate::admin::AdminStorage::require_admin(&env, &admin)?;
+        InvoiceStorage::set_invoice_lock(&env, &invoice_id, lock);
+        Ok(())
+    }
+
+    pub fn get_invoice_lock(env: Env, invoice_id: BytesN<32>) -> InvoiceLock {
+        InvoiceStorage::get_invoice_lock(&env, &invoice_id)
     }
 
     pub fn verify_business(env: Env, admin: Address, business: Address) -> Result<(), QuickLendXError> {
@@ -400,7 +423,7 @@ impl QuickLendXContract {
     }
 
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
         escrow.status = EscrowStatus::Released;
         escrow.released_at = Some(env.ledger().timestamp());
         EscrowStorage::update_escrow(&env, &escrow);
@@ -409,7 +432,7 @@ impl QuickLendXContract {
 
     pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>, admin: Address) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
-        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
         escrow.status = EscrowStatus::Refunded;
         escrow.refunded_at = Some(env.ledger().timestamp());
         EscrowStorage::update_escrow(&env, &escrow);
@@ -495,5 +518,41 @@ impl QuickLendXContract {
         BackupStorage::update_backup(&env, &backup)?;
         BackupStorage::remove_from_backup_list(&env, &backup_id);
         Ok(())
+    }
+
+    /// Rebuild customer, tax_id, and tag secondary indexes from the canonical invoice list.
+    /// Admin-only. Returns the number of invoices processed.
+    pub fn admin_reindex_invoices(env: Env, admin: Address) -> Result<u32, QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        admin.require_auth();
+
+        let all_ids = InvoiceStorage::get_all_invoice_ids(&env);
+        let mut count: u32 = 0;
+
+        for invoice_id in all_ids.iter() {
+            let invoice = match InvoiceStorage::get(&env, &invoice_id) {
+                Some(inv) => inv,
+                None => continue,
+            };
+
+            // Rebuild customer index
+            if let Some(ref name) = invoice.metadata_customer_name {
+                InvoiceStorage::add_to_customer_index(&env, name, &invoice_id);
+            }
+
+            // Rebuild tax_id index
+            if let Some(ref tax_id) = invoice.metadata_tax_id {
+                InvoiceStorage::add_to_tax_id_index(&env, tax_id, &invoice_id);
+            }
+
+            // Rebuild tag indexes
+            for tag in invoice.tags.iter() {
+                InvoiceStorage::add_tag_index(&env, &tag, &invoice_id);
+            }
+
+            count += 1;
+        }
+
+        Ok(count)
     }
 }

@@ -76,7 +76,13 @@ fn setup_funded_investment(
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &(bid_amount + 100));
+    let bid_id = client.place_bid(
+        investor,
+        &invoice_id,
+        &bid_amount,
+        &(bid_amount + 100),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
 
     invoice_id
@@ -212,6 +218,8 @@ fn test_withdraw_after_escrow_released_rejected() {
         &env, &client, &admin, &business, &investor, &currency, 1000, 1000,
     );
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let err = client
@@ -381,7 +389,13 @@ fn test_investor_can_invest_again_after_withdrawal() {
     );
     client.verify_invoice(&invoice2_id);
 
-    let bid2_id = client.place_bid(&investor, &invoice2_id, &2000, &2100);
+    let bid2_id = client.place_bid(
+        &investor,
+        &invoice2_id,
+        &2000,
+        &2100,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice2_id, &bid2_id);
 
     let investment2 = get_investment(&env, &contract_id, &invoice2_id);

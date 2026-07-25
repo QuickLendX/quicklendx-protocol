@@ -6,8 +6,8 @@ use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 use crate::storage::InvoiceStorage;
 pub use crate::types::{
-    Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata, InvoiceRating,
-    InvoiceStatus,
+    Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceMetadata,
+    InvoiceRating, InvoiceStatus,
 };
 
 /// Maximum normalized tags allowed per invoice.
@@ -32,6 +32,7 @@ impl Invoice {
         description: String,
         category: InvoiceCategory,
         tags: Vec<String>,
+        origination_fee_bps: Option<u32>,
     ) -> Result<Self, QuickLendXError> {
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -86,6 +87,7 @@ impl Invoice {
             dispute: Self::empty_dispute(env),
             total_paid: 0,
             payment_history: Vec::new(env),
+            origination_fee_bps,
         })
     }
 
@@ -239,25 +241,19 @@ impl Invoice {
         caller: &Address,
         metadata: InvoiceMetadata,
     ) -> Result<(), QuickLendXError> {
-        if self.business != *caller {
-            return Err(QuickLendXError::Unauthorized);
-        }
+        require_matching_business_invoice_ownership(env, caller, self)?;
         caller.require_auth();
         self.set_metadata(env, Some(metadata))
     }
 
     pub fn clear_metadata(&mut self, env: &Env, caller: &Address) -> Result<(), QuickLendXError> {
-        if self.business != *caller {
-            return Err(QuickLendXError::Unauthorized);
-        }
+        require_matching_business_invoice_ownership(env, caller, self)?;
         caller.require_auth();
         self.set_metadata(env, None)
     }
 
-    pub fn cancel(&mut self, _env: &Env, actor: Address) -> Result<(), QuickLendXError> {
-        if self.business != actor {
-            return Err(QuickLendXError::Unauthorized);
-        }
+    pub fn cancel(&mut self, env: &Env, actor: Address) -> Result<(), QuickLendXError> {
+        require_matching_business_invoice_ownership(env, &actor, self)?;
         self.status = InvoiceStatus::Cancelled;
         Ok(())
     }
@@ -334,6 +330,24 @@ impl Invoice {
         Ok(())
     }
 
+    /// Admin override of the invoice's computed average rating.
+    ///
+    /// A one-off manual correction (e.g. for a fraudulent or erroneous rating
+    /// discovered off-chain). Callers are responsible for authorization and
+    /// for recording the mandatory audit reason; this method only validates
+    /// and applies the new score.
+    ///
+    /// Note: a subsequent [`Self::add_rating`] call recomputes `average_rating`
+    /// purely from the underlying `ratings` vector, which silently replaces
+    /// this override — it is a one-off correction, not a persistent pin.
+    pub fn override_rating(&mut self, new_rating: u32) -> Result<(), QuickLendXError> {
+        if new_rating == 0 || new_rating > 5 {
+            return Err(QuickLendXError::InvalidRating);
+        }
+        self.average_rating = Some(new_rating);
+        Ok(())
+    }
+
     pub fn get_highest_rating(&self) -> Option<u32> {
         let mut highest: Option<u32> = None;
         for entry in self.ratings.iter() {
@@ -364,6 +378,17 @@ impl Invoice {
         }
         total / self.ratings.len()
     }
+}
+
+pub fn require_matching_business_invoice_ownership(
+    _env: &Env,
+    business: &Address,
+    invoice: &Invoice,
+) -> Result<(), QuickLendXError> {
+    if invoice.business != *business {
+        return Err(QuickLendXError::Unauthorized);
+    }
+    Ok(())
 }
 
 fn eq_trimmed_lower_ascii(lhs: &String, rhs: &String) -> bool {

@@ -173,6 +173,7 @@ fn place_bid(
         invoice_id,
         &INVOICE_AMOUNT,
         &(INVOICE_AMOUNT + 100),
+        &BytesN::from_array(&client.env, &[0u8; 32]),
     )
 }
 

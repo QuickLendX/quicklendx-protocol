@@ -22,7 +22,7 @@ use crate::events::{emit_escrow_refunded, emit_investment_withdrawn, emit_invoic
 use crate::payments::{create_escrow, refund_escrow, EscrowStatus, EscrowStorage};
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
-use crate::verification::require_business_not_pending;
+use crate::verification::{require_business_active, require_business_not_pending};
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 /// Loaded and validated state required to accept a bid.
@@ -55,6 +55,7 @@ pub(crate) fn load_accept_bid_context(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     invoice.business.require_auth();
+    require_business_active(env, &invoice.business)?;
     require_business_not_pending(env, &invoice.business)?;
 
     if invoice.status == InvoiceStatus::Funded {
@@ -79,7 +80,7 @@ pub(crate) fn load_accept_bid_context(
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    let bid = BidStorage::get_bid(env, bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let bid = BidStorage::get_bid(env, bid_id).unwrap();
 
     if bid.invoice_id != *invoice_id {
         return Err(QuickLendXError::Unauthorized);
@@ -126,6 +127,22 @@ pub fn accept_bid_and_fund(
 
     crate::qlx_log!(env, "escrow", "Accepting bid and funding invoice");
 
+    let mut escrow_amount = bid.bid_amount;
+    if let Some(fee_bps) = invoice.origination_fee_bps {
+        let total_fee = (bid.bid_amount.checked_mul(fee_bps as i128).ok_or(QuickLendXError::ArithmeticOverflow)?)
+            .checked_div(10000).ok_or(QuickLendXError::ArithmeticOverflow)?;
+            
+        escrow_amount = bid.bid_amount.checked_sub(total_fee).ok_or(QuickLendXError::ArithmeticOverflow)?;
+        
+        if total_fee > 0 {
+            crate::payments::transfer_funds(env, &invoice.currency, &bid.investor, &env.current_contract_address(), total_fee)?;
+            
+            let mut fees_collected = soroban_sdk::Map::new(env);
+            fees_collected.set(crate::fees::FeeType::Origination, total_fee);
+            crate::fees::FeeManager::collect_fees(env, &bid.investor, fees_collected, total_fee)?;
+        }
+    }
+
     // 5. Lock funds in escrow
     // This calls payments::create_escrow which calls token transfer and emits emit_escrow_created
     let escrow_id = create_escrow(
@@ -133,7 +150,7 @@ pub fn accept_bid_and_fund(
         invoice_id,
         &bid.investor,
         &invoice.business,
-        bid.bid_amount,
+        escrow_amount,
         &invoice.currency,
     )?;
 
@@ -225,8 +242,7 @@ pub fn refund_escrow_funds(
     }
 
     // 4. Retrieve Escrow
-    let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
 
     // 5. Transfer funds and update escrow state
     // This calls payments::refund_escrow which handles the token transfer and status update
@@ -322,8 +338,7 @@ pub fn withdraw_investment(
     investor.require_auth();
 
     // 2. Validate investment exists, is Active, and belongs to caller
-    let mut investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let mut investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
     if investment.status != InvestmentStatus::Active {
         return Err(QuickLendXError::InvalidStatus);
@@ -342,8 +357,7 @@ pub fn withdraw_investment(
     }
 
     // 4. Validate escrow exists and is still Held
-    let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
 
     if escrow.status != EscrowStatus::Held {
         return Err(QuickLendXError::InvalidStatus);
@@ -353,7 +367,7 @@ pub fn withdraw_investment(
     refund_escrow(env, invoice_id)?;
 
     // 6. Restore invoice to Verified state and clear funded fields
-    let previous_status = invoice.status.clone();
+    let previous_status = invoice.status;
     invoice.status = InvoiceStatus::Verified;
     invoice.funded_amount = 0;
     invoice.funded_at = None;

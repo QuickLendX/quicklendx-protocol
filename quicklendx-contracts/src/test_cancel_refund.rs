@@ -520,6 +520,8 @@ fn test_refund_prevents_release() {
     client.refund_escrow_funds(&invoice_id, &business);
 
     // Try to release after refund - should fail
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
     assert!(result.is_err(), "Release should fail after refund");
 }
@@ -824,7 +826,7 @@ fn test_cancel_bid_after_withdraw_is_noop() {
         &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Withdraw first
     client.withdraw_bid(&bid_id);
@@ -862,7 +864,7 @@ fn test_withdraw_bid_after_cancel_fails() {
         &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Cancel first
     client.cancel_bid(&bid_id);
@@ -900,7 +902,7 @@ fn test_double_cancel_second_is_noop() {
         &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
     assert!(client.cancel_bid(&bid_id), "first cancel must succeed");
     assert!(
@@ -932,7 +934,7 @@ fn test_double_withdraw_second_fails() {
         &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
     client.withdraw_bid(&bid_id);
     let result = client.try_withdraw_bid(&bid_id);
@@ -1028,7 +1030,7 @@ fn test_cancel_bid_after_expiry_is_noop() {
         &Vec::new(&env),
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Advance past TTL
     let new_ts = env.ledger().timestamp() + 7 * 86400 + 1;

@@ -78,7 +78,13 @@ fn create_and_fund_invoice(
         &Vec::new(env),
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(
+        investor,
+        &invoice_id,
+        &amount,
+        &(amount + 100),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
     invoice_id
 }
@@ -125,6 +131,30 @@ fn test_grace_period_boundary_on_both_sides() {
 
     let grace_period = 3 * 24 * 60 * 60; // 3 days
     let grace_deadline = due_date + grace_period;
+
+    // 0. Exactly at expiry (due_date) -> not overdue, not defaultable
+    env.ledger().set_timestamp(due_date);
+
+    // Try mark defaulted - should return OperationNotAllowed
+    let res = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert!(matches!(res, Err(Ok(QuickLendXError::OperationNotAllowed))));
+
+    // Scan funded invoice expirations at exactly due_date -> overdue count is 0
+    env.as_contract(&client.address, || {
+        let scan_res = scan_funded_invoice_expirations(&env, grace_period, Some(10)).unwrap();
+        assert_eq!(scan_res.overdue_count, 0);
+        assert_eq!(scan_res.scanned_count, 1);
+    });
+
+    let status = client.get_invoice(&invoice_id).status;
+    assert_eq!(status, InvoiceStatus::Funded);
+
+    // Reset default scan cursor back to 0 for next check
+    env.as_contract(&client.address, || {
+        env.storage()
+            .instance()
+            .set(&soroban_sdk::symbol_short!("ovd_scan"), &0u32);
+    });
 
     // 1. Exactly at grace deadline -> not defaultable
     env.ledger().set_timestamp(grace_deadline);

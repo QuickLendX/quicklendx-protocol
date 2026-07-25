@@ -6,7 +6,7 @@ use crate::payments::Escrow;
 use crate::types::Bid;
 use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
 
 // ============================================================================
 // Topic Constants
@@ -61,6 +61,14 @@ pub const TOPIC_DISPUTE_CREATED: &str = "dispute_created";
 pub const TOPIC_DISPUTE_UNDER_REVIEW: &str = "dispute_under_review";
 /// Topic for `DisputeResolved` events.
 pub const TOPIC_DISPUTE_RESOLVED: &str = "dispute_resolved";
+/// Topic for `DisputeRejected` events.
+pub const TOPIC_DISPUTE_REJECTED: &str = "dispute_rejected";
+/// Topic for `TreasuryRotationInitiated` events.
+pub const TOPIC_TREASURY_ROTATION_INITIATED: &str = "treasury_rotation_initiated";
+/// Topic for `TreasuryRotationConfirmed` events.
+pub const TOPIC_TREASURY_ROTATION_CONFIRMED: &str = "treasury_rotation_confirmed";
+/// Topic for `TreasuryRotationCancelled` events.
+pub const TOPIC_TREASURY_ROTATION_CANCELLED: &str = "treasury_rotation_cancelled";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -468,6 +476,21 @@ pub struct TreasuryConfigured {
 }
 
 #[contractevent]
+pub struct TreasuryRotationInitiated {
+    pub new_address: Address,
+    pub initiated_by: Address,
+    pub confirmation_deadline: u64,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct TreasuryRotationConfirmed {
+    pub old_address: Address,
+    pub new_address: Address,
+    pub timestamp: u64,
+}
+
+#[contractevent]
 pub struct BackupCreated {
     pub backup_id: BytesN<32>,
     pub invoice_count: u32,
@@ -588,6 +611,18 @@ pub struct DisputeResolved {
     pub timestamp: u64,
 }
 
+/// Emitted when a dispute is rejected (dismissed) by an admin.
+///
+/// Topic: [`TOPIC_DISPUTE_REJECTED`] (`"dsp_rj"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct DisputeRejected {
+    pub invoice_id: BytesN<32>,
+    pub rejected_by: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
 #[contractevent]
 pub struct ProfitFeeBreakdown {
     pub invoice_id: BytesN<32>,
@@ -649,6 +684,7 @@ pub struct ProtocolInitialized {
     pub min_invoice_amount: i128,
     pub max_due_date_days: u64,
     pub grace_period_seconds: u64,
+    pub backfill_max_batch_size: u32,
     pub timestamp: u64,
 }
 
@@ -666,11 +702,17 @@ pub struct Unpaused {
 }
 
 pub fn emit_paused(env: &Env, admin: &Address) {
-    Paused { admin: admin.clone() }.publish(env);
+    Paused {
+        admin: admin.clone(),
+    }
+    .publish(env);
 }
 
 pub fn emit_unpaused(env: &Env, admin: &Address) {
-    Unpaused { admin: admin.clone() }.publish(env);
+    Unpaused {
+        admin: admin.clone(),
+    }
+    .publish(env);
 }
 
 // ============================================================================
@@ -1271,6 +1313,21 @@ pub fn emit_dispute_resolved(
     .publish(env);
 }
 
+pub fn emit_dispute_rejected(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    rejected_by: &Address,
+    reason: &String,
+) {
+    DisputeRejected {
+        invoice_id: invoice_id.clone(),
+        rejected_by: rejected_by.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
 // ============================================================================
 // Profit / Fee Breakdown Event Emitter
 // ============================================================================
@@ -1470,6 +1527,7 @@ pub fn emit_protocol_initialized(
     min_invoice_amount: i128,
     max_due_date_days: u64,
     grace_period_seconds: u64,
+    backfill_max_batch_size: u32,
 ) {
     ProtocolInitialized {
         admin: admin.clone(),
@@ -1478,6 +1536,7 @@ pub fn emit_protocol_initialized(
         min_invoice_amount,
         max_due_date_days,
         grace_period_seconds,
+        backfill_max_batch_size,
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
@@ -1486,4 +1545,11 @@ pub fn emit_protocol_initialized(
 pub fn emit_admin_initialized(env: &Env, admin: &Address) {
     env.events()
         .publish((symbol_short!("adm_init"),), (admin.clone(),));
+}
+
+pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
+    env.events().publish(
+        (symbol_short!("tr_rot_c"), admin.clone()),
+        (),
+    );
 }

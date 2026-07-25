@@ -9,6 +9,7 @@
 //! - Type safety: strong typing for status and categories
 //! - Addresses are used for identity to leverage Soroban's built-in access control
 
+use crate::DisputeResolution as OtherDisputeResolution;
 use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
 /// Invoice status enumeration representing the lifecycle of an invoice
@@ -33,6 +34,20 @@ impl InvoiceStatus {
                 | InvoiceStatus::Cancelled
                 | InvoiceStatus::Refunded
         )
+    }
+}
+
+/// Invoice lock state controlled by admin holds.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvoiceLock {
+    None,
+    Frozen,
+}
+
+impl InvoiceLock {
+    pub fn is_locked(&self) -> bool {
+        *self != Self::None
     }
 }
 
@@ -88,6 +103,7 @@ pub enum DisputeResolution {
 impl DisputeResolution {
     pub fn code(self) -> u32 {
         match self {
+            Self::None => 0,
             Self::FavorBusiness => 1,
             Self::FavorInvestor => 2,
             Self::Split => 3,
@@ -150,6 +166,31 @@ pub struct InvoiceRating {
     pub timestamp: u64,
 }
 
+/// Freeze reason enumeration representing why a business invoice was frozen
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BusinessFreezeReason {
+    /// Generic administrative freeze (admin's discretion)
+    AdminAction,
+    /// Business KYC was rejected or revoked
+    KYCRejected,
+    /// Legal or compliance policy violation
+    ComplianceViolation,
+    /// Fraud or suspicious activity detected
+    SuspiciousActivity,
+    /// Court order or legal hold applied
+    LegalHold,
+}
+
+/// Freeze record stored alongside the frozen flag on an invoice
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FreezeInfo {
+    pub reason: BusinessFreezeReason,
+    pub frozen_by: Address,
+    pub frozen_at: u64,
+}
+
 /// Core Invoice data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -184,6 +225,45 @@ pub struct Invoice {
     pub dispute: Dispute,
     pub total_paid: i128,
     pub payment_history: Vec<PaymentRecord>,
+    pub origination_fee_bps: Option<u32>,
+}
+
+pub const RATINGS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+
+/// Versioned ratings snapshot for off-chain indexers and downstream contracts.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RatingsSnapshot {
+    pub schema_version: u32,
+    pub invoice_id: BytesN<32>,
+    pub average_rating: Option<u32>,
+    pub total_ratings: u32,
+    pub highest_rating: Option<u32>,
+    pub lowest_rating: Option<u32>,
+    pub ledger_sequence: u32,
+}
+
+/// Input type for a single invoice within a `store_invoices_batch` call.
+///
+/// Bundles every per-invoice field so the batch entrypoint can accept a
+/// `Vec<InvoiceInput>` with a single-argument list, keeping the public ABI
+/// clean and future-proof (adding optional metadata requires a new struct
+/// version rather than a new variadic argument list).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvoiceInput {
+    /// Invoice face value in the smallest currency unit (must be > 0).
+    pub amount: i128,
+    /// Token contract address for the invoice currency.
+    pub currency: Address,
+    /// Unix timestamp by which the invoice must be settled (must be in the future).
+    pub due_date: u64,
+    /// Human-readable invoice description (max `MAX_DESCRIPTION_LENGTH` bytes).
+    pub description: String,
+    /// Invoice category (Services, Products, etc.).
+    pub category: InvoiceCategory,
+    /// Optional searchable tags (max `MAX_INVOICE_TAGS` entries, each max 50 bytes).
+    pub tags: Vec<String>,
 }
 
 /// Helper struct for metadata updates

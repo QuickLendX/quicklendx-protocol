@@ -21,7 +21,10 @@ fn test_get_operational_limits_returns_protocol_constants() {
 
     let limits = client.get_operational_limits();
 
-    assert_eq!(limits.max_batch, crate::defaults::max_overdue_scan_batch_limit());
+    assert_eq!(
+        limits.max_batch,
+        crate::defaults::max_overdue_scan_batch_limit()
+    );
     assert_eq!(limits.max_limit, crate::MAX_QUERY_LIMIT);
     assert_eq!(limits.max_fee, crate::init::MAX_FEE_BPS);
 }

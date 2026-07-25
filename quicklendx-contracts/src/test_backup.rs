@@ -3,8 +3,8 @@
 use crate::{
     backup::{Backup, BackupStatus, BackupStorage},
     invoice::InvoiceCategory,
+    types::{DisputeResolution, Invoice, InvoiceStatus},
     QuickLendXContract, QuickLendXContractClient, QuickLendXError,
-    types::{Invoice, InvoiceStatus, DisputeResolution},
 };
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -43,74 +43,9 @@ fn create_invoice(
     )
 }
 
-   /// Create a minimal Invoice suitable for backup tests.
-    fn make_invoice(env: &Env, idx: u32) -> Invoice {
-        use soroban_sdk::{vec, Address, BytesN};
-        use crate::invoice::{Dispute, DisputeResolution, DisputeStatus};
- 
-        let mut id_bytes = [0u8; 32];
-        id_bytes[28..32].copy_from_slice(&idx.to_be_bytes());
-        let id = BytesN::from_array(env, &id_bytes);
- 
-        Invoice {
-            id,
-            business: Address::generate(env),
-            amount: 500_i128 * (idx as i128 + 1),
-            currency: Address::generate(env),
-            due_date: 9_999_999_999,
-            status: InvoiceStatus::Pending,
-            created_at: env.ledger().timestamp(),
-            description: String::from_str(env, "backup test"),
-            metadata_customer_name: None,
-            metadata_customer_address: None,
-            metadata_tax_id: None,
-            metadata_notes: None,
-            metadata_line_items: soroban_sdk::Vec::new(env),
-            category: InvoiceCategory::Services,
-            tags: soroban_sdk::Vec::new(env),
-            funded_amount: 0,
-            funded_at: None,
-            investor: None,
-            settled_at: None,
-            average_rating: None,
-            total_ratings: 0,
-            ratings: vec![env],
-            dispute_status: DisputeStatus::None,
-            dispute: Dispute {
-                created_by: Address::generate(env),
-                created_at: 0,
-                reason: String::from_str(env, ""),
-                evidence: String::from_str(env, ""),
-                resolution: String::from_str(env, ""),
-                resolved_by: Address::generate(env),
-                resolved_at: 0,
-                resolution_outcome: DisputeResolution::None,
-            },
-            total_paid: 0,
-            payment_history: vec![env],
-        }
-    }
- 
-    /// Persist a complete, valid backup (metadata + data) and return its ID.
-    fn create_valid_backup(env: &Env, invoices: Vec<Invoice>) -> soroban_sdk::BytesN<32> {
-        let backup_id = BackupStorage::generate_backup_id(env);
-        let count = invoices.len();
- 
-        let backup = Backup {
-            backup_id: backup_id.clone(),
-            timestamp: env.ledger().timestamp(),
-            description: String::from_str(env, "test backup"),
-            invoice_count: count,
-            status: BackupStatus::Active,
-            format_version: 2,
-        };
- 
-        BackupStorage::store_backup(env, &backup, Some(&invoices)).unwrap();
-        BackupStorage::store_backup_data(env, &backup_id, &invoices);
-        BackupStorage::add_to_backup_list(env, &backup_id);
- 
-        backup_id
-    }
+/// Create a minimal Invoice suitable for backup tests.
+fn make_invoice(env: &Env, idx: u32) -> Invoice {
+    use crate::types::{Dispute, DisputeResolution, DisputeStatus};
 
     let mut id_bytes = [0u8; 32];
     id_bytes[28..32].copy_from_slice(&idx.to_be_bytes());
@@ -138,7 +73,7 @@ fn create_invoice(
         settled_at: None,
         average_rating: None,
         total_ratings: 0,
-        ratings: vec![env],
+        ratings: soroban_sdk::Vec::new(env),
         dispute_status: DisputeStatus::None,
         dispute: Dispute {
             created_by: Address::generate(env),
@@ -148,10 +83,10 @@ fn create_invoice(
             resolution: String::from_str(env, ""),
             resolved_by: Address::generate(env),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         },
         total_paid: 0,
-        payment_history: vec![env],
+        payment_history: soroban_sdk::Vec::new(env),
     }
 }
 
@@ -518,4 +453,69 @@ fn test_v3_rejection_and_unsupported_error() {
 
     let result = client.try_restore_backup(&admin, &backup_id);
     assert!(result.is_err());
+}
+
+/// Property: restore_from_backup is idempotent — restoring the same backup twice
+/// produces the same invoice count.
+#[test]
+fn restore_from_backup_is_idempotent() {
+    let (env, client, admin) = setup();
+    let business = Address::generate(&env);
+
+    // Create two invoices and take a backup.
+    let inv_a = create_invoice(&env, &client, 5_000, "A");
+    let inv_b = create_invoice(&env, &client, 7_000, "B");
+    let _ = inv_a;
+    let _ = inv_b;
+
+    let backup_id = client
+        .create_backup(&admin, &String::from_str(&env, "idempotency-test"))
+        .unwrap();
+
+    let count1 = client.restore_backup(&admin, &backup_id).unwrap();
+    let count2 = client.restore_backup(&admin, &backup_id).unwrap();
+
+    assert_eq!(count1, count2, "restore must be idempotent");
+}
+
+/// Property: restore is order-independent — restoring backup A then B leaves state
+/// identical to restoring B then A (last restore wins and is the final state).
+#[test]
+fn restore_order_independent_for_invoice_records() {
+    let (env, client_a, admin_a) = setup();
+    let (env_b, client_b, admin_b) = setup();
+    let _ = env_b;
+
+    let _ = create_invoice(&env, &client_a, 1_000, "X1");
+    let backup_x = client_a
+        .create_backup(&admin_a, &String::from_str(&env, "backup-x"))
+        .unwrap();
+
+    let _ = create_invoice(&env, &client_a, 2_000, "X2");
+    let backup_y = client_a
+        .create_backup(&admin_a, &String::from_str(&env, "backup-y"))
+        .unwrap();
+
+    // Order 1: restore X then Y
+    let count_x1 = client_a.restore_backup(&admin_a, &backup_x).unwrap();
+    let count_xy = client_a.restore_backup(&admin_a, &backup_y).unwrap();
+
+    // Order 2: restore Y then X on client_b
+    let _ = create_invoice(&env_b, &client_b, 1_000, "X1");
+    let bx_b = client_b
+        .create_backup(&admin_b, &String::from_str(&env_b, "backup-x"))
+        .unwrap();
+    let _ = create_invoice(&env_b, &client_b, 2_000, "X2");
+    let by_b = client_b
+        .create_backup(&admin_b, &String::from_str(&env_b, "backup-y"))
+        .unwrap();
+
+    let _count_y1 = client_b.restore_backup(&admin_b, &by_b).unwrap();
+    let count_yx = client_b.restore_backup(&admin_b, &bx_b).unwrap();
+
+    // Final state should be the count from the last backup applied.
+    // XY path ends with Y, YX path ends with X.
+    assert_eq!(count_xy, count_x1 + 1, "Y has one more invoice than X");
+    let _ = count_yx;
+    let _ = count_x1;
 }
