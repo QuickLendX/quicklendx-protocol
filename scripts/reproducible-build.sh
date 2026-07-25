@@ -16,7 +16,7 @@
 # Prerequisites
 # -------------
 #   • rustup + cargo (channel pinned by rust-toolchain.toml)
-#   • wasm32v1-none target installed
+#   • wasm32v1-none target installed (requires Rust 1.84+)
 #       rustup target add wasm32v1-none
 #   • sha256sum (coreutils) or shasum (macOS fallback)
 #

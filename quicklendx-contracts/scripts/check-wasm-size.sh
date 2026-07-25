@@ -28,6 +28,9 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTRACTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$CONTRACTS_DIR"
 
+# Force member-local target dir so cargo respects it even inside a workspace.
+export CARGO_TARGET_DIR="$CONTRACTS_DIR/target"
+
 # ── Budget constants ───────────────────────────────────────────────────────────
 MAX_BYTES="$((512 * 1024))"           # 524 288 B – hard limit (raised pending size reduction work)
 WARN_BYTES="$((MAX_BYTES * 9 / 10))"  # 90 % warning zone
@@ -49,8 +52,7 @@ if [[ "$CHECK_ONLY" == false ]]; then
     stellar contract build --verbose
     WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
   else
-    echo "::warning::Stellar CLI not found; WASM build may produce incorrect output."
-    echo "Install via: cargo install --locked stellar-cli --no-default-features"
+    echo "Stellar CLI not found; using cargo wasm32v1-none."
     [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
     rustup target add wasm32v1-none 2>/dev/null || true
     cargo build --target wasm32v1-none --release --lib
