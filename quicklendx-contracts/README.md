@@ -145,6 +145,10 @@ See [Deterministic Ledger Time](docs/contracts/deterministic-time.md) for guidel
 
 See [Settlement formula, inputs, and update timing](../docs/contracts/settlement-formula.md) for the contributor-facing explanation of the settlement formula and when fee updates apply.
 
+### Settlement Currencies
+
+See [Settlement Currencies by Invoice Type](docs/SETTLEMENT_CURRENCIES.md) for a downstream integrator guide on which tokens are accepted for each invoice category.
+
 ### Core Functions
 
 #### Invoice Management

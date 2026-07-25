@@ -6,6 +6,7 @@
 |----------|---------------|
 | [contributor-guide.md](contracts/contributor-guide.md) | **Start here if you are new to the contracts codebase.** Module layout, build commands, invoice lifecycle, bidding, escrow, KYC gates, error/event stability contracts, test auth pattern, WASM budget. |
 | [invoice-lifecycle.md](contracts/invoice-lifecycle.md) | Full invoice state machine, transition table, investment status integration |
+| [DEFAULT_FLOW_DIAGRAM.md](DEFAULT_FLOW_DIAGRAM.md) | State-machine diagram from invoice past-due → default → recovery; grace period, finality guards, dispute interception, and concrete timeline example |
 | [errors.md](contracts/errors.md) | Error code reference (stable integers) |
 | [events.md](contracts/events.md) | Event schema and topic constants |
 | [security.md](contracts/security.md) | Reentrancy guard, pause circuit breaker, access control |
