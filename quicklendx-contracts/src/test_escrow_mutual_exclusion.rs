@@ -68,6 +68,7 @@ fn setup() -> (Ctx, BytesN<32>) {
         max_bid_duration_days: 30,
         insurance_fee_bps: 0,
         protocol_version: 1,
+        backfill_max_batch_size: 100,
     });
 
     let inv_id = client.create_invoice(&business, &String::from_str(&env, "INV-ME-1"), &AMOUNT, &currency, &(TS + 86400), &InvoiceCategory::Trade, &String::from_str(&env, "{}")).unwrap();

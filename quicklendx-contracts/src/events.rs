@@ -684,6 +684,7 @@ pub struct ProtocolInitialized {
     pub min_invoice_amount: i128,
     pub max_due_date_days: u64,
     pub grace_period_seconds: u64,
+    pub backfill_max_batch_size: u32,
     pub timestamp: u64,
 }
 
@@ -1526,6 +1527,7 @@ pub fn emit_protocol_initialized(
     min_invoice_amount: i128,
     max_due_date_days: u64,
     grace_period_seconds: u64,
+    backfill_max_batch_size: u32,
 ) {
     ProtocolInitialized {
         admin: admin.clone(),
@@ -1534,6 +1536,7 @@ pub fn emit_protocol_initialized(
         min_invoice_amount,
         max_due_date_days,
         grace_period_seconds,
+        backfill_max_batch_size,
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
@@ -1546,7 +1549,7 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
 
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
     env.events().publish(
-        (symbol_short!("rot_cncl"), admin.clone()),
+        (symbol_short!("tr_rot_cl"), admin.clone()),
         (),
     );
 }

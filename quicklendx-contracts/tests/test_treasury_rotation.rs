@@ -4,12 +4,14 @@
 
 extern crate std;
 
-use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
+use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient, quicklendx_contracts::errors::QuickLendXError};
 use soroban_sdk::{
     testutils::Address as _,
     Address, Env,
 };
 
+// Helper to setup the test environment.
+// This assumes a similar setup to other tests in the project.
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
@@ -38,6 +40,21 @@ fn test_cancel_treasury_rotation_by_admin_succeeds() {
     // Verify pending rotation is gone
     let pending_after_cancel = client.get_pending_treasury();
     assert!(pending_after_cancel.is_none());
+
+    // Verify event was emitted
+    let events = env.events().all();
+    let last_event = events.0.last().unwrap().unwrap();
+
+    // This event structure uses the old `publish` format to be consistent
+    // with other admin events like `emit_admin_transfer_cancelled`.
+    assert_eq!(
+        last_event,
+        (
+            client.address.clone(),
+            (soroban_sdk::symbol_short!("tr_rot_cl"), admin).into_val(&env),
+            ().into_val(&env)
+        )
+    );
 }
 
 #[test]

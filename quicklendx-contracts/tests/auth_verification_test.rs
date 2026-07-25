@@ -48,6 +48,9 @@ proptest! {
             &String::from_str(&env, "Test Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
+
+            &None,
+
         );
 
         client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));

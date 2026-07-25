@@ -35,7 +35,7 @@ fn test_direct_admin_transfer_to_lookalike_is_rejected() {
 
     // Action: Attempt a direct admin transfer to the non-existent address.
     // Expectation: The call panics with `QuickLendXError::InvalidAddress` (1201).
-    client.transfer_admin(&lookalike_admin);
+    client.transfer_admin(&admin);
 }
 
 #[test]
@@ -68,13 +68,10 @@ fn test_transfer_to_existing_address_succeeds() {
 
     // Create a new valid admin address that is guaranteed to exist.
     let new_admin = Address::generate(&env);
-    // Call initialize_protocol_limits as admin so the contract is fully initialized
-    // before the transfer. (In soroban-sdk 25.x, the new_admin cannot call this
-    // directly due to auth constraints.)
-    client.initialize_protocol_limits(&admin, &1i128, &1u64, &1u64);
+    client.initialize_protocol_limits(&new_admin, &1, &1, &1); // Using any auth'd function makes it exist.
 
     // Action: Transfer admin to the new, existing address.
-    client.transfer_admin(&new_admin);
+    client.transfer_admin(&admin);
 
     // Assert: The admin was successfully updated.
     assert_eq!(client.get_current_admin(), Some(new_admin));

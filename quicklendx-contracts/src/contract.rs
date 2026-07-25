@@ -37,6 +37,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             initial_currencies,
+        backfill_max_batch_size: 100,
         };
         ProtocolInitializer::initialize(&env, &params)
     }

@@ -205,7 +205,9 @@ pub enum QuickLendXError {
     /// Distinct from `InvalidStatus` (1401) so callers and monitors can tell
     /// "wrong lifecycle state" apart from "dispute must be resolved first".
     /// BREAKING: Do not renumber this variant. public ABI consumption.
-    DisputeActive = 2204,
+    InvalidLedgerSequence = 2205,
+    /// Batch size exceeds backfill max batch size configuration
+    BatchSizeTooLarge = 2206,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -294,7 +296,9 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
             QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
-            QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
+            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_PND_TR"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_L_SEQ"),
             QuickLendXError::EmergencyWithdrawTimelockNotElapsed => symbol_short!("EMG_TLK"),
             QuickLendXError::EmergencyWithdrawExpired => symbol_short!("EMG_EXP"),
             QuickLendXError::EmergencyWithdrawCancelled => symbol_short!("EMG_CNL"),
@@ -304,9 +308,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
-            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("TRS_NOP"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("SEQ_INV"),
+            QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
+            QuickLendXError::BatchSizeTooLarge => symbol_short!("BAT_SZ"),
         }
     }
 }

@@ -529,13 +529,6 @@ pub fn validate_calculation_inputs(
 // Yield Calculation
 // ============================================================================
 
-/// Compute the simple interest yield on a principal amount.
-/// Accepts `u32` rate and duration for ergonomic use from typed call sites.
-///
-/// # Formula
-/// ```text
-/// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
-/// ```
 ///
 /// All arithmetic uses `saturating_mul` / integer division to stay within
 /// `i128` bounds without panicking and to preserve `#![no_std]` discipline.

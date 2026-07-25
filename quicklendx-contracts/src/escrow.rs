@@ -127,6 +127,22 @@ pub fn accept_bid_and_fund(
 
     crate::qlx_log!(env, "escrow", "Accepting bid and funding invoice");
 
+    let mut escrow_amount = bid.bid_amount;
+    if let Some(fee_bps) = invoice.origination_fee_bps {
+        let total_fee = (bid.bid_amount.checked_mul(fee_bps as i128).ok_or(QuickLendXError::ArithmeticOverflow)?)
+            .checked_div(10000).ok_or(QuickLendXError::ArithmeticOverflow)?;
+            
+        escrow_amount = bid.bid_amount.checked_sub(total_fee).ok_or(QuickLendXError::ArithmeticOverflow)?;
+        
+        if total_fee > 0 {
+            crate::payments::transfer_funds(env, &invoice.currency, &bid.investor, &env.current_contract_address(), total_fee)?;
+            
+            let mut fees_collected = soroban_sdk::Map::new(env);
+            fees_collected.set(crate::fees::FeeType::Origination, total_fee);
+            crate::fees::FeeManager::collect_fees(env, &bid.investor, fees_collected, total_fee)?;
+        }
+    }
+
     // 5. Lock funds in escrow
     // This calls payments::create_escrow which calls token transfer and emits emit_escrow_created
     let escrow_id = create_escrow(
@@ -134,7 +150,7 @@ pub fn accept_bid_and_fund(
         invoice_id,
         &bid.investor,
         &invoice.business,
-        bid.bid_amount,
+        escrow_amount,
         &invoice.currency,
     )?;
 

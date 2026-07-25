@@ -613,6 +613,7 @@ impl QuickLendXContract {
         min_invoice_amount: i128,
         max_due_date_days: u64,
         grace_period_seconds: u64,
+        backfill_max_batch_size: u32,
     ) -> Result<(), QuickLendXError> {
         init::ProtocolInitializer::set_protocol_config(
             &env,
@@ -620,6 +621,7 @@ impl QuickLendXContract {
             min_invoice_amount,
             max_due_date_days,
             grace_period_seconds,
+            backfill_max_batch_size,
         )
     }
 
@@ -1067,6 +1069,7 @@ impl QuickLendXContract {
         description: String,
         category: InvoiceCategory,
         tags: Vec<String>,
+        origination_fee_bps: Option<u32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &business)?;
@@ -1122,6 +1125,7 @@ impl QuickLendXContract {
             description,
             category,
             tags,
+            origination_fee_bps,
         )?;
 
         // Store the invoice
@@ -1146,6 +1150,7 @@ impl QuickLendXContract {
         description: String,
         category: InvoiceCategory,
         tags: Vec<String>,
+        origination_fee_bps: Option<u32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         // Only the business can upload their own invoice
@@ -1186,6 +1191,7 @@ impl QuickLendXContract {
             description.clone(),
             category,
             tags,
+            origination_fee_bps,
         )?;
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
@@ -4650,6 +4656,11 @@ impl QuickLendXContract {
     ) -> Result<RebuildReport, QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(&env, &admin)?;
+        let config = init::ProtocolInitializer::get_protocol_config(&env)
+            .ok_or(QuickLendXError::OperationNotAllowed)?;
+        if limit > config.backfill_max_batch_size {
+            return Err(QuickLendXError::BatchSizeTooLarge);
+        }
         let report = InvoiceStorage::rebuild_indexes_page(&env, offset, limit);
         Ok(report)
     }
@@ -4687,6 +4698,11 @@ impl QuickLendXContract {
     ) -> Result<PruneReport, QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(&env, &admin)?;
+        let config = init::ProtocolInitializer::get_protocol_config(&env)
+            .ok_or(QuickLendXError::OperationNotAllowed)?;
+        if limit > config.backfill_max_batch_size {
+            return Err(QuickLendXError::BatchSizeTooLarge);
+        }
         let report =
             InvoiceStorage::prune_terminal_invoices_page(&env, older_than_secs, offset, limit);
         Ok(report)
@@ -4714,6 +4730,11 @@ impl QuickLendXContract {
     ) -> Result<RebuildReport, QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(&env, &admin)?;
+        let config = init::ProtocolInitializer::get_protocol_config(&env)
+            .ok_or(QuickLendXError::OperationNotAllowed)?;
+        if limit > config.backfill_max_batch_size {
+            return Err(QuickLendXError::BatchSizeTooLarge);
+        }
         EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
     }
 

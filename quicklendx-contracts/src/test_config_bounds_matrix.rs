@@ -165,7 +165,7 @@ fn test_set_protocol_config_grace_period_bounds_matrix() {
             &admin,
             &VALID_MIN_INVOICE_AMOUNT,
             &VALID_MAX_DUE_DATE_DAYS,
-            &(MAX_GRACE_PERIOD_SECONDS + 1),
+            &(MAX_GRACE_PERIOD_SECONDS + 1, &100),
         ),
         QuickLendXError::InvalidTimestamp,
     );
