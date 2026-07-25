@@ -37,6 +37,8 @@
   •  docs/contracts/platform-fee-ops.md  /docs/contracts/platform-fee-ops.md: Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
   •  docs/RUNBOOK_INCIDENT_RESPONSE.md : Operator playbook for unexpected contract behavior and incident-mode recovery.
   •  docs/INVESTOR_TIER.md : How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
+  •  docs/QLX_INVESTOR_KYC_TIERS.md : Investor KYC tiers, performance requirements, and gating enforcements — operator-facing.
+  •  docs/BID_OVERBID_POLICY.md : What happens when a bid exceeds the invoice amount — rejection path and error code.
   •  quicklendx-contracts/README.md : Smart contract-specific documentation.
   •  quicklendx-contracts/docs/contracts/deterministic-time.md : Smart contract deterministic ledger time semantics.
   •  quicklendx-backend/README.md : Backend-specific documentation.
@@ -44,6 +46,7 @@
   migration, and troubleshooting stuck runs.
   •  quicklendx-frontend/README.md : Frontend-specific documentation.
   •  docs/PLATFORM_FEES.md : Fee schedule and tenant override documentation.
+  •  docs/INDEXING_CONTRACT.md : What the indexer relies on from the Soroban smart contracts — events, topics, data structures, and storage keys.
 
   ## Contribution
 
@@ -59,25 +62,27 @@ npm run dev
 
 ## Documentation
 
-- `docs/`: Project-wide design, implementation, and audit documentation.
-- [Platform Fee & Treasury Split Operations Guide](file:///c:/Users/HP/quicklendx-protocol/docs/contracts/platform-fee-ops.md): Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
-- `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
-- [Invoice Lifecycle](docs/INVOICE_LIFECYCLE.md): State diagram and entrypoint reference — Pending → Verified → Funded → Settled/Defaulted.
-- [Dispute Lifecycle](file:///c:/Users/HP/quicklendx-protocol/docs/DISPUTE.md): Who can open, who resolves, timeout behaviour, and fund implications.
-- [`docs/QUERIES.md`](docs/QUERIES.md): Catalog of common read-only entrypoints with concrete invocation examples and return values — the quickest way to find the query you need.
-- `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
-- `docs/KYC.md`: Business KYC vs investor KYC, what each gates.
-- `quicklendx-contracts/README.md`: Smart contract-specific documentation.
-- `quicklendx-contracts/docs/contracts/deterministic-time.md`: Smart contract deterministic ledger time semantics.
+- [`docs/README.md`](docs/README.md): Full documentation index — **start here**.
+  - [`docs/contracts/contributor-guide.md`](docs/contracts/contributor-guide.md): Contract contributor guide (module layout, lifecycle, error/event stability contracts, test patterns, WASM budget).
+  - [`quicklendx-backend/docs/contributor-guide.md`](quicklendx-backend/docs/contributor-guide.md): Backend contributor guide (module layout, request pipeline, export/audit wiring, how to add an endpoint).
+- [Default Flow Diagram](docs/DEFAULT_FLOW_DIAGRAM.md): State-machine diagram from invoice past-due through default to recovery — grace period, finality guards, dispute interception, and a concrete ledger-timestamp walkthrough.
+- `quicklendx-contracts/README.md`: Smart contract build, deploy, and API reference.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
 - `backend/docs/REPLAY_RUNBOOK.md`: Step-by-step operator runbook for replaying ingestion from a specific ledger — covers reorg recovery, gap backfill, force rebuild after schema migration, and troubleshooting stuck runs.
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
 - `docs/PLATFORM_FEES.md`: Fee schedule and tenant override documentation.
 - `docs/BID_RANKING.md`: Deterministic bid ranking ordering function — tier-by-tier tie-breaker logic, invariants, and contributor workflow.
+- [`docs/BID_LIFECYCLE_DIAGRAM.md`](docs/BID_LIFECYCLE_DIAGRAM.md): Full bid state machine — status diagram, entrypoints, TTL config, expiry semantics, and invariants.
 - [`docs/CURRENCY_WHITELIST.md`](docs/CURRENCY_WHITELIST.md): How tokens are added to and removed from the currency whitelist — contributor guide covering entrypoints, auth model, enforcement points, and test patterns.
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
+- [`docs/FEES_GRACE_DEFAULT.md`](docs/FEES_GRACE_DEFAULT.md): Unified contributor reference — platform fees, grace period resolution, and default trigger rules in one place.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
+- [`docs/APPEALS.md`](docs/APPEALS.md): Appeals process — who reviews, timeline, outcomes, and how they affect funds — operator-facing.
+- [`docs/EVENT_DASHBOARDS.md`](docs/EVENT_DASHBOARDS.md): Standard operator dashboards — panel URLs, PromQL queries, SQLite indexer queries, and alert rules for protocol health, event throughput, disputes, and settlement pipeline.
+- [`docs/QLX_INVESTOR_KYC_TIERS.md`](docs/QLX_INVESTOR_KYC_TIERS.md): Investor KYC tiers, performance requirements, and gating enforcements — operator-facing.
 
 ## Contribution
 
 Please follow the repository guidelines in `AGENTS.md` and include tests for any behavior changes.
+- `docs/QLX_OWNERSHIP_MODEL.md`: Ownership model for invoices and investor bids.
+- [`docs/QLX_REPORT_LIFECYCLE.md`](docs/QLX_REPORT_LIFECYCLE.md): Analytics report lifecycle — Requested → Delivered → Archived, entrypoints, storage layout, and invariants.
