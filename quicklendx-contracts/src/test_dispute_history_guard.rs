@@ -57,18 +57,16 @@ mod test_dispute_history_guard {
         amount: i128,
     ) -> BytesN<32> {
         let currency = Address::generate(env);
-        let due_date = env.ledger().timestamp() + 30 * 24 * 60 * 60;
-        client
-            .store_invoice(
-                business,
-                &amount,
-                &currency,
-                &due_date,
-                &String::from_str(env, "Test invoice for dispute-history guard"),
-                &InvoiceCategory::Services,
-                &Vec::new(env),
-            )
-            .unwrap()
+        let due_date = env.ledger().timestamp() + 86_400;
+        client.store_invoice(
+            business,
+            &amount,
+            &currency,
+            &due_date,
+            &String::from_str(env, "Test invoice for dispute-history guard"),
+            &InvoiceCategory::Services,
+            &Vec::new(env),
+        )
     }
 
     // ------------------------------------------------------------------
