@@ -364,3 +364,39 @@ fn get_proposal_rejects_nonexistent() {
     let err = get_proposal(&env, &contract_id, &id).unwrap_err();
     assert_eq!(err, QuickLendXError::StorageKeyNotFound);
 }
+
+// ============================================================================
+// Guard
+// ============================================================================
+
+#[test]
+fn require_no_open_governance_proposal_blocks_destructive_ops() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    // Should succeed when no active proposals
+    env.as_contract(&contract_id, || {
+        let res = crate::governance::require_no_open_governance_proposal(&env);
+        assert!(res.is_ok());
+    });
+
+    // Create an active proposal
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+
+    // Guard should now fail
+    env.as_contract(&contract_id, || {
+        let err = crate::governance::require_no_open_governance_proposal(&env).unwrap_err();
+        assert_eq!(err, QuickLendXError::PendingGovernanceProposal);
+    });
+
+    // Finalize the proposal (rejected because 0 votes)
+    env.ledger().set_sequence_number(1011);
+    finalize_proposal(&env, &contract_id, &id).unwrap();
+
+    // Guard should succeed again
+    env.as_contract(&contract_id, || {
+        let res = crate::governance::require_no_open_governance_proposal(&env);
+        assert!(res.is_ok());
+    });
+}

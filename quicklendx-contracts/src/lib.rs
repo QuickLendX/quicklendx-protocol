@@ -1606,6 +1606,7 @@ impl QuickLendXContract {
     /// Clear metadata attached to an invoice
     pub fn clear_invoice_metadata(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        crate::governance::require_no_open_governance_proposal(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
