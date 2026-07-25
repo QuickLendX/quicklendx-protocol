@@ -381,48 +381,69 @@ pub struct PruneReport {
     pub next_offset: u32,
 }
 
-/// Paginated result wrapper for `Vec<BytesN<32>>` queries (invoice IDs, investment IDs).
+/// Typed reason for freezing a business entity or its invoices.
 ///
-/// Bundles the page of items together with pagination metadata so consumers
-/// (frontend, downstream contracts, operators) know the total result-set size
-/// and whether additional pages exist **without** making a separate count query
-/// or looping until an empty page is returned.
+/// Stored alongside the freeze state to provide an audit trail and enable
+/// targeted unfreeze logic. An admin must supply one of these variants
+/// when freezing; a bare boolean is no longer sufficient.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PaginatedBytes32Vec {
-    /// The items in the current page (≤ `MAX_QUERY_LIMIT`).
-    pub items: Vec<BytesN<32>>,
-    /// Total number of records matching the filter (before pagination is applied).
-    pub total_count: u32,
-    /// `true` when additional pages exist past the current offset + limit.
-    pub has_more: bool,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BusinessFreezeReason {
+    /// Suspected fraudulent invoice submission or business identity.
+    FraudSuspected,
+    /// Business failed or failed ongoing KYC/AML compliance checks.
+    ComplianceViolation,
+    /// Active or resolved dispute requiring the business to be frozen
+    /// until resolution.
+    Dispute,
+    /// Business requested a voluntary freeze (e.g., for internal audit).
+    Voluntary,
+    /// Admin-initiated freeze for an unspecified or catch-all reason.
+    AdminAction,
 }
 
-/// Paginated result wrapper for `Vec<Bid>` queries.
-///
-/// Same shape as [`PaginatedBytes32Vec`] but carries full [`Bid`] records instead
-/// of opaque IDs so callers can render bid details without N+1 lookups.
-#[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PaginatedBids {
-    /// The bid records in the current page (≤ `MAX_QUERY_LIMIT`).
-    pub items: Vec<Bid>,
-    /// Total number of records matching the filter (before pagination is applied).
-    pub total_count: u32,
-    /// `true` when additional pages exist past the current offset + limit.
-    pub has_more: bool,
+impl BusinessFreezeReason {
+    /// Returns a short human-readable label for event logging.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::FraudSuspected => "fraud_suspected",
+            Self::ComplianceViolation => "compliance_violation",
+            Self::Dispute => "dispute",
+            Self::Voluntary => "voluntary",
+            Self::AdminAction => "admin_action",
+        }
+    }
 }
 
-/// Paginated result wrapper for `Vec<Address>` queries (e.g. currency whitelist).
+/// Typed reason for freezing an investor account.
 ///
-/// Same shape as [`PaginatedBytes32Vec`] but carries [`Address`] values.
+/// Symmetric with [`BusinessFreezeReason`] — every freeze must carry a
+/// typed reason so that audit logs and unfreeze workflows can operate on
+/// structured data rather than opaque booleans.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct PaginatedCurrencies {
-    /// The currency addresses in the current page (≤ `MAX_QUERY_LIMIT`).
-    pub items: Vec<Address>,
-    /// Total number of records matching the filter (before pagination is applied).
-    pub total_count: u32,
-    /// `true` when additional pages exist past the current offset + limit.
-    pub has_more: bool,
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvestorFreezeReason {
+    /// Investor engaged in suspicious or fraudulent bid/investment activity.
+    FraudSuspected,
+    /// Investor failed or failed ongoing KYC/AML compliance checks.
+    ComplianceViolation,
+    /// Active dispute involving the investor's positions.
+    Dispute,
+    /// Investor requested a voluntary freeze.
+    Voluntary,
+    /// Admin-initiated freeze for an unspecified or catch-all reason.
+    AdminAction,
+}
+
+impl InvestorFreezeReason {
+    /// Returns a short human-readable label for event logging.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::FraudSuspected => "fraud_suspected",
+            Self::ComplianceViolation => "compliance_violation",
+            Self::Dispute => "dispute",
+            Self::Voluntary => "voluntary",
+            Self::AdminAction => "admin_action",
+        }
+    }
 }

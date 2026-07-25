@@ -2,8 +2,9 @@ use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec, Bytes, xdr:
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::types::{
-    Invoice, InvoiceStatus, InvoiceCategory, InvoiceLock, InvoiceMetadata, Bid, BidStatus, 
-    DisputeStatus, PaymentRecord, InvoiceRating, Escrow, EscrowStatus
+    Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus, 
+    DisputeStatus, PaymentRecord, InvoiceRating, Escrow, EscrowStatus,
+    BusinessFreezeReason,
 };
 use crate::storage::InvoiceStorage;
 use crate::init::{ProtocolInitializer, InitializationParams};
@@ -309,9 +310,14 @@ impl QuickLendXContract {
         submit_kyc_application(&env, &business, kyc_data)
     }
 
-    pub fn freeze_invoice(env: Env, admin: Address, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+    pub fn freeze_invoice(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        reason: BusinessFreezeReason,
+    ) -> Result<(), QuickLendXError> {
         crate::admin::AdminStorage::require_admin(&env, &admin)?;
-        InvoiceStorage::set_invoice_lock(&env, &invoice_id, InvoiceLock::Frozen);
+        InvoiceStorage::set_frozen(&env, &invoice_id, true, Some(reason));
         Ok(())
     }
 
