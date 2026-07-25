@@ -379,3 +379,49 @@ pub struct PruneReport {
     /// Offset to pass on the next call.
     pub next_offset: u32,
 }
+
+/// Paginated result wrapper for `Vec<BytesN<32>>` queries (invoice IDs, investment IDs).
+///
+/// Bundles the page of items together with pagination metadata so consumers
+/// (frontend, downstream contracts, operators) know the total result-set size
+/// and whether additional pages exist **without** making a separate count query
+/// or looping until an empty page is returned.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedBytes32Vec {
+    /// The items in the current page (≤ `MAX_QUERY_LIMIT`).
+    pub items: Vec<BytesN<32>>,
+    /// Total number of records matching the filter (before pagination is applied).
+    pub total_count: u32,
+    /// `true` when additional pages exist past the current offset + limit.
+    pub has_more: bool,
+}
+
+/// Paginated result wrapper for `Vec<Bid>` queries.
+///
+/// Same shape as [`PaginatedBytes32Vec`] but carries full [`Bid`] records instead
+/// of opaque IDs so callers can render bid details without N+1 lookups.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedBids {
+    /// The bid records in the current page (≤ `MAX_QUERY_LIMIT`).
+    pub items: Vec<Bid>,
+    /// Total number of records matching the filter (before pagination is applied).
+    pub total_count: u32,
+    /// `true` when additional pages exist past the current offset + limit.
+    pub has_more: bool,
+}
+
+/// Paginated result wrapper for `Vec<Address>` queries (e.g. currency whitelist).
+///
+/// Same shape as [`PaginatedBytes32Vec`] but carries [`Address`] values.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedCurrencies {
+    /// The currency addresses in the current page (≤ `MAX_QUERY_LIMIT`).
+    pub items: Vec<Address>,
+    /// Total number of records matching the filter (before pagination is applied).
+    pub total_count: u32,
+    /// `true` when additional pages exist past the current offset + limit.
+    pub has_more: bool,
+}

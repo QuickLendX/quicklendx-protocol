@@ -578,6 +578,11 @@ pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i12
     numerator / denominator
 }
 
+pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+    let yield_amount = compute_yield_u32(amount, rate_bps, duration_days);
+    amount.max(0).saturating_add(yield_amount)
+}
+
 /// A single ledger-delta entry for time-weighted average calculations.
 ///
 /// Each entry records the `balance` held for `duration_ledgers` ledgers.
