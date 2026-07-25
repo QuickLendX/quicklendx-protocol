@@ -108,6 +108,8 @@ mod test_panic_handler;
 #[cfg(test)]
 mod test_due_date_guard;
 #[cfg(test)]
+mod test_auto_resolution_boundary;
+#[cfg(test)]
 mod test_cancel_invoice_matrix;
 #[cfg(test)]
 mod test_governance;
@@ -137,6 +139,8 @@ mod test_bid_cancel_accept_race;
 mod test_bid_expiry_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
+#[cfg(test)]
+mod test_require_business_active;
 #[cfg(test)]
 mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -349,6 +353,7 @@ mod test_tier_boundary;
 mod test_verification_matrix;
 pub mod types;
 pub use types::*;
+pub mod upgrade;
 pub mod verification;
 pub mod vesting;
 use admin::require_not_self;
@@ -4781,6 +4786,23 @@ impl QuickLendXContract {
     }
 }
 
+// ── Upgrade control entrypoints ─────────────────────────────────────────────
+
+#[contractimpl]
+impl QuickLendXContract {
+    pub fn schedule_upgrade(env: Env, admin: Address, wasm_hash: BytesN<32>) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::schedule_upgrade(&env, &admin, &wasm_hash)
+    }
+
+    pub fn cancel_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::cancel_upgrade(&env, &admin)
+    }
+
+    pub fn execute_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::execute_upgrade(&env, &admin)
+    }
+}
+
 // =============================================================================
 // Feature-gated contract entrypoints
 // =============================================================================
@@ -4822,6 +4844,9 @@ mod test_view_only;
 
 #[cfg(test)]
 mod test_business_freeze_reason;
+
+#[cfg(test)]
+mod test_upgrade_guard;
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
