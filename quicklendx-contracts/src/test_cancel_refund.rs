@@ -520,6 +520,8 @@ fn test_refund_prevents_release() {
     client.refund_escrow_funds(&invoice_id, &business);
 
     // Try to release after refund - should fail
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
     assert!(result.is_err(), "Release should fail after refund");
 }

@@ -66,6 +66,8 @@ fn test_accept_bid_and_fund_uses_invoice_currency_for_escrow_and_release() {
         "Contract balance should increase by funded amount"
     );
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client
         .release_escrow_funds(&invoice_id)
         .expect("Release should succeed");
