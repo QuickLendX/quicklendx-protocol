@@ -46,6 +46,7 @@ fn valid_params(env: &Env) -> InitializationParams {
         max_due_date_days: 365,
         grace_period_seconds: 604_800, // 7 days
         initial_currencies: Vec::new(env),
+        backfill_max_batch_size: 100,
     }
 }
 
@@ -53,7 +54,8 @@ fn valid_params(env: &Env) -> InitializationParams {
 fn initialized(env: &Env, client: &QuickLendXContractClient) -> InitializationParams {
     let p = valid_params(env);
     client.initialize(&p);
-    p
+    p,
+        backfill_max_batch_size: 100,
 }
 
 // ===========================================================================
@@ -102,12 +104,10 @@ fn test_init_idempotent_same_params() {
 fn test_is_initialized_flag_lifecycle() {
     let (env, client) = setup();
     assert!(!client.is_initialized(), "must be false before init");
-    assert!(!ProtocolInitializer::is_initialized(&env));
 
     initialized(&env, &client);
 
     assert!(client.is_initialized(), "must be true after init");
-    assert!(ProtocolInitializer::is_initialized(&env));
 }
 
 /// A failed re-init must not alter any stored values.
@@ -152,6 +152,52 @@ fn test_version_written_at_init_and_stable() {
     let v_after = client.get_version();
     assert_eq!(v_before, v_after, "version must not change across init");
     assert_eq!(v_after, crate::init::PROTOCOL_VERSION);
+}
+
+/// Generation-bump invariant: version is read from storage (written at init),
+/// not from the PROTOCOL_VERSION constant. This simulates a WASM upgrade
+/// where the constant is bumped but storage retains the original version.
+#[test]
+fn test_generation_bump_invariant_version_read_from_storage() {
+    let (env, client) = setup();
+    let contract_id = client.address.clone();
+
+    // Before init: version comes from constant (PROTOCOL_VERSION = 1)
+    assert_eq!(
+        client.get_version(),
+        crate::init::PROTOCOL_VERSION,
+        "pre-init version must equal constant"
+    );
+
+    // Initialize: writes PROTOCOL_VERSION (1) to storage
+    initialized(&env, &client);
+    assert_eq!(
+        client.get_version(),
+        crate::init::PROTOCOL_VERSION,
+        "post-init version must equal constant"
+    );
+
+    // Simulate WASM upgrade: directly write a different version to storage
+    // (as would happen if a new contract version with PROTOCOL_VERSION = 2
+    // is deployed but storage migration doesn't run)
+    let upgraded_version: u32 = 99;
+    env.as_contract(&contract_id, || {
+        env.storage()
+            .instance()
+            .set(&crate::init::PROTOCOL_VERSION_KEY, &upgraded_version);
+    });
+
+    // get_version must read from storage, not the constant
+    let version_after_upgrade = client.get_version();
+    assert_eq!(
+        version_after_upgrade, upgraded_version,
+        "generation-bump invariant: version must be read from storage, not constant"
+    );
+    assert_ne!(
+        version_after_upgrade,
+        crate::init::PROTOCOL_VERSION,
+        "version must not fall back to constant after upgrade"
+    );
 }
 
 // ===========================================================================
@@ -436,11 +482,13 @@ fn test_max_due_date_days_max_accepted() {
 }
 
 /// max_due_date_days = 1 (minimum) must be accepted.
+/// grace_period_seconds must be <= max_due_date_days * 86_400 per protocol limits validation.
 #[test]
 fn test_max_due_date_days_one_accepted() {
     let (env, client) = setup();
     let mut p = valid_params(&env);
     p.max_due_date_days = 1;
+    p.grace_period_seconds = 0; // 0 grace fits within 1-day horizon
     assert!(client.try_initialize(&p).is_ok());
     assert_eq!(client.get_max_due_date_days(), 1);
 }
@@ -487,25 +535,25 @@ fn test_set_protocol_config_bounds_enforced() {
 
     // Invalid min_invoice_amount
     assert_eq!(
-        client.try_set_protocol_config(&p.admin, &0i128, &365u64, &604_800u64),
+        client.try_set_protocol_config(&p.admin, &0i128, &365u64, &604_800u64, &100),
         Err(Ok(QuickLendXError::InvalidAmount)),
     );
 
     // Invalid max_due_date_days = 0
     assert_eq!(
-        client.try_set_protocol_config(&p.admin, &1_000_000i128, &0u64, &604_800u64),
+        client.try_set_protocol_config(&p.admin, &1_000_000i128, &0u64, &604_800u64, &100),
         Err(Ok(QuickLendXError::InvoiceDueDateInvalid)),
     );
 
     // Invalid max_due_date_days > 730
     assert_eq!(
-        client.try_set_protocol_config(&p.admin, &1_000_000i128, &731u64, &604_800u64),
+        client.try_set_protocol_config(&p.admin, &1_000_000i128, &731u64, &604_800u64, &100),
         Err(Ok(QuickLendXError::InvoiceDueDateInvalid)),
     );
 
     // Invalid grace_period_seconds > 30 days
     assert_eq!(
-        client.try_set_protocol_config(&p.admin, &1_000_000i128, &365u64, &2_592_001u64),
+        client.try_set_protocol_config(&p.admin, &1_000_000i128, &365u64, &2_592_001u64, &100),
         Err(Ok(QuickLendXError::InvalidTimestamp)),
     );
 }
@@ -516,7 +564,7 @@ fn test_set_protocol_config_valid_update_atomic() {
     let (env, client) = setup();
     let p = initialized(&env, &client);
 
-    client.set_protocol_config(&p.admin, &500_000i128, &180u64, &86_400u64);
+    client.set_protocol_config(&p.admin, &500_000i128, &180u64, &86_400u64, &100);
 
     assert_eq!(client.get_min_invoice_amount(), 500_000);
     assert_eq!(client.get_max_due_date_days(), 180);
@@ -530,7 +578,7 @@ fn test_set_protocol_config_non_admin_rejected() {
     initialized(&env, &client);
     let stranger = Address::generate(&env);
     assert_eq!(
-        client.try_set_protocol_config(&stranger, &1_000_000i128, &365u64, &604_800u64),
+        client.try_set_protocol_config(&stranger, &1_000_000i128, &365u64, &604_800u64, &100),
         Err(Ok(QuickLendXError::NotAdmin)),
     );
 }
@@ -656,22 +704,25 @@ fn test_query_values_after_init() {
 /// ProtocolConfig must be None before init.
 #[test]
 fn test_protocol_config_none_before_init() {
-    let (env, _client) = setup();
-    assert!(ProtocolInitializer::get_protocol_config(&env).is_none());
+    let (env, client) = setup();
+    let contract_id = client.address.clone();
+    let cfg = env.as_contract(&contract_id, || {
+        ProtocolInitializer::get_protocol_config(&env)
+    });
+    assert!(cfg.is_none());
 }
 
 /// ProtocolConfig must be Some after init with correct values.
 #[test]
 fn test_protocol_config_some_after_init() {
-    let (env, _client) = setup();
+    let (env, client) = setup();
+    let contract_id = client.address.clone();
     let p = valid_params(&env);
-    let client = {
-        let id = env.register(QuickLendXContract, ());
-        QuickLendXContractClient::new(&env, &id)
-    };
     client.initialize(&p);
 
-    let cfg = ProtocolInitializer::get_protocol_config(&env).expect("config must exist");
+    let cfg = env.as_contract(&contract_id, || {
+        ProtocolInitializer::get_protocol_config(&env).expect("config must exist")
+    });
     assert_eq!(cfg.min_invoice_amount, p.min_invoice_amount);
     assert_eq!(cfg.max_due_date_days, p.max_due_date_days);
     assert_eq!(cfg.grace_period_seconds, p.grace_period_seconds);

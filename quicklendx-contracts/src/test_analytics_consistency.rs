@@ -31,6 +31,7 @@
 /// 25. re-generating a report yields identical computed summaries (idempotence)
 use super::*;
 use crate::analytics::{AnalyticsCalculator, TimePeriod};
+use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -619,4 +620,80 @@ fn test_analytics_snapshot_entrypoint_matches_public_metric_calls() {
         snapshot.performance_metrics,
         client.get_performance_metrics()
     );
+}
+
+// --- Dispute guard on report generation (Issue #2072) -----------------------
+//
+// A disputed invoice keeps its pre-dispute `InvoiceStatus` (e.g. `Funded`)
+// until the dispute resolves, so the snapshot calculators would otherwise
+// fold a contested invoice into `success_rate` / `default_rate` / volume
+// totals as if it were already settled. `export_analytics_snapshot` must
+// refuse to run while any invoice has an active (`Disputed` or
+// `UnderReview`) dispute.
+
+#[test]
+fn test_export_analytics_snapshot_blocks_while_dispute_active() {
+    let env = Env::default();
+    env.ledger().set_timestamp(30_000_000u64);
+    let (client, _admin, business) = setup(&env);
+    let invoice_id = upload(&env, &client, &business, 1_000, "dispute-guard");
+
+    // Baseline: no disputes yet, snapshot succeeds.
+    assert!(client.try_export_analytics_snapshot().is_ok());
+
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "goods not delivered"),
+        &String::from_str(&env, "tracking-evidence"),
+    );
+
+    let result = client.try_export_analytics_snapshot();
+    assert!(result.is_err());
+    let err = result.unwrap_err().expect("expected contract error");
+    assert_eq!(err, QuickLendXError::ActiveDisputeExists);
+}
+
+#[test]
+fn test_export_analytics_snapshot_blocks_while_dispute_under_review() {
+    let env = Env::default();
+    env.ledger().set_timestamp(31_000_000u64);
+    let (client, admin, business) = setup(&env);
+    let invoice_id = upload(&env, &client, &business, 1_000, "dispute-guard-review");
+
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "goods not delivered"),
+        &String::from_str(&env, "tracking-evidence"),
+    );
+    client.put_dispute_under_review(&invoice_id, &admin);
+
+    let result = client.try_export_analytics_snapshot();
+    assert!(result.is_err());
+    let err = result.unwrap_err().expect("expected contract error");
+    assert_eq!(err, QuickLendXError::ActiveDisputeExists);
+}
+
+#[test]
+fn test_export_analytics_snapshot_resumes_after_dispute_resolved() {
+    let env = Env::default();
+    env.ledger().set_timestamp(32_000_000u64);
+    let (client, admin, business) = setup(&env);
+    let invoice_id = upload(&env, &client, &business, 1_000, "dispute-guard-resolve");
+
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "goods not delivered"),
+        &String::from_str(&env, "tracking-evidence"),
+    );
+    client.put_dispute_under_review(&invoice_id, &admin);
+    client.resolve_dispute(
+        &invoice_id,
+        &admin,
+        &String::from_str(&env, "resolved in favor of business"),
+    );
+
+    assert!(client.try_export_analytics_snapshot().is_ok());
 }

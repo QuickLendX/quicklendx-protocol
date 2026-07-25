@@ -19,7 +19,10 @@ export { getBidsQuerySchema };
  *   POST /bids → schema.parse  → exposureService.assertWithinCap → bidStore.createBid
  */
 export const createBidBodySchema = z.object({
-  invoice_id: z.string().regex(/^0x[a-fA-F0-9]+$/, "Must be a valid hex string"),
+  invoice_id: z.string().refine(
+    (val) => /^0x[a-fA-F0-9]+$/.test(val) || /^inv_[0-9A-HJKMNP-TV-Z]{26}$/i.test(val),
+    "Must be a valid invoice ID (hex or inv_ ULID)"
+  ),
   bid_amount: z.string().regex(/^[0-9]+$/, "Must be a positive numeric value as string"),
   expected_return: z.string().regex(/^[0-9]+$/, "Must be a positive numeric value as string"),
   expiration_timestamp: z.number().int().positive(),

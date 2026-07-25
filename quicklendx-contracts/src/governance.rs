@@ -107,10 +107,7 @@ pub trait Governable {
     ///
     /// Called automatically by `run_proposal` after verifying the proposal
     /// status is `Passed`.  Implementations must be idempotent where possible.
-    fn execute_proposal(
-        env: &Env,
-        proposal_id: &BytesN<32>,
-    ) -> Result<(), QuickLendXError>;
+    fn execute_proposal(env: &Env, proposal_id: &BytesN<32>) -> Result<(), QuickLendXError>;
 
     // ------------------------------------------------------------------
     // Default implementations — override only if the protocol requires it
@@ -150,7 +147,9 @@ pub trait Governable {
         env.storage().instance().set(&key, &proposal);
         // Initialise empty voter set
         let empty: Vec<Address> = Vec::new(env);
-        env.storage().instance().set(&voted_key(&proposal_id), &empty);
+        env.storage()
+            .instance()
+            .set(&voted_key(&proposal_id), &empty);
 
         Ok(proposal)
     }
@@ -231,8 +230,7 @@ pub trait Governable {
         }
 
         let total = proposal.votes_for.saturating_add(proposal.votes_against);
-        let passed =
-            total >= Self::quorum() && proposal.votes_for > proposal.votes_against;
+        let passed = total >= Self::quorum() && proposal.votes_for > proposal.votes_against;
 
         proposal.status = if passed {
             ProposalStatus::Passed
@@ -249,10 +247,7 @@ pub trait Governable {
     /// Calls `finalize_proposal` if the status is still `Active`, then
     /// delegates to [`Self::execute_proposal`] and marks the proposal
     /// `Executed`.  Returns `InvalidStatus` if the proposal is not `Passed`.
-    fn run_proposal(
-        env: &Env,
-        proposal_id: &BytesN<32>,
-    ) -> Result<(), QuickLendXError> {
+    fn run_proposal(env: &Env, proposal_id: &BytesN<32>) -> Result<(), QuickLendXError> {
         let key = proposal_key(proposal_id);
         let mut proposal: Proposal = env
             .storage()
@@ -281,10 +276,7 @@ pub trait Governable {
     }
 
     /// Read the current state of a proposal without mutating anything.
-    fn get_proposal(
-        env: &Env,
-        proposal_id: &BytesN<32>,
-    ) -> Result<Proposal, QuickLendXError> {
+    fn get_proposal(env: &Env, proposal_id: &BytesN<32>) -> Result<Proposal, QuickLendXError> {
         env.storage()
             .instance()
             .get(&proposal_key(proposal_id))

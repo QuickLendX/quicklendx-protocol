@@ -147,3 +147,122 @@ duplicate checks. As a result:
   surface.
 - Canonical duplicate handling prevents ambiguous indexing/query behavior.
 - Rating/tag caps keep per-invoice state growth predictable over time.
+
+---
+
+## Batch Invoice Creation — `store_invoices_batch`
+
+### Motivation
+
+Businesses frequently issue multiple invoices per billing cycle. Before this
+feature, each invoice required a separate transaction (auth + ledger fees ×
+N). `store_invoices_batch` lets a verified business submit up to
+`MAX_BATCH_INVOICES` (currently **10**) invoices in a single transaction.
+
+### Entrypoint signature
+
+```rust
+pub fn store_invoices_batch(
+    env: Env,
+    business: Address,
+    inputs: Vec<InvoiceInput>,
+) -> Result<Vec<BytesN<32>>, QuickLendXError>
+```
+
+| Parameter  | Description |
+|------------|-------------|
+| `business` | Invoice-issuing business address (must sign). |
+| `inputs`   | `Vec<InvoiceInput>` — 1 to `MAX_BATCH_INVOICES` entries. |
+
+Returns an ordered `Vec<BytesN<32>>` of newly assigned invoice IDs, one per
+input entry.
+
+### `InvoiceInput` struct
+
+```rust
+pub struct InvoiceInput {
+    pub amount:      i128,
+    pub currency:    Address,
+    pub due_date:    u64,
+    pub description: String,
+    pub category:    InvoiceCategory,
+    pub tags:        Vec<String>,
+}
+```
+
+Fields are identical to the `upload_invoice` parameters.
+
+### Semantics
+
+| Property | Behaviour |
+|----------|-----------|
+| **Auth** | `business.require_auth()` is called once for the whole batch. |
+| **KYC** | Business must be `Verified` (same rule as `upload_invoice`). |
+| **Batch size** | `1 ≤ len(inputs) ≤ MAX_BATCH_INVOICES`; otherwise `BatchSizeExceeded` (2206). |
+| **Active-invoice cap** | The *entire* batch is pre-checked: `active_count + batch_len ≤ max_invoices_per_business`. |
+| **Atomicity** | All-or-nothing. A validation error on any entry rolls back the whole batch (Soroban tx semantics). |
+| **Two-pass validation** | All inputs are validated *before* any storage write, making the atomicity guarantee easy to reason about. |
+| **Events** | An `invoice_uploaded` event is emitted for each successfully stored invoice (same event as `upload_invoice`). |
+
+### Error codes returned
+
+| Code | Symbol | Meaning |
+|------|--------|---------|
+| 2100 | `PAUSED` | Protocol is paused. |
+| 2206 | `BATCH_SZ` | `inputs` is empty or exceeds `MAX_BATCH_INVOICES`. |
+| 1600 | `BUS_NV` | Business has no KYC record or was rejected. |
+| 1601 | `KYC_PD` | Business KYC is still pending admin review. |
+| 1408 | `MAX_INV` | Batch would push the business over its active-invoice cap. |
+| 1200 | `INV_AMT` | At least one invoice has an invalid amount. |
+| 1004 | `INV_DI` | At least one invoice has a due date in the past or too far in the future. |
+
+### Constant location
+
+`MAX_BATCH_INVOICES` is defined in `src/protocol_limits.rs`:
+
+```rust
+pub const MAX_BATCH_INVOICES: u32 = 10;
+```
+
+It is the single source of truth. Both the entrypoint guard and the
+`BatchSizeExceeded` error doc reference this constant.
+
+### Example (Rust test / Soroban SDK)
+
+```rust
+let mut inputs: Vec<InvoiceInput> = Vec::new(&env);
+for i in 0..3 {
+    inputs.push_back(InvoiceInput {
+        amount:      10_000,
+        currency:    token.clone(),
+        due_date:    env.ledger().timestamp() + 86_400 + i * 60,
+        description: String::from_str(&env, "Batch invoice"),
+        category:    InvoiceCategory::Services,
+        tags:        Vec::new(&env),
+    });
+}
+
+let ids = client.store_invoices_batch(&business, &inputs);
+// ids.len() == 3; each ID is a distinct BytesN<32>
+```
+
+### Test coverage
+
+Tests live in `src/test_store_invoices_batch.rs` and run with every `cargo
+test` invocation (no feature flag required).
+
+| Test | What is verified |
+|------|-----------------|
+| `test_batch_single_invoice` | Single-item batch stores one invoice. |
+| `test_batch_multiple_invoices` | Multi-item batch: IDs distinct, all Pending. |
+| `test_batch_max_size_succeeds` | Exactly `MAX_BATCH_INVOICES` entries accepted. |
+| `test_batch_empty_rejected` | Empty vec → `BatchSizeExceeded`. |
+| `test_batch_oversized_rejected` | `MAX_BATCH_INVOICES + 1` entries → `BatchSizeExceeded`. |
+| `test_batch_respects_active_invoice_cap` | Cap enforced; exact remaining headroom works. |
+| `test_batch_unverified_business_rejected` | No-KYC business rejected. |
+| `test_batch_pending_business_rejected` | Pending-KYC business → `KYCAlreadyPending`. |
+| `test_batch_bad_input_aborts_entirely` | Bad amount in second entry → zero invoices stored. |
+
+```bash
+cargo test test_store_invoices_batch
+```

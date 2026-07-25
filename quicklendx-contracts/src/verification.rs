@@ -8,7 +8,7 @@ use crate::protocol_limits::{
 };
 use crate::types::BidStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, vec, Address, Bytes, Env, String, Vec};
 
 /// Maximum normalized tags allowed on an invoice.
 pub const MAX_INVOICE_TAG_COUNT: u32 = 10;
@@ -36,7 +36,7 @@ pub struct BusinessVerification {
 }
 
 #[contracttype]
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, PartialOrd, Ord)]
 pub enum InvestorTier {
     Basic,
     Silver,
@@ -156,14 +156,12 @@ impl BusinessVerificationStorage {
         new_rejection_reason: &Option<String>,
     ) -> Result<(), QuickLendXError> {
         if let Some(old_ver) = old_verification {
-            // If there was an old rejection reason, the new one must match exactly
+            // If there was an old rejection reason and a new rejection reason is provided, they must match
             if let Some(old_reason) = &old_ver.rejection_reason {
                 if let Some(new_reason) = new_rejection_reason {
                     if old_reason != new_reason {
                         return Err(QuickLendXError::InvalidKYCStatus); // Cannot change rejection reason
                     }
-                } else {
-                    return Err(QuickLendXError::InvalidKYCStatus); // Cannot remove rejection reason
                 }
             }
         }
@@ -371,6 +369,19 @@ impl BusinessVerificationStorage {
             .set(&Self::DELETED_BUSINESSES_KEY, &deleted);
     }
 
+    fn remove_from_deleted_businesses(env: &Env, business: &Address) {
+        let deleted = Self::get_deleted_businesses(env);
+        let mut new_deleted = vec![env];
+        for addr in deleted.iter() {
+            if addr != *business {
+                new_deleted.push_back(addr);
+            }
+        }
+        env.storage()
+            .instance()
+            .set(&Self::DELETED_BUSINESSES_KEY, &new_deleted);
+    }
+
     /// Deletes a business: removes from any status list and marks as deleted.
     pub fn delete_business(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
         // Remove from verified, pending, rejected lists if present
@@ -389,6 +400,34 @@ impl BusinessVerificationStorage {
             return Ok(());
         }
         Self::add_to_deleted_businesses(env, business);
+        Ok(())
+    }
+
+    /// Restores a previously deleted business: removes from the deleted list and
+    /// re-adds to the appropriate status list based on the existing verification record.
+    ///
+    /// # Errors
+    /// - `BusinessNotVerified` if the business has no verification record.
+    /// - `BusinessDeleted` if the business is not currently deleted (no-op).
+    pub fn restore_business(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+        if !Self::is_deleted(env, business) {
+            return Err(QuickLendXError::BusinessDeleted);
+        }
+        Self::remove_from_deleted_businesses(env, business);
+        // Re-add to the status list matching the existing verification record.
+        if let Some(verification) = Self::get_verification(env, business) {
+            match verification.status {
+                BusinessVerificationStatus::Verified => {
+                    Self::add_to_verified_businesses(env, business);
+                }
+                BusinessVerificationStatus::Pending => {
+                    Self::add_to_pending_businesses(env, business);
+                }
+                BusinessVerificationStatus::Rejected => {
+                    Self::add_to_rejected_businesses(env, business);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -975,6 +1014,20 @@ pub fn require_business_not_pending(env: &Env, business: &Address) -> Result<(),
     }
 }
 
+/// Enforce that a business is active (not deleted/frozen) before performing an operation.
+///
+/// A deleted/frozen business must not be allowed to mutate any outstanding invoices.
+/// This is a defence-in-depth check that complements the KYC status guards.
+///
+/// # Errors
+/// - `BusinessDeleted` if the business has been deleted/frozen.
+pub fn require_business_active(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    if BusinessVerificationStorage::is_deleted(env, business) {
+        return Err(QuickLendXError::BusinessDeleted);
+    }
+    Ok(())
+}
+
 /// Enforce that an investor is not in KYC-pending state before allowing a sensitive operation.
 ///
 /// Pending investors have submitted KYC but have not yet been approved or rejected.
@@ -993,6 +1046,17 @@ pub fn require_investor_not_pending(env: &Env, investor: &Address) -> Result<(),
         },
         None => Err(QuickLendXError::BusinessNotVerified),
     }
+}
+
+/// Regulatory compliance gate, reserved for future jurisdiction/sanctions-list
+/// checks (see `docs/contracts/currency-whitelist.md` "Regulatory Compliance").
+///
+/// No such checks exist yet: this is intentionally a no-op by default and
+/// unconditionally returns `Ok(())` for any address and any ledger/storage
+/// state. Call sites can be wired in ahead of the actual regulatory logic
+/// landing so they don't need to change again once it does.
+pub fn require_regulatory_ok(_env: &Env, _address: &Address) -> Result<(), QuickLendXError> {
+    Ok(())
 }
 
 // Keep the existing invoice verification function
@@ -1017,6 +1081,11 @@ pub fn verify_invoice_data(
 
     // Validate due date bounds using protocol limits (Default 365 days)
     let limits = crate::protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+
+    if amount < limits.min_invoice_amount {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
     let max_horizon = limits.max_due_date_days.saturating_mul(86400);
     let max_due_date = current_timestamp.saturating_add(max_horizon);
 
@@ -1593,7 +1662,13 @@ pub fn validate_investor_investment(
     investor: &Address,
     investment_amount: i128,
 ) -> Result<(), QuickLendXError> {
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
+        if verification.tier < limits.min_investor_tier {
+            return Err(QuickLendXError::InsufficientKYCTier);
+        }
+
         // 1. Verification status check
         if !matches!(verification.status, BusinessVerificationStatus::Verified) {
             return Err(QuickLendXError::BusinessNotVerified);
@@ -1820,6 +1895,21 @@ pub fn validate_dispute_evidence(evidence: &String) -> Result<(), QuickLendXErro
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
     if evidence.len() > MAX_DISPUTE_EVIDENCE_LENGTH {
+        return Err(QuickLendXError::InvalidDisputeEvidence);
+    }
+    Ok(())
+}
+
+/// Required length for an evidence hash (`BytesN<32>` / SHA-256 digest size).
+pub const EVIDENCE_HASH_LENGTH: u32 = 32;
+
+/// @notice Validate evidence hash format (32-byte BytesN required).
+/// @dev Evidence hashes must be exactly [`EVIDENCE_HASH_LENGTH`] bytes so callers can
+///      safely convert the payload to `BytesN<32>` (SHA-256 and similar digests).
+/// @param evidence_hash The raw evidence hash bytes to validate.
+/// @return Ok(()) if `evidence_hash.len() == 32`, Err(InvalidDisputeEvidence) otherwise.
+pub fn validate_evidence_hash(evidence_hash: &Bytes) -> Result<(), QuickLendXError> {
+    if evidence_hash.len() != EVIDENCE_HASH_LENGTH {
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
     Ok(())
