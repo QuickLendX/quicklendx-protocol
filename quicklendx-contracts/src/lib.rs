@@ -272,6 +272,8 @@ mod test_fuzz_distribute_revenue;
 mod test_fuzz_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_partial_payment;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_tier_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(test)]
@@ -280,8 +282,12 @@ mod test_init_debug;
 mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
+#[cfg(test)]
+mod test_investment_active_guard;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
+#[cfg(test)]
+mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -1389,8 +1395,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
         // Validate that the invoice exists before freezing.
-        InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
         let info = FreezeInfo {
             reason,
@@ -1423,10 +1428,7 @@ impl QuickLendXContract {
     /// Return the stored freeze info for an invoice, if any.
     ///
     /// Returns `None` when the invoice is not frozen or does not exist.
-    pub fn get_invoice_freeze_info(
-        env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Option<FreezeInfo> {
+    pub fn get_invoice_freeze_info(env: Env, invoice_id: BytesN<32>) -> Option<FreezeInfo> {
         InvoiceStorage::get_freeze_info(&env, &invoice_id)
     }
 
@@ -2416,6 +2418,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2443,6 +2446,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2470,6 +2474,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2497,6 +2502,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2532,6 +2538,7 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
         max_invoices_per_business: u32,
+        min_investor_tier: crate::verification::InvestorTier,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
@@ -2543,6 +2550,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            min_investor_tier,
         )
     }
 

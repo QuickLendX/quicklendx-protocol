@@ -231,6 +231,7 @@ fn test_internal_protocol_limit_updates_reject_invalid_bid_constraints() {
                 365,
                 0,
                 100,
+                crate::verification::InvestorTier::Basic,
             )
         }),
         Err(QuickLendXError::InvalidAmount)
@@ -247,6 +248,7 @@ fn test_internal_protocol_limit_updates_reject_invalid_bid_constraints() {
                 365,
                 0,
                 100,
+                crate::verification::InvestorTier::Basic,
             )
         }),
         Err(QuickLendXError::InvalidAmount)

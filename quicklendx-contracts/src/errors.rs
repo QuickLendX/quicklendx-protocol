@@ -80,6 +80,8 @@ pub enum QuickLendXError {
     MaxInvoicesPerBusinessExceeded = 1408,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidBidTtl = 1409,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InsufficientKYCTier = 1410,
 
     // Rating (1500-1503)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -283,6 +285,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaxActiveBidsPerInvestorExceeded => symbol_short!("MAX_ACT"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
+            QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
             QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
             QuickLendXError::EmergencyWithdrawTimelockNotElapsed => symbol_short!("EMG_TLK"),

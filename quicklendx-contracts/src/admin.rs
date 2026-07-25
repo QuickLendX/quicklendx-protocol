@@ -424,9 +424,7 @@ pub fn require_not_reserved(
 
     let admin_addr = match admin {
         Some(a) => a,
-        None => {
-            AdminStorage::get_admin(env).ok_or(QuickLendXError::InvalidCurrency)?
-        }
+        None => AdminStorage::get_admin(env).ok_or(QuickLendXError::InvalidCurrency)?,
     };
     if *address == admin_addr {
         return Err(QuickLendXError::InvalidCurrency);
