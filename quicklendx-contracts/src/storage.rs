@@ -7,8 +7,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus,
-    PlatformFeeConfig, PruneReport, RebuildReport,
+    BidStatus, BusinessFreezeReason, InvestmentStatus, Invoice, InvoiceCategory,
+    InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
@@ -275,9 +275,19 @@ impl InvoiceStorage {
         Self::store(env, invoice)
     }
 
-    pub fn set_invoice_lock(env: &Env, invoice_id: &BytesN<32>, lock: InvoiceLock) {
+    pub fn set_frozen(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        frozen: bool,
+        reason: Option<BusinessFreezeReason>,
+    ) {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
-        if lock == InvoiceLock::None {
+        if frozen {
+            // Store the typed reason; callers must supply one when freezing.
+            let r = reason.unwrap_or(BusinessFreezeReason::AdminAction);
+            env.storage().persistent().set(&key, &r);
+            extend_persistent_ttl(env, &key);
+        } else {
             env.storage().persistent().remove(&key);
         } else {
             env.storage().persistent().set(&key, &lock);
@@ -287,32 +297,25 @@ impl InvoiceStorage {
 
     pub fn get_invoice_lock(env: &Env, invoice_id: &BytesN<32>) -> InvoiceLock {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
-        if let Some(lock) = env.storage().persistent().get::<_, InvoiceLock>(&key) {
+        if let Some(_frozen) = env.storage().persistent().get::<_, bool>(&key) {
             extend_persistent_ttl(env, &key);
-            lock
+            true
         } else {
-            InvoiceLock::None
+            // Backward-compatible: also treat the presence of a reason as frozen.
+            env.storage()
+                .persistent()
+                .get::<_, BusinessFreezeReason>(&key)
+                .is_some()
         }
     }
 
-    pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {
-        let key = DataKey::FreezeInfo(invoice_id.clone());
-        env.storage().persistent().set(&key, info);
-        extend_persistent_ttl(env, &key);
-    }
-
-    pub fn get_freeze_info(env: &Env, invoice_id: &BytesN<32>) -> Option<FreezeInfo> {
-        let key = DataKey::FreezeInfo(invoice_id.clone());
-        let result = env.storage().persistent().get::<_, FreezeInfo>(&key);
-        if result.is_some() {
-            extend_persistent_ttl(env, &key);
-        }
-        result
-    }
-
-    pub fn remove_freeze_info(env: &Env, invoice_id: &BytesN<32>) {
-        let key = DataKey::FreezeInfo(invoice_id.clone());
-        env.storage().persistent().remove(&key);
+    /// Returns the typed freeze reason for an invoice, if it is frozen.
+    pub fn get_freeze_reason(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Option<BusinessFreezeReason> {
+        let key = DataKey::FrozenInvoice(invoice_id.clone());
+        env.storage().persistent().get(&key)
     }
 
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
