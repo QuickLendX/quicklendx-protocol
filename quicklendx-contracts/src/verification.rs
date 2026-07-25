@@ -991,6 +991,21 @@ pub fn require_business_verification(env: &Env, business: &Address) -> Result<()
     Ok(())
 }
 
+/// Enforce that a business KYC verification record has a valid (Verified) KYC status/tier.
+///
+/// Symmetric guard for business KYC tiers.
+///
+/// # Errors
+/// - `KYCAlreadyPending` if the business KYC application is pending review
+/// - `BusinessNotVerified` if the business KYC application is rejected or not verified
+pub fn require_valid_business_kyc_tier(t: &BusinessVerification) -> Result<(), QuickLendXError> {
+    match t.status {
+        BusinessVerificationStatus::Verified => Ok(()),
+        BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
+        BusinessVerificationStatus::Rejected => Err(QuickLendXError::BusinessNotVerified),
+    }
+}
+
 /// Enforce that a business is not in KYC-pending state before allowing a sensitive operation.
 ///
 /// Pending businesses have submitted KYC but have not yet been approved or rejected.
@@ -1005,11 +1020,7 @@ pub fn require_business_not_pending(env: &Env, business: &Address) -> Result<(),
         return Err(QuickLendXError::BusinessDeleted);
     }
     match BusinessVerificationStorage::get_verification(env, business) {
-        Some(v) => match v.status {
-            BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
-            BusinessVerificationStatus::Verified => Ok(()),
-            BusinessVerificationStatus::Rejected => Err(QuickLendXError::BusinessNotVerified),
-        },
+        Some(v) => require_valid_business_kyc_tier(&v),
         None => Err(QuickLendXError::BusinessNotVerified),
     }
 }
