@@ -343,3 +343,309 @@ fn test_partial_payment_finalization_blocked_while_disputed() {
         "total_paid must reflect only the payment recorded before the dispute"
     );
 }
+
+/// Happy Path (Cleared): Full settlement succeeds when `dispute_status == None`.
+///
+/// "Cleared" means no investigation was ever opened on the invoice.  The
+/// active-investigation guard is a no-op in this state and normal settlement
+/// must proceed without any dispute-related error.
+#[test]
+fn test_settle_succeeds_when_dispute_status_is_none() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, invoice_id, _business, _investor, _contract_id) = setup_funded_invoice(&env);
+
+    let inv = client.get_invoice(&invoice_id);
+    assert_eq!(
+        inv.dispute_status,
+        DisputeStatus::None,
+        "pre-condition: invoice must start with dispute_status == None (cleared)"
+    );
+
+    let result = client.try_settle_invoice(&invoice_id, &100_000i128);
+    assert!(
+        result.is_ok(),
+        "settle_invoice must succeed when dispute_status == None (cleared), got {:?}",
+        result.err()
+    );
+
+    let inv_after = client.get_invoice(&invoice_id);
+    assert_eq!(
+        inv_after.status,
+        InvoiceStatus::Paid,
+        "invoice must reach Paid after a successful cleared-state settlement"
+    );
+}
+
+/// Happy Path (Cleared): Non-finalizing partial payment succeeds with
+/// `dispute_status == None`.
+///
+/// Documents that the guard never interferes with progress payments when the
+/// invoice has never entered a dispute lifecycle.
+#[test]
+fn test_partial_payment_succeeds_when_dispute_status_is_none() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, invoice_id, _business, _investor, _contract_id) = setup_funded_invoice(&env);
+
+    let res = client.try_process_partial_payment(
+        &invoice_id,
+        &30_000i128,
+        &String::from_str(&env, "deposit-1"),
+    );
+    assert!(
+        res.is_ok(),
+        "partial payment must succeed on cleared invoice, got {:?}",
+        res.err()
+    );
+
+    let inv = client.get_invoice(&invoice_id);
+    assert_eq!(inv.total_paid, 30_000, "total_paid must reflect the partial payment");
+    assert_eq!(
+        inv.status,
+        InvoiceStatus::Funded,
+        "invoice must remain Funded after a non-final partial payment"
+    );
+}
+
+/// Sad Path (Active): `process_partial_payment` finalization is blocked when
+/// `dispute_status == UnderReview`.
+///
+/// Mirror of `test_partial_payment_finalization_blocked_while_disputed` for the
+/// `UnderReview` state — admin has acknowledged the dispute (investigation is
+/// active and ongoing), so final settlement must remain blocked.
+#[test]
+fn test_partial_payment_finalization_blocked_while_under_review() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, invoice_id, business, _investor, _contract_id) = setup_funded_invoice(&env);
+    let admin = client
+        .get_current_admin()
+        .expect("admin must be set after initialization");
+
+    // 50 % payment before any dispute — allowed (cleared state).
+    client
+        .try_process_partial_payment(
+            &invoice_id,
+            &50_000i128,
+            &String::from_str(&env, "payment-001"),
+        )
+        .expect("first partial payment must succeed while cleared");
+
+    // Open dispute and advance to UnderReview (active investigation).
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "Partial payment amount disputed by business"),
+        &String::from_str(&env, "Wire transfer confirmation attached"),
+    );
+    client.put_dispute_under_review(&invoice_id, &admin);
+
+    let inv = client.get_invoice(&invoice_id);
+    assert_eq!(
+        inv.dispute_status,
+        DisputeStatus::UnderReview,
+        "pre-condition: dispute must be UnderReview (active investigation)"
+    );
+
+    // Finalising payment — MUST be rejected by the active-investigation guard.
+    let result = client.try_process_partial_payment(
+        &invoice_id,
+        &50_000i128,
+        &String::from_str(&env, "payment-002"),
+    );
+
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::DisputeActive,
+        "process_partial_payment finalization must return DisputeActive while dispute_status == UnderReview"
+    );
+
+    let inv_after = client.get_invoice(&invoice_id);
+    assert_eq!(
+        inv_after.status,
+        InvoiceStatus::Funded,
+        "invoice must stay Funded after blocked UnderReview finalization"
+    );
+    assert_eq!(
+        inv_after.total_paid, 50_000,
+        "total_paid must NOT include the rejected finalising payment"
+    );
+}
+
+/// Happy Path (Resolved): `process_partial_payment` finalization succeeds once
+/// the dispute reaches `Resolved`.
+///
+/// Once the admin issues a ruling the investigation is closed and normal
+/// settlement paths must be re-opened so a business-favourable resolution can
+/// complete normally.
+#[test]
+fn test_partial_payment_finalization_succeeds_after_dispute_resolved() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, invoice_id, business, _investor, _contract_id) = setup_funded_invoice(&env);
+    let admin = client
+        .get_current_admin()
+        .expect("admin must be set after initialization");
+
+    // 50 % payment → open dispute → review → resolve.
+    client
+        .try_process_partial_payment(
+            &invoice_id,
+            &50_000i128,
+            &String::from_str(&env, "payment-001"),
+        )
+        .expect("first partial payment must succeed while cleared");
+
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "Counterparty raised quality concern"),
+        &String::from_str(&env, "Photo evidence attached"),
+    );
+    client.put_dispute_under_review(&invoice_id, &admin);
+    client.resolve_dispute(
+        &invoice_id,
+        &admin,
+        &String::from_str(
+            &env,
+            "Ruling: Business position upheld. Investor provided no contrary evidence.",
+        ),
+    );
+
+    let inv = client.get_invoice(&invoice_id);
+    assert_eq!(
+        inv.dispute_status,
+        DisputeStatus::Resolved,
+        "pre-condition: dispute must be Resolved before attempting finalization"
+    );
+
+    // Now the remaining 50 % — must succeed, investigation is closed.
+    let res = client.try_process_partial_payment(
+        &invoice_id,
+        &50_000i128,
+        &String::from_str(&env, "payment-002"),
+    );
+    assert!(
+        res.is_ok(),
+        "finalising partial payment must succeed after dispute is Resolved, got {:?}",
+        res.err()
+    );
+
+    let inv_after = client.get_invoice(&invoice_id);
+    assert_eq!(
+        inv_after.status,
+        InvoiceStatus::Paid,
+        "invoice must reach Paid once finalization succeeds in Resolved state"
+    );
+}
+
+/// Happy Path (Resolved via structured): `settle_invoice` succeeds after a
+/// `FavorBusiness` ruling issued through `resolve_dispute_structured`.
+///
+/// Guards the explicit policy: `DisputeStatus::Resolved` unblocks settlement
+/// regardless of which resolution variant (text-only vs structured) was used
+/// by the admin.
+#[test]
+fn test_settle_succeeds_after_structured_resolution_favor_business() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, invoice_id, _business, investor, _contract_id) = setup_funded_invoice(&env);
+    let admin = client
+        .get_current_admin()
+        .expect("admin must be set after initialization");
+
+    client.create_dispute(
+        &invoice_id,
+        &investor,
+        &String::from_str(&env, "Non-delivery claim"),
+        &String::from_str(&env, "Customer support ticket attached"),
+    );
+    client.put_dispute_under_review(&invoice_id, &admin);
+    client.resolve_dispute_structured(
+        &invoice_id,
+        &admin,
+        &crate::types::DisputeResolution::FavorBusiness,
+        &String::from_str(
+            &env,
+            "Structured ruling: delivery confirmed on blockchain, FavorBusiness.",
+        ),
+    );
+
+    let inv = client.get_invoice(&invoice_id);
+    assert_eq!(
+        inv.dispute_status,
+        DisputeStatus::Resolved,
+        "pre-condition: structured resolution must transition status to Resolved"
+    );
+
+    let result = client.try_settle_invoice(&invoice_id, &100_000i128);
+    assert_ne!(
+        result.err().and_then(|e| e.ok()),
+        Some(QuickLendXError::DisputeActive),
+        "settle_invoice must NOT be blocked after structured FavorBusiness resolution"
+    );
+    assert!(
+        result.is_ok(),
+        "settle_invoice must succeed entirely after structured FavorBusiness, got {:?}",
+        result.err()
+    );
+
+    let inv_after = client.get_invoice(&invoice_id);
+    assert_eq!(
+        inv_after.status,
+        InvoiceStatus::Paid,
+        "invoice must be Paid after successful Resolved-state settlement"
+    );
+}
+
+/// Sad Path (Active): `settle_invoice` during `UnderReview` returns
+/// `DisputeActive` specifically, never `InvalidStatus`.
+///
+/// Locks in the explicit error contract: the active-investigation guard fires
+/// *before* downstream payable-status checks, so clients see the dedicated
+/// dispute-error code and can surface "unresolved dispute" in the UI instead
+/// of a generic "wrong lifecycle state".
+#[test]
+fn test_settle_under_review_returns_dispute_active_not_invalid_status() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let (client, invoice_id, business, _investor, _contract_id) = setup_funded_invoice(&env);
+    let admin = client
+        .get_current_admin()
+        .expect("admin must be set after initialization");
+
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "Investigation guard error-code boundary test"),
+        &String::from_str(&env, "Placeholder evidence"),
+    );
+    client.put_dispute_under_review(&invoice_id, &admin);
+
+    // Invoice is still Funded (dispute doesn't change status), so if the
+    // guard were missing or reordered we'd see InvalidStatus instead of
+    // DisputeActive.  Pin the correct ordering here.
+    let err = client
+        .try_settle_invoice(&invoice_id, &100_000i128)
+        .unwrap_err()
+        .unwrap();
+
+    assert_eq!(
+        err,
+        QuickLendXError::DisputeActive,
+        "settle_invoice on UnderReview must return DisputeActive (investigation guard fires before other status checks); got {:?}",
+        err
+    );
+    assert_ne!(
+        err,
+        QuickLendXError::InvalidStatus,
+        "DisputeActive must be strictly distinct from InvalidStatus for off-chain clients"
+    );
+}

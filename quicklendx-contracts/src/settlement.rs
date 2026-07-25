@@ -118,6 +118,9 @@ enum SettlementDataKey {
     PaymentNonce(BytesN<32>, String),
     /// Marks an invoice as finalized to guard against double-settlement.
     Finalized(BytesN<32>),
+    /// Per-invoice settlement currency whitelist (defence-in-depth).
+    /// Stored at invoice creation; checked at settlement time.
+    SettlementCurrencies(BytesN<32>),
 }
 
 /// Durable payment record stored per invoice/payment-index.
@@ -563,6 +566,55 @@ pub fn max_settlement_batch_size_soft_cap() -> u32 {
     MAX_SETTLEMENT_BATCH_SIZE_SOFT_CAP
 }
 
+/// Store the per-invoice settlement currency whitelist.
+///
+/// Called at invoice creation time to record the currencies that may be used
+/// to settle this invoice.  By default the whitelist contains only the
+/// invoice's own `currency`, providing defence-in-depth against storage-level
+/// corruption of `invoice.currency`.
+///
+/// When the stored whitelist is empty, no restriction is enforced (backward
+/// compatible fallback for invoices created before this feature).
+///
+/// # Arguments
+/// * `env` — The contract environment.
+/// * `invoice_id` — The invoice whose whitelist to set.
+/// * `currencies` — Allowed settlement currencies for this invoice.
+pub fn store_settlement_currencies(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    currencies: &soroban_sdk::Vec<Address>,
+) {
+    env.storage()
+        .persistent()
+        .set(&SettlementDataKey::SettlementCurrencies(invoice_id.clone()), currencies);
+}
+
+/// Check that `invoice_currency` is in the per-invoice settlement currency
+/// whitelist.  When no whitelist is stored (backward compat) the check passes.
+fn require_settlement_currency_allowed(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    invoice_currency: &Address,
+) -> Result<(), QuickLendXError> {
+    let stored: Option<soroban_sdk::Vec<Address>> = env
+        .storage()
+        .persistent()
+        .get(&SettlementDataKey::SettlementCurrencies(invoice_id.clone()));
+    if let Some(allowed) = stored {
+        if allowed.is_empty() {
+            return Ok(());
+        }
+        for c in allowed.iter() {
+            if c == *invoice_currency {
+                return Ok(());
+            }
+        }
+        return Err(QuickLendXError::SettlementCurrencyNotAllowed);
+    }
+    Ok(())
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -607,6 +659,13 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     ) {
         return Err(QuickLendXError::DisputeActive);
     }
+
+    // ── Settlement currency whitelist (defence-in-depth) ─────────────────
+    // Threat: if `invoice.currency` were corrupted in storage (or if a
+    // future refactor allowed a caller-supplied settlement currency), the
+    // per-invoice whitelist captured at creation time provides an independent
+    // check that the settlement currency is what the invoice intended.
+    require_settlement_currency_allowed(env, invoice_id, &invoice.currency)?;
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
