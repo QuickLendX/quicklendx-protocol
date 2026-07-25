@@ -194,12 +194,16 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DuplicateDefaultTransition = 2202,
     BackupVersionUnsupported = 2203,
-    DuplicateBid = 2204,
-    /// Caller supplied a cursor from a different snapshot generation.
+    /// Settlement attempted while a dispute is open on the invoice.
+    ///
+    /// Threat: a business could otherwise race to finalize settlement and
+    /// release escrowed funds before an admin resolves a pending dispute,
+    /// removing the investor's ability to recover their principal.
+    ///
+    /// Distinct from `InvalidStatus` (1401) so callers and monitors can tell
+    /// "wrong lifecycle state" apart from "dispute must be resolved first".
     /// BREAKING: Do not renumber this variant. public ABI consumption.
-    InvalidLedgerSequence = 2205,
-    /// Insurance coverage is not active at the time of default/settlement.
-    InsuranceNotActive = 2206,
+    DisputeActive = 2204,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -298,8 +302,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_ROT"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
+            QuickLendXError::DisputeActive => symbol_short!("DSP_ACT"),
         }
     }
 }
