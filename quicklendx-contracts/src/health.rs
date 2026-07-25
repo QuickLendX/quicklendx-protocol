@@ -162,9 +162,10 @@ mod tests {
             grace_period_seconds: 604800,
             initial_currencies: {
                 let mut v = soroban_sdk::Vec::new(&env);
-                v.push_back(currency);
+                v.push_back(currency.clone());
                 v
             },
+            backfill_max_batch_size: 100,
         };
 
         ProtocolInitializer::initialize(&env, &params).expect("init failed");

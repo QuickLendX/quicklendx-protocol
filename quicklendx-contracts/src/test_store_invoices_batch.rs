@@ -164,7 +164,7 @@ fn test_batch_respects_active_invoice_cap() {
 
     // Lower the per-business limit to something small.
     // Default is 100; set it to 3 so we can test the cap easily.
-    client.set_protocol_limits(
+    client.set_protocol_limits_full(
         &admin,
         &10,    // min_invoice_amount
         &10,    // min_bid_amount
@@ -172,6 +172,7 @@ fn test_batch_respects_active_invoice_cap() {
         &365,   // max_due_date_days
         &604800, // grace_period_seconds (7 days)
         &3,     // max_invoices_per_business
+        &crate::verification::InvestorTier::Basic, // min_investor_tier
     );
 
     // First batch: 2 invoices — should succeed (2 < 3).
