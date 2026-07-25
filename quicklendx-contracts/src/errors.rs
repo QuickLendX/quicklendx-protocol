@@ -206,8 +206,14 @@ pub enum QuickLendXError {
     /// "wrong lifecycle state" apart from "dispute must be resolved first".
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidLedgerSequence = 2205,
-    /// Batch size exceeds backfill max batch size configuration
-    BatchSizeTooLarge = 2206,
+    /// Insurance coverage is not active at the time of default/settlement.
+    InsuranceNotActive = 2206,
+    /// Caller supplied a cursor from a different snapshot generation.
+    UnstableCursor = 2207,
+    /// Batch input is empty or exceeds `MAX_BATCH_INVOICES`.
+    BatchSizeExceeded = 2208,
+    /// Account is frozen and cannot create invoices.
+    AccountIsFrozen = 2209,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -309,8 +315,12 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_TSY"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("LED_SEQ"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NOPND"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
+            QuickLendXError::InsuranceNotActive => symbol_short!("INS_NA"),
+            QuickLendXError::UnstableCursor => symbol_short!("STBL_CUR"),
+            QuickLendXError::BatchSizeExceeded => symbol_short!("BAT_MAX"),
+            QuickLendXError::AccountIsFrozen => symbol_short!("ACCT_FRZ"),
         }
     }
 }
