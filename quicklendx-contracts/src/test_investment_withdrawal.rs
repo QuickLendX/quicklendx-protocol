@@ -218,6 +218,8 @@ fn test_withdraw_after_escrow_released_rejected() {
         &env, &client, &admin, &business, &investor, &currency, 1000, 1000,
     );
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let err = client

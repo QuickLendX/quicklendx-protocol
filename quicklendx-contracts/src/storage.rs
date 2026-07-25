@@ -7,8 +7,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus, PlatformFeeConfig,
-    PruneReport, RebuildReport,
+    BidStatus, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus,
+    PlatformFeeConfig, PruneReport, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
@@ -32,8 +32,7 @@ where
 /// Storage key for the pending treasury address during a rotation.
 pub const PENDING_TREASURY_KEY: Symbol = symbol_short!("pnd_trs");
 /// Storage key for the pending treasury execution timestamp.
-pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("pnd_trs_ts");
-}
+pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("trs_ts");
 
 /// Counter and configuration keys for the contract.
 ///
@@ -58,6 +57,8 @@ pub enum DataKey {
     Bid(BytesN<32>),
     Investment(BytesN<32>),
     FrozenInvoice(BytesN<32>),
+    FreezeInfo(BytesN<32>),
+    EscrowExtension(BytesN<32>),
 }
 
 impl StorageKeys {
@@ -80,6 +81,11 @@ impl StorageKeys {
     /// **BREAKING**: Renaming `"inv_cnt"` resets the investment counter on all deployed contracts.
     pub fn investment_count() -> Symbol {
         symbol_short!("inv_cnt")
+    }
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"biz_def_h"` resets the business default history counters.
+    pub fn business_default_history(business: &Address) -> (Symbol, Address) {
+        (symbol_short!("biz_def_h"), business.clone())
     }
 }
 
@@ -270,24 +276,71 @@ impl InvoiceStorage {
         Self::store(env, invoice)
     }
 
-    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+    pub fn set_frozen(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        frozen: bool,
+        reason: Option<BusinessFreezeReason>,
+    ) {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
         if frozen {
-            env.storage().persistent().set(&key, &true);
+            // Store the typed reason; callers must supply one when freezing.
+            let r = reason.unwrap_or(BusinessFreezeReason::AdminAction);
+            env.storage().persistent().set(&key, &r);
             extend_persistent_ttl(env, &key);
         } else {
             env.storage().persistent().remove(&key);
+        } else {
+            env.storage().persistent().set(&key, &lock);
+            extend_persistent_ttl(env, &key);
+        }
+    }
+
+    pub fn get_invoice_lock(env: &Env, invoice_id: &BytesN<32>) -> InvoiceLock {
+        let key = DataKey::FrozenInvoice(invoice_id.clone());
+        if let Some(_frozen) = env.storage().persistent().get::<_, bool>(&key) {
+            extend_persistent_ttl(env, &key);
+            true
+        } else {
+            // Backward-compatible: also treat the presence of a reason as frozen.
+            env.storage()
+                .persistent()
+                .get::<_, BusinessFreezeReason>(&key)
+                .is_some()
         }
     }
 
     pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
-        let key = DataKey::FrozenInvoice(invoice_id.clone());
-        if let Some(frozen) = env.storage().persistent().get::<_, bool>(&key) {
-            extend_persistent_ttl(env, &key);
-            frozen
+        Self::get_invoice_lock(env, invoice_id).is_locked()
+    }
+
+    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+        let lock = if frozen {
+            InvoiceLock::Frozen
         } else {
-            false
+            InvoiceLock::None
+        };
+        Self::set_invoice_lock(env, invoice_id, lock);
+    }
+
+    pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        env.storage().persistent().set(&key, info);
+        extend_persistent_ttl(env, &key);
+    }
+
+    pub fn get_freeze_info(env: &Env, invoice_id: &BytesN<32>) -> Option<FreezeInfo> {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        let result = env.storage().persistent().get::<_, FreezeInfo>(&key);
+        if result.is_some() {
+            extend_persistent_ttl(env, &key);
         }
+        result
+    }
+
+    pub fn remove_freeze_info(env: &Env, invoice_id: &BytesN<32>) {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        env.storage().persistent().remove(&key);
     }
 
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {

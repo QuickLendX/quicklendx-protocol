@@ -117,6 +117,38 @@ fn create_and_fund_invoice(
     invoice_id
 }
 
+fn decode_insurance_claimed(env: &Env, val: &Val) -> InsuranceClaimed {
+    let map: Map<Symbol, Val> = Map::try_from_val(env, val).expect("event data map");
+    let investment_id = TryFromVal::try_from_val(
+        env,
+        &map.get(Symbol::new(env, "investment_id"))
+            .expect("investment_id"),
+    )
+    .unwrap();
+    let invoice_id = TryFromVal::try_from_val(
+        env,
+        &map.get(Symbol::new(env, "invoice_id")).expect("invoice_id"),
+    )
+    .unwrap();
+    let provider = TryFromVal::try_from_val(
+        env,
+        &map.get(Symbol::new(env, "provider")).expect("provider"),
+    )
+    .unwrap();
+    let coverage_amount = TryFromVal::try_from_val(
+        env,
+        &map.get(Symbol::new(env, "coverage_amount"))
+            .expect("coverage_amount"),
+    )
+    .unwrap();
+    InsuranceClaimed {
+        investment_id,
+        invoice_id,
+        provider,
+        coverage_amount,
+    }
+}
+
 /// Helper to get the latest emitted `InsuranceClaimed` payload
 fn latest_insurance_claimed_payload(env: &Env) -> InsuranceClaimed {
     use soroban_sdk::xdr;
@@ -128,8 +160,7 @@ fn latest_insurance_claimed_payload(env: &Env) -> InsuranceClaimed {
         if let xdr::ContractEventBody::V0(body) = &e.body {
             if body.topics.first() == Some(&topic_xdr) {
                 let data_val = Val::try_from_val(env, &body.data).expect("data ScVal to Val");
-                return InsuranceClaimed::try_from_val(env, &data_val)
-                    .expect("failed to decode event payload");
+                return decode_insurance_claimed(env, &data_val);
             }
         }
     }
@@ -188,6 +219,10 @@ fn test_default_triggers_correct_per_provider_insurance_claim() {
     // Default the invoice
     client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
 
+    // Capture events immediately — subsequent contract calls clear the event buffer
+    let claim_count = count_insurance_claimed_events(&env);
+    let payload = latest_insurance_claimed_payload(&env);
+
     // Assert investment defaulted
     let post_investment = client.get_invoice_investment(&invoice_id);
     assert_eq!(post_investment.status, InvestmentStatus::Defaulted);
@@ -201,8 +236,7 @@ fn test_default_triggers_correct_per_provider_insurance_claim() {
     assert_eq!(post_investment.total_active_coverage_percentage(), 0);
 
     // Assert exactly 1 claim event was fired
-    assert_eq!(count_insurance_claimed_events(&env), 1);
-    let payload = latest_insurance_claimed_payload(&env);
+    assert_eq!(claim_count, 1);
 
     assert_eq!(payload.investment_id, investment_id);
     assert_eq!(payload.invoice_id, invoice_id);
@@ -247,6 +281,25 @@ fn test_default_triggers_stacked_insurance_claims_correctly() {
 
     client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
 
+    // Capture events immediately — subsequent contract calls clear the event buffer
+    let count_after = count_insurance_claimed_events(&env);
+    let mut claims = alloc::vec::Vec::new();
+    {
+        use soroban_sdk::xdr;
+        let topic_str = "insurance_claimed";
+        let topic_sym = Symbol::new(&env, topic_str);
+        let topic_xdr = xdr::ScVal::try_from_val(&env, &topic_sym).expect("topic to ScVal");
+        for e in env.events().all().events().iter() {
+            if let xdr::ContractEventBody::V0(body) = &e.body {
+                if body.topics.first() == Some(&topic_xdr) {
+                    let data_val = Val::try_from_val(&env, &body.data).expect("data ScVal to Val");
+                    let pl = decode_insurance_claimed(&env, &data_val);
+                    claims.push(pl);
+                }
+            }
+        }
+    }
+
     // Assert coverage deactivated exactly once for both
     let records = client.query_investment_insurance(&investment_id);
     assert!(!records.get(0).unwrap().active);
@@ -255,26 +308,7 @@ fn test_default_triggers_stacked_insurance_claims_correctly() {
     let post_investment = client.get_invoice_investment(&invoice_id);
     assert_eq!(post_investment.total_active_coverage_percentage(), 0);
 
-    let count_after = count_insurance_claimed_events(&env);
     assert_eq!(count_after - count_before, 2);
-
-    // Ensure total claim amounts match what was set
-    // Note: iterating backwards over events to check all payloads is harder with the helper,
-    // but we know 2 claims were emitted for the providers
-    let mut claims = Vec::new(&env);
-    use soroban_sdk::xdr;
-    let topic_str = "insurance_claimed";
-    let topic_sym = Symbol::new(&env, topic_str);
-    let topic_xdr = xdr::ScVal::try_from_val(&env, &topic_sym).expect("topic to ScVal");
-    for e in env.events().all().events().iter() {
-        if let xdr::ContractEventBody::V0(body) = &e.body {
-            if body.topics.first() == Some(&topic_xdr) {
-                let data_val = Val::try_from_val(&env, &body.data).expect("data ScVal to Val");
-                let pl = InsuranceClaimed::try_from_val(&env, &data_val).unwrap();
-                claims.push_back(pl);
-            }
-        }
-    }
 
     assert_eq!(claims.len(), 2);
     let mut found_p1 = false;
@@ -360,12 +394,83 @@ fn test_already_inactive_coverage_not_reclaimed() {
     let default_time = due_date + grace_period + 1;
     env.ledger().set_timestamp(default_time);
 
-    let count_before = count_insurance_claimed_events(&env);
-    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
-    let count_after = count_insurance_claimed_events(&env);
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert!(
+        result.is_err(),
+        "Default must fail when insurance is inactive"
+    );
+    assert_eq!(result.unwrap_err(), Ok(QuickLendXError::InsuranceNotActive));
+}
 
-    assert_eq!(
-        count_after, count_before,
-        "inactive coverage should not trigger claim"
+#[test]
+fn test_default_fails_when_insurance_is_inactive() {
+    let env = Env::default();
+    let (client, admin, contract_id) = setup(&env);
+
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let investment = client.get_invoice_investment(&invoice_id);
+    let investment_id = investment.investment_id;
+
+    let provider = Address::generate(&env);
+    client.add_investment_insurance(&investment_id, &provider, &100u32);
+
+    // Manually deactivate it to simulate inactive/expired coverage
+    env.as_contract(&contract_id, || {
+        let mut inv =
+            crate::investment::InvestmentStorage::get_investment(&env, &investment_id).unwrap();
+        let mut cov = inv.insurance.get(0).unwrap();
+        cov.active = false;
+        inv.insurance.set(0, cov);
+        crate::investment::InvestmentStorage::update_investment(&env, &inv);
+    });
+
+    let grace_period = 7 * 24 * 60 * 60; // 7 days
+    let default_time = due_date + grace_period + 1;
+    env.ledger().set_timestamp(default_time);
+
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert!(
+        result.is_err(),
+        "Default must fail when insurance is inactive"
+    );
+    assert_eq!(result.unwrap_err(), Ok(QuickLendXError::InsuranceNotActive));
+}
+
+#[test]
+fn test_default_succeeds_when_insurance_is_active() {
+    let env = Env::default();
+    let (client, admin, _) = setup(&env);
+
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10000);
+
+    let amount = 1000;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let investment = client.get_invoice_investment(&invoice_id);
+    let investment_id = investment.investment_id;
+
+    let provider = Address::generate(&env);
+    client.add_investment_insurance(&investment_id, &provider, &100u32);
+
+    let grace_period = 7 * 24 * 60 * 60; // 7 days
+    let default_time = due_date + grace_period + 1;
+    env.ledger().set_timestamp(default_time);
+
+    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    assert!(
+        result.is_ok(),
+        "Default must succeed when insurance is active"
     );
 }

@@ -42,8 +42,6 @@
 | [MONITORING.md](MONITORING.md) | Per-event alert thresholds for contract events |
 | [DASHBOARD_QUERIES.md](DASHBOARD_QUERIES.md) | Full SQL reference for indexer health and workload queries |
 | [RUNBOOK_INCIDENT_RESPONSE.md](RUNBOOK_INCIDENT_RESPONSE.md) | Step-by-step operator playbook for unexpected contract behavior |
-| [QLX_INVESTOR_KYC_TIERS.md](QLX_INVESTOR_KYC_TIERS.md) | Investor KYC tiers, performance requirements, and gating enforcements |
-
 
 ## UX / frontend reference
 

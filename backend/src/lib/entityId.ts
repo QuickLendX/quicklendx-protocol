@@ -38,9 +38,19 @@ function assertEntityId(prefix: string, value: unknown): asserts value is string
 }
 
 /**
- * Asserts that `value` is a valid invoice ID (`inv_` + 26-char ULID).
+ * Asserts that `value` is a valid invoice ID (`inv_` + 26-char ULID or `0x` hex string).
  */
 export function assertInvoiceId(value: unknown): asserts value is string {
+  if (typeof value !== "string") {
+    throw new BadRequestError("Invalid entity ID", "INVALID_ENTITY_ID");
+  }
+  const trimmed = value.trim();
+  if (trimmed.startsWith("0x")) {
+    if (!/^0x[a-fA-F0-9]+$/.test(trimmed)) {
+      throw new BadRequestError("Invalid entity ID", "INVALID_ENTITY_ID");
+    }
+    return;
+  }
   assertEntityId(ENTITY_PREFIXES.INVOICE, value);
 }
 

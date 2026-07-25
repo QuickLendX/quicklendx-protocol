@@ -6,7 +6,7 @@ use crate::payments::Escrow;
 use crate::types::Bid;
 use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
 
 // ============================================================================
 // Topic Constants
@@ -63,6 +63,12 @@ pub const TOPIC_DISPUTE_UNDER_REVIEW: &str = "dispute_under_review";
 pub const TOPIC_DISPUTE_RESOLVED: &str = "dispute_resolved";
 /// Topic for `DisputeRejected` events.
 pub const TOPIC_DISPUTE_REJECTED: &str = "dispute_rejected";
+/// Topic for `TreasuryRotationInitiated` events.
+pub const TOPIC_TREASURY_ROTATION_INITIATED: &str = "treasury_rotation_initiated";
+/// Topic for `TreasuryRotationConfirmed` events.
+pub const TOPIC_TREASURY_ROTATION_CONFIRMED: &str = "treasury_rotation_confirmed";
+/// Topic for `TreasuryRotationCancelled` events.
+pub const TOPIC_TREASURY_ROTATION_CANCELLED: &str = "treasury_rotation_cancelled";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -470,6 +476,21 @@ pub struct TreasuryConfigured {
 }
 
 #[contractevent]
+pub struct TreasuryRotationInitiated {
+    pub new_address: Address,
+    pub initiated_by: Address,
+    pub confirmation_deadline: u64,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct TreasuryRotationConfirmed {
+    pub old_address: Address,
+    pub new_address: Address,
+    pub timestamp: u64,
+}
+
+#[contractevent]
 pub struct BackupCreated {
     pub backup_id: BytesN<32>,
     pub invoice_count: u32,
@@ -663,6 +684,7 @@ pub struct ProtocolInitialized {
     pub min_invoice_amount: i128,
     pub max_due_date_days: u64,
     pub grace_period_seconds: u64,
+    pub backfill_max_batch_size: u32,
     pub timestamp: u64,
 }
 
@@ -1505,6 +1527,7 @@ pub fn emit_protocol_initialized(
     min_invoice_amount: i128,
     max_due_date_days: u64,
     grace_period_seconds: u64,
+    backfill_max_batch_size: u32,
 ) {
     ProtocolInitialized {
         admin: admin.clone(),
@@ -1513,6 +1536,7 @@ pub fn emit_protocol_initialized(
         min_invoice_amount,
         max_due_date_days,
         grace_period_seconds,
+        backfill_max_batch_size,
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
@@ -1525,7 +1549,33 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
 
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
     env.events().publish(
-        (symbol_short!("tr_rot_cncl"), admin.clone()),
+        (symbol_short!("tr_rot_c"), admin.clone()),
         (),
+    );
+}
+
+// ── Upgrade events ──────────────────────────────────────────────────────────
+
+/// Emitted when an admin schedules a WASM contract upgrade.
+pub fn emit_upgrade_scheduled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_sch"),),
+        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp()),
+    );
+}
+
+/// Emitted when an admin cancels a pending WASM upgrade.
+pub fn emit_upgrade_cancelled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_can"),),
+        (admin.clone(), wasm_hash.clone()),
+    );
+}
+
+/// Emitted when a pending WASM upgrade is executed (contract code replaced).
+pub fn emit_upgrade_executed(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_exe"),),
+        (admin.clone(), wasm_hash.clone()),
     );
 }
