@@ -295,11 +295,7 @@ impl InvoiceStorage {
         }
     }
 
-    pub fn set_freeze_info(
-        env: &Env,
-        invoice_id: &BytesN<32>,
-        info: &FreezeInfo,
-    ) {
+    pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {
         let key = DataKey::FreezeInfo(invoice_id.clone());
         env.storage().persistent().set(&key, info);
         extend_persistent_ttl(env, &key);
