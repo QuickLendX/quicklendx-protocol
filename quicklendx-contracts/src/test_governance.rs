@@ -364,3 +364,82 @@ fn get_proposal_rejects_nonexistent() {
     let err = get_proposal(&env, &contract_id, &id).unwrap_err();
     assert_eq!(err, QuickLendXError::StorageKeyNotFound);
 }
+
+// ============================================================================
+// Governance guard tests
+// ============================================================================
+
+#[test]
+fn test_require_matching_governance_proposal_happy_paths() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    // 1. Current (Active) Proposal
+    let active_proposal = submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    let current_active = get_proposal(&env, &contract_id, &id).unwrap();
+
+    let res = crate::governance::require_matching_governance_proposal(&active_proposal, &current_active);
+    assert!(res.is_ok());
+
+    // 2. Closed (Passed/Executed) Proposal
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let voter3 = Address::generate(&env);
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter3, &id, true).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    run_proposal(&env, &contract_id, &id).unwrap();
+
+    let executed_proposal = get_proposal(&env, &contract_id, &id).unwrap();
+    let res2 = crate::governance::require_matching_governance_proposal(&executed_proposal, &executed_proposal);
+    assert!(res2.is_ok());
+}
+
+#[test]
+fn test_require_matching_governance_proposal_mismatch_fails() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    let mut active_proposal = submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    let current_active = get_proposal(&env, &contract_id, &id).unwrap();
+
+    // Mismatched ID
+    active_proposal.id = proposal_id(&env, 99);
+    let err = crate::governance::require_matching_governance_proposal(&active_proposal, &current_active).unwrap_err();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+
+    // Mismatched proposer
+    active_proposal = current_active.clone();
+    active_proposal.proposer = Address::generate(&env);
+    let err = crate::governance::require_matching_governance_proposal(&active_proposal, &current_active).unwrap_err();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+
+    // Mismatched votes_for
+    active_proposal = current_active.clone();
+    active_proposal.votes_for = 100;
+    let err = crate::governance::require_matching_governance_proposal(&active_proposal, &current_active).unwrap_err();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+
+    // Mismatched votes_against
+    active_proposal = current_active.clone();
+    active_proposal.votes_against = 5;
+    let err = crate::governance::require_matching_governance_proposal(&active_proposal, &current_active).unwrap_err();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+
+    // Mismatched voting_ends_at_ledger
+    active_proposal = current_active.clone();
+    active_proposal.voting_ends_at_ledger = 9999;
+    let err = crate::governance::require_matching_governance_proposal(&active_proposal, &current_active).unwrap_err();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+
+    // Mismatched status
+    active_proposal = current_active.clone();
+    active_proposal.status = ProposalStatus::Passed;
+    let err = crate::governance::require_matching_governance_proposal(&active_proposal, &current_active).unwrap_err();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+}
+
