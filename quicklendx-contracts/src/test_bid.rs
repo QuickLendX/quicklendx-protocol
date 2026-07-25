@@ -31,6 +31,7 @@
 
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
+use crate::types::BusinessFreezeReason;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::events::TOPIC_BID_CANCELLED;
 use soroban_sdk::{
@@ -507,7 +508,7 @@ fn test_freeze_invoice_blocks_bids() {
     );
 
     // Freeze it
-    client.freeze_invoice(&admin, &invoice_id);
+    client.freeze_invoice(&admin, &invoice_id, &BusinessFreezeReason::AdminAction);
 
     // Attempt to bid
     let investor = Address::generate(&env);
@@ -520,5 +521,116 @@ fn test_freeze_invoice_blocks_bids() {
         result.unwrap_err().expect("expected contract error"),
         QuickLendXError::InvoiceFrozen
     );
+}
+
+// ===========================================================================
+// 9. FREEZE REASON - Typed BusinessFreezeReason is stored and enforced
+// ===========================================================================
+
+/// Negative test: freezing without a valid typed reason is impossible at the
+/// type level — `freeze_invoice` requires a `BusinessFreezeReason` enum value.
+/// This test verifies that the reason is persisted alongside the freeze flag
+/// and that a frozen invoice with a typed reason still blocks bids.
+///
+/// Threat model: Without a typed reason, an admin could freeze an invoice
+/// without leaving an audit trail. A malicious or careless admin could then
+/// selectively freeze invoices with no accountability. The typed enum forces
+/// every freeze to declare its motivation, which is logged and queryable.
+#[test]
+fn test_freeze_with_typed_reason_stored_and_enforced() {
+    let (env, client, admin, business) = setup();
+
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+    let due = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &2_000i128,
+        &currency,
+        &due,
+        &soroban_sdk::String::from_str(&env, "typed-freeze-test"),
+        &crate::invoice::InvoiceCategory::Services,
+        &soroban_sdk::Vec::new(&env),
+    );
+
+    // Freeze with a specific typed reason
+    client.freeze_invoice(
+        &admin,
+        &invoice_id,
+        &BusinessFreezeReason::FraudSuspected,
+    );
+
+    // Verify invoice is frozen
+    assert!(
+        crate::storage::InvoiceStorage::is_frozen(&env, &invoice_id),
+        "invoice should be frozen after freeze_invoice with reason"
+    );
+
+    // Verify the reason is stored
+    let stored_reason =
+        crate::storage::InvoiceStorage::get_freeze_reason(&env, &invoice_id);
+    assert_eq!(
+        stored_reason,
+        Some(BusinessFreezeReason::FraudSuspected),
+        "freeze reason should be FraudSuspected"
+    );
+
+    // Verify bids are still blocked (negative test — this MUST fail)
+    let investor = Address::generate(&env);
+    client.submit_investor_kyc(&investor, &soroban_sdk::String::from_str(&env, "kyc"));
+    client.verify_investor(&admin, &investor, &50_000i128);
+
+    let result = client.try_place_bid(&investor, &invoice_id, &1_800i128, &1_900i128);
+    assert!(
+        result.is_err(),
+        "bid MUST be rejected on a frozen invoice (negative test)"
+    );
+    assert_eq!(
+        result.unwrap_err().expect("expected contract error"),
+        QuickLendXError::InvoiceFrozen,
+        "error should be InvoiceFrozen"
+    );
+}
+
+/// Verify that every BusinessFreezeReason variant round-trips through storage.
+#[test]
+fn test_all_business_freeze_reason_variants() {
+    let (env, client, admin, business) = setup();
+
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+    let due = env.ledger().timestamp() + 86_400;
+
+    let reasons = [
+        BusinessFreezeReason::FraudSuspected,
+        BusinessFreezeReason::ComplianceViolation,
+        BusinessFreezeReason::Dispute,
+        BusinessFreezeReason::Voluntary,
+        BusinessFreezeReason::AdminAction,
+    ];
+
+    for reason in reasons.iter() {
+        let invoice_id = client.upload_invoice(
+            &business,
+            &1_000i128,
+            &currency,
+            &due,
+            &soroban_sdk::String::from_str(&env, reason.label()),
+            &crate::invoice::InvoiceCategory::Services,
+            &soroban_sdk::Vec::new(&env),
+        );
+
+        client.freeze_invoice(&admin, &invoice_id, reason);
+
+        let stored = crate::storage::InvoiceStorage::get_freeze_reason(&env, &invoice_id);
+        assert_eq!(
+            stored,
+            Some(*reason),
+            "round-trip failed for {:?}",
+            reason
+        );
+
+        assert!(crate::storage::InvoiceStorage::is_frozen(&env, &invoice_id));
+    }
 }
 }
