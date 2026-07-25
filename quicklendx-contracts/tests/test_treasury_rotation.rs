@@ -1,4 +1,6 @@
 #![cfg(test)]
+#![allow(clippy::disallowed_methods)]
+#![allow(deprecated)]
 
 extern crate std;
 
@@ -38,7 +40,7 @@ fn test_get_pending_treasury_returns_none() {
         last_event,
         (
             client.address.clone(),
-            (soroban_sdk::symbol_short!("tr_rot_cn"), admin).into_val(&env),
+            (soroban_sdk::symbol_short!("tr_rot_cl"), admin).into_val(&env),
             ().into_val(&env)
         )
     );
@@ -54,9 +56,9 @@ fn test_cancel_treasury_rotation_fails_if_no_pending_rotation() {
 
 #[test]
 fn test_cancel_treasury_rotation_fails_for_non_admin() {
-    let (env, client, admin) = setup();
-    let new_treasury = Address::generate(&env);
-    let non_admin = Address::generate(&env);
+    let (_env, client, admin) = setup();
+    let new_treasury = Address::generate(&_env);
+    let non_admin = Address::generate(&_env);
 
     client.set_treasury(&admin, &new_treasury);
 

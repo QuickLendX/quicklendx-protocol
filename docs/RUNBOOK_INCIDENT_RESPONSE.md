@@ -7,7 +7,7 @@ project's key-management or governance procedures.
 
 Use this playbook when the contract accepts, rejects, emits, or settles
 something in a way that does not match the documented protocol intent.
-For information on which automated alerts to set up before an incident occurs, see the [Monitoring Guide](MONITORING.md).
+For information on which automated alerts to set up before an incident occurs, see the [Monitoring Guide](MONITORING.md). For detailed contract-by-contract entrypoints, parameters, error codes, and runnable examples, see the [Contract Emergency Response Runbook](EMERGENCY_RESPONSE.md).
 
 ## Decision Summary
 

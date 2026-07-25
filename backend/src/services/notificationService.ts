@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { ulid } from 'ulid';
 import { getDatabase, getPreparedStatement } from '../lib/database';
+import { CircuitBreaker } from '../lib/circuitBreaker';
 import {
   NotificationEvent,
   NotificationType,
@@ -22,6 +23,7 @@ export class NotificationService {
   private static instance: NotificationService;
   private transporter: nodemailer.Transporter;
   private dedupCache: NotificationDedupCache;
+  private circuitBreaker: CircuitBreaker;
 
   private constructor() {
     this.dedupCache = new NotificationDedupCache(

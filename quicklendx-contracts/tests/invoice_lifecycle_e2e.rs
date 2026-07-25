@@ -122,11 +122,7 @@ fn upload_verified_invoice(fx: &Fixture, amount: i128, description: &str) -> Byt
     invoice_id
 }
 
-fn assert_invoice_still_verified_and_unfunded(
-    fx: &Fixture,
-    invoice_id: &BytesN<32>,
-    amount: i128,
-) {
+fn assert_invoice_still_verified_and_unfunded(fx: &Fixture, invoice_id: &BytesN<32>, amount: i128) {
     let invoice = fx.client.get_invoice(invoice_id);
 
     assert_eq!(invoice.amount, amount);
@@ -142,10 +138,7 @@ fn assert_no_bid_or_escrow_created(fx: &Fixture, invoice_id: &BytesN<32>) {
 
     let escrow_result = fx.client.try_get_escrow_details(invoice_id);
     assert!(
-        matches!(
-            escrow_result,
-            Err(Ok(QuickLendXError::StorageKeyNotFound))
-        ),
+        matches!(escrow_result, Err(Ok(QuickLendXError::StorageKeyNotFound))),
         "expected no escrow"
     );
 }
@@ -194,6 +187,9 @@ fn test_invoice_lifecycle_happy_path() {
         &String::from_str(&env, "Consulting services"),
         &InvoiceCategory::Consulting,
         &Vec::new(&env),
+
+        &None,
+
     );
 
     let invoice = fx.client.get_invoice(&invoice_id);
@@ -416,11 +412,8 @@ fn test_boundary_bid_equal_to_invoice_amount_accepts_and_funds_exactly() {
     let tok = token::Client::new(&env, &fx.currency);
 
     let invoice_amount: i128 = 10_000;
-    let invoice_id = upload_verified_invoice(
-        &fx,
-        invoice_amount,
-        "Boundary bid equal to invoice amount",
-    );
+    let invoice_id =
+        upload_verified_invoice(&fx, invoice_amount, "Boundary bid equal to invoice amount");
     let bid_salt = BytesN::from_array(&env, &[11u8; 32]);
 
     let investor_balance_before = tok.balance(&fx.investor);
@@ -484,10 +477,7 @@ fn test_single_overbid_rejected_without_balance_or_state_changes() {
     );
 
     assert!(
-        matches!(
-            result,
-            Err(Ok(QuickLendXError::InvoiceAmountInvalid))
-        ),
+        matches!(result, Err(Ok(QuickLendXError::InvoiceAmountInvalid))),
         "expected InvoiceAmountInvalid for overbid"
     );
     assert_eq!(tok.balance(&fx.investor), investor_balance_before);
@@ -518,10 +508,7 @@ fn test_multiple_overbids_rejected_independently_without_side_effects() {
         );
 
         assert!(
-            matches!(
-                result,
-                Err(Ok(QuickLendXError::InvoiceAmountInvalid))
-            ),
+            matches!(result, Err(Ok(QuickLendXError::InvoiceAmountInvalid))),
             "expected InvoiceAmountInvalid for overbid {overbid_amount}"
         );
         assert_eq!(tok.balance(&fx.investor), investor_balance_before);
@@ -573,6 +560,9 @@ fn test_invoice_lifecycle_default_branch() {
         &String::from_str(&env, "Goods delivery"),
         &InvoiceCategory::Consulting,
         &Vec::new(&env),
+
+        &None,
+
     );
 
     assert_eq!(
@@ -739,6 +729,9 @@ fn test_partial_then_full_settle() {
         &String::from_str(&env, "Technology services"),
         &InvoiceCategory::Consulting,
         &Vec::new(&env),
+
+        &None,
+
     );
     assert_eq!(
         fx.client.get_invoice(&invoice_id).status,

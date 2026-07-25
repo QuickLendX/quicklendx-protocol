@@ -2,7 +2,7 @@ use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec, Bytes, xdr:
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::types::{
-    Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus, 
+    Invoice, InvoiceStatus, InvoiceCategory, InvoiceLock, InvoiceMetadata, Bid, BidStatus, 
     DisputeStatus, PaymentRecord, InvoiceRating, Escrow, EscrowStatus
 };
 use crate::storage::InvoiceStorage;
@@ -37,6 +37,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             initial_currencies,
+        backfill_max_batch_size: 100,
         };
         ProtocolInitializer::initialize(&env, &params)
     }
@@ -310,8 +311,23 @@ impl QuickLendXContract {
 
     pub fn freeze_invoice(env: Env, admin: Address, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         crate::admin::AdminStorage::require_admin(&env, &admin)?;
-        InvoiceStorage::set_frozen(&env, &invoice_id, true);
+        InvoiceStorage::set_invoice_lock(&env, &invoice_id, InvoiceLock::Frozen);
         Ok(())
+    }
+
+    pub fn set_invoice_lock(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        lock: InvoiceLock,
+    ) -> Result<(), QuickLendXError> {
+        crate::admin::AdminStorage::require_admin(&env, &admin)?;
+        InvoiceStorage::set_invoice_lock(&env, &invoice_id, lock);
+        Ok(())
+    }
+
+    pub fn get_invoice_lock(env: Env, invoice_id: BytesN<32>) -> InvoiceLock {
+        InvoiceStorage::get_invoice_lock(&env, &invoice_id)
     }
 
     pub fn verify_business(env: Env, admin: Address, business: Address) -> Result<(), QuickLendXError> {

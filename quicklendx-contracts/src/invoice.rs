@@ -32,6 +32,7 @@ impl Invoice {
         description: String,
         category: InvoiceCategory,
         tags: Vec<String>,
+        origination_fee_bps: Option<u32>,
     ) -> Result<Self, QuickLendXError> {
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -86,6 +87,7 @@ impl Invoice {
             dispute: Self::empty_dispute(env),
             total_paid: 0,
             payment_history: Vec::new(env),
+            origination_fee_bps,
         })
     }
 
@@ -239,25 +241,19 @@ impl Invoice {
         caller: &Address,
         metadata: InvoiceMetadata,
     ) -> Result<(), QuickLendXError> {
-        if self.business != *caller {
-            return Err(QuickLendXError::Unauthorized);
-        }
+        require_matching_business_invoice_ownership(env, caller, self)?;
         caller.require_auth();
         self.set_metadata(env, Some(metadata))
     }
 
     pub fn clear_metadata(&mut self, env: &Env, caller: &Address) -> Result<(), QuickLendXError> {
-        if self.business != *caller {
-            return Err(QuickLendXError::Unauthorized);
-        }
+        require_matching_business_invoice_ownership(env, caller, self)?;
         caller.require_auth();
         self.set_metadata(env, None)
     }
 
-    pub fn cancel(&mut self, _env: &Env, actor: Address) -> Result<(), QuickLendXError> {
-        if self.business != actor {
-            return Err(QuickLendXError::Unauthorized);
-        }
+    pub fn cancel(&mut self, env: &Env, actor: Address) -> Result<(), QuickLendXError> {
+        require_matching_business_invoice_ownership(env, &actor, self)?;
         self.status = InvoiceStatus::Cancelled;
         Ok(())
     }
@@ -382,6 +378,17 @@ impl Invoice {
         }
         total / self.ratings.len()
     }
+}
+
+pub fn require_matching_business_invoice_ownership(
+    _env: &Env,
+    business: &Address,
+    invoice: &Invoice,
+) -> Result<(), QuickLendXError> {
+    if invoice.business != *business {
+        return Err(QuickLendXError::Unauthorized);
+    }
+    Ok(())
 }
 
 fn eq_trimmed_lower_ascii(lhs: &String, rhs: &String) -> bool {

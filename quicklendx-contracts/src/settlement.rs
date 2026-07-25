@@ -21,19 +21,23 @@
 //! - Prevent proper refund pathways for the disadvantaged party
 //!
 //! ### Implementation
-//! The `ensure_payable_status()` guard enforces that settlement requires
-//! `invoice.status == InvoiceStatus::Funded`. When a dispute is active, the invoice
-//! either:
-//! 1. Remains `Funded` but has `dispute_status != None` (requires explicit check)
-//! 2. Transitions to a dispute-specific status (automatically blocks settlement)
+//! `settle_invoice_internal()` enforces two sequential guards:
+//! 1. `ensure_payable_status()` — invoice must be `Funded`.
+//! 2. **Dispute-active guard** — `invoice.dispute_status` must NOT be
+//!    `Disputed` or `UnderReview`; returns `QuickLendXError::DisputeActive`
+//!    (2204) while either open state is present.
+//!    `Resolved` is intentionally allowed: once the admin has issued a
+//!    ruling the dispute is concluded and the admin's outcome governs, so
+//!    a business-favourable resolution can proceed to settlement normally.
 //!
-//! **Current behavior**: Settlement checks status only. If disputes leave invoice in
-//! `Funded` status, an **additional explicit dispute check is required**:
-//! ```ignore
-//! if invoice.dispute_status != DisputeStatus::None {
-//!     return Err(QuickLendXError::DisputeActive);
-//! }
-//! ```
+//! The explicit check is required because disputes do NOT change `invoice.status`;
+//! the invoice remains `Funded` throughout the dispute lifecycle.  Without the
+//! second guard a business could finalize settlement during an active dispute,
+//! releasing escrowed funds before admin resolution and closing the investor's
+//! refund pathway.  See `test_settle_blocked_while_disputed` and
+//! `test_settle_blocked_while_under_review` (negative tests) for regression
+//! coverage, and `test_settle_allowed_after_dispute_resolved` for the
+//! unblock path.
 //!
 //! ### Partial Payments During Disputes
 //! `record_payment()` continues to function during disputes to:
@@ -85,7 +89,7 @@ use crate::investment::InvestmentStorage;
 use crate::payments::transfer_funds;
 use crate::storage::InvoiceStorage;
 use crate::types::InvestmentStatus;
-use crate::types::{Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
+use crate::types::{DisputeStatus, Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
@@ -408,6 +412,7 @@ pub fn settle_invoice(
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
+    require_no_active_dispute(&invoice)?;
     let payer = invoice.business.clone();
 
     let remaining_due = compute_remaining_due(&invoice)?;
@@ -426,8 +431,7 @@ pub fn settle_invoice(
         .checked_add(applied_preview)
         .ok_or(QuickLendXError::InvalidAmount)?;
 
-    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .unwrap();
+    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
     if projected_total < invoice.amount || projected_total < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -572,9 +576,39 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
+    require_no_active_dispute(&invoice)?;
 
-    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .unwrap();
+    // -----------------------------------------------------------------------
+    // SECURITY: Dispute-active guard (defence-in-depth)
+    //
+    // Threat model: without this check a business can call settle_invoice()
+    // while a dispute is open.  Because disputes do NOT change
+    // invoice.status (the invoice stays Funded), ensure_payable_status()
+    // alone would allow the settlement to proceed.  This would:
+    //   1. Release escrowed funds to the investor before the admin has
+    //      ruled on the dispute.
+    //   2. Mark the invoice as Paid, permanently closing the refund pathway
+    //      that the investor relies on if the dispute resolves in their favour.
+    //   3. Reward a bad-faith business that opened a dispute to delay the
+    //      investor, then raced to settle and pocket the return.
+    //
+    // We block only the two open states (Disputed, UnderReview).  Once the
+    // admin has issued a resolution (Resolved) the dispute is concluded and
+    // the admin's outcome governs; settlement is intentionally re-enabled so
+    // a business-favourable resolution can complete normally.
+    //
+    // Distinct error code (DisputeActive = 2204) lets off-chain monitors and
+    // clients distinguish "wrong lifecycle state" from "unresolved dispute"
+    // without inspecting the full invoice record.
+    // -----------------------------------------------------------------------
+    if matches!(
+        invoice.dispute_status,
+        crate::types::DisputeStatus::Disputed | crate::types::DisputeStatus::UnderReview
+    ) {
+        return Err(QuickLendXError::DisputeActive);
+    }
+
+    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
     if invoice.total_paid < invoice.amount || invoice.total_paid < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -707,6 +741,15 @@ fn ensure_payable_status(invoice: &Invoice) -> Result<(), QuickLendXError> {
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    Ok(())
+}
+
+fn require_no_active_dispute(invoice: &Invoice) -> Result<(), QuickLendXError> {
+    if invoice.dispute_status == DisputeStatus::Disputed
+        || invoice.dispute_status == DisputeStatus::UnderReview
+    {
+        return Err(QuickLendXError::DisputeActive);
+    }
     Ok(())
 }
 
