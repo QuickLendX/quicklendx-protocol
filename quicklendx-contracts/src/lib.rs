@@ -4162,6 +4162,9 @@ impl QuickLendXContract {
     /// ledger close without storage writes or auth. Internal iteration is bounded
     /// by the existing invoice status indexes and protocol invoice limits used by
     /// the reused analytics calculators.
+    ///
+    /// Fails with `QuickLendXError::ActiveDisputeExists` while any invoice has
+    /// an unresolved dispute, so a snapshot is never published mid-dispute.
     pub fn export_analytics_snapshot(
         env: Env,
     ) -> Result<analytics::AnalyticsSnapshot, QuickLendXError> {

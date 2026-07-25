@@ -208,16 +208,9 @@ pub enum QuickLendXError {
     InvalidLedgerSequence = 2205,
     /// Insurance coverage is not active at the time of default/settlement.
     InsuranceNotActive = 2206,
-    /// Caller supplied a cursor from a different snapshot generation.
-    UnstableCursor = 2207,
-    /// Batch input is empty or exceeds `MAX_BATCH_INVOICES`.
-    BatchSizeExceeded = 2208,
-    /// Account is frozen and cannot create invoices.
-    AccountIsFrozen = 2209,
-    /// Settlement currency is not in the invoice's per-invoice settlement currency whitelist.
-    /// Defence-in-depth: the invoice's own `currency` field must be in `settlement_currencies`
-    /// at settlement time. See Issue #1908.
-    SettlementCurrencyNotAllowed = 2210,
+    /// A report/analytics-snapshot was requested while an invoice has an
+    /// unresolved (`Disputed` or `UnderReview`) dispute.
+    ActiveDisputeExists = 2207,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -319,13 +312,10 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NOPND"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NO_P"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
-            QuickLendXError::InsuranceNotActive => symbol_short!("INS_NA"),
-            QuickLendXError::UnstableCursor => symbol_short!("STBL_CUR"),
-            QuickLendXError::BatchSizeExceeded => symbol_short!("BAT_MAX"),
-            QuickLendXError::AccountIsFrozen => symbol_short!("ACCT_FRZ"),
-            QuickLendXError::SettlementCurrencyNotAllowed => symbol_short!("STL_CR_NA"),
+            QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
+            QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
         }
     }
 }
