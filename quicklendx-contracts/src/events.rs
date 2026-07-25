@@ -684,6 +684,7 @@ pub struct ProtocolInitialized {
     pub min_invoice_amount: i128,
     pub max_due_date_days: u64,
     pub grace_period_seconds: u64,
+    pub backfill_max_batch_size: u32,
     pub timestamp: u64,
 }
 
@@ -1526,6 +1527,7 @@ pub fn emit_protocol_initialized(
     min_invoice_amount: i128,
     max_due_date_days: u64,
     grace_period_seconds: u64,
+    backfill_max_batch_size: u32,
 ) {
     ProtocolInitialized {
         admin: admin.clone(),
@@ -1534,6 +1536,7 @@ pub fn emit_protocol_initialized(
         min_invoice_amount,
         max_due_date_days,
         grace_period_seconds,
+        backfill_max_batch_size,
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
@@ -1546,35 +1549,33 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
 
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
     env.events().publish(
-        (symbol_short!("tr_rot_cn"), admin.clone()),
+        (symbol_short!("tr_rot_c"), admin.clone()),
         (),
     );
 }
 
-pub fn emit_treasury_rotation_initiated(
-    env: &Env,
-    new_address: &Address,
-    initiated_by: &Address,
-    confirmation_deadline: u64,
-) {
-    TreasuryRotationInitiated {
-        new_address: new_address.clone(),
-        initiated_by: initiated_by.clone(),
-        confirmation_deadline,
-        timestamp: env.ledger().timestamp(),
-    }
-    .publish(env);
+// ── Upgrade events ──────────────────────────────────────────────────────────
+
+/// Emitted when an admin schedules a WASM contract upgrade.
+pub fn emit_upgrade_scheduled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_sch"),),
+        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp()),
+    );
 }
 
-pub fn emit_treasury_rotation_confirmed(
-    env: &Env,
-    old_address: &Address,
-    new_address: &Address,
-) {
-    TreasuryRotationConfirmed {
-        old_address: old_address.clone(),
-        new_address: new_address.clone(),
-        timestamp: env.ledger().timestamp(),
-    }
-    .publish(env);
+/// Emitted when an admin cancels a pending WASM upgrade.
+pub fn emit_upgrade_cancelled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_can"),),
+        (admin.clone(), wasm_hash.clone()),
+    );
+}
+
+/// Emitted when a pending WASM upgrade is executed (contract code replaced).
+pub fn emit_upgrade_executed(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_exe"),),
+        (admin.clone(), wasm_hash.clone()),
+    );
 }

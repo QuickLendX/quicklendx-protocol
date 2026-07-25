@@ -410,6 +410,9 @@ fn test_hostile_token_reentry_accept_bid_and_fund_is_blocked_p0() {
 fn test_hostile_token_reentry_deeply_nested_and_alternating_entrypoints_are_blocked() {
     let fixture = Fixture::new();
 
+    fixture.client.approve_early_escrow_release(&fixture.invoice_id, &fixture.business);
+    fixture.client.approve_early_escrow_release(&fixture.invoice_id, &fixture.investor);
+
     // We invoke one guarded entrypoint with guard held by the test harness.
     // During token transfer, HostileToken will attempt to re-enter different entrypoints.
     // All attempts must be blocked pre-mutation.

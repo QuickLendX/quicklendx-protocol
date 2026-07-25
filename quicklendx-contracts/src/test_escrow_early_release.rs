@@ -93,6 +93,39 @@ mod tests {
     }
 
     #[test]
+    fn release_escrow_funds_rejected_without_dual_approval() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let (invoice_id, business, _, _) = funded_invoice(&env, &client, &contract_id);
+
+        // release_escrow_funds must not bypass the dual-approval gate.
+        let err = client
+            .try_release_escrow_funds(&invoice_id)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::OperationNotAllowed);
+        assert_eq!(client.get_escrow_status(&invoice_id), EscrowStatus::Held);
+    }
+
+    #[test]
+    fn release_escrow_funds_succeeds_with_dual_approval() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let (invoice_id, business, investor, _) = funded_invoice(&env, &client, &contract_id);
+        client.approve_early_escrow_release(&invoice_id, &business);
+        client.approve_early_escrow_release(&invoice_id, &investor);
+        client.release_escrow_funds(&invoice_id);
+        assert_eq!(
+            client.get_escrow_status(&invoice_id),
+            EscrowStatus::Released
+        );
+    }
+
+    #[test]
     fn early_release_stays_held_when_one_party_approves_then_revokes() {
         let env = Env::default();
         env.mock_all_auths();

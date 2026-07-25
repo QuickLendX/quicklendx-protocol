@@ -304,6 +304,8 @@ fn test_no_new_escrow_after_release() {
     let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000));
     client.accept_bid(&invoice_id, &bid_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     assert_eq!(
@@ -439,6 +441,8 @@ fn test_release_one_escrow_does_not_affect_other() {
     client.accept_bid(&invoice_b, &bid_b);
 
     // Release only invoice A.
+    client.approve_early_escrow_release(&invoice_a, &business);
+    client.approve_early_escrow_release(&invoice_a, &investor);
     client.release_escrow_funds(&invoice_a);
 
     assert_eq!(

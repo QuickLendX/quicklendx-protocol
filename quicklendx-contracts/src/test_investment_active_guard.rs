@@ -101,10 +101,18 @@ fn test_add_insurance_succeeds_when_investment_is_active() {
     let sac = token::StellarAssetClient::new(&env, &currency);
     sac.mint(&provider, &100_000i128);
     let tok = token::Client::new(&env, &currency);
-    tok.approve(&provider, &contract_id, &400_000i128, &(env.ledger().sequence() + 50_000));
+    tok.approve(
+        &provider,
+        &contract_id,
+        &400_000i128,
+        &(env.ledger().sequence() + 50_000),
+    );
 
     let res = client.try_add_investment_insurance(&investment.investment_id, &provider, &50u32);
-    assert!(res.is_ok(), "Should succeed in adding insurance when Active");
+    assert!(
+        res.is_ok(),
+        "Should succeed in adding insurance when Active"
+    );
 }
 
 /// Sad Path: Adding insurance on a Completed investment fails.
@@ -120,7 +128,12 @@ fn test_add_insurance_fails_when_investment_is_completed() {
     let sac = token::StellarAssetClient::new(&env, &currency);
     sac.mint(&business, &2_000i128);
     let tok = token::Client::new(&env, &currency);
-    tok.approve(&business, &contract_id, &400_000i128, &(env.ledger().sequence() + 50_000));
+    tok.approve(
+        &business,
+        &contract_id,
+        &400_000i128,
+        &(env.ledger().sequence() + 50_000),
+    );
 
     client.settle_invoice(&invoice_id, &1000);
 
@@ -147,7 +160,8 @@ fn test_add_insurance_fails_when_investment_is_defaulted() {
     );
 
     // Advance time past due date + grace period
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86_400 * 40);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86_400 * 40);
     client.handle_overdue_invoices(&100u32);
 
     let investment = env.as_contract(&contract_id, || {
@@ -223,7 +237,10 @@ fn test_withdraw_succeeds_when_investment_is_active() {
     );
 
     let res = client.try_withdraw_investment(&invoice_id, &investor);
-    assert!(res.is_ok(), "Should succeed in withdrawing active investment");
+    assert!(
+        res.is_ok(),
+        "Should succeed in withdrawing active investment"
+    );
 }
 
 /// Sad Path: Withdrawing a Completed investment fails.
@@ -239,7 +256,12 @@ fn test_withdraw_fails_when_investment_is_completed() {
     let sac = token::StellarAssetClient::new(&env, &currency);
     sac.mint(&business, &2_000i128);
     let tok = token::Client::new(&env, &currency);
-    tok.approve(&business, &contract_id, &400_000i128, &(env.ledger().sequence() + 50_000));
+    tok.approve(
+        &business,
+        &contract_id,
+        &400_000i128,
+        &(env.ledger().sequence() + 50_000),
+    );
 
     client.settle_invoice(&invoice_id, &1000);
 
@@ -260,7 +282,8 @@ fn test_withdraw_fails_when_investment_is_defaulted() {
     );
 
     // Advance time past due date + grace period
-    env.ledger().set_timestamp(env.ledger().timestamp() + 86_400 * 40);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86_400 * 40);
     client.handle_overdue_invoices(&100u32);
 
     let err = client

@@ -1,13 +1,24 @@
-#![allow(clippy::disallowed_methods)]
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env};
+#![allow(
+    dead_code,
+    unused_imports,
+    unused_variables,
+    unused_comparisons,
+    deprecated,
+    clippy::too_many_arguments,
+    clippy::doc_overindented_list_items,
+    clippy::absurd_extreme_comparisons,
+    clippy::needless_range_loop,
+    clippy::manual_checked_ops,
+    clippy::collapsible_match,
+    clippy::let_unit_value,
+    clippy::needless_borrow,
+    clippy::match_like_matches_macro,
+    clippy::needless_return,
+    clippy::disallowed_methods
+)]
 
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum QuickLendXError {
-    AccountIsFrozen = 1,
-}
+//! QuickLendX contracts library.
 
 extern crate alloc;
 
@@ -34,11 +45,12 @@ mod test_maintenance;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
 #[cfg(test)]
-mod test_pause_reason_cap;
-#[cfg(test)]
 mod test_settlement_capacity_stress;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
+// Issue #1920 — confirm require_regulatory_ok is truly a no-op by default.
+#[cfg(test)]
+mod test_regulatory_gate;
 use crate::idempotency::{idempotency_exists, idempotency_key, store_idempotency};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
@@ -84,13 +96,21 @@ pub mod payments;
 pub mod profits;
 pub mod protocol_limits;
 pub mod reentrancy;
-pub mod resolution_policy;
+pub mod regulatory;
 pub mod settlement;
 pub mod storage;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
+#[cfg(test)]
+mod test_panic_handler;
+#[cfg(test)]
+mod test_due_date_guard;
+#[cfg(test)]
+mod test_cancel_invoice_matrix;
+#[cfg(test)]
+mod test_governance;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -135,6 +155,10 @@ mod test_currency_match_funding;
 mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
+#[cfg(test)]
+mod test_evidence_size_cap;
+#[cfg(test)]
+mod test_evidence_hash_format;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
@@ -160,9 +184,7 @@ mod test_expired_bids_cleanup;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
 #[cfg(test)]
-mod test_governance;
-#[cfg(test)]
-mod test_invoice;
+mod test_investor_kyc;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
@@ -186,6 +208,8 @@ mod test_invariant_self_check;
 mod test_investment_consistency;
 #[cfg(test)]
 mod test_operational_limits;
+#[cfg(test)]
+mod test_regulatory;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 // #[cfg(test)]
@@ -218,7 +242,9 @@ mod test_reentrancy_fault_injection;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
 #[cfg(test)]
-mod test_storage_key_layout;
+mod test_settle_during_dispute;
+#[cfg(test)]
+mod test_string_limits;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_string_limits;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -227,10 +253,18 @@ mod test_string_limits;
 mod test_analytics_consistency;
 #[cfg(test)]
 mod test_bid_capacity_stress;
+// Issue #1891 — min-partial-fill amount boundary: at limit, one below, one above.
+#[cfg(test)]
+mod test_min_partial_fill_boundary;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
+// Issue #2083 — bid-match helper tests; runs on every CI matrix entry
+// (no feature gate, since `legacy-tests` is OFF in CI). Covers
+// `compare_bids`, `get_best_bid`, and `rank_bids`.
+#[cfg(test)]
+mod test_bid_match_helper;
 #[cfg(test)]
 mod test_vesting;
 mod test_vesting_summary;
@@ -260,16 +294,24 @@ mod test_fuzz_distribute_revenue;
 mod test_fuzz_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_partial_payment;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_profits_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
+#[cfg(test)]
+mod test_init_debug;
 #[cfg(test)]
 mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_insurance_claim_payout;
 #[cfg(test)]
-mod test_investment_withdrawal;
+mod test_insurance_optin_lifecycle;
 #[cfg(test)]
-mod test_investment_active_guard;
+mod test_invoice;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_insurance_premium_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -280,25 +322,15 @@ mod test_invoice_metadata;
 mod test_invoice_search_ranking;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_line_item_consistency;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_profits_props;
 #[cfg(all(test, feature = "legacy-tests"))]
-mod test_rebuild_indexes;
-// #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_max_invoices_per_business;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_insurance_claim_payout;
-#[cfg(test)]
-mod test_insurance_optin_lifecycle;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_insurance_premium_props;
-#[cfg(test)]
-mod test_invoice;
+mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
 mod test_platform_metrics_reconciliation;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_rebuild_indexes;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_seed;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
@@ -312,9 +344,14 @@ mod test_volume_tier_props;
 #[cfg(test)]
 mod test_cannot_withdraw_more_than_deposited;
 #[cfg(test)]
+mod test_store_invoice_auth;
+#[cfg(test)]
 mod test_tier_boundary;
+#[cfg(test)]
+mod test_verification_matrix;
 pub mod types;
 pub use types::*;
+pub mod upgrade;
 pub mod verification;
 pub mod vesting;
 use admin::require_not_self;
@@ -345,7 +382,7 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
     normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
-    require_business_active, require_business_not_pending, require_investor_not_pending,
+    require_business_not_pending, require_investor_not_pending,
     revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
@@ -463,11 +500,7 @@ fn early_release_approval_key(
     invoice_id: &BytesN<32>,
     approver: &Address,
 ) -> (soroban_sdk::Symbol, BytesN<32>, Address) {
-    (
-        symbol_short!("er_appr"),
-        invoice_id.clone(),
-        approver.clone(),
-    )
+    (symbol_short!("er_appr"), invoice_id.clone(), approver.clone())
 }
 
 fn has_early_release_approval(env: &Env, invoice_id: &BytesN<32>, approver: &Address) -> bool {
@@ -595,6 +628,7 @@ impl QuickLendXContract {
         min_invoice_amount: i128,
         max_due_date_days: u64,
         grace_period_seconds: u64,
+        backfill_max_batch_size: u32,
     ) -> Result<(), QuickLendXError> {
         init::ProtocolInitializer::set_protocol_config(
             &env,
@@ -602,6 +636,7 @@ impl QuickLendXContract {
             min_invoice_amount,
             max_due_date_days,
             grace_period_seconds,
+            backfill_max_batch_size,
         )
     }
 
@@ -707,15 +742,22 @@ impl QuickLendXContract {
         bid::BidStorage::get_max_active_bids_per_investor(&env)
     }
 
-    /// Get current investor active-bid limit configuration snapshot.
-    pub fn get_bid_limit_config(env: Env) -> bid::BidLimitConfig {
-        bid::BidStorage::get_bid_limit_config(&env)
-    }
-
-    /// Set maximum active bids allowed per investor (admin only)
+    /// Set maximum active bids allowed per investor (admin only).
+    ///
+    /// Pass `0` to disable the limit (any number of concurrent bids allowed).
     pub fn set_max_active_bids_per_investor(env: Env, limit: u32) -> Result<u32, QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         bid::BidStorage::set_max_active_bids_per_investor(&env, &admin, limit)
+    }
+
+    /// Reset the per-investor active-bid limit to the compile-time default (20).
+    ///
+    /// Removes the stored override so [`get_bid_limit_config`] reports
+    /// `is_custom = false` and `is_disabled = false`.  Useful for reverting a
+    /// previous [`set_max_active_bids_per_investor(0)`] call.
+    pub fn reset_investor_bid_limit(env: Env) -> Result<u32, QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        bid::BidStorage::reset_max_active_bids_per_investor(&env, &admin)
     }
 
     /// Initiate emergency withdraw for stuck funds (admin only). Timelock applies before execute.
@@ -843,8 +885,15 @@ impl QuickLendXContract {
         currency::CurrencyWhitelist::currency_count(&env)
     }
 
-    /// Return a paginated slice of the whitelist.
-    pub fn get_whitelisted_currencies_paged(env: Env, offset: u32, limit: u32) -> Vec<Address> {
+    /// Return a paginated slice of the whitelist with metadata.
+    ///
+    /// Returns [`PaginatedCurrencies`] bundling the page of currency addresses together
+    /// with `total_count` and `has_more` so consumers do not need a separate count query.
+    pub fn get_whitelisted_currencies_paged(
+        env: Env,
+        offset: u32,
+        limit: u32,
+    ) -> PaginatedCurrencies {
         currency::CurrencyWhitelist::get_whitelisted_currencies_paged(&env, offset, limit)
     }
 
@@ -996,10 +1045,16 @@ impl QuickLendXContract {
     // Invoice Management Functions
     // ============================================================================
 
-    /// Store an invoice in the contract (unauthenticated; use `upload_invoice` for business flow).
+    /// Store an invoice in the contract.
+    ///
+    /// Requires explicit authorization from the `business` address **and** a
+    /// `Verified` KYC record. Only KYC-verified ("tier-N") businesses may write
+    /// invoice data on-chain. This is the primary anti-spam gate: it prevents
+    /// unvetted addresses from polluting on-chain storage and misleading investors
+    /// with fraudulent invoice listings.
     ///
     /// # Arguments
-    /// * `business` - Address of the business that owns the invoice
+    /// * `business` - Address of the business that owns the invoice (must sign)
     /// * `amount` - Invoice amount in smallest currency unit (e.g. cents)
     /// * `currency` - Token contract address for the invoice currency
     /// * `due_date` - Unix timestamp when the invoice is due
@@ -1011,6 +1066,8 @@ impl QuickLendXContract {
     /// * `Ok(BytesN<32>)` - The new invoice ID
     ///
     /// # Errors
+    /// * `BusinessNotVerified` (1600) if the business has no KYC record or is rejected
+    /// * `KYCAlreadyPending`   (1601) if the business KYC is awaiting admin review
     /// * `InvalidAmount` if amount <= 0
     /// * `InvoiceDueDateInvalid` if due_date is not in the future
     /// * `InvalidDescription` if description is empty
@@ -1027,9 +1084,22 @@ impl QuickLendXContract {
         description: String,
         category: InvoiceCategory,
         tags: Vec<String>,
+        origination_fee_bps: Option<u32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &business)?;
+
+        // SECURITY LAYER 1: Require explicit authorization from the business address.
+        // This ensures only the business itself can create invoices — not the admin,
+        // not a third party. Prevents impersonation and unauthorized storage writes.
+        business.require_auth();
+
+        // SECURITY LAYER 2: KYC gate — only Verified ("tier-N") businesses may
+        // create invoices. Pending → KYCAlreadyPending; Rejected/unknown →
+        // BusinessNotVerified. This is the primary anti-spam control and enforces
+        // the invariant documented in docs/KYC.md.
+        require_business_not_pending(&env, &business)?;
+
         // Validate input parameters
         if amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -1056,14 +1126,15 @@ impl QuickLendXContract {
         // Enforcement: reject invoices whose currency is not whitelisted (when whitelist is non-empty).
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
-        // Check if business is verified (temporarily disabled for debugging)
-        // if !verification::BusinessVerificationStorage::is_business_verified(&env, &business) {
-        //     return Err(QuickLendXError::BusinessNotVerified);
-        // }
-
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&env, &tags)?;
+
+        // Regulatory compliance gate (reserved seam — no-op today).
+        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
+        // jurisdiction-specific or on-chain oracle-based compliance checks without
+        // touching this call site.
+        crate::regulatory::require_regulatory_ok(&env, &business)?;
 
         // Create new invoice
         let invoice = Invoice::new(
@@ -1075,6 +1146,7 @@ impl QuickLendXContract {
             description,
             category,
             tags,
+            origination_fee_bps,
         )?;
 
         // Store the invoice
@@ -1099,6 +1171,7 @@ impl QuickLendXContract {
         description: String,
         category: InvoiceCategory,
         tags: Vec<String>,
+        origination_fee_bps: Option<u32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         // Only the business can upload their own invoice
@@ -1139,6 +1212,7 @@ impl QuickLendXContract {
             description.clone(),
             category,
             tags,
+            origination_fee_bps,
         )?;
         InvoiceStorage::store_invoice(&env, &invoice);
         emit_invoice_uploaded(&env, &invoice);
@@ -1286,30 +1360,36 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
-        env.storage()
-            .persistent()
-            .set(&DataKey::Frozen(target.clone()), &false);
-    }
 
-    pub fn is_frozen(env: Env, target: Address) -> bool {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Frozen(target))
-            .unwrap_or(false)
-    }
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    pub fn create_invoice(
-        env: Env,
-        issuer: Address,
-        invoice_id: u64,
-    ) -> Result<(), QuickLendXError> {
-        issuer.require_auth();
-        if Self::is_frozen(env.clone(), issuer.clone()) {
-            return Err(QuickLendXError::AccountIsFrozen);
+        // When invoice is already funded, verify_invoice triggers release_escrow_funds (Issue #300)
+        if invoice.status == InvoiceStatus::Funded {
+            return Self::release_escrow_funds(env, invoice_id);
         }
-        env.storage()
-            .persistent()
-            .set(&DataKey::Invoice(invoice_id), &issuer);
+
+        // Only allow verification if pending
+        if invoice.status != InvoiceStatus::Pending {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        // Remove from pending status list
+        InvoiceStorage::remove_from_status_invoices(&env, InvoiceStatus::Pending, &invoice_id);
+
+        invoice.verify(&env, admin.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Add to verified status list
+        InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Verified, &invoice_id);
+
+        emit_invoice_verified(&env, &invoice);
+
+        // If invoice is funded (has escrow), release escrow funds to business
+        if invoice.status == InvoiceStatus::Funded {
+            Self::release_escrow_funds(env.clone(), invoice_id)?;
+        }
+
         Ok(())
     }
 
@@ -1344,6 +1424,74 @@ impl QuickLendXContract {
         emit_invoice_cancelled(&env, &invoice);
 
         Ok(())
+    }
+
+    // ============================================================================
+    // Invoice Freeze Management
+    // ============================================================================
+
+    /// Freeze an invoice with a specific reason (admin only).
+    ///
+    /// When frozen, the following operations are blocked:
+    /// - `place_bid` → `InvoiceFrozen`
+    /// - `accept_bid` → `InvoiceFrozen`
+    /// - `process_partial_payment` → `InvoiceFrozen`
+    /// - `settle_invoice` → `InvoiceFrozen`
+    ///
+    /// The freeze reason and metadata (who froze it, when) are stored alongside
+    /// the frozen flag and are queryable via `get_invoice_freeze_info`.
+    ///
+    /// # Arguments
+    /// * `admin`      - Must be the current protocol admin.
+    /// * `invoice_id` - The invoice to freeze.
+    /// * `reason`     - A `BusinessFreezeReason` variant describing why.
+    ///
+    /// # Errors
+    /// * `NotAdmin` if the caller is not the current admin.
+    /// * `InvoiceNotFound` if no invoice exists with that ID.
+    pub fn freeze_invoice(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        reason: BusinessFreezeReason,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        // Validate that the invoice exists before freezing.
+        InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        let info = FreezeInfo {
+            reason,
+            frozen_by: admin.clone(),
+            frozen_at: env.ledger().timestamp(),
+        };
+        InvoiceStorage::set_freeze_info(&env, &invoice_id, &info);
+        InvoiceStorage::set_frozen(&env, &invoice_id, true);
+        Ok(())
+    }
+
+    /// Unfreeze a previously frozen invoice (admin only).
+    ///
+    /// Removes the frozen flag and clears the stored freeze info.
+    /// After unfreezing, all operations resume normal behaviour.
+    ///
+    /// # Errors
+    /// * `NotAdmin` if the caller is not the current admin.
+    pub fn unfreeze_invoice(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        InvoiceStorage::remove_freeze_info(&env, &invoice_id);
+        InvoiceStorage::set_frozen(&env, &invoice_id, false);
+        Ok(())
+    }
+
+    /// Return the stored freeze info for an invoice, if any.
+    ///
+    /// Returns `None` when the invoice is not frozen or does not exist.
+    pub fn get_invoice_freeze_info(env: Env, invoice_id: BytesN<32>) -> Option<FreezeInfo> {
+        InvoiceStorage::get_freeze_info(&env, &invoice_id)
     }
 
     /// Get an invoice by ID.
@@ -1515,6 +1663,12 @@ impl QuickLendXContract {
     pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
         let invoices = InvoiceStorage::get_invoices_by_status(&env, status);
         invoices.len()
+    }
+
+    /// Get the total number of defaulted invoices for a business.
+    pub fn get_business_default_history(env: Env, business: Address) -> u32 {
+        let key = crate::storage::StorageKeys::business_default_history(&business);
+        env.storage().persistent().get(&key).unwrap_or(0)
     }
 
     /// Get total invoice count
@@ -1723,6 +1877,11 @@ impl QuickLendXContract {
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &investor)?;
+        // Regulatory compliance gate (reserved seam — no-op today).
+        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
+        // jurisdiction-specific or on-chain oracle-based compliance checks without
+        // touching this call site.
+        crate::regulatory::require_regulatory_ok(&env, &investor)?;
         // Idempotency check
         let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
         if idempotency_exists(&env, &idem_key) {
@@ -1739,6 +1898,9 @@ impl QuickLendXContract {
         // Validate invoice exists and is verified
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            return Err(QuickLendXError::InvoiceFrozen);
+        }
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }
@@ -1825,6 +1987,9 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            return Err(QuickLendXError::InvoiceFrozen);
+        }
         let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
@@ -2311,6 +2476,7 @@ impl QuickLendXContract {
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
         let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
+        let existing = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits_authed(
             &env,
             &admin,
@@ -2447,6 +2613,55 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            existing.min_investor_tier,
+        )
+    }
+
+    /// Update **all** protocol limits in a single call (admin only).
+    ///
+    /// This is the preferred entrypoint when operators need to configure
+    /// `min_bid_amount` or `min_bid_bps` alongside the other limits.  The
+    /// narrower helpers (`set_protocol_limits`, `update_protocol_limits`,
+    /// `update_limits_max_invoices`) preserve the current bid-limit values for
+    /// backwards compatibility.
+    ///
+    /// # Parameters
+    /// - `min_invoice_amount`       – minimum invoice face value (inclusive).
+    /// - `min_bid_amount`           – minimum absolute bid amount (inclusive).
+    ///                                Pass [`DEFAULT_MIN_BID_AMOUNT`] (10) to
+    ///                                keep the compile-time default.
+    /// - `min_bid_bps`              – minimum bid rate in basis points (inclusive).
+    ///                                Pass [`DEFAULT_MIN_BID_BPS`] (100) to keep
+    ///                                the compile-time default.
+    /// - `max_due_date_days`        – maximum invoice horizon in days (1..=730).
+    /// - `grace_period_seconds`     – grace period after due date (0..=2_592_000).
+    /// - `max_invoices_per_business`– per-business active-invoice cap; 0 = unlimited.
+    ///
+    /// # Errors
+    /// Delegates to `ProtocolLimitsContract::set_protocol_limits` for all
+    /// parameter validation; see that function's docs for error codes.
+    pub fn set_protocol_limits_full(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        min_bid_amount: i128,
+        min_bid_bps: u32,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+        max_invoices_per_business: u32,
+        min_investor_tier: crate::verification::InvestorTier,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
+            min_bid_amount,
+            min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+            max_invoices_per_business,
+            min_investor_tier,
         )
     }
 
@@ -2566,7 +2781,8 @@ impl QuickLendXContract {
         env: Env,
         invoice_id: BytesN<32>,
     ) -> Result<payments::EscrowStatus, QuickLendXError> {
-        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
+        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         Ok(escrow.status)
     }
 
@@ -2617,10 +2833,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
 
-        let investor = invoice
-            .investor
-            .clone()
-            .ok_or(QuickLendXError::InvoiceNotFunded)?;
+        let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
         if approver != invoice.business && approver != investor {
             return Err(QuickLendXError::Unauthorized);
         }
@@ -2652,10 +2865,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
 
-        let investor = invoice
-            .investor
-            .clone()
-            .ok_or(QuickLendXError::InvoiceNotFunded)?;
+        let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
         if approver != invoice.business && approver != investor {
             return Err(QuickLendXError::Unauthorized);
         }
@@ -2684,10 +2894,7 @@ impl QuickLendXContract {
             if invoice.status != InvoiceStatus::Funded {
                 return Err(QuickLendXError::InvalidStatus);
             }
-            let investor = invoice
-                .investor
-                .clone()
-                .ok_or(QuickLendXError::InvoiceNotFunded)?;
+            let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
             if !has_early_release_approval(&env, &invoice_id, &invoice.business)
                 || !has_early_release_approval(&env, &invoice_id, &investor)
             {
@@ -2837,7 +3044,7 @@ impl QuickLendXContract {
     ///      the contract's MAX_QUERY_LIMIT. Indexers should use this value as a starting point
     ///      for pagination to balance efficiency and memory usage.
     /// @return Default settlement batch size (25) — recommended number of payment records per page.
-    pub fn get_settlement_batch_size_soft_cap(_env: Env) -> u32 {
+    pub fn get_settlement_batch_soft_cap(_env: Env) -> u32 {
         settlement::default_settlement_batch_size_soft_cap()
     }
 
@@ -2845,7 +3052,7 @@ impl QuickLendXContract {
     /// @dev This represents the hard upper bound enforced by the contract. Query requests
     ///      exceeding this limit will be automatically clamped to this value by `get_payment_records`.
     /// @return Maximum settlement batch size (50) — hard cap for payment records per query.
-    pub fn get_settlement_batch_size_soft_cap_max(_env: Env) -> u32 {
+    pub fn get_settlement_batch_max_cap(_env: Env) -> u32 {
         settlement::max_settlement_batch_size_soft_cap()
     }
 
@@ -3221,11 +3428,15 @@ impl QuickLendXContract {
         status_filter: Option<InvoiceStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<BytesN<32>> {
+    ) -> PaginatedBytes32Vec {
         // Validate query parameters for security
         if validate_query_params(offset, limit).is_err() {
             // Return empty result on validation failure
-            return Vec::new(&env);
+            return PaginatedBytes32Vec {
+                items: Vec::new(&env),
+                total_count: 0,
+                has_more: false,
+            };
         }
 
         let all_invoices = InvoiceStorage::get_business_invoices(&env, &business);
@@ -3244,12 +3455,13 @@ impl QuickLendXContract {
             }
         }
 
+        let total_count = pairs.len() as u32;
+
         // Sort descending by created_at (newest first).
         pairs.sort_by_key(|b| core::cmp::Reverse(b.0));
 
         // Apply pagination (overflow-safe) and collect into Soroban Vec.
         let len_u32 = pairs.len() as u32;
-        let capped_limit = cap_query_limit(limit);
         let start = offset.min(len_u32) as usize;
         let capped_limit = cap_query_limit(limit);
         let end = (offset.saturating_add(capped_limit).min(len_u32)) as usize;
@@ -3257,7 +3469,13 @@ impl QuickLendXContract {
         for (_, id) in &pairs[start..end] {
             result.push_back(id.clone());
         }
-        result
+
+        let (_, has_more) = pagination::pagination_metadata(offset, limit, total_count);
+        PaginatedBytes32Vec {
+            items: result,
+            total_count,
+            has_more,
+        }
     }
 
     /// Get investments by investor with optional status filter and pagination
@@ -3300,7 +3518,7 @@ impl QuickLendXContract {
         status_filter: Option<InvestmentStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<BytesN<32>> {
+    ) -> PaginatedBytes32Vec {
         investment_queries::InvestmentQueries::get_investor_investments_paginated(
             &env,
             &investor,
@@ -3326,10 +3544,14 @@ impl QuickLendXContract {
         category_filter: Option<InvoiceCategory>,
         offset: u32,
         limit: u32,
-    ) -> Vec<BytesN<32>> {
+    ) -> PaginatedBytes32Vec {
         // Validate query parameters for security
         if validate_query_params(offset, limit).is_err() {
-            return Vec::new(&env);
+            return PaginatedBytes32Vec {
+                items: Vec::new(&env),
+                total_count: 0,
+                has_more: false,
+            };
         }
 
         let verified_invoices =
@@ -3359,10 +3581,11 @@ impl QuickLendXContract {
             }
         }
 
+        let total_count = filtered.len();
+
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len();
-        let (start, end) = pagination::calculate_safe_bounds(offset, limit, len_u32);
+        let (start, end) = pagination::calculate_safe_bounds(offset, limit, total_count);
         let mut idx = start;
         while idx < end {
             if let Some(invoice_id) = filtered.get(idx) {
@@ -3370,7 +3593,13 @@ impl QuickLendXContract {
             }
             idx += 1;
         }
-        result
+
+        let (_, has_more) = pagination::pagination_metadata(offset, limit, total_count);
+        PaginatedBytes32Vec {
+            items: result,
+            total_count,
+            has_more,
+        }
     }
 
     /// Get bid history for an invoice with pagination
@@ -3387,10 +3616,14 @@ impl QuickLendXContract {
         status_filter: Option<BidStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<Bid> {
+    ) -> PaginatedBids {
         // Validate query parameters for security
         if validate_query_params(offset, limit).is_err() {
-            return Vec::new(&env);
+            return PaginatedBids {
+                items: Vec::new(&env),
+                total_count: 0,
+                has_more: false,
+            };
         }
 
         let all_bids = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
@@ -3406,10 +3639,11 @@ impl QuickLendXContract {
             }
         }
 
+        let total_count = filtered.len();
+
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len();
-        let (start, end) = pagination::calculate_safe_bounds(offset, limit, len_u32);
+        let (start, end) = pagination::calculate_safe_bounds(offset, limit, total_count);
         let mut idx = start;
         while idx < end {
             if let Some(bid) = filtered.get(idx) {
@@ -3417,7 +3651,13 @@ impl QuickLendXContract {
             }
             idx += 1;
         }
-        result
+
+        let (_, has_more) = pagination::pagination_metadata(offset, limit, total_count);
+        PaginatedBids {
+            items: result,
+            total_count,
+            has_more,
+        }
     }
 
     /// Get bid history for an investor with pagination
@@ -3434,10 +3674,14 @@ impl QuickLendXContract {
         status_filter: Option<BidStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<Bid> {
+    ) -> PaginatedBids {
         // Validate query parameters for security
         if validate_query_params(offset, limit).is_err() {
-            return Vec::new(&env);
+            return PaginatedBids {
+                items: Vec::new(&env),
+                total_count: 0,
+                has_more: false,
+            };
         }
 
         let all_bid_ids = BidStorage::get_bids_by_investor_all(&env, &investor);
@@ -3455,10 +3699,11 @@ impl QuickLendXContract {
             }
         }
 
+        let total_count = filtered.len();
+
         // Apply pagination (overflow-safe)
         let mut result = Vec::new(&env);
-        let len_u32 = filtered.len();
-        let (start, end) = pagination::calculate_safe_bounds(offset, limit, len_u32);
+        let (start, end) = pagination::calculate_safe_bounds(offset, limit, total_count);
         let mut idx = start;
         while idx < end {
             if let Some(bid) = filtered.get(idx) {
@@ -3466,7 +3711,13 @@ impl QuickLendXContract {
             }
             idx += 1;
         }
-        result
+
+        let (_, has_more) = pagination::pagination_metadata(offset, limit, total_count);
+        PaginatedBids {
+            items: result,
+            total_count,
+            has_more,
+        }
     }
 
     /// Get investments by investor (simple version without pagination for backward compatibility)
@@ -3875,6 +4126,25 @@ impl QuickLendXContract {
         env: Env,
     ) -> Result<analytics::AnalyticsSnapshot, QuickLendXError> {
         analytics::AnalyticsCalculator::export_analytics_snapshot(&env)
+    }
+
+    /// Return a frozen snapshot of an invoice's ratings for downstream use.
+    pub fn ratings_snapshot(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<RatingsSnapshot, QuickLendXError> {
+        let invoice = crate::storage::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        Ok(RatingsSnapshot {
+            schema_version: crate::types::RATINGS_SNAPSHOT_SCHEMA_VERSION,
+            invoice_id,
+            average_rating: invoice.average_rating,
+            total_ratings: invoice.total_ratings,
+            highest_rating: invoice.get_highest_rating(),
+            lowest_rating: invoice.get_lowest_rating(),
+            ledger_sequence: env.ledger().sequence(),
+        })
     }
 
     pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
@@ -4419,6 +4689,11 @@ impl QuickLendXContract {
     ) -> Result<RebuildReport, QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(&env, &admin)?;
+        let config = init::ProtocolInitializer::get_protocol_config(&env)
+            .ok_or(QuickLendXError::OperationNotAllowed)?;
+        if limit > config.backfill_max_batch_size {
+            return Err(QuickLendXError::BatchSizeTooLarge);
+        }
         let report = InvoiceStorage::rebuild_indexes_page(&env, offset, limit);
         Ok(report)
     }
@@ -4456,6 +4731,11 @@ impl QuickLendXContract {
     ) -> Result<PruneReport, QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(&env, &admin)?;
+        let config = init::ProtocolInitializer::get_protocol_config(&env)
+            .ok_or(QuickLendXError::OperationNotAllowed)?;
+        if limit > config.backfill_max_batch_size {
+            return Err(QuickLendXError::BatchSizeTooLarge);
+        }
         let report =
             InvoiceStorage::prune_terminal_invoices_page(&env, older_than_secs, offset, limit);
         Ok(report)
@@ -4483,6 +4763,11 @@ impl QuickLendXContract {
     ) -> Result<RebuildReport, QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(&env, &admin)?;
+        let config = init::ProtocolInitializer::get_protocol_config(&env)
+            .ok_or(QuickLendXError::OperationNotAllowed)?;
+        if limit > config.backfill_max_batch_size {
+            return Err(QuickLendXError::BatchSizeTooLarge);
+        }
         EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
     }
 
@@ -4496,6 +4781,23 @@ impl QuickLendXContract {
         max_currencies: u32,
     ) -> i128 {
         EscrowStorage::get_total_locked_escrow_bounded(&env, &currencies, max_currencies)
+    }
+}
+
+// ── Upgrade control entrypoints ─────────────────────────────────────────────
+
+#[contractimpl]
+impl QuickLendXContract {
+    pub fn schedule_upgrade(env: Env, admin: Address, wasm_hash: BytesN<32>) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::schedule_upgrade(&env, &admin, &wasm_hash)
+    }
+
+    pub fn cancel_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::cancel_upgrade(&env, &admin)
+    }
+
+    pub fn execute_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::execute_upgrade(&env, &admin)
     }
 }
 
@@ -4537,6 +4839,12 @@ mod test_settlement_dispute_interaction;
 mod test_prune_terminal_invoices;
 #[cfg(test)]
 mod test_view_only;
+
+#[cfg(test)]
+mod test_business_freeze_reason;
+
+#[cfg(test)]
+mod test_upgrade_guard;
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;

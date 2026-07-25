@@ -119,10 +119,28 @@ fn create_and_fund_invoice(
 
 fn decode_insurance_claimed(env: &Env, val: &Val) -> InsuranceClaimed {
     let map: Map<Symbol, Val> = Map::try_from_val(env, val).expect("event data map");
-    let investment_id = TryFromVal::try_from_val(env, &map.get(Symbol::new(env, "investment_id")).expect("investment_id")).unwrap();
-    let invoice_id = TryFromVal::try_from_val(env, &map.get(Symbol::new(env, "invoice_id")).expect("invoice_id")).unwrap();
-    let provider = TryFromVal::try_from_val(env, &map.get(Symbol::new(env, "provider")).expect("provider")).unwrap();
-    let coverage_amount = TryFromVal::try_from_val(env, &map.get(Symbol::new(env, "coverage_amount")).expect("coverage_amount")).unwrap();
+    let investment_id = TryFromVal::try_from_val(
+        env,
+        &map.get(Symbol::new(env, "investment_id"))
+            .expect("investment_id"),
+    )
+    .unwrap();
+    let invoice_id = TryFromVal::try_from_val(
+        env,
+        &map.get(Symbol::new(env, "invoice_id")).expect("invoice_id"),
+    )
+    .unwrap();
+    let provider = TryFromVal::try_from_val(
+        env,
+        &map.get(Symbol::new(env, "provider")).expect("provider"),
+    )
+    .unwrap();
+    let coverage_amount = TryFromVal::try_from_val(
+        env,
+        &map.get(Symbol::new(env, "coverage_amount"))
+            .expect("coverage_amount"),
+    )
+    .unwrap();
     InsuranceClaimed {
         investment_id,
         invoice_id,
@@ -377,11 +395,11 @@ fn test_already_inactive_coverage_not_reclaimed() {
     env.ledger().set_timestamp(default_time);
 
     let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
-    assert!(result.is_err(), "Default must fail when insurance is inactive");
-    assert_eq!(
-        result.unwrap_err(),
-        Ok(QuickLendXError::InsuranceNotActive)
+    assert!(
+        result.is_err(),
+        "Default must fail when insurance is inactive"
     );
+    assert_eq!(result.unwrap_err(), Ok(QuickLendXError::InsuranceNotActive));
 }
 
 #[test]
@@ -419,11 +437,11 @@ fn test_default_fails_when_insurance_is_inactive() {
     env.ledger().set_timestamp(default_time);
 
     let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
-    assert!(result.is_err(), "Default must fail when insurance is inactive");
-    assert_eq!(
-        result.unwrap_err(),
-        Ok(QuickLendXError::InsuranceNotActive)
+    assert!(
+        result.is_err(),
+        "Default must fail when insurance is inactive"
     );
+    assert_eq!(result.unwrap_err(), Ok(QuickLendXError::InsuranceNotActive));
 }
 
 #[test]
@@ -451,5 +469,8 @@ fn test_default_succeeds_when_insurance_is_active() {
     env.ledger().set_timestamp(default_time);
 
     let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
-    assert!(result.is_ok(), "Default must succeed when insurance is active");
+    assert!(
+        result.is_ok(),
+        "Default must succeed when insurance is active"
+    );
 }

@@ -452,6 +452,8 @@ fn test_lifecycle_escrow_token_flow() {
     let business_bal_before = tok.balance(&business);
     let contract_bal_before = tok.balance(&contract_id);
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id).unwrap();
 
     let business_bal_after = tok.balance(&business);

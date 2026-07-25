@@ -52,7 +52,7 @@ mod test_dispute {
     use crate::types::DisputeResolution;
     use crate::verification::validate_evidence_hash;
     use crate::{QuickLendXContract, QuickLendXContractClient};
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+    use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec};
 
     // -----------------------------------------------------------------------
     // Test helpers
@@ -2191,61 +2191,61 @@ mod test_dispute {
         );
     }
 
-    /// [TC-EH-01] Evidence hash validation accepts valid 32-byte BytesN.
+    /// [TC-EH-01] Evidence hash validation accepts valid 32-byte payload.
     ///
-    /// This test verifies that the validate_evidence_hash function accepts
-    /// a properly formatted 32-byte hash, which is the standard output size
-    /// for cryptographic hash functions like SHA-256.
+    /// Prefer `test_evidence_hash_format` for CI coverage; these legacy cases
+    /// keep the dispute suite aligned with `validate_evidence_hash(&Bytes)`.
     #[test]
     fn test_validate_evidence_hash_accepts_valid_32_byte_hash() {
         let env = Env::default();
-        
-        // Create a valid 32-byte hash (all zeros for test purposes)
-        let valid_hash = BytesN::from_array(&env, &[0u8; 32]);
-        
+        let valid_hash = Bytes::from_slice(&env, &[0u8; 32]);
         let result = validate_evidence_hash(&valid_hash);
         assert!(result.is_ok(), "Valid 32-byte hash should pass validation");
     }
 
-    /// [TC-EH-02] Evidence hash validation accepts non-zero 32-byte BytesN.
-    ///
-    /// This test verifies that the validate_evidence_hash function accepts
-    /// a 32-byte hash with non-zero values, ensuring the validation is not
-    /// overly restrictive.
+    /// [TC-EH-02] Evidence hash validation accepts non-zero 32-byte payload.
     #[test]
     fn test_validate_evidence_hash_accepts_non_zero_hash() {
         let env = Env::default();
-        
-        // Create a valid 32-byte hash with non-zero values
         let mut hash_bytes = [0u8; 32];
         for i in 0..32 {
             hash_bytes[i] = (i as u8) + 1;
         }
-        let valid_hash = BytesN::from_array(&env, &hash_bytes);
-        
+        let valid_hash = Bytes::from_slice(&env, &hash_bytes);
         let result = validate_evidence_hash(&valid_hash);
-        assert!(result.is_ok(), "Non-zero 32-byte hash should pass validation");
+        assert!(
+            result.is_ok(),
+            "Non-zero 32-byte hash should pass validation"
+        );
     }
 
     /// [TC-EH-03] Evidence hash validation accepts SHA-256-like hash.
-    ///
-    /// This test verifies that the validate_evidence_hash function accepts
-    /// a hash that resembles a real SHA-256 output, ensuring compatibility
-    /// with actual cryptographic hash functions.
     #[test]
     fn test_validate_evidence_hash_accepts_sha256_like_hash() {
         let env = Env::default();
-        
-        // Create a hash that resembles a real SHA-256 output
         let hash_bytes = [
-            0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0x01, 0x12,
-            0x23, 0x34, 0x45, 0x56, 0x67, 0x78, 0x89, 0x9a,
-            0xab, 0xbc, 0xcd, 0xde, 0xef, 0xf0, 0x11, 0x22,
-            0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa,
+            0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0x01, 0x12, 0x23, 0x34, 0x45, 0x56, 0x67, 0x78,
+            0x89, 0x9a, 0xab, 0xbc, 0xcd, 0xde, 0xef, 0xf0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+            0x77, 0x88, 0x99, 0xaa,
         ];
-        let valid_hash = BytesN::from_array(&env, &hash_bytes);
-        
+        let valid_hash = Bytes::from_slice(&env, &hash_bytes);
         let result = validate_evidence_hash(&valid_hash);
         assert!(result.is_ok(), "SHA-256-like hash should pass validation");
+    }
+
+    /// [TC-EH-04] Evidence hash validation rejects non-32-byte payloads.
+    #[test]
+    fn test_validate_evidence_hash_rejects_wrong_length() {
+        let env = Env::default();
+        let too_short = Bytes::from_slice(&env, &[1u8; 31]);
+        let too_long = Bytes::from_slice(&env, &[1u8; 33]);
+        assert_eq!(
+            validate_evidence_hash(&too_short),
+            Err(QuickLendXError::InvalidDisputeEvidence)
+        );
+        assert_eq!(
+            validate_evidence_hash(&too_long),
+            Err(QuickLendXError::InvalidDisputeEvidence)
+        );
     }
 }
