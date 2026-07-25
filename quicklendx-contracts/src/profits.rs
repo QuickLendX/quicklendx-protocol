@@ -568,35 +568,6 @@ pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) 
     amount.max(0).saturating_add(yield_amount)
 }
 
-/// Compute the simple interest yield on a principal amount.
-///
-/// # Formula
-/// ```text
-/// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
-/// ```
-///
-/// All arithmetic uses `saturating_mul` / integer division to stay within
-/// `i128` bounds without panicking and to preserve `#![no_std]` discipline.
-///
-/// # Arguments
-/// * `amount`        — Principal (must be >= 0; negative input returns 0)
-/// * `rate_bps`      — Annual rate in basis points, e.g. 500 = 5 %
-/// * `duration_days` — Holding period in days
-///
-/// # Returns
-/// Simple interest yield (non-negative).
-pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 {
-    if amount <= 0 || rate_bps <= 0 || duration_days <= 0 {
-        return 0;
-    }
-    // amount * rate_bps * duration_days / (10_000 * 365)
-    let numerator = amount
-        .saturating_mul(rate_bps)
-        .saturating_mul(duration_days);
-    let denominator: i128 = BPS_DENOMINATOR.saturating_mul(365);
-    numerator / denominator
-}
-
 /// A single ledger-delta entry for time-weighted average calculations.
 ///
 /// Each entry records the `balance` held for `duration_ledgers` ledgers.
@@ -657,7 +628,11 @@ pub fn compute_twa_reference(deltas: &[LedgerDelta]) -> i128 {
         num = num.saturating_add(d.balance.saturating_mul(dur));
         den = den.saturating_add(dur);
     }
-    if den == 0 { 0 } else { num / den }
+    if den == 0 {
+        0
+    } else {
+        num / den
+    }
 }
 
 // ============================================================================
@@ -931,7 +906,6 @@ mod tests {
 
     #[test]
     fn test_investor_platform_treasury_sum_invariant() {
-        let env = Env::default();
         let cases = vec![
             (0i128, 0i128),
             (1000, 1100),
@@ -941,7 +915,9 @@ mod tests {
             (1000, 2000),
         ];
         for (investment, payment) in cases {
-            let breakdown = PlatformFee::calculate_breakdown(&env, investment, payment);
+            // Use pure function to avoid storage access outside contract context
+            let breakdown =
+                PlatformFee::calculate_breakdown_with_fee_bps(investment, payment, 200);
             // Verify investor profit + platform fee = gross profit
             assert_eq!(
                 breakdown.investor_profit + breakdown.platform_fee,

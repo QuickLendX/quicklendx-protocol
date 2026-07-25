@@ -151,6 +151,8 @@ fn test_refund_idempotency_and_release_blocked() {
     );
 
     // Attempt to release after refund should fail
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let release_result = client.try_release_escrow_funds(&invoice_id);
     assert!(
         release_result.is_err(),

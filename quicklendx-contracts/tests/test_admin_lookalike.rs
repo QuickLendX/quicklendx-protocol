@@ -3,6 +3,7 @@
 extern crate std;
 
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
+use quicklendx_contracts::errors::QuickLendXError;
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 fn setup_with_admin() -> (Env, QuickLendXContractClient<'static>, Address) {
@@ -15,6 +16,8 @@ fn setup_with_admin() -> (Env, QuickLendXContractClient<'static>, Address) {
     (env, client, admin)
 }
 
+/// Attempting a two-step admin transfer to an address that has never been used
+/// (no on-ledger entry) must fail.
 #[test]
 #[ignore = "requires mock auth that supports non-existent addresses (pre-existing)"]
 fn test_direct_admin_transfer_to_lookalike_is_rejected() {
@@ -32,6 +35,7 @@ fn test_two_step_admin_transfer_to_lookalike_is_rejected() {
     client.initiate_admin_transfer(&admin, &lookalike_admin);
 }
 
+/// Transferring admin to an address that already exists must succeed.
 #[test]
 #[ignore = "requires mock auth that supports non-existent addresses (pre-existing)"]
 fn test_transfer_to_existing_address_succeeds() {
