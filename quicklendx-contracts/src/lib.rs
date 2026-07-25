@@ -51,6 +51,11 @@ mod test_settlement_history_reconstruction;
 // Issue #1920 — confirm require_regulatory_ok is truly a no-op by default.
 #[cfg(test)]
 mod test_regulatory_gate;
+// Error-code discriminant stability snapshot — every QuickLendXError variant
+// is locked to its numeric value.  Renumbering a variant is a BREAKING change
+// for off-chain consumers; this test prevents silent drift.
+#[cfg(test)]
+mod test_error_code_stability;
 use crate::idempotency::{idempotency_exists, idempotency_key, store_idempotency};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
