@@ -46,6 +46,11 @@
 
 ## UX / frontend reference
 
+| Document | What it covers |
+|----------|---------------|
+| [docs/ux/emojis.md](ux/emojis.md) | Guidelines on where emojis are allowed in UI copy |
+| [docs/ux/content-style-guide.md](ux/content-style-guide.md) | Content style guide and microcopy conventions |
+
 See [ux/](ux/) for component-level design specifications.
 
 ## Security
