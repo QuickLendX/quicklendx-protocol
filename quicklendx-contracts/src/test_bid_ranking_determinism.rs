@@ -1,4 +1,3 @@
-extern crate alloc;
 /// # Bid Ranking Determinism Tests  (Issue #1551)
 ///
 /// Verifies that `BidStorage::rank_bids` and `BidStorage::compare_bids` produce
@@ -21,6 +20,7 @@ extern crate alloc;
 ///   (feature-gated `fuzz-tests`).
 /// * Integration with the full contract call stack — those live in `test_bid_ranking`
 ///   (feature-gated `legacy-tests`).
+    use alloc::vec::Vec;
     use crate::bid::{Bid, BidStatus, BidStorage};
     use core::cmp::Ordering;
     use soroban_sdk::{

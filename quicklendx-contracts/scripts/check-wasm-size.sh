@@ -49,7 +49,8 @@ if [[ "$CHECK_ONLY" == false ]]; then
     stellar contract build --verbose
     WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
   else
-    echo "Stellar CLI not found; using cargo wasm32v1-none."
+    echo "::warning::Stellar CLI not found; WASM build may produce incorrect output."
+    echo "Install via: cargo install --locked stellar-cli --no-default-features"
     [[ -f "$HOME/.cargo/env" ]] && source "$HOME/.cargo/env"
     rustup target add wasm32v1-none 2>/dev/null || true
     cargo build --target wasm32v1-none --release --lib

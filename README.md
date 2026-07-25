@@ -70,6 +70,7 @@ npm run dev
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
 - `docs/PLATFORM_FEES.md`: Fee schedule and tenant override documentation.
 - `docs/BID_RANKING.md`: Deterministic bid ranking ordering function — tier-by-tier tie-breaker logic, invariants, and contributor workflow.
+- [`docs/BID_LIFECYCLE_DIAGRAM.md`](docs/BID_LIFECYCLE_DIAGRAM.md): Full bid state machine — status diagram, entrypoints, TTL config, expiry semantics, and invariants.
 - [`docs/CURRENCY_WHITELIST.md`](docs/CURRENCY_WHITELIST.md): How tokens are added to and removed from the currency whitelist — contributor guide covering entrypoints, auth model, enforcement points, and test patterns.
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
 - [`docs/FEES_GRACE_DEFAULT.md`](docs/FEES_GRACE_DEFAULT.md): Unified contributor reference — platform fees, grace period resolution, and default trigger rules in one place.

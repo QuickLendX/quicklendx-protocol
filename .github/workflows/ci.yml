@@ -43,16 +43,14 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
-          rustup target add wasm32-unknown-unknown
-          rustup target add wasm32v1-none || true
-      - name: Detect optional Stellar CLI
+          rustup target add wasm32v1-none
+          rustup target remove wasm32-unknown-unknown 2>/dev/null || true
+      - name: Install Stellar CLI
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
-          if command -v stellar >/dev/null 2>&1; then
-            stellar --version
-          else
-            echo "stellar CLI not found; WASM build step will fall back to cargo."
-          fi
+          source $HOME/.cargo/env
+          cargo install --locked stellar-cli --no-default-features
+          stellar --version
 
       - name: Build Cargo project
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
