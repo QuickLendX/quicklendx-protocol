@@ -1,4 +1,4 @@
-//! Cross-module state consistency regression tests for QuickLendX.
+﻿//! Cross-module state consistency regression tests for QuickLendX.
 //!
 //! # Purpose
 //!
@@ -437,7 +437,7 @@ fn test_finalize_settle_cross_module_consistency() {
     tok.approve(&business, &contract_id, &(invoice_amount * 4), &exp);
 
     // Settle.
-    client.settle_invoice(&invoice_id, &invoice_amount);
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap());
 
     // -- Invoice assertions ----------------------------------------------------
     let invoice = client.get_invoice(&invoice_id);
@@ -534,7 +534,7 @@ fn test_no_orphan_after_sequential_operations() {
     sac.mint(&business_a, &amount_a);
     let exp2 = env.ledger().sequence() + 10_000;
     tok.approve(&business_a, &contract_id, &(amount_a * 4), &exp2);
-    client.settle_invoice(&invoice_a, &amount_a);
+    client.settle_invoice(&invoice_a, &amount_a, &client.get_investment(&invoice_a).unwrap());
 
     // Refund Invoice B.
     client.refund_escrow_funds(&invoice_b, &business_b);
@@ -646,7 +646,7 @@ fn test_query_canonical_record_agreement() {
     sac.mint(&business, &5_000i128);
     let exp = env.ledger().sequence() + 10_000;
     tok.approve(&business, &contract_id, &20_000i128, &exp);
-    client.settle_invoice(&inv1, &5_000i128);
+    client.settle_invoice(&inv1, &5_000i128, &client.get_investment(&inv1).unwrap());
 
     // Re-check: inv1 must NOT be in the Funded index; its record must be Paid.
     let funded_ids_after = client.get_invoices_by_status(&InvoiceStatus::Funded);
@@ -974,3 +974,4 @@ fn test_status_index_coherence_after_all_transitions() {
     assert_invoice_count_invariant(&client);
     assert!(client.validate_no_orphan_investments(), "No orphan investments after default");
 }
+

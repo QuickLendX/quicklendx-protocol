@@ -1,4 +1,4 @@
-//! Protocol-wide invariant tests for status/index coherence.
+﻿//! Protocol-wide invariant tests for status/index coherence.
 //!
 //! These tests verify that the protocol maintains critical invariants:
 //! - Invoice status lists remain coherent with primary records
@@ -1348,7 +1348,7 @@ fn invariant_settle_atomic_state_transitions() {
     tok.approve(&business, &contract_id, &10_000i128, &exp);
 
     // Settle the invoice
-    client.settle_invoice(&invoice_id, &5_000i128);
+    client.settle_invoice(&invoice_id, &5_000i128, &client.get_investment(&invoice_id).unwrap());
 
     // All transitions should be atomic and consistent
     let invoice = client.get_invoice(&invoice_id);
@@ -1421,7 +1421,7 @@ fn invariant_validate_no_orphan_investments_after_lifecycle() {
     // Settle
     sac.mint(&business, &5_000i128);
     tok.approve(&business, &contract_id, &10_000i128, &exp);
-    client.settle_invoice(&invoice_id, &5_000i128);
+    client.settle_invoice(&invoice_id, &5_000i128, &client.get_investment(&invoice_id).unwrap());
 
     // After settle: no orphans
     assert!(client.validate_no_orphan_investments());
@@ -1472,3 +1472,4 @@ fn invariant_count_equals_index_length_all_statuses() {
     verify_count_eq_index(&client, InvoiceStatus::Cancelled);
     verify_count_eq_index(&client, InvoiceStatus::Refunded);
 }
+

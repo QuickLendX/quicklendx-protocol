@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 use crate::alloc::string::ToString;
 use crate::errors::QuickLendXError;
 use crate::events::TOPIC_INVESTMENT_WITHDRAWN;
@@ -161,7 +161,7 @@ fn test_withdraw_after_settlement_rejected() {
         &env, &client, &admin, &business, &investor, &currency, 1000, 1000,
     );
 
-    client.settle_invoice(&invoice_id, &1000);
+    client.settle_invoice(&invoice_id, &1000, &client.get_investment(&invoice_id).unwrap());
 
     let err = client
         .try_withdraw_investment(&invoice_id, &investor)
@@ -401,3 +401,4 @@ fn test_investor_can_invest_again_after_withdrawal() {
     let investment2 = get_investment(&env, &contract_id, &invoice2_id);
     assert_eq!(investment2.status, InvestmentStatus::Active);
 }
+

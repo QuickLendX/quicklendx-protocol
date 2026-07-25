@@ -1,4 +1,4 @@
-//! Hostile token reentrancy fault-injection tests.
+﻿//! Hostile token reentrancy fault-injection tests.
 //!
 //! This suite validates that every payment/escrow funds-moving entrypoint
 //! cannot be re-entered (directly or indirectly) during a token transfer.
@@ -88,7 +88,7 @@ impl HostileToken {
 
     /// Hostile re-entry hook entrypoint called from the token client.
     ///
-    /// In this repository’s Soroban tests we don't use callback-based Stellar Asset.
+    /// In this repositoryâ€™s Soroban tests we don't use callback-based Stellar Asset.
     /// Instead, QuickLendX must call into *this* token contract for transfers.
     ///
     /// NOTE: This token contract implements only the pieces needed by the tests.
@@ -148,7 +148,7 @@ impl HostileToken {
                 );
             }
             2 => {
-                let _ = qc.try_settle_invoice(&invoice_id, &1i128);
+                let _ = qc.try_settle_invoice(&invoice_id, &1i128, &qc.get_investment(&invoice_id).unwrap());
             }
             3 => {
                 let _ = qc.try_refund_escrow_funds(&invoice_id, &admin);
@@ -425,3 +425,4 @@ fn test_hostile_token_reentry_deeply_nested_and_alternating_entrypoints_are_bloc
     assert!(matches!(result, Err(QuickLendXError::OperationNotAllowed)));
     assert!(!is_payment_guard_locked(&fixture.env));
 }
+

@@ -1,4 +1,4 @@
-//! Investment terminal state transition tests for QuickLendX protocol.
+﻿//! Investment terminal state transition tests for QuickLendX protocol.
 //!
 //! Test suite validates allowed transitions into terminal investment statuses
 //! and matching invoice side effects as required by issue #717.
@@ -121,7 +121,7 @@ fn test_investment_completion_flow() {
     assert!(investment_is_in_active_index(&env, &investment.investment_id));
     
     // Settle invoice to trigger investment completion
-    client.settle_invoice(&invoice_id, &invoice_amount);
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap());
     
     // Verify terminal state
     let updated_investment = get_investment_by_invoice(&env, &invoice_id);
@@ -365,7 +365,7 @@ fn test_invalid_terminal_transitions() {
     );
     
     // Complete the investment
-    client.settle_invoice(&invoice_id, &invoice_amount);
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap());
     
     // Verify investment is Completed
     let investment = get_investment_by_invoice(&env, &invoice_id);
@@ -477,7 +477,7 @@ fn test_investment_storage_invariants() {
     assert!(InvestmentStorage::validate_no_orphan_investments(&env));
     
     // Complete investment
-    client.settle_invoice(&invoice_id, &invoice_amount);
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap());
     
     // Verify post-transition invariants
     assert!(!investment_is_in_active_index(&env, &investment.investment_id));
@@ -540,3 +540,4 @@ fn has_event_with_topic(env: &Env, topic: soroban_sdk::Symbol) -> bool {
 
     false
 }
+

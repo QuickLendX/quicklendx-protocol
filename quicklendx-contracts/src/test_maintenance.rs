@@ -1,4 +1,4 @@
-//! Comprehensive tests for maintenance mode.
+﻿//! Comprehensive tests for maintenance mode.
 //!
 //! Coverage:
 //! 1. Toggle: admin can enable and disable maintenance mode.
@@ -195,7 +195,7 @@ fn test_maintenance_blocks_settle_invoice() {
 
     client.set_maintenance_mode(&admin, &true, &reason(&env, "Upgrade"));
 
-    let result = client.try_settle_invoice(&invoice_id, &1_000i128);
+    let result = client.try_settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -591,3 +591,4 @@ fn test_extend_ttl_no_events_when_empty() {
         "no TtlExtended events when all indexes are empty"
     );
 }
+
