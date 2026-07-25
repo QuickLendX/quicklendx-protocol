@@ -161,6 +161,12 @@ mod test_dispute_refund_flow;
 mod test_evidence_size_cap;
 #[cfg(test)]
 mod test_evidence_hash_format;
+// Issue #1975 — evidence-kind guard matrix; no feature gate (runs on every CI
+// matrix entry). Also the regression test for the fix landed alongside it:
+// `create_dispute` was not calling `validate_dispute_evidence` /
+// `validate_dispute_eligibility` at all.
+#[cfg(test)]
+mod test_evidence_kind_guard_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
@@ -394,8 +400,9 @@ use verification::{
     normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
     require_business_not_pending, require_investor_not_pending,
     revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
-    submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
-    validate_investor_investment, validate_invoice_metadata, verify_business,
+    submit_kyc_application, validate_bid, validate_dispute_eligibility, validate_dispute_evidence,
+    validate_dispute_reason, validate_dispute_resolution, validate_investor_investment,
+    validate_invoice_metadata, verify_business,
     verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
     BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
     InvestorVerificationStorage,
@@ -4293,9 +4300,9 @@ impl QuickLendXContract {
         if invoice.dispute_status != DisputeStatus::None {
             return Err(QuickLendXError::DisputeAlreadyExists);
         }
-        if reason.is_empty() {
-            return Err(QuickLendXError::InvalidDisputeReason);
-        }
+        validate_dispute_reason(&reason)?;
+        validate_dispute_evidence(&evidence)?;
+        validate_dispute_eligibility(&invoice, &creator)?;
         dispute_timeline::clear_under_review_timestamp(&env, &invoice_id);
         invoice.dispute_status = DisputeStatus::Disputed;
         invoice.dispute = crate::types::Dispute {
