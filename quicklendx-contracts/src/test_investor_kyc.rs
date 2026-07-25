@@ -1220,6 +1220,41 @@ mod test_investor_kyc {
         assert_eq!(err, QuickLendXError::BusinessNotVerified);
     }
 
+    #[test]
+    fn unverified_investor_fails_kyc_tier_check() {
+        let (env, client, admin) = setup();
+        let investor = Address::generate(&env);
+        let business = Address::generate(&env);
+        let kyc_data = String::from_str(&env, "Valid KYC data");
+
+        // Verify the investor so they are active but with Basic tier
+        let _ = client.try_submit_investor_kyc(&investor, &kyc_data);
+        let _ = client.try_verify_investor(&investor, &100_000i128);
+
+        // Update protocol limits to require Silver tier
+        client.set_protocol_limits_full(
+            &admin,
+            &1000,
+            &10,
+            &100,
+            &365,
+            &86400,
+            &100,
+            &crate::verification::InvestorTier::Silver,
+        );
+
+        let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
+        let err = client
+            .try_place_bid(&investor, &invoice_id, &10_000i128, &12_000i128)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(
+            err,
+            QuickLendXError::InsufficientKYCTier,
+            "Investor must have the minimum KYC tier to place a bid"
+        );
+    }
+
     // ============================================================================
     // Category: Admin revoke investor KYC (#1550)
     // ============================================================================
