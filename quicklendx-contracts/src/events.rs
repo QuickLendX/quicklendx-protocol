@@ -1545,30 +1545,8 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
 }
 
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
-    env.events()
-        .publish((symbol_short!("tr_rot_cn"), admin.clone()), ());
-}
-
-pub fn emit_treasury_rotation_initiated(
-    env: &Env,
-    new_address: &Address,
-    initiated_by: &Address,
-    confirmation_deadline: u64,
-) {
-    TreasuryRotationInitiated {
-        new_address: new_address.clone(),
-        initiated_by: initiated_by.clone(),
-        confirmation_deadline,
-        timestamp: env.ledger().timestamp(),
-    }
-    .publish(env);
-}
-
-pub fn emit_treasury_rotation_confirmed(env: &Env, old_address: &Address, new_address: &Address) {
-    TreasuryRotationConfirmed {
-        old_address: old_address.clone(),
-        new_address: new_address.clone(),
-        timestamp: env.ledger().timestamp(),
-    }
-    .publish(env);
+    env.events().publish(
+        (symbol_short!("trs_cncl"), admin.clone()),
+        (),
+    );
 }
