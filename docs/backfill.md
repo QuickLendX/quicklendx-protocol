@@ -161,6 +161,7 @@ Returns `null` progress object if no job has run yet.
 |---|---|---|
 | `BACKFILL_MAX_LEDGER_RANGE` | `5000` | Max ledger range per ledger-range backfill run |
 | `BACKFILL_MAX_CONCURRENCY` | `4` | Max concurrent workers for ledger-range backfill |
+| `BACKFILL_MAX_BATCH_SIZE` | `100` | Max batch size for drift backfill passes (throttling heavy runs) |
 | `DATABASE_PATH` | `.data/dev.db` | SQLite file path used by `getDatabase()` |
 | `QLX_OPERATIONS_TOKEN` | _(required for write routes)_ | Bearer token granting `operations_admin` role |
 | `QLX_SUPER_ADMIN_TOKEN` | _(optional)_ | Bearer token granting `super_admin` role |

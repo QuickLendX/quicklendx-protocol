@@ -64,7 +64,7 @@ fn test_two_step_admin_transfer_to_lookalike_is_rejected() {
 #[test]
 #[should_panic]
 fn test_transfer_to_existing_address_succeeds() {
-    let (env, client, admin) = setup();
+    let (env, client, _admin) = setup();
 
     // Create a new valid admin address that is guaranteed to exist.
     let new_admin = Address::generate(&env);

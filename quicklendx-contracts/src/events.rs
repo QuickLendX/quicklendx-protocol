@@ -6,7 +6,7 @@ use crate::payments::Escrow;
 use crate::types::Bid;
 use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
 
 // ============================================================================
 // Topic Constants
@@ -63,6 +63,12 @@ pub const TOPIC_DISPUTE_UNDER_REVIEW: &str = "dispute_under_review";
 pub const TOPIC_DISPUTE_RESOLVED: &str = "dispute_resolved";
 /// Topic for `DisputeRejected` events.
 pub const TOPIC_DISPUTE_REJECTED: &str = "dispute_rejected";
+/// Topic for `TreasuryRotationInitiated` events.
+pub const TOPIC_TREASURY_ROTATION_INITIATED: &str = "treasury_rotation_initiated";
+/// Topic for `TreasuryRotationConfirmed` events.
+pub const TOPIC_TREASURY_ROTATION_CONFIRMED: &str = "treasury_rotation_confirmed";
+/// Topic for `TreasuryRotationCancelled` events.
+pub const TOPIC_TREASURY_ROTATION_CANCELLED: &str = "treasury_rotation_cancelled";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -466,6 +472,21 @@ pub struct PlatformFeeConfigUpdated {
 pub struct TreasuryConfigured {
     pub treasury_address: Address,
     pub configured_by: Address,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct TreasuryRotationInitiated {
+    pub new_address: Address,
+    pub initiated_by: Address,
+    pub confirmation_deadline: u64,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct TreasuryRotationConfirmed {
+    pub old_address: Address,
+    pub new_address: Address,
     pub timestamp: u64,
 }
 

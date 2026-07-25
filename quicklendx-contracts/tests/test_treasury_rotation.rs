@@ -13,7 +13,7 @@ use soroban_sdk::{
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, QuickLendXContract);
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.initialize_admin(&admin);
@@ -51,7 +51,7 @@ fn test_cancel_treasury_rotation_fails_if_no_pending_rotation() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Auth, InvalidAction)")]
+#[should_panic(expected = "Error(Contract, #1103)")]
 fn test_cancel_treasury_rotation_fails_for_non_admin() {
     let (_env, client, admin) = setup();
     let new_treasury = Address::generate(&_env);

@@ -491,8 +491,7 @@ pub fn create_escrow(
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the release can be safely retried.
 pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .unwrap();
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
 
     if escrow.status != EscrowStatus::Held {
         // Prevents repeated release (idempotency)
@@ -547,8 +546,7 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the refund can be safely retried.
 pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .unwrap();
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
 
     if escrow.status != EscrowStatus::Held {
         return Err(QuickLendXError::InvalidStatus);

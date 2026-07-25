@@ -158,7 +158,7 @@ impl InvestmentQueries {
         status_filter: Option<InvestmentStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<BytesN<32>> {
+    ) -> crate::types::PaginatedBytes32Vec {
         let all_investment_ids = InvestmentStorage::get_investments_by_investor(env, investor);
         let mut filtered = Vec::new(env);
 
@@ -176,9 +176,10 @@ impl InvestmentQueries {
             }
         }
 
+        let total_count = filtered.len();
+
         // Apply pagination with overflow-safe arithmetic
-        let collection_size = filtered.len();
-        let (start, end) = Self::calculate_safe_bounds(offset, limit, collection_size);
+        let (start, end) = Self::calculate_safe_bounds(offset, limit, total_count);
 
         let mut result = Vec::new(env);
         let mut idx = start;
@@ -190,7 +191,12 @@ impl InvestmentQueries {
             idx = idx.saturating_add(1);
         }
 
-        result
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        crate::types::PaginatedBytes32Vec {
+            items: result,
+            total_count,
+            has_more,
+        }
     }
 
     /// Aggregate an investor's portfolio in a single bounded pass.

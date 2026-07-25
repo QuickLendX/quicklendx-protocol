@@ -3,7 +3,7 @@
 **Audience:** Smart-contract contributor / reviewer.
 
 This document catalogs every invariant the QuickLendX Soroban contracts enforce,
-where in the code the check lives, and what happens when it is violated.
+where in the code the check lives, and what happens when it is violated. For the formal mathematical state model and specification intended for formal verification tools (TLA+, Certora, K-Framework), see [Formal Verification Model Notes](FORMAL_MODEL_NOTES.md).
 
 ---
 

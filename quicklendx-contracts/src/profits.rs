@@ -530,6 +530,7 @@ pub fn validate_calculation_inputs(
 // ============================================================================
 
 /// Compute the simple interest yield on a principal amount.
+/// Accepts `u32` rate and duration for ergonomic use from typed call sites.
 ///
 /// # Formula
 /// ```text
@@ -640,7 +641,11 @@ pub fn compute_twa_reference(deltas: &[LedgerDelta]) -> i128 {
         num = num.saturating_add(d.balance.saturating_mul(dur));
         den = den.saturating_add(dur);
     }
-    if den == 0 { 0 } else { num / den }
+    if den == 0 {
+        0
+    } else {
+        num / den
+    }
 }
 
 // ============================================================================

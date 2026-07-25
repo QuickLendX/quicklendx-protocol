@@ -22,7 +22,7 @@ use crate::events::{emit_escrow_refunded, emit_investment_withdrawn, emit_invoic
 use crate::payments::{create_escrow, refund_escrow, EscrowStatus, EscrowStorage};
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
-use crate::verification::require_business_not_pending;
+use crate::verification::{require_business_active, require_business_not_pending};
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 /// Loaded and validated state required to accept a bid.
@@ -55,6 +55,7 @@ pub(crate) fn load_accept_bid_context(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     invoice.business.require_auth();
+    require_business_active(env, &invoice.business)?;
     require_business_not_pending(env, &invoice.business)?;
 
     if invoice.status == InvoiceStatus::Funded {
@@ -225,8 +226,7 @@ pub fn refund_escrow_funds(
     }
 
     // 4. Retrieve Escrow
-    let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .unwrap();
+    let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
 
     // 5. Transfer funds and update escrow state
     // This calls payments::refund_escrow which handles the token transfer and status update
@@ -322,8 +322,7 @@ pub fn withdraw_investment(
     investor.require_auth();
 
     // 2. Validate investment exists, is Active, and belongs to caller
-    let mut investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .unwrap();
+    let mut investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
     if investment.status != InvestmentStatus::Active {
         return Err(QuickLendXError::InvalidStatus);
@@ -342,8 +341,7 @@ pub fn withdraw_investment(
     }
 
     // 4. Validate escrow exists and is still Held
-    let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .unwrap();
+    let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
 
     if escrow.status != EscrowStatus::Held {
         return Err(QuickLendXError::InvalidStatus);
