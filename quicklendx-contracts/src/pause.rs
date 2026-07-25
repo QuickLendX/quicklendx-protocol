@@ -65,6 +65,8 @@ impl PauseControl {
         if Self::is_paused(env) {
             return Err(QuickLendXError::ContractPaused);
         }
+        // Also block writes while an upgrade is pending (defence-in-depth).
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(env)?;
         Ok(())
     }
 

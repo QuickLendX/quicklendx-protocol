@@ -349,6 +349,7 @@ mod test_tier_boundary;
 mod test_verification_matrix;
 pub mod types;
 pub use types::*;
+pub mod upgrade;
 pub mod verification;
 pub mod vesting;
 use admin::require_not_self;
@@ -4781,6 +4782,23 @@ impl QuickLendXContract {
     }
 }
 
+// ── Upgrade control entrypoints ─────────────────────────────────────────────
+
+#[contractimpl]
+impl QuickLendXContract {
+    pub fn schedule_upgrade(env: Env, admin: Address, wasm_hash: BytesN<32>) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::schedule_upgrade(&env, &admin, &wasm_hash)
+    }
+
+    pub fn cancel_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::cancel_upgrade(&env, &admin)
+    }
+
+    pub fn execute_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::execute_upgrade(&env, &admin)
+    }
+}
+
 // =============================================================================
 // Feature-gated contract entrypoints
 // =============================================================================
@@ -4822,6 +4840,9 @@ mod test_view_only;
 
 #[cfg(test)]
 mod test_business_freeze_reason;
+
+#[cfg(test)]
+mod test_upgrade_guard;
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
