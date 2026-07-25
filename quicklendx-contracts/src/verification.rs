@@ -371,6 +371,19 @@ impl BusinessVerificationStorage {
             .set(&Self::DELETED_BUSINESSES_KEY, &deleted);
     }
 
+    fn remove_from_deleted_businesses(env: &Env, business: &Address) {
+        let deleted = Self::get_deleted_businesses(env);
+        let mut new_deleted = vec![env];
+        for addr in deleted.iter() {
+            if addr != *business {
+                new_deleted.push_back(addr);
+            }
+        }
+        env.storage()
+            .instance()
+            .set(&Self::DELETED_BUSINESSES_KEY, &new_deleted);
+    }
+
     /// Deletes a business: removes from any status list and marks as deleted.
     pub fn delete_business(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
         // Remove from verified, pending, rejected lists if present
@@ -389,6 +402,34 @@ impl BusinessVerificationStorage {
             return Ok(());
         }
         Self::add_to_deleted_businesses(env, business);
+        Ok(())
+    }
+
+    /// Restores a previously deleted business: removes from the deleted list and
+    /// re-adds to the appropriate status list based on the existing verification record.
+    ///
+    /// # Errors
+    /// - `BusinessNotVerified` if the business has no verification record.
+    /// - `BusinessDeleted` if the business is not currently deleted (no-op).
+    pub fn restore_business(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+        if !Self::is_deleted(env, business) {
+            return Err(QuickLendXError::BusinessDeleted);
+        }
+        Self::remove_from_deleted_businesses(env, business);
+        // Re-add to the status list matching the existing verification record.
+        if let Some(verification) = Self::get_verification(env, business) {
+            match verification.status {
+                BusinessVerificationStatus::Verified => {
+                    Self::add_to_verified_businesses(env, business);
+                }
+                BusinessVerificationStatus::Pending => {
+                    Self::add_to_pending_businesses(env, business);
+                }
+                BusinessVerificationStatus::Rejected => {
+                    Self::add_to_rejected_businesses(env, business);
+                }
+            }
+        }
         Ok(())
     }
 
