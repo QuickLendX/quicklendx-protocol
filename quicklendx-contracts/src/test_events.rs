@@ -787,6 +787,8 @@ fn test_escrow_released_field_order() {
     client.accept_bid(&id, &bid_id);
 
     let escrow = client.get_escrow_details(&id);
+    client.approve_early_escrow_release(&id, &biz);
+    client.approve_early_escrow_release(&id, &inv);
     client.release_escrow_funds(&id);
 
     let p: EscrowReleased = latest_payload(&env, TOPIC_ESCROW_RELEASED);
@@ -1438,6 +1440,8 @@ fn test_escrow_released_event_emits_correct_topic_and_payload() {
     let bid_id = client.place_bid(&investor, &invoice_id, &INV_AMOUNT, &EXP_RETURN);
     client.accept_bid(&invoice_id, &bid_id);
     let escrow = client.get_escrow_details(&invoice_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let p_rel: EscrowReleased = latest_payload(&env, TOPIC_ESCROW_RELEASED);
