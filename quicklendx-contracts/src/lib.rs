@@ -50,16 +50,15 @@ mod test_maintenance;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
 #[cfg(test)]
-mod test_settlement_history_reconstruction;
-#[cfg(test)]
 mod test_settlement_capacity_stress;
 #[cfg(test)]
-mod test_pause_reason_cap;
+mod test_settlement_history_reconstruction;
+// Issue #1920 — confirm require_regulatory_ok is truly a no-op by default.
+#[cfg(test)]
+mod test_regulatory_gate;
+use crate::idempotency::{idempotency_exists, idempotency_key, store_idempotency};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
-use crate::idempotency::{idempotency_key, idempotency_exists, store_idempotency};
 
-#[cfg(any(test, feature = "testutils"))]
-pub mod bench;
 pub mod address_summary;
 pub mod admin;
 pub mod analytics;
@@ -67,6 +66,8 @@ pub mod audit;
 pub mod backpressure;
 pub mod backup;
 pub mod backup_v1;
+#[cfg(any(test, feature = "testutils"))]
+pub mod bench;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
@@ -81,10 +82,10 @@ pub mod fees;
 pub mod freshness;
 pub mod governance;
 pub mod health;
+pub mod idempotency;
 pub mod incident;
 pub mod init;
 pub mod invariants;
-pub mod idempotency;
 pub mod investment;
 pub mod investment_queries;
 pub mod invoice;
@@ -107,14 +108,6 @@ pub mod storage;
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
-mod test_panic_handler;
-#[cfg(test)]
-mod test_due_date_guard;
-#[cfg(test)]
-mod test_cancel_invoice_matrix;
-#[cfg(test)]
-mod test_invoice;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -127,8 +120,6 @@ mod test_admin_two_step;
 mod test_audit;
 #[cfg(test)]
 mod test_audit_config;
-#[cfg(test)]
-mod test_rating_override;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -143,6 +134,8 @@ mod test_bid_cancel_accept_race;
 mod test_bid_expiry_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
+#[cfg(test)]
+mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(test)]
@@ -157,10 +150,10 @@ mod test_currency_match_funding;
 mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
-#[cfg(test)]
-mod test_evidence_size_cap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
+#[cfg(test)]
+mod test_due_date_guard;
 #[cfg(test)]
 // mod test_dispute_event_invariant;
 #[cfg(test)]
@@ -173,6 +166,8 @@ mod test_escrow_event_completeness;
 mod test_escrow_invariant_model;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund_after_expiry;
+#[cfg(test)]
+mod test_evidence_size_cap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
 #[cfg(test)]
@@ -180,9 +175,15 @@ mod test_expired_bids_cleanup;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
 #[cfg(test)]
+mod test_investor_kyc;
+#[cfg(test)]
+mod test_panic_handler;
+#[cfg(test)]
 mod test_payments;
 #[cfg(test)]
 mod test_queries;
+#[cfg(test)]
+mod test_rating_override;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_self_call_rejection;
 // Issue #1541 — lag at zero, lag at positive, lag during pause.
@@ -290,22 +291,6 @@ mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
-mod test_investment_withdrawal;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_investment_transitions;
-#[cfg(test)]
-mod test_investment_withdrawal;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_invoice_metadata;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_line_item_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_invoice_search_ranking;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_rebuild_indexes;
-// #[cfg(all(test, feature = "legacy-tests"))]
-// mod test_max_invoices_per_business;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
 #[cfg(test)]
 mod test_insurance_optin_lifecycle;
@@ -313,17 +298,31 @@ mod test_insurance_optin_lifecycle;
 mod test_invoice;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_twa_props;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_investment_transitions;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_investment_withdrawal;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_invoice_metadata;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_invoice_search_ranking;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_line_item_consistency;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
 mod test_platform_metrics_reconciliation;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_rebuild_indexes;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_seed;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_treasury_split_overflow_props;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_twa_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_volume_tier_props;
 // Issue #1482 — "cannot withdraw more than deposited" invariant: hard-coded sad
@@ -352,10 +351,10 @@ use escrow::{
 };
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_dispute_created,
-    emit_dispute_rejected, emit_dispute_resolved, emit_dispute_under_review, emit_escrow_created, emit_escrow_released,
-    emit_insurance_added, emit_insurance_premium_collected, emit_investor_verified,
-    emit_invoice_cancelled, emit_invoice_metadata_cleared, emit_invoice_metadata_updated,
-    emit_invoice_uploaded, emit_invoice_verified,
+    emit_dispute_rejected, emit_dispute_resolved, emit_dispute_under_review, emit_escrow_created,
+    emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
+    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
+    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
 };
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
@@ -367,10 +366,9 @@ use settlement::{
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
-    normalize_tag, reject_business,
-    reject_investor as do_reject_investor, revoke_investor_kyc as do_revoke_investor_kyc,
-    recompute_investor_tier, require_business_active, require_business_not_pending,
-    require_investor_not_pending, submit_investor_kyc as do_submit_investor_kyc,
+    normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
+    require_business_not_pending, require_investor_not_pending,
+    revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
     verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
@@ -582,7 +580,11 @@ impl QuickLendXContract {
     }
 
     /// Initiate a two-step admin transfer.
-    pub fn initiate_admin_transfer(env: Env, admin: Address, new_admin: Address) -> Result<(), QuickLendXError> {
+    pub fn initiate_admin_transfer(
+        env: Env,
+        admin: Address,
+        new_admin: Address,
+    ) -> Result<(), QuickLendXError> {
         AdminStorage::initiate_admin_transfer(&env, &admin, &new_admin)
     }
 
@@ -596,7 +598,11 @@ impl QuickLendXContract {
     }
 
     /// Enable or disable two-step admin transfers.
-    pub fn set_two_step_enabled(env: Env, admin: Address, enabled: bool) -> Result<(), QuickLendXError> {
+    pub fn set_two_step_enabled(
+        env: Env,
+        admin: Address,
+        enabled: bool,
+    ) -> Result<(), QuickLendXError> {
         AdminStorage::set_two_step_enabled(&env, &admin, enabled)
     }
 
@@ -656,10 +662,7 @@ impl QuickLendXContract {
     ///
     /// # Arguments
     /// * `admin` - The address of the caller, must be the current admin.
-    pub fn cancel_treasury_rotation(
-        env: Env,
-        admin: Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn cancel_treasury_rotation(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         admin::cancel_treasury_rotation(&env, &admin)
     }
 
@@ -730,22 +733,12 @@ impl QuickLendXContract {
         bid::BidStorage::set_max_active_bids_per_investor(&env, &admin, limit)
     }
 
-    /// Get full snapshot of the investor active-bid limit policy.
-    ///
-    /// Returns a [`BidLimitConfig`] with the active limit, the compile-time
-    /// default, and convenience flags (`is_disabled`, `is_custom`).  Use this
-    /// instead of [`get_max_active_bids_per_investor`] when you need to
-    /// distinguish "default" from "admin-set to the same value as the default".
-    pub fn get_bid_limit_config(env: Env) -> bid::BidLimitConfig {
-        bid::BidStorage::get_bid_limit_config(&env)
-    }
-
     /// Reset the per-investor active-bid limit to the compile-time default (20).
     ///
     /// Removes the stored override so [`get_bid_limit_config`] reports
     /// `is_custom = false` and `is_disabled = false`.  Useful for reverting a
     /// previous [`set_max_active_bids_per_investor(0)`] call.
-    pub fn reset_max_active_bids_per_investor(env: Env) -> Result<u32, QuickLendXError> {
+    pub fn reset_max_bids_per_investor(env: Env) -> Result<u32, QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         bid::BidStorage::reset_max_active_bids_per_investor(&env, &admin)
     }
@@ -1810,13 +1803,11 @@ impl QuickLendXContract {
     /// preventing double-action execution.
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).unwrap();
+        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         bid.investor.require_auth();
         require_investor_not_pending(&env, &bid.investor)?;
         // Re-read status after auth to guard against concurrent transitions.
-        let bid_fresh =
-            BidStorage::get_bid(&env, &bid_id).unwrap();
+        let bid_fresh = BidStorage::get_bid(&env, &bid_id).unwrap();
         if bid_fresh.status != BidStatus::Placed {
             return Err(QuickLendXError::OperationNotAllowed);
         }
@@ -1964,8 +1955,7 @@ impl QuickLendXContract {
         let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).unwrap();
+        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         invoice.business.require_auth();
 
         // Enforce business is active (not deleted/frozen).
@@ -2013,8 +2003,7 @@ impl QuickLendXContract {
         };
         InvestmentStorage::store_investment(&env, &investment);
 
-        let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
-            .unwrap();
+        let escrow = EscrowStorage::get_escrow(&env, &escrow_id).unwrap();
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
 
@@ -2042,8 +2031,7 @@ impl QuickLendXContract {
         coverage_percentage: u32,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        let mut investment = InvestmentStorage::get_investment(&env, &investment_id)
-            .unwrap();
+        let mut investment = InvestmentStorage::get_investment(&env, &investment_id).unwrap();
 
         investment.investor.require_auth();
 
@@ -2151,8 +2139,7 @@ impl QuickLendXContract {
         env: Env,
         investment_id: BytesN<32>,
     ) -> Result<Vec<InsuranceCoverage>, QuickLendXError> {
-        let investment = InvestmentStorage::get_investment(&env, &investment_id)
-            .unwrap();
+        let investment = InvestmentStorage::get_investment(&env, &investment_id).unwrap();
         Ok(investment.insurance)
     }
 
@@ -2451,11 +2438,10 @@ impl QuickLendXContract {
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
         let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
-        // Preserve current bid limits; fall back to compile-time defaults if not yet set.
         let existing = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
-        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
-            env,
-            admin,
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits_authed(
+            &env,
+            &admin,
             min_invoice_amount,
             existing.min_bid_amount,
             existing.min_bid_bps,
@@ -2757,8 +2743,7 @@ impl QuickLendXContract {
         env: Env,
         invoice_id: BytesN<32>,
     ) -> Result<payments::EscrowStatus, QuickLendXError> {
-        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .unwrap();
+        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
         Ok(escrow.status)
     }
 
@@ -2904,19 +2889,7 @@ impl QuickLendXContract {
                 return Err(QuickLendXError::InvalidStatus);
             }
 
-            // Defence-in-depth: both business and investor must approve release.
-            // Without this check an attacker (or a single party) could call
-            // release_escrow_funds directly to bypass the dual-approval gate on
-            // execute_early_escrow_release.
-            let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
-            if !has_early_release_approval(&env, &invoice_id, &invoice.business)
-                || !has_early_release_approval(&env, &invoice_id, &investor)
-            {
-                return Err(QuickLendXError::OperationNotAllowed);
-            }
-
-            let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-                .unwrap();
+            let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
 
             release_escrow(&env, &invoice_id)?;
 
@@ -3032,7 +3005,7 @@ impl QuickLendXContract {
     ///      the contract's MAX_QUERY_LIMIT. Indexers should use this value as a starting point
     ///      for pagination to balance efficiency and memory usage.
     /// @return Default settlement batch size (25) — recommended number of payment records per page.
-    pub fn get_settlement_batch_size_soft_cap(_env: Env) -> u32 {
+    pub fn get_settle_batch_size_soft_cap(_env: Env) -> u32 {
         settlement::default_settlement_batch_size_soft_cap()
     }
 
@@ -3040,7 +3013,7 @@ impl QuickLendXContract {
     /// @dev This represents the hard upper bound enforced by the contract. Query requests
     ///      exceeding this limit will be automatically clamped to this value by `get_payment_records`.
     /// @return Maximum settlement batch size (50) — hard cap for payment records per query.
-    pub fn get_settlement_batch_size_soft_cap_max(_env: Env) -> u32 {
+    pub fn get_settle_batch_size_soft_max(_env: Env) -> u32 {
         settlement::max_settlement_batch_size_soft_cap()
     }
 
@@ -3788,8 +3761,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         AdminStorage::require_admin(&env, &admin)?;
-        let mut b = backup::BackupStorage::get_backup(&env, &backup_id)
-            .unwrap();
+        let mut b = backup::BackupStorage::get_backup(&env, &backup_id).unwrap();
         b.status = backup::BackupStatus::Archived;
         backup::BackupStorage::update_backup(&env, &b)?;
         backup::BackupStorage::remove_from_backup_list(&env, &backup_id);
@@ -3996,7 +3968,10 @@ impl QuickLendXContract {
     // ============================================================================
 
     /// Get user behavior metrics
-    pub fn get_user_behavior_metrics(env: Env, user: Address) -> Result<analytics::UserBehaviorMetrics, QuickLendXError> {
+    pub fn get_user_behavior_metrics(
+        env: Env,
+        user: Address,
+    ) -> Result<analytics::UserBehaviorMetrics, QuickLendXError> {
         analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)
     }
 

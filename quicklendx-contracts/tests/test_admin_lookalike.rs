@@ -35,7 +35,6 @@ fn test_direct_admin_transfer_to_lookalike_is_rejected() {
 
     // Action: Attempt a direct admin transfer to the non-existent address.
     // Expectation: The call panics with `QuickLendXError::InvalidAddress` (1201).
-    // transfer_admin reads the current admin from storage and requires its auth internally.
     client.transfer_admin(&lookalike_admin);
 }
 
@@ -64,11 +63,9 @@ fn test_transfer_to_existing_address_succeeds() {
 
     // Create a new valid admin address that is guaranteed to exist.
     let new_admin = Address::generate(&env);
-    // Use any admin-gated function to ensure new_admin has a ledger entry.
-    client.initialize_protocol_limits(&new_admin, &1i128, &1u64, &1u64);
+    client.initialize_protocol_limits(&new_admin, &1i128, &1u64, &1u64); // Using any auth'd function makes it exist.
 
     // Action: Transfer admin to the new, existing address.
-    // transfer_admin reads the current admin from storage internally.
     client.transfer_admin(&new_admin);
 
     // Assert: The admin was successfully updated.

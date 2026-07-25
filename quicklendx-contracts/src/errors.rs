@@ -305,9 +305,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NPD"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LSQ"),
-            QuickLendXError::InsuranceNotActive => symbol_short!("INS_NA"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LEDG"),
         }
     }
 }

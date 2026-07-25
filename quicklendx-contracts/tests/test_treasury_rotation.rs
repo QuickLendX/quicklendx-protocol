@@ -2,12 +2,15 @@
 
 extern crate std;
 
+use quicklendx_contracts::errors::QuickLendXError;
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
     testutils::{Address as _, Events},
-    Address, Env,
+    Address, Env, FromVal, IntoVal,
 };
 
+// Helper to setup the test environment.
+// This assumes a similar setup to other tests in the project.
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
@@ -39,7 +42,15 @@ fn test_cancel_treasury_rotation_by_admin_succeeds() {
 
     // Verify event was emitted
     let events = env.events().all();
-    assert!(!events.events().is_empty());
+    let last_event = events.events().last().unwrap();
+
+    use soroban_sdk::xdr;
+    if let xdr::ContractEventBody::V0(body) = &last_event.body {
+        let topic_sym = soroban_sdk::Symbol::from_val(&env, body.topics.first().unwrap());
+        assert_eq!(topic_sym, soroban_sdk::symbol_short!("tr_rot_cn"));
+    } else {
+        panic!("unexpected event body");
+    }
 }
 
 #[test]
@@ -63,6 +74,6 @@ fn test_cancel_treasury_rotation_fails_for_non_admin() {
     client.set_treasury(&admin, &new_treasury);
 
     // Action: Attempt to cancel as a non-admin.
-    // Expectation: Panics with `NotAdmin` error (1103).
+    // Expectation: Panics with NotAdmin (1103) error since mock_all_auths is on but they aren't admin.
     client.cancel_treasury_rotation(&non_admin);
 }

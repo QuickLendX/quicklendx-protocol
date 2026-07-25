@@ -89,7 +89,7 @@ impl CurrencyWhitelist {
         let zero = Self::zero_address(env);
         let contract_addr = env.current_contract_address();
         for currency in currencies.iter() {
-            if currency == admin || currency == &zero || currency == &contract_addr {
+            if currency == *admin || currency == zero || currency == contract_addr {
                 return Err(QuickLendXError::InvalidCurrency);
             }
         }
