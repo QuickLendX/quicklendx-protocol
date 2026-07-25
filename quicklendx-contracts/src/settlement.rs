@@ -435,6 +435,7 @@ pub fn settle_invoice(
         .ok_or(QuickLendXError::InvalidAmount)?;
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
+    crate::investment::require_investment_active(&investment)?;
 
     if projected_total < invoice.amount || projected_total < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -803,6 +804,14 @@ fn ensure_payable_status(invoice: &Invoice) -> Result<(), QuickLendXError> {
     Ok(())
 }
 
+pub fn require_matching_investment_snapshot(env: &Env, invoice_id: &BytesN<32>, snap: &crate::types::Investment) -> Result<(), QuickLendXError> {
+    let current = InvestmentStorage::get_investment_by_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+    if current != *snap {
+        return Err(QuickLendXError::StaleInvestmentSnapshot);
+    }
+    Ok(())
+}
+
 fn require_no_active_dispute(invoice: &Invoice) -> Result<(), QuickLendXError> {
     if invoice.dispute_status == DisputeStatus::Disputed
         || invoice.dispute_status == DisputeStatus::UnderReview
@@ -905,3 +914,4 @@ fn emit_invoice_settled_final(
         (invoice_id.clone(), final_amount, paid_at),
     );
 }
+
