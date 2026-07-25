@@ -312,13 +312,37 @@ impl InvoiceStorage {
         }
     }
 
-    /// Returns the typed freeze reason for an invoice, if it is frozen.
-    pub fn get_freeze_reason(
-        env: &Env,
-        invoice_id: &BytesN<32>,
-    ) -> Option<BusinessFreezeReason> {
-        let key = DataKey::FrozenInvoice(invoice_id.clone());
-        env.storage().persistent().get(&key)
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
+        Self::get_invoice_lock(env, invoice_id).is_locked()
+    }
+
+    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+        let lock = if frozen {
+            InvoiceLock::Frozen
+        } else {
+            InvoiceLock::None
+        };
+        Self::set_invoice_lock(env, invoice_id, lock);
+    }
+
+    pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        env.storage().persistent().set(&key, info);
+        extend_persistent_ttl(env, &key);
+    }
+
+    pub fn get_freeze_info(env: &Env, invoice_id: &BytesN<32>) -> Option<FreezeInfo> {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        let result = env.storage().persistent().get::<_, FreezeInfo>(&key);
+        if result.is_some() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
+    }
+
+    pub fn remove_freeze_info(env: &Env, invoice_id: &BytesN<32>) {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        env.storage().persistent().remove(&key);
     }
 
     pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
