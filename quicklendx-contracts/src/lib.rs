@@ -248,6 +248,8 @@ mod test_settlement_accounting_identity;
 #[cfg(test)]
 mod test_settlement_currency_whitelist;
 #[cfg(test)]
+mod test_fuzz_settlement_currency_whitelist;
+#[cfg(test)]
 mod test_settle_during_dispute;
 #[cfg(test)]
 mod test_string_limits;
