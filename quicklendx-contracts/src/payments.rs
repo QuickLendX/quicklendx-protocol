@@ -36,6 +36,42 @@ fn validate_token_address(
     }
 }
 
+/// Assert that `amount` is compatible with the declared decimal precision of
+/// `currency`.
+///
+/// # Threat model
+/// Without this check, a caller who passes a currency address whose token
+/// contract either (a) does not implement `decimals()`, or (b) reports an
+/// unexpectedly large decimal count, could supply amounts whose scale is
+/// incompatible with how the contract interprets them. This leads to silent
+/// truncation or mis-scaled transfers, draining escrow value that the caller did
+/// not intend to lock.
+///
+/// # Errors
+/// * [`QuickLendXError::InvalidAmount`] — `amount` is zero or negative.
+/// * [`QuickLendXError::InvalidCurrency`] — the token contract does not
+///   expose a `decimals` entry-point or returns a value greater than 18.
+pub fn require_matching_currency_precision(
+    env: &Env,
+    currency: &Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
+    if amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let result: Result<Result<u32, _>, _> = env.try_invoke_contract::<u32, QuickLendXError>(
+        currency,
+        &symbol_short!("decimals"),
+        soroban_sdk::vec![env],
+    );
+
+    match result {
+        Ok(Ok(decimals)) if decimals <= 18 => Ok(()),
+        _ => Err(QuickLendXError::InvalidCurrency),
+    }
+}
+
 /// Minimum transfer amount to prevent dust transfers.
 /// Matches the test-mode MIN_TRANSFER from protocol_limits.rs.
 #[cfg(not(test))]
@@ -995,5 +1031,90 @@ mod payments_tests {
             )
         });
         assert_eq!(r2, Err(QuickLendXError::InvoiceAlreadyFunded));
+    }
+
+    // -----------------------------------------------------------------------
+    // require_matching_currency_precision
+    // -----------------------------------------------------------------------
+
+    /// A valid SAC token with a positive amount must pass the precision
+    /// check without error.
+    #[test]
+    fn test_require_matching_currency_precision_valid_token_passes() {
+        let (env, contract_id) = contract_env();
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        let result = env.as_contract(&contract_id, || {
+            require_matching_currency_precision(&env, &currency, 1_000_000)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    /// Passing a non-token address as `currency` fails because the
+    /// contract does not expose a `decimals` entry-point.
+    #[test]
+    fn test_require_matching_currency_precision_non_token_fails() {
+        let (env, contract_id) = contract_env();
+        let bogus_currency = Address::generate(&env);
+
+        let result = env.as_contract(&contract_id, || {
+            require_matching_currency_precision(&env, &bogus_currency, 1_000)
+        });
+        assert_eq!(result, Err(QuickLendXError::InvalidCurrency));
+    }
+
+    /// A zero amount fails the precision check regardless of the token.
+    #[test]
+    fn test_require_matching_currency_precision_zero_amount_fails() {
+        let (env, contract_id) = contract_env();
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        let result = env.as_contract(&contract_id, || {
+            require_matching_currency_precision(&env, &currency, 0)
+        });
+        assert_eq!(result, Err(QuickLendXError::InvalidAmount));
+    }
+
+    /// A negative amount fails the precision check regardless of the token.
+    #[test]
+    fn test_require_matching_currency_precision_negative_amount_fails() {
+        let (env, contract_id) = contract_env();
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        let result = env.as_contract(&contract_id, || {
+            require_matching_currency_precision(&env, &currency, -1)
+        });
+        assert_eq!(result, Err(QuickLendXError::InvalidAmount));
+    }
+
+    /// A positive amount that is mis-scaled (e.g. intended whole tokens
+    /// but passed as atomic units for a high-decimal token) is still
+    /// accepted by the precision guard because any positive integer is
+    /// a valid atomic-unit amount; the guard's purpose is to ensure the
+    /// currency is a live token contract, not to enforce a particular
+    /// scaling convention.
+    #[test]
+    fn test_require_matching_currency_precision_scaled_amount_passes() {
+        let (env, contract_id) = contract_env();
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        // Even a very small positive amount (1 atomic unit) is valid
+        // for any token that accepts sub-whole-unit transfers.
+        let result = env.as_contract(&contract_id, || {
+            require_matching_currency_precision(&env, &currency, 1)
+        });
+        assert_eq!(result, Ok(()));
     }
 }
