@@ -82,10 +82,15 @@ impl StorageKeys {
     pub fn investment_count() -> Symbol {
         symbol_short!("inv_cnt")
     }
-    /// **Storage class**: Persistent  
+    /// **Storage class**: Persistent
     /// **BREAKING**: Renaming `"biz_def_h"` resets the business default history counters.
     pub fn business_default_history(business: &Address) -> (Symbol, Address) {
         (symbol_short!("biz_def_h"), business.clone())
+    }
+    /// **Storage class**: Persistent
+    /// **BREAKING**: Renaming `"inv_def_h"` resets the investor default history counters.
+    pub fn investor_default_history(investor: &Address) -> (Symbol, Address) {
+        (symbol_short!("inv_def_h"), investor.clone())
     }
 }
 
