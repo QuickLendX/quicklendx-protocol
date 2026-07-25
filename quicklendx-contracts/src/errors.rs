@@ -214,9 +214,10 @@ pub enum QuickLendXError {
     BatchSizeExceeded = 2208,
     /// Account is frozen and cannot create invoices.
     AccountIsFrozen = 2209,
-    /// A contract upgrade is pending (scheduled but not yet executed or cancelled).
-    /// All writable entrypoints are blocked until the upgrade is resolved.
-    UpgradePending = 2211,
+    /// Settlement currency is not in the invoice's per-invoice settlement currency whitelist.
+    /// Defence-in-depth: the invoice's own `currency` field must be in `settlement_currencies`
+    /// at settlement time. See Issue #1908.
+    SettlementCurrencyNotAllowed = 2210,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -324,7 +325,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::UnstableCursor => symbol_short!("STBL_CUR"),
             QuickLendXError::BatchSizeExceeded => symbol_short!("BAT_MAX"),
             QuickLendXError::AccountIsFrozen => symbol_short!("ACCT_FRZ"),
-            QuickLendXError::UpgradePending => symbol_short!("UPG_PND"),
+            QuickLendXError::SettlementCurrencyNotAllowed => symbol_short!("STL_CR_NA"),
         }
     }
 }
