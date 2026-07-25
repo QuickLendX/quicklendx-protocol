@@ -421,6 +421,22 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
     pagination::validate_query_params(offset, limit)
 }
 
+/// Defence-in-depth guard: reject any write when the target invoice is frozen.
+///
+/// An invoice can be frozen via `freeze_invoice` (admin action, compliance hold,
+/// KYC revocation, etc.). While frozen, **all** state-mutating operations on that
+/// invoice must be blocked — otherwise an attacker (or a compromised admin path)
+/// could still drain escrow, alter metadata, or advance the lifecycle despite an
+/// active hold.
+///
+/// Returns `Err(QuickLendXError::InvoiceFrozen)` when the invoice lock is active.
+fn require_no_active_freeze(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+    if InvoiceStorage::is_frozen(env, invoice_id) {
+        return Err(QuickLendXError::InvoiceFrozen);
+    }
+    Ok(())
+}
+
 /// Write a `u32` as ASCII decimal into `buf`, return byte length.
 #[inline]
 fn u32_to_ascii_lib(mut value: u32, buf: &mut [u8; 10]) -> usize {
@@ -1361,6 +1377,8 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
+        require_no_active_freeze(&env, &invoice_id)?;
+
         // When invoice is already funded, verify_invoice triggers release_escrow_funds (Issue #300)
         if invoice.status == InvoiceStatus::Funded {
             return Self::release_escrow_funds(env, invoice_id);
@@ -1395,6 +1413,8 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        require_no_active_freeze(&env, &invoice_id)?;
 
         // Only the business owner can cancel their own invoice
         invoice.business.require_auth();
@@ -1520,6 +1540,8 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
+        require_no_active_freeze(&env, &invoice_id)?;
+
         invoice.business.require_auth();
         require_business_active(&env, &invoice.business)?;
         validate_invoice_metadata(&metadata, invoice.amount)?;
@@ -1541,6 +1563,8 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        require_no_active_freeze(&env, &invoice_id)?;
 
         invoice.business.require_auth();
         require_business_active(&env, &invoice.business)?;
@@ -1607,6 +1631,8 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+
+        require_no_active_freeze(&env, &invoice_id)?;
 
         if new_status == InvoiceStatus::Defaulted {
             // Route every default transition through the defaults module so settlement finality,
@@ -1895,9 +1921,7 @@ impl QuickLendXContract {
         // Validate invoice exists and is verified
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        if InvoiceStorage::is_frozen(&env, &invoice_id) {
-            return Err(QuickLendXError::InvoiceFrozen);
-        }
+        require_no_active_freeze(&env, &invoice_id)?;
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
         }
@@ -1984,9 +2008,7 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        if InvoiceStorage::is_frozen(&env, &invoice_id) {
-            return Err(QuickLendXError::InvoiceFrozen);
-        }
+        require_no_active_freeze(&env, &invoice_id)?;
         let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
@@ -3119,6 +3141,8 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
+        require_no_active_freeze(&env, &invoice_id)?;
+
         // Only the business owner can update the category
         invoice.business.require_auth();
         require_business_active(&env, &invoice.business)?;
@@ -3158,6 +3182,8 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
+        require_no_active_freeze(&env, &invoice_id)?;
+
         // Authorization: Ensure the stored business owner authorizes the change
         invoice.business.require_auth();
         require_business_active(&env, &invoice.business)?;
@@ -3187,6 +3213,8 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        require_no_active_freeze(&env, &invoice_id)?;
 
         // Authorization: Ensure the stored business owner authorizes the removal
         invoice.business.require_auth();
@@ -4022,6 +4050,9 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        require_no_active_freeze(&env, &invoice_id)?;
+
         let ts = env.ledger().timestamp();
         invoice.add_rating(rating, feedback, rater, ts)?;
         InvoiceStorage::update_invoice(&env, &invoice);
@@ -4063,6 +4094,8 @@ impl QuickLendXContract {
         if reason.is_empty() || reason.len() > protocol_limits::MAX_RATING_OVERRIDE_REASON_LENGTH {
             return Err(QuickLendXError::InvalidRatingOverrideReason);
         }
+
+        require_no_active_freeze(&env, &invoice_id)?;
 
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -4208,6 +4241,9 @@ impl QuickLendXContract {
         creator.require_auth();
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        require_no_active_freeze(&env, &invoice_id)?;
+
         if invoice.dispute_status != DisputeStatus::None {
             return Err(QuickLendXError::DisputeAlreadyExists);
         }
@@ -4261,6 +4297,8 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
+        require_no_active_freeze(&env, &invoice_id)?;
+
         if invoice.dispute_status != DisputeStatus::Disputed {
             return Err(QuickLendXError::InvalidStatus);
         }
@@ -4304,6 +4342,8 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
 
+        require_no_active_freeze(&env, &invoice_id)?;
+
         match invoice.dispute_status {
             DisputeStatus::None => return Err(QuickLendXError::DisputeNotFound),
             DisputeStatus::Disputed => {}
@@ -4331,6 +4371,8 @@ impl QuickLendXContract {
         validate_dispute_resolution(&resolution)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        require_no_active_freeze(&env, &invoice_id)?;
 
         if invoice.dispute_status != DisputeStatus::UnderReview {
             return Err(QuickLendXError::DisputeNotUnderReview);
@@ -4364,6 +4406,8 @@ impl QuickLendXContract {
         validate_dispute_resolution(&note)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        require_no_active_freeze(&env, &invoice_id)?;
 
         if invoice.dispute_status != DisputeStatus::UnderReview {
             return Err(QuickLendXError::DisputeNotUnderReview);
@@ -4822,6 +4866,9 @@ mod test_view_only;
 
 #[cfg(test)]
 mod test_business_freeze_reason;
+
+#[cfg(test)]
+mod test_freeze_guard_writes;
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;

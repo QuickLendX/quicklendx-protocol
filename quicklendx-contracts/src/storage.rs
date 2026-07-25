@@ -7,7 +7,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus,
+    BidStatus, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus,
     PlatformFeeConfig, PruneReport, RebuildReport,
 };
 
@@ -293,6 +293,19 @@ impl InvoiceStorage {
         } else {
             InvoiceLock::None
         }
+    }
+
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
+        Self::get_invoice_lock(env, invoice_id).is_locked()
+    }
+
+    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+        let lock = if frozen {
+            InvoiceLock::Frozen
+        } else {
+            InvoiceLock::None
+        };
+        Self::set_invoice_lock(env, invoice_id, lock);
     }
 
     pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {
