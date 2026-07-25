@@ -128,7 +128,7 @@ fn compute_independent_metrics(env: &Env, contract_id: &Address) -> IndependentM
 
         let total_invoices = all_invoices.len() as u32;
         let expected_total_volume: i128 = all_invoices.iter().map(|i| i.amount).sum();
-        let total_investments = (funded.len() + paid.len() + defaulted.len());
+        let total_investments = funded.len() + paid.len() + defaulted.len();
 
         let expected_average_invoice_amount = if total_invoices > 0 {
             // integer division truncates toward zero

@@ -85,34 +85,37 @@ fn upload(env: &Env, client: &QuickLendXContractClient, business: &Address) -> B
 #[test]
 fn test_cancel_ownership_matrix() {
     let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
     let business = Address::generate(&env);
     let attacker = Address::generate(&env);
 
-    let mut invoice = Invoice::new(
-        &env,
-        business.clone(),
-        10_000,
-        Address::generate(&env),
-        env.ledger().timestamp() + 86_400,
-        String::from_str(&env, "owner matrix"),
-        InvoiceCategory::Services,
-        Vec::new(&env),
-    )
-    .expect("invoice creation");
+    let mut invoice = env
+        .as_contract(&contract_id, || {
+            Invoice::new(
+                &env,
+                business.clone(),
+                10_000,
+                Address::generate(&env),
+                env.ledger().timestamp() + 86_400,
+                String::from_str(&env, "owner matrix"),
+                InvoiceCategory::Services,
+                Vec::new(&env),
+            )
+        })
+        .expect("invoice creation");
 
     // A cancellable (Pending) invoice has no investor / escrow attached.
     assert!(invoice.investor.is_none());
     assert_eq!(invoice.funded_amount, 0);
 
     // Non-owner is rejected; status untouched.
-    assert_eq!(
-        invoice.cancel(&env, attacker).unwrap_err(),
-        QuickLendXError::Unauthorized
-    );
+    let result = env.as_contract(&contract_id, || invoice.cancel(&env, attacker));
+    assert_eq!(result.unwrap_err(), QuickLendXError::Unauthorized);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 
     // Owner succeeds.
-    assert!(invoice.cancel(&env, business).is_ok());
+    let result2 = env.as_contract(&contract_id, || invoice.cancel(&env, business));
+    assert!(result2.is_ok());
     assert_eq!(invoice.status, InvoiceStatus::Cancelled);
 }
 

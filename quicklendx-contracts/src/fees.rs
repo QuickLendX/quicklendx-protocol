@@ -1172,6 +1172,14 @@ impl FeeManager {
         };
 
         env.storage().instance().set(&ROTATION_KEY, &request);
+
+        crate::events::emit_treasury_rotation_initiated(
+            env,
+            &new_address,
+            admin,
+            request.confirmation_deadline,
+        );
+
         Ok(request)
     }
 
@@ -1213,6 +1221,8 @@ impl FeeManager {
         }
 
         let mut platform_config = Self::get_platform_fee_config(env)?;
+        let old_treasury = platform_config.treasury_address.clone();
+
         platform_config.treasury_address = Some(new_address.clone());
         platform_config.updated_at = now;
         platform_config.updated_by = new_address.clone();
@@ -1221,6 +1231,10 @@ impl FeeManager {
             .set(&PLATFORM_FEE_KEY, &platform_config);
 
         env.storage().instance().remove(&ROTATION_KEY);
+
+        if let Some(old) = old_treasury {
+            crate::events::emit_treasury_rotation_confirmed(env, &old, new_address);
+        }
 
         Ok(new_address.clone())
     }

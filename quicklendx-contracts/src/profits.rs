@@ -547,12 +547,20 @@ pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 
         / denominator
 }
 
-/// Compute the expected return on a principal amount.
+/// Compute the simple interest yield on a principal amount.
+/// Accepts `u32` rate and duration for ergonomic use from typed call sites.
 ///
-/// # Returns
-/// Total expected return (principal + yield)
+/// # Formula
+/// ```text
+/// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
+/// ```
+pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+    compute_yield(amount, rate_bps as i128, duration_days as i128)
+}
+>>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
+
 pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
-    let yield_amount = compute_yield(amount, rate_bps.into(), duration_days.into());
+    let yield_amount = compute_yield_u32(amount, rate_bps, duration_days);
     amount.max(0).saturating_add(yield_amount)
 }
 
@@ -895,6 +903,7 @@ mod tests {
     #[test]
     fn test_investor_platform_treasury_sum_invariant() {
         let env = Env::default();
+        let contract_id = env.register(crate::QuickLendXContract, ());
         let cases = vec![
             (0i128, 0i128),
             (1000, 1100),
@@ -904,7 +913,9 @@ mod tests {
             (1000, 2000),
         ];
         for (investment, payment) in cases {
-            let breakdown = PlatformFee::calculate_breakdown(&env, investment, payment);
+            let breakdown = env.as_contract(&contract_id, || {
+                PlatformFee::calculate_breakdown(&env, investment, payment)
+            });
             // Verify investor profit + platform fee = gross profit
             assert_eq!(
                 breakdown.investor_profit + breakdown.platform_fee,

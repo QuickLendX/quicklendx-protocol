@@ -745,8 +745,10 @@ mod escrow_query_consistency {
     fn test_status_match_released() {
         let (env, client, admin) = setup_contract();
         let amount = 5_000i128;
-        let (_, _, _, invoice_id, _) = setup_funded_invoice(&env, &client, &admin, amount);
+        let (business, investor, _, invoice_id, _) = setup_funded_invoice(&env, &client, &admin, amount);
 
+        client.approve_early_escrow_release(&invoice_id, &business);
+        client.approve_early_escrow_release(&invoice_id, &investor);
         client.release_escrow_funds(&invoice_id);
 
         let details = client.get_escrow_details(&invoice_id);
@@ -787,6 +789,8 @@ mod escrow_query_consistency {
             setup_funded_invoice(&env, &client, &admin, amount);
 
         let before = client.get_escrow_details(&invoice_id);
+        client.approve_early_escrow_release(&invoice_id, &business);
+        client.approve_early_escrow_release(&invoice_id, &investor);
         client.release_escrow_funds(&invoice_id);
         let after = client.get_escrow_details(&invoice_id);
 
@@ -906,10 +910,12 @@ mod escrow_query_consistency {
     #[test]
     fn test_cross_invoice_queries_are_isolated() {
         let (env, client, admin) = setup_contract();
-        let (_, _, _, invoice_a, _) = setup_funded_invoice(&env, &client, &admin, 4_000);
+        let (business_a, investor_a, _, invoice_a, _) = setup_funded_invoice(&env, &client, &admin, 4_000);
         let (_, _, _, invoice_b, _) = setup_funded_invoice(&env, &client, &admin, 6_000);
 
         // Release A; B must remain Held.
+        client.approve_early_escrow_release(&invoice_a, &business_a);
+        client.approve_early_escrow_release(&invoice_a, &investor_a);
         client.release_escrow_funds(&invoice_a);
 
         assert_eq!(client.get_escrow_status(&invoice_a), EscrowStatus::Released);

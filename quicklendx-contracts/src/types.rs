@@ -37,6 +37,20 @@ impl InvoiceStatus {
     }
 }
 
+/// Invoice lock state controlled by admin holds.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvoiceLock {
+    None,
+    Frozen,
+}
+
+impl InvoiceLock {
+    pub fn is_locked(&self) -> bool {
+        *self != Self::None
+    }
+}
+
 /// Bid status enumeration
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -152,6 +166,31 @@ pub struct InvoiceRating {
     pub timestamp: u64,
 }
 
+/// Freeze reason enumeration representing why a business invoice was frozen
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BusinessFreezeReason {
+    /// Generic administrative freeze (admin's discretion)
+    AdminAction,
+    /// Business KYC was rejected or revoked
+    KYCRejected,
+    /// Legal or compliance policy violation
+    ComplianceViolation,
+    /// Fraud or suspicious activity detected
+    SuspiciousActivity,
+    /// Court order or legal hold applied
+    LegalHold,
+}
+
+/// Freeze record stored alongside the frozen flag on an invoice
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FreezeInfo {
+    pub reason: BusinessFreezeReason,
+    pub frozen_by: Address,
+    pub frozen_at: u64,
+}
+
 /// Core Invoice data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -186,6 +225,44 @@ pub struct Invoice {
     pub dispute: Dispute,
     pub total_paid: i128,
     pub payment_history: Vec<PaymentRecord>,
+}
+
+pub const RATINGS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+
+/// Versioned ratings snapshot for off-chain indexers and downstream contracts.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RatingsSnapshot {
+    pub schema_version: u32,
+    pub invoice_id: BytesN<32>,
+    pub average_rating: Option<u32>,
+    pub total_ratings: u32,
+    pub highest_rating: Option<u32>,
+    pub lowest_rating: Option<u32>,
+    pub ledger_sequence: u32,
+}
+
+/// Input type for a single invoice within a `store_invoices_batch` call.
+///
+/// Bundles every per-invoice field so the batch entrypoint can accept a
+/// `Vec<InvoiceInput>` with a single-argument list, keeping the public ABI
+/// clean and future-proof (adding optional metadata requires a new struct
+/// version rather than a new variadic argument list).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvoiceInput {
+    /// Invoice face value in the smallest currency unit (must be > 0).
+    pub amount: i128,
+    /// Token contract address for the invoice currency.
+    pub currency: Address,
+    /// Unix timestamp by which the invoice must be settled (must be in the future).
+    pub due_date: u64,
+    /// Human-readable invoice description (max `MAX_DESCRIPTION_LENGTH` bytes).
+    pub description: String,
+    /// Invoice category (Services, Products, etc.).
+    pub category: InvoiceCategory,
+    /// Optional searchable tags (max `MAX_INVOICE_TAGS` entries, each max 50 bytes).
+    pub tags: Vec<String>,
 }
 
 /// Helper struct for metadata updates
@@ -301,4 +378,50 @@ pub struct PruneReport {
     pub pruned: u32,
     /// Offset to pass on the next call.
     pub next_offset: u32,
+}
+
+/// Paginated result wrapper for `Vec<BytesN<32>>` queries (invoice IDs, investment IDs).
+///
+/// Bundles the page of items together with pagination metadata so consumers
+/// (frontend, downstream contracts, operators) know the total result-set size
+/// and whether additional pages exist **without** making a separate count query
+/// or looping until an empty page is returned.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedBytes32Vec {
+    /// The items in the current page (≤ `MAX_QUERY_LIMIT`).
+    pub items: Vec<BytesN<32>>,
+    /// Total number of records matching the filter (before pagination is applied).
+    pub total_count: u32,
+    /// `true` when additional pages exist past the current offset + limit.
+    pub has_more: bool,
+}
+
+/// Paginated result wrapper for `Vec<Bid>` queries.
+///
+/// Same shape as [`PaginatedBytes32Vec`] but carries full [`Bid`] records instead
+/// of opaque IDs so callers can render bid details without N+1 lookups.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedBids {
+    /// The bid records in the current page (≤ `MAX_QUERY_LIMIT`).
+    pub items: Vec<Bid>,
+    /// Total number of records matching the filter (before pagination is applied).
+    pub total_count: u32,
+    /// `true` when additional pages exist past the current offset + limit.
+    pub has_more: bool,
+}
+
+/// Paginated result wrapper for `Vec<Address>` queries (e.g. currency whitelist).
+///
+/// Same shape as [`PaginatedBytes32Vec`] but carries [`Address`] values.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedCurrencies {
+    /// The currency addresses in the current page (≤ `MAX_QUERY_LIMIT`).
+    pub items: Vec<Address>,
+    /// Total number of records matching the filter (before pagination is applied).
+    pub total_count: u32,
+    /// `true` when additional pages exist past the current offset + limit.
+    pub has_more: bool,
 }

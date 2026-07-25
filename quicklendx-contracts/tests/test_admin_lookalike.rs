@@ -10,7 +10,7 @@ use soroban_sdk::{testutils::Address as _, Address, Env};
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, QuickLendXContract);
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Generate an admin address and initialize the contract with it.
@@ -24,7 +24,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
 #[test]
 #[should_panic(expected = "Error(Contract, #1201)")]
 fn test_direct_admin_transfer_to_lookalike_is_rejected() {
-    let (env, client, admin) = setup();
+    let (env, client, _admin) = setup();
 
     // A "lookalike" address is syntactically valid but has no on-ledger entry.
     let lookalike_admin = Address::generate(&env);
@@ -59,7 +59,7 @@ fn test_two_step_admin_transfer_to_lookalike_is_rejected() {
 
 #[test]
 fn test_transfer_to_existing_address_succeeds() {
-    let (env, client, admin) = setup();
+    let (env, client, _admin) = setup();
 
     // Create a new valid admin address that is guaranteed to exist.
     let new_admin = Address::generate(&env);

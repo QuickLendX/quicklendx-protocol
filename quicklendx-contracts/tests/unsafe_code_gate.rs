@@ -250,7 +250,7 @@ fn first_party_sources_contain_no_unsafe_keyword() {
                 violations.push(format!(
                     "  {}:{}: {}",
                     file_path
-                        .strip_prefix(&contracts_root())
+                        .strip_prefix(contracts_root())
                         .unwrap_or(file_path)
                         .display(),
                     line_num + 1,
@@ -282,8 +282,8 @@ fn first_party_sources_contain_no_unsafe_keyword() {
 /// Matches: `unsafe {`, `unsafe fn`, `unsafe impl`, `unsafe trait`,
 ///          leading/trailing word boundaries.
 fn contains_unsafe_keyword(text: &str) -> bool {
-    let mut chars = text.char_indices().peekable();
-    while let Some((i, _)) = chars.next() {
+    let chars = text.char_indices().peekable();
+    for (i, _) in chars {
         // Check for the substring "unsafe" starting at position i.
         if text[i..].starts_with("unsafe") {
             let end = i + "unsafe".len();

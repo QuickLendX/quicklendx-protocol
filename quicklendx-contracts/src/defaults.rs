@@ -3,7 +3,7 @@ use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice
 use crate::init::ProtocolInitializer;
 use crate::payments::{EscrowStatus, EscrowStorage};
 use crate::storage::{InvestmentStorage, InvoiceStorage};
-use crate::types::{InvestmentStatus, InvoiceStatus};
+use crate::types::{InvestmentStatus, Invoice, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, Vec};
 
 /// Default grace period in seconds (7 days)
@@ -348,9 +348,17 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Defaulted, invoice_id);
 
+    let history_key = crate::storage::StorageKeys::business_default_history(&invoice.business);
+    let history_count: u32 = env.storage().persistent().get(&history_key).unwrap_or(0);
+    env.storage()
+        .persistent()
+        .set(&history_key, &history_count.saturating_add(1));
+    crate::storage::bump_persistent(env, &history_key);
+
     emit_invoice_expired(env, &invoice);
 
     if let Some(mut investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
+        require_active_insurance_at_settlement(env, &invoice)?;
         investment.status = InvestmentStatus::Defaulted;
 
         let claim_details = investment.process_all_insurance_claims(env);
@@ -410,4 +418,16 @@ pub fn get_dispute_details(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     Ok(None)
+}
+
+pub fn require_active_insurance_at_settlement(
+    env: &Env,
+    invoice: &Invoice,
+) -> Result<(), QuickLendXError> {
+    if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, &invoice.id) {
+        if !investment.insurance.is_empty() && !investment.has_active_insurance() {
+            return Err(QuickLendXError::InsuranceNotActive);
+        }
+    }
+    Ok(())
 }

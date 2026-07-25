@@ -14,11 +14,9 @@ use soroban_sdk::{
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, QuickLendXContract);
+    let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    // The main `initialize` function takes a complex `InitializationParams` struct.
-    // For this test, `initialize_admin` is simpler and sufficient.
     client.initialize_admin(&admin);
     (env, client, admin)
 }
@@ -28,11 +26,10 @@ fn test_cancel_treasury_rotation_by_admin_succeeds() {
     let (env, client, admin) = setup();
     let new_treasury = Address::generate(&env);
 
-    // Initiate a rotation. `set_treasury` requires the admin's address for auth.
+    // Initiate a rotation
     client.set_treasury(&admin, &new_treasury);
 
-    // Verify pending rotation exists. Assumes a getter for the pending treasury.
-    // NOTE: `get_pending_treasury` will need to be added to the contract interface.
+    // Verify pending rotation exists
     let pending = client.get_pending_treasury().unwrap();
     assert_eq!(pending.0, new_treasury);
 
@@ -57,12 +54,12 @@ fn test_cancel_treasury_rotation_by_admin_succeeds() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1858)")] // Use a unique error code from the 185x range for rotations.
+#[should_panic(expected = "Error(Contract, #1858)")]
 fn test_cancel_treasury_rotation_fails_if_no_pending_rotation() {
-    let (env, client, admin) = setup();
+    let (_env, client, admin) = setup();
 
     // Action: Attempt to cancel a rotation when none is pending.
-    // Expectation: Panics with the `NoPendingTreasuryRotation` contract error.
+    // Expectation: Panics with the `NoPendingTreasuryRotation` contract error (1858).
     client.cancel_treasury_rotation(&admin);
 }
 
