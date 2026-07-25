@@ -108,6 +108,8 @@ mod test_panic_handler;
 #[cfg(test)]
 mod test_due_date_guard;
 #[cfg(test)]
+mod test_auto_resolution_boundary;
+#[cfg(test)]
 mod test_cancel_invoice_matrix;
 #[cfg(test)]
 mod test_governance;
@@ -137,6 +139,8 @@ mod test_bid_cancel_accept_race;
 mod test_bid_expiry_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
+#[cfg(test)]
+mod test_require_business_active;
 #[cfg(test)]
 mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -239,6 +243,10 @@ mod test_reentrancy;
 mod test_reentrancy_fault_injection;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
+// Issue #1908 — per-invoice settlement currency whitelist (defence-in-depth).
+// Negative test: settlement blocked when whitelist does not match invoice currency.
+#[cfg(test)]
+mod test_settlement_currency_whitelist;
 #[cfg(test)]
 mod test_settle_during_dispute;
 #[cfg(test)]
@@ -349,6 +357,7 @@ mod test_tier_boundary;
 mod test_verification_matrix;
 pub mod types;
 pub use types::*;
+pub mod upgrade;
 pub mod verification;
 pub mod vesting;
 use admin::require_not_self;
@@ -1149,6 +1158,15 @@ impl QuickLendXContract {
         // Store the invoice
         InvoiceStorage::store_invoice(&env, &invoice);
 
+        // Per-invoice settlement currency whitelist (defence-in-depth)
+        let mut settlement_currencies: Vec<Address> = Vec::new(&env);
+        settlement_currencies.push_back(currency.clone());
+        crate::settlement::store_settlement_currencies(
+            &env,
+            &invoice.id,
+            &settlement_currencies,
+        );
+
         // Emit event
         env.events().publish(
             (symbol_short!("created"),),
@@ -1212,6 +1230,16 @@ impl QuickLendXContract {
             origination_fee_bps,
         )?;
         InvoiceStorage::store_invoice(&env, &invoice);
+
+        // Per-invoice settlement currency whitelist (defence-in-depth)
+        let mut settlement_currencies: Vec<Address> = Vec::new(&env);
+        settlement_currencies.push_back(currency.clone());
+        crate::settlement::store_settlement_currencies(
+            &env,
+            &invoice.id,
+            &settlement_currencies,
+        );
+
         emit_invoice_uploaded(&env, &invoice);
 
         Ok(invoice.id)
@@ -1321,6 +1349,16 @@ impl QuickLendXContract {
             )?;
             let id = invoice.id.clone();
             InvoiceStorage::store_invoice(&env, &invoice);
+
+            // Per-invoice settlement currency whitelist (defence-in-depth)
+            let mut settlement_currencies: Vec<Address> = Vec::new(&env);
+            settlement_currencies.push_back(input.currency.clone());
+            crate::settlement::store_settlement_currencies(
+                &env,
+                &invoice.id,
+                &settlement_currencies,
+            );
+
             emit_invoice_uploaded(&env, &invoice);
             ids.push_back(id);
         }
@@ -4819,6 +4857,23 @@ impl QuickLendXContract {
     }
 }
 
+// ── Upgrade control entrypoints ─────────────────────────────────────────────
+
+#[contractimpl]
+impl QuickLendXContract {
+    pub fn schedule_upgrade(env: Env, admin: Address, wasm_hash: BytesN<32>) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::schedule_upgrade(&env, &admin, &wasm_hash)
+    }
+
+    pub fn cancel_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::cancel_upgrade(&env, &admin)
+    }
+
+    pub fn execute_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::execute_upgrade(&env, &admin)
+    }
+}
+
 // =============================================================================
 // Feature-gated contract entrypoints
 // =============================================================================
@@ -4860,6 +4915,9 @@ mod test_view_only;
 
 #[cfg(test)]
 mod test_business_freeze_reason;
+
+#[cfg(test)]
+mod test_upgrade_guard;
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
