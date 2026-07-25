@@ -273,6 +273,7 @@ mod test_bid_ranking;
 mod test_bid_match_helper;
 #[cfg(test)]
 mod test_vesting;
+#[cfg(test)]
 mod test_vesting_summary;
 // Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
 // every CI matrix entry.
