@@ -174,11 +174,10 @@ fn test_settlement_blocked_during_active_dispute() {
     // Expected: Settlement fails because dispute blocks finalization
     assert!(settle_result.is_err());
     let err = settle_result.err().unwrap().unwrap();
-    // Settlement logic checks invoice status first; with dispute, status might change
-    // or settlement just rejects. Either InvalidStatus or similar error expected.
+    // Settlement logic explicitly checks for active disputes and returns DisputeActive.
     assert!(matches!(
         err,
-        QuickLendXError::InvalidStatus | QuickLendXError::OperationNotAllowed
+        QuickLendXError::DisputeActive | QuickLendXError::OperationNotAllowed
     ));
 
     // Step 4: Verify escrow remains locked
@@ -563,4 +562,37 @@ fn test_partial_payments_during_dispute() {
 
     // **Invariant Verified**: Partial payments are recorded during disputes,
     // but settlement finalization waits for resolution
+}
+
+/// Test: Negative test ensuring the active dispute guard is triggered on settlement.
+/// Before the fix, this would fail by returning `InvalidStatus` instead of `DisputeActive`.
+#[test]
+fn test_settlement_guard_rejects_active_dispute_negative() {
+    let env = Env::default();
+    env.mock_all_auths();
+
+    let admin = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    let contract_id = env.register_contract(None, QuickLendXContract);
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    client.initialize(&admin);
+
+    let amount: i128 = 100_000;
+    let (invoice_id, _currency) =
+        setup_funded_invoice(&env, &client, &business, &investor, &admin, amount);
+
+    // Open dispute
+    let reason = String::from_str(&env, "Test active dispute check");
+    let evidence = String::from_str(&env, "Evidence");
+    client.create_dispute(&invoice_id, &business, &reason, &evidence);
+
+    // Try to settle entire amount during an active dispute.
+    // This MUST return the explicitly typed DisputeActive error.
+    let settle_result = client.try_settle_invoice(&invoice_id, &amount);
+
+    assert!(settle_result.is_err());
+    let err = settle_result.err().unwrap().unwrap();
+    assert_eq!(err, QuickLendXError::DisputeActive);
 }

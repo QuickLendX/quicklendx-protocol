@@ -1159,4 +1159,3 @@ fn test_add_currencies_batch_zero_address_fails() {
     let res = client.try_add_currencies_batch(&admin, &list);
     assert!(res.is_err(), "batch add should reject zero address");
 }
-

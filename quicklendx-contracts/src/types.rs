@@ -107,7 +107,7 @@ impl DisputeResolution {
             Self::FavorBusiness => 1,
             Self::FavorInvestor => 2,
             Self::Split => 3,
-            Self::Dismissed => 4
+            Self::Dismissed => 4,
         }
     }
 }
@@ -225,6 +225,21 @@ pub struct Invoice {
     pub dispute: Dispute,
     pub total_paid: i128,
     pub payment_history: Vec<PaymentRecord>,
+}
+
+pub const RATINGS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+
+/// Versioned ratings snapshot for off-chain indexers and downstream contracts.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RatingsSnapshot {
+    pub schema_version: u32,
+    pub invoice_id: BytesN<32>,
+    pub average_rating: Option<u32>,
+    pub total_ratings: u32,
+    pub highest_rating: Option<u32>,
+    pub lowest_rating: Option<u32>,
+    pub ledger_sequence: u32,
 }
 
 /// Input type for a single invoice within a `store_invoices_batch` call.

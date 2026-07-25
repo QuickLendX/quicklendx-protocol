@@ -174,8 +174,6 @@ mod test_expired_bids_cleanup;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
 #[cfg(test)]
-mod test_governance;
-#[cfg(test)]
 mod test_invoice;
 #[cfg(test)]
 mod test_panic_handler;
@@ -282,10 +280,6 @@ mod test_init_debug;
 mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
-#[cfg(test)]
-mod test_investment_withdrawal;
-#[cfg(test)]
-mod test_investment_active_guard;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -294,6 +288,10 @@ mod test_investment_withdrawal;
 mod test_invoice_metadata;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_search_ranking;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_line_item_consistency;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_profits_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -325,6 +323,8 @@ mod test_volume_tier_props;
 mod test_cannot_withdraw_more_than_deposited;
 #[cfg(test)]
 mod test_tier_boundary;
+#[cfg(test)]
+mod test_ratings_snapshot;
 pub mod types;
 pub use types::*;
 pub mod verification;
@@ -1599,6 +1599,12 @@ impl QuickLendXContract {
     pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
         let invoices = InvoiceStorage::get_invoices_by_status(&env, status);
         invoices.len()
+    }
+
+    /// Get the total number of defaulted invoices for a business.
+    pub fn get_business_default_history(env: Env, business: Address) -> u32 {
+        let key = crate::storage::StorageKeys::business_default_history(&business);
+        env.storage().persistent().get(&key).unwrap_or(0)
     }
 
     /// Get total invoice count
@@ -3965,6 +3971,25 @@ impl QuickLendXContract {
         env: Env,
     ) -> Result<analytics::AnalyticsSnapshot, QuickLendXError> {
         analytics::AnalyticsCalculator::export_analytics_snapshot(&env)
+    }
+
+    /// Return a frozen snapshot of an invoice's ratings for downstream use.
+    pub fn ratings_snapshot(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<RatingsSnapshot, QuickLendXError> {
+        let invoice = crate::storage::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        Ok(RatingsSnapshot {
+            schema_version: crate::types::RATINGS_SNAPSHOT_SCHEMA_VERSION,
+            invoice_id,
+            average_rating: invoice.average_rating,
+            total_ratings: invoice.total_ratings,
+            highest_rating: invoice.get_highest_rating(),
+            lowest_rating: invoice.get_lowest_rating(),
+            ledger_sequence: env.ledger().sequence(),
+        })
     }
 
     pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {

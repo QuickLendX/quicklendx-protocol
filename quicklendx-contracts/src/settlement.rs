@@ -85,7 +85,7 @@ use crate::investment::InvestmentStorage;
 use crate::payments::transfer_funds;
 use crate::storage::InvoiceStorage;
 use crate::types::InvestmentStatus;
-use crate::types::{Invoice, InvoiceStatus, DisputeStatus, PaymentRecord as InvoicePaymentRecord};
+use crate::types::{DisputeStatus, Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
@@ -408,6 +408,7 @@ pub fn settle_invoice(
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
+    require_no_active_dispute(&invoice)?;
     let payer = invoice.business.clone();
 
     let remaining_due = compute_remaining_due(&invoice)?;
@@ -426,8 +427,7 @@ pub fn settle_invoice(
         .checked_add(applied_preview)
         .ok_or(QuickLendXError::InvalidAmount)?;
 
-    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .unwrap();
+    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
     if projected_total < invoice.amount || projected_total < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -572,9 +572,9 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
+    require_no_active_dispute(&invoice)?;
 
-    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
-        .unwrap();
+    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
     if invoice.total_paid < invoice.amount || invoice.total_paid < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -707,12 +707,15 @@ fn ensure_payable_status(invoice: &Invoice) -> Result<(), QuickLendXError> {
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    Ok(())
+}
+
+fn require_no_active_dispute(invoice: &Invoice) -> Result<(), QuickLendXError> {
     if invoice.dispute_status == DisputeStatus::Disputed
         || invoice.dispute_status == DisputeStatus::UnderReview
     {
-        return Err(QuickLendXError::InvalidStatus);
+        return Err(QuickLendXError::DisputeActive);
     }
-
     Ok(())
 }
 
