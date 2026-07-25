@@ -1,7 +1,7 @@
 #![cfg(feature = "fuzz-tests")]
 
-use crate::verification::{compute_investor_tier_from_stats, InvestorTier};
 use proptest::prelude::*;
+use crate::verification::{compute_investor_tier_from_stats, InvestorTier};
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(5000))]
