@@ -1,4 +1,4 @@
-//! Invoice settlement with partial payments, capped overpayment handling,
+﻿//! Invoice settlement with partial payments, capped overpayment handling,
 //! durable per-payment storage records, and finalization safety guards.
 //!
 //! # Invariants
@@ -22,8 +22,8 @@
 //!
 //! ### Implementation
 //! `settle_invoice_internal()` enforces two sequential guards:
-//! 1. `ensure_payable_status()` — invoice must be `Funded`.
-//! 2. **Dispute-active guard** — `invoice.dispute_status` must NOT be
+//! 1. `ensure_payable_status()` Ã¢â‚¬â€ invoice must be `Funded`.
+//! 2. **Dispute-active guard** Ã¢â‚¬â€ `invoice.dispute_status` must NOT be
 //!    `Disputed` or `UnderReview`; returns `QuickLendXError::DisputeActive`
 //!    (2204) while either open state is present.
 //!    `Resolved` is intentionally allowed: once the admin has issued a
@@ -391,6 +391,7 @@ pub fn settle_invoice(
     env: &Env,
     invoice_id: &BytesN<32>,
     payment_amount: i128,
+    snap: &crate::types::Investment,
 ) -> Result<(), QuickLendXError> {
     if payment_amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
@@ -552,7 +553,7 @@ pub fn is_invoice_finalized(env: &Env, invoice_id: &BytesN<32>) -> Result<bool, 
 /// enforced by `get_payment_records` may differ based on `MAX_QUERY_LIMIT`.
 ///
 /// # Returns
-/// `DEFAULT_SETTLEMENT_BATCH_SIZE_SOFT_CAP` (25) — the recommended batch size.
+/// `DEFAULT_SETTLEMENT_BATCH_SIZE_SOFT_CAP` (25) Ã¢â‚¬â€ the recommended batch size.
 pub fn default_settlement_batch_size_soft_cap() -> u32 {
     DEFAULT_SETTLEMENT_BATCH_SIZE_SOFT_CAP
 }
@@ -562,7 +563,7 @@ pub fn default_settlement_batch_size_soft_cap() -> u32 {
 /// exceeding this limit will be clamped to this value.
 ///
 /// # Returns
-/// `MAX_SETTLEMENT_BATCH_SIZE_SOFT_CAP` (50) — the maximum allowed batch size.
+/// `MAX_SETTLEMENT_BATCH_SIZE_SOFT_CAP` (50) Ã¢â‚¬â€ the maximum allowed batch size.
 pub fn max_settlement_batch_size_soft_cap() -> u32 {
     MAX_SETTLEMENT_BATCH_SIZE_SOFT_CAP
 }
@@ -578,9 +579,9 @@ pub fn max_settlement_batch_size_soft_cap() -> u32 {
 /// compatible fallback for invoices created before this feature).
 ///
 /// # Arguments
-/// * `env` — The contract environment.
-/// * `invoice_id` — The invoice whose whitelist to set.
-/// * `currencies` — Allowed settlement currencies for this invoice.
+/// * `env` Ã¢â‚¬â€ The contract environment.
+/// * `invoice_id` Ã¢â‚¬â€ The invoice whose whitelist to set.
+/// * `currencies` Ã¢â‚¬â€ Allowed settlement currencies for this invoice.
 pub fn store_settlement_currencies(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -661,7 +662,7 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
         return Err(QuickLendXError::DisputeActive);
     }
 
-    // ── Settlement currency whitelist (defence-in-depth) ─────────────────
+    // Ã¢â€â‚¬Ã¢â€â‚¬ Settlement currency whitelist (defence-in-depth) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
     // Threat: if `invoice.currency` were corrupted in storage (or if a
     // future refactor allowed a caller-supplied settlement currency), the
     // per-invoice whitelist captured at creation time provides an independent
@@ -904,6 +905,98 @@ fn emit_payment_recorded(
 }
 
 fn emit_invoice_settled_final(
+fn require_no_active_dispute(invoice: &Invoice) -> Result<(), QuickLendXError> {
+    if invoice.dispute_status == DisputeStatus::Disputed
+        || invoice.dispute_status == DisputeStatus::UnderReview
+    {
+        return Err(QuickLendXError::DisputeActive);
+    }
+    Ok(())
+}
+
+fn compute_remaining_due(invoice: &Invoice) -> Result<i128, QuickLendXError> {
+    if invoice.amount <= 0 {
+        return Err(QuickLendXError::InvoiceAmountInvalid);
+    }
+
+    if invoice.total_paid < 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if invoice.total_paid >= invoice.amount {
+        return Ok(0);
+    }
+
+    invoice
+        .amount
+        .checked_sub(invoice.total_paid)
+        .ok_or(QuickLendXError::InvalidAmount)
+}
+
+fn update_inline_payment_history(
+    invoice: &mut Invoice,
+    payer: Address,
+    amount: i128,
+    timestamp: u64,
+    nonce: String,
+) {
+    if invoice.payment_history.len() >= MAX_INLINE_PAYMENT_HISTORY {
+        invoice.payment_history.remove(0u32);
+    }
+
+    invoice.payment_history.push_back(InvoicePaymentRecord {
+        payer,
+        amount,
+        timestamp,
+        transaction_id: nonce,
+    });
+}
+
+fn get_payment_count_internal(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+    env.storage()
+        .persistent()
+        .get(&SettlementDataKey::PaymentCount(invoice_id.clone()))
+        .unwrap_or(0)
+}
+
+fn get_last_applied_amount(env: &Env, invoice_id: &BytesN<32>) -> Result<i128, QuickLendXError> {
+    let count = get_payment_count_internal(env, invoice_id);
+    if count == 0 {
+        return Err(QuickLendXError::StorageKeyNotFound);
+    }
+
+    let last_index = count.saturating_sub(1);
+    let record = get_payment_record(env, invoice_id, last_index)?;
+    Ok(record.amount)
+}
+
+fn make_settlement_nonce(env: &Env) -> String {
+    // Full settlement can only succeed once per invoice (status becomes Paid),
+    // so a static nonce is sufficient for this internal path.
+    String::from_str(env, "settlement")
+}
+
+fn emit_payment_recorded(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    payer: &Address,
+    applied_amount: i128,
+    total_paid: i128,
+    status: &InvoiceStatus,
+) {
+    env.events().publish(
+        (symbol_short!("pay_rec"),),
+        (
+            invoice_id.clone(),
+            payer.clone(),
+            applied_amount,
+            total_paid,
+            *status,
+        ),
+    );
+}
+
+fn emit_invoice_settled_final(
     env: &Env,
     invoice_id: &BytesN<32>,
     final_amount: i128,
@@ -913,5 +1006,65 @@ fn emit_invoice_settled_final(
         (symbol_short!("inv_stlf"),),
         (invoice_id.clone(), final_amount, paid_at),
     );
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
+    use crate::types::{Investment, InvestmentStatus};
+    use crate::investment::InvestmentStorage;
+
+    fn create_test_investment(env: &Env, invoice_id: &BytesN<32>, amount: i128) -> Investment {
+        Investment {
+            investment_id: BytesN::from_array(env, &[1; 32]),
+            invoice_id: invoice_id.clone(),
+            investor: Address::generate(env),
+            amount,
+            funded_at: 100,
+            status: InvestmentStatus::Active,
+            insurance: Vec::new(env),
+        }
+    }
+
+    #[test]
+    fn test_investment_snapshot_fresh() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let invoice_id = BytesN::from_array(&env, &[0; 32]);
+        let investment = create_test_investment(&env, &invoice_id, 1000);
+        
+        InvestmentStorage::store_investment(&env, &investment);
+
+        let result = require_matching_investment_snapshot(&env, &invoice_id, &investment);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_investment_snapshot_stale() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let invoice_id = BytesN::from_array(&env, &[0; 32]);
+        
+        let stored_investment = create_test_investment(&env, &invoice_id, 1000);
+        InvestmentStorage::store_investment(&env, &stored_investment);
+
+        let mut snapshot_investment = stored_investment.clone();
+        snapshot_investment.amount = 2000;
+
+        let result = require_matching_investment_snapshot(&env, &invoice_id, &snapshot_investment);
+        assert_eq!(result, Err(QuickLendXError::StaleInvestmentSnapshot));
+    }
+
+    #[test]
+    fn test_investment_snapshot_missing() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let invoice_id = BytesN::from_array(&env, &[0; 32]);
+        let investment = create_test_investment(&env, &invoice_id, 1000);
+        
+        let result = require_matching_investment_snapshot(&env, &invoice_id, &investment);
+        assert_eq!(result, Err(QuickLendXError::StorageKeyNotFound));
+    }
 }
 
