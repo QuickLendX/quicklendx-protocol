@@ -245,6 +245,11 @@ mod test_bid_capacity_stress;
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
+// Issue #2083 — bid-match helper tests; runs on every CI matrix entry
+// (no feature gate, since `legacy-tests` is OFF in CI). Covers
+// `compare_bids`, `get_best_bid`, and `rank_bids`.
+#[cfg(test)]
+mod test_bid_match_helper;
 #[cfg(test)]
 mod test_vesting;
 mod test_vesting_summary;
