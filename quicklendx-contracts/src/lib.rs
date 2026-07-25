@@ -351,6 +351,10 @@ mod test_volume_tier_props;
 mod test_cannot_withdraw_more_than_deposited;
 #[cfg(test)]
 mod test_store_invoice_auth;
+// Issue #1880 — batch-create boundary tests; no feature gate (runs on every CI matrix entry).
+// Covers 0, 1, MAX_BATCH, MAX_BATCH+1, active-invoice cap, KYC gating, and atomicity.
+#[cfg(test)]
+mod test_store_invoices_batch;
 #[cfg(test)]
 mod test_tier_boundary;
 #[cfg(test)]
@@ -1346,6 +1350,7 @@ impl QuickLendXContract {
                 input.description.clone(),
                 input.category,
                 input.tags.clone(),
+                None, // origination_fee_bps
             )?;
             let id = invoice.id.clone();
             InvoiceStorage::store_invoice(&env, &invoice);
