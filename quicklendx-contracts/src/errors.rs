@@ -25,6 +25,8 @@ pub enum QuickLendXError {
     InvoiceAlreadyDefaulted = 1006,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceFrozen = 1007,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidFreezeReason = 1008,
 
     // Authorization (1100-1104)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -80,6 +82,8 @@ pub enum QuickLendXError {
     MaxInvoicesPerBusinessExceeded = 1408,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidBidTtl = 1409,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InsufficientKYCTier = 1410,
 
     // Rating (1500-1503)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -90,6 +94,9 @@ pub enum QuickLendXError {
     AlreadyRated = 1502,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotRater = 1503,
+    /// Admin rating override was requested without a non-empty, bounded-length audit reason.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidRatingOverrideReason = 1504,
 
     // KYC / verification (1600-1604)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -155,6 +162,8 @@ pub enum QuickLendXError {
     InvalidDisputeReason = 1905,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDisputeEvidence = 1906,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    DisputeActive = 1907,
 
     // Notification (2000-2002)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -187,11 +196,18 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DuplicateDefaultTransition = 2202,
     BackupVersionUnsupported = 2203,
-    DuplicateBid = 2204,
-    /// Caller supplied ledger sequence 0, which is not a valid Soroban ledger sequence.
-    /// Ledger sequences start at 1; sequence 0 indicates an uninitialised or default-constructed value.
+    /// Settlement attempted while a dispute is open on the invoice.
+    ///
+    /// Threat: a business could otherwise race to finalize settlement and
+    /// release escrowed funds before an admin resolves a pending dispute,
+    /// removing the investor's ability to recover their principal.
+    ///
+    /// Distinct from `InvalidStatus` (1401) so callers and monitors can tell
+    /// "wrong lifecycle state" apart from "dispute must be resolved first".
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidLedgerSequence = 2205,
+    /// Batch size exceeds backfill max batch size configuration
+    BatchSizeTooLarge = 2206,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -208,6 +224,7 @@ impl From<QuickLendXError> for Symbol {
             // Authorization
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
+            QuickLendXError::InvalidFreezeReason => symbol_short!("INV_FRZ_RSN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
             QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
             QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
@@ -235,6 +252,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotFunded => symbol_short!("NOT_FD"),
             QuickLendXError::AlreadyRated => symbol_short!("ALR_RT"),
             QuickLendXError::NotRater => symbol_short!("NOT_RT"),
+            QuickLendXError::InvalidRatingOverrideReason => symbol_short!("RT_OV_RSN"),
             // KYC / verification
             QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
             QuickLendXError::KYCAlreadyPending => symbol_short!("KYC_PD"),
@@ -258,6 +276,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::RotationNotFound => symbol_short!("ROT_NF"),
             QuickLendXError::RotationExpired => symbol_short!("ROT_EXP"),
             QuickLendXError::RotationTimelockNotElapsed => symbol_short!("ROT_TLK"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NOPND"),
             // Dispute
             QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
             QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
@@ -266,6 +285,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::DisputeNotUnderReview => symbol_short!("DSP_UR"),
             QuickLendXError::InvalidDisputeReason => symbol_short!("DSP_RN"),
             QuickLendXError::InvalidDisputeEvidence => symbol_short!("DSP_EV"),
+            QuickLendXError::DisputeActive => symbol_short!("DSP_ACT"),
             // Notification
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
@@ -274,8 +294,11 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaxActiveBidsPerInvestorExceeded => symbol_short!("MAX_ACT"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
+            QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
-            QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
+            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_PND_TR"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_L_SEQ"),
             QuickLendXError::EmergencyWithdrawTimelockNotElapsed => symbol_short!("EMG_TLK"),
             QuickLendXError::EmergencyWithdrawExpired => symbol_short!("EMG_EXP"),
             QuickLendXError::EmergencyWithdrawCancelled => symbol_short!("EMG_CNL"),

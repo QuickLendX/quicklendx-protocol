@@ -1,4 +1,6 @@
 #![cfg(test)]
+#![allow(clippy::disallowed_methods)]
+#![allow(deprecated)]
 
 extern crate std;
 
@@ -22,6 +24,8 @@ fn test_cancel_treasury_rotation_by_admin_succeeds() {
 
     // Initiate a rotation.
     client.set_treasury(&admin, &new_treasury);
+    assert_eq!(client.get_treasury(), Some(new_treasury));
+}
 
     // Verify the pending rotation was recorded.
     let pending = client.get_pending_treasury();

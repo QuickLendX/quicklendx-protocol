@@ -31,6 +31,7 @@
 
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
+use crate::types::InvoiceLock;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::events::TOPIC_BID_CANCELLED;
 use soroban_sdk::{
@@ -118,6 +119,34 @@ fn test_investor_can_cancel_own_placed_bid() {
         })
         .count();
     assert_eq!(cancelled_events, 1, "cancel_bid must emit exactly one BidCancelled event");
+}
+
+#[test]
+fn test_invoice_lock_round_trip_admin_api() {
+    let (env, client, admin, business) = setup();
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+    let due = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due,
+        &String::from_str(&env, "inv"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+
+    let current_lock = client.get_invoice_lock(&invoice_id);
+    assert_eq!(current_lock, InvoiceLock::None, "new invoices should start unlocked");
+
+    let result = client.set_invoice_lock(&admin, &invoice_id, InvoiceLock::Frozen);
+    assert!(result.is_ok(), "admin should be able to set a frozen lock");
+    assert_eq!(client.get_invoice_lock(&invoice_id), InvoiceLock::Frozen);
+
+    let result = client.set_invoice_lock(&admin, &invoice_id, InvoiceLock::None);
+    assert!(result.is_ok(), "admin should be able to clear the invoice lock");
+    assert_eq!(client.get_invoice_lock(&invoice_id), InvoiceLock::None);
 }
 
 #[test]

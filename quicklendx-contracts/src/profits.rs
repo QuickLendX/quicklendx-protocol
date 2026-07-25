@@ -616,7 +616,11 @@ pub fn compute_twa_reference(deltas: &[LedgerDelta]) -> i128 {
         num = num.saturating_add(d.balance.saturating_mul(dur));
         den = den.saturating_add(dur);
     }
-    if den == 0 { 0 } else { num / den }
+    if den == 0 {
+        0
+    } else {
+        num / den
+    }
 }
 
 // ============================================================================
@@ -890,7 +894,6 @@ mod tests {
 
     #[test]
     fn test_investor_platform_treasury_sum_invariant() {
-        let env = Env::default();
         let cases = vec![
             (0i128, 0i128),
             (1000, 1100),
@@ -900,7 +903,9 @@ mod tests {
             (1000, 2000),
         ];
         for (investment, payment) in cases {
-            let breakdown = PlatformFee::calculate_breakdown(&env, investment, payment);
+            // Use pure function to avoid storage access outside contract context
+            let breakdown =
+                PlatformFee::calculate_breakdown_with_fee_bps(investment, payment, 200);
             // Verify investor profit + platform fee = gross profit
             assert_eq!(
                 breakdown.investor_profit + breakdown.platform_fee,

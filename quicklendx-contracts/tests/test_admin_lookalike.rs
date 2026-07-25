@@ -3,6 +3,7 @@
 extern crate std;
 
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
+use quicklendx_contracts::errors::QuickLendXError;
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {

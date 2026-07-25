@@ -56,7 +56,7 @@ proposal with `get_pending_admin()` and check `is_transfer_locked()` /
 
 The one privileged action that can move funds out of the contract — emergency
 recovery of mistakenly-sent tokens — is **timelocked** so the community has a
-window to react. It is a queue-then-execute flow:
+window to react. It is a queue-then-execute flow (see [Timelocked and Queued Operations Lifecycle](contracts/timelocked-operations.md) for contributor and technical details):
 
 ```text
 1. initiate_emergency_withdraw(...)   # admin queues the withdrawal, emits an event

@@ -2,7 +2,7 @@ use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec, Bytes, xdr:
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::types::{
-    Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus, 
+    Invoice, InvoiceStatus, InvoiceCategory, InvoiceLock, InvoiceMetadata, Bid, BidStatus, 
     DisputeStatus, PaymentRecord, InvoiceRating, Escrow, EscrowStatus
 };
 use crate::storage::InvoiceStorage;
@@ -37,6 +37,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             initial_currencies,
+        backfill_max_batch_size: 100,
         };
         ProtocolInitializer::initialize(&env, &params)
     }
@@ -133,6 +134,13 @@ impl QuickLendXContract {
         // This is the primary anti-spam control: only vetted businesses may write
         // invoice data to on-chain storage.
         crate::verification::require_business_not_pending(&env, &business)?;
+
+        // POLICY LAYER 3: Regulatory compliance gate (reserved seam — no-op today).
+        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
+        // jurisdiction-specific or on-chain oracle-based compliance checks without
+        // touching this call site.
+        crate::regulatory::require_regulatory_ok(&env, &business)?;
+
         // Enforce per-business invoice cap.
         ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
 
@@ -303,8 +311,23 @@ impl QuickLendXContract {
 
     pub fn freeze_invoice(env: Env, admin: Address, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         crate::admin::AdminStorage::require_admin(&env, &admin)?;
-        InvoiceStorage::set_frozen(&env, &invoice_id, true);
+        InvoiceStorage::set_invoice_lock(&env, &invoice_id, InvoiceLock::Frozen);
         Ok(())
+    }
+
+    pub fn set_invoice_lock(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        lock: InvoiceLock,
+    ) -> Result<(), QuickLendXError> {
+        crate::admin::AdminStorage::require_admin(&env, &admin)?;
+        InvoiceStorage::set_invoice_lock(&env, &invoice_id, lock);
+        Ok(())
+    }
+
+    pub fn get_invoice_lock(env: Env, invoice_id: BytesN<32>) -> InvoiceLock {
+        InvoiceStorage::get_invoice_lock(&env, &invoice_id)
     }
 
     pub fn verify_business(env: Env, admin: Address, business: Address) -> Result<(), QuickLendXError> {

@@ -134,11 +134,15 @@ fn test_default_after_grace_period() {
     env.ledger().set_timestamp(default_time);
 
     // Mark as defaulted
+    assert_eq!(client.get_business_default_history(&business), 0);
     client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
 
     // Verify invoice is now defaulted
     let defaulted_invoice = client.get_invoice(&invoice_id);
     assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
+
+    // Verify business default history counter incremented
+    assert_eq!(client.get_business_default_history(&business), 1);
 }
 
 #[test]

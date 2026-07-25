@@ -42,8 +42,10 @@ fn setup_initialized_with_admin() -> (Env, Address, Address) {
         initial_currencies: {
             let mut v = soroban_sdk::Vec::new(&env);
             v.push_back(currency1);
-            v
+            v,
+        backfill_max_batch_size: 100,
         },
+        backfill_max_batch_size: 100,
     };
 
     ProtocolInitializer::initialize(&env, &params).expect("init failed");
