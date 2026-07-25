@@ -101,7 +101,7 @@ pub mod payments;
 pub mod profits;
 pub mod protocol_limits;
 pub mod reentrancy;
-pub mod resolution_policy;
+pub mod regulatory;
 pub mod settlement;
 pub mod storage;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -199,6 +199,8 @@ mod test_invariant_self_check;
 mod test_investment_consistency;
 #[cfg(test)]
 mod test_operational_limits;
+#[cfg(test)]
+mod test_regulatory;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 // #[cfg(test)]
@@ -740,7 +742,7 @@ impl QuickLendXContract {
     /// Removes the stored override so [`get_bid_limit_config`] reports
     /// `is_custom = false` and `is_disabled = false`.  Useful for reverting a
     /// previous [`set_max_active_bids_per_investor(0)`] call.
-    pub fn reset_max_bids_per_investor(env: Env) -> Result<u32, QuickLendXError> {
+    pub fn reset_investor_bid_limit(env: Env) -> Result<u32, QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         bid::BidStorage::reset_max_active_bids_per_investor(&env, &admin)
     }
@@ -1114,6 +1116,12 @@ impl QuickLendXContract {
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&env, &tags)?;
+
+        // Regulatory compliance gate (reserved seam — no-op today).
+        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
+        // jurisdiction-specific or on-chain oracle-based compliance checks without
+        // touching this call site.
+        crate::regulatory::require_regulatory_ok(&env, &business)?;
 
         // Create new invoice
         let invoice = Invoice::new(
@@ -1850,6 +1858,11 @@ impl QuickLendXContract {
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &investor)?;
+        // Regulatory compliance gate (reserved seam — no-op today).
+        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
+        // jurisdiction-specific or on-chain oracle-based compliance checks without
+        // touching this call site.
+        crate::regulatory::require_regulatory_ok(&env, &investor)?;
         // Idempotency check
         let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
         if idempotency_exists(&env, &idem_key) {
@@ -2749,7 +2762,8 @@ impl QuickLendXContract {
         env: Env,
         invoice_id: BytesN<32>,
     ) -> Result<payments::EscrowStatus, QuickLendXError> {
-        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
+        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         Ok(escrow.status)
     }
 
@@ -3011,7 +3025,7 @@ impl QuickLendXContract {
     ///      the contract's MAX_QUERY_LIMIT. Indexers should use this value as a starting point
     ///      for pagination to balance efficiency and memory usage.
     /// @return Default settlement batch size (25) — recommended number of payment records per page.
-    pub fn get_settle_batch_size_soft_cap(_env: Env) -> u32 {
+    pub fn get_settlement_batch_size(_env: Env) -> u32 {
         settlement::default_settlement_batch_size_soft_cap()
     }
 
@@ -3019,7 +3033,7 @@ impl QuickLendXContract {
     /// @dev This represents the hard upper bound enforced by the contract. Query requests
     ///      exceeding this limit will be automatically clamped to this value by `get_payment_records`.
     /// @return Maximum settlement batch size (50) — hard cap for payment records per query.
-    pub fn get_settle_batch_size_soft_max(_env: Env) -> u32 {
+    pub fn get_settlement_batch_size_max(_env: Env) -> u32 {
         settlement::max_settlement_batch_size_soft_cap()
     }
 

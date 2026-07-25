@@ -9,6 +9,40 @@ use crate::types::RebuildReport;
 use soroban_sdk::token;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, TryFromVal, Val, Vec};
 
+/// Validate that `currency` is a registered token contract by attempting a safe
+/// cross-contract `balance` call.
+///
+/// This is a **compliance-layer seam** — the check currently only verifies that
+/// the address hosts a contract with a `balance` entry-point. Future compliance
+/// logic (token allowlists, KYC-registered tokens, etc.) can be layered in here
+/// without touching call-sites.
+///
+/// # Errors
+/// Returns [`QuickLendXError::InvalidCurrency`] when `currency` is not a
+/// registered token contract.
+fn validate_token_address(
+    env: &Env,
+    currency: &Address,
+    account: &Address,
+) -> Result<(), QuickLendXError> {
+    let result: Result<Result<i128, _>, _> = env.try_invoke_contract::<i128, QuickLendXError>(
+        currency,
+        &symbol_short!("balance"),
+        soroban_sdk::vec![env, account.to_val()],
+    );
+    match result {
+        Ok(_) => Ok(()),
+        Err(_) => Err(QuickLendXError::InvalidCurrency),
+    }
+}
+
+/// Minimum transfer amount to prevent dust transfers.
+/// Matches the test-mode MIN_TRANSFER from protocol_limits.rs.
+#[cfg(not(test))]
+const MIN_TRANSFER: i128 = 1_000_000; // 1 token (6 decimals)
+#[cfg(test)]
+const MIN_TRANSFER: i128 = 10;
+
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
@@ -445,6 +479,10 @@ pub fn create_escrow(
     EscrowStorage::require_no_active_reserve_repair(env, currency)?;
     let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
 
+    // Compliance-layer seam: verify the token address is a registered contract
+    // before issuing any cross-contract calls to it.
+    validate_token_address(env, currency, investor)?;
+
     crate::qlx_log!(env, "payment", "Creating escrow: amount={}", amount);
 
     // Move funds from investor into contract-controlled escrow
@@ -621,6 +659,11 @@ pub fn transfer_funds(
         return Err(QuickLendXError::InvalidAmount);
     }
 
+    // Reject amounts below the minimum transfer threshold (dust prevention)
+    if amount < MIN_TRANSFER {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
     if from == to {
         return Err(QuickLendXError::SelfTransfer);
     }
@@ -628,7 +671,7 @@ pub fn transfer_funds(
     let token_client = token::Client::new(env, currency);
     let contract_address = env.current_contract_address();
 
-    // Ensure sufficient balance exists before attempting transfer
+    // Ensure sufficient balance exists before attempting transfer.
     let available_balance = token_client.balance(from);
     if available_balance < amount {
         return Err(QuickLendXError::InsufficientFunds);

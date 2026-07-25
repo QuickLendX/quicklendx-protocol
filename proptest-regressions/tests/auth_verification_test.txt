@@ -5,4 +5,4 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc 1745efac88ea499883ff6c00fcb27bcc8f463b1a80feffa447c38809c6e4586c # shrinks to bid_amount = 1, invoice_amount = 50000
-cc 51f83b63135ef7ed9e87fbb552b2b87d60a739c1a60530e789250ab775f68c66 # shrinks to bid_amount = 1, expected_return = 50000
+cc 559b0181609ba96f543c0144bccd8b33e8ac233c8ec3b723067c2a886f70823e # shrinks to bid_amount = 1, expected_return = 50000

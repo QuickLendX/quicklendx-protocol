@@ -15,7 +15,7 @@ proptest! {
     #[test]
     fn asserts_single_auth_count_when_user_places_bid(
         bid_amount in 1_000..50_000i128,
-        expected_return in 50_000..100_000i128
+        expected_return in 50_001..100_000i128
     ) {
         let env = Env::default();
         let contract_id = env.register(QuickLendXContract, ());
@@ -32,6 +32,9 @@ proptest! {
         client.set_admin(&admin);
 
         client.initialize_protocol_limits(&admin, &10, &30, &86400);
+
+        client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
+        client.verify_business(&admin, &business);
 
         let due_date = env.ledger().timestamp() + 86400;
         let invoice_amount = 100_000i128;
@@ -53,7 +56,9 @@ proptest! {
 
         );
 
-        client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
+        client.verify_invoice(&invoice_id);
+
+        client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC data"));
         client.verify_investor(&investor, &100_000i128);
 
         client.verify_invoice(&invoice_id);

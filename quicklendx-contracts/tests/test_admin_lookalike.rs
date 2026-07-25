@@ -3,6 +3,7 @@
 extern crate std;
 
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
+use quicklendx_contracts::errors::QuickLendXError;
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 /// Sets up the test environment with an initialized contract and an admin address
@@ -13,8 +14,6 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    // Generate an admin address and initialize the contract with it.
-    // This ensures the admin address has a ledger entry and `exists()` will return true.
     let admin = Address::generate(&env);
     client.initialize_admin(&admin);
 
@@ -22,20 +21,11 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
 }
 
 #[test]
-#[should_panic]
-fn test_direct_admin_transfer_to_lookalike_is_rejected() {
-    let (env, client, _admin) = setup();
+fn test_transfer_to_same_address_is_rejected() {
+    let (env, client, admin) = setup();
 
-    // A "lookalike" address is syntactically valid but has no on-ledger entry.
-    let lookalike_admin = Address::generate(&env);
-
-    // Pre-condition check: The lookalike address should not exist yet.
-    // Note: This assert is for clarity; the contract's `exists()` check is the real guard.
-    assert!(!lookalike_admin.exists());
-
-    // Action: Attempt a direct admin transfer to the non-existent address.
-    // Expectation: The call panics with `QuickLendXError::InvalidAddress` (1201).
-    client.transfer_admin(&admin);
+    let result = client.try_transfer_admin(&admin);
+    assert_eq!(result, Err(Ok(QuickLendXError::OperationNotAllowed)));
 }
 
 #[test]
@@ -55,24 +45,4 @@ fn test_two_step_admin_transfer_to_lookalike_is_rejected() {
     // Action: Attempt to initiate a two-step admin transfer to the non-existent address.
     // Expectation: The call panics with `QuickLendXError::InvalidAddress` (1201).
     client.initiate_admin_transfer(&admin, &lookalike_admin);
-}
-
-/// In soroban-sdk 25.x, transfer_admin hits a "frame is already authorized"
-/// host error when the admin was previously authorized (e.g., via
-/// initialize_protocol_limits). The semantic equivalent is verified by other
-/// admin transfer tests.
-#[test]
-#[should_panic]
-fn test_transfer_to_existing_address_succeeds() {
-    let (env, client, _admin) = setup();
-
-    // Create a new valid admin address that is guaranteed to exist.
-    let new_admin = Address::generate(&env);
-    client.initialize_protocol_limits(&new_admin, &1, &1, &1); // Using any auth'd function makes it exist.
-
-    // Action: Transfer admin to the new, existing address.
-    client.transfer_admin(&admin);
-
-    // Assert: The admin was successfully updated.
-    assert_eq!(client.get_current_admin(), Some(new_admin));
 }

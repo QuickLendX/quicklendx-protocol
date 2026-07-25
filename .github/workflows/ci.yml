@@ -5,6 +5,11 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
+  workflow_dispatch:
+
+concurrency:
+  group: soroban-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -53,7 +58,7 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           cd quicklendx-contracts
-          cargo build --verbose
+          cargo build --target wasm32v1-none --verbose
 
       - name: Check code quality
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'

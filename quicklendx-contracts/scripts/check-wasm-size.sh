@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # WASM build and size budget regression checks for QuickLendX contracts.
 #
-# Builds the contract for Soroban (wasm32v1-none or wasm32-unknown-unknown)
+# Builds the contract for Soroban (wasm32v1-native)
 # and applies a three-tier size classification:
 #
 #   OK      : size <= WARN_BYTES (90 % of hard limit)     – healthy
@@ -56,15 +56,21 @@ if [[ "$CHECK_ONLY" == false ]]; then
     WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
   fi
 else
-  # --check-only: probe both target directories for an existing artifact
+  # --check-only: probe package-local and workspace-root directories
   if [[ -f "target/wasm32v1-none/release/$WASM_NAME" ]]; then
     WASM_PATH="target/wasm32v1-none/release/$WASM_NAME"
-  elif [[ -f "target/wasm32-unknown-unknown/release/$WASM_NAME" ]]; then
-    WASM_PATH="target/wasm32-unknown-unknown/release/$WASM_NAME"
+  elif [[ -f "../target/wasm32v1-none/release/$WASM_NAME" ]]; then
+    WASM_PATH="../target/wasm32v1-none/release/$WASM_NAME"
   else
     echo "::error::--check-only specified but no WASM artifact found; run without --check-only first."
     exit 1
   fi
+fi
+
+# cargo builds in a workspace put artefacts in the workspace root target/,
+# so fall back to the parent dir if the package-local path is absent.
+if [[ ! -f "$WASM_PATH" ]] && [[ -f "../target/wasm32v1-none/release/$WASM_NAME" ]]; then
+  WASM_PATH="../target/wasm32v1-none/release/$WASM_NAME"
 fi
 
 if [[ ! -f "$WASM_PATH" ]]; then

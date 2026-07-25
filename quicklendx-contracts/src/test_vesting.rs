@@ -846,7 +846,7 @@ fn test_very_small_vesting_amount() {
 
     env.ledger().set_timestamp(end);
     let releasable = client.get_vesting_releasable(&1).unwrap();
-    assert_eq!(releasable, 10, "Entire vesting amount should be releasable at end");
+    assert_eq!(releasable, 10, "Single unit should be releasable");
 }
 
 #[test]

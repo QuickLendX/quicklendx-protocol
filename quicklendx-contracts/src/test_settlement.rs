@@ -1010,25 +1010,25 @@ fn test_settlement_idempotency_no_side_effects() {
 // Settlement Batch Size Configuration Tests
 // ============================================================================
 
-/// Test that get_settle_batch_size_soft_cap returns the expected default value.
+/// Test that get_settlement_batch_size returns the expected default value.
 #[test]
-fn test_get_settlement_batch_size_soft_cap_returns_default() {
+fn test_get_settlement_batch_size_returns_default() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    let batch_size = client.get_settle_batch_size_soft_cap();
+    let batch_size = client.get_settlement_batch_size();
     assert_eq!(batch_size, 25, "Default settlement batch size soft cap should be 25");
 }
 
-/// Test that get_settle_batch_size_soft_max returns the expected maximum value.
+/// Test that get_settlement_batch_size_max returns the expected maximum value.
 #[test]
-fn test_get_settlement_batch_size_soft_cap_max_returns_maximum() {
+fn test_get_settlement_batch_size_max_returns_maximum() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    let max_batch_size = client.get_settle_batch_size_soft_max();
+    let max_batch_size = client.get_settlement_batch_size_max();
     assert_eq!(max_batch_size, 50, "Maximum settlement batch size soft cap should be 50");
 }
 
@@ -1039,8 +1039,8 @@ fn test_settlement_batch_size_consistency_with_query_limit() {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
-    let max_batch_size = client.get_settle_batch_size_soft_max();
-    let default_batch_size = client.get_settle_batch_size_soft_cap();
+    let max_batch_size = client.get_settlement_batch_size_max();
+    let default_batch_size = client.get_settlement_batch_size();
 
     // Max should match MAX_QUERY_LIMIT (50)
     assert_eq!(max_batch_size, 50);
@@ -1073,7 +1073,7 @@ fn test_settlement_batch_size_usable_for_pagination() {
     client.process_partial_payment(&invoice_id, &300, &String::from_str(&env, "payment3"));
 
     // Get the recommended batch size
-    let batch_size = client.get_settle_batch_size_soft_cap();
+    let batch_size = client.get_settlement_batch_size();
 
     // Verify we can query with the recommended batch size
     let records_result = env.as_contract(&contract_id, || {
@@ -1085,7 +1085,7 @@ fn test_settlement_batch_size_usable_for_pagination() {
     assert_eq!(records.len(), 3, "Should retrieve all 3 payment records");
 
     // Verify we can query with the max batch size
-    let max_batch_size = client.get_settle_batch_size_soft_max();
+    let max_batch_size = client.get_settlement_batch_size_max();
     let records_result_max = env.as_contract(&contract_id, || {
         get_payment_records(&env, &invoice_id, 0, max_batch_size)
     });
@@ -1101,8 +1101,8 @@ fn test_settlement_batch_size_stable_across_states() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     // Read batch sizes before initialization
-    let default_before = client.get_settle_batch_size_soft_cap();
-    let max_before = client.get_settle_batch_size_soft_max();
+    let default_before = client.get_settlement_batch_size();
+    let max_before = client.get_settlement_batch_size_max();
 
     // Initialize contract
     let admin = Address::generate(&env);
@@ -1119,8 +1119,8 @@ fn test_settlement_batch_size_stable_across_states() {
     );
 
     // Read batch sizes after initialization
-    let default_after = client.get_settle_batch_size_soft_cap();
-    let max_after = client.get_settle_batch_size_soft_max();
+    let default_after = client.get_settlement_batch_size();
+    let max_after = client.get_settlement_batch_size_max();
 
     // Values should be stable
     assert_eq!(default_before, default_after, "Default batch size should remain stable");

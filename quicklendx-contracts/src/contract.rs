@@ -134,6 +134,13 @@ impl QuickLendXContract {
         // This is the primary anti-spam control: only vetted businesses may write
         // invoice data to on-chain storage.
         crate::verification::require_business_not_pending(&env, &business)?;
+
+        // POLICY LAYER 3: Regulatory compliance gate (reserved seam — no-op today).
+        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
+        // jurisdiction-specific or on-chain oracle-based compliance checks without
+        // touching this call site.
+        crate::regulatory::require_regulatory_ok(&env, &business)?;
+
         // Enforce per-business invoice cap.
         ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
 
