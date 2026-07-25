@@ -14,7 +14,7 @@
 //!
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use soroban_sdk::{symbol_short, Address, Env, Vec, String};
+use soroban_sdk::{symbol_short, Address, Env, String, Vec};
 
 const WHITELIST_KEY: soroban_sdk::Symbol = symbol_short!("curr_wl");
 
@@ -236,7 +236,7 @@ impl CurrencyWhitelist {
             .get(&WHITELIST_KEY)
             .unwrap_or_else(|| Vec::new(env))
     }
-    
+
     /// Returns the canonical zero address used for validation.
     fn zero_address(env: &Env) -> Address {
         Address::from_string(&String::from_str(

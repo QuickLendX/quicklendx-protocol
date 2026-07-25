@@ -591,9 +591,8 @@ fn test_settlement_guard_rejects_active_dispute_negative() {
     // Try to settle entire amount during an active dispute.
     // This MUST return the explicitly typed DisputeActive error.
     let settle_result = client.try_settle_invoice(&invoice_id, &amount);
-    
+
     assert!(settle_result.is_err());
     let err = settle_result.err().unwrap().unwrap();
     assert_eq!(err, QuickLendXError::DisputeActive);
 }
-
