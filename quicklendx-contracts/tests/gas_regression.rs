@@ -836,6 +836,8 @@ fn test_escrow_gas() {
         "default",
         client.try_get_escrow_status(&harness.invoice_id)
     );
+    client.approve_early_escrow_release(&harness.invoice_id, &harness.business);
+    client.approve_early_escrow_release(&harness.invoice_id, &harness.investor);
     bench_scenario!(
         harness,
         "release_escrow_funds",

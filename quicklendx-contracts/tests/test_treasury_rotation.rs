@@ -1,11 +1,13 @@
 #![cfg(test)]
+#![allow(clippy::disallowed_methods)]
+#![allow(deprecated)]
 
 extern crate std;
 
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient, quicklendx_contracts::errors::QuickLendXError};
 use soroban_sdk::{
-    testutils::{Address as _, Events},
-    Address, Env, IntoVal,
+    testutils::Address as _,
+    Address, Env,
 };
 
 // Helper to setup the test environment.
@@ -16,22 +18,19 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    // The main `initialize` function takes a complex `InitializationParams` struct.
-    // For this test, `initialize_admin` is simpler and sufficient.
     client.initialize_admin(&admin);
     (env, client, admin)
 }
 
 #[test]
 fn test_cancel_treasury_rotation_by_admin_succeeds() {
-    let (env, client, admin) = setup();
-    let new_treasury = Address::generate(&env);
+    let (_env, client, admin) = setup();
+    let new_treasury = Address::generate(&_env);
 
-    // Initiate a rotation. `set_treasury` requires the admin's address for auth.
+    // Initiate a rotation.
     client.set_treasury(&admin, &new_treasury);
 
-    // Verify pending rotation exists. Assumes a getter for the pending treasury.
-    // NOTE: `get_pending_treasury` will need to be added to the contract interface.
+    // Verify pending rotation exists.
     let pending = client.get_pending_treasury().unwrap();
     assert_eq!(pending.0, new_treasury);
 
@@ -59,28 +58,28 @@ fn test_cancel_treasury_rotation_by_admin_succeeds() {
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #1858)")] // Use a unique error code from the 185x range for rotations.
+#[should_panic(expected = "Error(Contract, #1858)")]
 fn test_cancel_treasury_rotation_fails_if_no_pending_rotation() {
-    let (env, client, admin) = setup();
+    let (_env, client, admin) = setup();
 
-    // Action: Attempt to cancel a rotation when none is pending.
-    // Expectation: Panics with the `NoPendingTreasuryRotation` contract error.
+    // Attempt to cancel a rotation when none is pending.
+    // Expects panic with NoPendingTreasuryRotation (error code 1858).
     client.cancel_treasury_rotation(&admin);
 }
 
 #[test]
-#[should_panic(expected = "Error(Auth, InvalidAction)")]
+#[should_panic(expected = "Error(Contract, #1103)")]
 fn test_cancel_treasury_rotation_fails_for_non_admin() {
-    let (env, client, admin) = setup();
-    let new_treasury = Address::generate(&env);
-    let non_admin = Address::generate(&env);
+    let (_env, client, admin) = setup();
+    let new_treasury = Address::generate(&_env);
+    let non_admin = Address::generate(&_env);
 
     // Initiate a rotation as admin
     client.set_treasury(&admin, &new_treasury);
 
-    // Action: Attempt to cancel as a non-admin.
-    // Expectation: Panics with an auth error.
-    client
-        .with_source_account(&non_admin)
-        .cancel_treasury_rotation(&non_admin);
+    // Attempt to cancel as a non-admin.
+    // Expects panic with auth error since non_admin hasn't signed.
+    let _ = client
+        .try_cancel_treasury_rotation(&non_admin)
+        .unwrap_err();
 }

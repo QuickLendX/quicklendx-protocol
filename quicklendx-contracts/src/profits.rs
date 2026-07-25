@@ -542,29 +542,6 @@ pub fn validate_calculation_inputs(
 /// For fixed `rate_bps` and `duration_days`, `yield` is non-decreasing in `amount`.
 /// For fixed `amount` and `duration_days`, `yield` is non-decreasing in `rate_bps`.
 /// For fixed `amount` and `rate_bps`, `yield` is non-decreasing in `duration_days`.
-/// Compute the expected return on a principal amount.
-///
-/// # Returns
-/// Total expected return (principal + yield)
-pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
-    let yield_amount = compute_yield(amount, rate_bps.into(), duration_days.into());
-    amount.max(0).saturating_add(yield_amount)
-}
-
-/// Compute the simple interest yield on a principal amount.
-///
-/// # Formula
-/// ```text
-/// yield = amount * rate_bps * duration_days / (BPS_DENOMINATOR * 365)
-/// ```
-///
-/// All arithmetic uses `saturating_mul` / integer division to stay within
-/// `i128` bounds without panicking and to preserve `#![no_std]` discipline.
-///
-/// # Arguments
-/// * `amount`        — Principal (must be >= 0; negative input returns 0)
-/// * `rate_bps`      — Annual rate in basis points, e.g. 500 = 5 %
-/// * `duration_days` — Holding period in days
 ///
 /// # Returns
 /// Simple interest yield (non-negative).
@@ -578,6 +555,23 @@ pub fn compute_yield(amount: i128, rate_bps: i128, duration_days: i128) -> i128 
         .saturating_mul(duration_days);
     let denominator: i128 = BPS_DENOMINATOR.saturating_mul(365);
     numerator / denominator
+}
+
+/// Compute the expected return on a principal amount.
+///
+/// All arithmetic uses `saturating_mul` / integer division to stay within
+/// `i128` bounds without panicking and to preserve `#![no_std]` discipline.
+///
+/// # Arguments
+/// * `amount`        — Principal (must be >= 0; negative input returns 0)
+/// * `rate_bps`      — Annual rate in basis points, e.g. 500 = 5 %
+/// * `duration_days` — Holding period in days
+///
+/// # Returns
+/// Total expected return (principal + yield)
+pub fn compute_expected_return(amount: i128, rate_bps: u32, duration_days: u32) -> i128 {
+    let yield_amount = compute_yield(amount, rate_bps as i128, duration_days as i128);
+    amount.max(0).saturating_add(yield_amount)
 }
 
 /// A single ledger-delta entry for time-weighted average calculations.
@@ -640,7 +634,11 @@ pub fn compute_twa_reference(deltas: &[LedgerDelta]) -> i128 {
         num = num.saturating_add(d.balance.saturating_mul(dur));
         den = den.saturating_add(dur);
     }
-    if den == 0 { 0 } else { num / den }
+    if den == 0 {
+        0
+    } else {
+        num / den
+    }
 }
 
 // ============================================================================
@@ -915,6 +913,8 @@ mod tests {
     #[test]
     fn test_investor_platform_treasury_sum_invariant() {
         let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(crate::QuickLendXContract, ());
         let cases = vec![
             (0i128, 0i128),
             (1000, 1100),
@@ -924,7 +924,9 @@ mod tests {
             (1000, 2000),
         ];
         for (investment, payment) in cases {
-            let breakdown = PlatformFee::calculate_breakdown(&env, investment, payment);
+            let breakdown = env.as_contract(&contract_id, || {
+                PlatformFee::calculate_breakdown(&env, investment, payment)
+            });
             // Verify investor profit + platform fee = gross profit
             assert_eq!(
                 breakdown.investor_profit + breakdown.platform_fee,

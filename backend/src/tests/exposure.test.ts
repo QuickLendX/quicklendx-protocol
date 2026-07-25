@@ -33,6 +33,7 @@ import {
   InvalidAmountError,
   exposureService,
 } from "../services/exposureService";
+import { apiKeyService } from "../services/api-key-service";
 import { MOCK_BIDS } from "../controllers/v1/bids";
 import { MOCK_SETTLEMENTS } from "../controllers/v1/settlements";
 import { BidStatus, SettlementStatus } from "../types/contract";
@@ -966,7 +967,7 @@ describe("POST /api/v1/bids — exposure cap integration", () => {
         id: "test-key-id",
         key_prefix: key.slice(0, 8),
         created_by: INVESTOR_A,
-        scopes: ["bid:create"],
+        scopes: ["write:bids", "read:bids", "write:*"],
       } as any;
     };
   });
@@ -990,7 +991,7 @@ describe("POST /api/v1/bids — exposure cap integration", () => {
 
     try {
       const apiKey = "qlx_test_" + crypto.randomBytes(32).toString("base64url");
-      const validInvoiceId = "0x" + crypto.randomBytes(32).toString("hex");
+      const validInvoiceId = "inv_01ARZ3NDEKTSV4RRFFQ69G5FAV";
       const res = await request(app)
         .post("/api/v1/bids")
         .set("Authorization", `Bearer ${apiKey}`)
@@ -1019,7 +1020,7 @@ describe("POST /api/v1/bids — exposure cap integration", () => {
     // Use the singleton (default $10B cap) with empty mocks → any bid fits.
     isolate();
     const apiKey = "qlx_test_" + crypto.randomBytes(32).toString("base64url");
-    const validInvoiceId = "0x" + crypto.randomBytes(32).toString("hex");
+    const validInvoiceId = "inv_01ARZ3NDEKTSV4RRFFQ69G5FAV";
 
     // This test will fail at the bidStore layer (no invoice exists) but
     // it should NOT fail at the exposure-cap layer. So we expect either

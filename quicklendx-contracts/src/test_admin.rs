@@ -1250,7 +1250,15 @@ mod access_control_matrix {
         // Non-admin cannot set protocol limits
         let result = env.as_contract(&contract_id, || {
             ProtocolLimitsContract::set_protocol_limits(
-                &env, &non_admin, 1000, 10, 100, 365, 86400, 100,
+                &env,
+                &non_admin,
+                1000,
+                10,
+                100,
+                365,
+                86400,
+                100,
+                crate::verification::InvestorTier::Basic,
             )
         });
         assert_eq!(result, Err(QuickLendXError::NotAdmin));
@@ -1258,7 +1266,15 @@ mod access_control_matrix {
         // Admin can set protocol limits
         let result = env.as_contract(&contract_id, || {
             ProtocolLimitsContract::set_protocol_limits(
-                &env, &admin, 1000, 10, 100, 365, 86400, 100,
+                &env,
+                &admin,
+                1000,
+                10,
+                100,
+                365,
+                86400,
+                100,
+                crate::verification::InvestorTier::Basic,
             )
         });
         assert_eq!(result, Ok(()));
@@ -1790,7 +1806,15 @@ mod access_control_matrix {
             }),
             env.as_contract(&contract_id, || {
                 ProtocolLimitsContract::set_protocol_limits(
-                    &env, &admin_1, 1000, 10, 100, 365, 86400, 100,
+                    &env,
+                    &admin_1,
+                    1000,
+                    10,
+                    100,
+                    365,
+                    86400,
+                    100,
+                    crate::verification::InvestorTier::Basic,
                 )
             }),
         ];
@@ -2692,6 +2716,7 @@ mod access_control_matrix_extended {
                         365,
                         86400,
                         100,
+                        crate::verification::InvestorTier::Basic,
                     )
                 })
             }),

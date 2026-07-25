@@ -86,6 +86,8 @@ fn setup() -> (Ctx, BytesN<32>) {
 fn release_then_refund_is_rejected() {
     let (ctx, inv_id) = setup();
 
+    ctx.client.approve_early_escrow_release(&inv_id, &ctx.business);
+    ctx.client.approve_early_escrow_release(&inv_id, &ctx.investor);
     ctx.client.release_escrow_funds(&ctx.invoice_id_for_inv(&inv_id)).unwrap();
 
     let escrow = ctx.client.get_escrow_status(&inv_id).unwrap();
@@ -104,6 +106,8 @@ fn refund_then_release_is_rejected() {
     let escrow = ctx.client.get_escrow_status(&inv_id).unwrap();
     assert_eq!(escrow, EscrowStatus::Refunded);
 
+    ctx.client.approve_early_escrow_release(&inv_id, &ctx.business);
+    ctx.client.approve_early_escrow_release(&inv_id, &ctx.investor);
     assert_invalid_status!(ctx.client.release_escrow_funds(&inv_id));
 }
 
