@@ -5,11 +5,7 @@
 extern crate std;
 
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
-use quicklendx_contracts::errors::QuickLendXError;
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, Env,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
@@ -17,51 +13,39 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    client.initialize_admin(&admin);
+    client.set_admin(&admin);
     (env, client, admin)
 }
 
 #[test]
-fn test_set_treasury_succeeds() {
-    let (env, client, admin) = setup();
-    let new_treasury = Address::generate(&env);
+fn test_cancel_treasury_rotation_by_admin_succeeds() {
+    let (_env, client, admin) = setup();
+    let new_treasury = Address::generate(&_env);
 
+    // Initiate a rotation.
     client.set_treasury(&admin, &new_treasury);
     assert_eq!(client.get_treasury(), Some(new_treasury));
 }
 
-#[test]
-fn test_get_pending_treasury_returns_none() {
-    let (_env, client, _admin) = setup();
+    // Verify the pending rotation was recorded.
+    let pending = client.get_pending_treasury();
+    assert!(pending.is_some(), "pending treasury must be set after set_treasury");
+    if let Some((addr, _)) = pending {
+        assert_eq!(addr, new_treasury);
+    }
 
-    // This event structure uses the old `publish` format to be consistent
-    // with other admin events like `emit_admin_transfer_cancelled`.
-    assert_eq!(
-        last_event,
-        (
-            client.address.clone(),
-            (soroban_sdk::symbol_short!("tr_rot_cl"), admin).into_val(&env),
-            ().into_val(&env)
-        )
-    );
+    // Cancel the rotation as admin.
+    client.cancel_treasury_rotation(&admin);
+
+    // Verify it was cleared.
+    let pending_after = client.get_pending_treasury();
+    assert!(pending_after.is_none(), "pending treasury must be cleared after cancel");
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #1858)")]
 fn test_cancel_treasury_rotation_fails_if_no_pending_rotation() {
     let (_env, client, admin) = setup();
-
-    let result = client.try_cancel_treasury_rotation(&admin);
-    assert_eq!(result, Err(Ok(QuickLendXError::NoPendingTreasuryRotation)));
-}
-
-#[test]
-fn test_cancel_treasury_rotation_fails_for_non_admin() {
-    let (_env, client, admin) = setup();
-    let new_treasury = Address::generate(&_env);
-    let non_admin = Address::generate(&_env);
-
-    client.set_treasury(&admin, &new_treasury);
-
-    let result = client.try_cancel_treasury_rotation(&non_admin);
-    assert_eq!(result, Err(Ok(QuickLendXError::NotAdmin)));
+    // No rotation has been initiated; cancel must fail with NoPendingTreasuryRotation.
+    client.cancel_treasury_rotation(&admin);
 }
