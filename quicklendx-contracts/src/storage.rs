@@ -81,6 +81,11 @@ impl StorageKeys {
     pub fn investment_count() -> Symbol {
         symbol_short!("inv_cnt")
     }
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"biz_def_h"` resets the business default history counters.
+    pub fn business_default_history(business: &Address) -> (Symbol, Address) {
+        (symbol_short!("biz_def_h"), business.clone())
+    }
 }
 
 /// Secondary indexes for efficient querying.
@@ -290,11 +295,7 @@ impl InvoiceStorage {
         }
     }
 
-    pub fn set_freeze_info(
-        env: &Env,
-        invoice_id: &BytesN<32>,
-        info: &FreezeInfo,
-    ) {
+    pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {
         let key = DataKey::FreezeInfo(invoice_id.clone());
         env.storage().persistent().set(&key, info);
         extend_persistent_ttl(env, &key);

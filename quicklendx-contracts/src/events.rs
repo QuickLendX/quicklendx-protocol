@@ -1545,10 +1545,8 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
 }
 
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
-    env.events().publish(
-        (symbol_short!("tr_rot_cn"), admin.clone()),
-        (),
-    );
+    env.events()
+        .publish((symbol_short!("tr_rot_cn"), admin.clone()), ());
 }
 
 pub fn emit_treasury_rotation_initiated(
@@ -1566,11 +1564,7 @@ pub fn emit_treasury_rotation_initiated(
     .publish(env);
 }
 
-pub fn emit_treasury_rotation_confirmed(
-    env: &Env,
-    old_address: &Address,
-    new_address: &Address,
-) {
+pub fn emit_treasury_rotation_confirmed(env: &Env, old_address: &Address, new_address: &Address) {
     TreasuryRotationConfirmed {
         old_address: old_address.clone(),
         new_address: new_address.clone(),
