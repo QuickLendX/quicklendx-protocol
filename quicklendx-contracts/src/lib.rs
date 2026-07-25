@@ -108,6 +108,8 @@ mod test_panic_handler;
 #[cfg(test)]
 mod test_due_date_guard;
 #[cfg(test)]
+mod test_auto_resolution_boundary;
+#[cfg(test)]
 mod test_cancel_invoice_matrix;
 #[cfg(test)]
 mod test_governance;
@@ -137,6 +139,8 @@ mod test_bid_cancel_accept_race;
 mod test_bid_expiry_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
+#[cfg(test)]
+mod test_require_business_active;
 #[cfg(test)]
 mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -239,6 +243,10 @@ mod test_reentrancy;
 mod test_reentrancy_fault_injection;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
+// Issue #1908 — per-invoice settlement currency whitelist (defence-in-depth).
+// Negative test: settlement blocked when whitelist does not match invoice currency.
+#[cfg(test)]
+mod test_settlement_currency_whitelist;
 #[cfg(test)]
 mod test_settle_during_dispute;
 #[cfg(test)]
@@ -343,12 +351,17 @@ mod test_volume_tier_props;
 mod test_cannot_withdraw_more_than_deposited;
 #[cfg(test)]
 mod test_store_invoice_auth;
+// Issue #1880 — batch-create boundary tests; no feature gate (runs on every CI matrix entry).
+// Covers 0, 1, MAX_BATCH, MAX_BATCH+1, active-invoice cap, KYC gating, and atomicity.
+#[cfg(test)]
+mod test_store_invoices_batch;
 #[cfg(test)]
 mod test_tier_boundary;
 #[cfg(test)]
 mod test_verification_matrix;
 pub mod types;
 pub use types::*;
+pub mod upgrade;
 pub mod verification;
 pub mod vesting;
 use admin::require_not_self;
@@ -1165,6 +1178,15 @@ impl QuickLendXContract {
         // Store the invoice
         InvoiceStorage::store_invoice(&env, &invoice);
 
+        // Per-invoice settlement currency whitelist (defence-in-depth)
+        let mut settlement_currencies: Vec<Address> = Vec::new(&env);
+        settlement_currencies.push_back(currency.clone());
+        crate::settlement::store_settlement_currencies(
+            &env,
+            &invoice.id,
+            &settlement_currencies,
+        );
+
         // Emit event
         env.events().publish(
             (symbol_short!("created"),),
@@ -1228,6 +1250,16 @@ impl QuickLendXContract {
             origination_fee_bps,
         )?;
         InvoiceStorage::store_invoice(&env, &invoice);
+
+        // Per-invoice settlement currency whitelist (defence-in-depth)
+        let mut settlement_currencies: Vec<Address> = Vec::new(&env);
+        settlement_currencies.push_back(currency.clone());
+        crate::settlement::store_settlement_currencies(
+            &env,
+            &invoice.id,
+            &settlement_currencies,
+        );
+
         emit_invoice_uploaded(&env, &invoice);
 
         Ok(invoice.id)
@@ -1334,9 +1366,20 @@ impl QuickLendXContract {
                 input.description.clone(),
                 input.category,
                 input.tags.clone(),
+                None, // origination_fee_bps
             )?;
             let id = invoice.id.clone();
             InvoiceStorage::store_invoice(&env, &invoice);
+
+            // Per-invoice settlement currency whitelist (defence-in-depth)
+            let mut settlement_currencies: Vec<Address> = Vec::new(&env);
+            settlement_currencies.push_back(input.currency.clone());
+            crate::settlement::store_settlement_currencies(
+                &env,
+                &invoice.id,
+                &settlement_currencies,
+            );
+
             emit_invoice_uploaded(&env, &invoice);
             ids.push_back(id);
         }
@@ -4152,6 +4195,9 @@ impl QuickLendXContract {
     /// ledger close without storage writes or auth. Internal iteration is bounded
     /// by the existing invoice status indexes and protocol invoice limits used by
     /// the reused analytics calculators.
+    ///
+    /// Fails with `QuickLendXError::ActiveDisputeExists` while any invoice has
+    /// an unresolved dispute, so a snapshot is never published mid-dispute.
     pub fn export_analytics_snapshot(
         env: Env,
     ) -> Result<analytics::AnalyticsSnapshot, QuickLendXError> {
@@ -4812,6 +4858,44 @@ impl QuickLendXContract {
         EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
     }
 
+    pub fn extend_escrow_expiry(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        new_due_date: u64,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        admin.require_auth();
+        admin::AdminStorage::require_admin(&env, &admin)?;
+
+        let mut invoice = storage::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        let escrow = payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::OperationNotAllowed)?;
+
+        if escrow.status != payments::EscrowStatus::Held {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        let ext_key = storage::DataKey::EscrowExtension(invoice_id.clone());
+        if env.storage().persistent().has(&ext_key) {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        if new_due_date <= invoice.due_date {
+            return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
+        env.storage().persistent().set(&ext_key, &true);
+        storage::extend_persistent_ttl(&env, &ext_key);
+
+        invoice.due_date = new_due_date;
+        storage::InvoiceStorage::update_invoice(&env, &invoice);
+
+        Ok(())
+    }
+
     /// Query the total locked escrow value across a caller-supplied bounded list of currencies.
     ///
     /// At most `max_currencies` entries from `currencies` are aggregated in one call.
@@ -4822,6 +4906,23 @@ impl QuickLendXContract {
         max_currencies: u32,
     ) -> i128 {
         EscrowStorage::get_total_locked_escrow_bounded(&env, &currencies, max_currencies)
+    }
+}
+
+// ── Upgrade control entrypoints ─────────────────────────────────────────────
+
+#[contractimpl]
+impl QuickLendXContract {
+    pub fn schedule_upgrade(env: Env, admin: Address, wasm_hash: BytesN<32>) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::schedule_upgrade(&env, &admin, &wasm_hash)
+    }
+
+    pub fn cancel_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::cancel_upgrade(&env, &admin)
+    }
+
+    pub fn execute_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        upgrade::UpgradeControl::execute_upgrade(&env, &admin)
     }
 }
 
