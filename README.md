@@ -76,7 +76,8 @@ npm run dev
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
 - [`docs/FEES_GRACE_DEFAULT.md`](docs/FEES_GRACE_DEFAULT.md): Unified contributor reference — platform fees, grace period resolution, and default trigger rules in one place.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
-- [`docs/GENERATION_COUNTER.md`](docs/GENERATION_COUNTER.md): What the on-chain protocol version (generation counter) is, who reads it, and the generation-bump invariant.
+- [`docs/APPEALS.md`](docs/APPEALS.md): Appeals process — who reviews, timeline, outcomes, and how they affect funds — operator-facing.
+- [`docs/EVENT_DASHBOARDS.md`](docs/EVENT_DASHBOARDS.md): Standard operator dashboards — panel URLs, PromQL queries, SQLite indexer queries, and alert rules for protocol health, event throughput, disputes, and settlement pipeline.
 
 ## Contribution
 
