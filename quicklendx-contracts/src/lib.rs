@@ -323,6 +323,8 @@ mod test_volume_tier_props;
 mod test_cannot_withdraw_more_than_deposited;
 #[cfg(test)]
 mod test_tier_boundary;
+#[cfg(test)]
+mod test_ratings_snapshot;
 pub mod types;
 pub use types::*;
 pub mod verification;
@@ -3969,6 +3971,25 @@ impl QuickLendXContract {
         env: Env,
     ) -> Result<analytics::AnalyticsSnapshot, QuickLendXError> {
         analytics::AnalyticsCalculator::export_analytics_snapshot(&env)
+    }
+
+    /// Return a frozen snapshot of an invoice's ratings for downstream use.
+    pub fn ratings_snapshot(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<RatingsSnapshot, QuickLendXError> {
+        let invoice = crate::storage::InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        Ok(RatingsSnapshot {
+            schema_version: crate::types::RATINGS_SNAPSHOT_SCHEMA_VERSION,
+            invoice_id,
+            average_rating: invoice.average_rating,
+            total_ratings: invoice.total_ratings,
+            highest_rating: invoice.get_highest_rating(),
+            lowest_rating: invoice.get_lowest_rating(),
+            ledger_sequence: env.ledger().sequence(),
+        })
     }
 
     pub fn get_performance_metrics(env: Env) -> analytics::PerformanceMetrics {
