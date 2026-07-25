@@ -67,6 +67,7 @@ npm run dev
 - [Platform Fee & Treasury Split Operations Guide](file:///c:/Users/HP/quicklendx-protocol/docs/contracts/platform-fee-ops.md): Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
 - [Invoice Lifecycle](docs/INVOICE_LIFECYCLE.md): State diagram and entrypoint reference — Pending → Verified → Funded → Settled/Defaulted.
+- [Investment States](docs/QLX_INVESTMENT_STATES.md): Full investment state machine — Active, Completed, Defaulted, Refunded, Withdrawn — with entrypoints, status coupling, and worked examples.
 - [Dispute Lifecycle](file:///c:/Users/HP/quicklendx-protocol/docs/DISPUTE.md): Who can open, who resolves, timeout behaviour, and fund implications.
 - [`docs/QUERIES.md`](docs/QUERIES.md): Catalog of common read-only entrypoints with concrete invocation examples and return values — the quickest way to find the query you need.
 - [`docs/CROSS_INVOICE_ANALYTICS.md`](docs/CROSS_INVOICE_ANALYTICS.md): Cross-invoice read patterns, supported analytics entrypoints, and their pagination bounds for contributors and integrators.
