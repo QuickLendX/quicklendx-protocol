@@ -16,6 +16,7 @@
 | [dispute.md](contracts/dispute.md) | Dispute lifecycle and resolution |
 | [escrow.md](contracts/escrow.md) | Escrow creation, release, and refund |
 | [bidding.md](contracts/bidding.md) | Bid ranking, TTL, and cleanup |
+| [QLX_BID_MATCH_ALGORITHM.md](QLX_BID_MATCH_ALGORITHM.md) | Deterministic 5-tier bid-matching comparison algorithm write-up and total-ordering specification |
 | [admin.md](contracts/admin.md) | Admin setup and transfer |
 | [storage-schema.md](contracts/storage-schema.md) | Persistent storage keys and index layout |
 | [backup.md](contracts/backup.md) | Backup and restore |
