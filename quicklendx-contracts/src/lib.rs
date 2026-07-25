@@ -239,6 +239,10 @@ mod test_reentrancy;
 mod test_reentrancy_fault_injection;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
+// Issue #1908 — per-invoice settlement currency whitelist (defence-in-depth).
+// Negative test: settlement blocked when whitelist does not match invoice currency.
+#[cfg(test)]
+mod test_settlement_currency_whitelist;
 #[cfg(test)]
 mod test_settle_during_dispute;
 #[cfg(test)]
@@ -1149,6 +1153,15 @@ impl QuickLendXContract {
         // Store the invoice
         InvoiceStorage::store_invoice(&env, &invoice);
 
+        // Per-invoice settlement currency whitelist (defence-in-depth)
+        let mut settlement_currencies: Vec<Address> = Vec::new(&env);
+        settlement_currencies.push_back(currency.clone());
+        crate::settlement::store_settlement_currencies(
+            &env,
+            &invoice.id,
+            &settlement_currencies,
+        );
+
         // Emit event
         env.events().publish(
             (symbol_short!("created"),),
@@ -1212,6 +1225,16 @@ impl QuickLendXContract {
             origination_fee_bps,
         )?;
         InvoiceStorage::store_invoice(&env, &invoice);
+
+        // Per-invoice settlement currency whitelist (defence-in-depth)
+        let mut settlement_currencies: Vec<Address> = Vec::new(&env);
+        settlement_currencies.push_back(currency.clone());
+        crate::settlement::store_settlement_currencies(
+            &env,
+            &invoice.id,
+            &settlement_currencies,
+        );
+
         emit_invoice_uploaded(&env, &invoice);
 
         Ok(invoice.id)
@@ -1321,6 +1344,16 @@ impl QuickLendXContract {
             )?;
             let id = invoice.id.clone();
             InvoiceStorage::store_invoice(&env, &invoice);
+
+            // Per-invoice settlement currency whitelist (defence-in-depth)
+            let mut settlement_currencies: Vec<Address> = Vec::new(&env);
+            settlement_currencies.push_back(input.currency.clone());
+            crate::settlement::store_settlement_currencies(
+                &env,
+                &invoice.id,
+                &settlement_currencies,
+            );
+
             emit_invoice_uploaded(&env, &invoice);
             ids.push_back(id);
         }
