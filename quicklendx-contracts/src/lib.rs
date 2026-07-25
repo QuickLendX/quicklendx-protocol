@@ -4971,6 +4971,9 @@ mod test_business_freeze_reason;
 #[cfg(test)]
 mod test_freeze_guard_writes;
 
+#[cfg(test)]
+mod test_freeze_event;
+
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
 

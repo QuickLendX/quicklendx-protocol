@@ -69,6 +69,12 @@ pub const TOPIC_TREASURY_ROTATION_INITIATED: &str = "treasury_rotation_initiated
 pub const TOPIC_TREASURY_ROTATION_CONFIRMED: &str = "treasury_rotation_confirmed";
 /// Topic for `TreasuryRotationCancelled` events.
 pub const TOPIC_TREASURY_ROTATION_CANCELLED: &str = "treasury_rotation_cancelled";
+/// Topic for `InvoiceFrozen` events.
+///
+/// Emitted when an admin applies a freeze to an invoice via `freeze_invoice`.
+/// The payload includes a `freeze_appeal_channel` field that points consumers
+/// to the appeals process documented in `docs/APPEALS.md`.
+pub const TOPIC_INVOICE_FROZEN: &str = "invoice_frozen";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -711,6 +717,65 @@ pub fn emit_paused(env: &Env, admin: &Address) {
 pub fn emit_unpaused(env: &Env, admin: &Address) {
     Unpaused {
         admin: admin.clone(),
+    }
+    .publish(env);
+}
+
+// ============================================================================
+// Freeze / Unfreeze Events
+// ============================================================================
+
+/// Emitted when an admin applies a freeze to an invoice via `freeze_invoice`.
+///
+/// Topic: [`TOPIC_INVOICE_FROZEN`] (`"invoice_frozen"`)
+///
+/// # Fields
+/// - `invoice_id` – The frozen invoice.
+/// - `frozen_by` – Address of the admin who applied the freeze.
+/// - `reason` – Machine-readable label for the [`crate::types::BusinessFreezeReason`]
+///   variant (e.g. `"admin_action"`, `"compliance_violation"`, `"fraud_suspected"`).
+/// - `freeze_appeal_channel` – A short pointer to the off-chain appeals process.
+///   Set to `"docs/APPEALS.md"` by the emitter.  Downstream consumers (dashboards,
+///   notification pipelines) can surface this string directly to the affected
+///   business so they know where to file an appeal without paging an engineer.
+///   This field contains **no PII** — it is a static URL/path.
+/// - `timestamp` – Ledger timestamp at emission time.
+///
+/// # Backwards compatibility
+/// This event is **additive**.  Indexers that do not recognise the
+/// `freeze_appeal_channel` field can safely ignore it.
+///
+/// # Security
+/// No PII is included.  The `reason` field is the string label returned by
+/// `BusinessFreezeReason::label()`, not a free-text admin comment.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceFrozen {
+    pub invoice_id: BytesN<32>,
+    pub frozen_by: Address,
+    pub reason: String,
+    pub freeze_appeal_channel: String,
+    pub timestamp: u64,
+}
+
+/// Emit an [`InvoiceFrozen`] event.
+///
+/// `reason_label` should come from [`crate::types::BusinessFreezeReason::label()`].
+/// `freeze_appeal_channel` is always `"docs/APPEALS.md"` — a static pointer
+/// to the operator-facing appeals runbook so that any off-chain consumer of
+/// this event knows immediately where to direct the frozen business.
+pub fn emit_invoice_frozen(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    frozen_by: &Address,
+    reason_label: &str,
+) {
+    InvoiceFrozen {
+        invoice_id: invoice_id.clone(),
+        frozen_by: frozen_by.clone(),
+        reason: String::from_str(env, reason_label),
+        freeze_appeal_channel: String::from_str(env, "docs/APPEALS.md"),
+        timestamp: env.ledger().timestamp(),
     }
     .publish(env);
 }

@@ -318,6 +318,15 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         crate::admin::AdminStorage::require_admin(&env, &admin)?;
         InvoiceStorage::set_frozen(&env, &invoice_id, true, Some(reason));
+        // Emit InvoiceFrozen with freeze_appeal_channel so off-chain consumers
+        // (dashboards, notification pipelines, indexers) can immediately surface
+        // the appeals path to the affected business.  Issue #1959.
+        crate::events::emit_invoice_frozen(
+            &env,
+            &invoice_id,
+            &admin,
+            reason.label(),
+        );
         Ok(())
     }
 
