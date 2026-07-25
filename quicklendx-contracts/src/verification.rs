@@ -36,7 +36,7 @@ pub struct BusinessVerification {
 }
 
 #[contracttype]
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, PartialOrd, Ord)]
 pub enum InvestorTier {
     Basic,
     Silver,
@@ -156,14 +156,12 @@ impl BusinessVerificationStorage {
         new_rejection_reason: &Option<String>,
     ) -> Result<(), QuickLendXError> {
         if let Some(old_ver) = old_verification {
-            // If there was an old rejection reason, the new one must match exactly
+            // If there was an old rejection reason and a new rejection reason is provided, they must match
             if let Some(old_reason) = &old_ver.rejection_reason {
                 if let Some(new_reason) = new_rejection_reason {
                     if old_reason != new_reason {
                         return Err(QuickLendXError::InvalidKYCStatus); // Cannot change rejection reason
                     }
-                } else {
-                    return Err(QuickLendXError::InvalidKYCStatus); // Cannot remove rejection reason
                 }
             }
         }
@@ -1623,7 +1621,13 @@ pub fn validate_investor_investment(
     investor: &Address,
     investment_amount: i128,
 ) -> Result<(), QuickLendXError> {
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
+        if verification.tier < limits.min_investor_tier {
+            return Err(QuickLendXError::InsufficientKYCTier);
+        }
+
         // 1. Verification status check
         if !matches!(verification.status, BusinessVerificationStatus::Verified) {
             return Err(QuickLendXError::BusinessNotVerified);

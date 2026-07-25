@@ -217,11 +217,7 @@ impl BackupStorage {
         env: &Env,
         backup_id: &BytesN<32>,
     ) -> Result<u32, QuickLendXError> {
-        let raw_val: soroban_sdk::Val = env
-            .storage()
-            .instance()
-            .get(backup_id)
-            .unwrap();
+        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id).unwrap();
 
         if let Ok(map) =
             soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
@@ -322,8 +318,7 @@ impl BackupStorage {
         Self::validate_backup_metadata(&backup, None)?;
 
         // Fetch the payload and validate together with the count.
-        let data =
-            Self::get_backup_data(env, backup_id).unwrap();
+        let data = Self::get_backup_data(env, backup_id).unwrap();
 
         if data.len() != backup.invoice_count {
             return Err(QuickLendXError::StorageError);
@@ -396,8 +391,7 @@ impl BackupStorage {
         Self::validate_backup(env, backup_id)?;
 
         // Fetch the validated payload.
-        let data =
-            Self::get_backup_data(env, backup_id).unwrap();
+        let data = Self::get_backup_data(env, backup_id).unwrap();
 
         let restored_count = data.len();
 

@@ -153,6 +153,8 @@ fn test_escrow_event_completeness() {
     assert_eq!(created_event.amount, escrow.amount);
 
     // Release path
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
     assert_eq!(
         client.get_escrow_status(&invoice_id),

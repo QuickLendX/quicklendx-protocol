@@ -129,6 +129,8 @@ fn test_escrow_status_consistency_released_state() {
     );
     
     // Release escrow
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
     
     // Test: Status and details should be consistent for Released state
@@ -208,6 +210,8 @@ fn test_escrow_status_consistency_multiple_operations() {
     assert_eq!(details1.status, EscrowStatus::Held);
     
     // Release escrow
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
     
     // Test: Status should be Released after release
@@ -342,6 +346,8 @@ fn test_escrow_status_consistency_state_transitions() {
     previous_details = Some(details1.clone());
     
     // After release: Released state
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
     let (status2, details2) = get_escrow_status_and_details(&env, &client, &invoice_id);
     assert_eq!(status2, EscrowStatus::Released);
@@ -438,6 +444,8 @@ fn test_escrow_status_consistency_with_multiple_invoices() {
     );
     
     // Release first escrow
+    client.approve_early_escrow_release(&invoice_id1, &business);
+    client.approve_early_escrow_release(&invoice_id1, &investor);
     client.release_escrow_funds(&invoice_id1);
     
     // Test: Each escrow should have consistent status/details independently

@@ -2213,7 +2213,10 @@ mod test_dispute {
         }
         let valid_hash = Bytes::from_slice(&env, &hash_bytes);
         let result = validate_evidence_hash(&valid_hash);
-        assert!(result.is_ok(), "Non-zero 32-byte hash should pass validation");
+        assert!(
+            result.is_ok(),
+            "Non-zero 32-byte hash should pass validation"
+        );
     }
 
     /// [TC-EH-03] Evidence hash validation accepts SHA-256-like hash.

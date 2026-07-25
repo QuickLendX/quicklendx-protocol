@@ -42,6 +42,7 @@ pub enum FeeType {
     Verification,
     EarlyPayment,
     LatePayment,
+    Origination,
 }
 
 /// Volume tier for discounted fees
@@ -222,6 +223,7 @@ fn fee_type_label(fee_type: &FeeType) -> &'static str {
         FeeType::Verification => "Verification",
         FeeType::EarlyPayment => "EarlyPayment",
         FeeType::LatePayment => "LatePayment",
+        FeeType::Origination => "Origination",
     }
 }
 
@@ -414,11 +416,8 @@ impl FeeManager {
         env: &Env,
         fee_type: &FeeType,
     ) -> Result<FeeStructure, QuickLendXError> {
-        let fee_structures: Vec<FeeStructure> = env
-            .storage()
-            .instance()
-            .get(&FEE_CONFIG_KEY)
-            .unwrap();
+        let fee_structures: Vec<FeeStructure> =
+            env.storage().instance().get(&FEE_CONFIG_KEY).unwrap();
         for i in 0..fee_structures.len() {
             let structure = fee_structures.get(i).unwrap();
             if structure.fee_type == *fee_type {
@@ -485,8 +484,8 @@ impl FeeManager {
                     return Err(QuickLendXError::InvalidFeeConfiguration);
                 }
             }
-            FeeType::EarlyPayment | FeeType::LatePayment => {
-                // Early/late payment fees may have different thresholds
+            FeeType::EarlyPayment | FeeType::LatePayment | FeeType::Origination => {
+                // Early/late/origination payment fees may have different thresholds
                 // Allow more flexibility but still bounded
                 let calculated_max_threshold = (base_fee_bps as i128)
                     .saturating_mul(500)
@@ -578,11 +577,8 @@ impl FeeManager {
         // Apply comprehensive consistency checks
         Self::validate_fee_structure_consistency(&fee_type, base_fee_bps, min_fee, max_fee)?;
         Self::validate_cross_fee_consistency(env, &fee_type, min_fee, max_fee)?;
-        let mut fee_structures: Vec<FeeStructure> = env
-            .storage()
-            .instance()
-            .get(&FEE_CONFIG_KEY)
-            .unwrap();
+        let mut fee_structures: Vec<FeeStructure> =
+            env.storage().instance().get(&FEE_CONFIG_KEY).unwrap();
         let mut found = false;
         let mut old_bps = 0u32;
         let mut old_min_fee: i128 = 0;
@@ -672,11 +668,8 @@ impl FeeManager {
         if transaction_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
-        let fee_structures: Vec<FeeStructure> = env
-            .storage()
-            .instance()
-            .get(&FEE_CONFIG_KEY)
-            .unwrap();
+        let fee_structures: Vec<FeeStructure> =
+            env.storage().instance().get(&FEE_CONFIG_KEY).unwrap();
         let user_volume_data = Self::get_user_volume(env, user);
         let tier_discount = Self::get_tier_discount(&user_volume_data.current_tier);
         let mut total_fees: i128 = 0;
@@ -1021,11 +1014,7 @@ impl FeeManager {
         }
 
         let revenue_key = (REVENUE_KEY, period);
-        let mut revenue_data: RevenueData = env
-            .storage()
-            .instance()
-            .get(&revenue_key)
-            .unwrap();
+        let mut revenue_data: RevenueData = env.storage().instance().get(&revenue_key).unwrap();
 
         if revenue_data.pending_distribution == 0 {
             return Err(QuickLendXError::OperationNotAllowed);
@@ -1080,11 +1069,7 @@ impl FeeManager {
 
     pub fn get_analytics(env: &Env, period: u64) -> Result<FeeAnalytics, QuickLendXError> {
         let revenue_key = (REVENUE_KEY, period);
-        let revenue_data: RevenueData = env
-            .storage()
-            .instance()
-            .get(&revenue_key)
-            .unwrap();
+        let revenue_data: RevenueData = env.storage().instance().get(&revenue_key).unwrap();
         let average_fee_rate = if revenue_data.transaction_count > 0 {
             revenue_data
                 .total_collected
@@ -1189,6 +1174,14 @@ impl FeeManager {
         };
 
         env.storage().instance().set(&ROTATION_KEY, &request);
+
+        crate::events::emit_treasury_rotation_initiated(
+            env,
+            &new_address,
+            admin,
+            request.confirmation_deadline,
+        );
+
         Ok(request)
     }
 
@@ -1230,6 +1223,8 @@ impl FeeManager {
         }
 
         let mut platform_config = Self::get_platform_fee_config(env)?;
+        let old_treasury = platform_config.treasury_address.clone();
+
         platform_config.treasury_address = Some(new_address.clone());
         platform_config.updated_at = now;
         platform_config.updated_by = new_address.clone();
@@ -1238,6 +1233,10 @@ impl FeeManager {
             .set(&PLATFORM_FEE_KEY, &platform_config);
 
         env.storage().instance().remove(&ROTATION_KEY);
+
+        if let Some(old) = old_treasury {
+            crate::events::emit_treasury_rotation_confirmed(env, &old, new_address);
+        }
 
         Ok(new_address.clone())
     }
