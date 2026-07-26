@@ -82,10 +82,13 @@ pub enum QuickLendXError {
     MaxInvoicesPerBusinessExceeded = 1408,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidBidTtl = 1409,
+    /// Insurance opt-in was rejected because the invoice due date has already
+    /// passed. Adding coverage after an invoice is overdue would allow an
+    /// attacker to insure a known-defaulting position and immediately collect
+    /// the payout — an adverse-selection exploit. The claim window closes at
+    /// the invoice `due_date`.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
-    InsufficientKYCTier = 1410,
-    /// BREAKING: Do not renumber this variant. public ABI consumption.
-    BidBelowTierMinimum = 1411,
+    InsuranceClaimWindowClosed = 1410,
 
     // Rating (1500-1503)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -307,8 +310,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaxActiveBidsPerInvestorExceeded => symbol_short!("MAX_ACT"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
-            QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
-            QuickLendXError::BidBelowTierMinimum => symbol_short!("MIN_BID"),
+            QuickLendXError::InsuranceClaimWindowClosed => symbol_short!("INS_WCL"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
             QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_PND_TR"),

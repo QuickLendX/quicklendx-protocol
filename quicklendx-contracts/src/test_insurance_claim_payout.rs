@@ -474,3 +474,71 @@ fn test_default_succeeds_when_insurance_is_active() {
         "Default must succeed when insurance is active"
     );
 }
+
+/// Security regression: late insurance opt-in must be rejected.
+///
+/// # Threat model
+/// An attacker who notices a Funded invoice has gone past its due date (i.e.,
+/// default is certain) could call `add_investment_insurance` while the invoice
+/// is still in `Funded` status (before `mark_invoice_defaulted` is called).
+/// Without a deadline guard the contract accepts the policy, and when the
+/// attacker then triggers the default they collect the coverage payout for
+/// zero actual timing risk — an adverse-selection exploit.
+///
+/// This test verifies that:
+/// - Opt-in succeeds when `ledger.timestamp() < invoice.due_date` (control).
+/// - Opt-in is rejected with `InsuranceClaimWindowClosed` when
+///   `ledger.timestamp() >= invoice.due_date` (the new guard).
+///
+/// The test *would fail without the fix* applied in this PR because the old
+/// code had no due-date check; the second `add_investment_insurance` call
+/// would succeed rather than returning `InsuranceClaimWindowClosed`.
+#[test]
+fn test_add_insurance_rejected_after_due_date() {
+    let env = Env::default();
+    let (client, admin, _) = setup(&env);
+
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10_000);
+
+    let amount = 1_000i128;
+    // Set a due date that is 2 days in the future from the initial ledger time.
+    let due_date = env.ledger().timestamp() + 2 * 86_400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let investment = client.get_invoice_investment(&invoice_id);
+    let investment_id = investment.investment_id;
+
+    // --- Control: opt-in succeeds while the due date is still in the future ---
+    let provider_a = Address::generate(&env);
+    client.add_investment_insurance(&investment_id, &provider_a, &50u32);
+    let records = client.query_investment_insurance(&investment_id);
+    assert_eq!(records.len(), 1, "one policy should be active before due date");
+    assert!(records.get(0).unwrap().active);
+
+    // --- Advance time past the due date (invoice is now overdue) ---
+    env.ledger().set_timestamp(due_date); // timestamp == due_date: window closed
+
+    // --- Attack: opt-in attempt after due date must be rejected ---
+    let provider_b = Address::generate(&env);
+    let result = client.try_add_investment_insurance(&investment_id, &provider_b, &50u32);
+    assert!(
+        result.is_err(),
+        "insurance opt-in must be rejected after the due date has passed"
+    );
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::errors::QuickLendXError::InsuranceClaimWindowClosed,
+        "error must be InsuranceClaimWindowClosed (1410), not a generic error"
+    );
+
+    // Confirm no second policy was recorded.
+    let records_after = client.query_investment_insurance(&investment_id);
+    assert_eq!(
+        records_after.len(),
+        1,
+        "the rejected opt-in must not create an extra coverage record"
+    );
+}
