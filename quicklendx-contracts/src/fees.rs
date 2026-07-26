@@ -412,6 +412,13 @@ impl FeeManager {
         }
     }
 
+    pub fn get_fee_schedule(env: &Env) -> Vec<FeeStructure> {
+        env.storage()
+            .instance()
+            .get(&FEE_CONFIG_KEY)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
     pub fn get_fee_structure(
         env: &Env,
         fee_type: &FeeType,
