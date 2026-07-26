@@ -294,6 +294,7 @@ mod test_bid_match_helper;
 mod test_max_invoice_tags_boundary;
 #[cfg(test)]
 mod test_vesting;
+#[cfg(test)]
 mod test_vesting_summary;
 // Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
 // every CI matrix entry.
