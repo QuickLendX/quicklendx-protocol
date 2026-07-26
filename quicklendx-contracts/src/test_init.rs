@@ -42,6 +42,8 @@ mod test_init {
             max_due_date_days: 365,
             grace_period_seconds: 604800, // 7 days
             initial_currencies: Vec::new(env),
+            corridors: Vec::new(env),
+            backfill_max_batch_size: 100,
         }
     }
 
@@ -444,6 +446,8 @@ mod test_init {
             max_due_date_days: 0,
             grace_period_seconds: 0,
             initial_currencies: Vec::new(&env),
+            corridors: Vec::new(&env),
+            backfill_max_batch_size: 100,
         };
 
         let result = client.try_initialize(&params);
@@ -490,6 +494,8 @@ mod test_init {
             max_due_date_days: 0,
             grace_period_seconds: 0,
             initial_currencies: Vec::new(&env),
+            corridors: Vec::new(&env),
+            backfill_max_batch_size: 100,
         };
 
         let result = client.try_initialize(&params);

@@ -29,6 +29,7 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
         initial_currencies: Vec<Address>,
+        corridors: Vec<Address>,
     ) -> Result<(), QuickLendXError> {
         let params = InitializationParams {
             admin,
@@ -38,7 +39,8 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             initial_currencies,
-        backfill_max_batch_size: 100,
+            corridors,
+            backfill_max_batch_size: 100,
         };
         ProtocolInitializer::initialize(&env, &params)
     }

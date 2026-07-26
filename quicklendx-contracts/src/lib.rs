@@ -740,6 +740,11 @@ impl QuickLendXContract {
         init::ProtocolInitializer::get_grace_period_seconds(&env)
     }
 
+    /// Get the corridor list (approved counterparty addresses for cross-invoice operations)
+    pub fn get_corridors(env: Env) -> Vec<Address> {
+        init::ProtocolInitializer::get_corridors(&env)
+    }
+
     /// Admin-only: configure default bid TTL (days). Bounds: 1..=30.
     pub fn set_bid_ttl_days(env: Env, days: u64) -> Result<u64, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;

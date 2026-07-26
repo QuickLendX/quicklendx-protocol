@@ -20,6 +20,9 @@ fn test_ratings_snapshot_lifecycle() {
         min_invoice_amount: 100,
         max_due_date_days: 90,
         grace_period_seconds: 86400,
+        initial_currencies: soroban_sdk::Vec::new(&env),
+        corridors: soroban_sdk::Vec::new(&env),
+        backfill_max_batch_size: 100,
     });
     
     let business = Address::generate(&env);

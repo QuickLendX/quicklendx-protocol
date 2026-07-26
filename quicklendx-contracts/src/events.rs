@@ -6,7 +6,7 @@ use crate::payments::Escrow;
 use crate::types::Bid;
 use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 // ============================================================================
 // Topic Constants
@@ -685,6 +685,7 @@ pub struct ProtocolInitialized {
     pub max_due_date_days: u64,
     pub grace_period_seconds: u64,
     pub backfill_max_batch_size: u32,
+    pub corridors: Vec<Address>,
     pub timestamp: u64,
 }
 
@@ -1528,6 +1529,7 @@ pub fn emit_protocol_initialized(
     max_due_date_days: u64,
     grace_period_seconds: u64,
     backfill_max_batch_size: u32,
+    corridors: &Vec<Address>,
 ) {
     ProtocolInitialized {
         admin: admin.clone(),
@@ -1537,6 +1539,7 @@ pub fn emit_protocol_initialized(
         max_due_date_days,
         grace_period_seconds,
         backfill_max_batch_size,
+        corridors: corridors.clone(),
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
