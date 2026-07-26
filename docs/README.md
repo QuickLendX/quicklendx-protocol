@@ -13,6 +13,7 @@
 | [security.md](contracts/security.md) | Reentrancy guard, pause circuit breaker, access control |
 | [protocol-limits.md](contracts/protocol-limits.md) | Configurable numeric limits and string-length caps |
 | [fees.md](contracts/fees.md) | Fee management and revenue distribution |
+| [PROFIT_SPLIT.md](PROFIT_SPLIT.md) | How platform and investor fees are split |
 | [settlement.md](contracts/settlement.md) | Settlement flows and partial payments |
 | [dispute.md](contracts/dispute.md) | Dispute lifecycle and resolution |
 | [escrow.md](contracts/escrow.md) | Escrow creation, release, and refund |

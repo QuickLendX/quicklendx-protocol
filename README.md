@@ -45,6 +45,7 @@
   migration, and troubleshooting stuck runs.
   •  quicklendx-frontend/README.md : Frontend-specific documentation.
   •  docs/PLATFORM_FEES.md : Fee schedule and tenant override documentation.
+  •  docs/PROFIT_SPLIT.md : How platform and investor fees are split.
   •  docs/INDEXING_CONTRACT.md : What the indexer relies on from the Soroban smart contracts — events, topics, data structures, and storage keys.
 
   ## Contribution

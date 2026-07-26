@@ -379,7 +379,7 @@ fn test_settle_invoice_rejects_overpayment_without_mutating_accounting() {
     let invoice_id =
         setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
 
-    client.process_partial_payment(&invoice_id, &400, &String::from_str(&env, "prepay-1"));
+    client.process_partial_payment(&invoice_id, &400, &String::from_str(&env, "1111111111111111111111111111111111111111111111111111111111111111"));
 
     let token_client = token::Client::new(&env, &currency);
     let business_before = token_client.balance(&business);
@@ -435,7 +435,7 @@ fn test_settle_invoice_exact_remaining_due_preserves_totals_and_emits_final_even
     );
 
     env.ledger().set_timestamp(4_000);
-    client.process_partial_payment(&invoice_id, &400, &String::from_str(&env, "prepay-2"));
+    client.process_partial_payment(&invoice_id, &400, &String::from_str(&env, "2222222222222222222222222222222222222222222222222222222222222222"));
 
     let token_client = token::Client::new(&env, &currency);
     let business_before = token_client.balance(&business);
@@ -522,7 +522,7 @@ fn test_partial_payment_after_auto_settle_is_rejected() {
         setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
 
     // Pay full amount via partial payment path => triggers auto-settlement.
-    client.process_partial_payment(&invoice_id, &1_000, &String::from_str(&env, "full-pay"));
+    client.process_partial_payment(&invoice_id, &1_000, &String::from_str(&env, "5555555555555555555555555555555555555555555555555555555555555555"));
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
@@ -532,7 +532,7 @@ fn test_partial_payment_after_auto_settle_is_rejected() {
     let result = client.try_process_partial_payment(
         &invoice_id,
         &1,
-        &String::from_str(&env, "extra"),
+        &String::from_str(&env, "6666666666666666666666666666666666666666666666666666666666666666"),
     );
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
@@ -553,8 +553,8 @@ fn test_settle_after_auto_settle_via_partial_is_rejected() {
         setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
 
     // Auto-settle via partial payments.
-    client.process_partial_payment(&invoice_id, &500, &String::from_str(&env, "p1"));
-    client.process_partial_payment(&invoice_id, &500, &String::from_str(&env, "p2"));
+    client.process_partial_payment(&invoice_id, &500, &String::from_str(&env, "3333333333333333333333333333333333333333333333333333333333333333"));
+    client.process_partial_payment(&invoice_id, &500, &String::from_str(&env, "4444444444444444444444444444444444444444444444444444444444444444"));
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
@@ -618,11 +618,11 @@ fn test_no_accounting_drift_after_multiple_partial_then_settle() {
 
     // Make several partial payments.
     env.ledger().set_timestamp(1_000);
-    client.process_partial_payment(&invoice_id, &100, &String::from_str(&env, "d1"));
+    client.process_partial_payment(&invoice_id, &100, &String::from_str(&env, "7777777777777777777777777777777777777777777777777777777777777777"));
     env.ledger().set_timestamp(1_100);
-    client.process_partial_payment(&invoice_id, &200, &String::from_str(&env, "d2"));
+    client.process_partial_payment(&invoice_id, &200, &String::from_str(&env, "8888888888888888888888888888888888888888888888888888888888888888"));
     env.ledger().set_timestamp(1_200);
-    client.process_partial_payment(&invoice_id, &100, &String::from_str(&env, "d3"));
+    client.process_partial_payment(&invoice_id, &100, &String::from_str(&env, "9999999999999999999999999999999999999999999999999999999999999999"));
 
     let progress = env.as_contract(&contract_id, || {
         get_invoice_progress(&env, &invoice_id).unwrap()
@@ -718,6 +718,7 @@ fn test_settle_with_zero_amount_rejected() {
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
 }
 
+
 /// Negative-amount settle attempt must be rejected.
 #[test]
 fn test_settle_with_negative_amount_rejected() {
@@ -796,7 +797,7 @@ fn test_get_payment_records_pagination() {
 
     // Make 5 partial payments.
     for i in 0..5u32 {
-        let nonce = String::from_str(&env, &alloc::format!("page-{}", i));
+        let nonce = String::from_str(&env, &alloc::format!("{:064x}", i));
         env.ledger().set_timestamp(1_000 + i as u64 * 100);
         client.process_partial_payment(&invoice_id, &100, &nonce);
     }
@@ -1126,3 +1127,46 @@ fn test_settlement_batch_size_stable_across_states() {
     assert_eq!(default_before, default_after, "Default batch size should remain stable");
     assert_eq!(max_before, max_after, "Max batch size should remain stable");
 }
+
+#[test]
+fn test_settle_with_malformed_transaction_hash_rejected() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
+    let invoice_id =
+        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+
+    // Empty hash
+    let result_empty = client.try_process_partial_payment(
+        &invoice_id,
+        &100,
+        &String::from_str(&env, ""),
+    );
+    assert_eq!(result_empty.unwrap_err().unwrap(), QuickLendXError::InvalidTransactionHash);
+
+    // Malformed length
+    let result_short = client.try_process_partial_payment(
+        &invoice_id,
+        &100,
+        &String::from_str(&env, "a1b2c3d4"),
+    );
+    assert_eq!(result_short.unwrap_err().unwrap(), QuickLendXError::InvalidTransactionHash);
+    
+    // Invalid characters (not hex)
+    let mut bad_chars = alloc::string::String::new();
+    for _ in 0..64 {
+        bad_chars.push('z');
+    }
+    let result_bad_chars = client.try_process_partial_payment(
+        &invoice_id,
+        &100,
+        &String::from_str(&env, &bad_chars),
+    );
+    assert_eq!(result_bad_chars.unwrap_err().unwrap(), QuickLendXError::InvalidTransactionHash);
+}
+
