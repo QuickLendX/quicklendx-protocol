@@ -180,6 +180,29 @@ pub enum BusinessFreezeReason {
     SuspiciousActivity,
     /// Court order or legal hold applied
     LegalHold,
+    /// Suspected fraudulent invoice submission or business identity.
+    FraudSuspected,
+    /// Active or resolved dispute requiring the business to be frozen
+    /// until resolution.
+    Dispute,
+    /// Business requested a voluntary freeze (e.g., for internal audit).
+    Voluntary,
+}
+
+impl BusinessFreezeReason {
+    /// Returns a short human-readable label for event logging.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::AdminAction => "admin_action",
+            Self::KYCRejected => "kyc_rejected",
+            Self::ComplianceViolation => "compliance_violation",
+            Self::SuspiciousActivity => "suspicious_activity",
+            Self::LegalHold => "legal_hold",
+            Self::FraudSuspected => "fraud_suspected",
+            Self::Dispute => "dispute",
+            Self::Voluntary => "voluntary",
+        }
+    }
 }
 
 /// Freeze record stored alongside the frozen flag on an invoice
@@ -379,40 +402,6 @@ pub struct PruneReport {
     pub pruned: u32,
     /// Offset to pass on the next call.
     pub next_offset: u32,
-}
-
-/// Typed reason for freezing a business entity or its invoices.
-///
-/// Stored alongside the freeze state to provide an audit trail and enable
-/// targeted unfreeze logic. An admin must supply one of these variants
-/// when freezing; a bare boolean is no longer sufficient.
-#[contracttype]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BusinessFreezeReason {
-    /// Suspected fraudulent invoice submission or business identity.
-    FraudSuspected,
-    /// Business failed or failed ongoing KYC/AML compliance checks.
-    ComplianceViolation,
-    /// Active or resolved dispute requiring the business to be frozen
-    /// until resolution.
-    Dispute,
-    /// Business requested a voluntary freeze (e.g., for internal audit).
-    Voluntary,
-    /// Admin-initiated freeze for an unspecified or catch-all reason.
-    AdminAction,
-}
-
-impl BusinessFreezeReason {
-    /// Returns a short human-readable label for event logging.
-    pub fn label(&self) -> &'static str {
-        match self {
-            Self::FraudSuspected => "fraud_suspected",
-            Self::ComplianceViolation => "compliance_violation",
-            Self::Dispute => "dispute",
-            Self::Voluntary => "voluntary",
-            Self::AdminAction => "admin_action",
-        }
-    }
 }
 
 /// Typed reason for freezing an investor account.
