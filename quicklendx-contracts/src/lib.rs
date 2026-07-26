@@ -5014,6 +5014,8 @@ mod test_freeze_guard_writes;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
 
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_default_flow;
 #[cfg(feature = "diagnostics")]
 #[contractimpl]
 impl QuickLendXContract {

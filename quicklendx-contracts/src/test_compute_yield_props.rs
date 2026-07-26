@@ -12,6 +12,7 @@
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_compute_yield_props {
+    use crate::profits::{compute_expected_return, compute_yield};
     use crate::profits::{compute_expected_return, compute_yield_u32};
     use proptest::prelude::*;
 
@@ -110,6 +111,7 @@ mod test_compute_yield_props {
         ) {
             let er = compute_expected_return(amount, rate_bps, duration_days);
             prop_assert!(er >= 0, "expected return must be non-negative");
+            
 
             // Expected return must be bounded by the return at MAX_RATE_BPS
             let max_er = compute_expected_return(amount, MAX_RATE_BPS, duration_days);
