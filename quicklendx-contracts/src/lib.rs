@@ -427,7 +427,7 @@ use events::{
 };
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
-use payments::{create_escrow, release_escrow, EscrowStorage};
+use payments::{create_escrow, release_escrow, require_matching_currency_precision, EscrowStorage};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
@@ -1268,6 +1268,10 @@ impl QuickLendXContract {
         // Enforcement: reject invoices whose currency is not whitelisted (when whitelist is non-empty).
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
 
+        // Defence-in-depth: ensure the amount is compatible with the token's
+        // declared decimal precision before any state is written.
+        require_matching_currency_precision(&env, &currency, amount)?;
+
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&env, &tags)?;
@@ -1341,6 +1345,10 @@ impl QuickLendXContract {
         verify_invoice_data(&env, &business, amount, &currency, due_date, &description)?;
         // Enforcement: reject invoices whose currency is not whitelisted (when whitelist is non-empty).
         currency::CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
+
+        // Defence-in-depth: ensure the amount is compatible with the token's
+        // declared decimal precision before any state is written.
+        require_matching_currency_precision(&env, &currency, amount)?;
 
         // Validate category and tags
         verification::validate_invoice_category(&category)?;
@@ -1469,6 +1477,10 @@ impl QuickLendXContract {
                 &input.description,
             )?;
             currency::CurrencyWhitelist::require_allowed_currency(&env, &input.currency)?;
+
+            // Defence-in-depth: ensure the amount is compatible with the
+            // token's declared decimal precision before any state is written.
+            require_matching_currency_precision(&env, &input.currency, input.amount)?;
             verification::validate_invoice_category(&input.category)?;
             verification::validate_invoice_tags(&env, &input.tags)?;
         }
@@ -2289,6 +2301,10 @@ impl QuickLendXContract {
         }
         // Enforcement: reject bids on invoices whose currency was removed from the whitelist after creation.
         currency::CurrencyWhitelist::require_allowed_currency(&env, &invoice.currency)?;
+
+        // Defence-in-depth: ensure the bid amount is compatible with the
+        // invoice currency's declared decimal precision.
+        require_matching_currency_precision(&env, &invoice.currency, bid_amount)?;
 
         let verification = do_get_investor_verification(&env, &investor)
             .ok_or(QuickLendXError::InvestorNotVerified)?; // Changed error to InvestorNotVerified
