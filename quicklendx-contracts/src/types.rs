@@ -288,6 +288,12 @@ pub struct Invoice {
     /// during late-payment fee calculation. `None` falls back to the default
     /// 20 % surcharge.
     pub late_payment_penalty_bps: Option<u32>,
+    /// Per-invoice early-payment discount in basis points (0–5000 bps, i.e. 0–50%).
+    /// When `Some`, this discount is applied to the business's outstanding amount
+    /// for any payment that settles on or before the invoice `due_date`.
+    /// `None` means "no early-payment discount advertised on this invoice",
+    /// preserving the prior flat-fee behaviour.
+    pub early_payment_discount_bps: Option<u32>,
 }
 
 pub const RATINGS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
@@ -329,6 +335,10 @@ pub struct InvoiceInput {
     /// Per-invoice late payment penalty in basis points (0–5000).
     /// Applied when a payment lands after the invoice due date.
     pub late_payment_penalty_bps: Option<u32>,
+    /// Per-invoice early-payment discount in basis points (0–5000).
+    /// Applied to a payment that settles on or before the invoice `due_date`.
+    /// `None` means "no discount advertised on this invoice".
+    pub early_payment_discount_bps: Option<u32>,
 }
 
 /// Helper struct for metadata updates

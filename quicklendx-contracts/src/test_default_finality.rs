@@ -50,6 +50,7 @@ mod test_default_finality {
                 resolution_outcome: DisputeResolution::None,
             },
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     };
         InvoiceStorage::store_invoice(&env, &invoice);
 
@@ -107,6 +108,7 @@ mod test_default_finality {
                 resolution_outcome: DisputeResolution::None,
             },
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     };
         InvoiceStorage::store_invoice(&env, &invoice);
 

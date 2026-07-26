@@ -76,6 +76,7 @@ fn make_complex_invoice(
         created_at: env.ledger().timestamp(),
     },
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
 fn create_valid_backup(env: &Env, invoices: Vec<Invoice>) -> BytesN<32> {

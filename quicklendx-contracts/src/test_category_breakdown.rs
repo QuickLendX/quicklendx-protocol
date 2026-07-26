@@ -58,6 +58,7 @@ mod tests {
             dispute_status: DisputeStatus::None,
         },
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
     #[test]

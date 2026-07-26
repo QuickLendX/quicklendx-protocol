@@ -34,15 +34,17 @@ fn make_invoice(env: &Env, business: &Address) -> Invoice {
     let currency = Address::generate(env);
     let tags = Vec::new(env);
     Invoice::new(
-        env,
-        business.clone(),
-        1000,
-        currency,
-        env.ledger().timestamp() + 86400,
-        String::from_str(env, "Test invoice"),
-        InvoiceCategory::Services,
-        tags,
-        None)
+env,
+business.clone(),
+1000,
+currency,
+env.ledger().timestamp() + 86400,
+String::from_str(env, "Test invoice"),
+InvoiceCategory::Services,
+tags,
+        None, /* early_payment_discount_bps */,
+        None
+)
     .unwrap()
 }
 
@@ -557,15 +559,17 @@ fn test_invoice_new_deduplicates_trimmed_casefolded_tags() {
         tags.push_back(String::from_str(&env, "TECH"));
 
         let invoice = Invoice::new(
-            &env,
-            business,
-            1000,
-            currency,
-            env.ledger().timestamp() + 86400,
-            String::from_str(&env, "Normalized tags"),
-            InvoiceCategory::Services,
-            tags,
-        None)
+&env,
+business,
+1000,
+currency,
+env.ledger().timestamp() + 86400,
+String::from_str(&env, "Normalized tags"),
+InvoiceCategory::Services,
+tags,
+        None, /* early_payment_discount_bps */,
+        None
+)
         .expect("invoice creation should normalize tags");
 
         assert_eq!(

@@ -51,6 +51,7 @@ impl Invoice {
         tags: Vec<String>,
         origination_fee_bps: Option<u32>,
         late_payment_penalty_bps: Option<u32>,
+        early_payment_discount_bps: Option<u32>,
     ) -> Result<Self, QuickLendXError> {
         if amount <= 0 || amount > MAX_INVOICE_AMOUNT {
             return Err(QuickLendXError::InvalidAmount);
@@ -62,6 +63,16 @@ impl Invoice {
 
         if let Some(penalty_bps) = late_payment_penalty_bps {
             if penalty_bps > 5000 {
+                return Err(QuickLendXError::InvalidFeeBasisPoints);
+            }
+        }
+
+        // Early-payment discount uses the same legal ceiling as penalty bps:
+        // 0–5000 bps (0–50%). Anything above can never represent a real-world
+        // discount and would only show up from a misconfigured business or a
+        // hostile caller probing for overflow / rounding abuse. Reject loudly.
+        if let Some(discount_bps) = early_payment_discount_bps {
+            if discount_bps > 5000 {
                 return Err(QuickLendXError::InvalidFeeBasisPoints);
             }
         }
@@ -113,6 +124,7 @@ impl Invoice {
             payment_history: Vec::new(env),
             origination_fee_bps,
             late_payment_penalty_bps,
+            early_payment_discount_bps,
         })
     }
 

@@ -77,16 +77,18 @@ mod test_evidence_kind_guard_matrix {
         let currency = Address::generate(env);
         let due_date = env.ledger().timestamp() + 30 * 24 * 60 * 60;
         let mut invoice = Invoice::new(
-            env,
-            business.clone(),
-            100_000,
-            currency,
-            due_date,
-            String::from_str(env, "Matrix test invoice"),
-            InvoiceCategory::Services,
-            Vec::new(env),
-            None,
-        )
+env,
+business.clone(),
+100_000,
+currency,
+due_date,
+String::from_str(env, "Matrix test invoice"),
+InvoiceCategory::Services,
+Vec::new(env),
+None,
+        None, /* early_payment_discount_bps */,
+        
+)
         .unwrap();
         invoice.status = status;
         invoice

@@ -89,6 +89,7 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
         payment_history: soroban_sdk::Vec::new(env),
     },
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
 /// Persist a complete, valid backup (metadata + data) and return its ID.

@@ -92,6 +92,7 @@ fn make_invoice(env: &Env, invoice_id: &BytesN<32>) -> Invoice {
         payment_history: Vec::new(env),
     },
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
 #[test]

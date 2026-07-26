@@ -62,6 +62,7 @@ use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Ma
 pub mod address_summary;
 pub mod admin;
 pub mod analytics;
+pub mod arbiter;
 pub mod audit;
 pub mod backpressure;
 pub mod backup;
@@ -187,6 +188,17 @@ mod test_dispute_timeline_props;
 // mod test_dispute_event_invariant;
 #[cfg(test)]
 mod test_dust_transfer;
+// Issue #1840 — arbiter guard on dispute resolution (no feature gate: every
+// CI matrix entry must exercise the negative test path).
+#[cfg(test)]
+mod test_dispute_arbiter;
+// Issue #1847 — backfill guard against WASM upgrades (no feature gate).
+#[cfg(test)]
+mod test_backfill_guard;
+// Issue #1820/#1821 — early_payment_discount_bps per-invoice config and
+// boundary tests.
+#[cfg(test)]
+mod test_early_payment_discount_bps;
 #[cfg(test)]
 mod test_escrow_early_release;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -1037,6 +1049,53 @@ impl QuickLendXContract {
         emergency::EmergencyWithdraw::cancel(&env, &admin)
     }
 
+    // ── Dispute arbiter registry (#1840) ─────────────────────────────────────
+
+    /// Register a dispute arbiter (admin only).
+    ///
+    /// Splits dispute-adjudication authority from protocol-configuration
+    /// authority. Once registered, only the registered arbiter(s) may
+    /// resolve disputes (see `require_dispute_arbiter`). Idempotent — calling
+    /// twice with the same address is a no-op.
+    pub fn register_arbiter(
+        env: Env,
+        admin: Address,
+        arbiter: Address,
+    ) -> Result<(), QuickLendXError> {
+        crate::arbiter::ArbiterStorage::register_arbiter(&env, &admin, &arbiter)
+    }
+
+    /// Revoke a previously registered dispute arbiter (admin only).
+    ///
+    /// Returns `Err(OperationNotAllowed)` if the address was never registered,
+    /// so accidental no-op revocations surface to monitoring rather than
+    /// slipping through as silent successes.
+    pub fn unregister_arbiter(
+        env: Env,
+        admin: Address,
+        arbiter: Address,
+    ) -> Result<(), QuickLendXError> {
+        crate::arbiter::ArbiterStorage::unregister_arbiter(&env, &admin, &arbiter)
+    }
+
+    /// Membership test: returns `true` when `address` is a registered arbiter.
+    pub fn is_arbiter(env: Env, address: Address) -> bool {
+        crate::arbiter::ArbiterStorage::is_arbiter(&env, &address)
+    }
+
+    /// List every currently registered arbiter.
+    pub fn list_arbiters(env: Env) -> Vec<Address> {
+        crate::arbiter::ArbiterStorage::list_arbiters(&env)
+    }
+
+    // ── Migration / backfill guard (#1847) ───────────────────────────────────
+
+    /// Return whether a destructive backfill (e.g. `restore_from_backup`) is
+    /// currently mutating invoice state.
+    pub fn is_pending_backfill(env: Env) -> bool {
+        crate::backup::BackupStorage::is_pending_backfill(&env)
+    }
+
     /// Pause the contract (admin only). When paused, mutating operations fail with ContractPaused; getters succeed.
     pub fn pause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         pause::PauseControl::set_paused(&env, &admin, true)
@@ -1227,6 +1286,7 @@ impl QuickLendXContract {
         tags: Vec<String>,
         origination_fee_bps: Option<u32>,
         late_payment_penalty_bps: Option<u32>,
+        early_payment_discount_bps: Option<u32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &business)?;
@@ -1290,6 +1350,7 @@ impl QuickLendXContract {
             tags,
             origination_fee_bps,
             late_payment_penalty_bps,
+            early_payment_discount_bps,
         )?;
 
         // Store the invoice
@@ -1325,6 +1386,7 @@ impl QuickLendXContract {
         tags: Vec<String>,
         origination_fee_bps: Option<u32>,
         late_payment_penalty_bps: Option<u32>,
+        early_payment_discount_bps: Option<u32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         // Only the business can upload their own invoice
@@ -1367,6 +1429,10 @@ impl QuickLendXContract {
             tags,
             origination_fee_bps,
             late_payment_penalty_bps,
+            // Batch endpoint currently does not surface per-invoice early
+            // payment discount; callers can post-batch-update via store_invoice
+            // if a per-invoice discount is required.
+            None,
         )?;
         InvoiceStorage::store_invoice(&env, &invoice);
 

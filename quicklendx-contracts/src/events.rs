@@ -1737,3 +1737,41 @@ pub fn emit_incident_mode_exited(env: &Env, admin: &Address) {
     }
     .publish(env);
 }
+
+// ── Arbiter (dispute-resolution) events ──────────────────────────────────────
+
+/// Emitted when an admin registers a new dispute arbiter.
+pub fn arbiter_registered(env: &Env, admin: &Address, arbiter: &Address) {
+    env.events().publish(
+        (symbol_short!("arb_reg"),),
+        (admin.clone(), arbiter.clone(), env.ledger().timestamp()),
+    );
+}
+
+/// Emitted when an admin revokes a previously registered dispute arbiter.
+pub fn arbiter_revoked(env: &Env, admin: &Address, arbiter: &Address) {
+    env.events().publish(
+        (symbol_short!("arb_rvk"),),
+        (admin.clone(), arbiter.clone(), env.ledger().timestamp()),
+    );
+}
+
+// ── Backfill lifecycle events ────────────────────────────────────────────────
+
+/// Emitted when a destructive backfill (e.g. `restore_from_backup`) begins.
+/// While this flag is set, the contract refuses to schedule a WASM upgrade.
+pub fn backfill_started(env: &Env, actor: &Address) {
+    env.events().publish(
+        (symbol_short!("bkf_sta"),),
+        (actor.clone(), env.ledger().timestamp()),
+    );
+}
+
+/// Emitted when a backfill finishes — flag is cleared and contracts are free
+/// to migrate again.
+pub fn backfill_finished(env: &Env, actor: &Address, restored_count: u32) {
+    env.events().publish(
+        (symbol_short!("bkf_end"),),
+        (actor.clone(), restored_count, env.ledger().timestamp()),
+    );
+}

@@ -71,6 +71,7 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
         payment_history: soroban_sdk::Vec::new(env),
     },
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
 fn setup_env() -> Env {
@@ -267,6 +268,7 @@ fn test_invoice_storage() {
             created_at: 1234567890,
             updated_at: 1234567890,
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     };
 
         // Test storing invoice

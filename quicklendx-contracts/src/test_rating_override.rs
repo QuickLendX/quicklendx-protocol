@@ -44,15 +44,17 @@ fn seed_invoice(env: &Env, contract_id: &Address) -> BytesN<32> {
         let business = Address::generate(env);
         let currency = Address::generate(env);
         let invoice = Invoice::new(
-            env,
-            business,
-            1_000i128,
-            currency,
-            env.ledger().timestamp() + 86_400,
-            String::from_str(env, "Test invoice"),
-            InvoiceCategory::Services,
-            Vec::new(env),
-        None)
+env,
+business,
+1_000i128,
+currency,
+env.ledger().timestamp() + 86_400,
+String::from_str(env, "Test invoice"),
+InvoiceCategory::Services,
+Vec::new(env),
+        None, /* early_payment_discount_bps */,
+        None
+)
         .unwrap();
         let id = invoice.id.clone();
         InvoiceStorage::store_invoice(env, &invoice);
