@@ -42,6 +42,8 @@ fn make_invoice(env: &Env, business: &Address) -> Invoice {
         String::from_str(env, "Test invoice"),
         InvoiceCategory::Services,
         tags,
+        None,
+        None,
     )
     .unwrap()
 }
@@ -565,6 +567,8 @@ fn test_invoice_new_deduplicates_trimmed_casefolded_tags() {
             String::from_str(&env, "Normalized tags"),
             InvoiceCategory::Services,
             tags,
+            None,
+            None,
         )
         .expect("invoice creation should normalize tags");
 

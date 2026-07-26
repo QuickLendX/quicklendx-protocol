@@ -35,6 +35,8 @@ mod tests {
             description,
             category,
             tags,
+            None,
+            None,
         ).expect("invoice creation should succeed");
         // Manually set status to the desired variant for testing
         inv.status = status;

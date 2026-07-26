@@ -664,6 +664,7 @@ impl FeeManager {
         transaction_amount: i128,
         is_early_payment: bool,
         is_late_payment: bool,
+        late_payment_penalty_bps: Option<u32>,
     ) -> Result<i128, QuickLendXError> {
         if transaction_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -699,7 +700,9 @@ impl FeeManager {
                     .ok_or(QuickLendXError::ArithmeticOverflow)?;
             }
             if is_late_payment && structure.fee_type == FeeType::LatePayment {
-                let late = Self::checked_mul_div(fee, LATE_FEE_SURCHARGE_BPS, BPS_DENOMINATOR)?;
+                let surcharge_bps = late_payment_penalty_bps
+                    .unwrap_or(LATE_FEE_SURCHARGE_BPS as u32) as i128;
+                let late = Self::checked_mul_div(fee, surcharge_bps, BPS_DENOMINATOR)?;
                 fee = fee
                     .checked_add(late)
                     .ok_or(QuickLendXError::ArithmeticOverflow)?;

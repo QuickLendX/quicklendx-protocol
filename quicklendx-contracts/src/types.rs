@@ -226,6 +226,11 @@ pub struct Invoice {
     pub total_paid: i128,
     pub payment_history: Vec<PaymentRecord>,
     pub origination_fee_bps: Option<u32>,
+    /// Per-invoice late payment penalty in basis points (0–5000 bps, i.e. 0–50%).
+    /// When `Some`, this overrides the global `LATE_FEE_SURCHARGE_BPS` constant
+    /// during late-payment fee calculation. `None` falls back to the default
+    /// 20 % surcharge.
+    pub late_payment_penalty_bps: Option<u32>,
 }
 
 pub const RATINGS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
@@ -264,6 +269,9 @@ pub struct InvoiceInput {
     pub category: InvoiceCategory,
     /// Optional searchable tags (max `MAX_INVOICE_TAGS` entries, each max 50 bytes).
     pub tags: Vec<String>,
+    /// Per-invoice late payment penalty in basis points (0–5000).
+    /// Applied when a payment lands after the invoice due date.
+    pub late_payment_penalty_bps: Option<u32>,
 }
 
 /// Helper struct for metadata updates

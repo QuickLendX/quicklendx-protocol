@@ -55,6 +55,8 @@ fn invoice_new_rejects_due_date_in_past() {
             String::from_str(&env, "past-due invoice"),
             InvoiceCategory::Services,
             Vec::new(&env),
+            None,
+            None,
         )
     });
 
@@ -79,6 +81,8 @@ fn invoice_new_rejects_due_date_equal_to_current_timestamp() {
             String::from_str(&env, "due-now invoice"),
             InvoiceCategory::Services,
             Vec::new(&env),
+            None,
+            None,
         )
     });
 
@@ -103,6 +107,8 @@ fn invoice_new_accepts_due_date_strictly_in_future() {
             String::from_str(&env, "future invoice"),
             InvoiceCategory::Services,
             Vec::new(&env),
+            None,
+            None,
         )
     });
 
