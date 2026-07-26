@@ -3,8 +3,8 @@ use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
-    MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_REJECTION_REASON_LENGTH,
-    MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
+    MAX_INVOICE_AMOUNT, MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_NOTES_LENGTH,
+    MAX_REJECTION_REASON_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
 };
 use crate::types::BidStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
@@ -849,6 +849,11 @@ pub fn validate_bid(
         return Err(QuickLendXError::InvalidAmount);
     }
 
+    // Expected return must fit safely in i128 arithmetic.
+    if expected_return > MAX_INVOICE_AMOUNT {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
     // 5. Investor Eligibility and Capacity
     // This checks both verification status AND individual/risk-based investment limits
     validate_investor_investment(env, investor, bid_amount)?;
@@ -1071,7 +1076,7 @@ pub fn verify_invoice_data(
     // First check if business is verified (temporarily disabled for debugging)
     // require_business_verification(env, business)?;
 
-    if amount <= 0 {
+    if amount <= 0 || amount > crate::protocol_limits::MAX_INVOICE_AMOUNT {
         return Err(QuickLendXError::InvalidAmount);
     }
     let current_timestamp = env.ledger().timestamp();

@@ -1127,7 +1127,7 @@ impl QuickLendXContract {
         require_business_not_pending(&env, &business)?;
 
         // Validate input parameters
-        if amount <= 0 {
+        if amount <= 0 || amount > protocol_limits::MAX_INVOICE_AMOUNT {
             return Err(QuickLendXError::InvalidAmount);
         }
 
@@ -1958,6 +1958,13 @@ impl QuickLendXContract {
 
         // Validate bid amount is positive
         if bid_amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        // Validate expected_return fits safely in i128 arithmetic.
+        // Without the upper bound an attacker could submit i128::MAX,
+        // causing compare_bids to saturate silently and distort ranking.
+        if expected_return > crate::protocol_limits::MAX_INVOICE_AMOUNT {
             return Err(QuickLendXError::InvalidAmount);
         }
 

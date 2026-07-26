@@ -1,6 +1,7 @@
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec, Bytes, xdr::ToXdr};
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
+use crate::protocol_limits::MAX_INVOICE_AMOUNT;
 use crate::types::{
     Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus, 
     DisputeStatus, PaymentRecord, InvoiceRating, Escrow, EscrowStatus,
@@ -141,6 +142,14 @@ impl QuickLendXContract {
         // jurisdiction-specific or on-chain oracle-based compliance checks without
         // touching this call site.
         crate::regulatory::require_regulatory_ok(&env, &business)?;
+
+        // Amount must be positive and fit safely in i128 arithmetic.
+        // Without the upper bound an attacker could submit i128::MAX, causing
+        // fee calculations (amount * fee_bps / 10_000) to overflow at settlement
+        // and trap funds.
+        if amount <= 0 || amount > MAX_INVOICE_AMOUNT {
+            return Err(QuickLendXError::InvalidAmount);
+        }
 
         // Enforce per-business invoice cap.
         ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
