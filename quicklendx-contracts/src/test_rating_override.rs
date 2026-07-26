@@ -52,7 +52,7 @@ fn seed_invoice(env: &Env, contract_id: &Address) -> BytesN<32> {
             String::from_str(env, "Test invoice"),
             InvoiceCategory::Services,
             Vec::new(env),
-        )
+        None)
         .unwrap();
         let id = invoice.id.clone();
         InvoiceStorage::store_invoice(env, &invoice);

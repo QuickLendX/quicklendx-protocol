@@ -63,7 +63,7 @@ fn test_metadata_customer_name_limits() {
         &String::from_str(&env, "test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // At limit (150 bytes)
     let mut meta = InvoiceMetadata {
@@ -114,7 +114,7 @@ fn test_metadata_customer_address_limits() {
         &String::from_str(&env, "test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let mut meta = InvoiceMetadata {
         customer_name: String::from_str(&env, "Name"),
@@ -150,7 +150,7 @@ fn test_metadata_tax_id_limits() {
         &String::from_str(&env, "test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let mut meta = InvoiceMetadata {
         customer_name: String::from_str(&env, "Name"),

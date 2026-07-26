@@ -54,8 +54,7 @@ fn valid_params(env: &Env) -> InitializationParams {
 fn initialized(env: &Env, client: &QuickLendXContractClient) -> InitializationParams {
     let p = valid_params(env);
     client.initialize(&p);
-    p,
-        backfill_max_batch_size: 100,
+    p
 }
 
 // ===========================================================================

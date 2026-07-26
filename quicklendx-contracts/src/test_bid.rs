@@ -75,11 +75,11 @@ fn place_bid(
         &String::from_str(env, "inv"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "kyc"));
     client.verify_investor(&admin, &investor, &10_000i128);
-    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
     (bid_id, investor, invoice_id)
 }
 
@@ -135,7 +135,7 @@ fn test_invoice_lock_round_trip_admin_api() {
         &String::from_str(&env, "inv"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let current_lock = client.get_invoice_lock(&invoice_id);
     assert_eq!(current_lock, InvoiceLock::None, "new invoices should start unlocked");
@@ -380,7 +380,7 @@ fn test_cancel_bid_does_not_affect_other_bids_on_same_invoice() {
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
     client.verify_investor(&admin, &investor_b, &10_000i128);
-    let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &850i128);
+    let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &850i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Cancel only bid A
     client.cancel_bid(&bid_id_a);
@@ -533,7 +533,7 @@ fn test_freeze_invoice_blocks_bids() {
         &soroban_sdk::String::from_str(&env, "inv"),
         &crate::invoice::InvoiceCategory::Services,
         &soroban_sdk::Vec::new(&env),
-    );
+        &None);
 
     // Freeze it
     client.freeze_invoice(&admin, &invoice_id, &BusinessFreezeReason::AdminAction);
@@ -543,7 +543,7 @@ fn test_freeze_invoice_blocks_bids() {
     client.submit_investor_kyc(&investor, &soroban_sdk::String::from_str(&env, "kyc"));
     client.verify_investor(&admin, &investor, &10_000i128);
 
-    let result = client.try_place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let result = client.try_place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert!(result.is_err(), "should block bid on frozen invoice");
     assert_eq!(
         result.unwrap_err().expect("expected contract error"),
@@ -579,7 +579,7 @@ fn test_freeze_with_typed_reason_stored_and_enforced() {
         &soroban_sdk::String::from_str(&env, "typed-freeze-test"),
         &crate::invoice::InvoiceCategory::Services,
         &soroban_sdk::Vec::new(&env),
-    );
+        &None);
 
     // Freeze with a specific typed reason
     client.freeze_invoice(
@@ -608,7 +608,7 @@ fn test_freeze_with_typed_reason_stored_and_enforced() {
     client.submit_investor_kyc(&investor, &soroban_sdk::String::from_str(&env, "kyc"));
     client.verify_investor(&admin, &investor, &50_000i128);
 
-    let result = client.try_place_bid(&investor, &invoice_id, &1_800i128, &1_900i128);
+    let result = client.try_place_bid(&investor, &invoice_id, &1_800i128, &1_900i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert!(
         result.is_err(),
         "bid MUST be rejected on a frozen invoice (negative test)"
@@ -646,7 +646,7 @@ fn test_all_business_freeze_reason_variants() {
             &soroban_sdk::String::from_str(&env, reason.label()),
             &crate::invoice::InvoiceCategory::Services,
             &soroban_sdk::Vec::new(&env),
-        );
+        &None);
 
         client.freeze_invoice(&admin, &invoice_id, reason);
 

@@ -5,6 +5,7 @@ use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Env, IntoVal, String, Vec, Symbol, xdr};
 
 /// Standard test setup: registers contract, initializes admin, generates test addresses.
@@ -75,7 +76,7 @@ fn test_pause_blocks_user_and_invoice_state_mutations() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.pause(&admin);
     assert!(client.is_paused());
@@ -89,7 +90,7 @@ fn test_pause_blocks_user_and_invoice_state_mutations() {
         &String::from_str(&env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.unwrap_err().unwrap();
     assert_eq!(err, QuickLendXError::ContractPaused);
@@ -128,7 +129,7 @@ fn test_pause_allows_governance_configuration_updates() {
         &String::from_str(&env, "Below min"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.unwrap_err().unwrap();
     assert_eq!(err, QuickLendXError::InvalidAmount);
@@ -269,10 +270,10 @@ fn test_pause_blocks_accept_bid_and_fund() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     client.pause(&admin);
 
@@ -296,10 +297,10 @@ fn test_pause_blocks_release_escrow_funds() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let accept_res = client.try_accept_bid(&invoice_id, &bid_id);
     if let Err(err) = accept_res {
@@ -330,10 +331,10 @@ fn test_pause_blocks_refund_escrow_funds() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     client.pause(&admin);
@@ -358,10 +359,10 @@ fn test_pause_blocks_withdraw_bid() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 10_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     client.pause(&admin);
 
@@ -389,7 +390,7 @@ fn test_pause_blocks_update_invoice_category() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.pause(&admin);
 
@@ -413,10 +414,10 @@ fn test_pause_blocks_settle_invoice() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 10_000);
-    let _bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     client.pause(&admin);
 
@@ -440,10 +441,10 @@ fn test_pause_blocks_add_investment_insurance() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 10_000);
-    let _bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid_and_fund(&invoice_id, &_bid_id);
     client.approve_early_escrow_release(&invoice_id, &business);
     client.approve_early_escrow_release(&invoice_id, &investor);
@@ -558,7 +559,7 @@ fn test_pause_blocks_tag_management() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.pause(&admin);
 
@@ -620,7 +621,7 @@ fn test_pause_unpause_cycle_is_deterministic() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
 
         client.pause(&admin);
         assert!(client.is_paused());
@@ -634,7 +635,7 @@ fn test_pause_unpause_cycle_is_deterministic() {
             &String::from_str(&env, "Blocked"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
         assert!(result.is_err());
 
         client.unpause(&admin);
@@ -712,10 +713,10 @@ fn fund_invoice(
         &String::from_str(env, "Funded invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(env, &client, &investor, 15_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
     (client, admin, invoice_id)
@@ -735,13 +736,13 @@ fn test_pause_blocks_place_bid() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     client.pause(&admin);
 
-    let result = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    let result = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert!(result.is_err());
     let err = result.unwrap_err().unwrap();
     assert_eq!(err, QuickLendXError::ContractPaused);
@@ -804,7 +805,7 @@ fn test_unpause_restores_store_invoice() {
         &String::from_str(&env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(blocked.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
 
     client.unpause(&admin);
@@ -819,7 +820,7 @@ fn test_unpause_restores_store_invoice() {
         &String::from_str(&env, "After unpause"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.amount, 1_000i128);
 }
@@ -838,18 +839,18 @@ fn test_unpause_restores_place_bid() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 10_000);
 
     client.pause(&admin);
-    let blocked = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    let blocked = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert_eq!(blocked.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
 
     client.unpause(&admin);
 
     // Same call now succeeds and returns a stored bid id.
-    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert!(client.get_bid(&bid_id).is_some());
 }
 
@@ -890,10 +891,10 @@ fn test_unpause_restores_accept_bid_and_fund() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     verify_investor_for_test(&env, &client, &investor, 15_000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     client.pause(&admin);
     let blocked = client.try_accept_bid_and_fund(&invoice_id, &bid_id);

@@ -127,9 +127,9 @@ fn setup_funded_invoice(
         &String::from_str(env, "Dispute-settlement interaction test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &amount);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &amount, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     (client, invoice_id, business, investor, contract_id)
@@ -586,14 +586,14 @@ fn test_settle_succeeds_after_structured_resolution_favor_business() {
 
     let result = client.try_settle_invoice(&invoice_id, &100_000i128);
     assert_ne!(
-        result.err().and_then(|e| e.ok()),
+        result.as_ref().err().and_then(|e| e.as_ref().ok()).copied(),
         Some(QuickLendXError::DisputeActive),
         "settle_invoice must NOT be blocked after structured FavorBusiness resolution"
     );
     assert!(
         result.is_ok(),
         "settle_invoice must succeed entirely after structured FavorBusiness, got {:?}",
-        result.err()
+        result.as_ref().err()
     );
 
     let inv_after = client.get_invoice(&invoice_id);

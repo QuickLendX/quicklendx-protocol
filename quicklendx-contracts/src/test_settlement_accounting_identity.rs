@@ -53,7 +53,7 @@ fn setup_funded_invoice_with_fee(
         &String::from_str(env, "Invoice for accounting identity tests"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(

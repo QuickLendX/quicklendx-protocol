@@ -80,7 +80,7 @@ impl PaymentFixture {
             &String::from_str(&self.env, "reentrancy-regression"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        );
+            &None);
         client.verify_invoice(&invoice_id);
 
         let bid_id = client.place_bid(
@@ -88,7 +88,7 @@ impl PaymentFixture {
             &invoice_id,
             &bid_amount,
             &(invoice_amount + 100),
-        );
+            &BytesN::from_array(&env, &[0u8; 32]));
 
         (invoice_id, bid_id)
     }

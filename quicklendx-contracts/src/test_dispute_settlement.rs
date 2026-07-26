@@ -29,7 +29,7 @@ fn setup_funded_invoice(
         &String::from_str(env, "Test invoice for dispute settlement test"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
 

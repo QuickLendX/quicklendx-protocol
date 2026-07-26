@@ -73,7 +73,7 @@ fn setup_funded_investment(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(
@@ -386,7 +386,7 @@ fn test_investor_can_invest_again_after_withdrawal() {
         &String::from_str(&env, "Second invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice2_id);
 
     let bid2_id = client.place_bid(

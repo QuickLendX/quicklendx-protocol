@@ -196,6 +196,8 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DuplicateDefaultTransition = 2202,
     BackupVersionUnsupported = 2203,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    DuplicateBid = 2204,
     /// Settlement attempted while a dispute is open on the invoice.
     ///
     /// Threat: a business could otherwise race to finalize settlement and
@@ -211,6 +213,14 @@ pub enum QuickLendXError {
     /// A report/analytics-snapshot was requested while an invoice has an
     /// unresolved (`Disputed` or `UnderReview`) dispute.
     ActiveDisputeExists = 2207,
+    /// Caller supplied a cursor from a different snapshot generation.
+    UnstableCursor = 2208,
+    /// Batch input is empty or exceeds `MAX_BATCH_INVOICES`.
+    BatchSizeExceeded = 2209,
+    /// Settlement currency is not in the invoice's per-invoice settlement currency whitelist.
+    SettlementCurrencyNotAllowed = 2210,
+    /// A contract upgrade is pending (scheduled but not yet executed or cancelled).
+    UpgradePending = 2211,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -224,14 +234,12 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvoiceDueDateInvalid => symbol_short!("INV_DI"),
             QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NFD"),
             QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
+            QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
+            QuickLendXError::InvalidFreezeReason => symbol_short!("FRZ_RSN"),
             // Authorization
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
-            QuickLendXError::InvalidFreezeReason => symbol_short!("INV_FRZ_RSN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
-            QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
-            QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
-            QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
             QuickLendXError::SelfCallNotAllowed => symbol_short!("SELF_NA"),
             // Input validation
@@ -240,6 +248,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidCurrency => symbol_short!("INV_CR"),
             QuickLendXError::InvalidTimestamp => symbol_short!("INV_TM"),
             QuickLendXError::InvalidDescription => symbol_short!("INV_DS"),
+            QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
             // Storage
             QuickLendXError::StorageError => symbol_short!("STORE"),
             QuickLendXError::StorageKeyNotFound => symbol_short!("KEY_NF"),
@@ -250,6 +259,11 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::PaymentTooLow => symbol_short!("PAY_LOW"),
             QuickLendXError::PlatformAccountNotConfigured => symbol_short!("PLT_NC"),
             QuickLendXError::InvalidCoveragePercentage => symbol_short!("INS_CV"),
+            QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
+            QuickLendXError::MaxActiveBidsPerInvestorExceeded => symbol_short!("MAX_ACT"),
+            QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
+            QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
+            QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
             // Rating
             QuickLendXError::InvalidRating => symbol_short!("INV_RT"),
             QuickLendXError::NotFunded => symbol_short!("NOT_FD"),
@@ -275,6 +289,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidFeeConfiguration => symbol_short!("FEE_CFG"),
             QuickLendXError::TreasuryNotConfigured => symbol_short!("TRS_NC"),
             QuickLendXError::InvalidFeeBasisPoints => symbol_short!("FEE_BPS"),
+            QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::RotationAlreadyPending => symbol_short!("ROT_PND"),
             QuickLendXError::RotationNotFound => symbol_short!("ROT_NF"),
             QuickLendXError::RotationExpired => symbol_short!("ROT_EXP"),
@@ -293,29 +308,27 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
             QuickLendXError::NotificationDuplicate => symbol_short!("NOT_DUP"),
-            QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
-            QuickLendXError::MaxActiveBidsPerInvestorExceeded => symbol_short!("MAX_ACT"),
-            QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
-            QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
-            QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
+            // Emergency / pause
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
-            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_PND_TR"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_L_SEQ"),
+            QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
             QuickLendXError::EmergencyWithdrawTimelockNotElapsed => symbol_short!("EMG_TLK"),
             QuickLendXError::EmergencyWithdrawExpired => symbol_short!("EMG_EXP"),
             QuickLendXError::EmergencyWithdrawCancelled => symbol_short!("EMG_CNL"),
             QuickLendXError::EmergencyWithdrawAlreadyExists => symbol_short!("EMG_EX"),
             QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
+            // Misc
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
-            QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NO_P"),
+            QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
             QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
-            QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
+            QuickLendXError::ActiveDisputeExists => symbol_short!("ACT_DSP"),
+            QuickLendXError::UnstableCursor => symbol_short!("STBL_CUR"),
+            QuickLendXError::BatchSizeExceeded => symbol_short!("BAT_MAX"),
+            QuickLendXError::SettlementCurrencyNotAllowed => symbol_short!("STL_CR_NA"),
+            QuickLendXError::UpgradePending => symbol_short!("UPG_PND"),
         }
     }
 }

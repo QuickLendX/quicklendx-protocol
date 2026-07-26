@@ -37,7 +37,7 @@ fn upload_invoice(env: &Env, client: &QuickLendXContractClient, business: &Addre
         &String::from_str(env, "test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 fn delete_business(env: &Env, contract_id: &Address, business: &Address) {
@@ -425,15 +425,18 @@ fn upload_invoice_fallible(
 ) -> Result<BytesN<32>, QuickLendXError> {
     let currency = Address::generate(env);
     let due_date = env.ledger().timestamp() + 86_400;
-    client
-        .try_upload_invoice(
-            business,
-            &1_000i128,
-            &currency,
-            &due_date,
-            &String::from_str(env, "test invoice"),
-            &InvoiceCategory::Services,
-            &Vec::new(env),
-        )
-        .map_err(|_| QuickLendXError::BusinessDeleted)?
+    match client.try_upload_invoice(
+        business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(env, "test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(env),
+        &None,
+    ) {
+        Ok(Ok(id)) => Ok(id),
+        Err(Ok(e)) => Err(e),
+        _ => Err(QuickLendXError::BusinessDeleted),
+    }
 }

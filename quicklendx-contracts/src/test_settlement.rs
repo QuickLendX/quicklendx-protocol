@@ -73,11 +73,11 @@ fn setup_funded_invoice(
         &String::from_str(env, "Test invoice for settlement"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     verify_investor_for_test(env, client, investor, 10_000);
-    let bid_id = client.place_bid(investor, &invoice_id, &investment_amount, &invoice_amount);
+    let bid_id = client.place_bid(investor, &invoice_id, &investment_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     invoice_id
@@ -116,7 +116,7 @@ fn test_cannot_settle_unfunded_invoice() {
         &String::from_str(&env, "Unfunded invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -154,7 +154,7 @@ fn test_cannot_settle_pending_invoice() {
         &String::from_str(&env, "Pending invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);

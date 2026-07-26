@@ -100,7 +100,7 @@ mod test_dispute {
                 &String::from_str(env, "Test invoice for dispute"),
                 &InvoiceCategory::Services,
                 &Vec::new(env),
-            )
+                &None)
             .unwrap()
     }
 

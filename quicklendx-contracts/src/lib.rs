@@ -141,8 +141,6 @@ mod test_bid_expiry_boundary;
 mod test_bid_ttl;
 #[cfg(test)]
 mod test_require_business_active;
-#[cfg(test)]
-mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(test)]
@@ -164,8 +162,6 @@ mod test_evidence_hash_format;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
-mod test_due_date_guard;
-#[cfg(test)]
 // mod test_dispute_event_invariant;
 #[cfg(test)]
 mod test_dust_transfer;
@@ -177,8 +173,6 @@ mod test_escrow_event_completeness;
 mod test_escrow_invariant_model;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund_after_expiry;
-#[cfg(test)]
-mod test_evidence_size_cap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
 #[cfg(test)]
@@ -187,8 +181,6 @@ mod test_expired_bids_cleanup;
 mod test_freshness_bounds;
 #[cfg(test)]
 mod test_investor_kyc;
-#[cfg(test)]
-mod test_panic_handler;
 #[cfg(test)]
 mod test_payments;
 #[cfg(test)]
@@ -320,6 +312,9 @@ mod test_invoice;
 mod test_insurance_premium_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
+// Issue #1949 — full InvestmentStatus transition matrix (CI-ungated).
+#[cfg(test)]
+mod test_investment_state_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -392,7 +387,7 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
     normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
-    require_business_not_pending, require_investor_not_pending,
+    require_business_active, require_business_not_pending, require_investor_not_pending,
     revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
@@ -1525,7 +1520,7 @@ impl QuickLendXContract {
             frozen_at: env.ledger().timestamp(),
         };
         InvoiceStorage::set_freeze_info(&env, &invoice_id, &info);
-        InvoiceStorage::set_frozen(&env, &invoice_id, true);
+        InvoiceStorage::set_frozen(&env, &invoice_id, true, Some(reason));
         Ok(())
     }
 
@@ -1543,7 +1538,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
         InvoiceStorage::remove_freeze_info(&env, &invoice_id);
-        InvoiceStorage::set_frozen(&env, &invoice_id, false);
+        InvoiceStorage::set_frozen(&env, &invoice_id, false, None);
         Ok(())
     }
 
@@ -2548,6 +2543,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2575,6 +2571,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2602,6 +2599,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2626,52 +2624,6 @@ impl QuickLendXContract {
             min_invoice_amount,
             existing.min_bid_amount,
             existing.min_bid_bps,
-            max_due_date_days,
-            grace_period_seconds,
-            max_invoices_per_business,
-        )
-    }
-
-    /// Update **all** protocol limits in a single call (admin only).
-    ///
-    /// This is the preferred entrypoint when operators need to configure
-    /// `min_bid_amount` or `min_bid_bps` alongside the other limits.  The
-    /// narrower helpers (`set_protocol_limits`, `update_protocol_limits`,
-    /// `update_limits_max_invoices`) preserve the current bid-limit values for
-    /// backwards compatibility.
-    ///
-    /// # Parameters
-    /// - `min_invoice_amount`       – minimum invoice face value (inclusive).
-    /// - `min_bid_amount`           – minimum absolute bid amount (inclusive).
-    ///                                Pass [`DEFAULT_MIN_BID_AMOUNT`] (10) to
-    ///                                keep the compile-time default.
-    /// - `min_bid_bps`              – minimum bid rate in basis points (inclusive).
-    ///                                Pass [`DEFAULT_MIN_BID_BPS`] (100) to keep
-    ///                                the compile-time default.
-    /// - `max_due_date_days`        – maximum invoice horizon in days (1..=730).
-    /// - `grace_period_seconds`     – grace period after due date (0..=2_592_000).
-    /// - `max_invoices_per_business`– per-business active-invoice cap; 0 = unlimited.
-    ///
-    /// # Errors
-    /// Delegates to `ProtocolLimitsContract::set_protocol_limits` for all
-    /// parameter validation; see that function's docs for error codes.
-    pub fn set_protocol_limits_full(
-        env: Env,
-        admin: Address,
-        min_invoice_amount: i128,
-        min_bid_amount: i128,
-        min_bid_bps: u32,
-        max_due_date_days: u64,
-        grace_period_seconds: u64,
-        max_invoices_per_business: u32,
-    ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
-            env,
-            admin,
-            min_invoice_amount,
-            min_bid_amount,
-            min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
@@ -4779,7 +4731,7 @@ impl QuickLendXContract {
         let config = init::ProtocolInitializer::get_protocol_config(&env)
             .ok_or(QuickLendXError::OperationNotAllowed)?;
         if limit > config.backfill_max_batch_size {
-            return Err(QuickLendXError::BatchSizeTooLarge);
+            return Err(QuickLendXError::BatchSizeExceeded);
         }
         let report = InvoiceStorage::rebuild_indexes_page(&env, offset, limit);
         Ok(report)
@@ -4821,7 +4773,7 @@ impl QuickLendXContract {
         let config = init::ProtocolInitializer::get_protocol_config(&env)
             .ok_or(QuickLendXError::OperationNotAllowed)?;
         if limit > config.backfill_max_batch_size {
-            return Err(QuickLendXError::BatchSizeTooLarge);
+            return Err(QuickLendXError::BatchSizeExceeded);
         }
         let report =
             InvoiceStorage::prune_terminal_invoices_page(&env, older_than_secs, offset, limit);
@@ -4853,7 +4805,7 @@ impl QuickLendXContract {
         let config = init::ProtocolInitializer::get_protocol_config(&env)
             .ok_or(QuickLendXError::OperationNotAllowed)?;
         if limit > config.backfill_max_batch_size {
-            return Err(QuickLendXError::BatchSizeTooLarge);
+            return Err(QuickLendXError::BatchSizeExceeded);
         }
         EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
     }

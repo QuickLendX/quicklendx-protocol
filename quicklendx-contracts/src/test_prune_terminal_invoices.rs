@@ -77,7 +77,7 @@ impl TestFixture {
             &String::from_str(&self.env, "Test invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        );
+        &None);
         self.client.verify_invoice(&invoice_id);
         let bid_id = self.client.place_bid(
             &self.investor,
@@ -113,7 +113,7 @@ impl TestFixture {
                     &String::from_str(&self.env, "Test invoice"),
                     &InvoiceCategory::Services,
                     &Vec::new(&self.env),
-                );
+        &None);
                 self.client.verify_invoice(&invoice_id);
                 let bid_id = self.client.place_bid(
                     &self.investor,
@@ -154,7 +154,7 @@ impl TestFixture {
                     &String::from_str(&self.env, "Test invoice"),
                     &InvoiceCategory::Services,
                     &Vec::new(&self.env),
-                );
+        &None);
                 if status == InvoiceStatus::Verified {
                     self.client.verify_invoice(&invoice_id);
                 }
@@ -174,7 +174,7 @@ impl TestFixture {
             &String::from_str(&self.env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        );
+        &None);
         self.client.verify_invoice(&invoice_id);
         let bid_id = self.client.place_bid(
             &self.investor,

@@ -156,7 +156,7 @@ fn test_health_status_store_invoice_blocked_when_paused() {
         &reason(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
 }
 

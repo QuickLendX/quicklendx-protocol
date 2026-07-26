@@ -641,13 +641,6 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
 /// - Balance and allowance are checked **before** the token call so that the contract
 ///   never enters a partial-transfer state.
 /// - When `from == to` the function is a no-op (returns `Ok(())`).
-/// Minimum transfer amount. Below this, transfers are rejected as dust to
-/// prevent dust attacks and uneconomical token movements.
-#[cfg(not(any(test, feature = "testutils")))]
-const MIN_TRANSFER: i128 = 1_000_000; // 1 token (6 decimals)
-#[cfg(any(test, feature = "testutils"))]
-const MIN_TRANSFER: i128 = 10;
-
 pub fn transfer_funds(
     env: &Env,
     currency: &Address,
@@ -655,10 +648,6 @@ pub fn transfer_funds(
     to: &Address,
     amount: i128,
 ) -> Result<(), QuickLendXError> {
-    if amount < MIN_TRANSFER {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
     // Reject amounts below the minimum transfer threshold (dust prevention)
     if amount < MIN_TRANSFER {
         return Err(QuickLendXError::InvalidAmount);

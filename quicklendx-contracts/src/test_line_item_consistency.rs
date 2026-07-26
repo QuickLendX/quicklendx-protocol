@@ -28,7 +28,7 @@ fn make_invoice_with_amount(env: &Env, business: &Address, amount: i128) -> Invo
         String::from_str(env, "Test invoice"),
         InvoiceCategory::Services,
         tags,
-    )
+        None)
     .unwrap()
 }
 

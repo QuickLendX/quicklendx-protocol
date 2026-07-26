@@ -166,22 +166,6 @@ pub struct InvoiceRating {
     pub timestamp: u64,
 }
 
-/// Freeze reason enumeration representing why a business invoice was frozen
-#[contracttype]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum BusinessFreezeReason {
-    /// Generic administrative freeze (admin's discretion)
-    AdminAction,
-    /// Business KYC was rejected or revoked
-    KYCRejected,
-    /// Legal or compliance policy violation
-    ComplianceViolation,
-    /// Fraud or suspicious activity detected
-    SuspiciousActivity,
-    /// Court order or legal hold applied
-    LegalHold,
-}
-
 /// Freeze record stored alongside the frozen flag on an invoice
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -389,30 +373,85 @@ pub struct PruneReport {
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BusinessFreezeReason {
+    /// Generic administrative freeze (admin's discretion).
+    AdminAction,
+    /// Business KYC was rejected or revoked.
+    KYCRejected,
+    /// Legal or compliance policy violation.
+    ComplianceViolation,
+    /// Fraud or suspicious activity detected.
+    SuspiciousActivity,
+    /// Court order or legal hold applied.
+    LegalHold,
     /// Suspected fraudulent invoice submission or business identity.
     FraudSuspected,
-    /// Business failed or failed ongoing KYC/AML compliance checks.
-    ComplianceViolation,
     /// Active or resolved dispute requiring the business to be frozen
     /// until resolution.
     Dispute,
     /// Business requested a voluntary freeze (e.g., for internal audit).
     Voluntary,
-    /// Admin-initiated freeze for an unspecified or catch-all reason.
-    AdminAction,
 }
 
 impl BusinessFreezeReason {
     /// Returns a short human-readable label for event logging.
     pub fn label(&self) -> &'static str {
         match self {
-            Self::FraudSuspected => "fraud_suspected",
+            Self::AdminAction => "admin_action",
+            Self::KYCRejected => "kyc_rejected",
             Self::ComplianceViolation => "compliance_violation",
+            Self::SuspiciousActivity => "suspicious_activity",
+            Self::LegalHold => "legal_hold",
+            Self::FraudSuspected => "fraud_suspected",
             Self::Dispute => "dispute",
             Self::Voluntary => "voluntary",
-            Self::AdminAction => "admin_action",
         }
     }
+}
+
+/// Paginated result wrapper for `Vec<BytesN<32>>` queries (invoice IDs, investment IDs).
+///
+/// Bundles the page of items together with pagination metadata so consumers
+/// (frontend, downstream contracts, operators) know the total result-set size
+/// and whether additional pages exist **without** making a separate count query
+/// or looping until an empty page is returned.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedBytes32Vec {
+    /// The items in the current page (≤ `MAX_QUERY_LIMIT`).
+    pub items: Vec<BytesN<32>>,
+    /// Total number of records matching the filter (before pagination is applied).
+    pub total_count: u32,
+    /// `true` when additional pages exist past the current offset + limit.
+    pub has_more: bool,
+}
+
+/// Paginated result wrapper for `Vec<Bid>` queries.
+///
+/// Same shape as [`PaginatedBytes32Vec`] but carries full [`Bid`] records instead
+/// of opaque IDs so callers can render bid details without N+1 lookups.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedBids {
+    /// The bid records in the current page (≤ `MAX_QUERY_LIMIT`).
+    pub items: Vec<Bid>,
+    /// Total number of records matching the filter (before pagination is applied).
+    pub total_count: u32,
+    /// `true` when additional pages exist past the current offset + limit.
+    pub has_more: bool,
+}
+
+/// Paginated result wrapper for `Vec<Address>` queries (e.g. currency whitelist).
+///
+/// Same shape as [`PaginatedBytes32Vec`] but carries [`Address`] values.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedCurrencies {
+    /// The currency addresses in the current page (≤ `MAX_QUERY_LIMIT`).
+    pub items: Vec<Address>,
+    /// Total number of records matching the filter (before pagination is applied).
+    pub total_count: u32,
+    /// `true` when additional pages exist past the current offset + limit.
+    pub has_more: bool,
 }
 
 /// Typed reason for freezing an investor account.

@@ -130,7 +130,7 @@ fn upload_verified_invoice(
         &String::from_str(env, description),
         &InvoiceCategory::Technology,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     invoice_id
 }
