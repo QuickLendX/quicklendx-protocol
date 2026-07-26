@@ -83,6 +83,30 @@ fn place_bid(
     (bid_id, investor, invoice_id)
 }
 
+#[test]
+fn test_investor_cannot_bid_below_tier_minimum() {
+    let (env, client, admin, business) = setup();
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+    let due = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due,
+        &String::from_str(&env, "inv"),
+        &crate::invoice::InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let investor = Address::generate(&env);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
+    client.verify_investor(&admin, &investor, &10_000i128); // default becomes Basic tier
+
+    // Basic tier minimum is 100, we bid 99
+    let result = client.try_place_bid(&investor, &invoice_id, &99i128, &105i128);
+    assert_eq!(result, Err(Ok(crate::errors::QuickLendXError::BidBelowTierMinimum)));
+}
+
 // ===========================================================================
 // 1. HAPPY PATH - investor cancels own Placed bid
 // ===========================================================================

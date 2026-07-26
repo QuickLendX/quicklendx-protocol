@@ -1604,6 +1604,25 @@ fn recover_base_limit_from_current_limit(
         .saturating_div(combined_multiplier)
 }
 
+/// Enforce minimum investment amount based on tier.
+/// Higher tiers can still invest small amounts, but minimums prevent dust bids.
+pub fn require_tier_min_investment_amount(
+    tier: &InvestorTier,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
+    let min_amount = match tier {
+        InvestorTier::Basic => 100,
+        InvestorTier::Silver => 200,
+        InvestorTier::Gold => 300,
+        InvestorTier::Platinum => 400,
+        InvestorTier::VIP => 500,
+    };
+    if amount < min_amount {
+        return Err(QuickLendXError::BidBelowTierMinimum);
+    }
+    Ok(())
+}
+
 /// Update investor analytics after an investment
 pub fn update_investor_analytics(
     env: &Env,

@@ -84,13 +84,8 @@ pub enum QuickLendXError {
     InvalidBidTtl = 1409,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InsufficientKYCTier = 1410,
-    /// A bid exceeds the invoice's configured `per_investor_position_cap`.
-    ///
-    /// Threat: without this check a whale with a high KYC investment limit can
-    /// bid the full invoice face value and crowd out other investors, even when
-    /// protocol-wide bid-count caps still allow one oversized position.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
-    PerInvestorPositionCapExceeded = 1411,
+    BidBelowTierMinimum = 1411,
 
     // Rating (1500-1503)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -313,7 +308,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
             QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
-            QuickLendXError::PerInvestorPositionCapExceeded => symbol_short!("POS_CAP"),
+            QuickLendXError::BidBelowTierMinimum => symbol_short!("MIN_BID"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
             QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_PND_TR"),
