@@ -54,6 +54,9 @@ const FEE_BPS_KEY: Symbol = symbol_short!("fee_bps");
 /// Storage key for currency whitelist
 const WHITELIST_KEY: Symbol = symbol_short!("curr_wl");
 
+/// Storage key for corridor list
+const CORRIDORS_KEY: Symbol = symbol_short!("corridors");
+
 /// Storage key for initialization lock (prevents concurrent initialization)
 const INIT_LOCK_KEY: Symbol = symbol_short!("init_lck");
 
@@ -136,6 +139,8 @@ pub struct InitializationParams {
     pub grace_period_seconds: u64,
     /// Initial whitelisted currencies
     pub initial_currencies: Vec<Address>,
+    /// Initial corridor list (approved counterparty addresses for cross-invoice operations)
+    pub corridors: Vec<Address>,
     /// Maximum number of items processed in a single backfill or heavy run
     pub backfill_max_batch_size: u32,
 }
@@ -335,6 +340,11 @@ impl ProtocolInitializer {
                 .instance()
                 .get(&WHITELIST_KEY)
                 .unwrap_or(Vec::new(env));
+            let current_corridors: Vec<Address> = env
+                .storage()
+                .instance()
+                .get(&CORRIDORS_KEY)
+                .unwrap_or(Vec::new(env));
 
             if let (Some(c_admin), Some(c_treasury), Some(c_fee), Some(c_conf)) = (
                 current_admin,
@@ -350,6 +360,7 @@ impl ProtocolInitializer {
                     && c_conf.grace_period_seconds == params.grace_period_seconds
                     && c_conf.backfill_max_batch_size == params.backfill_max_batch_size
                     && current_whitelist == params.initial_currencies
+                    && current_corridors == params.corridors
                 {
                     return Ok(());
                 }
@@ -404,6 +415,13 @@ impl ProtocolInitializer {
                 .set(&WHITELIST_KEY, &params.initial_currencies);
         }
 
+        // Initialize corridor list with provided addresses
+        if !params.corridors.is_empty() {
+            env.storage()
+                .instance()
+                .set(&CORRIDORS_KEY, &params.corridors);
+        }
+
         // ATOMIC: Persist the protocol version so get_version is consistent
         // with the version that was active at initialization time.
         env.storage()
@@ -425,6 +443,7 @@ impl ProtocolInitializer {
             params.max_due_date_days,
             params.grace_period_seconds,
             params.backfill_max_batch_size,
+            &params.corridors,
         );
 
         Ok(())
@@ -535,6 +554,25 @@ impl ProtocolInitializer {
             for j in (i + 1)..len {
                 if curr == params.initial_currencies.get(j).unwrap() {
                     return Err(QuickLendXError::InvalidCurrency);
+                }
+            }
+        }
+
+        // VALIDATION: Corridor list must not contain duplicates, reserved
+        // addresses, or the well-known zero/burn address.
+        let corridor_len = params.corridors.len();
+        for i in 0..corridor_len {
+            let corridor = params.corridors.get(i).unwrap();
+            if corridor == params.admin
+                || corridor == params.treasury
+                || corridor == contract_address
+                || corridor == zero
+            {
+                return Err(QuickLendXError::InvalidAddress);
+            }
+            for j in (i + 1)..corridor_len {
+                if corridor == params.corridors.get(j).unwrap() {
+                    return Err(QuickLendXError::InvalidAddress);
                 }
             }
         }
@@ -942,6 +980,20 @@ impl ProtocolInitializer {
             .map(|config| config.grace_period_seconds)
             .unwrap_or(DEFAULT_GRACE_PERIOD_SECONDS)
     }
+
+    /// Get the corridor list.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    /// * The stored corridor address list (empty vec if not set)
+    pub fn get_corridors(env: &Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&CORRIDORS_KEY)
+            .unwrap_or(Vec::new(env))
+    }
 }
 
 // ============================================================================
@@ -959,6 +1011,7 @@ fn emit_protocol_initialized(
     max_due_date_days: u64,
     grace_period_seconds: u64,
     backfill_max_batch_size: u32,
+    corridors: &Vec<Address>,
 ) {
     crate::events::emit_protocol_initialized(
         env,
@@ -969,6 +1022,7 @@ fn emit_protocol_initialized(
         max_due_date_days,
         grace_period_seconds,
         backfill_max_batch_size,
+        corridors,
     );
 }
 

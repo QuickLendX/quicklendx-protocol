@@ -267,6 +267,7 @@ fn test_initialize_rejects_invalid_limit_combination_before_state_commit() {
         max_due_date_days: 1,
         grace_period_seconds: 86_401,
         initial_currencies: Vec::new(&env),
+        corridors: Vec::new(&env),
         backfill_max_batch_size: 100,
     };
 
