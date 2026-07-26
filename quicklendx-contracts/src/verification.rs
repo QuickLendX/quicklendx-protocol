@@ -1745,6 +1745,73 @@ pub fn validate_investor_investment(
     }
 }
 
+/// Recompute investor rating from on-chain history deterministically.
+///
+/// Recalculates the risk score via `calculate_investor_risk_score`, then
+/// derives the tier, risk level, and investment limit from the updated score
+/// and the investor's accumulated performance counters.  Updates the stored
+/// verification record and returns the full updated record.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `admin` - The admin address (must be authorized)
+/// * `investor` - The investor address to recompute the rating for
+///
+/// # Returns
+/// * `Ok(InvestorVerification)` - The updated verification record with the new rating
+///
+/// # Errors
+/// * `NotAdmin` if the caller is not the current admin
+/// * `KYCNotFound` if the investor has no verification record
+pub fn investor_rating_recompute(
+    env: &Env,
+    admin: &Address,
+    investor: &Address,
+) -> Result<InvestorVerification, QuickLendXError> {
+    admin.require_auth();
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
+        return Err(QuickLendXError::NotAdmin);
+    }
+
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
+
+    if !matches!(verification.status, BusinessVerificationStatus::Verified) {
+        return Err(QuickLendXError::InvalidKYCStatus);
+    }
+
+    let prior_tier = verification.tier.clone();
+    let prior_risk_level = verification.risk_level.clone();
+    let base_limit = recover_base_limit_from_current_limit(
+        verification.investment_limit,
+        &prior_tier,
+        &prior_risk_level,
+    )
+    .max(1);
+
+    let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
+    validate_risk_score(risk_score)?;
+
+    let tier = compute_investor_tier_from_stats(
+        verification.total_invested,
+        verification.successful_investments,
+        verification.defaulted_investments,
+        risk_score,
+    )?;
+    let risk_level = determine_risk_level(risk_score);
+    let investment_limit = calculate_investment_limit(&tier, &risk_level, base_limit);
+
+    verification.risk_score = risk_score;
+    verification.risk_level = risk_level;
+    verification.tier = tier;
+    verification.investment_limit = investment_limit;
+    verification.compliance_notes =
+        Some(String::from_str(env, "Investor rating recomputed from on-chain history"));
+
+    InvestorVerificationStorage::update(env, &verification);
+    Ok(verification)
+}
+
 /// Set investment limit for a verified investor (admin only)
 pub fn set_investment_limit(
     env: &Env,
