@@ -76,6 +76,16 @@ fn test_storage_key_business_default_history_stable() {
     assert_eq!(sym, symbol_short!("biz_def_h"));
 }
 
+/// STORAGE CLASS: Persistent
+#[test]
+fn test_storage_key_investor_default_history_stable() {
+    let env = setup();
+    assert_snapshot_entry("investor_default_history", "inv_def_h");
+    let addr = Address::generate(&env);
+    let (sym, _) = StorageKeys::investor_default_history(&addr);
+    assert_eq!(sym, symbol_short!("inv_def_h"));
+}
+
 // ---------------------------------------------------------------------------
 // Indexes — invoice secondary indexes (all Persistent)
 // ---------------------------------------------------------------------------

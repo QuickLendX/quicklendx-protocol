@@ -1875,6 +1875,16 @@ impl QuickLendXContract {
         env.storage().persistent().get(&key).unwrap_or(0)
     }
 
+    /// Get the total number of defaulted investments for an investor.
+    ///
+    /// Increments each time an invoice funded by this investor transitions to
+    /// `Defaulted` (see `defaults::handle_default`). Mirrors
+    /// `get_business_default_history` on the investor side.
+    pub fn get_investor_default_history(env: Env, investor: Address) -> u32 {
+        let key = crate::storage::StorageKeys::investor_default_history(&investor);
+        env.storage().persistent().get(&key).unwrap_or(0)
+    }
+
     /// Get total invoice count
     pub fn get_total_invoice_count(env: Env) -> u32 {
         let pending = Self::get_invoice_count_by_status(env.clone(), InvoiceStatus::Pending);
