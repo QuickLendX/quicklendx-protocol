@@ -436,6 +436,67 @@ impl EscrowStorage {
     }
 }
 
+/// Shared validation logic for escrow creation.
+///
+/// Returns `(next_held_reserve)` on success.
+fn validate_and_prepare_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    business: &Address,
+    amount: i128,
+    currency: &Address,
+) -> Result<HeldEscrowReserve, QuickLendXError> {
+    if amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some() {
+        return Err(QuickLendXError::InvoiceAlreadyFunded);
+    }
+
+    EscrowStorage::require_no_active_reserve_repair(env, currency)?;
+    let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
+
+    validate_token_address(env, currency, investor)?;
+
+    Ok(next_held_reserve)
+}
+
+/// Write the escrow record and update the held-reserve accumulator.
+///
+/// # Panics
+/// Panics if `next_held_reserve` was not obtained by calling
+/// [`validate_and_prepare_escrow`] with the same arguments.
+fn write_escrow_record(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    business: &Address,
+    amount: i128,
+    currency: &Address,
+    next_held_reserve: &HeldEscrowReserve,
+) -> BytesN<32> {
+    let escrow_id = EscrowStorage::generate_unique_escrow_id(env);
+    let escrow = Escrow {
+        escrow_id: escrow_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        business: business.clone(),
+        amount,
+        currency: currency.clone(),
+        created_at: env.ledger().timestamp(),
+        status: EscrowStatus::Held,
+    };
+
+    EscrowStorage::store_escrow(env, &escrow);
+    EscrowStorage::set_held_reserve_record(env, currency, next_held_reserve);
+    EscrowStorage::mark_reserve_accounted(env, &escrow_id);
+    crate::qlx_log!(env, "payment", "Escrow created successfully");
+    emit_escrow_created(env, &escrow);
+    escrow_id
+}
+
 /// Create escrow: transfer `amount` from investor to contract and store escrow record.
 ///
 /// ## One-Escrow-Per-Invoice Guard
@@ -468,20 +529,7 @@ pub fn create_escrow(
     amount: i128,
     currency: &Address,
 ) -> Result<BytesN<32>, QuickLendXError> {
-    if amount <= 0 {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some() {
-        return Err(QuickLendXError::InvoiceAlreadyFunded);
-    }
-
-    EscrowStorage::require_no_active_reserve_repair(env, currency)?;
-    let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
-
-    // Compliance-layer seam: verify the token address is a registered contract
-    // before issuing any cross-contract calls to it.
-    validate_token_address(env, currency, investor)?;
+    let next_held_reserve = validate_and_prepare_escrow(env, invoice_id, investor, business, amount, currency)?;
 
     crate::qlx_log!(env, "payment", "Creating escrow: amount={}", amount);
 
@@ -489,23 +537,32 @@ pub fn create_escrow(
     let contract_address = env.current_contract_address();
     transfer_funds(env, currency, investor, &contract_address, amount)?;
 
-    let escrow_id = EscrowStorage::generate_unique_escrow_id(env);
-    let escrow = Escrow {
-        escrow_id: escrow_id.clone(),
-        invoice_id: invoice_id.clone(),
-        investor: investor.clone(),
-        business: business.clone(),
-        amount,
-        currency: currency.clone(),
-        created_at: env.ledger().timestamp(),
-        status: EscrowStatus::Held,
-    };
+    let escrow_id = write_escrow_record(env, invoice_id, investor, business, amount, currency, &next_held_reserve);
+    Ok(escrow_id)
+}
 
-    EscrowStorage::store_escrow(env, &escrow);
-    EscrowStorage::set_held_reserve_record(env, currency, &next_held_reserve);
-    EscrowStorage::mark_reserve_accounted(env, &escrow_id);
-    crate::qlx_log!(env, "payment", "Escrow created successfully");
-    emit_escrow_created(env, &escrow);
+/// Create escrow record without transferring funds (funds must already be in the contract).
+///
+/// Use this when the investor's full bid amount has already been transferred to
+/// the contract (e.g., in flows that split a single transfer into fee + escrow).
+/// All the same validations as [`create_escrow`] are performed, but the token
+/// transfer step is skipped.
+///
+/// # Errors
+/// Same as [`create_escrow`] except token-transfer errors are not possible.
+pub fn create_escrow_record_only(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    business: &Address,
+    amount: i128,
+    currency: &Address,
+) -> Result<BytesN<32>, QuickLendXError> {
+    let next_held_reserve = validate_and_prepare_escrow(env, invoice_id, investor, business, amount, currency)?;
+
+    crate::qlx_log!(env, "payment", "Creating escrow record (funds pre-transferred): amount={}", amount);
+
+    let escrow_id = write_escrow_record(env, invoice_id, investor, business, amount, currency, &next_held_reserve);
     Ok(escrow_id)
 }
 
@@ -655,11 +712,6 @@ pub fn transfer_funds(
     to: &Address,
     amount: i128,
 ) -> Result<(), QuickLendXError> {
-    if amount < MIN_TRANSFER {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    // Reject amounts below the minimum transfer threshold (dust prevention)
     if amount < MIN_TRANSFER {
         return Err(QuickLendXError::InvalidAmount);
     }
