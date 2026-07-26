@@ -352,7 +352,7 @@ mod test_invoice_metadata;
 mod test_invoice_search_ranking;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_line_item_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
@@ -1253,10 +1253,17 @@ impl QuickLendXContract {
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&env, &tags)?;
 
+        // Check max invoices per business limit
+        let limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+        if limits.max_invoices_per_business > 0 {
+            let active_count =
+                InvoiceStorage::count_active_business_invoices(&env, &business);
+            if active_count >= limits.max_invoices_per_business {
+                return Err(QuickLendXError::MaxInvoicesPerBusinessExceeded);
+            }
+        }
+
         // Regulatory compliance gate (reserved seam — no-op today).
-        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
-        // jurisdiction-specific or on-chain oracle-based compliance checks without
-        // touching this call site.
         crate::regulatory::require_regulatory_ok(&env, &business)?;
 
         // Create new invoice
