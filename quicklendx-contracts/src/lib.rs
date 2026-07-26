@@ -167,7 +167,7 @@ mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
 #[cfg(test)]
-mod test_dispute_time_limit;
+mod test_dispute_history_guard;
 #[cfg(test)]
 mod test_evidence_size_cap;
 #[cfg(test)]
