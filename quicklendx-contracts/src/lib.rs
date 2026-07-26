@@ -284,6 +284,12 @@ mod test_bid_ranking;
 // `compare_bids`, `get_best_bid`, and `rank_bids`.
 #[cfg(test)]
 mod test_bid_match_helper;
+// Issue #2089 — max-invoice-tags helper boundary tests; runs on every CI
+// matrix entry (no feature gate). Locks in below/at/over-cap behaviour for
+// `Invoice::add_tag`, the bulk ctor `Invoice::new`, and the pure validator
+// `validate_invoice_tags`. Assertive names and deterministic inputs only.
+#[cfg(test)]
+mod test_max_invoice_tags_boundary;
 #[cfg(test)]
 mod test_vesting;
 mod test_vesting_summary;
