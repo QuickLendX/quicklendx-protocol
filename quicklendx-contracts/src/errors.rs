@@ -164,6 +164,8 @@ pub enum QuickLendXError {
     InvalidDisputeEvidence = 1906,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeActive = 1907,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    DisputeTimeLimitExceeded = 1908,
 
     // Notification (2000-2002)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -289,6 +291,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidDisputeReason => symbol_short!("DSP_RN"),
             QuickLendXError::InvalidDisputeEvidence => symbol_short!("DSP_EV"),
             QuickLendXError::DisputeActive => symbol_short!("DSP_ACT"),
+            QuickLendXError::DisputeTimeLimitExceeded => symbol_short!("DSP_TL"),
             // Notification
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
