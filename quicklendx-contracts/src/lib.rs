@@ -152,6 +152,10 @@ mod test_bid_expiry_grace;
 mod test_bid_ttl;
 #[cfg(test)]
 mod test_require_business_active;
+#[cfg(test)]
+mod test_require_valid_business_kyc_tier;
+#[cfg(test)]
+mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(test)]
@@ -422,8 +426,8 @@ use settlement::{
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
-    investor_rating_recompute, normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
-    require_business_not_pending, require_investor_not_pending,
+    normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
+    require_business_not_pending, require_investor_not_pending, require_valid_business_kyc_tier,
     revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
