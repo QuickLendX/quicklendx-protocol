@@ -1,5 +1,5 @@
 use crate::errors::QuickLendXError;
-use crate::protocol_limits::{check_string_length, MAX_FEEDBACK_LENGTH};
+use crate::protocol_limits::{check_string_length, MAX_FEEDBACK_LENGTH, MAX_INVOICE_AMOUNT};
 use crate::storage::DataKey;
 use crate::verification::normalize_tag;
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
@@ -34,7 +34,7 @@ impl Invoice {
         tags: Vec<String>,
         origination_fee_bps: Option<u32>,
     ) -> Result<Self, QuickLendXError> {
-        if amount <= 0 {
+        if amount <= 0 || amount > MAX_INVOICE_AMOUNT {
             return Err(QuickLendXError::InvalidAmount);
         }
 

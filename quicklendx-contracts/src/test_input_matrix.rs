@@ -126,15 +126,55 @@ fn test_store_invoice_i128_max_amount() {
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
 
+    assert_contract_err(
+        client.try_store_invoice(
+            &business,
+            &i128::MAX,
+            &currency,
+            &(env.ledger().timestamp() + 86_400),
+            &String::from_str(&env, "Test"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        ),
+        QuickLendXError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_store_invoice_amount_at_max_boundary() {
+    let (env, client, _) = setup();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
     assert_no_host_error(client.try_store_invoice(
         &business,
-        &i128::MAX,
+        &crate::protocol_limits::MAX_INVOICE_AMOUNT,
         &currency,
         &(env.ledger().timestamp() + 86_400),
-        &String::from_str(&env, "Test"),
+        &String::from_str(&env, "At max boundary"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
     ));
+}
+
+#[test]
+fn test_store_invoice_amount_one_over_max_boundary() {
+    let (env, client, _) = setup();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    assert_contract_err(
+        client.try_store_invoice(
+            &business,
+            &(crate::protocol_limits::MAX_INVOICE_AMOUNT + 1),
+            &currency,
+            &(env.ledger().timestamp() + 86_400),
+            &String::from_str(&env, "One over max"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        ),
+        QuickLendXError::InvalidAmount,
+    );
 }
 
 #[test]
@@ -211,6 +251,39 @@ fn test_place_bid_negative_amount() {
         ),
         QuickLendXError::InvalidAmount,
     );
+}
+
+#[test]
+fn test_place_bid_expected_return_exceeds_max() {
+    let (env, client, admin) = setup();
+    let investor = verified_investor(&env, &client);
+    let invoice_id = verified_invoice(&env, &client, &admin);
+
+    assert_contract_err(
+        client.try_place_bid(
+            &investor,
+            &invoice_id,
+            &100,
+            &(crate::protocol_limits::MAX_INVOICE_AMOUNT + 1),
+            &BytesN::from_array(&env, &[0u8; 32]),
+        ),
+        QuickLendXError::InvalidAmount,
+    );
+}
+
+#[test]
+fn test_place_bid_expected_return_at_max_boundary() {
+    let (env, client, admin) = setup();
+    let investor = verified_investor(&env, &client);
+    let invoice_id = verified_invoice(&env, &client, &admin);
+
+    assert_no_host_error(client.try_place_bid(
+        &investor,
+        &invoice_id,
+        &100,
+        &crate::protocol_limits::MAX_INVOICE_AMOUNT,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    ));
 }
 
 #[test]
