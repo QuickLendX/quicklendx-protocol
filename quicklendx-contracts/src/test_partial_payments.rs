@@ -356,7 +356,23 @@ mod tests {
 
     /// Payment record sum must always equal invoice.total_paid.
     #[test]
-    fn test_payment_record_sum_equals_total_paid() {
+    fn test_partial_fills_sum_to_total_when_fully_paid() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+        let (invoice_id, _business, _investor, _currency) =
+            setup_funded_invoice(&env, &client, &contract_id, 1_000);
+        env.ledger().set_timestamp(1_000);
+        client.process_partial_payment(&invoice_id, &300, &String::from_str(&env, "tx-1"));
+        env.ledger().set_timestamp(1_100);
+        client.process_partial_payment(&invoice_id, &400, &String::from_str(&env, "tx-2"));
+        env.ledger().set_timestamp(1_200);
+        client.process_partial_payment(&invoice_id, &300, &String::from_str(&env, "tx-3"));
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.total_paid, invoice.amount);
+        assert_eq!(invoice.status, InvoiceStatus::Paid);
+    }
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register(QuickLendXContract, ());

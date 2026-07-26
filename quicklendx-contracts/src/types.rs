@@ -37,6 +37,20 @@ impl InvoiceStatus {
     }
 }
 
+/// Invoice lock state controlled by admin holds.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvoiceLock {
+    None,
+    Frozen,
+}
+
+impl InvoiceLock {
+    pub fn is_locked(&self) -> bool {
+        *self != Self::None
+    }
+}
+
 /// Bid status enumeration
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -93,7 +107,7 @@ impl DisputeResolution {
             Self::FavorBusiness => 1,
             Self::FavorInvestor => 2,
             Self::Split => 3,
-            Self::Dismissed => 4
+            Self::Dismissed => 4,
         }
     }
 }
@@ -152,6 +166,31 @@ pub struct InvoiceRating {
     pub timestamp: u64,
 }
 
+/// Freeze reason enumeration representing why a business invoice was frozen
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BusinessFreezeReason {
+    /// Generic administrative freeze (admin's discretion)
+    AdminAction,
+    /// Business KYC was rejected or revoked
+    KYCRejected,
+    /// Legal or compliance policy violation
+    ComplianceViolation,
+    /// Fraud or suspicious activity detected
+    SuspiciousActivity,
+    /// Court order or legal hold applied
+    LegalHold,
+}
+
+/// Freeze record stored alongside the frozen flag on an invoice
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FreezeInfo {
+    pub reason: BusinessFreezeReason,
+    pub frozen_by: Address,
+    pub frozen_at: u64,
+}
+
 /// Core Invoice data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -186,6 +225,45 @@ pub struct Invoice {
     pub dispute: Dispute,
     pub total_paid: i128,
     pub payment_history: Vec<PaymentRecord>,
+    pub origination_fee_bps: Option<u32>,
+}
+
+pub const RATINGS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+
+/// Versioned ratings snapshot for off-chain indexers and downstream contracts.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RatingsSnapshot {
+    pub schema_version: u32,
+    pub invoice_id: BytesN<32>,
+    pub average_rating: Option<u32>,
+    pub total_ratings: u32,
+    pub highest_rating: Option<u32>,
+    pub lowest_rating: Option<u32>,
+    pub ledger_sequence: u32,
+}
+
+/// Input type for a single invoice within a `store_invoices_batch` call.
+///
+/// Bundles every per-invoice field so the batch entrypoint can accept a
+/// `Vec<InvoiceInput>` with a single-argument list, keeping the public ABI
+/// clean and future-proof (adding optional metadata requires a new struct
+/// version rather than a new variadic argument list).
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvoiceInput {
+    /// Invoice face value in the smallest currency unit (must be > 0).
+    pub amount: i128,
+    /// Token contract address for the invoice currency.
+    pub currency: Address,
+    /// Unix timestamp by which the invoice must be settled (must be in the future).
+    pub due_date: u64,
+    /// Human-readable invoice description (max `MAX_DESCRIPTION_LENGTH` bytes).
+    pub description: String,
+    /// Invoice category (Services, Products, etc.).
+    pub category: InvoiceCategory,
+    /// Optional searchable tags (max `MAX_INVOICE_TAGS` entries, each max 50 bytes).
+    pub tags: Vec<String>,
 }
 
 /// Helper struct for metadata updates
@@ -301,4 +379,71 @@ pub struct PruneReport {
     pub pruned: u32,
     /// Offset to pass on the next call.
     pub next_offset: u32,
+}
+
+/// Typed reason for freezing a business entity or its invoices.
+///
+/// Stored alongside the freeze state to provide an audit trail and enable
+/// targeted unfreeze logic. An admin must supply one of these variants
+/// when freezing; a bare boolean is no longer sufficient.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BusinessFreezeReason {
+    /// Suspected fraudulent invoice submission or business identity.
+    FraudSuspected,
+    /// Business failed or failed ongoing KYC/AML compliance checks.
+    ComplianceViolation,
+    /// Active or resolved dispute requiring the business to be frozen
+    /// until resolution.
+    Dispute,
+    /// Business requested a voluntary freeze (e.g., for internal audit).
+    Voluntary,
+    /// Admin-initiated freeze for an unspecified or catch-all reason.
+    AdminAction,
+}
+
+impl BusinessFreezeReason {
+    /// Returns a short human-readable label for event logging.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::FraudSuspected => "fraud_suspected",
+            Self::ComplianceViolation => "compliance_violation",
+            Self::Dispute => "dispute",
+            Self::Voluntary => "voluntary",
+            Self::AdminAction => "admin_action",
+        }
+    }
+}
+
+/// Typed reason for freezing an investor account.
+///
+/// Symmetric with [`BusinessFreezeReason`] — every freeze must carry a
+/// typed reason so that audit logs and unfreeze workflows can operate on
+/// structured data rather than opaque booleans.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvestorFreezeReason {
+    /// Investor engaged in suspicious or fraudulent bid/investment activity.
+    FraudSuspected,
+    /// Investor failed or failed ongoing KYC/AML compliance checks.
+    ComplianceViolation,
+    /// Active dispute involving the investor's positions.
+    Dispute,
+    /// Investor requested a voluntary freeze.
+    Voluntary,
+    /// Admin-initiated freeze for an unspecified or catch-all reason.
+    AdminAction,
+}
+
+impl InvestorFreezeReason {
+    /// Returns a short human-readable label for event logging.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::FraudSuspected => "fraud_suspected",
+            Self::ComplianceViolation => "compliance_violation",
+            Self::Dispute => "dispute",
+            Self::Voluntary => "voluntary",
+            Self::AdminAction => "admin_action",
+        }
+    }
 }

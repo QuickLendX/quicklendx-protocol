@@ -14,6 +14,7 @@ fn test_store_invoice_rejects_below_minimum_amount() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
     client.set_admin(&admin);
     client.set_protocol_limits(&admin, &1_000i128, &365u64, &0u64);
 
@@ -41,6 +42,7 @@ fn test_store_invoice_allows_at_minimum_amount() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
     client.set_admin(&admin);
     client.set_protocol_limits(&admin, &1_000i128, &365u64, &0u64);
 
@@ -69,6 +71,7 @@ fn test_upload_invoice_enforces_minimum_amount() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
     client.set_admin(&admin);
     client.set_protocol_limits(&admin, &1_000i128, &365u64, &0u64);
 

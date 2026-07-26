@@ -499,9 +499,11 @@ fn test_refund_index_consistency() {
 #[test]
 fn test_cannot_refund_after_release() {
     let (env, client, admin) = setup();
-    let (invoice_id, business, _, _, _) = create_funded_invoice(&env, &client, &admin);
+    let (invoice_id, business, investor, _, _) = create_funded_invoice(&env, &client, &admin);
 
     // Release funds to business
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     // Attempt refund
