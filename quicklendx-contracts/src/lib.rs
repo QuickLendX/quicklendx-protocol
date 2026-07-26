@@ -3979,3 +3979,6 @@ mod test_prune_terminal_invoices;
 
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
+
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_default_flow;
