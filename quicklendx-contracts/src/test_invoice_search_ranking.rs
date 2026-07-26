@@ -5,7 +5,8 @@ mod test_invoice_search_ranking {
     use crate::invoice_search::InvoiceSearch;
     use crate::storage::InvoiceStorage;
     use crate::types::{
-        Dispute, DisputeResolution, Invoice, InvoiceCategory, InvoiceStatus, SearchRank, SearchResult,
+        Dispute, DisputeResolution, Invoice, InvoiceCategory, InvoiceStatus, SearchRank,
+        SearchResult,
     };
     use crate::QuickLendXContract;
     use soroban_sdk::testutils::Address as _;

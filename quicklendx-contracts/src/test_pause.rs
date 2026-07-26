@@ -5,7 +5,7 @@ use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::{Address as _, Ledger, MockAuth, MockAuthInvoke};
-use soroban_sdk::{token, Address, Env, IntoVal, String, Vec};
+use soroban_sdk::{token, Address, Env, IntoVal, String, Vec, Symbol, xdr};
 
 /// Standard test setup: registers contract, initializes admin, generates test addresses.
 pub fn setup_contract_with_admin() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
@@ -185,6 +185,39 @@ fn test_pause_allows_admin_rotation_and_new_admin_unpause() {
 }
 
 #[test]
+fn test_pause_idempotent_no_duplicate_events() {
+    let env = Env::default();
+    let (client, admin, _business, _investor, _currency) = setup(&env);
+    // First pause should emit one Paused event
+    client.pause(&admin);
+    assert!(client.is_paused());
+    // Count Paused events
+    let paused_topic = Symbol::new(&env, "paused");
+    let topic_xdr = xdr::ScVal::try_from_val(&env, &paused_topic).unwrap();
+    let count1 = env.events()
+        .all()
+        .events()
+        .iter()
+        .filter(|e| match &e.body {
+            soroban_sdk::xdr::ContractEventBody::V0(body) => body.topics.first() == Some(&topic_xdr),
+        })
+        .count();
+    assert_eq!(count1, 1);
+    // Second pause should not emit another event
+    client.pause(&admin);
+    let count2 = env.events()
+        .all()
+        .events()
+        .iter()
+        .filter(|e| match &e.body {
+            soroban_sdk::xdr::ContractEventBody::V0(body) => body.topics.first() == Some(&topic_xdr),
+        })
+        .count();
+    assert_eq!(count2, 1);
+    assert!(client.is_paused());
+}
+
+#[test]
 fn test_pause_allows_emergency_withdraw_lifecycle() {
     let env = Env::default();
     env.mock_all_auths();
@@ -275,6 +308,8 @@ fn test_pause_blocks_release_escrow_funds() {
 
     client.pause(&admin);
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
     assert!(result.is_err());
     let err = result.unwrap_err().unwrap();
@@ -410,6 +445,8 @@ fn test_pause_blocks_add_investment_insurance() {
     verify_investor_for_test(&env, &client, &investor, 10_000);
     let _bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
     client.accept_bid_and_fund(&invoice_id, &_bid_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let investment = client.get_invoice_investment(&invoice_id);

@@ -204,6 +204,7 @@ impl BidStorage {
     }
 
     pub fn store_bid(env: &Env, bid: &Bid) {
+        crate::assert_view_only!(env);
         env.storage().persistent().set(&bid.bid_id, bid);
         bump_persistent(env, &bid.bid_id);
         // Add to investor index
@@ -219,6 +220,7 @@ impl BidStorage {
         result
     }
     pub fn update_bid(env: &Env, bid: &Bid) {
+        crate::assert_view_only!(env);
         env.storage().persistent().set(&bid.bid_id, bid);
         bump_persistent(env, &bid.bid_id);
     }
@@ -525,6 +527,7 @@ impl BidStorage {
         count
     }
     pub fn add_bid_to_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
+        crate::assert_view_only!(env);
         let count_key = Self::invoice_bid_count_key(invoice_id);
         let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
         let entry_key = Self::invoice_bid_entry_key(invoice_id, count);

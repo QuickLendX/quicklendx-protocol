@@ -77,6 +77,7 @@ QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing t
 - **`investment.rs`**: Investment tracking and insurance
 - **`notifications.rs`**: Notification system for all parties
 - **`events.rs`**: Event emission and handling
+- **`regulatory.rs`**: Compliance seam — no-op `require_regulatory_ok` gate called on state-changing entry points (`store_invoice`, `place_bid`), reserved for future jurisdiction-specific checks.
 - **`errors.rs`**: Error definitions and handling
 
 ## ⚡ Quick Start
@@ -139,6 +140,14 @@ let bid_id = contract.place_bid(
 ### Deterministic Ledger Time
 
 See [Deterministic Ledger Time](docs/contracts/deterministic-time.md) for guidelines on using `env.ledger().timestamp()` instead of off-chain wall-clock time in contract logic.
+
+### Settlement formula and update timing
+
+See [Settlement formula, inputs, and update timing](../docs/contracts/settlement-formula.md) for the contributor-facing explanation of the settlement formula and when fee updates apply.
+
+### Settlement Currencies
+
+See [Settlement Currencies by Invoice Type](docs/SETTLEMENT_CURRENCIES.md) for a downstream integrator guide on which tokens are accepted for each invoice category.
 
 ### Core Functions
 
@@ -1103,17 +1112,22 @@ See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) for detailed security analysis.
 
 Additional documentation is available in the `docs/` directory:
 
+- **[Regulatory Compliance Hook](docs/contracts/regulatory.md)**: Reserved compliance seam — how `require_regulatory_ok` is wired into invoice and bid flows.
 - **[Decimal Handling](docs/decimal-handling.md)**: How the contract handles different token decimal places (USDC, DAI, XLM, etc.) and how integrators should convert amounts
 - **[Protocol Limits](PROTOCOL_LIMITS_README.md)**: Protocol-wide limits and configuration
 - **[Admin Operations](docs/admin-dry-run.md)**: Admin function dry-run previews
 - **[Bid Lifecycle](docs/bid-lifecycle.md)**: Complete bid state machine and transitions
+- **[Bid Ranking](../docs/BID_RANKING.md)**: Deterministic ordering function — tier-by-tier tie-breaker logic, invariants, and contributor workflow.
 - **[Escrow Invariants](docs/escrow-invariants.md)**: Escrow state guarantees and safety properties
 - **[Investment Lifecycle](docs/investment-lifecycle.md)**: Investment states and transitions
+- **[Settlement & Fund Distribution](docs/SETTLEMENT.md)**: How invoice settlement splits funds across investors, treasury, and the platform.
 - **[Settlement & Dispute Interaction](docs/settlement-dispute-interaction.md)**: How settlements interact with disputes
 - **[Invoice Search](docs/invoice-search-ranking.md)**: Invoice search and ranking algorithms
 - **[Insurance Stacking](docs/insurance-stacking.md)**: Multiple insurance providers per investment
 - **[Notifications Idempotency](docs/notifications-idempotency.md)**: Notification delivery guarantees
 - **[Storage TTL Policy](docs/storage-ttl-policy.md)**: Storage lifetime management
+- **[Storage TTL Map](../docs/STORAGE_TTL.md)**: Detailed mapping of each contract storage key to its bump amount
+- **[Rounding Strategy](Rounding.md)**: Explanation of half‑up vs. banker rounding used in financial calculations.
 - **[Protocol Health](docs/protocol-health.md)**: Health check endpoints and monitoring
 - **[Error Catalog](docs/error-catalog.md)**: Complete error reference
 
@@ -1219,6 +1233,41 @@ pub fn create_funded_invoice(env, client, admin)
 
 
 
+## ⚙️ Protocol Limits
+
+All configurable numeric limits live in a single `ProtocolLimits` struct stored
+in instance storage.  Use `get_protocol_limits()` to read the current values.
+
+### Setting limits
+
+| Entrypoint | What it sets | Notes |
+|-----------|-------------|-------|
+| `set_protocol_limits_full(admin, min_invoice_amount, min_bid_amount, min_bid_bps, max_due_date_days, grace_period_seconds, max_invoices_per_business)` | All 6 limits | **Preferred** for full control |
+| `set_protocol_limits(admin, min_invoice_amount, max_due_date_days, grace_period_seconds)` | Invoice horizon limits only | Preserves current bid limits |
+| `update_protocol_limits(admin, …)` | Same as above | Alias |
+| `update_limits_max_invoices(admin, …, max_invoices_per_business)` | Invoice horizon + business cap | Preserves bid limits |
+
+Default constants (defined in `src/protocol_limits.rs`):
+
+| Constant | Value |
+|---------|-------|
+| `DEFAULT_MIN_BID_AMOUNT` | `10` |
+| `DEFAULT_MIN_BID_BPS` | `100` (1 %) |
+| `DEFAULT_MAX_INVOICES_PER_BUSINESS` | `100` |
+
+### Bid TTL and per-investor bid cap
+
+| Entrypoint | Description |
+|-----------|-------------|
+| `get_bid_ttl_config()` | Full TTL snapshot (`current_days`, `min_days`, `max_days`, `is_custom`) |
+| `set_bid_ttl_days(days)` | Set bid TTL 1–30 days (admin only) |
+| `reset_bid_ttl_to_default()` | Restore default 7-day TTL |
+| `get_bid_limit_config()` | Full per-investor cap snapshot (`limit`, `is_disabled`, `is_custom`) |
+| `set_max_active_bids_per_investor(limit)` | Set cap; `0` = unlimited |
+| `reset_max_active_bids_per_investor()` | Restore default 20-bid cap |
+
+Full documentation: [`docs/contracts/limits.md`](../docs/contracts/limits.md).
+
 ## 🤝 Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
@@ -1252,6 +1301,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
+- [Contract Emergency Response Runbook](../docs/EMERGENCY_RESPONSE.md)
 - [Token Decimals — how non-standard decimals are handled internally](../docs/contracts/token-decimals.md)
 - [Stellar Documentation](https://developers.stellar.org/)
 - [Soroban Documentation](https://soroban.stellar.org/)

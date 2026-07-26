@@ -51,12 +51,7 @@ fn test_place_bid_unverified_investor_fails() {
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 10_000);
 
     let result = client.try_place_bid(&unverified_investor, &invoice_id, &5_000, &5_700);
-    assert!(result.is_err());
-    let contract_err = result
-        .err()
-        .expect("expected contract error")
-        .expect("expected contract-level error");
-    assert_eq!(contract_err, QuickLendXError::BusinessNotVerified);
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::BusinessNotVerified);
 }
 
 #[test]
@@ -68,12 +63,7 @@ fn test_place_bid_over_limit_fails() {
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 10_000);
 
     let result = client.try_place_bid(&investor, &invoice_id, &1_500, &1_700);
-    assert!(result.is_err());
-    let contract_err = result
-        .err()
-        .expect("expected contract error")
-        .expect("expected contract-level error");
-    assert_eq!(contract_err, QuickLendXError::InvalidAmount);
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvalidAmount);
 }
 
 #[test]
@@ -94,12 +84,7 @@ fn test_place_bid_wrong_invoice_status_fails() {
     );
 
     let result = client.try_place_bid(&investor, &invoice_id, &5_000, &5_700);
-    assert!(result.is_err());
-    let contract_err = result
-        .err()
-        .expect("expected contract error")
-        .expect("expected contract-level error");
-    assert_eq!(contract_err, QuickLendXError::InvalidStatus);
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvalidStatus);
 }
 
 #[test]
@@ -223,10 +208,5 @@ fn test_withdraw_bid_already_withdrawn_fails() {
     client.withdraw_bid(&bid_id);
 
     let result = client.try_withdraw_bid(&bid_id);
-    assert!(result.is_err());
-    let contract_err = result
-        .err()
-        .expect("expected contract error")
-        .expect("expected contract-level error");
-    assert_eq!(contract_err, QuickLendXError::OperationNotAllowed);
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::OperationNotAllowed);
 }

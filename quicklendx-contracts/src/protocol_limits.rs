@@ -22,6 +22,8 @@ pub struct ProtocolLimits {
     pub grace_period_seconds: u64,
     /// Max invoices per business. **Inclusivity**: Inclusive (active_count < limit), 0 = unlimited.
     pub max_invoices_per_business: u32,
+    /// Minimum KYC tier required for placing a bid.
+    pub min_investor_tier: crate::verification::InvestorTier,
 }
 
 #[allow(dead_code)]
@@ -36,6 +38,8 @@ const DEFAULT_MIN_AMOUNT: i128 = 10;
 pub const DEFAULT_MIN_BID_AMOUNT: i128 = 10;
 /// @notice Default minimum bid rate in basis points.
 pub const DEFAULT_MIN_BID_BPS: u32 = 100; // 1%
+/// @notice Hard minimum bid amount that admin may not undercut.
+pub const MIN_BID_FLOOR: i128 = 1;
 
 #[allow(dead_code)]
 const DEFAULT_MAX_DUE_DAYS: u64 = 365;
@@ -75,6 +79,8 @@ pub const MAX_KYC_DATA_LENGTH: u32 = 5000;
 pub const MAX_REJECTION_REASON_LENGTH: u32 = 500;
 /// Maximum length for invoice feedback (1000 bytes)
 pub const MAX_FEEDBACK_LENGTH: u32 = 1000;
+/// Maximum length for the mandatory reason on an admin rating override (500 bytes)
+pub const MAX_RATING_OVERRIDE_REASON_LENGTH: u32 = 500;
 
 pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXError> {
     if s.len() > max_len {
@@ -144,6 +150,7 @@ impl ProtocolLimitsContract {
             max_due_date_days: DEFAULT_MAX_DUE_DAYS,
             grace_period_seconds: DEFAULT_GRACE_PERIOD,
             max_invoices_per_business: DEFAULT_MAX_INVOICES_PER_BUSINESS,
+            min_investor_tier: crate::verification::InvestorTier::Basic,
         };
 
         env.storage().instance().set(&LIMITS_KEY, &limits);
@@ -161,6 +168,7 @@ impl ProtocolLimitsContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
         max_invoices_per_business: u32,
+        min_investor_tier: crate::verification::InvestorTier,
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
         Self::set_protocol_limits_authed(
@@ -172,6 +180,7 @@ impl ProtocolLimitsContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            min_investor_tier,
         )
     }
 
@@ -187,6 +196,7 @@ impl ProtocolLimitsContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
         max_invoices_per_business: u32,
+        min_investor_tier: crate::verification::InvestorTier,
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
         validate_protocol_limits_params(
@@ -204,6 +214,7 @@ impl ProtocolLimitsContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            min_investor_tier,
         };
 
         env.storage().instance().set(&LIMITS_KEY, &limits);
@@ -223,7 +234,40 @@ impl ProtocolLimitsContract {
                 max_due_date_days: DEFAULT_MAX_DUE_DAYS,
                 grace_period_seconds: DEFAULT_GRACE_PERIOD,
                 max_invoices_per_business: DEFAULT_MAX_INVOICES_PER_BUSINESS,
+                min_investor_tier: crate::verification::InvestorTier::Basic,
             })
+    }
+
+    /// @notice Admin-only: update the absolute minimum bid amount.
+    /// @dev Enforces a hard floor of `MIN_BID_FLOOR` so the protocol
+    ///      cannot be configured to accept bids below the minimum viable
+    ///      economic unit. Returns the new value on success.
+    pub fn update_minimum_bid(
+        env: Env,
+        admin: Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
+        admin.require_auth();
+        Self::update_minimum_bid_authed(&env, &admin, amount)
+    }
+
+    /// @notice Update minimum bid without calling `require_auth` again.
+    /// @dev Used during initialization or when caller is already authenticated.
+    pub(crate) fn update_minimum_bid_authed(
+        env: &Env,
+        admin: &Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
+        AdminStorage::require_admin(env, admin)?;
+
+        if amount < MIN_BID_FLOOR {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let mut limits = Self::get_protocol_limits(env.clone());
+        limits.min_bid_amount = amount;
+        env.storage().instance().set(&LIMITS_KEY, &limits);
+        Ok(amount)
     }
 
     /// @notice Validate invoice amount and due date against configured limits.
@@ -268,6 +312,14 @@ pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> 
 
 /// Maximum number of active invoices allowed per business
 pub const MAX_ACTIVE_INVOICES_PER_BUSINESS: u32 = 100;
+
+/// Maximum number of invoices that can be created in a single batch call.
+///
+/// This constant caps the size of a `store_invoices_batch` submission to
+/// prevent a single transaction from consuming an unbounded amount of CPU and
+/// storage budget. Callers that need to submit more than this many invoices
+/// should split the work across multiple calls.
+pub const MAX_BATCH_INVOICES: u32 = 10;
 
 /// Determine if an invoice status is considered "active" for limit enforcement.
 ///

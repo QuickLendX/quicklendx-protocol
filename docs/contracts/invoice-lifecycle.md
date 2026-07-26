@@ -36,6 +36,7 @@ Allows a verified business to upload an invoice to the platform.
 - `description: String` - Invoice description (cannot be empty)
 - `category: InvoiceCategory` - Invoice category
 - `tags: Vec<String>` - Invoice tags for discoverability
+- `origination_fee_bps: Option<u32>` - Optional origination fee rate to charge the investor at fund-time
 
 **Returns**: `Result<BytesN<32>, QuickLendXError>` - Invoice ID on success
 

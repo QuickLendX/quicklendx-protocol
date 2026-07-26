@@ -13,6 +13,7 @@
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_compute_yield_props {
     use crate::profits::{compute_expected_return, compute_yield};
+    use crate::profits::{compute_expected_return, compute_yield_u32};
     use proptest::prelude::*;
 
     // Ranges chosen to stay well inside i128 bounds while exercising realistic
@@ -34,9 +35,8 @@ mod test_compute_yield_props {
             rate_bps in 0u32..=MAX_RATE_BPS,
             duration_days in 0u32..=MAX_DURATION_DAYS,
         ) {
-            let (a, b) = if lo <= hi { (lo, hi) } else { (hi, lo) };
-            let y_a = compute_yield(a, rate_bps, duration_days);
-            let y_b = compute_yield(b, rate_bps, duration_days);
+            let y_a = compute_yield_u32(a, rate_bps, duration_days);
+            let y_b = compute_yield_u32(b, rate_bps, duration_days);
             prop_assert!(
                 y_a <= y_b,
                 "yield must be non-decreasing in amount: \
@@ -55,8 +55,8 @@ mod test_compute_yield_props {
             duration_days in 0u32..=MAX_DURATION_DAYS,
         ) {
             let (r_lo, r_hi) = if lo_rate <= hi_rate { (lo_rate, hi_rate) } else { (hi_rate, lo_rate) };
-            let y_lo = compute_yield(amount, r_lo, duration_days);
-            let y_hi = compute_yield(amount, r_hi, duration_days);
+            let y_lo = compute_yield_u32(amount, r_lo, duration_days);
+            let y_hi = compute_yield_u32(amount, r_hi, duration_days);
             prop_assert!(
                 y_lo <= y_hi,
                 "yield must be non-decreasing in rate_bps: \
@@ -75,8 +75,8 @@ mod test_compute_yield_props {
             hi_dur in 0u32..=MAX_DURATION_DAYS,
         ) {
             let (d_lo, d_hi) = if lo_dur <= hi_dur { (lo_dur, hi_dur) } else { (hi_dur, lo_dur) };
-            let y_lo = compute_yield(amount, rate_bps, d_lo);
-            let y_hi = compute_yield(amount, rate_bps, d_hi);
+            let y_lo = compute_yield_u32(amount, rate_bps, d_lo);
+            let y_hi = compute_yield_u32(amount, rate_bps, d_hi);
             prop_assert!(
                 y_lo <= y_hi,
                 "yield must be non-decreasing in duration_days: \
@@ -93,13 +93,14 @@ mod test_compute_yield_props {
             rate_bps in 0u32..=MAX_RATE_BPS,
             duration_days in 0u32..=MAX_DURATION_DAYS,
         ) {
-            prop_assert_eq!(compute_yield(0, rate_bps, duration_days), 0,
+            prop_assert_eq!(compute_yield_u32(0, rate_bps, duration_days), 0,
                 "zero amount must yield 0");
-            prop_assert_eq!(compute_yield(amount, 0, duration_days), 0,
+            prop_assert_eq!(compute_yield_u32(amount, 0, duration_days), 0,
                 "zero rate must yield 0");
-            prop_assert_eq!(compute_yield(amount, rate_bps, 0), 0,
+            prop_assert_eq!(compute_yield_u32(amount, rate_bps, 0), 0,
                 "zero duration must yield 0");
         }
+
         // ── Expected Return ────────────────────────────────────────────────
 
         #[test]
@@ -111,6 +112,7 @@ mod test_compute_yield_props {
             let er = compute_expected_return(amount, rate_bps, duration_days);
             prop_assert!(er >= 0, "expected return must be non-negative");
             
+
             // Expected return must be bounded by the return at MAX_RATE_BPS
             let max_er = compute_expected_return(amount, MAX_RATE_BPS, duration_days);
             prop_assert!(er <= max_er, "expected return must be bounded by MAX_RATE");

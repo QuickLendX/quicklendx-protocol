@@ -7,8 +7,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus, PlatformFeeConfig,
-    PruneReport, RebuildReport,
+    BidStatus, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus,
+    PlatformFeeConfig, PruneReport, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
@@ -28,6 +28,11 @@ where
 {
     extend_persistent_ttl(env, key);
 }
+
+/// Storage key for the pending treasury address during a rotation.
+pub const PENDING_TREASURY_KEY: Symbol = symbol_short!("pnd_trs");
+/// Storage key for the pending treasury execution timestamp.
+pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("trs_ts");
 
 /// Counter and configuration keys for the contract.
 ///
@@ -51,6 +56,9 @@ pub enum DataKey {
     Invoice(BytesN<32>),
     Bid(BytesN<32>),
     Investment(BytesN<32>),
+    FrozenInvoice(BytesN<32>),
+    FreezeInfo(BytesN<32>),
+    EscrowExtension(BytesN<32>),
 }
 
 impl StorageKeys {
@@ -73,6 +81,11 @@ impl StorageKeys {
     /// **BREAKING**: Renaming `"inv_cnt"` resets the investment counter on all deployed contracts.
     pub fn investment_count() -> Symbol {
         symbol_short!("inv_cnt")
+    }
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"biz_def_h"` resets the business default history counters.
+    pub fn business_default_history(business: &Address) -> (Symbol, Address) {
+        (symbol_short!("biz_def_h"), business.clone())
     }
 }
 
@@ -241,6 +254,7 @@ pub struct InvoiceStorage;
 impl InvoiceStorage {
     /// Store an invoice and update all its secondary indexes.
     pub fn store(env: &Env, invoice: &Invoice) {
+        crate::assert_view_only!(env);
         let key = DataKey::Invoice(invoice.id.clone());
         env.storage().persistent().set(&key, invoice);
         extend_persistent_ttl(env, &key);
@@ -260,6 +274,73 @@ impl InvoiceStorage {
 
     pub fn store_invoice(env: &Env, invoice: &Invoice) {
         Self::store(env, invoice)
+    }
+
+    pub fn set_frozen(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        frozen: bool,
+        reason: Option<BusinessFreezeReason>,
+    ) {
+        let key = DataKey::FrozenInvoice(invoice_id.clone());
+        if frozen {
+            // Store the typed reason; callers must supply one when freezing.
+            let r = reason.unwrap_or(BusinessFreezeReason::AdminAction);
+            env.storage().persistent().set(&key, &r);
+            extend_persistent_ttl(env, &key);
+        } else {
+            env.storage().persistent().remove(&key);
+        } else {
+            env.storage().persistent().set(&key, &lock);
+            extend_persistent_ttl(env, &key);
+        }
+    }
+
+    pub fn get_invoice_lock(env: &Env, invoice_id: &BytesN<32>) -> InvoiceLock {
+        let key = DataKey::FrozenInvoice(invoice_id.clone());
+        if let Some(_frozen) = env.storage().persistent().get::<_, bool>(&key) {
+            extend_persistent_ttl(env, &key);
+            true
+        } else {
+            // Backward-compatible: also treat the presence of a reason as frozen.
+            env.storage()
+                .persistent()
+                .get::<_, BusinessFreezeReason>(&key)
+                .is_some()
+        }
+    }
+
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
+        Self::get_invoice_lock(env, invoice_id).is_locked()
+    }
+
+    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+        let lock = if frozen {
+            InvoiceLock::Frozen
+        } else {
+            InvoiceLock::None
+        };
+        Self::set_invoice_lock(env, invoice_id, lock);
+    }
+
+    pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        env.storage().persistent().set(&key, info);
+        extend_persistent_ttl(env, &key);
+    }
+
+    pub fn get_freeze_info(env: &Env, invoice_id: &BytesN<32>) -> Option<FreezeInfo> {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        let result = env.storage().persistent().get::<_, FreezeInfo>(&key);
+        if result.is_some() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
+    }
+
+    pub fn remove_freeze_info(env: &Env, invoice_id: &BytesN<32>) {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        env.storage().persistent().remove(&key);
     }
 
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
@@ -314,6 +395,7 @@ impl InvoiceStorage {
     }
 
     pub fn update(env: &Env, invoice: &Invoice) {
+        crate::assert_view_only!(env);
         if let Some(old) = Self::get(env, &invoice.id) {
             if old.status != invoice.status {
                 Self::remove_from_status_index(env, old.status, &invoice.id);
@@ -378,6 +460,7 @@ impl InvoiceStorage {
     }
 
     pub fn delete_invoice(env: &Env, invoice_id: &BytesN<32>) {
+        crate::assert_view_only!(env);
         if let Some(invoice) = Self::get(env, invoice_id) {
             Self::remove_from_status_index(env, invoice.status, invoice_id);
             Self::remove_from_business_index(env, &invoice.business, invoice_id);
@@ -783,6 +866,10 @@ impl ConfigStorage {
 }
 
 pub struct StorageManager;
+
+/// Storage key for the view-only context flag.
+const VIEW_ONLY_KEY: Symbol = symbol_short!("view_onl");
+
 impl StorageManager {
     pub fn clear_all_mappings(env: &Env) {
         env.storage()
@@ -792,6 +879,33 @@ impl StorageManager {
         env.storage()
             .persistent()
             .remove(&StorageKeys::investment_count());
+    }
+
+    /// Return `true` if the current context is marked as view-only.
+    pub fn is_view_only(env: &Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&VIEW_ONLY_KEY)
+            .unwrap_or(false)
+    }
+
+    /// Mark the current context as view-only or normal.
+    pub fn set_view_only(env: &Env, enabled: bool) {
+        env.storage().instance().set(&VIEW_ONLY_KEY, &enabled);
+    }
+
+    /// Execute a closure within a view-only context.
+    ///
+    /// Sets the view-only flag, runs `f`, then restores the previous flag state.
+    pub fn with_view_only<F, R>(env: &Env, f: F) -> R
+    where
+        F: FnOnce() -> R,
+    {
+        let previous = Self::is_view_only(env);
+        Self::set_view_only(env, true);
+        let result = f();
+        Self::set_view_only(env, previous);
+        result
     }
 }
 
@@ -1027,6 +1141,33 @@ impl StorageIntegrityAudit {
     }
 }
 
+/// Check if a treasury rotation is currently pending.
+pub fn has_pending_treasury(env: &Env) -> bool {
+    env.storage().instance().has(&PENDING_TREASURY_KEY)
+}
+
+/// Remove the pending treasury address and timestamp from storage.
+pub fn remove_pending_treasury(env: &Env) {
+    env.storage().instance().remove(&PENDING_TREASURY_KEY);
+    env.storage().instance().remove(&PENDING_TREASURY_TS_KEY);
+}
+
+/// Get the pending treasury address and its execution timestamp.
+/// This is used by tests and potentially by UI components to show pending changes.
+pub fn get_pending_treasury(env: &Env) -> Option<(Address, u64)> {
+    if !has_pending_treasury(env) {
+        return None;
+    }
+    // We can safely unwrap here because we've already checked with `has()`.
+    let address = env.storage().instance().get(&PENDING_TREASURY_KEY).unwrap();
+    let timestamp = env
+        .storage()
+        .instance()
+        .get(&PENDING_TREASURY_TS_KEY)
+        .unwrap();
+    Some((address, timestamp))
+}
+
 // ============================================================================
 // Index Rebuild
 // ============================================================================
@@ -1140,7 +1281,7 @@ impl InvoiceStorage {
 
         let now = env.ledger().timestamp();
         let all_ids = Self::get_all_invoice_ids(env);
-        let total = all_ids.len() as u32;
+        let total = all_ids.len();
 
         let start = offset.min(total);
         let end = start.saturating_add(capped).min(total);

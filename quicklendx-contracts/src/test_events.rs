@@ -26,11 +26,11 @@ use crate::audit::{AuditOperationFilter, AuditQueryFilter};
 use crate::errors::QuickLendXError;
 use crate::events::{
     TOPIC_BID_ACCEPTED, TOPIC_BID_EXPIRED, TOPIC_BID_PLACED, TOPIC_BID_WITHDRAWN,
-    TOPIC_DISPUTE_CREATED, TOPIC_DISPUTE_RESOLVED, TOPIC_DISPUTE_UNDER_REVIEW,
-    TOPIC_ESCROW_CREATED, TOPIC_ESCROW_REFUNDED, TOPIC_ESCROW_RELEASED, TOPIC_INVOICE_CANCELLED,
-    TOPIC_INVOICE_DEFAULTED, TOPIC_INVOICE_EXPIRED, TOPIC_INVOICE_FUNDED, TOPIC_INVOICE_SETTLED,
-    TOPIC_INVOICE_SETTLED_FINAL, TOPIC_INVOICE_UPLOADED, TOPIC_INVOICE_VERIFIED,
-    TOPIC_PARTIAL_PAYMENT, TOPIC_PAYMENT_RECORDED,
+    TOPIC_DISPUTE_CREATED, TOPIC_DISPUTE_REJECTED, TOPIC_DISPUTE_RESOLVED,
+    TOPIC_DISPUTE_UNDER_REVIEW, TOPIC_ESCROW_CREATED, TOPIC_ESCROW_REFUNDED, TOPIC_ESCROW_RELEASED,
+    TOPIC_INVOICE_CANCELLED, TOPIC_INVOICE_DEFAULTED, TOPIC_INVOICE_EXPIRED, TOPIC_INVOICE_FUNDED,
+    TOPIC_INVOICE_SETTLED, TOPIC_INVOICE_SETTLED_FINAL, TOPIC_INVOICE_UPLOADED,
+    TOPIC_INVOICE_VERIFIED, TOPIC_PARTIAL_PAYMENT, TOPIC_PAYMENT_RECORDED,
 };
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::payments::EscrowStatus;
@@ -528,7 +528,11 @@ fn test_invoice_settled_field_order() {
     assert!(p.platform_fee >= 0);
     assert_eq!(p.timestamp, ts);
     assert_eq!(p.amount, EXP_RETURN, "amount must equal total settled");
-    assert_eq!(p.ledger, env.ledger().sequence(), "ledger sequence must be set");
+    assert_eq!(
+        p.ledger,
+        env.ledger().sequence(),
+        "ledger sequence must be set"
+    );
 }
 
 // ============================================================================
@@ -782,6 +786,8 @@ fn test_escrow_released_field_order() {
     client.accept_bid(&id, &bid_id);
 
     let escrow = client.get_escrow_details(&id);
+    client.approve_early_escrow_release(&id, &biz);
+    client.approve_early_escrow_release(&id, &inv);
     client.release_escrow_funds(&id);
 
     let p: EscrowReleased = latest_payload(&env, TOPIC_ESCROW_RELEASED);
@@ -1083,7 +1089,11 @@ fn test_loan_settled_event_schema() {
     assert!(p.platform_fee >= 0, "platform_fee must be non-negative");
     assert_eq!(p.timestamp, ts, "timestamp mismatch");
     assert_eq!(p.amount, EXP_RETURN, "amount must equal total settled");
-    assert_eq!(p.ledger, env.ledger().sequence(), "ledger sequence must be set");
+    assert_eq!(
+        p.ledger,
+        env.ledger().sequence(),
+        "ledger sequence must be set"
+    );
 }
 
 // ============================================================================
@@ -1238,6 +1248,7 @@ fn test_topic_constants_include_funded_and_dispute() {
     assert_eq!(TOPIC_DISPUTE_CREATED, "dispute_created");
     assert_eq!(TOPIC_DISPUTE_UNDER_REVIEW, "dispute_under_review");
     assert_eq!(TOPIC_DISPUTE_RESOLVED, "dispute_resolved");
+    assert_eq!(TOPIC_DISPUTE_REJECTED, "dispute_rejected");
 }
 
 // ============================================================================
@@ -1428,6 +1439,8 @@ fn test_escrow_released_event_emits_correct_topic_and_payload() {
     let bid_id = client.place_bid(&investor, &invoice_id, &INV_AMOUNT, &EXP_RETURN);
     client.accept_bid(&invoice_id, &bid_id);
     let escrow = client.get_escrow_details(&invoice_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let p_rel: EscrowReleased = latest_payload(&env, TOPIC_ESCROW_RELEASED);

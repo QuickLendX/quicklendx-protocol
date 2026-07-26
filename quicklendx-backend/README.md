@@ -223,9 +223,12 @@ Set these secrets in your CI/CD platform:
 
 ## Documentation
 
-- [Configuration Guide](docs/configuration.md) - Complete configuration reference
-- [Testing Guide](docs/testing.md) - Testing strategies and best practices
-- [Implementation Summary](IMPLEMENTATION_SUMMARY.md) - Technical details
+- [Contributor Guide](docs/contributor-guide.md) — **Start here.** Module layout, request pipeline, export/audit wiring, how to add an endpoint.
+- [Configuration Guide](docs/configuration.md) — Complete environment variable reference with validation rules.
+- [Exports Guide](docs/exports.md) — Export limits, formats, streaming, and integrity digest.
+- [Observability Guide](docs/observability.md) — Prometheus metrics, Grafana queries, alert rules.
+- [Testing Guide](docs/testing.md) — Contract testing, fixtures, and coverage requirements.
+- [Implementation Summary](IMPLEMENTATION_SUMMARY.md) — Technical implementation details.
 
 ## Scripts
 

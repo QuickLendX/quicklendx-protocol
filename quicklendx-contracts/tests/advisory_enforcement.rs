@@ -1,3 +1,4 @@
+#![allow(clippy::disallowed_methods)]
 //! # Advisory Enforcement – Negative-Test Regression Guard
 //!
 //! Validates that `deny.toml` is configured to **fail the build** for any

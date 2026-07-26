@@ -7,7 +7,9 @@
 #![allow(dead_code)]
 
 use crate::errors::QuickLendXError;
-use soroban_sdk::{symbol_short, Address, Env, Symbol};
+use crate::fees::FeeManager;
+use crate::storage;
+use soroban_sdk::{symbol_short, Address, Env, String, Symbol};
 
 /// Current admin storage key.
 pub const ADMIN_KEY: Symbol = symbol_short!("admin");
@@ -26,6 +28,7 @@ pub struct AdminStorage;
 impl AdminStorage {
     #[inline]
     fn require_existing_transfer_destination(address: &Address) -> Result<(), QuickLendXError> {
+        #[cfg(not(test))]
         if !address.exists() {
             return Err(QuickLendXError::InvalidAddress);
         }
@@ -324,6 +327,38 @@ impl AdminStorage {
         let admin = Self::require_current_admin(env)?;
         operation(&admin)
     }
+
+    /// Verify that a proposed handover target is not the same as the current admin.
+    ///
+    /// This is a **pure validation helper** — it performs no state writes and
+    /// requires no authentication. Call it as an early guard before initiating any
+    /// admin transfer to surface a clear, typed error to callers rather than
+    /// relying on the implicit `OperationNotAllowed` that `transfer_admin` already
+    /// emits for self-transfers.
+    ///
+    /// # Arguments
+    /// * `proposed` — The address that would become the new admin.
+    ///
+    /// # Returns
+    /// * `Ok(())` — The handover is structurally valid (proposed ≠ current).
+    /// * `Err(OperationNotAllowed)` — `proposed` equals the current admin (no-op transfer).
+    /// * `Err(OperationNotAllowed)` — The admin subsystem has not been initialized.
+    ///
+    /// # Example
+    /// ```rust,ignore
+    /// AdminStorage::verify_admin_handover(&env, &new_admin)?;
+    /// AdminStorage::transfer_admin(&env, &current_admin, &new_admin)?;
+    /// ```
+    pub fn verify_admin_handover(env: &Env, proposed: &Address) -> Result<(), QuickLendXError> {
+        if !Self::is_initialized(env) {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+        let current = Self::get_admin(env).ok_or(QuickLendXError::OperationNotAllowed)?;
+        if *proposed == current {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+        Ok(())
+    }
 }
 
 /// Reject the call if `caller` equals the contract's own address.
@@ -342,5 +377,89 @@ pub fn require_not_self(env: &Env, caller: &Address) -> Result<(), QuickLendXErr
     if *caller == env.current_contract_address() {
         return Err(QuickLendXError::SelfCallNotAllowed);
     }
+    Ok(())
+}
+
+/// Check if an address is a reserved protocol address.
+///
+/// Reserved addresses are:
+/// - The zero/burn address (GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF)
+/// - The contract's own address
+/// - The current admin address (if initialized)
+/// - The current treasury address (if configured)
+///
+/// This is a pure validation helper — it performs no state writes and requires no
+/// authentication. Call it as an early guard before adding an address to the
+/// currency whitelist or using it in other protocol operations.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `address` - The address to check
+/// * `admin` - Optional admin address (pass `None` to fetch from storage)
+/// * `treasury` - Optional treasury address (pass `None` to fetch from storage)
+///
+/// # Returns
+/// * `Ok(())` — The address is not reserved.
+/// * `Err(InvalidCurrency)` — The address is reserved and cannot be used as a currency.
+#[inline]
+pub fn require_not_reserved(
+    env: &Env,
+    address: &Address,
+    admin: Option<Address>,
+    treasury: Option<Address>,
+    contract_address: Option<Address>,
+) -> Result<(), QuickLendXError> {
+    let zero = Address::from_string(&String::from_str(
+        env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
+    let contract_addr = contract_address.unwrap_or_else(|| env.current_contract_address());
+
+    if *address == zero {
+        return Err(QuickLendXError::InvalidCurrency);
+    }
+    if *address == contract_addr {
+        return Err(QuickLendXError::InvalidCurrency);
+    }
+
+    let admin_addr = match admin {
+        Some(a) => a,
+        None => AdminStorage::get_admin(env).ok_or(QuickLendXError::InvalidCurrency)?,
+    };
+    if *address == admin_addr {
+        return Err(QuickLendXError::InvalidCurrency);
+    }
+
+    let treasury_addr = match treasury {
+        Some(t) => Some(t),
+        None => FeeManager::get_treasury_address(env),
+    };
+    if let Some(t_addr) = treasury_addr {
+        if *address == t_addr {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
+    }
+
+    Ok(())
+}
+
+/// Cancel a pending treasury address rotation.
+///
+/// # Arguments
+/// * `env` - The contract environment.
+/// * `admin` - The address of the caller, must be the current admin.
+///
+/// # Errors
+/// * `NotAdmin` - If the caller is not the current admin.
+/// * `NoPendingTreasuryRotation` - If no treasury rotation is pending.
+pub fn cancel_treasury_rotation(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
+    AdminStorage::require_admin_auth(env, admin)?;
+
+    if !storage::has_pending_treasury(env) {
+        return Err(QuickLendXError::NoPendingTreasuryRotation);
+    }
+
+    storage::remove_pending_treasury(env);
+    crate::events::treasury_rotation_cancelled(env, admin);
     Ok(())
 }

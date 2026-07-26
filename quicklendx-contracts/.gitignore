@@ -1,6 +1,9 @@
 # Rust's output directory
 target
 
+*.rlib
+*.rmeta
+
 # Local settings
 .soroban
 .stellar
