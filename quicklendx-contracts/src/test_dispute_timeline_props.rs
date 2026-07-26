@@ -108,6 +108,8 @@ mod test_dispute_timeline_props {
                 String::from_str(env, "Dispute timeline property invoice"),
                 InvoiceCategory::Services,
                 Vec::new(env),
+                None,
+                None,
             )
             .expect("invoice should build");
 

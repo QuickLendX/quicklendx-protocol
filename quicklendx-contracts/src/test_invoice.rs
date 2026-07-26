@@ -159,6 +159,7 @@ fn test_invoice_cancel_authorization() {
         tags,
 
         None,
+        None,
 
     ).expect("Invoice creation should succeed");
 
@@ -210,6 +211,7 @@ fn test_invoice_cancel_no_state_preconditions() {
             category,
             tags.clone(),
 
+            None,
             None,
 
         ).expect("Invoice creation should succeed");

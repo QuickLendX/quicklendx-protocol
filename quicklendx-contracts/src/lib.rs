@@ -1142,6 +1142,7 @@ impl QuickLendXContract {
         category: InvoiceCategory,
         tags: Vec<String>,
         origination_fee_bps: Option<u32>,
+        late_payment_penalty_bps: Option<u32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &business)?;
@@ -1204,6 +1205,7 @@ impl QuickLendXContract {
             category,
             tags,
             origination_fee_bps,
+            late_payment_penalty_bps,
         )?;
 
         // Store the invoice
@@ -1238,6 +1240,7 @@ impl QuickLendXContract {
         category: InvoiceCategory,
         tags: Vec<String>,
         origination_fee_bps: Option<u32>,
+        late_payment_penalty_bps: Option<u32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         // Only the business can upload their own invoice
@@ -1279,6 +1282,7 @@ impl QuickLendXContract {
             category,
             tags,
             origination_fee_bps,
+            late_payment_penalty_bps,
         )?;
         InvoiceStorage::store_invoice(&env, &invoice);
 
@@ -1398,6 +1402,7 @@ impl QuickLendXContract {
                 input.category,
                 input.tags.clone(),
                 None, // origination_fee_bps
+                input.late_payment_penalty_bps,
             )?;
             let id = invoice.id.clone();
             InvoiceStorage::store_invoice(&env, &invoice);
@@ -3433,6 +3438,7 @@ impl QuickLendXContract {
         transaction_amount: i128,
         is_early_payment: bool,
         is_late_payment: bool,
+        late_payment_penalty_bps: Option<u32>,
     ) -> Result<i128, QuickLendXError> {
         fees::FeeManager::calculate_total_fees(
             &env,
@@ -3440,6 +3446,7 @@ impl QuickLendXContract {
             transaction_amount,
             is_early_payment,
             is_late_payment,
+            late_payment_penalty_bps,
         )
     }
 

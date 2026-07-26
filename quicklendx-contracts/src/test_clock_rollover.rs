@@ -111,6 +111,8 @@ fn invoice_not_overdue_when_due_date_equals_u64_max() {
                 String::from_str(&env, "rollover test"),
                 InvoiceCategory::Services,
                 Vec::new(&env),
+                None,
+                None,
             )
         })
         .expect("invoice construction must succeed at NEAR_MAX");
@@ -144,6 +146,8 @@ fn invoice_not_overdue_after_clock_rollover_to_zero_when_due_date_is_u64_max() {
                 String::from_str(&env, "rollover test"),
                 InvoiceCategory::Services,
                 Vec::new(&env),
+                None,
+                None,
             )
         })
         .expect("invoice construction must succeed");
@@ -176,6 +180,8 @@ fn invoice_is_overdue_at_u64_max_minus_one_when_due_date_is_small() {
                 String::from_str(&env, "small due date"),
                 InvoiceCategory::Services,
                 Vec::new(&env),
+                None,
+                None,
             )
         })
         .expect("invoice construction must succeed");
@@ -208,6 +214,8 @@ fn grace_deadline_saturates_at_u64_max_when_due_date_is_near_max() {
                 String::from_str(&env, "grace saturation"),
                 InvoiceCategory::Services,
                 Vec::new(&env),
+                None,
+                None,
             )
         })
         .expect("invoice construction must succeed");
@@ -251,6 +259,8 @@ fn grace_deadline_at_u64_max_minus_one_saturates_with_overflow_grace_period() {
                 String::from_str(&env, "near max due date"),
                 InvoiceCategory::Services,
                 Vec::new(&env),
+                None,
+                None,
             )
         })
         .expect("invoice construction must succeed");

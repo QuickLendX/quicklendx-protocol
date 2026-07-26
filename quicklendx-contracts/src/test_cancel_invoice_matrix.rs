@@ -103,6 +103,8 @@ fn test_cancel_ownership_matrix() {
             String::from_str(&env, "owner matrix"),
             InvoiceCategory::Services,
             Vec::new(&env),
+            None,
+            None,
         )
         .expect("invoice creation")
     });

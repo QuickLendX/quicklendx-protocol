@@ -33,6 +33,7 @@ impl Invoice {
         category: InvoiceCategory,
         tags: Vec<String>,
         origination_fee_bps: Option<u32>,
+        late_payment_penalty_bps: Option<u32>,
     ) -> Result<Self, QuickLendXError> {
         if amount <= 0 || amount > MAX_INVOICE_AMOUNT {
             return Err(QuickLendXError::InvalidAmount);
@@ -40,6 +41,12 @@ impl Invoice {
 
         if due_date <= env.ledger().timestamp() {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
+        if let Some(penalty_bps) = late_payment_penalty_bps {
+            if penalty_bps > 5000 {
+                return Err(QuickLendXError::InvalidFeeBasisPoints);
+            }
         }
 
         let mut normalized_tags = Vec::new(env);
@@ -88,6 +95,7 @@ impl Invoice {
             total_paid: 0,
             payment_history: Vec::new(env),
             origination_fee_bps,
+            late_payment_penalty_bps,
         })
     }
 
