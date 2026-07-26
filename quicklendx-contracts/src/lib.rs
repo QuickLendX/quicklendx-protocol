@@ -299,6 +299,8 @@ mod test_events;
 mod test_fuzz_cancelled_noop;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_distribute_revenue;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_fuzz_default_counter;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
