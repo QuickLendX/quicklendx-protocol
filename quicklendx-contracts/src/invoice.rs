@@ -16,6 +16,23 @@ pub use crate::types::{
 /// tag-based query/index operations predictable.
 pub const MAX_INVOICE_TAGS: u32 = 10;
 
+
+/// Require that the number of tags does not exceed the given cap.
+///
+/// Defence-in-depth: even though tag vectors are individually bounded by
+/// `MAX_INVOICE_TAGS`, this helper provides a reusable, auditable check that
+/// any caller can apply before appending tags. An attacker who bypasses the
+/// per-vector check and floods the system with tag-heavy invoices would
+/// degrade query performance and inflate on-chain storage costs. This helper
+/// closes that gap by providing a single enforcement point that can be
+/// dropped into any tag-mutation path.
+pub fn require_max_invoice_tags(tags: &Vec<String>, cap: u32) -> Result<(), QuickLendXError> {
+    if tags.len() as u32 >= cap {
+        return Err(QuickLendXError::TagLimitExceeded);
+    }
+    Ok(())
+}
+
 /// Maximum ratings retained per invoice.
 ///
 /// Bounding this vector prevents unbounded on-chain storage growth from
@@ -432,3 +449,4 @@ fn zero_address(env: &Env) -> Address {
         "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
     )
 }
+
