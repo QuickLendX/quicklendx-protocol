@@ -339,6 +339,8 @@ mod test_max_invoices_per_business;
 mod test_notifications;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_pause_reason;
 mod test_platform_metrics_reconciliation;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
@@ -946,6 +948,12 @@ impl QuickLendXContract {
     /// Return whether the contract is currently paused.
     pub fn is_paused(env: Env) -> bool {
         pause::PauseControl::is_paused(&env)
+    }
+
+    /// Return why guarded entrypoints are currently blocked, or `None`
+    /// if the contract is not blocked.
+    pub fn pause_reason(env: Env) -> Option<pause::PauseReason> {
+        pause::PauseControl::pause_reason(&env)
     }
 
     /// Return whether a specific guarded entrypoint is currently blocked by pause.
