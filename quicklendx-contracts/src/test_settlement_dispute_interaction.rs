@@ -73,6 +73,7 @@ use crate::contract::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
 use crate::types::{DisputeStatus, InvoiceCategory, InvoiceStatus};
 use soroban_sdk::testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{symbol_short, token, Address, Env, String};
 
 // Test helper: Create a test currency token
@@ -116,7 +117,7 @@ fn setup_funded_invoice(
     client.verify_invoice(admin, &invoice_id);
 
     // Investor places bid and it gets accepted
-    let bid_id = client.place_bid(&invoice_id, investor, &amount, &(amount + 1000));
+    let bid_id = client.place_bid(&invoice_id, investor, &amount, &(amount + 1000), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(business, &invoice_id, &bid_id);
 
     (invoice_id, currency)

@@ -793,7 +793,7 @@ mod escrow_query_consistency {
             &String::from_str(env, "Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(env),
-        );
+            &None);
         client.verify_invoice(&invoice_id);
 
         let bid_id = client.place_bid(
@@ -960,7 +960,7 @@ mod escrow_query_consistency {
             &String::from_str(&env, "Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
         client.verify_invoice(&invoice_id);
 
         let de = client.try_get_escrow_details(&invoice_id);

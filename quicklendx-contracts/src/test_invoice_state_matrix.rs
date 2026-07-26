@@ -3,6 +3,7 @@ use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Bytes, BytesN, Env, String, Vec};
 
 struct TestContext {
@@ -59,7 +60,7 @@ impl TestContext {
             &String::from_str(&self.env, "Test invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        )
+        &None)
     }
 
     fn create_verified_invoice(&self) -> BytesN<32> {

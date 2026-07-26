@@ -42,9 +42,7 @@ fn make_invoice(env: &Env, business: &Address) -> Invoice {
         String::from_str(env, "Test invoice"),
         InvoiceCategory::Services,
         tags,
-        None,
-        None,
-    )
+        None)
     .unwrap()
 }
 
@@ -567,9 +565,7 @@ fn test_invoice_new_deduplicates_trimmed_casefolded_tags() {
             String::from_str(&env, "Normalized tags"),
             InvoiceCategory::Services,
             tags,
-            None,
-            None,
-        )
+        None)
         .expect("invoice creation should normalize tags");
 
         assert_eq!(
@@ -670,7 +666,7 @@ fn test_search_index_resolves_after_clearing_metadata() {
         &String::from_str(&env, "UniqueDescription123"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let mut items = Vec::new(&env);
     items.push_back(LineItemRecord(

@@ -9,6 +9,7 @@
 use crate::errors::QuickLendXError;
 use crate::types::{BusinessFreezeReason, InvoiceCategory};
 use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, BytesN, Env, String, Vec};
 
 fn setup_env() -> (Env, crate::QuickLendXContractClient<'static>, Address) {
@@ -85,7 +86,7 @@ fn setup_invoice(
         &String::from_str(env, "test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     (invoice_id, currency)
 }
 

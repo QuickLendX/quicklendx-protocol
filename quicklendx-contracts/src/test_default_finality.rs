@@ -49,7 +49,8 @@ mod test_default_finality {
                 resolved_at: 0,
                 resolution_outcome: DisputeResolution::None,
             },
-        };
+        origination_fee_bps: None,
+    };
         InvoiceStorage::store_invoice(&env, &invoice);
 
         let bid_id = BytesN::from_array(&env, &[2; 32]);
@@ -105,7 +106,8 @@ mod test_default_finality {
                 resolved_at: 0,
                 resolution_outcome: DisputeResolution::None,
             },
-        };
+        origination_fee_bps: None,
+    };
         InvoiceStorage::store_invoice(&env, &invoice);
 
         let investment_id = BytesN::from_array(&env, &[4; 32]);

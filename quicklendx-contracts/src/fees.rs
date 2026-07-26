@@ -1177,7 +1177,7 @@ impl FeeManager {
 
         let now = env.ledger().timestamp();
         let request = RecipientRotationRequest {
-            new_address,
+            new_address: new_address.clone(),
             initiated_by: admin.clone(),
             initiated_at: now,
             confirmation_deadline: now.saturating_add(ROTATION_TTL_SECONDS),

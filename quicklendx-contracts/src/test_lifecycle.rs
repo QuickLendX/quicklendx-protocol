@@ -197,7 +197,7 @@ fn run_kyc_and_bid(
         &String::from_str(env, "Consulting services invoice"),
         &InvoiceCategory::Consulting,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // Investor KYC + verification
@@ -205,7 +205,7 @@ fn run_kyc_and_bid(
     client.verify_investor(investor, &50_000i128);
 
     // Place bid
-    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &invoice_amount);
+    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
 
     (invoice_id, bid_id)
 }
@@ -564,7 +564,7 @@ fn test_full_lifecycle_step_by_step() {
             &String::from_str(&env, "Consulting services invoice"),
             &InvoiceCategory::Consulting,
             &Vec::new(&env),
-        )
+        &None)
         .unwrap();
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
@@ -611,7 +611,7 @@ fn test_full_lifecycle_step_by_step() {
 
     // -- Step 7: Investor places bid (status -> Placed) --------------------------
     let bid_id = client
-        .place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount)
+        .place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]))
         .unwrap();
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid.status, BidStatus::Placed);
@@ -705,7 +705,7 @@ fn test_admin_update_invoice_status_pathway_moves_indexes_and_rejects_invalid_tr
         &String::from_str(&env, "admin status pathway"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     assert_eq!(
         client.get_invoice_count_by_status(&InvoiceStatus::Pending),

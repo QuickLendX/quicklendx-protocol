@@ -115,14 +115,14 @@ impl TestContext {
                 &String::from_str(&self.env, "Test invoice"),
                 &InvoiceCategory::Services,
                 &Vec::new(&self.env),
-            )
+        &None)
             .unwrap();
         self.client.verify_invoice(&invoice_id).unwrap();
 
         // Place and accept bid to create investment
         let bid_id = self
             .client
-            .place_bid(investor, &invoice_id, &bid_amount, &invoice_amount)
+            .place_bid(investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]))
             .unwrap();
         self.client.accept_bid(&invoice_id, &bid_id).unwrap();
 

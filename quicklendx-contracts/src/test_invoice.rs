@@ -46,7 +46,7 @@ fn create_test_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 // ============================================================================
@@ -156,12 +156,7 @@ fn test_invoice_cancel_authorization() {
         due_date,
         description,
         category,
-        tags,
-
-        None,
-        None,
-
-    ).expect("Invoice creation should succeed");
+        tags, None).expect("Invoice creation should succeed");
 
     // Attempt to cancel as attacker (not business owner) - should fail in contract context
     let result = env.as_contract(&contract_id, || invoice.cancel(&env, attacker));
@@ -205,16 +200,14 @@ fn test_invoice_cancel_no_state_preconditions() {
             &env,
             business.clone(),
             10_000,
-            currency,
+            currency.clone(),
             due_date,
             description.clone(),
             category,
             tags.clone(),
-
             None,
-            None,
-
-        ).expect("Invoice creation should succeed");
+        )
+        .expect("Invoice creation should succeed");
 
         invoice.status = status.clone();
 

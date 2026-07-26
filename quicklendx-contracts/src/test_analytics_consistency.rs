@@ -67,7 +67,7 @@ fn upload(
         &String::from_str(env, desc),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 // --- 1. generated_at correctness --------------------------------------------

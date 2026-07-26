@@ -159,7 +159,7 @@ fn test_incident_mode_blocks_store_invoice() {
         &String::from_str(&env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::ContractPaused

@@ -108,9 +108,7 @@ mod test_dispute_timeline_props {
                 String::from_str(env, "Dispute timeline property invoice"),
                 InvoiceCategory::Services,
                 Vec::new(env),
-                None,
-                None,
-            )
+        None)
             .expect("invoice should build");
 
             let invoice_id = invoice.id.clone();

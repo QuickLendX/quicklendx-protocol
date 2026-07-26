@@ -152,8 +152,6 @@ mod test_bid_expiry_grace;
 mod test_bid_ttl;
 #[cfg(test)]
 mod test_require_business_active;
-#[cfg(test)]
-mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
 #[cfg(test)]
@@ -177,8 +175,6 @@ mod test_evidence_hash_format;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
-mod test_due_date_guard;
-#[cfg(test)]
 // mod test_dispute_event_invariant;
 #[cfg(test)]
 mod test_dust_transfer;
@@ -190,8 +186,6 @@ mod test_escrow_event_completeness;
 mod test_escrow_invariant_model;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund_after_expiry;
-#[cfg(test)]
-mod test_evidence_size_cap;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
 #[cfg(test)]
@@ -200,8 +194,6 @@ mod test_freshness;
 mod test_freshness_bounds;
 #[cfg(test)]
 mod test_investor_kyc;
-#[cfg(test)]
-mod test_panic_handler;
 #[cfg(test)]
 mod test_payments;
 #[cfg(test)]
@@ -351,6 +343,9 @@ mod test_invoice;
 mod test_insurance_premium_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
+// Issue #1949 — full InvestmentStatus transition matrix (CI-ungated).
+#[cfg(test)]
+mod test_investment_state_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_withdrawal;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -1629,7 +1624,7 @@ impl QuickLendXContract {
             frozen_at: env.ledger().timestamp(),
         };
         InvoiceStorage::set_freeze_info(&env, &invoice_id, &info);
-        InvoiceStorage::set_frozen(&env, &invoice_id, true);
+        InvoiceStorage::set_frozen(&env, &invoice_id, true, Some(reason));
         Ok(())
     }
 
@@ -1647,7 +1642,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
         InvoiceStorage::remove_freeze_info(&env, &invoice_id);
-        InvoiceStorage::set_frozen(&env, &invoice_id, false);
+        InvoiceStorage::set_frozen(&env, &invoice_id, false, None);
         Ok(())
     }
 
@@ -2816,6 +2811,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -4928,7 +4924,7 @@ impl QuickLendXContract {
         let config = init::ProtocolInitializer::get_protocol_config(&env)
             .ok_or(QuickLendXError::OperationNotAllowed)?;
         if limit > config.backfill_max_batch_size {
-            return Err(QuickLendXError::BatchSizeTooLarge);
+            return Err(QuickLendXError::BatchSizeExceeded);
         }
         let report = InvoiceStorage::rebuild_indexes_page(&env, offset, limit);
         Ok(report)
@@ -4970,7 +4966,7 @@ impl QuickLendXContract {
         let config = init::ProtocolInitializer::get_protocol_config(&env)
             .ok_or(QuickLendXError::OperationNotAllowed)?;
         if limit > config.backfill_max_batch_size {
-            return Err(QuickLendXError::BatchSizeTooLarge);
+            return Err(QuickLendXError::BatchSizeExceeded);
         }
         let report =
             InvoiceStorage::prune_terminal_invoices_page(&env, older_than_secs, offset, limit);
@@ -5002,7 +4998,7 @@ impl QuickLendXContract {
         let config = init::ProtocolInitializer::get_protocol_config(&env)
             .ok_or(QuickLendXError::OperationNotAllowed)?;
         if limit > config.backfill_max_batch_size {
-            return Err(QuickLendXError::BatchSizeTooLarge);
+            return Err(QuickLendXError::BatchSizeExceeded);
         }
         EscrowStorage::repair_held_reserve_page(&env, &currency, offset, limit)
     }

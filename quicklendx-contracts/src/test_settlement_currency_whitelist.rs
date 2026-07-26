@@ -97,9 +97,9 @@ fn setup_funded_invoice(
         &String::from_str(env, "Settlement currency whitelist test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &amount);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &amount, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     (client, invoice_id, business, investor, contract_id)

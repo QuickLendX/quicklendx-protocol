@@ -48,9 +48,7 @@ fn make_invoice_unit(env: &Env) -> (Invoice, Address) {
         SStr::from_str(env, "fuzz invoice"),
         InvoiceCategory::Services,
         SVec::new(env),
-        None,
-        None,
-    )
+        None)
     .expect("baseline invoice creation must succeed");
     (inv, business)
 }
@@ -106,9 +104,7 @@ proptest! {
                 SStr::from_str(&env, "t"),
                 InvoiceCategory::Services,
                 tags,
-                None,
-                None,
-            );
+        None);
             prop_assert!(result.is_ok(), "count={} should succeed", count);
             prop_assert_eq!(result.unwrap().tags.len(), count);
         });
@@ -134,9 +130,7 @@ proptest! {
                 SStr::from_str(&env, "t"),
                 InvoiceCategory::Services,
                 tags,
-                None,
-                None,
-            );
+        None);
             prop_assert_eq!(
                 result,
                 Err(QuickLendXError::TagLimitExceeded),

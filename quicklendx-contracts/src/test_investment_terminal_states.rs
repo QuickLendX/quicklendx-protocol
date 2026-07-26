@@ -58,7 +58,7 @@ fn setup_funded_investment_for_terminal_tests(
         &String::from_str(env, "Test invoice for terminal states"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // Setup investor KYC and verification
@@ -66,7 +66,7 @@ fn setup_funded_investment_for_terminal_tests(
     client.verify_investor(&admin, investor, &investment_amount);
 
     // Place and accept bid to create investment
-    let bid_id = client.place_bid(investor, &invoice_id, &investment_amount, &invoice_amount);
+    let bid_id = client.place_bid(investor, &invoice_id, &investment_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     (invoice_id, bid_id)

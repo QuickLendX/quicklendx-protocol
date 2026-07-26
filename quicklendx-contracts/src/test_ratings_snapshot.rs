@@ -44,7 +44,7 @@ fn test_ratings_snapshot_lifecycle() {
         &String::from_str(&env, "Test Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     
     client.verify_invoice(&admin, &invoice_id);
     client.accept_bid_and_fund(&investor, &invoice_id, &1000, &1050, &0, &false, &admin);

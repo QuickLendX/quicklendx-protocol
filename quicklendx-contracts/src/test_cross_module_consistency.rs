@@ -105,13 +105,13 @@ fn kyc_upload_bid(
         &String::from_str(env, "Consistency regression invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(investor, &50_000i128);
 
-    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &invoice_amount);
+    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
     (invoice_id, bid_id)
 }
 
@@ -616,9 +616,9 @@ fn test_query_canonical_record_agreement() {
         &String::from_str(&env, "Second regression invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&inv2);
-    let bid2 = client.place_bid(&investor, &inv2, &4_000i128, &5_000i128);
+    let bid2 = client.place_bid(&investor, &inv2, &4_000i128, &5_000i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&inv2, &bid2);
 
     // Both appear in the Funded index - verify each canonical record agrees.
@@ -794,7 +794,7 @@ fn test_multiple_bids_single_accept_invariants() {
         &String::from_str(env, "Multi-bid invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(&investor1, &String::from_str(env, "Investor 1 KYC"));
@@ -802,8 +802,8 @@ fn test_multiple_bids_single_accept_invariants() {
     client.verify_investor(&investor1, &50_000i128);
     client.verify_investor(&investor2, &50_000i128);
 
-    let bid1_id = client.place_bid(&investor1, &invoice_id, &5_000i128, &6_000i128);
-    let bid2_id = client.place_bid(&investor2, &invoice_id, &5_500i128, &6_000i128);
+    let bid1_id = client.place_bid(&investor1, &invoice_id, &5_000i128, &6_000i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid2_id = client.place_bid(&investor2, &invoice_id, &5_500i128, &6_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Accept bid2
     client.accept_bid(&invoice_id, &bid2_id);
@@ -938,7 +938,7 @@ fn test_status_index_coherence_after_all_transitions() {
         &String::from_str(&env, "Lifecycle test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Initial: Pending
     let pending_count = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
@@ -952,7 +952,7 @@ fn test_status_index_coherence_after_all_transitions() {
     // Setup investor and bid
     client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC"));
     client.verify_investor(&investor, &50_000i128);
-    let bid_id = client.place_bid(&investor, &invoice_id, &8_000i128, &10_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &8_000i128, &10_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Fund: moves to Funded
     client.accept_bid(&invoice_id, &bid_id);

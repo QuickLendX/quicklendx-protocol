@@ -1,27 +1,5 @@
 #![cfg(test)]
 
-/// # store_invoice Authentication Policy Tests (Issue #790)
-///
-/// This module locks the intended authentication and KYC-gating policy for
-/// `store_invoice`. Every test here is a **policy regression test**: if the
-/// policy changes without updating these tests, CI will fail.
-///
-/// ## Policy under test
-///
-/// `store_invoice` requires **both**:
-/// 1. A valid Soroban authorization from the `business` address.
-/// 2. A `Verified` KYC record for that business.
-///
-/// ## Security invariants validated
-/// - Unverified businesses cannot create invoices (storage DoS prevention).
-/// - Pending businesses are explicitly blocked with `KYCAlreadyPending`.
-/// - Rejected businesses are blocked with `BusinessNotVerified`.
-/// - No KYC record -> `BusinessNotVerified`.
-/// - Admin cannot bypass the business signature requirement.
-/// - A third party cannot create invoices on behalf of a business.
-/// - Only after KYC approval can a business write invoice data on-chain.
->>>>>>> 5cb9f163937819e3586a3e1a59c799069f232e4b
-
 //! # store_invoice Authentication Policy Tests (Issue #790)
 //!
 //! This module locks the intended authentication and KYC-gating policy for
@@ -128,7 +106,7 @@ fn test_verified_business_with_auth_can_store_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(
         result.is_ok(),
         "Verified business with auth must succeed: {:?}",
@@ -193,7 +171,7 @@ fn test_third_party_cannot_store_invoice_for_another_business() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(
         result.is_err(),
         "Third-party signature must not satisfy business.require_auth()"
@@ -243,7 +221,7 @@ fn test_admin_cannot_bypass_business_auth_for_store_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(
         result.is_err(),
         "Admin signature alone must not satisfy business.require_auth()"
@@ -270,7 +248,7 @@ fn test_no_kyc_record_returns_business_not_verified() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     assert!(result.is_err(), "Business with no KYC must be rejected");
     assert_eq!(
@@ -298,7 +276,7 @@ fn test_pending_kyc_returns_kyc_already_pending() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     assert!(result.is_err(), "Pending business must be blocked");
     assert_eq!(
@@ -324,7 +302,7 @@ fn test_rejected_kyc_returns_business_not_verified() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     assert!(result.is_err(), "Rejected business must be blocked");
     assert_eq!(
@@ -355,7 +333,7 @@ fn test_multiple_unverified_businesses_all_blocked() {
             &description,
             &category,
             &tags,
-        );
+            &None);
         assert!(
             result.is_err(),
             "Unverified spammer must not create invoices"
@@ -387,7 +365,7 @@ fn test_multiple_pending_businesses_all_blocked_with_correct_error() {
             &description,
             &category,
             &tags,
-        );
+            &None);
         assert!(result.is_err(), "Pending spammer must not create invoices");
         assert_eq!(
             result.unwrap_err().unwrap(),
@@ -418,7 +396,7 @@ fn test_full_kyc_lifecycle_unlocks_store_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert_eq!(
         r1.unwrap_err().unwrap(),
         QuickLendXError::BusinessNotVerified,
@@ -435,7 +413,7 @@ fn test_full_kyc_lifecycle_unlocks_store_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert_eq!(
         r2.unwrap_err().unwrap(),
         QuickLendXError::KYCAlreadyPending,
@@ -452,7 +430,7 @@ fn test_full_kyc_lifecycle_unlocks_store_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(
         r3.is_ok(),
         "Step 3: verified business must succeed: {:?}",
@@ -484,7 +462,7 @@ fn test_rejection_resubmission_reverification_restores_access() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert_eq!(
         r1.unwrap_err().unwrap(),
         QuickLendXError::BusinessNotVerified,
@@ -501,7 +479,7 @@ fn test_rejection_resubmission_reverification_restores_access() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert_eq!(
         r2.unwrap_err().unwrap(),
         QuickLendXError::KYCAlreadyPending,
@@ -518,7 +496,7 @@ fn test_rejection_resubmission_reverification_restores_access() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(
         r3.is_ok(),
         "Re-verified business must succeed: {:?}",
@@ -554,7 +532,7 @@ fn test_stored_invoice_fields_match_inputs() {
             &description,
             &category,
             &tags,
-        )
+            &None)
         .expect("Verified business must succeed")
         .expect("should return valid invoice ID");
 
@@ -597,7 +575,7 @@ fn test_two_invoices_from_same_business_have_distinct_ids() {
             &description,
             &category,
             &tags,
-        )
+            &None)
         .expect("first invoice must succeed")
         .expect("must return ID");
 
@@ -612,7 +590,7 @@ fn test_two_invoices_from_same_business_have_distinct_ids() {
             &description,
             &category,
             &tags,
-        )
+            &None)
         .expect("second invoice must succeed")
         .expect("must return ID");
 
@@ -635,7 +613,7 @@ fn test_stored_invoice_appears_in_business_index() {
             &description,
             &category,
             &tags,
-        )
+            &None)
         .expect("must succeed")
         .expect("must return ID");
 
@@ -662,7 +640,7 @@ fn test_stored_invoice_appears_in_pending_status_index() {
             &description,
             &category,
             &tags,
-        )
+            &None)
         .expect("must succeed")
         .expect("must return ID");
 
@@ -694,7 +672,7 @@ fn test_upload_invoice_also_requires_verified_kyc() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(
         result.is_err(),
         "upload_invoice must also enforce KYC gating"
@@ -720,7 +698,7 @@ fn test_upload_invoice_succeeds_for_verified_business() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(
         result.is_ok(),
         "upload_invoice must succeed for verified business: {:?}",
@@ -805,7 +783,7 @@ fn kyc_gate_unverified_business_blocked_from_store_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     // Must be rejected — no KYC record means no right to create invoices.
     assert!(
@@ -841,7 +819,7 @@ fn kyc_gate_pending_business_blocked_from_store_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     assert!(result.is_err(), "Pending business must not create invoices");
     assert_eq!(

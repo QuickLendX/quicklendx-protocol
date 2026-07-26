@@ -103,7 +103,7 @@ fn create_verified_invoice(
         &String::from_str(env, "Test Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     invoice_id
 }
@@ -116,7 +116,7 @@ fn place_test_bid(
     bid_amount: i128,
     expected_return: i128,
 ) -> BytesN<32> {
-    client.place_bid(investor, invoice_id, &bid_amount, &expected_return)
+    client.place_bid(investor, invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]))
 }
 
 // ============================================================================
@@ -172,10 +172,10 @@ fn test_only_verified_invoice_can_be_funded() {
         &String::from_str(&env, "Unverified Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Attempt to place bid on unverified invoice - should fail
-    let result = client.try_place_bid(&investor, &invoice_id, &amount, &(amount + 1000));
+    let result = client.try_place_bid(&investor, &invoice_id, &amount, &(amount + 1000), &BytesN::from_array(&env, &[0u8; 32]));
     assert!(
         result.is_err(),
         "Should not be able to bid on unverified invoice"
@@ -185,7 +185,7 @@ fn test_only_verified_invoice_can_be_funded() {
     client.verify_invoice(&invoice_id);
 
     // Now bidding should work
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1000));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1000), &BytesN::from_array(&env, &[0u8; 32]));
 
     // Accepting bid should work on verified invoice
     let result = client.try_accept_bid(&invoice_id, &bid_id);
@@ -298,7 +298,7 @@ fn test_rejects_double_accept() {
     token_client.approve(&investor2, &contract_id, &initial_balance, &expiration);
 
     // Try to place another bid on funded invoice
-    let result = client.try_place_bid(&investor2, &invoice_id, &amount, &(amount + 500));
+    let result = client.try_place_bid(&investor2, &invoice_id, &amount, &(amount + 500), &BytesN::from_array(&env, &[0u8; 32]));
     assert!(
         result.is_err(),
         "Should not be able to bid on funded invoice"

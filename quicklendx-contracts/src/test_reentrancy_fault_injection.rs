@@ -315,10 +315,10 @@ impl Fixture {
             &String::from_str(&env, "hostile-inj"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
         client.verify_invoice(&invoice_id);
 
-        let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &(1_100i128));
+        let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &(1_100i128), &BytesN::from_array(&env, &[0u8; 32]));
         client.accept_bid(&invoice_id, &bid_id);
 
         // Register hostile token and set as invoice currency by creating a new invoice.
@@ -347,9 +347,9 @@ impl Fixture {
             &String::from_str(&env, "hostile-inj-2"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
         client.verify_invoice(&invoice_id2);
-        let bid_id2 = client.place_bid(&investor, &invoice_id2, &1_000i128, &1_100i128);
+        let bid_id2 = client.place_bid(&investor, &invoice_id2, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
         // At this point escrow creation will attempt token transfer from investor to contract.
         // The token call will trigger hostile re-entry.

@@ -1,6 +1,7 @@
 // Tests for replay guard (nonce handling) in settlement.
 
 use super::*;
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 /// Helper to initialize a token for testing.
@@ -47,12 +48,12 @@ fn setup_funded_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     // Investor KYC and investment.
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(investor, &10_000i128);
-    let bid_id = client.place_bid(investor, &invoice_id, &investment_amount, &invoice_amount);
+    let bid_id = client.place_bid(investor, &invoice_id, &investment_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
     invoice_id
 }

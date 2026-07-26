@@ -67,7 +67,7 @@ fn make_invoice(
         &String::from_str(env, "Test invoice for maintenance matrix"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 /// Enables maintenance mode with a given reason and verifies it is active.
@@ -112,7 +112,7 @@ fn test_maintenance_blocks_store_invoice() {
         &String::from_str(&env, "Should be blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -203,7 +203,7 @@ fn test_maintenance_blocks_place_bid() {
 
     enable_maintenance(&env, &client, &admin, "Bid placement disabled");
 
-    let result = client.try_place_bid(&investor, &invoice_id, &500i128, &600i128);
+    let result = client.try_place_bid(&investor, &invoice_id, &500i128, &600i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive,
@@ -549,7 +549,7 @@ fn test_mutations_resume_after_disable() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         fail_result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -567,7 +567,7 @@ fn test_mutations_resume_after_disable() {
         &String::from_str(&env, "Now allowed"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(
         success_result.is_ok(),
         "Mutations must succeed after disabling maintenance"
@@ -726,7 +726,7 @@ fn test_toggle_maintenance_multiple_times() {
         &String::from_str(&env, "Test1"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         result1.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -742,7 +742,7 @@ fn test_toggle_maintenance_multiple_times() {
         &String::from_str(&env, "Test2"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result2.is_ok(), "Must succeed when disabled");
 
     // Toggle 3: Re-enable
@@ -755,7 +755,7 @@ fn test_toggle_maintenance_multiple_times() {
         &String::from_str(&env, "Test3"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         result3.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -771,7 +771,7 @@ fn test_toggle_maintenance_multiple_times() {
         &String::from_str(&env, "Test4"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result4.is_ok(), "Must succeed after final disable");
 }
 
