@@ -80,13 +80,6 @@ jobs:
           cd quicklendx-contracts
           cargo test --test ${{ matrix.test_target }} --verbose
 
-      - name: Run targeted regression test
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
-        run: |
-          source $HOME/.cargo/env
-          cd quicklendx-contracts
-          cargo test --test ${{ matrix.test_target }} --verbose
-
       - name: Check code quality
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
