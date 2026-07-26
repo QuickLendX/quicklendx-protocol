@@ -633,6 +633,11 @@ impl QuickLendXContract {
         init::ProtocolInitializer::get_fee_bps(&env)
     }
 
+    /// Expose the current fee schedule
+    pub fn get_fee_schedule(env: Env) -> Vec<crate::fees::FeeStructure> {
+        crate::fees::FeeManager::get_fee_schedule(&env)
+    }
+
     /// Get treasury address
     pub fn get_treasury(env: Env) -> Option<Address> {
         init::ProtocolInitializer::get_treasury(&env)
