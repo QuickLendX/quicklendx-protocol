@@ -6,7 +6,8 @@
 |----------|---------------|
 | [contributor-guide.md](contracts/contributor-guide.md) | **Start here if you are new to the contracts codebase.** Module layout, build commands, invoice lifecycle, bidding, escrow, KYC gates, error/event stability contracts, test auth pattern, WASM budget. |
 | [invoice-lifecycle.md](contracts/invoice-lifecycle.md) | Full invoice state machine, transition table, investment status integration |
-| [LIFECYCLE_COMPOSITION.md](LIFECYCLE_COMPOSITION.md) | Origination, late, default, and dispute — how they interact when more than one is active on the same invoice at once |
+| [INVOICE_LIFECYCLE_DIAGRAM.md](INVOICE_LIFECYCLE_DIAGRAM.md) | Full invoice state machine diagram — all statuses, transitions, invariants, and entrypoint signatures in one page (issue #1946) |
+| [OFF_CHAIN_SIGNATURES.md](OFF_CHAIN_SIGNATURES.md) | Threat model and implementation notes for all off-chain signed operations: KYC payloads, cursor attestations, dispute evidence (issue #1894) |
 | [DEFAULT_FLOW_DIAGRAM.md](DEFAULT_FLOW_DIAGRAM.md) | State-machine diagram from invoice past-due → default → recovery; grace period, finality guards, dispute interception, and concrete timeline example |
 | [errors.md](contracts/errors.md) | Error code reference (stable integers) |
 | [events.md](contracts/events.md) | Event schema and topic constants |

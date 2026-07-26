@@ -20,6 +20,13 @@ entrypoint.  The contract treats `Resolved` as a write-once terminal
 state.  Instead, the appeal process is a policy layer that operators
 follow, using existing admin entrypoints to implement the result.
 
+> **Finding this document from an on-chain event:** When `freeze_invoice`
+> is called, the contract emits an `InvoiceFrozen` event (topic
+> `"invoice_frozen"`, issue #1959).  The event payload contains a
+> `freeze_appeal_channel` field set to `"docs/APPEALS.md"` — this file.
+> Dashboards and notification pipelines should surface that value to the
+> affected business so they can file an appeal without contacting support.
+
 ## State machine
 
 ```
@@ -277,3 +284,5 @@ future-enhancements list.
 - [`RUNBOOK_INCIDENT_RESPONSE.md`](RUNBOOK_INCIDENT_RESPONSE.md) — Incident-mode recovery for disputed resolution faults.
 - [`MONITORING.md`](MONITORING.md) — Alerts for overdue disputes and appeals.
 - [`INVOICE_LIFECYCLE.md`](INVOICE_LIFECYCLE.md) — Full invoice state machine.
+- [`INVOICE_LIFECYCLE_DIAGRAM.md`](INVOICE_LIFECYCLE_DIAGRAM.md) — State diagram including the freeze overlay.
+- [`EVENTS_SCHEMA.md`](EVENTS_SCHEMA.md) — Full event schema; see `InvoiceFrozen` for the `freeze_appeal_channel` field (issue #1959).
