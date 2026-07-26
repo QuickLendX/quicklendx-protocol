@@ -26,6 +26,8 @@ extern crate alloc;
 mod scratch_events;
 #[cfg(test)]
 mod test_concurrent_default_overlap;
+#[cfg(test)]
+mod test_multisig;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -76,6 +78,7 @@ pub mod events;
 pub mod fees;
 pub mod freshness;
 pub mod governance;
+pub mod multisig;
 pub mod health;
 pub mod idempotency;
 pub mod incident;
