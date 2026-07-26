@@ -1185,6 +1185,22 @@ impl FeeManager {
         Ok(request)
     }
 
+    #[inline]
+    pub fn require_treasury_rotation_within_window(
+        env: &Env,
+        now: u64,
+        request: &RecipientRotationRequest,
+    ) -> Result<(), QuickLendXError> {
+        if now < request.initiated_at.saturating_add(MIN_ROTATION_DELAY_SECONDS) {
+            return Err(QuickLendXError::RotationTimelockNotElapsed);
+        }
+        if now > request.confirmation_deadline {
+            env.storage().instance().remove(&ROTATION_KEY);
+            return Err(QuickLendXError::RotationExpired);
+        }
+        Ok(())
+    }
+
     /// Confirm the pending treasury rotation.
     ///
     /// The new_address from the pending request must authorize this call,
@@ -1208,19 +1224,7 @@ impl FeeManager {
 
         let now = env.ledger().timestamp();
 
-        // Enforce minimum delay: cannot confirm before min_delay has elapsed.
-        if now
-            < request
-                .initiated_at
-                .saturating_add(MIN_ROTATION_DELAY_SECONDS)
-        {
-            return Err(QuickLendXError::RotationTimelockNotElapsed);
-        }
-
-        if now > request.confirmation_deadline {
-            env.storage().instance().remove(&ROTATION_KEY);
-            return Err(QuickLendXError::RotationExpired);
-        }
+        Self::require_treasury_rotation_within_window(env, now, &request)?;
 
         let mut platform_config = Self::get_platform_fee_config(env)?;
         let old_treasury = platform_config.treasury_address.clone();
