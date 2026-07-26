@@ -296,6 +296,8 @@ mod test_events;
 mod test_fuzz_cancelled_noop;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_distribute_revenue;
+#[cfg(test)]
+mod test_fuzz_default_counter;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
@@ -1978,6 +1980,7 @@ impl QuickLendXContract {
                 if bid_amount > verification.investment_limit {
                     return Err(QuickLendXError::InvalidAmount);
                 }
+                crate::verification::require_tier_min_investment_amount(&verification.tier, bid_amount)?;
             }
             BusinessVerificationStatus::Pending => return Err(QuickLendXError::KYCAlreadyPending),
             BusinessVerificationStatus::Rejected => {
