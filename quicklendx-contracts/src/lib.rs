@@ -161,6 +161,8 @@ mod test_dispute;
 #[cfg(test)]
 mod test_dispute_refund_flow;
 #[cfg(test)]
+mod test_dispute_time_limit;
+#[cfg(test)]
 mod test_evidence_size_cap;
 #[cfg(test)]
 mod test_evidence_hash_format;
@@ -2635,6 +2637,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2662,6 +2665,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2689,6 +2693,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -4333,6 +4338,13 @@ impl QuickLendXContract {
         if invoice.dispute_status != DisputeStatus::None {
             return Err(QuickLendXError::DisputeAlreadyExists);
         }
+        
+        let grace_period = init::ProtocolInitializer::get_grace_period_seconds(&env);
+        let time_limit = invoice.due_date.saturating_add(grace_period);
+        if env.ledger().timestamp() > time_limit {
+            return Err(QuickLendXError::DisputeTimeLimitExceeded);
+        }
+
         if reason.is_empty() {
             return Err(QuickLendXError::InvalidDisputeReason);
         }
