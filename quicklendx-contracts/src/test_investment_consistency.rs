@@ -40,7 +40,7 @@ fn test_investment_consistency_after_clear_all() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // We need real tokens for place_bid to work in some setups, but here we assume mock_all_auths handles it

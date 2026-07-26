@@ -3,6 +3,7 @@
 use crate::errors::QuickLendXError;
 use crate::types::{BusinessFreezeReason, FreezeInfo};
 use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, BytesN, Env, String, Vec};
 
 fn setup_env() -> (Env, crate::QuickLendXContractClient<'static>, Address) {
@@ -15,22 +16,14 @@ fn setup_env() -> (Env, crate::QuickLendXContractClient<'static>, Address) {
     (env, client, admin)
 }
 
-fn setup_business(
-    env: &Env,
-    client: &crate::QuickLendXContractClient,
-    admin: &Address,
-) -> Address {
+fn setup_business(env: &Env, client: &crate::QuickLendXContractClient, admin: &Address) -> Address {
     let business = Address::generate(env);
     client.submit_kyc_application(&business, &String::from_str(env, "Business KYC"));
     client.verify_business(admin, &business);
     business
 }
 
-fn setup_investor(
-    env: &Env,
-    client: &crate::QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn setup_investor(env: &Env, client: &crate::QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &limit);
@@ -87,7 +80,7 @@ fn setup_invoice(
         &String::from_str(env, "test invoice"),
         &crate::invoice::InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     (invoice_id, currency)
 }
 
@@ -126,7 +119,11 @@ fn test_freeze_compliance_violation() {
     let business = setup_business(&env, &client, &admin);
     let (invoice_id, _) = setup_invoice(&env, &client, &admin, &business);
 
-    client.freeze_invoice(&admin, &invoice_id, &BusinessFreezeReason::ComplianceViolation);
+    client.freeze_invoice(
+        &admin,
+        &invoice_id,
+        &BusinessFreezeReason::ComplianceViolation,
+    );
 
     let info = client.get_invoice_freeze_info(&invoice_id).unwrap();
     assert_eq!(info.reason, BusinessFreezeReason::ComplianceViolation);
@@ -138,7 +135,11 @@ fn test_freeze_suspicious_activity() {
     let business = setup_business(&env, &client, &admin);
     let (invoice_id, _) = setup_invoice(&env, &client, &admin, &business);
 
-    client.freeze_invoice(&admin, &invoice_id, &BusinessFreezeReason::SuspiciousActivity);
+    client.freeze_invoice(
+        &admin,
+        &invoice_id,
+        &BusinessFreezeReason::SuspiciousActivity,
+    );
 
     let info = client.get_invoice_freeze_info(&invoice_id).unwrap();
     assert_eq!(info.reason, BusinessFreezeReason::SuspiciousActivity);
@@ -178,10 +179,7 @@ fn test_freeze_blocks_place_bid() {
         &BytesN::from_array(&env, &[0u8; 32]),
     );
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        QuickLendXError::InvoiceFrozen
-    );
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvoiceFrozen);
 }
 
 #[test]
@@ -206,10 +204,7 @@ fn test_freeze_blocks_accept_bid() {
 
     let result = client.try_accept_bid(&invoice_id, &bid_id);
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        QuickLendXError::InvoiceFrozen
-    );
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvoiceFrozen);
 }
 
 #[test]
@@ -239,10 +234,7 @@ fn test_freeze_blocks_partial_payment() {
         &String::from_str(&env, "tx-freeze-block"),
     );
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        QuickLendXError::InvoiceFrozen
-    );
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvoiceFrozen);
 }
 
 // ============================================================================
@@ -314,11 +306,8 @@ fn test_freeze_requires_admin() {
     let (invoice_id, _) = setup_invoice(&env, &client, &admin, &business);
 
     let non_admin = Address::generate(&env);
-    let result = client.try_freeze_invoice(
-        &non_admin,
-        &invoice_id,
-        &BusinessFreezeReason::AdminAction,
-    );
+    let result =
+        client.try_freeze_invoice(&non_admin, &invoice_id, &BusinessFreezeReason::AdminAction);
     assert!(result.is_err());
 }
 
@@ -331,11 +320,7 @@ fn test_freeze_nonexistent_invoice() {
     let (env, client, admin) = setup_env();
     let fake_id = BytesN::from_array(&env, &[0u8; 32]);
 
-    let result = client.try_freeze_invoice(
-        &admin,
-        &fake_id,
-        &BusinessFreezeReason::AdminAction,
-    );
+    let result = client.try_freeze_invoice(&admin, &fake_id, &BusinessFreezeReason::AdminAction);
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -381,7 +366,11 @@ fn test_freeze_info_includes_timestamp() {
     let (invoice_id, _) = setup_invoice(&env, &client, &admin, &business);
     let now = env.ledger().timestamp();
 
-    client.freeze_invoice(&admin, &invoice_id, &BusinessFreezeReason::SuspiciousActivity);
+    client.freeze_invoice(
+        &admin,
+        &invoice_id,
+        &BusinessFreezeReason::SuspiciousActivity,
+    );
 
     let info = client.get_invoice_freeze_info(&invoice_id).unwrap();
     assert_eq!(info.frozen_by, admin);

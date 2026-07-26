@@ -3,7 +3,7 @@ use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice
 use crate::init::ProtocolInitializer;
 use crate::payments::{EscrowStatus, EscrowStorage};
 use crate::storage::{InvestmentStorage, InvoiceStorage};
-use crate::types::{InvestmentStatus, InvoiceStatus, Invoice};
+use crate::types::{InvestmentStatus, Invoice, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, Vec};
 
 /// Default grace period in seconds (7 days)
@@ -347,6 +347,26 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     InvoiceStorage::update_invoice(env, &invoice);
 
     InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Defaulted, invoice_id);
+
+    let history_key = crate::storage::StorageKeys::business_default_history(&invoice.business);
+    let history_count: u32 = env.storage().persistent().get(&history_key).unwrap_or(0);
+    env.storage()
+        .persistent()
+        .set(&history_key, &history_count.saturating_add(1));
+    crate::storage::bump_persistent(env, &history_key);
+
+    if let Some(investor) = invoice.investor.clone() {
+        let investor_history_key = crate::storage::StorageKeys::investor_default_history(&investor);
+        let investor_history_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&investor_history_key)
+            .unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&investor_history_key, &investor_history_count.saturating_add(1));
+        crate::storage::bump_persistent(env, &investor_history_key);
+    }
 
     emit_invoice_expired(env, &invoice);
 

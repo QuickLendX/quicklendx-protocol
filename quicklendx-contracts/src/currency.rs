@@ -14,7 +14,7 @@
 //!
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use soroban_sdk::{symbol_short, Address, Env, Vec, String};
+use soroban_sdk::{symbol_short, Address, Env, String, Vec};
 
 const WHITELIST_KEY: soroban_sdk::Symbol = symbol_short!("curr_wl");
 
@@ -89,7 +89,7 @@ impl CurrencyWhitelist {
         let zero = Self::zero_address(env);
         let contract_addr = env.current_contract_address();
         for currency in currencies.iter() {
-            if currency == admin || currency == &zero || currency == &contract_addr {
+            if currency == *admin || currency == zero || currency == contract_addr {
                 return Err(QuickLendXError::InvalidCurrency);
             }
         }
@@ -245,6 +245,14 @@ impl CurrencyWhitelist {
         ))
     }
 
+    /// Returns the canonical zero address used for validation.
+    fn zero_address(env: &Env) -> Address {
+        Address::from_string(&String::from_str(
+            env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        ))
+    }
+
     /// Assert that `currency` is permitted, respecting empty-list backward compatibility.
     ///
     /// # Parameters
@@ -332,32 +340,35 @@ impl CurrencyWhitelist {
         Self::get_whitelisted_currencies(env).len()
     }
 
-    /// @notice Return a paginated slice of the whitelist with hard cap enforcement
+    /// @notice Return a paginated slice of the whitelist with metadata.
     /// @param env The contract environment
     /// @param offset Starting index for pagination (0-based)
     /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
-    /// @return Vector of whitelisted currency addresses
+    /// @return [`PaginatedCurrencies`] with items, total_count, and has_more
     /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
-    pub fn get_whitelisted_currencies_paged(env: &Env, offset: u32, limit: u32) -> Vec<Address> {
-        // Import MAX_QUERY_LIMIT from parent module
-        const MAX_QUERY_LIMIT: u32 = 100;
-
-        // Validate query parameters for security
-        if offset > u32::MAX - MAX_QUERY_LIMIT {
-            return Vec::new(env);
-        }
-
-        let capped_limit = limit.min(MAX_QUERY_LIMIT);
+    pub fn get_whitelisted_currencies_paged(
+        env: &Env,
+        offset: u32,
+        limit: u32,
+    ) -> crate::types::PaginatedCurrencies {
         let list = Self::get_whitelisted_currencies(env);
+        let total_count = list.len();
+
         let mut page: Vec<Address> = Vec::new(env);
-        let len = list.len();
-        let end = (offset + capped_limit).min(len);
-        if offset >= len {
-            return page;
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut idx = start;
+        while idx < end {
+            if let Some(addr) = list.get(idx) {
+                page.push_back(addr);
+            }
+            idx = idx.saturating_add(1);
         }
-        for i in offset..end {
-            page.push_back(list.get(i).unwrap());
+
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        crate::types::PaginatedCurrencies {
+            items: page,
+            total_count,
+            has_more,
         }
-        page
     }
 }

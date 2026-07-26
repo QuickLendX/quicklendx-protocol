@@ -1,4 +1,4 @@
-#![cfg(test)]
+﻿#![cfg(test)]
 
 use crate::contract::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
@@ -29,7 +29,7 @@ fn setup_funded_invoice(
         &String::from_str(env, "Test invoice for dispute settlement test"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
 
@@ -71,7 +71,7 @@ fn test_settle_invoice_blocks_when_dispute_is_open() {
     assert_eq!(invoice.dispute_status, DisputeStatus::Disputed);
 
     // Settle invoice should be BLOCKED (returns InvalidStatus)
-    let result = client.try_settle_invoice(&invoice_id, &amount);
+    let result = client.try_settle_invoice(&invoice_id, &amount, &client.get_investment(&invoice_id).unwrap());
     assert_eq!(result, Err(Ok(QuickLendXError::InvalidStatus)));
 
     // Advance to UnderReview
@@ -80,7 +80,7 @@ fn test_settle_invoice_blocks_when_dispute_is_open() {
     assert_eq!(invoice_review.dispute_status, DisputeStatus::UnderReview);
 
     // Settle invoice should STILL be BLOCKED under review
-    let result_review = client.try_settle_invoice(&invoice_id, &amount);
+    let result_review = client.try_settle_invoice(&invoice_id, &amount, &client.get_investment(&invoice_id).unwrap());
     assert_eq!(result_review, Err(Ok(QuickLendXError::InvalidStatus)));
 }
 
@@ -126,7 +126,7 @@ fn test_settle_invoice_allows_when_dispute_is_resolved() {
     token_client.approve(&business, &contract_id, &amount, &expiry);
 
     // Settle invoice should SUCCEED
-    let result = client.try_settle_invoice(&invoice_id, &amount);
+    let result = client.try_settle_invoice(&invoice_id, &amount, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_ok());
 
     let final_invoice = client.get_invoice(&invoice_id).unwrap();
@@ -163,9 +163,10 @@ fn test_settle_invoice_allows_when_no_dispute_exists() {
     token_client.approve(&business, &contract_id, &amount, &expiry);
 
     // Settle invoice should SUCCEED
-    let result = client.try_settle_invoice(&invoice_id, &amount);
+    let result = client.try_settle_invoice(&invoice_id, &amount, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_ok());
 
     let final_invoice = client.get_invoice(&invoice_id).unwrap();
     assert_eq!(final_invoice.status, InvoiceStatus::Paid);
 }
+

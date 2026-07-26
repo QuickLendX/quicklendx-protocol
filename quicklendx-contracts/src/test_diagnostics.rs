@@ -1,4 +1,4 @@
-//! Tests for the `qlx_log!` structured diagnostics macro.
+﻿//! Tests for the `qlx_log!` structured diagnostics macro.
 //!
 //! These tests verify:
 //! 1. The macro emits correctly-prefixed domain-tagged log lines when compiled under `cfg(test)`.
@@ -186,7 +186,7 @@ fn test_bid_placed_emits_diagnostic_log() {
         &String::from_str(&env, "Diagnostics test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.place_bid(
@@ -221,7 +221,7 @@ fn test_bid_withdrawn_emits_diagnostic_log() {
         &String::from_str(&env, "Withdraw diagnostics invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(
@@ -257,7 +257,7 @@ fn test_escrow_lifecycle_emits_diagnostic_logs() {
         &String::from_str(&env, "Escrow diagnostics invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(
         &investor,
@@ -310,7 +310,7 @@ fn test_partial_payment_emits_diagnostic_log() {
         &String::from_str(&env, "Partial payment diagnostics"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(
         &investor,
@@ -353,7 +353,7 @@ fn test_settlement_finalization_emits_diagnostic_log() {
         &String::from_str(&env, "Settlement diagnostics invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(
         &investor,
@@ -364,7 +364,7 @@ fn test_settlement_finalization_emits_diagnostic_log() {
     );
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
-    client.settle_invoice(&invoice_id, &5_000i128);
+    client.settle_invoice(&invoice_id, &5_000i128, &client.get_investment(&invoice_id).unwrap());
 
     let logs = env.logs().all();
     let log_str: alloc::string::String = logs.join("\n");
@@ -401,7 +401,7 @@ fn test_refund_escrow_emits_diagnostic_log() {
         &String::from_str(&env, "Refund diagnostics invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(
         &investor,
@@ -504,7 +504,7 @@ fn test_error_path_no_diagnostic() {
         &String::from_str(&env, "Diagnostics error path invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // This should fail because the invoice is not verified
     let result = client.try_place_bid(
@@ -565,7 +565,7 @@ fn test_get_protocol_diagnostics_basic() {
         &String::from_str(&env, "Diagnostics entry-point test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let diag2 = client.get_protocol_diagnostics();
     assert_eq!(diag2.total_invoices, 1);
     assert_eq!(diag2.pending_invoices, 1);
@@ -577,3 +577,4 @@ fn test_get_protocol_diagnostics_basic() {
     assert_eq!(diag3.verified_invoices, 1);
     assert_eq!(diag3.ledger_sequence, env.ledger().sequence());
 }
+

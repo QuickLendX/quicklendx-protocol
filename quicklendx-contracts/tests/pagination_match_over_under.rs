@@ -2,15 +2,11 @@
 #[cfg(test)]
 mod pagination_match_over_under {
     use super::super::*; // import pagination module
-    use quicklendx_contracts::pagination::{
-        cap_query_limit,
-        validate_query_params,
-        validate_pagination_params,
-        calculate_safe_bounds,
-        paginate_slice,
-        MAX_QUERY_LIMIT,
-    };
     use quicklendx_contracts::errors::QuickLendXError;
+    use quicklendx_contracts::pagination::{
+        calculate_safe_bounds, cap_query_limit, paginate_slice, validate_pagination_params,
+        validate_query_params, MAX_QUERY_LIMIT,
+    };
 
     #[test]
     fn test_validate_query_params_overflow() {

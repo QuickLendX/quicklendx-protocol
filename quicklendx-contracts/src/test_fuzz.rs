@@ -1,4 +1,4 @@
-#![cfg(all(test, feature = "fuzz-tests"))]
+﻿#![cfg(all(test, feature = "fuzz-tests"))]
 
 use crate::{invoice::InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
@@ -77,7 +77,7 @@ proptest! {
             &description,
             &InvoiceCategory::Services,
             &tags,
-        );
+            &None);
 
         if let Ok(Ok(invoice_id)) = result {
             let invoice = client.get_invoice(&invoice_id);
@@ -106,7 +106,7 @@ proptest! {
             &SorobanString::from_str(&env, "Test invoice"),
             &InvoiceCategory::Services,
             &SorobanVec::new(&env),
-        );
+            &None);
 
         let _ = client.try_verify_invoice(&invoice_id);
 
@@ -119,7 +119,7 @@ proptest! {
             &invoice_id,
             &bid_amount,
             &expected_return,
-        );
+            &BytesN::from_array(&env, &[0u8; 32]));
 
         if let Ok(Ok(bid_id)) = result {
             let bid = client.get_bid(&bid_id).unwrap();
@@ -148,7 +148,7 @@ proptest! {
             &SorobanString::from_str(&env, "Test invoice"),
             &InvoiceCategory::Services,
             &SorobanVec::new(&env),
-        );
+            &None);
 
         let _ = client.try_verify_invoice(&invoice_id);
 
@@ -161,7 +161,7 @@ proptest! {
         let payment_amount = invoice_amount.saturating_mul(payment_amount_factor as i128) / 100;
 
         // Try settle
-        let result = client.try_settle_invoice(&invoice_id, &payment_amount);
+        let result = client.try_settle_invoice(&invoice_id, &payment_amount, &client.get_investment(&invoice_id).unwrap());
 
         if let Ok(Ok(_)) = result {
             let invoice_after = client.get_invoice(&invoice_id);
@@ -242,7 +242,7 @@ fn setup_funded_invoice_for_fuzz(
         &SorobanString::from_str(env, "Fuzz test invoice"),
         &InvoiceCategory::Services,
         &SorobanVec::new(env),
-    );
+        &None);
 
     let _ = client.try_verify_invoice(&invoice_id);
 
@@ -251,7 +251,7 @@ fn setup_funded_invoice_for_fuzz(
         &invoice_id,
         &invoice_amount,
         &(invoice_amount + 100),
-    );
+        &BytesN::from_array(&env, &[0u8; 32]));
     let _ = client.try_accept_bid(&invoice_id, &bid_id);
 
     (invoice_id, business, investor)
@@ -516,9 +516,10 @@ mod extra_tests {
             &SorobanString::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &SorobanVec::new(&env),
-        );
+            &None);
 
         let invoice = client.get_invoice(&invoice_id);
         assert_eq!(invoice.amount, 1_000_000);
     }
 }
+

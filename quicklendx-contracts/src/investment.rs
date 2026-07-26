@@ -586,3 +586,11 @@ impl InvestmentStorage {
         result
     }
 }
+
+/// Requires that the investment is active.
+pub fn require_investment_active(investment: &Investment) -> Result<(), QuickLendXError> {
+    if investment.status != InvestmentStatus::Active {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+    Ok(())
+}
