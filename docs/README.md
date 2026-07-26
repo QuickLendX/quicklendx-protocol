@@ -23,6 +23,7 @@
 | [CROSS_INVOICE_ANALYTICS.md](CROSS_INVOICE_ANALYTICS.md) | Cross-invoice read patterns, supported entrypoints, and pagination bounds for contributors and integrators |
 | [UPGRADE_QUIESCE.md](UPGRADE_QUIESCE.md) | How writes drain before a contract upgrade — maintenance mode, drain window, and operator checklist |
 | [OPERATIONAL_PLAYBOOKS.md](OPERATIONAL_PLAYBOOKS.md) | Protocol reasons, meaning, and operational playbooks |
+| [QLX_INDEXER_CONTRACT.md](QLX_INDEXER_CONTRACT.md) | What the off-chain indexer relies on from the on-chain contract (events, structures) |
 
 ## Backend reference
 
