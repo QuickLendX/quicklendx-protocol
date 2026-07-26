@@ -1764,7 +1764,16 @@ impl QuickLendXContract {
     /// # Errors
     /// * `StorageKeyNotFound` if investment does not exist
     /// * `InvalidStatus` if investment is not Active
+    /// * `InsuranceClaimWindowClosed` if the invoice due date has already passed
     /// * `InvalidAmount` if computed premium is zero
+    ///
+    /// # Security
+    /// Insurance opt-in is only permitted while the invoice due date is in the
+    /// future (`ledger.timestamp() < invoice.due_date`). Allowing opt-in after
+    /// the due date would let an attacker insure a position that is already
+    /// certain to default, then immediately trigger the default to collect the
+    /// coverage payout — an adverse-selection exploit with zero economic risk
+    /// to the attacker and unbounded liability for the insurance provider.
     pub fn add_investment_insurance(
         env: Env,
         investment_id: BytesN<32>,
@@ -1779,6 +1788,19 @@ impl QuickLendXContract {
 
         if investment.status != InvestmentStatus::Active {
             return Err(QuickLendXError::InvalidStatus);
+        }
+
+        // Security: reject opt-in after the invoice due date.
+        //
+        // Once the due date has passed the invoice is overdue and default is
+        // imminent. An investor who opts in at that point bears zero timing
+        // risk yet receives the full coverage payout — a classic adverse-
+        // selection exploit (insuring a burning building). The claim window
+        // must close no later than the due date.
+        let invoice = InvoiceStorage::get_invoice(&env, &investment.invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if env.ledger().timestamp() >= invoice.due_date {
+            return Err(QuickLendXError::InsuranceClaimWindowClosed);
         }
 
         let premium = Investment::calculate_premium(investment.amount, coverage_percentage);
