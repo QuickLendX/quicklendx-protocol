@@ -232,6 +232,10 @@ mod test_string_limits;
 // mod test_types;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_analytics_consistency;
+// Issue snapshot-tests — clean snapshot and snapshot with open dispute.
+// No feature gate: runs on every CI matrix entry.
+#[cfg(test)]
+mod test_snapshot;
 #[cfg(test)]
 mod test_bid_capacity_stress;
 #[cfg(all(test, feature = "fuzz-tests"))]
