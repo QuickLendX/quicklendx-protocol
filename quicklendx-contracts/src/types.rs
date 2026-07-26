@@ -223,6 +223,31 @@ pub struct FreezeInfo {
     pub frozen_at: u64,
 }
 
+/// Freeze reason enumeration representing why an investor was frozen.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvestorFreezeReason {
+    /// Generic administrative freeze (admin's discretion)
+    AdminAction,
+    /// Investor KYC has expired
+    KYCExpired,
+    /// Legal or compliance policy violation
+    ComplianceViolation,
+    /// Fraud or suspicious activity detected
+    SuspiciousActivity,
+    /// Court order or legal hold applied
+    LegalHold,
+}
+
+/// Freeze record stored for a frozen investor
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvestorFreezeInfo {
+    pub reason: InvestorFreezeReason,
+    pub frozen_by: Address,
+    pub frozen_at: u64,
+}
+
 /// Core Invoice data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]

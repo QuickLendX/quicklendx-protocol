@@ -7,8 +7,9 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory,
-    InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
+    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, InvestorFreezeInfo,
+    Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport,
+    RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
@@ -59,8 +60,7 @@ pub enum DataKey {
     FrozenInvoice(BytesN<32>),
     FreezeInfo(BytesN<32>),
     EscrowExtension(BytesN<32>),
-    /// Absolute per-investor bid cap for a single invoice (`None`/missing = uncapped).
-    PerInvestorPositionCap(BytesN<32>),
+    InvestorFreezeInfo(Address),
 }
 
 impl StorageKeys {
@@ -336,6 +336,41 @@ impl InvoiceStorage {
 
     pub fn remove_freeze_info(env: &Env, invoice_id: &BytesN<32>) {
         let key = DataKey::FreezeInfo(invoice_id.clone());
+        env.storage().persistent().remove(&key);
+    }
+
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
+        Self::get_invoice_lock(env, invoice_id).is_locked()
+    }
+
+    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+        if frozen {
+            Self::set_invoice_lock(env, invoice_id, InvoiceLock::Frozen);
+        } else {
+            Self::set_invoice_lock(env, invoice_id, InvoiceLock::None);
+        }
+    }
+
+    pub fn set_investor_freeze_info(env: &Env, investor: &Address, info: &InvestorFreezeInfo) {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
+        env.storage().persistent().set(&key, info);
+        extend_persistent_ttl(env, &key);
+    }
+
+    pub fn get_investor_freeze_info(
+        env: &Env,
+        investor: &Address,
+    ) -> Option<InvestorFreezeInfo> {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
+        let result = env.storage().persistent().get::<_, InvestorFreezeInfo>(&key);
+        if result.is_some() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
+    }
+
+    pub fn remove_investor_freeze_info(env: &Env, investor: &Address) {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
         env.storage().persistent().remove(&key);
     }
 

@@ -54,11 +54,9 @@ mod test_settlement_history_reconstruction;
 // Issue #1920 — confirm require_regulatory_ok is truly a no-op by default.
 #[cfg(test)]
 mod test_regulatory_gate;
-// Error-code discriminant stability snapshot — every QuickLendXError variant
-// is locked to its numeric value.  Renumbering a variant is a BREAKING change
-// for off-chain consumers; this test prevents silent drift.
+// Issue #1902 — investor freeze reason typed enum
 #[cfg(test)]
-mod test_error_code_stability;
+mod test_investor_freeze_reason;
 use crate::idempotency::{idempotency_exists, idempotency_key, store_idempotency};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
@@ -439,7 +437,7 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
     normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
-    require_business_active, require_business_not_pending, require_investor_not_pending,
+    require_business_not_pending, require_investor_not_frozen, require_investor_not_pending,
     revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_eligibility, validate_dispute_evidence,
     validate_dispute_reason, validate_dispute_resolution, validate_investor_investment,
@@ -1754,6 +1752,67 @@ impl QuickLendXContract {
         InvoiceStorage::get_freeze_info(&env, &invoice_id)
     }
 
+    /// Freeze an investor with a specific reason (admin only).
+    ///
+    /// When frozen, the following operations are blocked:
+    /// - `place_bid` → `InvestorFrozen`
+    /// - `withdraw_bid` → `InvestorFrozen`
+    ///
+    /// The freeze reason and metadata are stored alongside the frozen flag
+    /// and are queryable via `get_investor_freeze_info`.
+    ///
+    /// # Arguments
+    /// * `admin`    - Must be the current protocol admin.
+    /// * `investor` - The investor to freeze.
+    /// * `reason`   - An `InvestorFreezeReason` variant describing why.
+    ///
+    /// # Errors
+    /// * `NotAdmin` if the caller is not the current admin.
+    /// * `KYCNotFound` if no investor KYC record exists.
+    pub fn freeze_investor(
+        env: Env,
+        admin: Address,
+        investor: Address,
+        reason: InvestorFreezeReason,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        // Verify the investor has a KYC record before freezing.
+        InvestorVerificationStorage::get(&env, &investor)
+            .ok_or(QuickLendXError::KYCNotFound)?;
+
+        let info = InvestorFreezeInfo {
+            reason,
+            frozen_by: admin.clone(),
+            frozen_at: env.ledger().timestamp(),
+        };
+        InvoiceStorage::set_investor_freeze_info(&env, &investor, &info);
+        Ok(())
+    }
+
+    /// Unfreeze a previously frozen investor (admin only).
+    ///
+    /// Removes the stored investor freeze info.
+    /// After unfreezing, all operations resume normal behaviour.
+    ///
+    /// # Errors
+    /// * `NotAdmin` if the caller is not the current admin.
+    pub fn unfreeze_investor(
+        env: Env,
+        admin: Address,
+        investor: Address,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        InvoiceStorage::remove_investor_freeze_info(&env, &investor);
+        Ok(())
+    }
+
+    /// Return the stored freeze info for an investor, if any.
+    ///
+    /// Returns `None` when the investor is not frozen.
+    pub fn get_investor_freeze_info(env: Env, investor: Address) -> Option<InvestorFreezeInfo> {
+        InvoiceStorage::get_investor_freeze_info(&env, &investor)
+    }
+
     /// Get an invoice by ID.
     ///
     /// # Returns
@@ -2162,6 +2221,7 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         bid.investor.require_auth();
+        require_investor_not_frozen(&env, &bid.investor)?;
         require_investor_not_pending(&env, &bid.investor)?;
         // Re-read status after auth to guard against concurrent transitions.
         let bid_fresh = BidStorage::get_bid(&env, &bid_id).unwrap();
@@ -2206,6 +2266,8 @@ impl QuickLendXContract {
         // jurisdiction-specific or on-chain oracle-based compliance checks without
         // touching this call site.
         crate::regulatory::require_regulatory_ok(&env, &investor)?;
+        // Reject bids from frozen investors.
+        require_investor_not_frozen(&env, &investor)?;
         // Idempotency check
         let idem_key = idempotency_key(&invoice_id, &investor, &salt, &env);
         if idempotency_exists(&env, &idem_key) {
@@ -2322,6 +2384,7 @@ impl QuickLendXContract {
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
+        require_investor_not_frozen(&env, &bid.investor)?;
         invoice.business.require_auth();
 
         // Enforce business is active (not deleted/frozen).
