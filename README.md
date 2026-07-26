@@ -85,6 +85,7 @@ npm run dev
 - [`docs/FEES_GRACE_DEFAULT.md`](docs/FEES_GRACE_DEFAULT.md): Unified contributor reference — platform fees, grace period resolution, and default trigger rules in one place.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
 - [`docs/GENERATION_COUNTER.md`](docs/GENERATION_COUNTER.md): What the on-chain protocol version (generation counter) is, who reads it, and the generation-bump invariant.
+- [`docs/QLX_RISK_PARAMETERS.md`](docs/QLX_RISK_PARAMETERS.md): Complete catalog of risk-related parameters with min/max/default values — investor tiers, business supply limits, bid controls, fee ceilings, and operational bounds.
 
 ## Contribution
 
