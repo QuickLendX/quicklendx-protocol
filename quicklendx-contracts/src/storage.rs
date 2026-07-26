@@ -7,8 +7,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus,
-    PlatformFeeConfig, PruneReport, RebuildReport,
+    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory,
+    InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
@@ -59,6 +59,8 @@ pub enum DataKey {
     FrozenInvoice(BytesN<32>),
     FreezeInfo(BytesN<32>),
     EscrowExtension(BytesN<32>),
+    /// Absolute per-investor bid cap for a single invoice (`None`/missing = uncapped).
+    PerInvestorPositionCap(BytesN<32>),
 }
 
 impl StorageKeys {
@@ -392,6 +394,36 @@ impl InvoiceStorage {
 
     pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
         Self::get(env, invoice_id)
+    }
+
+    /// Returns the optional absolute per-investor position cap for an invoice.
+    ///
+    /// `None` means the invoice is uncapped (only face value / protocol limits apply).
+    pub fn get_per_investor_position_cap(env: &Env, invoice_id: &BytesN<32>) -> Option<i128> {
+        let key = DataKey::PerInvestorPositionCap(invoice_id.clone());
+        env.storage().persistent().get(&key)
+    }
+
+    /// Sets or clears the absolute per-investor position cap for an invoice.
+    ///
+    /// Passing `None` removes the cap (uncapped). Callers must validate
+    /// `cap > 0 && cap <= invoice.amount` before storing `Some(cap)`.
+    pub fn set_per_investor_position_cap(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        cap: Option<i128>,
+    ) {
+        crate::assert_view_only!(env);
+        let key = DataKey::PerInvestorPositionCap(invoice_id.clone());
+        match cap {
+            Some(value) => {
+                env.storage().persistent().set(&key, &value);
+                extend_persistent_ttl(env, &key);
+            }
+            None => {
+                env.storage().persistent().remove(&key);
+            }
+        }
     }
 
     pub fn update(env: &Env, invoice: &Invoice) {

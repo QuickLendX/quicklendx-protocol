@@ -6,6 +6,7 @@ use crate::protocol_limits::{
     MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_REJECTION_REASON_LENGTH,
     MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
 };
+use crate::storage::InvoiceStorage;
 use crate::types::BidStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Bytes, Env, String, Vec};
@@ -791,6 +792,7 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
 /// @param investor The address of the bidding investor
 /// @return Success if bid passes all validation rules
 /// @error InvalidAmount if bid amount is below minimum or exceeds invoice amount
+/// @error PerInvestorPositionCapExceeded if bid exceeds invoice per_investor_position_cap
 /// @error InvalidStatus if invoice is not in Verified state or is past due date
 /// @error Unauthorized if business tries to bid on own invoice
 /// @error OperationNotAllowed if investor already has an active bid on this invoice
@@ -842,6 +844,14 @@ pub fn validate_bid(
 
     if bid_amount > invoice.amount {
         return Err(QuickLendXError::InvoiceAmountInvalid);
+    }
+
+    // Per-invoice whale defence: reject bids above the configured position cap.
+    // Missing / None storage means uncapped (invoice.amount remains the ceiling).
+    if let Some(cap) = InvoiceStorage::get_per_investor_position_cap(env, &invoice.id) {
+        if bid_amount > cap {
+            return Err(QuickLendXError::PerInvestorPositionCapExceeded);
+        }
     }
 
     // Expected return must exceed the original bid to avoid negative payoff.

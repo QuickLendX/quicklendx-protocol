@@ -262,6 +262,9 @@ mod test_bid_capacity_stress;
 // Issue #1891 — min-partial-fill amount boundary: at limit, one below, one above.
 #[cfg(test)]
 mod test_min_partial_fill_boundary;
+// Issue #1858 — per-invoice per_investor_position_cap whale defence.
+#[cfg(test)]
+mod test_per_investor_position_cap;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -392,7 +395,7 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
     normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
-    require_business_not_pending, require_investor_not_pending,
+    require_business_active, require_business_not_pending, require_investor_not_pending,
     revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
     validate_investor_investment, validate_invoice_metadata, verify_business,
@@ -1563,6 +1566,60 @@ impl QuickLendXContract {
         InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
     }
 
+    /// Set or clear the absolute per-investor position cap for an invoice.
+    ///
+    /// Business-only. Prevents a single whale from cornering funding by bidding
+    /// the full face value when their KYC aggregate limit would otherwise allow it.
+    ///
+    /// * `cap = Some(x)` requires `0 < x <= invoice.amount`
+    /// * `cap = None` clears the cap (uncapped)
+    ///
+    /// # Errors
+    /// * `InvoiceNotFound` — unknown invoice
+    /// * `NotBusinessOwner` — caller is not the invoice business
+    /// * `InvalidAmount` — cap is non-positive or above invoice amount
+    /// * `InvalidStatus` — invoice is already funded / terminal
+    /// * `ContractPaused` — protocol pause engaged
+    pub fn set_per_investor_position_cap(
+        env: Env,
+        business: Address,
+        invoice_id: BytesN<32>,
+        cap: Option<i128>,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        business.require_auth();
+
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if invoice.business != business {
+            return Err(QuickLendXError::NotBusinessOwner);
+        }
+        require_no_active_freeze(&env, &invoice_id)?;
+
+        // Cap may only be configured while the invoice is still open for bidding.
+        if invoice.status != InvoiceStatus::Pending && invoice.status != InvoiceStatus::Verified {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        if let Some(value) = cap {
+            if value <= 0 || value > invoice.amount {
+                return Err(QuickLendXError::InvalidAmount);
+            }
+        }
+
+        InvoiceStorage::set_per_investor_position_cap(&env, &invoice_id, cap);
+        env.events().publish(
+            (symbol_short!("pos_cap"),),
+            (invoice_id, business, cap),
+        );
+        Ok(())
+    }
+
+    /// Read the optional per-investor position cap for an invoice (`None` = uncapped).
+    pub fn get_per_investor_position_cap(env: Env, invoice_id: BytesN<32>) -> Option<i128> {
+        InvoiceStorage::get_per_investor_position_cap(&env, &invoice_id)
+    }
+
     /// Get all invoices for a business
     pub fn get_invoice_by_business(env: Env, business: Address) -> Vec<BytesN<32>> {
         InvoiceStorage::get_business_invoices(&env, &business)
@@ -2629,53 +2686,6 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
-        )
-    }
-
-    /// Update **all** protocol limits in a single call (admin only).
-    ///
-    /// This is the preferred entrypoint when operators need to configure
-    /// `min_bid_amount` or `min_bid_bps` alongside the other limits.  The
-    /// narrower helpers (`set_protocol_limits`, `update_protocol_limits`,
-    /// `update_limits_max_invoices`) preserve the current bid-limit values for
-    /// backwards compatibility.
-    ///
-    /// # Parameters
-    /// - `min_invoice_amount`       – minimum invoice face value (inclusive).
-    /// - `min_bid_amount`           – minimum absolute bid amount (inclusive).
-    ///                                Pass [`DEFAULT_MIN_BID_AMOUNT`] (10) to
-    ///                                keep the compile-time default.
-    /// - `min_bid_bps`              – minimum bid rate in basis points (inclusive).
-    ///                                Pass [`DEFAULT_MIN_BID_BPS`] (100) to keep
-    ///                                the compile-time default.
-    /// - `max_due_date_days`        – maximum invoice horizon in days (1..=730).
-    /// - `grace_period_seconds`     – grace period after due date (0..=2_592_000).
-    /// - `max_invoices_per_business`– per-business active-invoice cap; 0 = unlimited.
-    ///
-    /// # Errors
-    /// Delegates to `ProtocolLimitsContract::set_protocol_limits` for all
-    /// parameter validation; see that function's docs for error codes.
-    pub fn set_protocol_limits_full(
-        env: Env,
-        admin: Address,
-        min_invoice_amount: i128,
-        min_bid_amount: i128,
-        min_bid_bps: u32,
-        max_due_date_days: u64,
-        grace_period_seconds: u64,
-        max_invoices_per_business: u32,
-    ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
-            env,
-            admin,
-            min_invoice_amount,
-            min_bid_amount,
-            min_bid_bps,
-            max_due_date_days,
-            grace_period_seconds,
-            max_invoices_per_business,
-            existing.min_investor_tier,
         )
     }
 
