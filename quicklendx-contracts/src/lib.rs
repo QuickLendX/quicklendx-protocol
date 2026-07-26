@@ -143,6 +143,8 @@ mod test_backup_safety;
 mod test_bid_cancel_accept_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_boundary;
+#[cfg(test)]
+mod test_bid_expiry_grace;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(test)]
@@ -786,6 +788,35 @@ impl QuickLendXContract {
     pub fn reset_bid_ttl_to_default(env: Env) -> Result<u64, QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         bid::BidStorage::reset_bid_ttl_to_default(&env, &admin)
+    }
+
+    /// Admin-only: configure the bid expiry grace period (seconds). Bounds: 0..=2_592_000 (30 days).
+    ///
+    /// This is the additional buffer, on top of a bid's expiration timestamp,
+    /// that must elapse before the permissionless cleanup entrypoints
+    /// (`cleanup_expired_bids` / `cleanup_expired_bids_paged`) will transition
+    /// it from `Placed` to `Expired`. Defaults to `0`, matching the
+    /// pre-existing behaviour of cleaning up immediately at raw expiry.
+    pub fn set_bid_expiry_grace_seconds(env: Env, seconds: u64) -> Result<u64, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        bid::BidStorage::set_bid_expiry_grace_seconds(&env, &admin, seconds)
+    }
+
+    /// Get the configured bid expiry grace period in seconds (returns default 0 if not set)
+    pub fn get_bid_expiry_grace_seconds(env: Env) -> u64 {
+        bid::BidStorage::get_bid_expiry_grace_seconds(&env)
+    }
+
+    /// Get the current bid expiry grace-period configuration snapshot
+    pub fn get_bid_expiry_grace_config(env: Env) -> bid::BidExpiryGraceConfig {
+        bid::BidStorage::get_bid_expiry_grace_config(&env)
+    }
+
+    /// Reset the bid expiry grace period to the compile-time default (0)
+    pub fn reset_bid_expiry_grace_to_default(env: Env) -> Result<u64, QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        bid::BidStorage::reset_bid_expiry_grace_to_default(&env, &admin)
     }
 
     /// Get maximum active bids allowed per investor
