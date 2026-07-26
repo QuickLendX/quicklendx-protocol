@@ -51,7 +51,7 @@
 | [MONITORING.md](MONITORING.md) | Per-event alert thresholds for contract events |
 | [DASHBOARD_QUERIES.md](DASHBOARD_QUERIES.md) | Full SQL reference for indexer health and workload queries |
 | [RUNBOOK_INCIDENT_RESPONSE.md](RUNBOOK_INCIDENT_RESPONSE.md) | Step-by-step operator playbook for unexpected contract behavior |
-| [QLX_FREEZE_RECOVERY.md](QLX_FREEZE_RECOVERY.md) | How a freeze is applied, monitored, and lifted. |
+| [QLX_INVESTIGATION_WORKFLOW.md](QLX_INVESTIGATION_WORKFLOW.md) | End-to-end investigation flow with SLA |
 
 ## UX / frontend reference
 

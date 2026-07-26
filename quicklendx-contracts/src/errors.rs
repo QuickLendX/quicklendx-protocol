@@ -220,14 +220,8 @@ pub enum QuickLendXError {
     /// A report/analytics-snapshot was requested while an invoice has an
     /// unresolved (`Disputed` or `UnderReview`) dispute.
     ActiveDisputeExists = 2207,
-    /// Caller supplied a cursor from a different snapshot generation.
-    UnstableCursor = 2208,
-    /// Batch input is empty or exceeds `MAX_BATCH_INVOICES`.
-    BatchSizeExceeded = 2209,
-    /// Settlement currency is not in the invoice's per-invoice settlement currency whitelist.
-    SettlementCurrencyNotAllowed = 2210,
-    /// A contract upgrade is pending (scheduled but not yet executed or cancelled).
-    UpgradePending = 2211,
+    /// Destructive op was attempted while a governance proposal is open.
+    PendingGovernanceProposal = 2208,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -332,11 +326,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
             QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
-            QuickLendXError::ActiveDisputeExists => symbol_short!("ACT_DSP"),
-            QuickLendXError::UnstableCursor => symbol_short!("STBL_CUR"),
-            QuickLendXError::BatchSizeExceeded => symbol_short!("BAT_MAX"),
-            QuickLendXError::SettlementCurrencyNotAllowed => symbol_short!("STL_CR_NA"),
-            QuickLendXError::UpgradePending => symbol_short!("UPG_PND"),
+            QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
+            QuickLendXError::PendingGovernanceProposal => symbol_short!("PEND_GOV"),
         }
     }
 }

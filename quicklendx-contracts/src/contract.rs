@@ -362,6 +362,7 @@ impl QuickLendXContract {
 
     /// Delete a business, removing it from any status list and marking as deleted.
     pub fn delete_business(env: Env, business: Address) -> Result<(), QuickLendXError> {
+        crate::governance::require_no_open_governance_proposal(&env)?;
         BusinessVerificationStorage::delete_business(&env, &business)
     }
 
@@ -397,6 +398,7 @@ impl QuickLendXContract {
     }
 
     pub fn clear_invoice_metadata(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        crate::governance::require_no_open_governance_proposal(&env)?;
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.clear_metadata();
         InvoiceStorage::update_invoice(&env, &invoice);
@@ -533,6 +535,7 @@ impl QuickLendXContract {
 
     pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
+        crate::governance::require_no_open_governance_proposal(&env)?;
         let mut backup = BackupStorage::get_backup(&env, &backup_id).ok_or(QuickLendXError::OperationNotAllowed)?;
         backup.status = BackupStatus::Archived;
         BackupStorage::update_backup(&env, &backup)?;
