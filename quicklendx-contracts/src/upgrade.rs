@@ -77,7 +77,11 @@ impl UpgradeControl {
             .set(&PENDING_UPGRADE_AT_KEY, &env.ledger().timestamp());
 
         // Auto-pause: block state mutations until the upgrade is resolved.
-        crate::pause::PauseControl::apply_paused(env, true);
+        crate::pause::PauseControl::apply_paused(
+            env,
+            true,
+            Some(crate::pause::PauseReason::PendingUpgrade),
+        );
 
         crate::events::emit_upgrade_scheduled(env, admin, wasm_hash);
         Ok(())
@@ -104,7 +108,7 @@ impl UpgradeControl {
         env.storage().instance().remove(&PENDING_UPGRADE_AT_KEY);
 
         // Restore write access.
-        crate::pause::PauseControl::apply_paused(env, false);
+        crate::pause::PauseControl::apply_paused(env, false, None);
 
         crate::events::emit_upgrade_cancelled(env, admin, &wasm_hash);
         Ok(())
@@ -127,7 +131,7 @@ impl UpgradeControl {
 
         env.storage().instance().remove(&PENDING_UPGRADE_WASM_KEY);
         env.storage().instance().remove(&PENDING_UPGRADE_AT_KEY);
-        crate::pause::PauseControl::apply_paused(env, false);
+        crate::pause::PauseControl::apply_paused(env, false, None);
 
         crate::events::emit_upgrade_executed(env, admin, &wasm_hash);
 
