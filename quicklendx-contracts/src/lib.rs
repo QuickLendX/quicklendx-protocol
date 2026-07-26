@@ -18,7 +18,6 @@
     clippy::disallowed_methods
 )]
 
-//! QuickLendX contracts library.
 pub use crate::errors::QuickLendXError;
 
 extern crate alloc;
