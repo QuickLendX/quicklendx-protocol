@@ -391,7 +391,7 @@ use settlement::{
 use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
-    normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
+    investor_rating_recompute, normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
     require_business_not_pending, require_investor_not_pending,
     revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_evidence, validate_dispute_resolution,
@@ -2476,6 +2476,32 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         recompute_investor_tier(&env, &admin, &investor)
+    }
+
+    /// Recompute investor rating from on-chain history deterministically.
+    ///
+    /// Recalculates the risk score, tier, risk level, and investment limit from
+    /// the investor's accumulated performance counters and KYC data, then
+    /// updates the stored verification record in place.
+    ///
+    /// # Arguments
+    /// * `admin` - The admin address (must be authorized)
+    /// * `investor` - The investor address to recompute the rating for
+    ///
+    /// # Returns
+    /// * `Ok(InvestorVerification)` - The updated verification record with the new rating
+    ///
+    /// # Errors
+    /// * `NotAdmin` if the caller is not the current admin
+    /// * `KYCNotFound` if the investor has no verification record
+    /// * `InvalidKYCStatus` if the investor is not verified
+    pub fn investor_rating_recompute(
+        env: Env,
+        admin: Address,
+        investor: Address,
+    ) -> Result<InvestorVerification, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        investor_rating_recompute(&env, &admin, &investor)
     }
 
     /// Verify business (admin only)
