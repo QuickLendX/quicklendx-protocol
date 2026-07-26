@@ -51,6 +51,9 @@ mod test_settlement_history_reconstruction;
 // Issue #1920 — confirm require_regulatory_ok is truly a no-op by default.
 #[cfg(test)]
 mod test_regulatory_gate;
+// Issue #2184 — extend_escrow_expiry must enforce the max_due_date_days ledger cap.
+#[cfg(test)]
+mod test_escrow_expiry_extend;
 use crate::idempotency::{idempotency_exists, idempotency_key, store_idempotency};
 use soroban_sdk::{contract, contractimpl, symbol_short, Address, BytesN, Env, Map, String, Vec};
 
@@ -4884,6 +4887,13 @@ impl QuickLendXContract {
         }
 
         if new_due_date <= invoice.due_date {
+            return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
+        let limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+        let max_horizon = limits.max_due_date_days.saturating_mul(86_400);
+        let max_allowed = env.ledger().timestamp().saturating_add(max_horizon);
+        if new_due_date > max_allowed {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
 
