@@ -1,4 +1,4 @@
-#![cfg(test)]
+﻿#![cfg(test)]
 
 //! Pause-state coverage tests
 //! Asserts that read-only query entrypoints remain callable while the contract is paused,
@@ -112,7 +112,7 @@ fn test_pause_reads_available() {
         QuickLendXError::ContractPaused
     );
 
-    let settle_err = client.try_settle_invoice(&funded_invoice_id, &1_000i128);
+    let settle_err = client.try_settle_invoice(&funded_invoice_id, &1_000i128, &client.get_investment(&funded_invoice_id).unwrap());
     assert_eq!(
         settle_err.unwrap_err().unwrap(),
         QuickLendXError::ContractPaused
@@ -158,3 +158,4 @@ fn test_pause_reads_available() {
         "get_total_invoice_count should remain accessible"
     );
 }
+

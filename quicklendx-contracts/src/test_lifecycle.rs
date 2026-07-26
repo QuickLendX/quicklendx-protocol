@@ -1,4 +1,4 @@
-//! Full invoice lifecycle integration tests for the QuickLendX protocol.
+﻿//! Full invoice lifecycle integration tests for the QuickLendX protocol.
 //!
 //! These tests cover the complete end-to-end flow with state and event
 //! assertions at each step to meet integration and coverage requirements.
@@ -338,7 +338,7 @@ fn test_full_invoice_lifecycle() {
     let tok_exp = env.ledger().sequence() + 10_000;
     tok.approve(&business, &contract_id, &(invoice_amount * 4), &tok_exp);
 
-    client.settle_invoice(&invoice_id, &invoice_amount).unwrap();
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap()).unwrap();
 
     // Invoice is Paid.
     let invoice = client.get_invoice(&invoice_id);
@@ -650,7 +650,7 @@ fn test_full_lifecycle_step_by_step() {
     sac.mint(&business, &invoice_amount);
     let exp = env.ledger().sequence() + 10_000;
     tok.approve(&business, &contract_id, &(invoice_amount * 4), &exp);
-    client.settle_invoice(&invoice_id, &invoice_amount).unwrap();
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap()).unwrap();
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
@@ -752,3 +752,4 @@ fn test_admin_update_invoice_status_pathway_moves_indexes_and_rejects_invalid_tr
     );
     assert!(has_event_with_topic(&env, symbol_short!("inv_def")));
 }
+

@@ -1,4 +1,4 @@
-#![no_std]
+﻿#![no_std]
 #![allow(
     dead_code,
     unused_imports,
@@ -51,7 +51,7 @@ mod test_maintenance_write_matrix;
 mod test_settlement_capacity_stress;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
-// Issue #1920 — confirm require_regulatory_ok is truly a no-op by default.
+// Issue #1920 â€” confirm require_regulatory_ok is truly a no-op by default.
 #[cfg(test)]
 mod test_regulatory_gate;
 // Issue #1902 — investor freeze reason typed enum
@@ -212,7 +212,7 @@ mod test_queries;
 mod test_rating_override;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_self_call_rejection;
-// Issue #1541 — lag at zero, lag at positive, lag during pause.
+// Issue #1541 â€” lag at zero, lag at positive, lag during pause.
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_lag;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -258,7 +258,7 @@ mod test_reentrancy;
 mod test_reentrancy_fault_injection;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
-// Issue #1908 — per-invoice settlement currency whitelist (defence-in-depth).
+// Issue #1908 â€” per-invoice settlement currency whitelist (defence-in-depth).
 // Negative test: settlement blocked when whitelist does not match invoice currency.
 #[cfg(test)]
 mod test_settlement_currency_whitelist;
@@ -280,7 +280,7 @@ mod test_analytics_consistency;
 mod test_snapshot;
 #[cfg(test)]
 mod test_bid_capacity_stress;
-// Issue #1891 — min-partial-fill amount boundary: at limit, one below, one above.
+// Issue #1891 â€” min-partial-fill amount boundary: at limit, one below, one above.
 #[cfg(test)]
 mod test_min_partial_fill_boundary;
 // Issue #1858 — per-invoice per_investor_position_cap whale defence.
@@ -290,7 +290,7 @@ mod test_per_investor_position_cap;
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
-// Issue #2083 — bid-match helper tests; runs on every CI matrix entry
+// Issue #2083 â€” bid-match helper tests; runs on every CI matrix entry
 // (no feature gate, since `legacy-tests` is OFF in CI). Covers
 // `compare_bids`, `get_best_bid`, and `rank_bids`.
 #[cfg(test)]
@@ -305,7 +305,7 @@ mod test_max_invoice_tags_boundary;
 mod test_vesting;
 #[cfg(test)]
 mod test_vesting_summary;
-// Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
+// Issue #1551 â€” determinism tests for bid_ranking; no feature gate, runs on
 // every CI matrix entry.
 // #[cfg(test)]
 // mod test_bid_ranking_determinism;
@@ -383,13 +383,13 @@ mod test_treasury_split_overflow_props;
 mod test_twa_props;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_volume_tier_props;
-// Issue #1482 — "cannot withdraw more than deposited" invariant: hard-coded sad
+// Issue #1482 â€” "cannot withdraw more than deposited" invariant: hard-coded sad
 // path (always runs) + proptest property (requires fuzz-tests feature).
 #[cfg(test)]
 mod test_cannot_withdraw_more_than_deposited;
 #[cfg(test)]
 mod test_store_invoice_auth;
-// Issue #1880 — batch-create boundary tests; no feature gate (runs on every CI matrix entry).
+// Issue #1880 â€” batch-create boundary tests; no feature gate (runs on every CI matrix entry).
 // Covers 0, 1, MAX_BATCH, MAX_BATCH+1, active-invoice cap, KYC gating, and atomicity.
 #[cfg(test)]
 mod test_store_invoices_batch;
@@ -752,9 +752,9 @@ impl QuickLendXContract {
     /// - No storage writes occur; safe for use in monitoring and governance tooling.
     ///
     /// # Returns
-    /// * `Ok(ProtocolConfigDiff)` — before/after diff with `would_succeed` and `is_noop` flags.
-    /// * `Err(QuickLendXError::NotAdmin)` — caller is not the current admin.
-    /// * `Err(QuickLendXError::OperationNotAllowed)` — admin subsystem not initialized.
+    /// * `Ok(ProtocolConfigDiff)` â€” before/after diff with `would_succeed` and `is_noop` flags.
+    /// * `Err(QuickLendXError::NotAdmin)` â€” caller is not the current admin.
+    /// * `Err(QuickLendXError::OperationNotAllowed)` â€” admin subsystem not initialized.
     pub fn preview_protocol_config(
         env: Env,
         admin: Address,
@@ -1233,12 +1233,12 @@ impl QuickLendXContract {
         require_not_self(&env, &business)?;
 
         // SECURITY LAYER 1: Require explicit authorization from the business address.
-        // This ensures only the business itself can create invoices — not the admin,
+        // This ensures only the business itself can create invoices â€” not the admin,
         // not a third party. Prevents impersonation and unauthorized storage writes.
         business.require_auth();
 
-        // SECURITY LAYER 2: KYC gate — only Verified ("tier-N") businesses may
-        // create invoices. Pending → KYCAlreadyPending; Rejected/unknown →
+        // SECURITY LAYER 2: KYC gate â€” only Verified ("tier-N") businesses may
+        // create invoices. Pending â†’ KYCAlreadyPending; Rejected/unknown â†’
         // BusinessNotVerified. This is the primary anti-spam control and enforces
         // the invariant documented in docs/KYC.md.
         require_business_not_pending(&env, &business)?;
@@ -1273,17 +1273,10 @@ impl QuickLendXContract {
         verification::validate_invoice_category(&category)?;
         verification::validate_invoice_tags(&env, &tags)?;
 
-        // Check max invoices per business limit
-        let limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
-        if limits.max_invoices_per_business > 0 {
-            let active_count =
-                InvoiceStorage::count_active_business_invoices(&env, &business);
-            if active_count >= limits.max_invoices_per_business {
-                return Err(QuickLendXError::MaxInvoicesPerBusinessExceeded);
-            }
-        }
-
-        // Regulatory compliance gate (reserved seam — no-op today).
+        // Regulatory compliance gate (reserved seam â€” no-op today).
+        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
+        // jurisdiction-specific or on-chain oracle-based compliance checks without
+        // touching this call site.
         crate::regulatory::require_regulatory_ok(&env, &business)?;
 
         // Create new invoice
@@ -1403,9 +1396,9 @@ impl QuickLendXContract {
     /// # Authentication & KYC Policy
     ///
     /// Identical to [`upload_invoice`]:
-    /// 1. **Business signature** — `business.require_auth()` is called once for
+    /// 1. **Business signature** â€” `business.require_auth()` is called once for
     ///    the whole batch.
-    /// 2. **Verified KYC** — the business must hold a `Verified` KYC record.
+    /// 2. **Verified KYC** â€” the business must hold a `Verified` KYC record.
     ///
     /// # Atomicity
     ///
@@ -1413,21 +1406,21 @@ impl QuickLendXContract {
     /// (Soroban's transaction semantics roll back on any error).
     ///
     /// # Arguments
-    /// * `env`      — The contract environment.
-    /// * `business` — The address of the invoice-issuing business (must sign).
-    /// * `inputs`   — A `Vec<InvoiceInput>` of length 1 ..= `MAX_BATCH_INVOICES`.
+    /// * `env`      â€” The contract environment.
+    /// * `business` â€” The address of the invoice-issuing business (must sign).
+    /// * `inputs`   â€” A `Vec<InvoiceInput>` of length 1 ..= `MAX_BATCH_INVOICES`.
     ///
     /// # Returns
-    /// * `Ok(Vec<BytesN<32>>)` — Ordered list of newly assigned invoice IDs, one
+    /// * `Ok(Vec<BytesN<32>>)` â€” Ordered list of newly assigned invoice IDs, one
     ///   per input entry.
     ///
     /// # Errors
-    /// * `ContractPaused`                  — protocol is paused.
-    /// * `BatchSizeExceeded`               — `inputs` is empty or exceeds
+    /// * `ContractPaused`                  â€” protocol is paused.
+    /// * `BatchSizeExceeded`               â€” `inputs` is empty or exceeds
     ///   `MAX_BATCH_INVOICES` (= 10).
-    /// * `BusinessNotVerified`  (1600)     — business has no KYC record or was rejected.
-    /// * `KYCAlreadyPending`    (1601)     — business KYC is still pending review.
-    /// * `MaxInvoicesPerBusinessExceeded`  — the batch would push the business over
+    /// * `BusinessNotVerified`  (1600)     â€” business has no KYC record or was rejected.
+    /// * `KYCAlreadyPending`    (1601)     â€” business KYC is still pending review.
+    /// * `MaxInvoicesPerBusinessExceeded`  â€” the batch would push the business over
     ///   its active-invoice cap.
     /// * Any per-invoice validation error (propagated immediately, aborting the batch).
     pub fn store_invoices_batch(
@@ -1435,23 +1428,23 @@ impl QuickLendXContract {
         business: Address,
         inputs: Vec<InvoiceInput>,
     ) -> Result<Vec<BytesN<32>>, QuickLendXError> {
-        // ── Pause gate ────────────────────────────────────────────────────────
+        // â”€â”€ Pause gate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         pause::PauseControl::require_not_paused(&env)?;
 
-        // ── Auth ──────────────────────────────────────────────────────────────
+        // â”€â”€ Auth â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         require_not_self(&env, &business)?;
         business.require_auth();
 
-        // ── KYC gate ──────────────────────────────────────────────────────────
+        // â”€â”€ KYC gate â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         require_business_not_pending(&env, &business)?;
 
-        // ── Batch size guard ──────────────────────────────────────────────────
+        // â”€â”€ Batch size guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         let batch_len = inputs.len();
         if batch_len == 0 || batch_len > protocol_limits::MAX_BATCH_INVOICES {
             return Err(QuickLendXError::BatchSizeExceeded);
         }
 
-        // ── Per-business active-invoice cap ───────────────────────────────────
+        // â”€â”€ Per-business active-invoice cap â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Pre-flight: the entire batch must fit within the remaining headroom.
         let limits = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         if limits.max_invoices_per_business > 0 {
@@ -1464,7 +1457,7 @@ impl QuickLendXContract {
             }
         }
 
-        // ── Validate every input before writing any storage ───────────────────
+        // â”€â”€ Validate every input before writing any storage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         // Two-pass approach: validate all, then write all. This makes the
         // atomicity guarantee easier to reason about and avoids partial writes.
         for input in inputs.iter() {
@@ -1481,7 +1474,7 @@ impl QuickLendXContract {
             verification::validate_invoice_tags(&env, &input.tags)?;
         }
 
-        // ── Create & store invoices ───────────────────────────────────────────
+        // â”€â”€ Create & store invoices â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         let mut ids: Vec<BytesN<32>> = Vec::new(&env);
         for input in inputs.iter() {
             let invoice = Invoice::new(
@@ -1691,10 +1684,10 @@ impl QuickLendXContract {
     /// Freeze an invoice with a specific reason (admin only).
     ///
     /// When frozen, the following operations are blocked:
-    /// - `place_bid` → `InvoiceFrozen`
-    /// - `accept_bid` → `InvoiceFrozen`
-    /// - `process_partial_payment` → `InvoiceFrozen`
-    /// - `settle_invoice` → `InvoiceFrozen`
+    /// - `place_bid` â†’ `InvoiceFrozen`
+    /// - `accept_bid` â†’ `InvoiceFrozen`
+    /// - `process_partial_payment` â†’ `InvoiceFrozen`
+    /// - `settle_invoice` â†’ `InvoiceFrozen`
     ///
     /// The freeze reason and metadata (who froze it, when) are stored alongside
     /// the frozen flag and are queryable via `get_invoice_freeze_info`.
@@ -2179,8 +2172,8 @@ impl QuickLendXContract {
     ///
     /// # Operator Workflow
     /// For an invoice with 50 bids at maximum capacity:
-    /// 1. Call with offset=0, limit=25 → processes first 25 bids
-    /// 2. Call with offset=25, limit=25 → processes remaining 25 bids
+    /// 1. Call with offset=0, limit=25 â†’ processes first 25 bids
+    /// 2. Call with offset=25, limit=25 â†’ processes remaining 25 bids
     /// 3. Repeat until cleaned_count = 0 (all expired bids removed)
     ///
     /// # Gas Safety
@@ -2261,7 +2254,7 @@ impl QuickLendXContract {
     ) -> Result<BytesN<32>, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         require_not_self(&env, &investor)?;
-        // Regulatory compliance gate (reserved seam — no-op today).
+        // Regulatory compliance gate (reserved seam â€” no-op today).
         // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
         // jurisdiction-specific or on-chain oracle-based compliance checks without
         // touching this call site.
@@ -2523,12 +2516,13 @@ impl QuickLendXContract {
         env: Env,
         invoice_id: BytesN<32>,
         payment_amount: i128,
+        snap: crate::types::Investment,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
         let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = reentrancy::with_payment_guard(&env, || {
-            do_settle_invoice(&env, &invoice_id, payment_amount)
+            do_settle_invoice(&env, &invoice_id, payment_amount, &snap)
         });
 
         if result.is_ok() {
@@ -3009,6 +3003,52 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+        )
+    }
+
+    /// Update **all** protocol limits in a single call (admin only).
+    ///
+    /// This is the preferred entrypoint when operators need to configure
+    /// `min_bid_amount` or `min_bid_bps` alongside the other limits.  The
+    /// narrower helpers (`set_protocol_limits`, `update_protocol_limits`,
+    /// `update_limits_max_invoices`) preserve the current bid-limit values for
+    /// backwards compatibility.
+    ///
+    /// # Parameters
+    /// - `min_invoice_amount`       â€“ minimum invoice face value (inclusive).
+    /// - `min_bid_amount`           â€“ minimum absolute bid amount (inclusive).
+    ///                                Pass [`DEFAULT_MIN_BID_AMOUNT`] (10) to
+    ///                                keep the compile-time default.
+    /// - `min_bid_bps`              â€“ minimum bid rate in basis points (inclusive).
+    ///                                Pass [`DEFAULT_MIN_BID_BPS`] (100) to keep
+    ///                                the compile-time default.
+    /// - `max_due_date_days`        â€“ maximum invoice horizon in days (1..=730).
+    /// - `grace_period_seconds`     â€“ grace period after due date (0..=2_592_000).
+    /// - `max_invoices_per_business`â€“ per-business active-invoice cap; 0 = unlimited.
+    ///
+    /// # Errors
+    /// Delegates to `ProtocolLimitsContract::set_protocol_limits` for all
+    /// parameter validation; see that function's docs for error codes.
+    pub fn set_protocol_limits_full(
+        env: Env,
+        admin: Address,
+        min_invoice_amount: i128,
+        min_bid_amount: i128,
+        min_bid_bps: u32,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+        max_invoices_per_business: u32,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+            env,
+            admin,
+            min_invoice_amount,
+            min_bid_amount,
+            min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+            max_invoices_per_business,
             existing.min_investor_tier,
         )
     }
@@ -3022,16 +3062,16 @@ impl QuickLendXContract {
     /// backwards compatibility.
     ///
     /// # Parameters
-    /// - `min_invoice_amount`       – minimum invoice face value (inclusive).
-    /// - `min_bid_amount`           – minimum absolute bid amount (inclusive).
+    /// - `min_invoice_amount`       â€“ minimum invoice face value (inclusive).
+    /// - `min_bid_amount`           â€“ minimum absolute bid amount (inclusive).
     ///                                Pass [`DEFAULT_MIN_BID_AMOUNT`] (10) to
     ///                                keep the compile-time default.
-    /// - `min_bid_bps`              – minimum bid rate in basis points (inclusive).
+    /// - `min_bid_bps`              â€“ minimum bid rate in basis points (inclusive).
     ///                                Pass [`DEFAULT_MIN_BID_BPS`] (100) to keep
     ///                                the compile-time default.
-    /// - `max_due_date_days`        – maximum invoice horizon in days (1..=730).
-    /// - `grace_period_seconds`     – grace period after due date (0..=2_592_000).
-    /// - `max_invoices_per_business`– per-business active-invoice cap; 0 = unlimited.
+    /// - `max_due_date_days`        â€“ maximum invoice horizon in days (1..=730).
+    /// - `grace_period_seconds`     â€“ grace period after due date (0..=2_592_000).
+    /// - `max_invoices_per_business`â€“ per-business active-invoice cap; 0 = unlimited.
     ///
     /// # Errors
     /// Delegates to `ProtocolLimitsContract::set_protocol_limits` for all
@@ -3357,7 +3397,7 @@ impl QuickLendXContract {
     ///
     /// Only the investor may call this. The investment must be in `Active` status
     /// and the associated escrow must still be `Held` (funds not yet released to
-    /// the business). On success the investment transitions `Active → Withdrawn`,
+    /// the business). On success the investment transitions `Active â†’ Withdrawn`,
     /// the invoice is restored to a fundable state, and the accepted bid is cancelled.
     ///
     /// Protected by payment reentrancy guard (see docs/contracts/security.md).
@@ -3366,8 +3406,8 @@ impl QuickLendXContract {
     /// * `Ok(())` on successful withdrawal
     ///
     /// # Errors
-    /// * `Unauthorized` — caller is not the investment's investor
-    /// * `InvalidStatus` — investment is not Active, or escrow is not Held
+    /// * `Unauthorized` â€” caller is not the investment's investor
+    /// * `InvalidStatus` â€” investment is not Active, or escrow is not Held
     /// * `InvoiceNotFound`, `StorageKeyNotFound`
     /// * `ContractPaused` if the protocol is paused
     /// * `OperationNotAllowed` if reentrancy is detected
@@ -3439,7 +3479,7 @@ impl QuickLendXContract {
     /// @dev This is a soft hint for off-chain indexers. Actual query limits are enforced by
     ///      the contract's MAX_QUERY_LIMIT. Indexers should use this value as a starting point
     ///      for pagination to balance efficiency and memory usage.
-    /// @return Default settlement batch size (25) — recommended number of payment records per page.
+    /// @return Default settlement batch size (25) â€” recommended number of payment records per page.
     pub fn get_settlement_batch_soft_cap(_env: Env) -> u32 {
         settlement::default_settlement_batch_size_soft_cap()
     }
@@ -3447,7 +3487,7 @@ impl QuickLendXContract {
     /// @notice Returns the maximum page size for settlement/payment record queries.
     /// @dev This represents the hard upper bound enforced by the contract. Query requests
     ///      exceeding this limit will be automatically clamped to this value by `get_payment_records`.
-    /// @return Maximum settlement batch size (50) — hard cap for payment records per query.
+    /// @return Maximum settlement batch size (50) â€” hard cap for payment records per query.
     pub fn get_settlement_batch_max_cap(_env: Env) -> u32 {
         settlement::max_settlement_batch_size_soft_cap()
     }
@@ -4446,8 +4486,8 @@ impl QuickLendXContract {
     ///
     /// # Threat model
     /// Without a mandatory, logged reason, an admin could silently rewrite an
-    /// invoice's displayed rating — e.g. to bury a legitimate bad-faith
-    /// complaint or inflate a business's track record — leaving investors who
+    /// invoice's displayed rating â€” e.g. to bury a legitimate bad-faith
+    /// complaint or inflate a business's track record â€” leaving investors who
     /// rely on that score with no way to detect or attribute the change after
     /// the fact. Requiring a non-empty, length-bounded reason and routing the
     /// mutation through the tamper-evident audit trail (see `audit.rs`) closes
@@ -4456,11 +4496,11 @@ impl QuickLendXContract {
     /// audit entry.
     ///
     /// # Errors
-    /// * `NotAdmin` / `OperationNotAllowed` — caller is not the current admin.
-    /// * `InvalidRatingOverrideReason` — `reason` is empty or exceeds
+    /// * `NotAdmin` / `OperationNotAllowed` â€” caller is not the current admin.
+    /// * `InvalidRatingOverrideReason` â€” `reason` is empty or exceeds
     ///   `protocol_limits::MAX_RATING_OVERRIDE_REASON_LENGTH`.
-    /// * `InvoiceNotFound` — `invoice_id` does not exist.
-    /// * `InvalidRating` — `new_rating` is not in `1..=5`.
+    /// * `InvoiceNotFound` â€” `invoice_id` does not exist.
+    /// * `InvalidRating` â€” `new_rating` is not in `1..=5`.
     pub fn rating_override(
         env: Env,
         admin: Address,
@@ -4664,7 +4704,7 @@ impl QuickLendXContract {
     ///      `Disputed` state (before admin review starts).
     /// @param invoice_id The disputed invoice.
     /// @param creator The original dispute creator.
-    /// @param evidence Replacement evidence payload (1–2000 chars).
+    /// @param evidence Replacement evidence payload (1â€“2000 chars).
     /// @return Ok(()) on success.
     pub fn update_dispute_evidence(
         env: Env,
@@ -5132,7 +5172,7 @@ impl QuickLendXContract {
     ///
     /// Each pruned invoice is removed from all secondary indexes (status,
     /// business, customer, tax_id, tag, category) and from primary persistent
-    /// storage. This operation is **irreversible** — there is no undo.
+    /// storage. This operation is **irreversible** â€” there is no undo.
     ///
     /// # Resumability
     /// The operation is paginated and resumable. Pass the `next_offset` from the
@@ -5252,7 +5292,7 @@ impl QuickLendXContract {
     }
 }
 
-// ── Upgrade control entrypoints ─────────────────────────────────────────────
+// â”€â”€ Upgrade control entrypoints â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 #[contractimpl]
 impl QuickLendXContract {
@@ -5341,3 +5381,4 @@ impl QuickLendXContract {
         diagnostics::get_protocol_diagnostics(&env)
     }
 }
+

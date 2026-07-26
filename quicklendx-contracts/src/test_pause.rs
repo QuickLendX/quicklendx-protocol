@@ -1,4 +1,4 @@
-#![cfg(test)]
+﻿#![cfg(test)]
 
 use crate::emergency::DEFAULT_EMERGENCY_TIMELOCK_SECS;
 use crate::errors::QuickLendXError;
@@ -421,7 +421,7 @@ fn test_pause_blocks_settle_invoice() {
 
     client.pause(&admin);
 
-    let result = client.try_settle_invoice(&invoice_id, &1000i128);
+    let result = client.try_settle_invoice(&invoice_id, &1000i128, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
     let err = result.unwrap_err().unwrap();
     assert_eq!(err, QuickLendXError::ContractPaused);
@@ -648,8 +648,8 @@ fn test_pause_unpause_cycle_is_deterministic() {
 // The emergency circuit breaker is only as strong as its weakest entrypoint:
 // a single mutating path that ignores the pause flag lets value move while the
 // protocol is supposed to be frozen. The tests below enumerate every
-// state-mutating entrypoint named in the pause matrix — store_invoice,
-// place_bid, accept_bid_and_fund, process_partial_payment, settle_invoice —
+// state-mutating entrypoint named in the pause matrix â€” store_invoice,
+// place_bid, accept_bid_and_fund, process_partial_payment, settle_invoice â€”
 // and assert two properties for each:
 //
 //   1. Blocked: while paused, the call rejects with `ContractPaused` and no
@@ -668,7 +668,7 @@ fn test_pause_unpause_cycle_is_deterministic() {
 /// Funding and settlement move real value (`accept_bid_and_fund` pulls the bid
 /// into escrow; `settle_invoice` / a completing `process_partial_payment`
 /// release escrow and disburse returns), so these paths require a registered
-/// Stellar Asset Contract with funded, pre-approved balances — a
+/// Stellar Asset Contract with funded, pre-approved balances â€” a
 /// `generate()`-only currency is not enough. Modeled on the e2e fixture in
 /// tests/invoice_lifecycle_e2e.rs.
 ///
@@ -935,13 +935,13 @@ fn test_unpause_restores_settle_invoice() {
     let (client, admin, invoice_id) = fund_invoice(&env);
 
     client.pause(&admin);
-    let blocked = client.try_settle_invoice(&invoice_id, &1_000i128);
+    let blocked = client.try_settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
     assert_eq!(blocked.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
 
     client.unpause(&admin);
 
     // Same call now succeeds; invoice reaches a terminal Paid state.
-    client.settle_invoice(&invoice_id, &1_000i128);
+    client.settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, crate::invoice::InvoiceStatus::Paid);
 }
@@ -974,4 +974,5 @@ fn test_pause_mid_lifecycle_freezes_then_resumes_payment() {
     assert_eq!(invoice.total_paid, 1_000i128);
     assert_eq!(invoice.status, crate::invoice::InvoiceStatus::Paid);
 }
+
 

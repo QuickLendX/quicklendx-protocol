@@ -1,4 +1,4 @@
-#![cfg(test)]
+﻿#![cfg(test)]
 
 use super::*;
 use crate::errors::QuickLendXError;
@@ -135,7 +135,7 @@ fn test_add_insurance_fails_when_investment_is_completed() {
         &(env.ledger().sequence() + 50_000),
     );
 
-    client.settle_invoice(&invoice_id, &1000);
+    client.settle_invoice(&invoice_id, &1000, &client.get_investment(&invoice_id).unwrap());
 
     let investment = env.as_contract(&contract_id, || {
         InvestmentStorage::get_investment_by_invoice(&env, &invoice_id).unwrap()
@@ -263,7 +263,7 @@ fn test_withdraw_fails_when_investment_is_completed() {
         &(env.ledger().sequence() + 50_000),
     );
 
-    client.settle_invoice(&invoice_id, &1000);
+    client.settle_invoice(&invoice_id, &1000, &client.get_investment(&invoice_id).unwrap());
 
     let err = client
         .try_withdraw_investment(&invoice_id, &investor)
@@ -360,3 +360,4 @@ fn test_settle_fails_when_investment_is_withdrawn() {
         .unwrap();
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
+

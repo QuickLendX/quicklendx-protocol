@@ -1,4 +1,4 @@
-/// Test suite for escrow refund flow
+﻿/// Test suite for escrow refund flow
 ///
 /// Test Coverage:
 /// 1. Authorization: Only admin or business owner can trigger a refund
@@ -526,7 +526,7 @@ fn test_cannot_refund_after_settlement() {
     // Settle invoice (Business pays back investor)
     // Note: Settle usually happens after release, but in some paths it can be direct.
     // Here we ensure it's fully Paid.
-    client.settle_invoice(&invoice_id, &amount);
+    client.settle_invoice(&invoice_id, &amount, &client.get_investment(&invoice_id).unwrap());
 
     // Verify invoice status is Paid
     let invoice = client.get_invoice(&invoice_id);
@@ -543,3 +543,4 @@ fn test_cannot_refund_after_settlement() {
     let invoice_post = client.get_invoice(&invoice_id);
     assert_eq!(invoice_post.status, InvoiceStatus::Paid);
 }
+

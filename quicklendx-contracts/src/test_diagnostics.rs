@@ -1,4 +1,4 @@
-//! Tests for the `qlx_log!` structured diagnostics macro.
+﻿//! Tests for the `qlx_log!` structured diagnostics macro.
 //!
 //! These tests verify:
 //! 1. The macro emits correctly-prefixed domain-tagged log lines when compiled under `cfg(test)`.
@@ -364,7 +364,7 @@ fn test_settlement_finalization_emits_diagnostic_log() {
     );
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
-    client.settle_invoice(&invoice_id, &5_000i128);
+    client.settle_invoice(&invoice_id, &5_000i128, &client.get_investment(&invoice_id).unwrap());
 
     let logs = env.logs().all();
     let log_str: alloc::string::String = logs.join("\n");
@@ -577,3 +577,4 @@ fn test_get_protocol_diagnostics_basic() {
     assert_eq!(diag3.verified_invoices, 1);
     assert_eq!(diag3.ledger_sequence, env.ledger().sequence());
 }
+

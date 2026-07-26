@@ -1,4 +1,4 @@
-#![cfg(all(test, feature = "fuzz-tests"))]
+﻿#![cfg(all(test, feature = "fuzz-tests"))]
 
 use crate::{invoice::InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
@@ -161,7 +161,7 @@ proptest! {
         let payment_amount = invoice_amount.saturating_mul(payment_amount_factor as i128) / 100;
 
         // Try settle
-        let result = client.try_settle_invoice(&invoice_id, &payment_amount);
+        let result = client.try_settle_invoice(&invoice_id, &payment_amount, &client.get_investment(&invoice_id).unwrap());
 
         if let Ok(Ok(_)) = result {
             let invoice_after = client.get_invoice(&invoice_id);
@@ -522,3 +522,4 @@ mod extra_tests {
         assert_eq!(invoice.amount, 1_000_000);
     }
 }
+

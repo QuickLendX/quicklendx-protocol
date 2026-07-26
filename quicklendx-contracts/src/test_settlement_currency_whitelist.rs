@@ -1,10 +1,10 @@
-//! Negative regression tests: settlement is blocked when the per-invoice
+﻿//! Negative regression tests: settlement is blocked when the per-invoice
 //! settlement currency whitelist does not include `invoice.currency`.
 //!
 //! # Security gap being closed (defence-in-depth)
 //!
 //! `settle_invoice_internal()` previously had no check on the settlement
-//! currency — it used `invoice.currency` unconditionally.  This meant that
+//! currency â€” it used `invoice.currency` unconditionally.  This meant that
 //! if `invoice.currency` were corrupted in stored state (or if a future
 //! refactor introduced a caller-supplied settlement currency), an invoice
 //! could be settled in an unexpected token.
@@ -13,14 +13,14 @@
 //!
 //! An attacker who can manipulate stored invoice state (or a future code
 //! path that accepts a caller-specified settlement currency) could cause an
-//! invoice funded in Token A to be settled in Token B, potentially at a
+//! invoice funded in Tokenâ€¯A to be settled in Tokenâ€¯B, potentially at a
 //! different valuation, enabling:
 //!
-//! 1. **Value extraction** — settle a high-value invoice with a low-value
+//! 1. **Value extraction** â€” settle a high-value invoice with a low-value
 //!    token, defrauding the investor of the expected return.
-//! 2. **Compliance bypass** — settle in a token that was deliberately
+//! 2. **Compliance bypass** â€” settle in a token that was deliberately
 //!    excluded (e.g. a sanctioned or frozen token).
-//! 3. **Accounting drift** — create an inconsistency between the funded
+//! 3. **Accounting drift** â€” create an inconsistency between the funded
 //!    currency and the settlement currency that off-chain reconciliation
 //!    cannot resolve.
 //!
@@ -80,13 +80,13 @@ fn setup_funded_invoice(
     token_client.approve(&business, &contract_id, &balance, &expiry);
     token_client.approve(&investor, &contract_id, &balance, &expiry);
 
-    // KYC — both parties must be verified.
+    // KYC â€” both parties must be verified.
     client.submit_kyc_application(&business, &String::from_str(env, "business-kyc"));
     client.verify_business(&admin, &business);
     client.submit_investor_kyc(&investor, &String::from_str(env, "investor-kyc"));
     client.verify_investor(&investor, &balance);
 
-    // Create invoice → verify → bid → accept (funds escrowed, invoice = Funded).
+    // Create invoice â†’ verify â†’ bid â†’ accept (funds escrowed, invoice = Funded).
     let amount: i128 = 100_000;
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
@@ -127,7 +127,7 @@ fn test_settlement_blocked_when_whitelist_does_not_match() {
         "pre-condition: invoice must be Funded"
     );
 
-    // ── Override settlement currencies whitelist ──────────────────────────
+    // â”€â”€ Override settlement currencies whitelist â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     // Create a different dummy token and set it as the ONLY allowed
     // settlement currency.  The invoice was created with `currency`, so
     // this whitelist does NOT include it.
@@ -136,8 +136,8 @@ fn test_settlement_blocked_when_whitelist_does_not_match() {
     bad_whitelist.push_back(other_token);
     crate::settlement::store_settlement_currencies(&env, &invoice_id, &bad_whitelist);
 
-    // Attempt full settlement — MUST FAIL.
-    let result = client.try_settle_invoice(&invoice_id, &100_000i128);
+    // Attempt full settlement â€” MUST FAIL.
+    let result = client.try_settle_invoice(&invoice_id, &100_000i128, &client.get_investment(&invoice_id).unwrap());
 
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -146,7 +146,7 @@ fn test_settlement_blocked_when_whitelist_does_not_match() {
          whitelist does not include invoice.currency"
     );
 
-    // Invoice must still be Funded — no funds moved, no terminal state.
+    // Invoice must still be Funded â€” no funds moved, no terminal state.
     let inv_after = client.get_invoice(&invoice_id);
     assert_eq!(
         inv_after.status,
@@ -172,8 +172,8 @@ fn test_settlement_succeeds_with_default_whitelist() {
         "pre-condition: invoice must be Funded"
     );
 
-    // Full settlement with default whitelist — MUST SUCCEED.
-    let result = client.try_settle_invoice(&invoice_id, &100_000i128);
+    // Full settlement with default whitelist â€” MUST SUCCEED.
+    let result = client.try_settle_invoice(&invoice_id, &100_000i128, &client.get_investment(&invoice_id).unwrap());
 
     assert!(
         result.is_ok(),
@@ -189,3 +189,4 @@ fn test_settlement_succeeds_with_default_whitelist() {
         "invoice must transition to Paid after successful settlement"
     );
 }
+

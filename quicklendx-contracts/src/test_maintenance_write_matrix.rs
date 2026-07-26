@@ -1,4 +1,4 @@
-//! Exhaustive maintenance write-gating matrix for QuickLendX protocol.
+﻿//! Exhaustive maintenance write-gating matrix for QuickLendX protocol.
 //!
 //! **Invariant**: Every mutating entrypoint must call `require_write_allowed` to enforce
 //! maintenance mode uniformly. This matrix test enumerates representative mutations across
@@ -22,7 +22,7 @@
 //! If a mutation does NOT reject during maintenance, it is recorded with a comment
 //! and should be investigated as a potential finding (missing guard).
 //!
-//! **Coverage Target**: ≥95% of branch coverage for maintenance-gating paths.
+//! **Coverage Target**: â‰¥95% of branch coverage for maintenance-gating paths.
 
 #![cfg(test)]
 
@@ -266,7 +266,7 @@ fn test_maintenance_blocks_settle_invoice() {
 
     enable_maintenance(&env, &client, &admin, "Settlement suspended");
 
-    let result = client.try_settle_invoice(&invoice_id, &1_000i128);
+    let result = client.try_settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive,
@@ -813,7 +813,7 @@ fn test_non_admin_cannot_disable_during_maintenance() {
 // - Reason round-trip is correct.
 // - Recovery after disable works.
 // - Edge cases are handled safely.
-// - Coverage ≥95% of maintenance-gating paths.
+// - Coverage â‰¥95% of maintenance-gating paths.
 //
 // **Known Limitations**:
 // - This matrix uses dummy IDs for some tests (e.g., invalid invoice/bid IDs).
@@ -823,3 +823,4 @@ fn test_non_admin_cannot_disable_during_maintenance() {
 //   to allow recovery; it is tested separately.
 // - Pause and maintenance are independent; this test does not cover
 //   interaction with pause mode (see test_maintenance.rs for those).
+

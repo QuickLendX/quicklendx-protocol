@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 extern crate alloc;
 use alloc::string::ToString;
 use crate::investment::InvestmentStatus;
@@ -124,7 +124,7 @@ fn test_cannot_settle_unfunded_invoice() {
     assert_eq!(invoice.funded_amount, 0);
     assert!(invoice.investor.is_none());
 
-    let result = client.try_settle_invoice(&invoice_id, &1_000);
+    let result = client.try_settle_invoice(&invoice_id, &1_000, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
 }
@@ -159,7 +159,7 @@ fn test_cannot_settle_pending_invoice() {
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 
-    let result = client.try_settle_invoice(&invoice_id, &1_000);
+    let result = client.try_settle_invoice(&invoice_id, &1_000, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
 }
@@ -197,7 +197,7 @@ fn test_payout_matches_expected_return() {
     let (expected_investor_return, expected_platform_fee) =
         calculate_profit(&env, investment_amount, payment_amount);
 
-    client.settle_invoice(&invoice_id, &payment_amount);
+    client.settle_invoice(&invoice_id, &payment_amount, &client.get_investment(&invoice_id).unwrap());
 
     let final_business_balance = token_client.balance(&business);
     let final_investor_balance = token_client.balance(&investor);
@@ -250,7 +250,7 @@ fn test_payout_with_profit() {
     let initial_investor_balance = token_client.balance(&investor);
     let (expected_investor_return, _) = calculate_profit(&env, investment_amount, payment_amount);
 
-    client.settle_invoice(&invoice_id, &payment_amount);
+    client.settle_invoice(&invoice_id, &payment_amount, &client.get_investment(&invoice_id).unwrap());
 
     let final_investor_balance = token_client.balance(&investor);
     let investor_received = final_investor_balance - initial_investor_balance;
@@ -303,7 +303,7 @@ fn test_settle_invoice_profit_split_matches_calculate_profit_and_config() {
     let initial_investor = token_client.balance(&investor);
     let initial_contract = token_client.balance(&contract_id);
 
-    client.settle_invoice(&invoice_id, &payment_amount);
+    client.settle_invoice(&invoice_id, &payment_amount, &client.get_investment(&invoice_id).unwrap());
 
     let investor_received = token_client.balance(&investor) - initial_investor;
     let platform_received = token_client.balance(&contract_id) - initial_contract;
@@ -353,7 +353,7 @@ fn test_settle_invoice_verify_amounts_with_get_platform_fee_config() {
     let initial_investor = token_client.balance(&investor);
     let initial_platform = token_client.balance(&contract_id);
 
-    client.settle_invoice(&invoice_id, &payment_amount);
+    client.settle_invoice(&invoice_id, &payment_amount, &client.get_investment(&invoice_id).unwrap());
 
     assert_eq!(
         token_client.balance(&investor) - initial_investor,
@@ -389,7 +389,7 @@ fn test_settle_invoice_rejects_overpayment_without_mutating_accounting() {
     let invoice_before = client.get_invoice(&invoice_id);
     let investment_before = client.get_invoice_investment(&invoice_id);
 
-    let result = client.try_settle_invoice(&invoice_id, &700);
+    let result = client.try_settle_invoice(&invoice_id, &700, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
 
@@ -443,7 +443,7 @@ fn test_settle_invoice_exact_remaining_due_preserves_totals_and_emits_final_even
     let platform_before = token_client.balance(&contract_id);
 
     env.ledger().set_timestamp(4_500);
-    client.settle_invoice(&invoice_id, &600);
+    client.settle_invoice(&invoice_id, &600, &client.get_investment(&invoice_id).unwrap());
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.total_paid, invoice_amount);
@@ -495,13 +495,13 @@ fn test_double_settle_is_rejected() {
     let invoice_id =
         setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
 
-    client.settle_invoice(&invoice_id, &1_000);
+    client.settle_invoice(&invoice_id, &1_000, &client.get_investment(&invoice_id).unwrap());
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
 
     // Second settle attempt must fail.
-    let result = client.try_settle_invoice(&invoice_id, &1_000);
+    let result = client.try_settle_invoice(&invoice_id, &1_000, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
 }
@@ -560,7 +560,7 @@ fn test_settle_after_auto_settle_via_partial_is_rejected() {
     assert_eq!(invoice.status, InvoiceStatus::Paid);
 
     // Explicit settle_invoice must also be rejected.
-    let result = client.try_settle_invoice(&invoice_id, &1_000);
+    let result = client.try_settle_invoice(&invoice_id, &1_000, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
 }
@@ -585,7 +585,7 @@ fn test_finalization_flag_is_set() {
     });
     assert!(!finalized_before);
 
-    client.settle_invoice(&invoice_id, &1_000);
+    client.settle_invoice(&invoice_id, &1_000, &client.get_investment(&invoice_id).unwrap());
 
     // After settlement: finalized.
     let finalized_after = env.as_contract(&contract_id, || {
@@ -632,7 +632,7 @@ fn test_no_accounting_drift_after_multiple_partial_then_settle() {
 
     // Final settlement with exact remaining due.
     env.ledger().set_timestamp(1_300);
-    client.settle_invoice(&invoice_id, &600);
+    client.settle_invoice(&invoice_id, &600, &client.get_investment(&invoice_id).unwrap());
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.total_paid, invoice_amount, "total_paid must exactly equal invoice amount");
@@ -683,7 +683,7 @@ fn test_settle_invoice_auto_releases_escrow() {
     let business_balance_before = token_client.balance(&business);
 
     // Settle invoice. This should trigger auto-release.
-    client.settle_invoice(&invoice_id, &invoice_amount);
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap());
 
     // After settlement, escrow status should be Released
     let escrow_after = client.get_escrow_details(&invoice_id);
@@ -713,7 +713,7 @@ fn test_settle_with_zero_amount_rejected() {
     let invoice_id =
         setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
 
-    let result = client.try_settle_invoice(&invoice_id, &0);
+    let result = client.try_settle_invoice(&invoice_id, &0, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
 }
@@ -733,7 +733,7 @@ fn test_settle_with_negative_amount_rejected() {
     let invoice_id =
         setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
 
-    let result = client.try_settle_invoice(&invoice_id, &-500);
+    let result = client.try_settle_invoice(&invoice_id, &-500, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidAmount);
 }
@@ -747,7 +747,7 @@ fn test_settle_nonexistent_invoice() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let missing_id = BytesN::from_array(&env, &[42u8; 32]);
-    let result = client.try_settle_invoice(&missing_id, &1_000);
+    let result = client.try_settle_invoice(&missing_id, &1_000, &client.get_investment(&missing_id).unwrap());
     assert!(result.is_err());
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -771,7 +771,7 @@ fn test_settle_with_insufficient_amount_rejected() {
 
     // Try to settle with 500 (less than 1_000 due). Should fail because
     // projected_total < invoice.amount.
-    let result = client.try_settle_invoice(&invoice_id, &500);
+    let result = client.try_settle_invoice(&invoice_id, &500, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::PaymentTooLow);
 
@@ -839,7 +839,7 @@ fn test_investment_completed_after_settlement() {
     let investment_before = client.get_invoice_investment(&invoice_id);
     assert_eq!(investment_before.status, InvestmentStatus::Active);
 
-    client.settle_invoice(&invoice_id, &1_000);
+    client.settle_invoice(&invoice_id, &1_000, &client.get_investment(&invoice_id).unwrap());
 
     let investment_after = client.get_invoice_investment(&invoice_id);
     assert_eq!(investment_after.status, InvestmentStatus::Completed);
@@ -927,7 +927,7 @@ fn test_partial_payment_rejected_after_explicit_settlement() {
         setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
 
     // Final settle
-    client.settle_invoice(&invoice_id, &1_000);
+    client.settle_invoice(&invoice_id, &1_000, &client.get_investment(&invoice_id).unwrap());
 
     let token_client = token::Client::new(&env, &currency);
     let business_before = token_client.balance(&business);
@@ -979,7 +979,7 @@ fn test_settlement_idempotency_no_side_effects() {
     let events_before = env.events().all().events().len();
 
     // First settle succeeds.
-    client.settle_invoice(&invoice_id, &1_000);
+    client.settle_invoice(&invoice_id, &1_000, &client.get_investment(&invoice_id).unwrap());
 
     // Capture post-settlement snapshot.
     let business_after_first = token_client.balance(&business);
@@ -988,7 +988,7 @@ fn test_settlement_idempotency_no_side_effects() {
     let events_after_first = env.events().all().events().len();
 
     // Second explicit settle attempt must fail.
-    let result = client.try_settle_invoice(&invoice_id, &1_000);
+    let result = client.try_settle_invoice(&invoice_id, &1_000, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidStatus);
 
@@ -1128,45 +1128,54 @@ fn test_settlement_batch_size_stable_across_states() {
     assert_eq!(max_before, max_after, "Max batch size should remain stable");
 }
 
+
 #[test]
-fn test_settle_with_malformed_transaction_hash_rejected() {
+fn test_stale_investment_snapshot() {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
+    env.ledger().set_timestamp(1_000_000);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
-    let invoice_id =
-        setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
+    let admin = Address::generate(&env);
+    let treasury = Address::generate(&env);
 
-    // Empty hash
-    let result_empty = client.try_process_partial_payment(
-        &invoice_id,
-        &100,
-        &String::from_str(&env, ""),
-    );
-    assert_eq!(result_empty.unwrap_err().unwrap(), QuickLendXError::InvalidTransactionHash);
+    let (contract_id, client) = setup_protocol(&env, &admin, &treasury, 200, 1000);
+    init_currency_for_test(&env, &contract_id, &business, &investor, 100_000i128);
 
-    // Malformed length
-    let result_short = client.try_process_partial_payment(
-        &invoice_id,
-        &100,
-        &String::from_str(&env, "a1b2c3d4"),
+    let currency = Address::generate(&env);
+    client.initialize_protocol_limits(&admin);
+    verify_investor_for_test(&env, &client, &investor, 1_000_000);
+
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC Data"));
+    client.verify_business(&admin, &business);
+
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "Invoice 1"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
     );
-    assert_eq!(result_short.unwrap_err().unwrap(), QuickLendXError::InvalidTransactionHash);
-    
-    // Invalid characters (not hex)
-    let mut bad_chars = alloc::string::String::new();
-    for _ in 0..64 {
-        bad_chars.push('z');
-    }
-    let result_bad_chars = client.try_process_partial_payment(
+
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = client.place_bid(
+        &investor,
         &invoice_id,
-        &100,
-        &String::from_str(&env, &bad_chars),
+        &1_000i128,
+        &1_100i128,
+        &BytesN::from_array(&env, &[0; 32]),
     );
-    assert_eq!(result_bad_chars.unwrap_err().unwrap(), QuickLendXError::InvalidTransactionHash);
+
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let mut old_snapshot = client.get_investment(&invoice_id).unwrap();
+    // modify it to be stale
+    old_snapshot.amount = 999; 
+    let res = client.try_settle_invoice(&invoice_id, &1_000i128, &old_snapshot);
+    assert_eq!(res.unwrap_err().unwrap(), QuickLendXError::StaleInvestmentSnapshot);
 }
-

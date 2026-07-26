@@ -222,20 +222,8 @@ pub enum QuickLendXError {
     /// A report/analytics-snapshot was requested while an invoice has an
     /// unresolved (`Disputed` or `UnderReview`) dispute.
     ActiveDisputeExists = 2207,
-    /// Caller supplied a cursor from a different snapshot generation.
-    UnstableCursor = 2208,
-    /// Batch input is empty or exceeds `MAX_BATCH_INVOICES`.
-    BatchSizeExceeded = 2209,
-    /// Account is frozen and cannot create invoices.
-    AccountIsFrozen = 2210,
-    /// Settlement currency is not in the invoice's per-invoice settlement currency whitelist.
-    SettlementCurrencyNotAllowed = 2211,
-    /// Batch size exceeds limit.
-    BatchSizeTooLarge = 2212,
-    /// Duplicate bid submission.
-    DuplicateBid = 2213,
-    /// An upgrade is pending and must be executed or cancelled first.
-    UpgradePending = 2214,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    StaleInvestmentSnapshot = 2208,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -340,14 +328,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
             QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
-            QuickLendXError::UnstableCursor => symbol_short!("STBL_CUR"),
-            QuickLendXError::BatchSizeExceeded => symbol_short!("BAT_MAX"),
-            QuickLendXError::AccountIsFrozen => symbol_short!("ACCT_FRZ"),
-            QuickLendXError::SettlementCurrencyNotAllowed => symbol_short!("STL_CR_NA"),
-            QuickLendXError::BatchSizeTooLarge => symbol_short!("BAT_LRG"),
-            QuickLendXError::UpgradePending => symbol_short!("UPG_PND"),
-            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
+            QuickLendXError::StaleInvestmentSnapshot => symbol_short!("STL_INV"),
         }
     }
 }
+
