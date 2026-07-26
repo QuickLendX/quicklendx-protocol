@@ -1633,6 +1633,20 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
         .publish((symbol_short!("adm_init"),), (admin.clone(),));
 }
 
+pub fn emit_treasury_rotation_initiated(env: &Env, admin: &Address, new_address: &Address, deadline: u64) {
+    env.events().publish(
+        (symbol_short!("tr_rot_i"), admin.clone()),
+        (new_address.clone(), deadline),
+    );
+}
+
+pub fn emit_treasury_rotation_confirmed(env: &Env, admin: &Address, new_address: &Address) {
+    env.events().publish(
+        (symbol_short!("tr_rot_f"), admin.clone()),
+        (new_address.clone(), env.ledger().timestamp()),
+    );
+}
+
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
     env.events().publish(
         (symbol_short!("tr_rot_c"), admin.clone()),

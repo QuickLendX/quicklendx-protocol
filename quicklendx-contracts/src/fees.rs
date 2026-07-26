@@ -1187,8 +1187,8 @@ impl FeeManager {
 
         crate::events::emit_treasury_rotation_initiated(
             env,
-            &new_address,
             admin,
+            &new_address,
             request.confirmation_deadline,
         );
 

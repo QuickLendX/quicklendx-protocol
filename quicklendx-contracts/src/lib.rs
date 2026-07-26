@@ -395,6 +395,10 @@ mod test_store_invoice_auth;
 // Covers 0, 1, MAX_BATCH, MAX_BATCH+1, active-invoice cap, KYC gating, and atomicity.
 #[cfg(test)]
 mod test_store_invoices_batch;
+// Issue #1881 — batch-cancel boundary tests; no feature gate (runs on every CI matrix entry).
+// Covers 0, 1, MAX_BATCH, MAX_BATCH+1, KYC gating, frozen items, non-existent items, unauthorized items, and atomicity.
+#[cfg(test)]
+mod test_invoice_batch_cancel;
 #[cfg(test)]
 mod test_tier_boundary;
 // Issue — symmetric pause/maintenance state-change tests (both directions); no
@@ -435,7 +439,7 @@ use verification::{
     calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
     determine_investor_tier, get_investor_verification as do_get_investor_verification,
     normalize_tag, recompute_investor_tier, reject_business, reject_investor as do_reject_investor,
-    require_business_not_pending, require_investor_not_pending, require_valid_business_kyc_tier,
+    require_business_active, require_business_not_pending, require_investor_not_pending,
     revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_eligibility, validate_dispute_evidence,
     validate_dispute_reason, validate_dispute_resolution, validate_investor_investment,
@@ -1598,6 +1602,86 @@ impl QuickLendXContract {
 
         // Emit event
         emit_invoice_cancelled(&env, &invoice);
+
+        Ok(())
+    }
+
+    /// Cancel a batch of invoices (business only, before funding)
+    ///
+    /// # Authentication & KYC Policy
+    /// 1. **Business signature** — `business.require_auth()` is called once for
+    ///    the whole batch.
+    /// 2. **Active & Verified KYC** — business must be active and not pending.
+    ///
+    /// # Atomicity
+    /// Either **all** invoices in the batch are cancelled, or **none** are.
+    ///
+    /// # Arguments
+    /// * `env`         — The contract environment.
+    /// * `business`    — Address of the invoice-issuing business (must sign).
+    /// * `invoice_ids` — `Vec<BytesN<32>>` of length 1 ..= `MAX_BATCH_INVOICES`.
+    ///
+    /// # Errors
+    /// * `ContractPaused`     — protocol is paused.
+    /// * `BatchSizeExceeded`  — `invoice_ids` is empty or exceeds `MAX_BATCH_INVOICES` (= 10).
+    /// * `SelfCallNotAllowed` — business is contract address.
+    /// * `InvoiceNotFound`    — an invoice in the batch does not exist.
+    /// * `InvoiceFrozen`      — an invoice in the batch is frozen.
+    /// * `Unauthorized`       — an invoice in the batch does not belong to `business`.
+    pub fn invoice_batch_cancel(
+        env: Env,
+        business: Address,
+        invoice_ids: Vec<BytesN<32>>,
+    ) -> Result<(), QuickLendXError> {
+        // ── Pause gate ────────────────────────────────────────────────────────
+        pause::PauseControl::require_not_paused(&env)?;
+
+        // ── Auth ──────────────────────────────────────────────────────────────
+        require_not_self(&env, &business)?;
+        business.require_auth();
+
+        // ── Business status & KYC gates ──────────────────────────────────────
+        require_business_active(&env, &business)?;
+        require_business_not_pending(&env, &business)?;
+
+        // ── Batch size guard ──────────────────────────────────────────────────
+        let batch_len = invoice_ids.len();
+        if batch_len == 0 || batch_len > protocol_limits::MAX_BATCH_INVOICES {
+            return Err(QuickLendXError::BatchSizeExceeded);
+        }
+
+        // ── Pre-flight pass: validate all invoices before mutating storage ────
+        for id in invoice_ids.iter() {
+            let invoice = InvoiceStorage::get_invoice(&env, &id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+            require_no_active_freeze(&env, &id)?;
+
+            if invoice.business != business {
+                return Err(QuickLendXError::Unauthorized);
+            }
+        }
+
+        // ── Execution pass: cancel invoices, update storage, emit events ─────
+        for id in invoice_ids.iter() {
+            let mut invoice = InvoiceStorage::get_invoice(&env, &id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+            // Remove from old status list
+            InvoiceStorage::remove_from_status_invoices(&env, invoice.status, &id);
+
+            // Cancel invoice
+            invoice.cancel(&env, business.clone())?;
+
+            // Update storage
+            InvoiceStorage::update_invoice(&env, &invoice);
+
+            // Add to cancelled status list
+            InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Cancelled, &id);
+
+            // Emit event
+            emit_invoice_cancelled(&env, &invoice);
+        }
 
         Ok(())
     }

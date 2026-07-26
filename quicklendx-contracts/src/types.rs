@@ -180,7 +180,9 @@ pub struct InvoiceRating {
 pub enum BusinessFreezeReason {
     /// Generic administrative freeze (admin's discretion).
     AdminAction,
-    /// Business KYC was rejected or revoked.
+    /// Alias for generic administrative freeze
+    Administrative,
+    /// Business KYC was rejected or revoked
     KYCRejected,
     /// Legal or compliance policy violation.
     ComplianceViolation,
@@ -190,29 +192,24 @@ pub enum BusinessFreezeReason {
     LegalHold,
     /// Suspected fraudulent invoice submission or business identity.
     FraudSuspected,
-    /// Active or resolved dispute requiring the business to be frozen
-    /// until resolution.
+    /// Active or resolved dispute requiring the business to be frozen.
     Dispute,
-    /// Business requested a voluntary freeze (e.g., for internal audit).
+    /// Business requested a voluntary freeze.
     Voluntary,
 }
 
 impl BusinessFreezeReason {
-    /// Returns a short machine-readable label used in event payloads.
-    ///
-    /// This label appears as the `reason` field in the `InvoiceFrozen` event
-    /// and in audit log entries. It is intentionally stable — do not change
-    /// existing values without a schema version bump.
+    /// Returns a short human-readable label for event logging.
     pub fn label(&self) -> &'static str {
         match self {
-            Self::AdminAction => "admin_action",
-            Self::KYCRejected => "kyc_rejected",
-            Self::ComplianceViolation => "compliance_violation",
-            Self::SuspiciousActivity => "suspicious_activity",
-            Self::LegalHold => "legal_hold",
             Self::FraudSuspected => "fraud_suspected",
+            Self::ComplianceViolation => "compliance_violation",
             Self::Dispute => "dispute",
             Self::Voluntary => "voluntary",
+            Self::AdminAction | Self::Administrative => "admin_action",
+            Self::KYCRejected => "kyc_rejected",
+            Self::SuspiciousActivity => "suspicious_activity",
+            Self::LegalHold => "legal_hold",
         }
     }
 }
@@ -422,6 +419,30 @@ pub struct PruneReport {
     pub pruned: u32,
     /// Offset to pass on the next call.
     pub next_offset: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedBytes32Vec {
+    pub items: Vec<BytesN<32>>,
+    pub total_count: u32,
+    pub has_more: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedBids {
+    pub items: Vec<crate::bid::Bid>,
+    pub total_count: u32,
+    pub has_more: bool,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaginatedCurrencies {
+    pub items: Vec<Address>,
+    pub total_count: u32,
+    pub has_more: bool,
 }
 
 /// Typed reason for freezing an investor account.

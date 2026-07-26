@@ -220,8 +220,20 @@ pub enum QuickLendXError {
     /// A report/analytics-snapshot was requested while an invoice has an
     /// unresolved (`Disputed` or `UnderReview`) dispute.
     ActiveDisputeExists = 2207,
-    /// Destructive op was attempted while a governance proposal is open.
-    PendingGovernanceProposal = 2208,
+    /// Caller supplied a cursor from a different snapshot generation.
+    UnstableCursor = 2208,
+    /// Batch input is empty or exceeds `MAX_BATCH_INVOICES`.
+    BatchSizeExceeded = 2209,
+    /// Account is frozen and cannot create invoices.
+    AccountIsFrozen = 2210,
+    /// Settlement currency is not in the invoice's per-invoice settlement currency whitelist.
+    SettlementCurrencyNotAllowed = 2211,
+    /// Batch size exceeds limit.
+    BatchSizeTooLarge = 2212,
+    /// Duplicate bid submission.
+    DuplicateBid = 2213,
+    /// An upgrade is pending and must be executed or cancelled first.
+    UpgradePending = 2214,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -240,6 +252,7 @@ impl From<QuickLendXError> for Symbol {
             // Authorization
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
+            QuickLendXError::InvalidFreezeReason => symbol_short!("FRZ_RSN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
             QuickLendXError::SelfCallNotAllowed => symbol_short!("SELF_NA"),
@@ -322,12 +335,16 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
-            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
             QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
             QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
-            QuickLendXError::PendingGovernanceProposal => symbol_short!("PEND_GOV"),
+            QuickLendXError::UnstableCursor => symbol_short!("STBL_CUR"),
+            QuickLendXError::BatchSizeExceeded => symbol_short!("BAT_MAX"),
+            QuickLendXError::AccountIsFrozen => symbol_short!("ACCT_FRZ"),
+            QuickLendXError::SettlementCurrencyNotAllowed => symbol_short!("STL_CR_NA"),
+            QuickLendXError::BatchSizeTooLarge => symbol_short!("BAT_LRG"),
+            QuickLendXError::UpgradePending => symbol_short!("UPG_PND"),
+            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
         }
     }
 }
