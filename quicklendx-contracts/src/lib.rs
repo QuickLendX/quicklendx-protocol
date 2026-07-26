@@ -357,6 +357,10 @@ mod test_store_invoice_auth;
 mod test_store_invoices_batch;
 #[cfg(test)]
 mod test_tier_boundary;
+// Issue — symmetric pause/maintenance state-change tests (both directions); no
+// feature gate so this runs on every CI matrix entry.
+#[cfg(test)]
+mod test_pause_toggle_symmetry;
 #[cfg(test)]
 mod test_verification_matrix;
 pub mod types;

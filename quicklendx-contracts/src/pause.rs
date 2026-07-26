@@ -4,7 +4,7 @@ use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, Vec};
 
 const PAUSED_KEY: Symbol = symbol_short!("paused");
 const PAUSED_AT_KEY: Symbol = symbol_short!("paused_at");
-const MAX_PAUSE_DURATION: u64 = 7 * 24 * 3600;
+pub(crate) const MAX_PAUSE_DURATION: u64 = 7 * 24 * 3600;
 
 /// Set of contract entrypoint names that are guarded by the protocol pause.
 ///
