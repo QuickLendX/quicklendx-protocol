@@ -108,6 +108,8 @@ mod test_panic_handler;
 #[cfg(test)]
 mod test_due_date_guard;
 #[cfg(test)]
+mod test_lock_time_limit;
+#[cfg(test)]
 mod test_cancel_invoice_matrix;
 #[cfg(test)]
 mod test_governance;
@@ -1896,6 +1898,7 @@ impl QuickLendXContract {
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
             return Err(QuickLendXError::InvoiceFrozen);
         }
         if invoice.status != InvoiceStatus::Verified {
@@ -1985,6 +1988,7 @@ impl QuickLendXContract {
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
             return Err(QuickLendXError::InvoiceFrozen);
         }
         let bid = BidStorage::get_bid(&env, &bid_id).unwrap();

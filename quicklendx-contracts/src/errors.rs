@@ -27,6 +27,8 @@ pub enum QuickLendXError {
     InvoiceFrozen = 1007,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidFreezeReason = 1008,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvoiceLockExpired = 1009,
 
     // Authorization (1100-1104)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -233,6 +235,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidFreezeReason => symbol_short!("INV_FRZ_RSN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
             QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
+            QuickLendXError::InvoiceLockExpired => symbol_short!("INV_LK_EXP"),
             QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
             QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),

@@ -262,6 +262,7 @@ pub fn record_payment(
     }
 
     if crate::storage::InvoiceStorage::is_frozen(env, invoice_id) {
+        crate::storage::InvoiceStorage::require_lock_within_time_limit(env, invoice_id)?;
         return Err(QuickLendXError::InvoiceFrozen);
     }
 
@@ -406,6 +407,7 @@ pub fn settle_invoice(
     }
 
     if crate::storage::InvoiceStorage::is_frozen(env, invoice_id) {
+        crate::storage::InvoiceStorage::require_lock_within_time_limit(env, invoice_id)?;
         return Err(QuickLendXError::InvoiceFrozen);
     }
 
