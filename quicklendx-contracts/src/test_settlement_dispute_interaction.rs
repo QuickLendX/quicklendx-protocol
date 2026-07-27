@@ -1,15 +1,15 @@
-//! Integration tests for settlement-dispute interaction and "logical reorg" recovery.
+﻿//! Integration tests for settlement-dispute interaction and "logical reorg" recovery.
 //!
 //! # Purpose
 //!
 //! While Soroban/Stellar does not experience traditional blockchain reorgs, the platform
-//! faces **logical reorgs** — situations where an off-chain observer records a transaction
+//! faces **logical reorgs** â€” situations where an off-chain observer records a transaction
 //! (like a partial payment), but a subsequent administrative dispute operation conceptually
 //! rolls back or alters that settlement's outcome.
 //!
 //! This test suite validates that:
 //! 1. **Settlement finalization is strictly BLOCKED** while a dispute is active.
-//! 2. **Escrow funds remain locked** during dispute lifecycle (Disputed → UnderReview → Resolved).
+//! 2. **Escrow funds remain locked** during dispute lifecycle (Disputed â†’ UnderReview â†’ Resolved).
 //! 3. **No double-spend is possible** during state transitions.
 //! 4. **Refund pathways remain intact** if dispute resolves against the business.
 //! 5. **Settlement can proceed normally** after favorable dispute resolution.
@@ -55,7 +55,7 @@
 //! Each test follows this timeline:
 //! 1. **Setup**: Create invoice, fund it, record partial payment
 //! 2. **Dispute Open**: Business or investor opens dispute
-//! 3. **Settlement Block**: Attempt finalization → expect failure
+//! 3. **Settlement Block**: Attempt finalization â†’ expect failure
 //! 4. **Dispute Progression**: Admin moves dispute to UnderReview
 //! 5. **Settlement Block (re-test)**: Ensure still blocked
 //! 6. **Dispute Resolution**: Admin resolves dispute (favor investor/business/neutral)
@@ -73,6 +73,7 @@ use crate::contract::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
 use crate::types::{DisputeStatus, InvoiceCategory, InvoiceStatus};
 use soroban_sdk::testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{symbol_short, token, Address, Env, String};
 
 // Test helper: Create a test currency token
@@ -116,7 +117,7 @@ fn setup_funded_invoice(
     client.verify_invoice(admin, &invoice_id);
 
     // Investor places bid and it gets accepted
-    let bid_id = client.place_bid(&invoice_id, investor, &amount, &(amount + 1000));
+    let bid_id = client.place_bid(&invoice_id, investor, &amount, &(amount + 1000), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(business, &invoice_id, &bid_id);
 
     (invoice_id, currency)
@@ -128,7 +129,7 @@ fn setup_funded_invoice(
 /// 1. Create and fund invoice
 /// 2. Record partial payment (50% of amount)
 /// 3. Open dispute against the invoice
-/// 4. Attempt to finalize settlement → **MUST FAIL**
+/// 4. Attempt to finalize settlement â†’ **MUST FAIL**
 /// 5. Verify escrow remains locked (status == Held)
 #[test]
 fn test_settlement_blocked_during_active_dispute() {
@@ -166,10 +167,10 @@ fn test_settlement_blocked_during_active_dispute() {
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.dispute_status, DisputeStatus::Disputed);
 
-    // Step 3: Attempt to finalize settlement → MUST FAIL
+    // Step 3: Attempt to finalize settlement â†’ MUST FAIL
     // Settlement requires invoice status == Funded AND no active dispute
     let remaining = amount - partial_amount;
-    let settle_result = client.try_settle_invoice(&invoice_id, &remaining);
+    let settle_result = client.try_settle_invoice(&invoice_id, &remaining, &client.get_investment(&invoice_id).unwrap());
 
     // Expected: Settlement fails because dispute blocks finalization
     assert!(settle_result.is_err());
@@ -190,17 +191,17 @@ fn test_settlement_blocked_during_active_dispute() {
     // **Invariant Verified**: Settlement cannot proceed with active dispute
 }
 
-/// Test: Dispute resolves IN FAVOR OF INVESTOR → Escrow refund succeeds, settlement blocked.
+/// Test: Dispute resolves IN FAVOR OF INVESTOR â†’ Escrow refund succeeds, settlement blocked.
 ///
 /// # Timeline
 /// 1. Create and fund invoice
 /// 2. Record partial payment
 /// 3. Open dispute (investor claims business fraud)
 /// 4. Admin puts dispute under review
-/// 5. Attempt settlement → BLOCKED
+/// 5. Attempt settlement â†’ BLOCKED
 /// 6. Admin resolves dispute in favor of investor
 /// 7. Verify: Escrow refund pathway intact, settlement permanently blocked
-/// 8. **Escrow Safety**: Attempting double refund → MUST FAIL
+/// 8. **Escrow Safety**: Attempting double refund â†’ MUST FAIL
 #[test]
 fn test_dispute_resolves_in_favor_of_investor() {
     let env = Env::default();
@@ -232,8 +233,8 @@ fn test_dispute_resolves_in_favor_of_investor() {
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.dispute_status, DisputeStatus::UnderReview);
 
-    // Attempt settlement during UnderReview → BLOCKED
-    let settle_result = client.try_settle_invoice(&invoice_id, &(amount - partial));
+    // Attempt settlement during UnderReview â†’ BLOCKED
+    let settle_result = client.try_settle_invoice(&invoice_id, &(amount - partial, &client.get_investment(&invoice_id).unwrap()));
     assert!(settle_result.is_err());
 
     // Admin resolves in favor of investor
@@ -256,7 +257,7 @@ fn test_dispute_resolves_in_favor_of_investor() {
     // Expected: Refund succeeds if invoice transitioned to refundable state
     // OR refund might require explicit admin action post-resolution
 
-    // **Escrow Double-Spend Guard**: Attempt second refund → MUST FAIL
+    // **Escrow Double-Spend Guard**: Attempt second refund â†’ MUST FAIL
     if refund_result.is_ok() {
         let second_refund = client.try_refund_escrow(&invoice_id);
         assert!(second_refund.is_err());
@@ -267,17 +268,17 @@ fn test_dispute_resolves_in_favor_of_investor() {
     // and prevents settlement finalization
 }
 
-/// Test: Dispute resolves IN FAVOR OF BUSINESS → Settlement unblocks and completes normally.
+/// Test: Dispute resolves IN FAVOR OF BUSINESS â†’ Settlement unblocks and completes normally.
 ///
 /// # Timeline
 /// 1. Create and fund invoice
 /// 2. Record partial payment
 /// 3. Investor opens frivolous dispute
 /// 4. Admin puts dispute under review
-/// 5. Attempt settlement → BLOCKED
+/// 5. Attempt settlement â†’ BLOCKED
 /// 6. Admin resolves dispute in favor of business
 /// 7. Invoice returns to Funded status (or equivalent)
-/// 8. Business completes remaining payment → Settlement succeeds
+/// 8. Business completes remaining payment â†’ Settlement succeeds
 /// 9. **Escrow Safety**: Escrow released to business (or via settlement), no double-spend
 #[test]
 fn test_dispute_resolves_in_favor_of_business() {
@@ -308,9 +309,9 @@ fn test_dispute_resolves_in_favor_of_business() {
     // Admin reviews
     client.put_dispute_under_review(&admin, &invoice_id);
 
-    // Attempt settlement → BLOCKED
+    // Attempt settlement â†’ BLOCKED
     let remaining = amount - partial;
-    let blocked = client.try_settle_invoice(&invoice_id, &remaining);
+    let blocked = client.try_settle_invoice(&invoice_id, &remaining, &client.get_investment(&invoice_id).unwrap());
     assert!(blocked.is_err());
 
     // Admin resolves in favor of business
@@ -351,7 +352,7 @@ fn test_dispute_resolves_in_favor_of_business() {
     // **Invariant Verified**: Favorable dispute resolution for business allows settlement
 }
 
-/// Test: Dispute resolves NEUTRAL → Standard fallback rules apply, no permanent freeze.
+/// Test: Dispute resolves NEUTRAL â†’ Standard fallback rules apply, no permanent freeze.
 ///
 /// # Timeline
 /// 1. Create and fund invoice
@@ -479,11 +480,11 @@ fn test_escrow_double_spend_protection_during_dispute() {
     let refund_result = client.try_refund_escrow(&invoice_id);
 
     if refund_result.is_ok() {
-        // **Critical Test**: Attempt SECOND refund → MUST FAIL
+        // **Critical Test**: Attempt SECOND refund â†’ MUST FAIL
         let double_refund = client.try_refund_escrow(&invoice_id);
         assert!(double_refund.is_err());
 
-        // **Critical Test**: Attempt release after refund → MUST FAIL
+        // **Critical Test**: Attempt release after refund â†’ MUST FAIL
         let release_after_refund = client.try_release_escrow(&invoice_id);
         assert!(release_after_refund.is_err());
     }
@@ -542,7 +543,7 @@ fn test_partial_payments_during_dispute() {
 
     // Verify settlement is STILL blocked despite reaching 80% payment
     let remaining = amount - progress.total_paid;
-    let settle_attempt = client.try_settle_invoice(&invoice_id, &remaining);
+    let settle_attempt = client.try_settle_invoice(&invoice_id, &remaining, &client.get_investment(&invoice_id).unwrap());
     assert!(settle_attempt.is_err());
 
     // Admin resolves dispute in favor of business
@@ -590,10 +591,11 @@ fn test_settlement_guard_rejects_active_dispute_negative() {
 
     // Try to settle entire amount during an active dispute.
     // This MUST return the explicitly typed DisputeActive error.
-    let settle_result = client.try_settle_invoice(&invoice_id, &amount);
+    let settle_result = client.try_settle_invoice(&invoice_id, &amount, &client.get_investment(&invoice_id).unwrap());
     
     assert!(settle_result.is_err());
     let err = settle_result.err().unwrap().unwrap();
     assert_eq!(err, QuickLendXError::DisputeActive);
 }
+
 

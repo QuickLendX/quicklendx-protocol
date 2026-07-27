@@ -1,4 +1,4 @@
-//! Cross-module state consistency regression tests for QuickLendX.
+﻿//! Cross-module state consistency regression tests for QuickLendX.
 //!
 //! # Purpose
 //!
@@ -105,13 +105,13 @@ fn kyc_upload_bid(
         &String::from_str(env, "Consistency regression invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(investor, &50_000i128);
 
-    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &invoice_amount);
+    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
     (invoice_id, bid_id)
 }
 
@@ -437,7 +437,7 @@ fn test_finalize_settle_cross_module_consistency() {
     tok.approve(&business, &contract_id, &(invoice_amount * 4), &exp);
 
     // Settle.
-    client.settle_invoice(&invoice_id, &invoice_amount);
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap());
 
     // -- Invoice assertions ----------------------------------------------------
     let invoice = client.get_invoice(&invoice_id);
@@ -534,7 +534,7 @@ fn test_no_orphan_after_sequential_operations() {
     sac.mint(&business_a, &amount_a);
     let exp2 = env.ledger().sequence() + 10_000;
     tok.approve(&business_a, &contract_id, &(amount_a * 4), &exp2);
-    client.settle_invoice(&invoice_a, &amount_a);
+    client.settle_invoice(&invoice_a, &amount_a, &client.get_investment(&invoice_a).unwrap());
 
     // Refund Invoice B.
     client.refund_escrow_funds(&invoice_b, &business_b);
@@ -616,9 +616,9 @@ fn test_query_canonical_record_agreement() {
         &String::from_str(&env, "Second regression invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&inv2);
-    let bid2 = client.place_bid(&investor, &inv2, &4_000i128, &5_000i128);
+    let bid2 = client.place_bid(&investor, &inv2, &4_000i128, &5_000i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&inv2, &bid2);
 
     // Both appear in the Funded index - verify each canonical record agrees.
@@ -646,7 +646,7 @@ fn test_query_canonical_record_agreement() {
     sac.mint(&business, &5_000i128);
     let exp = env.ledger().sequence() + 10_000;
     tok.approve(&business, &contract_id, &20_000i128, &exp);
-    client.settle_invoice(&inv1, &5_000i128);
+    client.settle_invoice(&inv1, &5_000i128, &client.get_investment(&inv1).unwrap());
 
     // Re-check: inv1 must NOT be in the Funded index; its record must be Paid.
     let funded_ids_after = client.get_invoices_by_status(&InvoiceStatus::Funded);
@@ -794,7 +794,7 @@ fn test_multiple_bids_single_accept_invariants() {
         &String::from_str(env, "Multi-bid invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(&investor1, &String::from_str(env, "Investor 1 KYC"));
@@ -802,8 +802,8 @@ fn test_multiple_bids_single_accept_invariants() {
     client.verify_investor(&investor1, &50_000i128);
     client.verify_investor(&investor2, &50_000i128);
 
-    let bid1_id = client.place_bid(&investor1, &invoice_id, &5_000i128, &6_000i128);
-    let bid2_id = client.place_bid(&investor2, &invoice_id, &5_500i128, &6_000i128);
+    let bid1_id = client.place_bid(&investor1, &invoice_id, &5_000i128, &6_000i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid2_id = client.place_bid(&investor2, &invoice_id, &5_500i128, &6_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Accept bid2
     client.accept_bid(&invoice_id, &bid2_id);
@@ -938,7 +938,7 @@ fn test_status_index_coherence_after_all_transitions() {
         &String::from_str(&env, "Lifecycle test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Initial: Pending
     let pending_count = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
@@ -952,7 +952,7 @@ fn test_status_index_coherence_after_all_transitions() {
     // Setup investor and bid
     client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC"));
     client.verify_investor(&investor, &50_000i128);
-    let bid_id = client.place_bid(&investor, &invoice_id, &8_000i128, &10_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &8_000i128, &10_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Fund: moves to Funded
     client.accept_bid(&invoice_id, &bid_id);
@@ -974,3 +974,4 @@ fn test_status_index_coherence_after_all_transitions() {
     assert_invoice_count_invariant(&client);
     assert!(client.validate_no_orphan_investments(), "No orphan investments after default");
 }
+

@@ -63,7 +63,7 @@ fn create_verified_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     invoice_id
 }
@@ -97,7 +97,7 @@ fn create_funded_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
@@ -133,7 +133,7 @@ fn test_invoice_amount_invalid_error() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -149,7 +149,7 @@ fn test_invoice_amount_invalid_error() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -176,7 +176,7 @@ fn test_invoice_due_date_invalid_error() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -200,11 +200,11 @@ fn test_invoice_not_verified_error() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Try to place bid on unverified invoice
     let investor = Address::generate(&env);
-    let result = client.try_place_bid(&investor, &invoice_id, &500, &600);
+    let result = client.try_place_bid(&investor, &invoice_id, &500, &600, &BytesN::from_array(&env, &[0u8; 32]));
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -250,7 +250,7 @@ fn test_invalid_description_error() {
         &String::from_str(&env, ""),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -387,7 +387,7 @@ fn test_business_not_verified_error() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -413,7 +413,7 @@ fn test_store_invoice_unauthorized_fails() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     assert!(result.is_err());
     let err = result.err().unwrap();
@@ -448,7 +448,7 @@ fn test_no_panics_on_error_conditions() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Set ledger timestamp to non-zero so past date make sense
     env.ledger().set_timestamp(10_000);
@@ -461,7 +461,7 @@ fn test_no_panics_on_error_conditions() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 }
 
 #[test]

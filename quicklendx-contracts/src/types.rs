@@ -166,14 +166,71 @@ pub struct InvoiceRating {
     pub timestamp: u64,
 }
 
-/// Freeze reason enumeration representing why a business invoice was frozen
+/// Freeze reason enumeration representing why a business invoice was frozen.
+///
+/// Stored alongside the freeze flag to provide an audit trail and enable
+/// targeted unfreeze logic. An admin must supply one of these variants when
+/// calling `freeze_invoice`; a bare boolean is no longer sufficient.
+///
+/// When a freeze is applied, an [`crate::events::InvoiceFrozen`] event is
+/// emitted that includes a `freeze_appeal_channel` field pointing to
+/// `docs/APPEALS.md` so the affected business knows where to file an appeal.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BusinessFreezeReason {
-    /// Generic administrative freeze (admin's discretion)
+    /// Generic administrative freeze (admin's discretion).
     AdminAction,
+    /// Alias for generic administrative freeze
+    Administrative,
     /// Business KYC was rejected or revoked
     KYCRejected,
+    /// Legal or compliance policy violation.
+    ComplianceViolation,
+    /// Fraud or suspicious activity detected (alias for `FraudSuspected`).
+    SuspiciousActivity,
+    /// Court order or legal hold applied.
+    LegalHold,
+    /// Suspected fraudulent invoice submission or business identity.
+    FraudSuspected,
+    /// Active or resolved dispute requiring the business to be frozen.
+    Dispute,
+    /// Business requested a voluntary freeze.
+    Voluntary,
+}
+
+impl BusinessFreezeReason {
+    /// Returns a short human-readable label for event logging.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::FraudSuspected => "fraud_suspected",
+            Self::ComplianceViolation => "compliance_violation",
+            Self::Dispute => "dispute",
+            Self::Voluntary => "voluntary",
+            Self::AdminAction | Self::Administrative => "admin_action",
+            Self::KYCRejected => "kyc_rejected",
+            Self::SuspiciousActivity => "suspicious_activity",
+            Self::LegalHold => "legal_hold",
+        }
+    }
+}
+
+/// Freeze record stored alongside the frozen flag on an invoice
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FreezeInfo {
+    pub reason: BusinessFreezeReason,
+    pub frozen_by: Address,
+    pub frozen_at: u64,
+}
+
+/// Freeze reason enumeration representing why an investor was frozen.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvestorFreezeReason {
+    /// Generic administrative freeze (admin's discretion)
+    AdminAction,
+    /// Investor KYC has expired
+    KYCExpired,
     /// Legal or compliance policy violation
     ComplianceViolation,
     /// Fraud or suspicious activity detected
@@ -182,11 +239,11 @@ pub enum BusinessFreezeReason {
     LegalHold,
 }
 
-/// Freeze record stored alongside the frozen flag on an invoice
+/// Freeze record stored for a frozen investor
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct FreezeInfo {
-    pub reason: BusinessFreezeReason,
+pub struct InvestorFreezeInfo {
+    pub reason: InvestorFreezeReason,
     pub frozen_by: Address,
     pub frozen_at: u64,
 }
@@ -226,6 +283,17 @@ pub struct Invoice {
     pub total_paid: i128,
     pub payment_history: Vec<PaymentRecord>,
     pub origination_fee_bps: Option<u32>,
+    /// Per-invoice late payment penalty in basis points (0–5000 bps, i.e. 0–50%).
+    /// When `Some`, this overrides the global `LATE_FEE_SURCHARGE_BPS` constant
+    /// during late-payment fee calculation. `None` falls back to the default
+    /// 20 % surcharge.
+    pub late_payment_penalty_bps: Option<u32>,
+    /// Per-invoice early-payment discount in basis points (0–5000 bps, i.e. 0–50%).
+    /// When `Some`, this discount is applied to the business's outstanding amount
+    /// for any payment that settles on or before the invoice `due_date`.
+    /// `None` means "no early-payment discount advertised on this invoice",
+    /// preserving the prior flat-fee behaviour.
+    pub early_payment_discount_bps: Option<u32>,
 }
 
 pub const RATINGS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
@@ -264,6 +332,13 @@ pub struct InvoiceInput {
     pub category: InvoiceCategory,
     /// Optional searchable tags (max `MAX_INVOICE_TAGS` entries, each max 50 bytes).
     pub tags: Vec<String>,
+    /// Per-invoice late payment penalty in basis points (0–5000).
+    /// Applied when a payment lands after the invoice due date.
+    pub late_payment_penalty_bps: Option<u32>,
+    /// Per-invoice early-payment discount in basis points (0–5000).
+    /// Applied to a payment that settles on or before the invoice `due_date`.
+    /// `None` means "no discount advertised on this invoice".
+    pub early_payment_discount_bps: Option<u32>,
 }
 
 /// Helper struct for metadata updates
@@ -381,48 +456,59 @@ pub struct PruneReport {
     pub next_offset: u32,
 }
 
-/// Paginated result wrapper for `Vec<BytesN<32>>` queries (invoice IDs, investment IDs).
-///
-/// Bundles the page of items together with pagination metadata so consumers
-/// (frontend, downstream contracts, operators) know the total result-set size
-/// and whether additional pages exist **without** making a separate count query
-/// or looping until an empty page is returned.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaginatedBytes32Vec {
-    /// The items in the current page (≤ `MAX_QUERY_LIMIT`).
     pub items: Vec<BytesN<32>>,
-    /// Total number of records matching the filter (before pagination is applied).
     pub total_count: u32,
-    /// `true` when additional pages exist past the current offset + limit.
     pub has_more: bool,
 }
 
-/// Paginated result wrapper for `Vec<Bid>` queries.
-///
-/// Same shape as [`PaginatedBytes32Vec`] but carries full [`Bid`] records instead
-/// of opaque IDs so callers can render bid details without N+1 lookups.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaginatedBids {
-    /// The bid records in the current page (≤ `MAX_QUERY_LIMIT`).
-    pub items: Vec<Bid>,
-    /// Total number of records matching the filter (before pagination is applied).
+    pub items: Vec<crate::bid::Bid>,
     pub total_count: u32,
-    /// `true` when additional pages exist past the current offset + limit.
     pub has_more: bool,
 }
 
-/// Paginated result wrapper for `Vec<Address>` queries (e.g. currency whitelist).
-///
-/// Same shape as [`PaginatedBytes32Vec`] but carries [`Address`] values.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaginatedCurrencies {
-    /// The currency addresses in the current page (≤ `MAX_QUERY_LIMIT`).
     pub items: Vec<Address>,
-    /// Total number of records matching the filter (before pagination is applied).
     pub total_count: u32,
-    /// `true` when additional pages exist past the current offset + limit.
     pub has_more: bool,
+}
+
+/// Typed reason for freezing an investor account.
+///
+/// Symmetric with [`BusinessFreezeReason`] — every freeze must carry a
+/// typed reason so that audit logs and unfreeze workflows can operate on
+/// structured data rather than opaque booleans.
+#[contracttype]
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum InvestorFreezeReason {
+    /// Investor engaged in suspicious or fraudulent bid/investment activity.
+    FraudSuspected,
+    /// Investor failed or failed ongoing KYC/AML compliance checks.
+    ComplianceViolation,
+    /// Active dispute involving the investor's positions.
+    Dispute,
+    /// Investor requested a voluntary freeze.
+    Voluntary,
+    /// Admin-initiated freeze for an unspecified or catch-all reason.
+    AdminAction,
+}
+
+impl InvestorFreezeReason {
+    /// Returns a short human-readable label for event logging.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Self::FraudSuspected => "fraud_suspected",
+            Self::ComplianceViolation => "compliance_violation",
+            Self::Dispute => "dispute",
+            Self::Voluntary => "voluntary",
+            Self::AdminAction => "admin_action",
+        }
+    }
 }

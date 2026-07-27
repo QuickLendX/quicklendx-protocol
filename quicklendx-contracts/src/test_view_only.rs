@@ -54,6 +54,8 @@ fn test_view_only_allows_writes_normally() {
         metadata_tax_id: None,
         metadata_notes: None,
         metadata_line_items: Vec::new(&env),
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     };
 
     // Should NOT panic
@@ -106,6 +108,8 @@ fn test_view_only_panics_on_invoice_store() {
         metadata_tax_id: None,
         metadata_notes: None,
         metadata_line_items: Vec::new(&env),
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     };
 
     env.as_contract(&contract_id, || {

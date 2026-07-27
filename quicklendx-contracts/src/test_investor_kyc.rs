@@ -57,7 +57,7 @@ mod test_investor_kyc {
             &String::from_str(env, "Test Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(env),
-        );
+            &None);
 
         let _ = client.try_verify_invoice(&invoice_id);
         invoice_id
@@ -1297,7 +1297,7 @@ mod test_investor_kyc {
 
         let invoice_id = create_verified_invoice(&env, &client, &business, 50_000);
         let err = client
-            .try_place_bid(&investor, &invoice_id, &10_000i128, &12_000i128)
+            .try_place_bid(&investor, &invoice_id, &10_000i128, &12_000i128, &BytesN::from_array(&env, &[0u8; 32]))
             .unwrap_err()
             .unwrap();
         assert_eq!(

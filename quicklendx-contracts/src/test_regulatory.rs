@@ -47,7 +47,7 @@ fn test_store_invoice_regulatory_gate_is_noop() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_ok(), "store_invoice must not be blocked by the no-op regulatory gate");
 }
 
@@ -70,7 +70,7 @@ fn test_place_bid_regulatory_gate_is_noop() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_ok(), "store_invoice must not be blocked by the no-op regulatory gate");
     let invoice_id = result.unwrap().unwrap();
 

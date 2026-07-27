@@ -51,6 +51,8 @@ fn make_input(env: &Env, currency: &Address, offset_secs: u64) -> InvoiceInput {
         description: String::from_str(env, "Batch invoice"),
         category: InvoiceCategory::Services,
         tags: Vec::new(env),
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     }
 }
 
@@ -252,6 +254,8 @@ fn test_batch_bad_input_aborts_entirely() {
         description: String::from_str(&env, "Bad invoice"),
         category: InvoiceCategory::Services,
         tags: Vec::new(&env),
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     });
 
     let result = client.try_store_invoices_batch(&business, &inputs);

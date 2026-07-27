@@ -36,6 +36,7 @@
 
 use crate::bid::{Bid, BidStatus, BidStorage};
 use core::cmp::Ordering;
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{testutils::Ledger, Address, BytesN, Env};
 
 // ---------------------------------------------------------------------------
@@ -530,7 +531,7 @@ fn rank_bids_is_deterministic_across_insertion_orders() {
     persist_bid(&env_a, &a1);
     persist_bid(&env_a, &a2);
     persist_bid(&env_a, &a3);
-    let ranked_a: Vec<BytesN<32>> = BidStorage::rank_bids(&env_a, &invoice_a)
+    let ranked_a: alloc::vec::Vec<BytesN<32>> = BidStorage::rank_bids(&env_a, &invoice_a)
         .iter()
         .map(|b| b.bid_id)
         .collect();
@@ -542,7 +543,7 @@ fn rank_bids_is_deterministic_across_insertion_orders() {
     persist_bid(&env_b, &b3);
     persist_bid(&env_b, &b1);
     persist_bid(&env_b, &b2);
-    let ranked_b: Vec<BytesN<32>> = BidStorage::rank_bids(&env_b, &invoice_b)
+    let ranked_b: alloc::vec::Vec<BytesN<32>> = BidStorage::rank_bids(&env_b, &invoice_b)
         .iter()
         .map(|b| b.bid_id)
         .collect();
@@ -625,21 +626,21 @@ fn rank_bids_produces_no_adjacent_inversions() {
     env.ledger().with_mut(|li| li.timestamp = 1_000);
     let invoice = invoice_id(&env, 40);
 
-    let investors: Vec<Address> = (0..6).map(|_| Address::generate(&env)).collect();
-    let mut bids: Vec<Bid> = Vec::new();
-    bids.push_back(build_bid(&env, &invoice, &investors[0], 1_000, 1_200, 50, BidStatus::Placed, 1));
-    bids.push_back(build_bid(&env, &invoice, &investors[1], 1_000, 4_500, 80, BidStatus::Placed, 2));
-    bids.push_back(build_bid(&env, &invoice, &investors[2], 2_000, 3_500, 70, BidStatus::Placed, 3));
-    bids.push_back(build_bid(&env, &invoice, &investors[3], 1_500, 2_200, 60, BidStatus::Placed, 4));
-    bids.push_back(build_bid(&env, &invoice, &investors[4], 500, 700, 90, BidStatus::Placed, 5));
-    bids.push_back(build_bid(&env, &invoice, &investors[5], 1_000, 2_000, 65, BidStatus::Placed, 6));
+    let investors: alloc::vec::Vec<Address> = (0..6).map(|_| Address::generate(&env)).collect();
+    let mut bids: alloc::vec::Vec<Bid> = alloc::vec::Vec::new();
+    bids.push(build_bid(&env, &invoice, &investors[0], 1_000, 1_200, 50, BidStatus::Placed, 1));
+    bids.push(build_bid(&env, &invoice, &investors[1], 1_000, 4_500, 80, BidStatus::Placed, 2));
+    bids.push(build_bid(&env, &invoice, &investors[2], 2_000, 3_500, 70, BidStatus::Placed, 3));
+    bids.push(build_bid(&env, &invoice, &investors[3], 1_500, 2_200, 60, BidStatus::Placed, 4));
+    bids.push(build_bid(&env, &invoice, &investors[4], 500, 700, 90, BidStatus::Placed, 5));
+    bids.push(build_bid(&env, &invoice, &investors[5], 1_000, 2_000, 65, BidStatus::Placed, 6));
 
     for b in bids.iter() {
         persist_bid(&env, b);
     }
 
     let ranked = BidStorage::rank_bids(&env, &invoice);
-    assert_eq!(ranked.len() as u32, bids.len());
+    assert_eq!(ranked.len() as usize, bids.len());
 
     let mut i: u32 = 0;
     while i + 1 < ranked.len() {

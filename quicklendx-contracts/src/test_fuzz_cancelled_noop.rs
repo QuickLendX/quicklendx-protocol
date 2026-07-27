@@ -127,7 +127,7 @@ fn upload_pending_invoice(
             &SorobanString::from_str(env, "Fuzz invoice"),
             &InvoiceCategory::Services,
             &SorobanVec::new(env),
-        )
+            &None)
         .expect("upload_invoice must succeed during setup")
         .expect("contract must not error during setup")
 }
@@ -162,7 +162,7 @@ fn place_bid(
         .saturating_add(bid_amount / 10)
         .max(bid_amount + 1);
     client
-        .try_place_bid(investor, invoice_id, &bid_amount, &expected_return)
+        .try_place_bid(investor, invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]))
         .expect("place_bid must succeed during setup")
         .expect("contract must not error during setup")
 }
@@ -264,7 +264,7 @@ proptest! {
 
         // P4
         let result = client
-            .try_place_bid(&investor, &invoice_id, &bid_amount, &expected_return)
+            .try_place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]))
             .expect("try_place_bid must not panic");
         assert!(result.is_err(), "P4: place_bid on Cancelled must return Err");
 

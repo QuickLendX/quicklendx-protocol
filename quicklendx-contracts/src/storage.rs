@@ -7,8 +7,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus,
-    PlatformFeeConfig, PruneReport, RebuildReport,
+    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory,
+    InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
 };
 use crate::errors::QuickLendXError;
 
@@ -62,6 +62,8 @@ pub enum DataKey {
     Investment(BytesN<32>),
     FrozenInvoice(BytesN<32>),
     FreezeInfo(BytesN<32>),
+    EscrowExtension(BytesN<32>),
+    InvestorFreezeInfo(Address),
 }
 
 impl StorageKeys {
@@ -85,10 +87,15 @@ impl StorageKeys {
     pub fn investment_count() -> Symbol {
         symbol_short!("inv_cnt")
     }
-    /// **Storage class**: Persistent  
+    /// **Storage class**: Persistent
     /// **BREAKING**: Renaming `"biz_def_h"` resets the business default history counters.
     pub fn business_default_history(business: &Address) -> (Symbol, Address) {
         (symbol_short!("biz_def_h"), business.clone())
+    }
+    /// **Storage class**: Persistent
+    /// **BREAKING**: Renaming `"inv_def_h"` resets the investor default history counters.
+    pub fn investor_default_history(investor: &Address) -> (Symbol, Address) {
+        (symbol_short!("inv_def_h"), investor.clone())
     }
 }
 
@@ -279,21 +286,37 @@ impl InvoiceStorage {
         Self::store(env, invoice)
     }
 
-    pub fn set_invoice_lock(env: &Env, invoice_id: &BytesN<32>, lock: InvoiceLock) {
+    pub fn set_frozen(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        frozen: bool,
+        reason: Option<BusinessFreezeReason>,
+    ) {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
-        if lock == InvoiceLock::None {
-            env.storage().persistent().remove(&key);
-        } else {
-            env.storage().persistent().set(&key, &lock);
+        if frozen {
+            // Store the typed reason; callers must supply one when freezing.
+            let r = reason.unwrap_or(BusinessFreezeReason::AdminAction);
+            env.storage().persistent().set(&key, &r);
             extend_persistent_ttl(env, &key);
+        } else {
+            env.storage().persistent().remove(&key);
         }
     }
 
-    pub fn get_invoice_lock(env: &Env, invoice_id: &BytesN<32>) -> InvoiceLock {
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
         if let Some(lock) = env.storage().persistent().get::<_, InvoiceLock>(&key) {
             extend_persistent_ttl(env, &key);
             lock
+        } else if env
+            .storage()
+            .persistent()
+            .get::<_, BusinessFreezeReason>(&key)
+            .is_some()
+        {
+            // Backward-compatible: a typed freeze reason also means frozen.
+            extend_persistent_ttl(env, &key);
+            InvoiceLock::Frozen
         } else {
             InvoiceLock::None
         }
@@ -338,6 +361,41 @@ impl InvoiceStorage {
 
     pub fn remove_freeze_info(env: &Env, invoice_id: &BytesN<32>) {
         let key = DataKey::FreezeInfo(invoice_id.clone());
+        env.storage().persistent().remove(&key);
+    }
+
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
+        Self::get_invoice_lock(env, invoice_id).is_locked()
+    }
+
+    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+        if frozen {
+            Self::set_invoice_lock(env, invoice_id, InvoiceLock::Frozen);
+        } else {
+            Self::set_invoice_lock(env, invoice_id, InvoiceLock::None);
+        }
+    }
+
+    pub fn set_investor_freeze_info(env: &Env, investor: &Address, info: &InvestorFreezeInfo) {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
+        env.storage().persistent().set(&key, info);
+        extend_persistent_ttl(env, &key);
+    }
+
+    pub fn get_investor_freeze_info(
+        env: &Env,
+        investor: &Address,
+    ) -> Option<InvestorFreezeInfo> {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
+        let result = env.storage().persistent().get::<_, InvestorFreezeInfo>(&key);
+        if result.is_some() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
+    }
+
+    pub fn remove_investor_freeze_info(env: &Env, investor: &Address) {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
         env.storage().persistent().remove(&key);
     }
 
@@ -390,6 +448,36 @@ impl InvoiceStorage {
 
     pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
         Self::get(env, invoice_id)
+    }
+
+    /// Returns the optional absolute per-investor position cap for an invoice.
+    ///
+    /// `None` means the invoice is uncapped (only face value / protocol limits apply).
+    pub fn get_per_investor_position_cap(env: &Env, invoice_id: &BytesN<32>) -> Option<i128> {
+        let key = DataKey::PerInvestorPositionCap(invoice_id.clone());
+        env.storage().persistent().get(&key)
+    }
+
+    /// Sets or clears the absolute per-investor position cap for an invoice.
+    ///
+    /// Passing `None` removes the cap (uncapped). Callers must validate
+    /// `cap > 0 && cap <= invoice.amount` before storing `Some(cap)`.
+    pub fn set_per_investor_position_cap(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        cap: Option<i128>,
+    ) {
+        crate::assert_view_only!(env);
+        let key = DataKey::PerInvestorPositionCap(invoice_id.clone());
+        match cap {
+            Some(value) => {
+                env.storage().persistent().set(&key, &value);
+                extend_persistent_ttl(env, &key);
+            }
+            None => {
+                env.storage().persistent().remove(&key);
+            }
+        }
     }
 
     pub fn update(env: &Env, invoice: &Invoice) {
@@ -479,6 +567,7 @@ impl InvoiceStorage {
     }
 
     pub fn clear_all(env: &Env) {
+        crate::governance::require_no_open_governance_proposal(env).unwrap();
         let ids = Self::get_all_invoice_ids(env);
         for id in ids.iter() {
             Self::delete_invoice(env, &id);
@@ -870,6 +959,7 @@ const VIEW_ONLY_KEY: Symbol = symbol_short!("view_onl");
 
 impl StorageManager {
     pub fn clear_all_mappings(env: &Env) {
+        crate::governance::require_no_open_governance_proposal(env).unwrap();
         env.storage()
             .persistent()
             .remove(&StorageKeys::invoice_count());
