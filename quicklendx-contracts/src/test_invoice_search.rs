@@ -61,6 +61,7 @@ mod test_invoice_search {
         };
         invoice,
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
     #[test]

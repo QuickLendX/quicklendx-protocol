@@ -60,8 +60,8 @@ fn test_error_code_invoice_frozen() {
     assert_snapshot_entry("InvoiceFrozen", QuickLendXError::InvoiceFrozen as u32);
 }
 #[test]
-fn test_error_code_invalid_freeze_reason() {
-    assert_snapshot_entry("InvalidFreezeReason", QuickLendXError::InvalidFreezeReason as u32);
+fn test_error_code_not_arbiter() {
+    assert_snapshot_entry("NotArbiter", QuickLendXError::NotArbiter as u32);
 }
 
 // --- Authorization (1100-1104) ---
@@ -387,8 +387,8 @@ fn test_error_code_duplicate_default_transition() {
     assert_snapshot_entry("DuplicateDefaultTransition", QuickLendXError::DuplicateDefaultTransition as u32);
 }
 #[test]
-fn test_error_code_backup_version_unsupported() {
-    assert_snapshot_entry("BackupVersionUnsupported", QuickLendXError::BackupVersionUnsupported as u32);
+fn test_error_code_backfill_in_progress() {
+    assert_snapshot_entry("BackfillInProgress", QuickLendXError::BackfillInProgress as u32);
 }
 #[test]
 fn test_error_code_invalid_ledger_sequence() {

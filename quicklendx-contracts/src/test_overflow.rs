@@ -330,15 +330,17 @@ fn test_timestamp_invoice_grace_deadline_saturates() {
 
     let inv = env.as_contract(&contract_id, || {
         Invoice::new(
-            &env,
-            business,
-            10_000,
-            currency,
-            due_date,
-            String::from_str(&env, "Test"),
-            InvoiceCategory::Services,
-            Vec::new(&env),
-        None)
+&env,
+business,
+10_000,
+currency,
+due_date,
+String::from_str(&env, "Test"),
+InvoiceCategory::Services,
+Vec::new(&env),
+        None, /* early_payment_discount_bps */,
+        None
+)
     });
     let deadline = inv.unwrap().grace_deadline(grace_period);
     assert_eq!(deadline, u64::MAX);

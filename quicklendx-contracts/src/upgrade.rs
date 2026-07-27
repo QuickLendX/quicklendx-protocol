@@ -69,6 +69,13 @@ impl UpgradeControl {
             return Err(QuickLendXError::OperationNotAllowed);
         }
 
+        // Migration safety: refuse to schedule an upgrade while a destructive
+        // backfill (currently `restore_from_backup`) is mutating invoice
+        // state. Letting the new contract code come online between clear and
+        // rebuild would leave it reading half-restored state with no flag to
+        // detect the partial view.
+        crate::backup::BackupStorage::require_no_pending_backfill(env)?;
+
         env.storage()
             .instance()
             .set(&PENDING_UPGRADE_WASM_KEY, wasm_hash);

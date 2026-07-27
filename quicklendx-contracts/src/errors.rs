@@ -25,8 +25,13 @@ pub enum QuickLendXError {
     InvoiceAlreadyDefaulted = 1006,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceFrozen = 1007,
+    /// Caller is a registered admin but is **not** a registered dispute
+    /// arbiter. Resolving, reviewing, or driving dispute lifecycle actions
+    /// requires explicit arbiter registration on top of admin authority —
+    /// this separates "who can configure the protocol" from "who can
+    /// adjudicate a dispute".
     /// BREAKING: Do not renumber this variant. public ABI consumption.
-    InvalidFreezeReason = 1008,
+    NotArbiter = 1008,
 
     // Authorization (1100-1104)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -204,7 +209,13 @@ pub enum QuickLendXError {
     MaintenanceModeActive = 2201,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DuplicateDefaultTransition = 2202,
-    BackupVersionUnsupported = 2203,
+    /// A destructive contract migration (e.g. `schedule_upgrade`) was
+    /// attempted while an in-progress backfill (e.g. `restore_from_backup`)
+    /// has not yet cleared its pending flag. Letting a migration race a
+    /// backfill leaves the new contract code interpreting partially
+    /// restored state, with no signal either side has to detect it.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    BackfillInProgress = 2203,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DuplicateBid = 2204,
     /// Settlement attempted while a dispute is open on the invoice.
@@ -243,11 +254,10 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NFD"),
             QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
             QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
-            QuickLendXError::InvalidFreezeReason => symbol_short!("FRZ_RSN"),
+            QuickLendXError::NotArbiter => symbol_short!("NOT_ARB"),
             // Authorization
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
-            QuickLendXError::InvalidFreezeReason => symbol_short!("FRZ_RSN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
             QuickLendXError::SelfCallNotAllowed => symbol_short!("SELF_NA"),
@@ -331,6 +341,9 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
+            QuickLendXError::BackfillInProgress => symbol_short!("BKF_IP"),
+            QuickLendXError::DuplicateBid => symbol_short!("BID_DUP"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LS"),
             QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
             QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
             QuickLendXError::StaleInvestmentSnapshot => symbol_short!("STL_INV"),

@@ -86,6 +86,7 @@ fn make_invoice(env: &Env) -> Invoice {
         payment_history: Vec::new(env),
     },
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
 /// Build a minimal, valid `Bid`.

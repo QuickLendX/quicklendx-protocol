@@ -86,6 +86,7 @@ fn make_invoice(env: &Env, idx: u32, amount: i128) -> Invoice {
         created_at: env.ledger().timestamp(),
     },
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
 /// Create and persist a valid active backup (metadata + data + list entry)

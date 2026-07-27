@@ -52,7 +52,9 @@ fn make_inputs(env: &Env, currency: &Address, n: u32) -> Vec<InvoiceInput> {
             description: String::from_str(env, "Batch invoice"),
             category: InvoiceCategory::Services,
             tags: Vec::new(env),
-        });
+        
+        early_payment_discount_bps: None,
+});
     }
     inputs
 }

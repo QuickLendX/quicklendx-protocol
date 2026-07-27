@@ -95,15 +95,17 @@ fn test_cancel_ownership_matrix() {
     // so it must run inside a contract context.
     let mut invoice = env.as_contract(&contract_id, || {
         Invoice::new(
-            &env,
-            business.clone(),
-            10_000,
-            Address::generate(&env),
-            env.ledger().timestamp() + 86_400,
-            String::from_str(&env, "owner matrix"),
-            InvoiceCategory::Services,
-            Vec::new(&env),
-        None)
+&env,
+business.clone(),
+10_000,
+Address::generate(&env),
+env.ledger().timestamp() + 86_400,
+String::from_str(&env, "owner matrix"),
+InvoiceCategory::Services,
+Vec::new(&env),
+        None, /* early_payment_discount_bps */,
+        None
+)
         .expect("invoice creation")
     });
 

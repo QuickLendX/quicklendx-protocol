@@ -99,6 +99,7 @@ fn setup_escrow(env: &Env) -> (Address, Address, Address, BytesN<32>, Address, Q
         total_paid: 0,
         payment_history: Vec::new(env),
         origination_fee_bps: None,
+        early_payment_discount_bps: None,
     };
     InvoiceStorage::store(env, &invoice);
 

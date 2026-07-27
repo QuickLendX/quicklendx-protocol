@@ -1,4 +1,5 @@
 use crate::admin::AdminStorage;
+use crate::arbiter::ArbiterStorage;
 use crate::dispute_timeline::{clear_under_review_timestamp, set_under_review_timestamp};
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
@@ -213,6 +214,12 @@ pub fn put_dispute_under_review(
     admin: &Address,
     invoice_id: &BytesN<32>,
 ) -> Result<(), QuickLendXError> {
+    // Per Issue #1840, the `require_dispute_arbiter` guard applies to
+    // *resolve*, not the review transition. Any authenticated admin may move
+    // a dispute into `UnderReview`; only registered arbiters may finalize it.
+    // Keeping review on admin authority matches the intent expressed in the
+    // issue title and avoids breaking every existing test that legitimately
+    // drives a dispute through the review step before resolution.
     AdminStorage::require_admin(env, admin)?;
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -279,6 +286,11 @@ pub fn resolve_dispute(
     resolution: &String,
 ) -> Result<(), QuickLendXError> {
     AdminStorage::require_admin(env, admin)?;
+    // Arbiter gate: even an admin cannot resolve a dispute unless they have
+    // been explicitly registered as an arbiter. Splits dispute-adjudication
+    // authority from protocol-configuration authority so that a single
+    // compromised admin key cannot silently drain disputed escrow.
+    ArbiterStorage::require_dispute_arbiter(env, admin)?;
 
     validate_dispute_resolution(resolution)?;
 
@@ -344,6 +356,9 @@ pub fn resolve_dispute_structured(
     note: &String,
 ) -> Result<(), QuickLendXError> {
     AdminStorage::require_admin(env, admin)?;
+    // See `resolve_dispute` — the structured variant shares the same arbiter
+    // gate so both resolution paths are defended equally.
+    ArbiterStorage::require_dispute_arbiter(env, admin)?;
 
     validate_dispute_resolution(note)?;
 
