@@ -9,6 +9,7 @@
 | [INVOICE_LIFECYCLE_DIAGRAM.md](INVOICE_LIFECYCLE_DIAGRAM.md) | Full invoice state machine diagram — all statuses, transitions, invariants, and entrypoint signatures in one page (issue #1946) |
 | [OFF_CHAIN_SIGNATURES.md](OFF_CHAIN_SIGNATURES.md) | Threat model and implementation notes for all off-chain signed operations: KYC payloads, cursor attestations, dispute evidence (issue #1894) |
 | [DEFAULT_FLOW_DIAGRAM.md](DEFAULT_FLOW_DIAGRAM.md) | State-machine diagram from invoice past-due → default → recovery; grace period, finality guards, dispute interception, and concrete timeline example |
+| [QLX_INVOICE_LOCK_TIME_LIMITS.md](QLX_INVOICE_LOCK_TIME_LIMITS.md) | Contributor-facing summary of the practical invoice lock time limits, auto-release behavior, and the default grace-period path |
 | [errors.md](contracts/errors.md) | Error code reference (stable integers) |
 | [events.md](contracts/events.md) | Event schema and topic constants |
 | [security.md](contracts/security.md) | Reentrancy guard, pause circuit breaker, access control |
