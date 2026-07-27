@@ -235,7 +235,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidFreezeReason => symbol_short!("INV_FRZ_RSN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
             QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
-            QuickLendXError::InvoiceLockExpired => symbol_short!("INV_LK_EXP"),
+            QuickLendXError::InvoiceLockExpired => symbol_short!("INV_LK_XPD"),
             QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
             QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
