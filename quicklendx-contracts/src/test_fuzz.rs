@@ -323,22 +323,14 @@ fn run_payment_sequence_fuzz(
             PaymentAction::DuplicateNonce(idx) => {
                 if *idx < nonces.len() {
                     let dup_nonce = nonces.get(*idx).unwrap();
-                    let prev_invoice = client.get_invoice(invoice_id);
 
                     let result = client.try_process_partial_payment(invoice_id, &500, &dup_nonce);
 
-                    if let Ok(Ok(_)) = result {
-                        let after_invoice = client.get_invoice(invoice_id);
-                        assert_eq!(
-                            after_invoice.total_paid, prev_invoice.total_paid,
-                            "Duplicate nonce changed total_paid"
-                        );
-                    } else if prev_invoice.status == crate::invoice::InvoiceStatus::Funded {
-                        assert!(
-                            result.is_ok(),
-                            "Duplicate nonce on Funded invoice should be idempotent"
-                        );
-                    }
+                    // Duplicate nonces must always be rejected.
+                    assert!(
+                        result.is_err(),
+                        "Duplicate nonce must be rejected"
+                    );
                 }
             }
         }
@@ -423,7 +415,7 @@ proptest! {
     }
 
     /// Fuzz test: repeated nonce rejection in sequence.
-    /// Validates that duplicate nonces are properly rejected/idempotent.
+    /// Validates that duplicate nonces are properly rejected with DuplicateNonce error.
     #[test]
     fn fuzz_repeated_nonce_replay_protection(
         invoice_amount in 1_000i128..50_000i128,
@@ -443,19 +435,20 @@ proptest! {
             env.ledger().set_timestamp(env.ledger().timestamp() + 100);
             let result = client.try_process_partial_payment(&invoice_id, &payment_amount, &nonce);
 
-            if result.is_ok() {
-                let after = client.get_invoice(&invoice_id);
-                assert_eq!(
-                    after.total_paid, initial_paid,
-                    "Duplicate nonce changed total_paid"
-                );
-            }
+            // Every duplicate must be rejected.
+            assert!(result.is_err(), "Duplicate nonce must be rejected");
         }
 
         let final_count = crate::settlement::get_payment_count(&env, &invoice_id).unwrap();
         assert_eq!(
             final_count, initial_count,
             "Duplicate nonces incremented payment count"
+        );
+
+        let final_paid = client.get_invoice(&invoice_id).total_paid;
+        assert_eq!(
+            final_paid, initial_paid,
+            "Duplicate nonces changed total_paid"
         );
     }
 

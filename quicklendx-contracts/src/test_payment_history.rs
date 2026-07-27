@@ -62,11 +62,18 @@ fn test_payment_history_deduplication() {
     let nonce = String::from_str(&env, "duplicate_nonce");
     let timestamp = env.ledger().timestamp();
 
-    // First payment
+    // First payment succeeds
     client.record_payment(&invoice_id, &1000, &timestamp, &nonce);
     
-    // Duplicate payment (same nonce)
-    client.record_payment(&invoice_id, &1000, &timestamp, &nonce);
+    // Duplicate payment (same nonce) must be rejected
+    let result = client.try_record_payment(&invoice_id, &1000, &timestamp, &nonce);
+    assert!(result.is_err(), "Duplicate nonce must be rejected");
+    let err = result.unwrap_err();
+    assert_eq!(
+        err,
+        Ok(QuickLendXError::DuplicateNonce),
+        "Expected DuplicateNonce error"
+    );
 
     // Should only have 1 record
     let records = client.get_payment_records(&invoice_id, &0, &10);

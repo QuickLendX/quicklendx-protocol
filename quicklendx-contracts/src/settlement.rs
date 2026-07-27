@@ -150,7 +150,7 @@ pub struct Progress {
 /// Record a partial payment for an invoice.
 ///
 /// If the total paid amount reaches the invoice total, the settlement is finalized.
-/// This method provides strictly ordered record persistence and idempotent deduplication.
+/// This method provides strictly ordered record persistence and rejects duplicate nonces.
 ///
 /// # Arguments
 /// - `invoice_id`: Unique identifier for the invoice being paid.
@@ -241,8 +241,8 @@ pub fn process_partial_payment(
 ///    accounting identity `investor_return + platform_fee == total_paid` holds.
 ///
 /// 2. **Replay Protection Invariant**: Each `(invoice_id, nonce)` pair is unique. Duplicate
-///    nonces return the current progress without creating a new record or incrementing count.
-///    Empty nonces bypass this check intentionally (caller responsibility for uniqueness).
+///    nonces are rejected with `DuplicateNonce`. Empty nonces bypass this check intentionally
+///    (caller responsibility for uniqueness).
 ///
 /// 3. **Payment Count Bound**: `payment_count <= MAX_PAYMENT_COUNT`. Payment count exhaustion
 ///    returns `OperationNotAllowed` and cannot be bypassed.
@@ -253,6 +253,7 @@ pub fn process_partial_payment(
 /// - `InvalidStatus`: Invoice is not in `Funded` state or `remaining_due == 0`.
 /// - `NotBusinessOwner`: `payer` does not match invoice business.
 /// - `OperationNotAllowed`: Payment count has reached `MAX_PAYMENT_COUNT`.
+/// - `DuplicateNonce`: `payment_nonce` has already been recorded for this invoice.
 pub fn record_payment(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -283,8 +284,7 @@ pub fn record_payment(
     let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
     let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
     if seen {
-        // Deduplicate: If transaction_id is already seen, return current progress to ensure idempotency.
-        return get_invoice_progress(env, invoice_id);
+        return Err(QuickLendXError::DuplicateNonce);
     }
 
     let payment_count = get_payment_count_internal(env, invoice_id);
@@ -904,7 +904,6 @@ fn emit_payment_recorded(
     );
 }
 
-fn emit_invoice_settled_final(
 fn require_no_active_dispute(invoice: &Invoice) -> Result<(), QuickLendXError> {
     if invoice.dispute_status == DisputeStatus::Disputed
         || invoice.dispute_status == DisputeStatus::UnderReview
