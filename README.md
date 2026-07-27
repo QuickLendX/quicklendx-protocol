@@ -73,6 +73,7 @@ npm run dev
 - [`docs/contracts/settlement-formula.md`](docs/contracts/settlement-formula.md): Contributor-facing explanation of the settlement formula, inputs, and when fee updates take effect.
 - `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
 - `docs/KYC.md`: Business KYC vs investor KYC, what each gates.
+- `docs/QLX_BUSINESS_KYC_TIERS.md`: Business KYC status system — state machine, transitions, invoice limits, and enforcement points.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-contracts/docs/contracts/deterministic-time.md`: Smart contract deterministic ledger time semantics.
 - `quicklendx-backend/README.md`: Backend-specific documentation.
