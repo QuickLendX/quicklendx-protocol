@@ -294,6 +294,124 @@ fn finalize_proposal_rejects_non_active_proposal() {
 }
 
 // ============================================================================
+// Quorum boundary edge cases
+// ============================================================================
+
+#[test]
+fn finalize_proposal_passes_when_exactly_at_quorum_with_majority_for() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let voter3 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter3, &id, false).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Passed);
+}
+
+#[test]
+fn finalize_proposal_rejects_when_exactly_at_quorum_with_majority_against() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let voter3 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, false).unwrap();
+    cast_vote(&env, &contract_id, &voter3, &id, false).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Rejected);
+}
+
+#[test]
+fn finalize_proposal_rejects_when_one_vote_below_quorum_even_with_majority_for() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, true).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Rejected);
+}
+
+#[test]
+fn finalize_proposal_rejects_when_one_vote_below_quorum_with_split_votes() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, false).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Rejected);
+}
+
+#[test]
+fn finalize_proposal_passes_when_one_vote_above_quorum_with_majority_for() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let voter3 = Address::generate(&env);
+    let voter4 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter3, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter4, &id, false).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Passed);
+}
+
+#[test]
+fn finalize_proposal_rejects_when_one_vote_above_quorum_but_tied() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let voter3 = Address::generate(&env);
+    let voter4 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter3, &id, false).unwrap();
+    cast_vote(&env, &contract_id, &voter4, &id, false).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Rejected);
+}
+
+// ============================================================================
 // Run proposal (execute)
 // ============================================================================
 
