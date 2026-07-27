@@ -5372,6 +5372,10 @@ mod test_freeze_guard_writes;
 #[cfg(test)]
 mod test_freeze_event;
 
+// Issue #1960 — serialisation stability for freeze_appeal_channel field.
+#[cfg(test)]
+mod test_freeze_appeal_channel;
+
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_accounting;
 
