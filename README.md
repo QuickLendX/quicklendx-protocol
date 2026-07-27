@@ -69,6 +69,7 @@ npm run dev
 - `docs/RUNBOOK_INCIDENT_RESPONSE.md`: Operator playbook for unexpected contract behavior and incident-mode recovery.
 - `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
 - `docs/KYC.md`: Business KYC vs investor KYC, what each gates.
+- `docs/QLX_BUSINESS_KYC_TIERS.md`: Business KYC status system — state machine, transitions, invoice limits, and enforcement points.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-contracts/docs/contracts/deterministic-time.md`: Smart contract deterministic ledger time semantics.
 - [`docs/README.md`](docs/README.md): Full documentation index — **start here**.
