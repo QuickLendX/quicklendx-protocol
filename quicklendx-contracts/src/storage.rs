@@ -3,6 +3,7 @@
 //! This module defines storage keys, indexing strategies, and storage operations
 //! for efficient data retrieval and management.
 
+use crate::types::FreezeInfo;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 use crate::protocol_limits;
@@ -313,6 +314,18 @@ impl InvoiceStorage {
     pub fn remove_freeze_info(env: &Env, invoice_id: &BytesN<32>) {
         let key = DataKey::FreezeInfo(invoice_id.clone());
         env.storage().persistent().remove(&key);
+    }
+
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
+        Self::get_invoice_lock(env, invoice_id) != InvoiceLock::None
+    }
+
+    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+        if frozen {
+            Self::set_invoice_lock(env, invoice_id, InvoiceLock::Frozen);
+        } else {
+            Self::set_invoice_lock(env, invoice_id, InvoiceLock::None);
+        }
     }
 
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {

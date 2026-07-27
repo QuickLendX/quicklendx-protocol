@@ -36,7 +36,7 @@ pub struct BusinessVerification {
 }
 
 #[contracttype]
-#[derive(Clone, PartialEq, Debug, PartialOrd, Ord)]
+#[derive(Clone, PartialEq, Eq, Debug, PartialOrd, Ord)]
 pub enum InvestorTier {
     Basic,
     Silver,

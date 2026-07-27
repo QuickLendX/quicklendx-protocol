@@ -36,13 +36,6 @@ fn validate_token_address(
     }
 }
 
-/// Minimum transfer amount to prevent dust transfers.
-/// Matches the test-mode MIN_TRANSFER from protocol_limits.rs.
-#[cfg(not(test))]
-const MIN_TRANSFER: i128 = 1_000_000; // 1 token (6 decimals)
-#[cfg(test)]
-const MIN_TRANSFER: i128 = 10;
-
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]

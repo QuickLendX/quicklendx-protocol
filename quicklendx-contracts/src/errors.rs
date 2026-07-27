@@ -214,6 +214,10 @@ pub enum QuickLendXError {
     BatchSizeExceeded = 2208,
     /// Account is frozen and cannot create invoices.
     AccountIsFrozen = 2209,
+    /// Duplicate bid detected.
+    DuplicateBid = 2210,
+    /// Batch size exceeds maximum allowed.
+    BatchSizeTooLarge = 2211,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -230,11 +234,10 @@ impl From<QuickLendXError> for Symbol {
             // Authorization
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
-            QuickLendXError::InvalidFreezeReason => symbol_short!("INV_FRZ_RSN"),
+            QuickLendXError::InvalidFreezeReason => symbol_short!("INV_FRZ"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
             QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
             QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
-            QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
             QuickLendXError::SelfCallNotAllowed => symbol_short!("SELF_NA"),
             // Input validation
@@ -303,24 +306,23 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_PND_TR"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_L_SEQ"),
             QuickLendXError::EmergencyWithdrawTimelockNotElapsed => symbol_short!("EMG_TLK"),
             QuickLendXError::EmergencyWithdrawExpired => symbol_short!("EMG_EXP"),
             QuickLendXError::EmergencyWithdrawCancelled => symbol_short!("EMG_CNL"),
             QuickLendXError::EmergencyWithdrawAlreadyExists => symbol_short!("EMG_EX"),
             QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
+            QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
-            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NOPND"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
             QuickLendXError::InsuranceNotActive => symbol_short!("INS_NA"),
             QuickLendXError::UnstableCursor => symbol_short!("STBL_CUR"),
             QuickLendXError::BatchSizeExceeded => symbol_short!("BAT_MAX"),
             QuickLendXError::AccountIsFrozen => symbol_short!("ACCT_FRZ"),
+            QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
+            QuickLendXError::BatchSizeTooLarge => symbol_short!("BAT_LRG"),
         }
     }
 }
