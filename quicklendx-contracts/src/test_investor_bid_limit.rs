@@ -94,7 +94,7 @@ fn funded_setup(
         &String::from_str(env, "test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     (business, investor, invoice_id)
 }
@@ -118,7 +118,7 @@ fn plain_invoice(
         &String::from_str(env, "inv"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     invoice_id
 }
@@ -148,7 +148,7 @@ fn test_cap_blocks_next_bid() {
     // never a confound).
     for _ in 0..3u32 {
         let inv = plain_invoice(&env, &client, &admin, &business, &currency);
-        client.place_bid(&investor, &inv, &1_000i128, &1_100i128);
+        client.place_bid(&investor, &inv, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
     }
 
     assert_eq!(
@@ -163,7 +163,7 @@ fn test_cap_blocks_next_bid() {
 
     // The (cap+1)th bid must be rejected with MaxActiveBidsPerInvestorExceeded.
     let overflow_inv = plain_invoice(&env, &client, &admin, &business, &currency);
-    let result = client.try_place_bid(&investor, &overflow_inv, &1_000i128, &1_100i128);
+    let result = client.try_place_bid(&investor, &overflow_inv, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert!(result.is_err(), "bid beyond cap must be rejected");
     assert_eq!(
         result.unwrap_err().expect("expected contract error"),
@@ -196,13 +196,13 @@ fn test_expiry_frees_slot() {
     // Fill the cap.
     let inv0 = plain_invoice(&env, &client, &admin, &business, &currency);
     let inv1 = plain_invoice(&env, &client, &admin, &business, &currency);
-    let bid0 = client.place_bid(&investor, &inv0, &1_000i128, &1_100i128);
-    client.place_bid(&investor, &inv1, &1_000i128, &1_100i128);
+    let bid0 = client.place_bid(&investor, &inv0, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    client.place_bid(&investor, &inv1, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Third bid must be blocked.
     let inv2 = plain_invoice(&env, &client, &admin, &business, &currency);
     assert!(
-        client.try_place_bid(&investor, &inv2, &1_000i128, &1_100i128).is_err(),
+        client.try_place_bid(&investor, &inv2, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32])).is_err(),
         "cap must be enforced"
     );
 
@@ -224,7 +224,7 @@ fn test_expiry_frees_slot() {
 
     // Now the third bid must succeed.
     assert!(
-        client.try_place_bid(&investor, &inv2, &1_000i128, &1_100i128).is_ok(),
+        client.try_place_bid(&investor, &inv2, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32])).is_ok(),
         "new bid must succeed after expiry freed a slot"
     );
 }
@@ -252,11 +252,11 @@ fn test_cancellation_frees_slot() {
     let inv1 = plain_invoice(&env, &client, &admin, &business, &currency);
     let inv2 = plain_invoice(&env, &client, &admin, &business, &currency);
 
-    let bid0 = client.place_bid(&investor, &inv0, &1_000i128, &1_100i128);
-    client.place_bid(&investor, &inv1, &1_000i128, &1_100i128);
+    let bid0 = client.place_bid(&investor, &inv0, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    client.place_bid(&investor, &inv1, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     assert!(
-        client.try_place_bid(&investor, &inv2, &1_000i128, &1_100i128).is_err(),
+        client.try_place_bid(&investor, &inv2, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32])).is_err(),
         "cap must be enforced"
     );
 
@@ -272,7 +272,7 @@ fn test_cancellation_frees_slot() {
 
     // Third bid now succeeds.
     assert!(
-        client.try_place_bid(&investor, &inv2, &1_000i128, &1_100i128).is_ok(),
+        client.try_place_bid(&investor, &inv2, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32])).is_ok(),
         "new bid must succeed after cancellation freed a slot"
     );
 }
@@ -302,11 +302,11 @@ fn test_acceptance_frees_slot() {
     let inv_new   = plain_invoice(&env, &client, &admin, &business_plain, &currency);
 
     // Fill cap: one bid on the to-be-accepted invoice, one on the plain invoice.
-    let bid_accept = client.place_bid(&investor, &inv_accepted, &5_000i128, &5_500i128);
-    client.place_bid(&investor, &inv_plain, &1_000i128, &1_100i128);
+    let bid_accept = client.place_bid(&investor, &inv_accepted, &5_000i128, &5_500i128, &BytesN::from_array(&env, &[0u8; 32]));
+    client.place_bid(&investor, &inv_plain, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     assert!(
-        client.try_place_bid(&investor, &inv_new, &1_000i128, &1_100i128).is_err(),
+        client.try_place_bid(&investor, &inv_new, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32])).is_err(),
         "cap must be enforced"
     );
 
@@ -326,7 +326,7 @@ fn test_acceptance_frees_slot() {
 
     // New bid must now succeed.
     assert!(
-        client.try_place_bid(&investor, &inv_new, &1_000i128, &1_100i128).is_ok(),
+        client.try_place_bid(&investor, &inv_new, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32])).is_ok(),
         "new bid must succeed after acceptance freed a slot"
     );
 }
@@ -356,11 +356,11 @@ fn test_count_excludes_non_placed_statuses() {
     let inv_withdraw = plain_invoice(&env, &client, &admin, &business, &currency);
     let inv_expire   = plain_invoice(&env, &client, &admin, &business, &currency);
 
-    let bid_stay     = client.place_bid(&investor, &inv_placed,   &1_000i128, &1_100i128);
-    let bid_cancel   = client.place_bid(&investor, &inv_cancel,   &1_000i128, &1_100i128);
-    let bid_withdraw = client.place_bid(&investor, &inv_withdraw,  &1_000i128, &1_100i128);
-    let bid_expire   = client.place_bid(&investor, &inv_expire,   &1_000i128, &1_100i128);
-    let bid_accept   = client.place_bid(&investor, &inv_accepted, &5_000i128, &5_500i128);
+    let bid_stay     = client.place_bid(&investor, &inv_placed,   &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_cancel   = client.place_bid(&investor, &inv_cancel,   &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_withdraw = client.place_bid(&investor, &inv_withdraw,  &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_expire   = client.place_bid(&investor, &inv_expire,   &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_accept   = client.place_bid(&investor, &inv_accepted, &5_000i128, &5_500i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     assert_eq!(
         BidStorage::count_active_placed_bids_for_investor(&env, &investor),
@@ -429,7 +429,7 @@ fn test_disabled_limit_allows_placement_beyond_previous_cap() {
     for _ in 0..5u32 {
         let inv = plain_invoice(&env, &client, &admin, &business, &currency);
         assert!(
-            client.try_place_bid(&investor, &inv, &1_000i128, &1_100i128).is_ok(),
+            client.try_place_bid(&investor, &inv, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32])).is_ok(),
             "placement must succeed when limit is disabled"
         );
     }

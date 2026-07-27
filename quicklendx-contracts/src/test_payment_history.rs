@@ -94,13 +94,13 @@ fn setup_test_invoice(
         &String::from_str(env, "Test"),
         &crate::invoice::InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(investor, &10000);
     
-    let bid_id = client.place_bid(investor, &invoice_id, &5000, &10000);
+    let bid_id = client.place_bid(investor, &invoice_id, &5000, &10000, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
     
     invoice_id

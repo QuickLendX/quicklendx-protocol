@@ -1,4 +1,4 @@
-//! Comprehensive tests for maintenance mode.
+﻿//! Comprehensive tests for maintenance mode.
 //!
 //! Coverage:
 //! 1. Toggle: admin can enable and disable maintenance mode.
@@ -59,7 +59,7 @@ fn make_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 // ============================================================================
@@ -112,7 +112,7 @@ fn test_maintenance_blocks_store_invoice() {
         &String::from_str(&env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive,
@@ -130,7 +130,7 @@ fn test_maintenance_blocks_place_bid() {
 
     client.set_maintenance_mode(&admin, &true, &reason(&env, "Upgrade"));
 
-    let result = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    let result = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -195,7 +195,7 @@ fn test_maintenance_blocks_settle_invoice() {
 
     client.set_maintenance_mode(&admin, &true, &reason(&env, "Upgrade"));
 
-    let result = client.try_settle_invoice(&invoice_id, &1_000i128);
+    let result = client.try_settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -456,7 +456,7 @@ fn test_admin_can_extend_protocol_ttl() {
 
     client.add_currency(&admin, &currency);
     let invoice_id = make_invoice(&env, &client, &business, &currency);
-    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let report = client.extend_protocol_ttl(&admin);
 
@@ -511,7 +511,7 @@ fn test_extend_ttl_idempotent() {
 
     client.add_currency(&admin, &currency);
     let invoice_id = make_invoice(&env, &client, &business, &currency);
-    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let report1 = client.extend_protocol_ttl(&admin);
     let report2 = client.extend_protocol_ttl(&admin);
@@ -533,7 +533,7 @@ fn test_extend_ttl_all_kinds_populated() {
     client.add_currency(&admin, &currency);
 
     let invoice_id = make_invoice(&env, &client, &business, &currency);
-    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let _invoice2 = make_invoice(&env, &client, &business, &currency);
     let currency2 = Address::generate(&env);
@@ -556,7 +556,7 @@ fn test_extend_ttl_emits_events() {
 
     client.add_currency(&admin, &currency);
     let invoice_id = make_invoice(&env, &client, &business, &currency);
-    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &500i128, &600i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let before = count_ttl_extended_events(&env);
 
@@ -591,3 +591,4 @@ fn test_extend_ttl_no_events_when_empty() {
         "no TtlExtended events when all indexes are empty"
     );
 }
+

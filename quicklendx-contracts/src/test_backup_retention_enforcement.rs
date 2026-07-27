@@ -84,8 +84,9 @@ fn make_invoice(env: &Env, idx: u32, amount: i128) -> Invoice {
         total_paid: 0,
         payment_history: Vec::new(env),
         created_at: env.ledger().timestamp(),
+    },
+        origination_fee_bps: None,
     }
-}
 
 /// Create and persist a valid active backup (metadata + data + list entry)
 /// stamped at the current ledger time, and return its ID.
@@ -110,7 +111,8 @@ fn create_backup(env: &Env) -> BytesN<32> {
 }
 
 fn advance(env: &Env, seconds: u64) {
-    env.ledger().set_timestamp(env.ledger().timestamp() + seconds);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + seconds);
 }
 
 fn set_policy(env: &Env, max_backups: u32, max_age_seconds: u64, auto_cleanup_enabled: bool) {
@@ -300,7 +302,9 @@ fn test_archive_marks_without_deleting_and_is_excluded() {
 
     // Archived backup remains fully intact.
     assert_eq!(
-        BackupStorage::get_backup(&env, &archived_id).unwrap().status,
+        BackupStorage::get_backup(&env, &archived_id)
+            .unwrap()
+            .status,
         BackupStatus::Archived
     );
 }

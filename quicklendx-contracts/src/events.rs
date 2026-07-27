@@ -6,7 +6,7 @@ use crate::payments::Escrow;
 use crate::types::Bid;
 use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 // ============================================================================
 // Topic Constants
@@ -69,6 +69,12 @@ pub const TOPIC_TREASURY_ROTATION_INITIATED: &str = "treasury_rotation_initiated
 pub const TOPIC_TREASURY_ROTATION_CONFIRMED: &str = "treasury_rotation_confirmed";
 /// Topic for `TreasuryRotationCancelled` events.
 pub const TOPIC_TREASURY_ROTATION_CANCELLED: &str = "treasury_rotation_cancelled";
+/// Topic for `InvoiceFrozen` events.
+///
+/// Emitted when an admin applies a freeze to an invoice via `freeze_invoice`.
+/// The payload includes a `freeze_appeal_channel` field that points consumers
+/// to the appeals process documented in `docs/APPEALS.md`.
+pub const TOPIC_INVOICE_FROZEN: &str = "invoice_frozen";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -649,6 +655,14 @@ pub struct BidTtlUpdated {
     pub timestamp: u64,
 }
 
+#[contractevent]
+pub struct BidExpiryGraceUpdated {
+    pub old_seconds: u64,
+    pub new_seconds: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
 pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     TtlExtended {
         kind: kind.clone(),
@@ -684,6 +698,8 @@ pub struct ProtocolInitialized {
     pub min_invoice_amount: i128,
     pub max_due_date_days: u64,
     pub grace_period_seconds: u64,
+    pub backfill_max_batch_size: u32,
+    pub corridors: Vec<Address>,
     pub timestamp: u64,
 }
 
@@ -710,6 +726,65 @@ pub fn emit_paused(env: &Env, admin: &Address) {
 pub fn emit_unpaused(env: &Env, admin: &Address) {
     Unpaused {
         admin: admin.clone(),
+    }
+    .publish(env);
+}
+
+// ============================================================================
+// Freeze / Unfreeze Events
+// ============================================================================
+
+/// Emitted when an admin applies a freeze to an invoice via `freeze_invoice`.
+///
+/// Topic: [`TOPIC_INVOICE_FROZEN`] (`"invoice_frozen"`)
+///
+/// # Fields
+/// - `invoice_id` – The frozen invoice.
+/// - `frozen_by` – Address of the admin who applied the freeze.
+/// - `reason` – Machine-readable label for the [`crate::types::BusinessFreezeReason`]
+///   variant (e.g. `"admin_action"`, `"compliance_violation"`, `"fraud_suspected"`).
+/// - `freeze_appeal_channel` – A short pointer to the off-chain appeals process.
+///   Set to `"docs/APPEALS.md"` by the emitter.  Downstream consumers (dashboards,
+///   notification pipelines) can surface this string directly to the affected
+///   business so they know where to file an appeal without paging an engineer.
+///   This field contains **no PII** — it is a static URL/path.
+/// - `timestamp` – Ledger timestamp at emission time.
+///
+/// # Backwards compatibility
+/// This event is **additive**.  Indexers that do not recognise the
+/// `freeze_appeal_channel` field can safely ignore it.
+///
+/// # Security
+/// No PII is included.  The `reason` field is the string label returned by
+/// `BusinessFreezeReason::label()`, not a free-text admin comment.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceFrozen {
+    pub invoice_id: BytesN<32>,
+    pub frozen_by: Address,
+    pub reason: String,
+    pub freeze_appeal_channel: String,
+    pub timestamp: u64,
+}
+
+/// Emit an [`InvoiceFrozen`] event.
+///
+/// `reason_label` should come from [`crate::types::BusinessFreezeReason::label()`].
+/// `freeze_appeal_channel` is always `"docs/APPEALS.md"` — a static pointer
+/// to the operator-facing appeals runbook so that any off-chain consumer of
+/// this event knows immediately where to direct the frozen business.
+pub fn emit_invoice_frozen(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    frozen_by: &Address,
+    reason_label: &str,
+) {
+    InvoiceFrozen {
+        invoice_id: invoice_id.clone(),
+        frozen_by: frozen_by.clone(),
+        reason: String::from_str(env, reason_label),
+        freeze_appeal_channel: String::from_str(env, "docs/APPEALS.md"),
+        timestamp: env.ledger().timestamp(),
     }
     .publish(env);
 }
@@ -1365,6 +1440,16 @@ pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Add
     .publish(env);
 }
 
+pub fn emit_bid_expiry_grace_updated(env: &Env, old_seconds: u64, new_seconds: u64, admin: &Address) {
+    BidExpiryGraceUpdated {
+        old_seconds,
+        new_seconds,
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
 #[contractevent]
 pub struct EmergencyWithdrawalInitiated {
     pub token: Address,
@@ -1526,6 +1611,8 @@ pub fn emit_protocol_initialized(
     min_invoice_amount: i128,
     max_due_date_days: u64,
     grace_period_seconds: u64,
+    backfill_max_batch_size: u32,
+    corridors: &Vec<Address>,
 ) {
     ProtocolInitialized {
         admin: admin.clone(),
@@ -1534,6 +1621,8 @@ pub fn emit_protocol_initialized(
         min_invoice_amount,
         max_due_date_days,
         grace_period_seconds,
+        backfill_max_batch_size,
+        corridors: corridors.clone(),
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
@@ -1544,9 +1633,23 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
         .publish((symbol_short!("adm_init"),), (admin.clone(),));
 }
 
+pub fn emit_treasury_rotation_initiated(env: &Env, admin: &Address, new_address: &Address, deadline: u64) {
+    env.events().publish(
+        (symbol_short!("tr_rot_i"), admin.clone()),
+        (new_address.clone(), deadline),
+    );
+}
+
+pub fn emit_treasury_rotation_confirmed(env: &Env, admin: &Address, new_address: &Address) {
+    env.events().publish(
+        (symbol_short!("tr_rot_f"), admin.clone()),
+        (new_address.clone(), env.ledger().timestamp()),
+    );
+}
+
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
     env.events().publish(
-        (symbol_short!("tr_rot_cn"), admin.clone()),
+        (symbol_short!("tr_rot_c"), admin.clone()),
         (),
     );
 }
@@ -1566,14 +1669,70 @@ pub fn emit_treasury_rotation_initiated(
     .publish(env);
 }
 
-pub fn emit_treasury_rotation_confirmed(
-    env: &Env,
-    old_address: &Address,
-    new_address: &Address,
-) {
+pub fn emit_treasury_rotation_confirmed(env: &Env, old_address: &Address, new_address: &Address) {
     TreasuryRotationConfirmed {
         old_address: old_address.clone(),
         new_address: new_address.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+// ── Upgrade events ──────────────────────────────────────────────────────────
+
+/// Emitted when an admin schedules a WASM contract upgrade.
+pub fn emit_upgrade_scheduled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_sch"),),
+        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp()),
+    );
+}
+
+/// Emitted when an admin cancels a pending WASM upgrade.
+pub fn emit_upgrade_cancelled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_can"),),
+        (admin.clone(), wasm_hash.clone()),
+    );
+}
+
+/// Emitted when a pending WASM upgrade is executed (contract code replaced).
+pub fn emit_upgrade_executed(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_exe"),),
+        (admin.clone(), wasm_hash.clone()),
+    );
+}
+
+// ── Incident mode events ─────────────────────────────────────────────────────
+
+/// Emitted when the admin enters coordinated incident mode (pause + maintenance).
+#[contractevent]
+pub struct IncidentModeEntered {
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when the admin exits coordinated incident mode (unpause + disable maintenance).
+#[contractevent]
+pub struct IncidentModeExited {
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+pub fn emit_incident_mode_entered(env: &Env, admin: &Address, reason: &String) {
+    IncidentModeEntered {
+        admin: admin.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_incident_mode_exited(env: &Env, admin: &Address) {
+    IncidentModeExited {
+        admin: admin.clone(),
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
