@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env};
 
 use crate::errors::QuickLendXError;
@@ -293,6 +294,124 @@ fn finalize_proposal_rejects_non_active_proposal() {
 }
 
 // ============================================================================
+// Quorum boundary edge cases
+// ============================================================================
+
+#[test]
+fn finalize_proposal_passes_when_exactly_at_quorum_with_majority_for() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let voter3 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter3, &id, false).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Passed);
+}
+
+#[test]
+fn finalize_proposal_rejects_when_exactly_at_quorum_with_majority_against() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let voter3 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, false).unwrap();
+    cast_vote(&env, &contract_id, &voter3, &id, false).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Rejected);
+}
+
+#[test]
+fn finalize_proposal_rejects_when_one_vote_below_quorum_even_with_majority_for() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, true).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Rejected);
+}
+
+#[test]
+fn finalize_proposal_rejects_when_one_vote_below_quorum_with_split_votes() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, false).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Rejected);
+}
+
+#[test]
+fn finalize_proposal_passes_when_one_vote_above_quorum_with_majority_for() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let voter3 = Address::generate(&env);
+    let voter4 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter3, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter4, &id, false).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Passed);
+}
+
+#[test]
+fn finalize_proposal_rejects_when_one_vote_above_quorum_but_tied() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let voter1 = Address::generate(&env);
+    let voter2 = Address::generate(&env);
+    let voter3 = Address::generate(&env);
+    let voter4 = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+    cast_vote(&env, &contract_id, &voter1, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter2, &id, true).unwrap();
+    cast_vote(&env, &contract_id, &voter3, &id, false).unwrap();
+    cast_vote(&env, &contract_id, &voter4, &id, false).unwrap();
+
+    env.ledger().set_sequence_number(1011);
+    let status = finalize_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(status, ProposalStatus::Rejected);
+}
+
+// ============================================================================
 // Run proposal (execute)
 // ============================================================================
 
@@ -363,4 +482,40 @@ fn get_proposal_rejects_nonexistent() {
     let id = proposal_id(&env, 99);
     let err = get_proposal(&env, &contract_id, &id).unwrap_err();
     assert_eq!(err, QuickLendXError::StorageKeyNotFound);
+}
+
+// ============================================================================
+// Guard
+// ============================================================================
+
+#[test]
+fn require_no_open_governance_proposal_blocks_destructive_ops() {
+    let (env, contract_id) = setup();
+    let proposer = Address::generate(&env);
+    let id = proposal_id(&env, 1);
+
+    // Should succeed when no active proposals
+    env.as_contract(&contract_id, || {
+        let res = crate::governance::require_no_open_governance_proposal(&env);
+        assert!(res.is_ok());
+    });
+
+    // Create an active proposal
+    submit_proposal(&env, &contract_id, &proposer, id.clone()).unwrap();
+
+    // Guard should now fail
+    env.as_contract(&contract_id, || {
+        let err = crate::governance::require_no_open_governance_proposal(&env).unwrap_err();
+        assert_eq!(err, QuickLendXError::PendingGovernanceProposal);
+    });
+
+    // Finalize the proposal (rejected because 0 votes)
+    env.ledger().set_sequence_number(1011);
+    finalize_proposal(&env, &contract_id, &id).unwrap();
+
+    // Guard should succeed again
+    env.as_contract(&contract_id, || {
+        let res = crate::governance::require_no_open_governance_proposal(&env);
+        assert!(res.is_ok());
+    });
 }

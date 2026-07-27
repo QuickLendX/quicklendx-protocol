@@ -1,4 +1,4 @@
-//! Notification emission policy tests for the QuickLendX protocol.
+﻿//! Notification emission policy tests for the QuickLendX protocol.
 //!
 //! # Purpose
 //! Verify that the notification system:
@@ -1178,7 +1178,7 @@ fn funded_invoice_fixture(
         &String::from_str(env, "desc"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(
         investor,
@@ -1253,7 +1253,7 @@ fn test_wire_settlement_emits_status_changed_notification() {
     sac.mint(&business, &10_000);
     let exp = env.ledger().sequence() + 10_000;
     tok.approve(&business, &client.address, &10_000, &exp);
-    client.settle_invoice(&invoice_id, &10_000);
+    client.settle_invoice(&invoice_id, &10_000, &client.get_investment(&invoice_id).unwrap());
     assert!(notification_type_for_user(
         &env,
         &contract_id,
@@ -1334,3 +1334,4 @@ fn test_wire_payment_notification_respects_preferences() {
         NotificationType::PaymentReceived,
     ));
 }
+

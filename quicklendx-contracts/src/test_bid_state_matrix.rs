@@ -3,6 +3,7 @@ use crate::errors::QuickLendXError;
 use crate::storage::BidStorage;
 use crate::types::{Bid, BidStatus};
 use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Bytes, BytesN, Env, String, Vec};
 
 struct TestContext {
@@ -59,7 +60,7 @@ impl TestContext {
             &String::from_str(&self.env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        );
+        &None);
         self.client.verify_invoice(&invoice_id);
         invoice_id
     }
@@ -84,7 +85,7 @@ fn test_transition_placed_to_accepted() {
     let ctx = TestContext::new();
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
-    let bid_id = ctx.place_bid(&invoice_id);
+    let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
     assert_eq!(ctx.bid_status(&bid_id), BidStatus::Placed);
     ctx.client.accept_bid(&invoice_id, &bid_id);
     assert_eq!(ctx.bid_status(&bid_id), BidStatus::Accepted);
@@ -95,7 +96,7 @@ fn test_transition_placed_to_withdrawn() {
     let ctx = TestContext::new();
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
-    let bid_id = ctx.place_bid(&invoice_id);
+    let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
     assert_eq!(ctx.bid_status(&bid_id), BidStatus::Placed);
     ctx.client.withdraw_bid(&bid_id);
     assert_eq!(ctx.bid_status(&bid_id), BidStatus::Withdrawn);
@@ -106,7 +107,7 @@ fn test_transition_placed_to_cancelled() {
     let ctx = TestContext::new();
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
-    let bid_id = ctx.place_bid(&invoice_id);
+    let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
     assert_eq!(ctx.bid_status(&bid_id), BidStatus::Placed);
     ctx.client.cancel_bid(&bid_id);
     assert_eq!(ctx.bid_status(&bid_id), BidStatus::Cancelled);
@@ -117,7 +118,7 @@ fn test_transition_placed_to_expired() {
     let ctx = TestContext::new();
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
-    let bid_id = ctx.place_bid(&invoice_id);
+    let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
     assert_eq!(ctx.bid_status(&bid_id), BidStatus::Placed);
     ctx.env.ledger().set_timestamp(ctx.env.ledger().timestamp() + 86_400 * 40);
     let cleaned = ctx.client.cleanup_expired_bids(&invoice_id);
@@ -130,7 +131,7 @@ fn test_cannot_accept_non_placed_bid() {
     let ctx = TestContext::new();
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
-    let bid_id = ctx.place_bid(&invoice_id);
+    let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
     ctx.client.cancel_bid(&bid_id);
     let result = ctx.client.try_accept_bid(&invoice_id, &bid_id);
     assert!(result.is_err());
@@ -141,7 +142,7 @@ fn test_cannot_withdraw_non_placed_bid() {
     let ctx = TestContext::new();
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
-    let bid_id = ctx.place_bid(&invoice_id);
+    let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
     ctx.client.cancel_bid(&bid_id);
     let result = ctx.client.try_withdraw_bid(&bid_id);
     assert!(result.is_err());
@@ -152,7 +153,7 @@ fn test_cannot_cancel_non_placed_bid() {
     let ctx = TestContext::new();
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
-    let bid_id = ctx.place_bid(&invoice_id);
+    let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
     ctx.client.withdraw_bid(&bid_id);
     let cancelled = ctx.client.cancel_bid(&bid_id);
     assert!(!cancelled);
@@ -163,7 +164,7 @@ fn test_terminal_bid_states_are_immutable() {
     let ctx = TestContext::new();
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
-    let bid_id = ctx.place_bid(&invoice_id);
+    let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
     ctx.client.accept_bid(&invoice_id, &bid_id);
     let result = ctx.client.try_withdraw_bid(&bid_id);
     assert!(result.is_err());
@@ -185,7 +186,7 @@ fn test_transitions_guard_consistency() {
     ];
 
     for (to, should_succeed) in transitions {
-        let bid_id = ctx.place_bid(&invoice_id);
+        let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
         assert_eq!(ctx.bid_status(&bid_id), BidStatus::Placed);
 
         let result = match to {

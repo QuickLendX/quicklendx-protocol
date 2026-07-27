@@ -3,6 +3,7 @@ use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
 use crate::types::{DisputeStatus, InvoiceStatus};
 use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Bytes, BytesN, Env, String, Vec};
 
 struct TestContext {
@@ -59,7 +60,7 @@ impl TestContext {
             &String::from_str(&self.env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        );
+        &None);
         self.client.verify_invoice(&invoice_id);
         let bid_id = self.client.place_bid(
             &self.investor,

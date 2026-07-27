@@ -94,7 +94,7 @@ fn test_cancel_invoice_pending_status() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
@@ -122,7 +122,7 @@ fn test_cancel_invoice_pending_emits_event() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Cancel and check events
     client.cancel_invoice(&invoice_id);
@@ -148,7 +148,7 @@ fn test_cancel_invoice_pending_business_owner_only() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Note: With mock_all_auths(), authorization is bypassed
     // This test documents that cancel_invoice succeeds when auth is mocked
@@ -179,7 +179,7 @@ fn test_cancel_invoice_verified_status() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
 
@@ -209,7 +209,7 @@ fn test_cancel_invoice_verified_emits_event() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
     client.cancel_invoice(&invoice_id);
@@ -243,12 +243,12 @@ fn test_cancel_invoice_funded_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
 
     // Place and accept bid (invoice becomes Funded)
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -276,12 +276,12 @@ fn test_cancel_invoice_funded_returns_error() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
 
     // Place and accept bid
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Try to cancel - should return error
@@ -309,7 +309,7 @@ fn test_cancel_invoice_paid_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Manually set status to Paid
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
@@ -334,7 +334,7 @@ fn test_cancel_invoice_defaulted_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Manually set status to Defaulted
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
@@ -359,7 +359,7 @@ fn test_cancel_invoice_already_cancelled_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Cancel once
     client.cancel_invoice(&invoice_id);
@@ -391,12 +391,12 @@ fn test_refund_escrow_after_funding() {
         &String::from_str(&env, "Refund test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
 
     // Place and accept bid
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Verify escrow is held
@@ -441,10 +441,10 @@ fn test_refund_emits_event() {
         &String::from_str(&env, "Refund test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Refund and check events
@@ -475,10 +475,10 @@ fn test_refund_idempotency() {
         &String::from_str(&env, "Refund idempotency test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // First refund should succeed
@@ -510,10 +510,10 @@ fn test_refund_prevents_release() {
         &String::from_str(&env, "Refund prevents release test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Refund escrow
@@ -545,7 +545,7 @@ fn test_cancel_invoice_non_owner_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Note: With mock_all_auths(), authorization checks are bypassed
     // This test documents that in production, only the business owner can cancel
@@ -570,7 +570,7 @@ fn test_cancel_invoice_admin_cannot_cancel() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Admin should not be able to cancel (only business owner can)
     let result = client.try_cancel_invoice(&invoice_id);
@@ -606,7 +606,7 @@ fn test_cancel_invoice_multiple_times_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // First cancel should succeed
     client.cancel_invoice(&invoice_id);
@@ -634,7 +634,7 @@ fn test_cancel_invoice_updates_status_list() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Cancel invoice
     client.cancel_invoice(&invoice_id);
@@ -669,7 +669,7 @@ fn test_refund_without_escrow_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Try to refund without creating escrow - should fail
     let result = client.try_refund_escrow_funds(&invoice_id, &business);
@@ -696,7 +696,7 @@ fn test_complete_lifecycle_with_cancellation() {
         &String::from_str(&env, "Lifecycle test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
@@ -739,13 +739,13 @@ fn test_complete_lifecycle_with_refund() {
         &String::from_str(&env, "Refund lifecycle test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Step 2: Verify invoice
     client.verify_invoice(&invoice_id);
 
     // Step 3: Place and accept bid
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -824,7 +824,7 @@ fn test_cancel_bid_after_withdraw_is_noop() {
         &String::from_str(&env, "race test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
@@ -862,7 +862,7 @@ fn test_withdraw_bid_after_cancel_fails() {
         &String::from_str(&env, "race test 2"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
@@ -900,7 +900,7 @@ fn test_double_cancel_second_is_noop() {
         &String::from_str(&env, "double cancel"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
@@ -932,7 +932,7 @@ fn test_double_withdraw_second_fails() {
         &String::from_str(&env, "double withdraw"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
@@ -964,9 +964,9 @@ fn test_cancel_bid_after_accept_is_noop() {
         &String::from_str(&env, "accept race"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     let result = client.cancel_bid(&bid_id);
@@ -997,9 +997,9 @@ fn test_withdraw_bid_after_accept_fails() {
         &String::from_str(&env, "withdraw race"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     let result = client.try_withdraw_bid(&bid_id);
@@ -1028,7 +1028,7 @@ fn test_cancel_bid_after_expiry_is_noop() {
         &String::from_str(&env, "expire race"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 

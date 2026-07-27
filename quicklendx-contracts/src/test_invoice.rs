@@ -46,7 +46,7 @@ fn create_test_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 // ============================================================================
@@ -149,18 +149,17 @@ fn test_invoice_cancel_authorization() {
 
     // Create an invoice owned by business
     let mut invoice = Invoice::new(
-        &env,
-        business.clone(),
-        10_000,
-        currency,
-        due_date,
-        description,
-        category,
-        tags,
-
-        None,
-
-    ).expect("Invoice creation should succeed");
+&env,
+business.clone(),
+10_000,
+currency,
+due_date,
+description,
+category,
+tags,
+    None, /* early_payment_discount_bps */,
+    None
+).expect("Invoice creation should succeed");
 
     // Attempt to cancel as attacker (not business owner) - should fail in contract context
     let result = env.as_contract(&contract_id, || invoice.cancel(&env, attacker));
@@ -201,18 +200,19 @@ fn test_invoice_cancel_no_state_preconditions() {
 
     for status in test_states {
         let mut invoice = Invoice::new(
-            &env,
-            business.clone(),
-            10_000,
-            currency,
-            due_date,
-            description.clone(),
-            category,
-            tags.clone(),
-
-            None,
-
-        ).expect("Invoice creation should succeed");
+&env,
+business.clone(),
+10_000,
+currency.clone(),
+due_date,
+description.clone(),
+category,
+tags.clone(),
+None,
+        None, /* early_payment_discount_bps */,
+        
+)
+        .expect("Invoice creation should succeed");
 
         invoice.status = status.clone();
 

@@ -73,7 +73,7 @@ fn create_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     invoice_id
 }
@@ -86,7 +86,7 @@ fn create_and_place_bid(
     bid_amount: i128,
     expected_return: i128,
 ) -> BytesN<32> {
-    client.place_bid(investor, invoice_id, &bid_amount, &expected_return)
+    client.place_bid(investor, invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]))
 }
 
 fn get_bid_count_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> u32 {

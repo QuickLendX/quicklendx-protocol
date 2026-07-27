@@ -56,7 +56,9 @@ mod tests {
             settlement_currency: None,
             settlement_timestamp: None,
             dispute_status: DisputeStatus::None,
-        }
+        },
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
     #[test]

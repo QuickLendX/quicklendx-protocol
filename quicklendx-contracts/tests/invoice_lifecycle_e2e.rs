@@ -115,6 +115,7 @@ fn upload_verified_invoice(fx: &Fixture, amount: i128, description: &str) -> Byt
         &String::from_str(&fx.client.env, description),
         &InvoiceCategory::Goods,
         &Vec::new(&fx.client.env),
+        &None,
     );
 
     fx.client.verify_invoice(&invoice_id);

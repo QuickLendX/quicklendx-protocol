@@ -84,8 +84,10 @@ fn make_invoice(env: &Env, idx: u32, amount: i128) -> Invoice {
         total_paid: 0,
         payment_history: Vec::new(env),
         created_at: env.ledger().timestamp(),
+    },
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
-}
 
 /// Create and persist a valid active backup (metadata + data + list entry)
 /// stamped at the current ledger time, and return its ID.

@@ -55,7 +55,7 @@ fn upload(
         &String::from_str(env, desc),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 fn store_investment(

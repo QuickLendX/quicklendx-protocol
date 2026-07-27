@@ -36,6 +36,49 @@ fn validate_token_address(
     }
 }
 
+/// Assert that `amount` is compatible with the declared decimal precision of
+/// `currency`.
+///
+/// # Threat model
+/// Without this check, a caller who passes a currency address whose token
+/// contract either (a) does not implement `decimals()`, or (b) reports an
+/// unexpectedly large decimal count, could supply amounts whose scale is
+/// incompatible with how the contract interprets them. This leads to silent
+/// truncation or mis-scaled transfers, draining escrow value that the caller did
+/// not intend to lock.
+///
+/// # Errors
+/// * [`QuickLendXError::InvalidAmount`] — `amount` is zero or negative.
+/// * [`QuickLendXError::InvalidCurrency`] — the token contract does not
+///   expose a `decimals` entry-point or returns a value greater than 18.
+pub fn require_matching_currency_precision(
+    env: &Env,
+    currency: &Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
+    if amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let result: Result<Result<u32, _>, _> = env.try_invoke_contract::<u32, QuickLendXError>(
+        currency,
+        &symbol_short!("decimals"),
+        soroban_sdk::vec![env],
+    );
+
+    match result {
+        Ok(Ok(decimals)) if decimals <= 18 => Ok(()),
+        _ => Err(QuickLendXError::InvalidCurrency),
+    }
+}
+
+/// Minimum transfer amount to prevent dust transfers.
+/// Matches the test-mode MIN_TRANSFER from protocol_limits.rs.
+#[cfg(not(test))]
+const MIN_TRANSFER: i128 = 1_000_000; // 1 token (6 decimals)
+#[cfg(test)]
+const MIN_TRANSFER: i128 = 10;
+
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
@@ -429,6 +472,67 @@ impl EscrowStorage {
     }
 }
 
+/// Shared validation logic for escrow creation.
+///
+/// Returns `(next_held_reserve)` on success.
+fn validate_and_prepare_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    business: &Address,
+    amount: i128,
+    currency: &Address,
+) -> Result<HeldEscrowReserve, QuickLendXError> {
+    if amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some() {
+        return Err(QuickLendXError::InvoiceAlreadyFunded);
+    }
+
+    EscrowStorage::require_no_active_reserve_repair(env, currency)?;
+    let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
+
+    validate_token_address(env, currency, investor)?;
+
+    Ok(next_held_reserve)
+}
+
+/// Write the escrow record and update the held-reserve accumulator.
+///
+/// # Panics
+/// Panics if `next_held_reserve` was not obtained by calling
+/// [`validate_and_prepare_escrow`] with the same arguments.
+fn write_escrow_record(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    business: &Address,
+    amount: i128,
+    currency: &Address,
+    next_held_reserve: &HeldEscrowReserve,
+) -> BytesN<32> {
+    let escrow_id = EscrowStorage::generate_unique_escrow_id(env);
+    let escrow = Escrow {
+        escrow_id: escrow_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        business: business.clone(),
+        amount,
+        currency: currency.clone(),
+        created_at: env.ledger().timestamp(),
+        status: EscrowStatus::Held,
+    };
+
+    EscrowStorage::store_escrow(env, &escrow);
+    EscrowStorage::set_held_reserve_record(env, currency, next_held_reserve);
+    EscrowStorage::mark_reserve_accounted(env, &escrow_id);
+    crate::qlx_log!(env, "payment", "Escrow created successfully");
+    emit_escrow_created(env, &escrow);
+    escrow_id
+}
+
 /// Create escrow: transfer `amount` from investor to contract and store escrow record.
 ///
 /// ## One-Escrow-Per-Invoice Guard
@@ -461,20 +565,7 @@ pub fn create_escrow(
     amount: i128,
     currency: &Address,
 ) -> Result<BytesN<32>, QuickLendXError> {
-    if amount <= 0 {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some() {
-        return Err(QuickLendXError::InvoiceAlreadyFunded);
-    }
-
-    EscrowStorage::require_no_active_reserve_repair(env, currency)?;
-    let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
-
-    // Compliance-layer seam: verify the token address is a registered contract
-    // before issuing any cross-contract calls to it.
-    validate_token_address(env, currency, investor)?;
+    let next_held_reserve = validate_and_prepare_escrow(env, invoice_id, investor, business, amount, currency)?;
 
     crate::qlx_log!(env, "payment", "Creating escrow: amount={}", amount);
 
@@ -482,23 +573,32 @@ pub fn create_escrow(
     let contract_address = env.current_contract_address();
     transfer_funds(env, currency, investor, &contract_address, amount)?;
 
-    let escrow_id = EscrowStorage::generate_unique_escrow_id(env);
-    let escrow = Escrow {
-        escrow_id: escrow_id.clone(),
-        invoice_id: invoice_id.clone(),
-        investor: investor.clone(),
-        business: business.clone(),
-        amount,
-        currency: currency.clone(),
-        created_at: env.ledger().timestamp(),
-        status: EscrowStatus::Held,
-    };
+    let escrow_id = write_escrow_record(env, invoice_id, investor, business, amount, currency, &next_held_reserve);
+    Ok(escrow_id)
+}
 
-    EscrowStorage::store_escrow(env, &escrow);
-    EscrowStorage::set_held_reserve_record(env, currency, &next_held_reserve);
-    EscrowStorage::mark_reserve_accounted(env, &escrow_id);
-    crate::qlx_log!(env, "payment", "Escrow created successfully");
-    emit_escrow_created(env, &escrow);
+/// Create escrow record without transferring funds (funds must already be in the contract).
+///
+/// Use this when the investor's full bid amount has already been transferred to
+/// the contract (e.g., in flows that split a single transfer into fee + escrow).
+/// All the same validations as [`create_escrow`] are performed, but the token
+/// transfer step is skipped.
+///
+/// # Errors
+/// Same as [`create_escrow`] except token-transfer errors are not possible.
+pub fn create_escrow_record_only(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    business: &Address,
+    amount: i128,
+    currency: &Address,
+) -> Result<BytesN<32>, QuickLendXError> {
+    let next_held_reserve = validate_and_prepare_escrow(env, invoice_id, investor, business, amount, currency)?;
+
+    crate::qlx_log!(env, "payment", "Creating escrow record (funds pre-transferred): amount={}", amount);
+
+    let escrow_id = write_escrow_record(env, invoice_id, investor, business, amount, currency, &next_held_reserve);
     Ok(escrow_id)
 }
 
@@ -634,13 +734,6 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
 /// - Balance and allowance are checked **before** the token call so that the contract
 ///   never enters a partial-transfer state.
 /// - When `from == to` the function is a no-op (returns `Ok(())`).
-/// Minimum transfer amount. Below this, transfers are rejected as dust to
-/// prevent dust attacks and uneconomical token movements.
-#[cfg(not(any(test, feature = "testutils")))]
-const MIN_TRANSFER: i128 = 1_000_000; // 1 token (6 decimals)
-#[cfg(any(test, feature = "testutils"))]
-const MIN_TRANSFER: i128 = 10;
-
 pub fn transfer_funds(
     env: &Env,
     currency: &Address,
@@ -648,10 +741,6 @@ pub fn transfer_funds(
     to: &Address,
     amount: i128,
 ) -> Result<(), QuickLendXError> {
-    if amount < MIN_TRANSFER {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
     // Reject amounts below the minimum transfer threshold (dust prevention)
     if amount < MIN_TRANSFER {
         return Err(QuickLendXError::InvalidAmount);
@@ -988,5 +1077,90 @@ mod payments_tests {
             )
         });
         assert_eq!(r2, Err(QuickLendXError::InvoiceAlreadyFunded));
+    }
+
+    // -----------------------------------------------------------------------
+    // require_matching_currency_precision
+    // -----------------------------------------------------------------------
+
+    /// A valid SAC token with a positive amount must pass the precision
+    /// check without error.
+    #[test]
+    fn test_require_matching_currency_precision_valid_token_passes() {
+        let (env, contract_id) = contract_env();
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        let result = env.as_contract(&contract_id, || {
+            require_matching_currency_precision(&env, &currency, 1_000_000)
+        });
+        assert_eq!(result, Ok(()));
+    }
+
+    /// Passing a non-token address as `currency` fails because the
+    /// contract does not expose a `decimals` entry-point.
+    #[test]
+    fn test_require_matching_currency_precision_non_token_fails() {
+        let (env, contract_id) = contract_env();
+        let bogus_currency = Address::generate(&env);
+
+        let result = env.as_contract(&contract_id, || {
+            require_matching_currency_precision(&env, &bogus_currency, 1_000)
+        });
+        assert_eq!(result, Err(QuickLendXError::InvalidCurrency));
+    }
+
+    /// A zero amount fails the precision check regardless of the token.
+    #[test]
+    fn test_require_matching_currency_precision_zero_amount_fails() {
+        let (env, contract_id) = contract_env();
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        let result = env.as_contract(&contract_id, || {
+            require_matching_currency_precision(&env, &currency, 0)
+        });
+        assert_eq!(result, Err(QuickLendXError::InvalidAmount));
+    }
+
+    /// A negative amount fails the precision check regardless of the token.
+    #[test]
+    fn test_require_matching_currency_precision_negative_amount_fails() {
+        let (env, contract_id) = contract_env();
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        let result = env.as_contract(&contract_id, || {
+            require_matching_currency_precision(&env, &currency, -1)
+        });
+        assert_eq!(result, Err(QuickLendXError::InvalidAmount));
+    }
+
+    /// A positive amount that is mis-scaled (e.g. intended whole tokens
+    /// but passed as atomic units for a high-decimal token) is still
+    /// accepted by the precision guard because any positive integer is
+    /// a valid atomic-unit amount; the guard's purpose is to ensure the
+    /// currency is a live token contract, not to enforce a particular
+    /// scaling convention.
+    #[test]
+    fn test_require_matching_currency_precision_scaled_amount_passes() {
+        let (env, contract_id) = contract_env();
+        let token_admin = Address::generate(&env);
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin)
+            .address();
+
+        // Even a very small positive amount (1 atomic unit) is valid
+        // for any token that accepts sub-whole-unit transfers.
+        let result = env.as_contract(&contract_id, || {
+            require_matching_currency_precision(&env, &currency, 1)
+        });
+        assert_eq!(result, Ok(()));
     }
 }

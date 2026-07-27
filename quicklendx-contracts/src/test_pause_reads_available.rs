@@ -1,4 +1,4 @@
-#![cfg(test)]
+﻿#![cfg(test)]
 
 //! Pause-state coverage tests
 //! Asserts that read-only query entrypoints remain callable while the contract is paused,
@@ -53,14 +53,14 @@ fn setup_and_fund_invoice(
         &String::from_str(env, "Funded invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // KYC
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &15_000i128);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
     // Second invoice - keep it active with a bid so get_best_bid works
@@ -72,9 +72,9 @@ fn setup_and_fund_invoice(
         &String::from_str(env, "Active invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice2_id);
-    client.place_bid(&investor, &invoice2_id, &2_000i128, &2_200i128);
+    client.place_bid(&investor, &invoice2_id, &2_000i128, &2_200i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     (client, admin, invoice_id, invoice2_id, investor)
 }
@@ -99,7 +99,7 @@ fn test_pause_reads_available() {
     assert!(client.is_paused(), "Contract must be paused");
 
     // 3. Assert mutating entrypoints fail with ContractPaused
-    let place_bid_err = client.try_place_bid(&investor, &active_invoice_id, &2_000i128, &2_100i128);
+    let place_bid_err = client.try_place_bid(&investor, &active_invoice_id, &2_000i128, &2_100i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert_eq!(
         place_bid_err.unwrap_err().unwrap(),
         QuickLendXError::ContractPaused
@@ -112,7 +112,7 @@ fn test_pause_reads_available() {
         QuickLendXError::ContractPaused
     );
 
-    let settle_err = client.try_settle_invoice(&funded_invoice_id, &1_000i128);
+    let settle_err = client.try_settle_invoice(&funded_invoice_id, &1_000i128, &client.get_investment(&funded_invoice_id).unwrap());
     assert_eq!(
         settle_err.unwrap_err().unwrap(),
         QuickLendXError::ContractPaused
@@ -158,3 +158,4 @@ fn test_pause_reads_available() {
         "get_total_invoice_count should remain accessible"
     );
 }
+
