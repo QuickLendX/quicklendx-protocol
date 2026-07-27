@@ -90,6 +90,8 @@ npm run dev
 - [`docs/ERROR_CODES.md`](docs/ERROR_CODES.md): Complete catalog of every contract error code (QuickLendXError and FreshnessError) with numeric codes, ABI symbols, and meanings.
 - [`docs/FEES_GRACE_DEFAULT.md`](docs/FEES_GRACE_DEFAULT.md): Unified contributor reference — platform fees, grace period resolution, and default trigger rules in one place.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
+- [`docs/GENERATION_COUNTER.md`](docs/GENERATION_COUNTER.md): What the on-chain protocol version (generation counter) is, who reads it, and the generation-bump invariant.
+- [`docs/QLX_RISK_PARAMETERS.md`](docs/QLX_RISK_PARAMETERS.md): Complete catalog of risk-related parameters with min/max/default values — investor tiers, business supply limits, bid controls, fee ceilings, and operational bounds.
 - [`docs/QLX_GOVERNANCE_PROPOSALS.md`](docs/QLX_GOVERNANCE_PROPOSALS.md): Governance proposal lifecycle, status transitions, and operator workflow.
 - [`docs/QLX_TREASURY_ROTATION.md`](docs/QLX_TREASURY_ROTATION.md): Treasury address rotation flow with two-step validation and timelock.
 - [`docs/APPEALS.md`](docs/APPEALS.md): Appeals process — who reviews, timeline, outcomes, and how they affect funds — operator-facing.
