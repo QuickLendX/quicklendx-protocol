@@ -52,6 +52,7 @@
 | [QLX_GOVERNANCE_PROPOSALS.md](QLX_GOVERNANCE_PROPOSALS.md) | Governance proposal lifecycle status transitions and operator workflows |
 | [QLX_TREASURY_ROTATION.md](QLX_TREASURY_ROTATION.md) | Treasury address rotation flow with two-step validation and timelock |
 | [QLX_MULTISIG_CONFIG.md](QLX_MULTISIG_CONFIG.md) | Multisig setup, signer rotation, and threshold-signature verification for critical operations |
+| [QLX_ESCROW_TIME_LIMITS.md](QLX_ESCROW_TIME_LIMITS.md) | Escrow Held status duration, release/refund paths, grace period, and default handling |
 | [MONITORING.md](MONITORING.md) | Per-event alert thresholds for contract events |
 | [DASHBOARD_QUERIES.md](DASHBOARD_QUERIES.md) | Full SQL reference for indexer health and workload queries |
 | [RUNBOOK_INCIDENT_RESPONSE.md](RUNBOOK_INCIDENT_RESPONSE.md) | Step-by-step operator playbook for unexpected contract behavior |
