@@ -224,6 +224,11 @@ pub enum QuickLendXError {
     ActiveDisputeExists = 2207,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     StaleInvestmentSnapshot = 2208,
+    /// A payment was submitted with a nonce that has already been recorded for
+    /// this invoice.  Duplicate nonces are rejected at the boundary to keep the
+    /// settlement ledger strictly auditable.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    DuplicateNonce = 2209,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -329,6 +334,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
             QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
             QuickLendXError::StaleInvestmentSnapshot => symbol_short!("STL_INV"),
+            QuickLendXError::DuplicateNonce => symbol_short!("DUP_NONCE"),
         }
     }
 }

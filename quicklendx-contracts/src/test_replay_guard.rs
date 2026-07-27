@@ -69,16 +69,25 @@ fn test_replay_guard_fresh_and_duplicate_nonce() {
     let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
     let invoice_id = setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
 
-    // First partial payment with a fresh nonce.
+    // First partial payment with a fresh nonce succeeds.
     let nonce = String::from_str(&env, "nonce-1");
     client.process_partial_payment(&invoice_id, 400, &nonce);
     let count_after_first = get_payment_count(&env, &invoice_id).unwrap();
     assert_eq!(count_after_first, 1);
 
-    // Duplicate nonce should not create a new record.
-    client.process_partial_payment(&invoice_id, 400, &nonce);
+    // Duplicate nonce must be rejected.
+    let result = client.try_process_partial_payment(&invoice_id, 400, &nonce);
+    assert!(result.is_err(), "Duplicate nonce must be rejected");
+    let err = result.unwrap_err();
+    assert_eq!(
+        err,
+        Ok(QuickLendXError::DuplicateNonce),
+        "Expected DuplicateNonce error"
+    );
+
+    // Count must remain unchanged.
     let count_after_dup = get_payment_count(&env, &invoice_id).unwrap();
-    assert_eq!(count_after_dup, 1, "Duplicate nonce should not increase count");
+    assert_eq!(count_after_dup, 1, "Duplicate nonce must not increase count");
 }
 
 #[test]

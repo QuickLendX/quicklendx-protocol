@@ -146,7 +146,7 @@ mod tests {
     }
 
     #[test]
-    fn test_duplicate_transaction_id_is_deduplicated() {
+    fn test_duplicate_transaction_id_is_rejected() {
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register(QuickLendXContract, ());
@@ -157,8 +157,15 @@ mod tests {
         env.ledger().set_timestamp(1_300);
         client.process_partial_payment(&invoice_id, &100, &duplicate_tx);
         
-        // This should not fail, but effectively do nothing (deduplicated)
-        client.process_partial_payment(&invoice_id, &150, &duplicate_tx);
+        // Duplicate nonce must be rejected with DuplicateNonce error
+        let result = client.try_process_partial_payment(&invoice_id, &150, &duplicate_tx);
+        assert!(result.is_err(), "Duplicate transaction id must be rejected");
+        let err = result.unwrap_err();
+        assert_eq!(
+            err,
+            Ok(QuickLendXError::DuplicateNonce),
+            "Expected DuplicateNonce error"
+        );
         
         let invoice = client.get_invoice(&invoice_id);
         assert_eq!(invoice.total_paid, 100);
@@ -925,9 +932,9 @@ mod tests {
         assert_eq!(record.nonce, test_nonce, "Nonce should match transaction_id");
     }
 
-    /// Test that duplicate nonces are properly deduplicated and don't increment count.
+    /// Test that duplicate nonces are rejected with DuplicateNonce error.
     #[test]
-    fn test_duplicate_nonce_does_not_increment_count() {
+    fn test_duplicate_nonce_is_rejected() {
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register(QuickLendXContract, ());
@@ -942,10 +949,16 @@ mod tests {
         env.ledger().set_timestamp(41_000);
         client.process_partial_payment(&invoice_id, &100, &duplicate_nonce);
 
-        // Try duplicate - should be deduplicated (return current progress, not error)
+        // Duplicate nonce must be rejected with DuplicateNonce error
         env.ledger().set_timestamp(41_100);
         let result = client.try_process_partial_payment(&invoice_id, &100, &duplicate_nonce);
-        assert!(result.is_ok(), "Duplicate nonce should not error, but be deduplicated");
+        assert!(result.is_err(), "Duplicate nonce must be rejected");
+        let err = result.unwrap_err();
+        assert_eq!(
+            err,
+            Ok(QuickLendXError::DuplicateNonce),
+            "Expected DuplicateNonce error"
+        );
 
         // Count should still be 1
         let count = env.as_contract(&contract_id, || {
