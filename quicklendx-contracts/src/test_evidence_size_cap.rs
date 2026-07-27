@@ -201,7 +201,7 @@ mod test_evidence_size_cap {
             &String::from_str(&env, "Invoice for evidence-cap integration test"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
 
         // Open a dispute with minimal (1-char) evidence so we have a Disputed invoice.
         let reason = String::from_str(&env, "reason");

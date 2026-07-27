@@ -5,6 +5,7 @@ use crate::verification::{
     BusinessVerification, BusinessVerificationStatus, BusinessVerificationStorage,
 };
 use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Env, String};
 
 fn setup_env() -> (Env, Address) {

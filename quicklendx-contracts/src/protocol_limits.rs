@@ -5,6 +5,18 @@ use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
 use crate::types::InvoiceStatus;
 
+/// Hard upper bound for invoice amounts.
+///
+/// Kept well below `i128::MAX` so that downstream arithmetic — fee
+/// calculations (`amount * fee_bps / 10_000`), analytics aggregation
+/// (`saturating_add` across invoices), and settlement splits — cannot
+/// silently truncate or overflow.
+///
+/// An attacker submitting an invoice with `i128::MAX` could cause fee
+/// calculations to overflow at settlement, trapping funds or producing
+/// incorrect accounting. This constant closes that window.
+pub const MAX_INVOICE_AMOUNT: i128 = i128::MAX / 10_000;
+
 #[allow(dead_code)]
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]

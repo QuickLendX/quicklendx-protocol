@@ -1,5 +1,5 @@
 use crate::errors::QuickLendXError;
-use crate::protocol_limits::{check_string_length, MAX_FEEDBACK_LENGTH};
+use crate::protocol_limits::{check_string_length, MAX_FEEDBACK_LENGTH, MAX_INVOICE_AMOUNT};
 use crate::storage::DataKey;
 use crate::verification::normalize_tag;
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
@@ -15,6 +15,23 @@ pub use crate::types::{
 /// Limiting tag cardinality prevents unbounded metadata growth and keeps
 /// tag-based query/index operations predictable.
 pub const MAX_INVOICE_TAGS: u32 = 10;
+
+
+/// Require that the number of tags does not exceed the given cap.
+///
+/// Defence-in-depth: even though tag vectors are individually bounded by
+/// `MAX_INVOICE_TAGS`, this helper provides a reusable, auditable check that
+/// any caller can apply before appending tags. An attacker who bypasses the
+/// per-vector check and floods the system with tag-heavy invoices would
+/// degrade query performance and inflate on-chain storage costs. This helper
+/// closes that gap by providing a single enforcement point that can be
+/// dropped into any tag-mutation path.
+pub fn require_max_invoice_tags(tags: &Vec<String>, cap: u32) -> Result<(), QuickLendXError> {
+    if tags.len() as u32 >= cap {
+        return Err(QuickLendXError::TagLimitExceeded);
+    }
+    Ok(())
+}
 
 /// Maximum ratings retained per invoice.
 ///
@@ -33,13 +50,31 @@ impl Invoice {
         category: InvoiceCategory,
         tags: Vec<String>,
         origination_fee_bps: Option<u32>,
+        late_payment_penalty_bps: Option<u32>,
+        early_payment_discount_bps: Option<u32>,
     ) -> Result<Self, QuickLendXError> {
-        if amount <= 0 {
+        if amount <= 0 || amount > MAX_INVOICE_AMOUNT {
             return Err(QuickLendXError::InvalidAmount);
         }
 
         if due_date <= env.ledger().timestamp() {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
+        if let Some(penalty_bps) = late_payment_penalty_bps {
+            if penalty_bps > 5000 {
+                return Err(QuickLendXError::InvalidFeeBasisPoints);
+            }
+        }
+
+        // Early-payment discount uses the same legal ceiling as penalty bps:
+        // 0–5000 bps (0–50%). Anything above can never represent a real-world
+        // discount and would only show up from a misconfigured business or a
+        // hostile caller probing for overflow / rounding abuse. Reject loudly.
+        if let Some(discount_bps) = early_payment_discount_bps {
+            if discount_bps > 5000 {
+                return Err(QuickLendXError::InvalidFeeBasisPoints);
+            }
         }
 
         let mut normalized_tags = Vec::new(env);
@@ -88,6 +123,8 @@ impl Invoice {
             total_paid: 0,
             payment_history: Vec::new(env),
             origination_fee_bps,
+            late_payment_penalty_bps,
+            early_payment_discount_bps,
         })
     }
 
@@ -432,3 +469,4 @@ fn zero_address(env: &Env) -> Address {
         "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
     )
 }
+

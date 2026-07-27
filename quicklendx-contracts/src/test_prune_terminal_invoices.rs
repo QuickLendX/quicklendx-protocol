@@ -1,4 +1,4 @@
-use super::*;
+﻿use super::*;
 use crate::alloc::string::ToString;
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
@@ -77,7 +77,7 @@ impl TestFixture {
             &String::from_str(&self.env, "Test invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        );
+        &None);
         self.client.verify_invoice(&invoice_id);
         let bid_id = self.client.place_bid(
             &self.investor,
@@ -88,7 +88,7 @@ impl TestFixture {
         );
         self.client.accept_bid(&invoice_id, &bid_id);
         self.env.ledger().set_timestamp(timestamp + 10);
-        self.client.settle_invoice(&invoice_id, &amount);
+        self.client.settle_invoice(&invoice_id, &amount, &self.client.get_investment(&invoice_id).unwrap());
         let inv = self.client.get_invoice(&invoice_id);
         assert_eq!(inv.status, InvoiceStatus::Paid);
         invoice_id
@@ -113,7 +113,7 @@ impl TestFixture {
                     &String::from_str(&self.env, "Test invoice"),
                     &InvoiceCategory::Services,
                     &Vec::new(&self.env),
-                );
+        &None);
                 self.client.verify_invoice(&invoice_id);
                 let bid_id = self.client.place_bid(
                     &self.investor,
@@ -154,7 +154,7 @@ impl TestFixture {
                     &String::from_str(&self.env, "Test invoice"),
                     &InvoiceCategory::Services,
                     &Vec::new(&self.env),
-                );
+        &None);
                 if status == InvoiceStatus::Verified {
                     self.client.verify_invoice(&invoice_id);
                 }
@@ -174,7 +174,7 @@ impl TestFixture {
             &String::from_str(&self.env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        );
+        &None);
         self.client.verify_invoice(&invoice_id);
         let bid_id = self.client.place_bid(
             &self.investor,
@@ -272,7 +272,7 @@ fn test_pagination() {
     assert_eq!(r1.scanned, 2);
     assert!(r1.next_offset > 0);
 
-    // Page 2: resume at next_offset (total shrank to 1, offset past end → empty)
+    // Page 2: resume at next_offset (total shrank to 1, offset past end â†’ empty)
     let r2 = fx
         .client
         .prune_terminal_invoices(&fx.admin, &retention, &r1.next_offset, &2);
@@ -428,3 +428,4 @@ fn test_index_cleanup_no_orphans() {
         "invoice should be deleted from persistent storage"
     );
 }
+

@@ -165,6 +165,7 @@ mod tests {
                 v.push_back(currency.clone());
                 v
             },
+            corridors: soroban_sdk::Vec::new(&env),
             backfill_max_batch_size: 100,
         };
 

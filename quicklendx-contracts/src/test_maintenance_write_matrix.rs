@@ -1,4 +1,4 @@
-//! Exhaustive maintenance write-gating matrix for QuickLendX protocol.
+﻿//! Exhaustive maintenance write-gating matrix for QuickLendX protocol.
 //!
 //! **Invariant**: Every mutating entrypoint must call `require_write_allowed` to enforce
 //! maintenance mode uniformly. This matrix test enumerates representative mutations across
@@ -22,7 +22,7 @@
 //! If a mutation does NOT reject during maintenance, it is recorded with a comment
 //! and should be investigated as a potential finding (missing guard).
 //!
-//! **Coverage Target**: ≥95% of branch coverage for maintenance-gating paths.
+//! **Coverage Target**: â‰¥95% of branch coverage for maintenance-gating paths.
 
 #![cfg(test)]
 
@@ -67,7 +67,7 @@ fn make_invoice(
         &String::from_str(env, "Test invoice for maintenance matrix"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 /// Enables maintenance mode with a given reason and verifies it is active.
@@ -112,7 +112,7 @@ fn test_maintenance_blocks_store_invoice() {
         &String::from_str(&env, "Should be blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -203,7 +203,7 @@ fn test_maintenance_blocks_place_bid() {
 
     enable_maintenance(&env, &client, &admin, "Bid placement disabled");
 
-    let result = client.try_place_bid(&investor, &invoice_id, &500i128, &600i128);
+    let result = client.try_place_bid(&investor, &invoice_id, &500i128, &600i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive,
@@ -266,7 +266,7 @@ fn test_maintenance_blocks_settle_invoice() {
 
     enable_maintenance(&env, &client, &admin, "Settlement suspended");
 
-    let result = client.try_settle_invoice(&invoice_id, &1_000i128);
+    let result = client.try_settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive,
@@ -549,7 +549,7 @@ fn test_mutations_resume_after_disable() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         fail_result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -567,7 +567,7 @@ fn test_mutations_resume_after_disable() {
         &String::from_str(&env, "Now allowed"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(
         success_result.is_ok(),
         "Mutations must succeed after disabling maintenance"
@@ -726,7 +726,7 @@ fn test_toggle_maintenance_multiple_times() {
         &String::from_str(&env, "Test1"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         result1.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -742,7 +742,7 @@ fn test_toggle_maintenance_multiple_times() {
         &String::from_str(&env, "Test2"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result2.is_ok(), "Must succeed when disabled");
 
     // Toggle 3: Re-enable
@@ -755,7 +755,7 @@ fn test_toggle_maintenance_multiple_times() {
         &String::from_str(&env, "Test3"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         result3.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -771,7 +771,7 @@ fn test_toggle_maintenance_multiple_times() {
         &String::from_str(&env, "Test4"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result4.is_ok(), "Must succeed after final disable");
 }
 
@@ -813,7 +813,7 @@ fn test_non_admin_cannot_disable_during_maintenance() {
 // - Reason round-trip is correct.
 // - Recovery after disable works.
 // - Edge cases are handled safely.
-// - Coverage ≥95% of maintenance-gating paths.
+// - Coverage â‰¥95% of maintenance-gating paths.
 //
 // **Known Limitations**:
 // - This matrix uses dummy IDs for some tests (e.g., invalid invoice/bid IDs).
@@ -823,3 +823,4 @@ fn test_non_admin_cannot_disable_during_maintenance() {
 //   to allow recovery; it is tested separately.
 // - Pause and maintenance are independent; this test does not cover
 //   interaction with pause mode (see test_maintenance.rs for those).
+
