@@ -886,8 +886,8 @@ impl QuickLendXContract {
     }
 
     /// Reset the bid expiry grace period to the compile-time default (0)
-    pub fn reset_bid_expiry_grace_to_default(env: Env) -> Result<u64, QuickLendXError> {
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+    pub fn reset_bid_grace_to_default(env: Env, admin: Address) -> Result<u64, QuickLendXError> {
+        admin.require_auth();
         bid::BidStorage::reset_bid_expiry_grace_to_default(&env, &admin)
     }
 
@@ -1572,6 +1572,7 @@ impl QuickLendXContract {
                 input.tags.clone(),
                 None, // origination_fee_bps
                 input.late_payment_penalty_bps,
+                None, // early_payment_discount_bps
             )?;
             let id = invoice.id.clone();
             InvoiceStorage::store_invoice(&env, &invoice);
@@ -2934,7 +2935,7 @@ impl QuickLendXContract {
         investor: Address,
     ) -> Result<InvestorVerification, QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        investor_rating_recompute(&env, &admin, &investor)
+        verification::investor_rating_recompute(&env, &admin, &investor)
     }
 
     /// Verify business (admin only)
@@ -3088,52 +3089,6 @@ impl QuickLendXContract {
             min_invoice_amount,
             existing.min_bid_amount,
             existing.min_bid_bps,
-            max_due_date_days,
-            grace_period_seconds,
-            max_invoices_per_business,
-        )
-    }
-
-    /// Update **all** protocol limits in a single call (admin only).
-    ///
-    /// This is the preferred entrypoint when operators need to configure
-    /// `min_bid_amount` or `min_bid_bps` alongside the other limits.  The
-    /// narrower helpers (`set_protocol_limits`, `update_protocol_limits`,
-    /// `update_limits_max_invoices`) preserve the current bid-limit values for
-    /// backwards compatibility.
-    ///
-    /// # Parameters
-    /// - `min_invoice_amount`       â€“ minimum invoice face value (inclusive).
-    /// - `min_bid_amount`           â€“ minimum absolute bid amount (inclusive).
-    ///                                Pass [`DEFAULT_MIN_BID_AMOUNT`] (10) to
-    ///                                keep the compile-time default.
-    /// - `min_bid_bps`              â€“ minimum bid rate in basis points (inclusive).
-    ///                                Pass [`DEFAULT_MIN_BID_BPS`] (100) to keep
-    ///                                the compile-time default.
-    /// - `max_due_date_days`        â€“ maximum invoice horizon in days (1..=730).
-    /// - `grace_period_seconds`     â€“ grace period after due date (0..=2_592_000).
-    /// - `max_invoices_per_business`â€“ per-business active-invoice cap; 0 = unlimited.
-    ///
-    /// # Errors
-    /// Delegates to `ProtocolLimitsContract::set_protocol_limits` for all
-    /// parameter validation; see that function's docs for error codes.
-    pub fn set_protocol_limits_full(
-        env: Env,
-        admin: Address,
-        min_invoice_amount: i128,
-        min_bid_amount: i128,
-        min_bid_bps: u32,
-        max_due_date_days: u64,
-        grace_period_seconds: u64,
-        max_invoices_per_business: u32,
-    ) -> Result<(), QuickLendXError> {
-        pause::PauseControl::require_not_paused(&env)?;
-        protocol_limits::ProtocolLimitsContract::set_protocol_limits(
-            env,
-            admin,
-            min_invoice_amount,
-            min_bid_amount,
-            min_bid_bps,
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,

@@ -7,7 +7,6 @@ use crate::protocol_limits::{
     MAX_INVOICE_AMOUNT, MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_NOTES_LENGTH,
     MAX_REJECTION_REASON_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
 };
-use crate::storage::InvoiceStorage;
 use crate::types::BidStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Bytes, Env, String, Vec};
@@ -2091,23 +2090,15 @@ pub fn validate_transaction_hash(env: &soroban_sdk::Env, hash: &soroban_sdk::Str
         return Err(crate::errors::QuickLendXError::InvalidTransactionHash);
     }
     
-    let mut is_hex = true;
-    let bytes = soroban_sdk::Bytes::from_string(env, hash);
-    for i in 0..64 {
+    let bytes = hash.to_bytes();
+    for i in 0..bytes.len() {
         let b = bytes.get(i).unwrap();
         match b {
             b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {}
-            _ => {
-                is_hex = false;
-                break;
-            }
+            _ => return Err(crate::errors::QuickLendXError::InvalidTransactionHash),
         }
     }
-    
-    if !is_hex {
-        return Err(crate::errors::QuickLendXError::InvalidTransactionHash);
-    }
-    
+
     Ok(())
 }
 
