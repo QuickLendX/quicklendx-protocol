@@ -66,6 +66,16 @@ pub(crate) fn load_accept_bid_context(
         return Err(QuickLendXError::InvoiceNotAvailableForFunding);
     }
 
+    // Reject bid acceptance on invoices past their due date.
+    // An escrow created for an already-expired invoice would lock
+    // investor funds into an obligation that cannot be settled on
+    // time.  The investor must be able to place bids freely, but
+    // once the due date passes the business should not be able to
+    // accept new funding.
+    if env.ledger().timestamp() > invoice.due_date {
+        return Err(QuickLendXError::OperationNotAllowed);
+    }
+
     if invoice.funded_amount != 0 || invoice.funded_at.is_some() || invoice.investor.is_some() {
         return Err(QuickLendXError::InvalidStatus);
     }

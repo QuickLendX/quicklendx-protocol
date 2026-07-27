@@ -264,6 +264,12 @@ mod test_bid_ranking;
 #[cfg(test)]
 mod test_bid_match_helper;
 #[cfg(test)]
+mod test_require_valid_invoice_category;
+#[cfg(test)]
+mod test_verify_bid_match;
+#[cfg(test)]
+mod test_expired_escrow;
+#[cfg(test)]
 mod test_vesting;
 mod test_vesting_summary;
 // Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
