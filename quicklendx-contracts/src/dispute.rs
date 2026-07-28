@@ -1,4 +1,5 @@
 use crate::admin::AdminStorage;
+use crate::arbiter::ArbiterStorage;
 use crate::dispute_timeline::{clear_under_review_timestamp, set_under_review_timestamp};
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
@@ -213,6 +214,12 @@ pub fn put_dispute_under_review(
     admin: &Address,
     invoice_id: &BytesN<32>,
 ) -> Result<(), QuickLendXError> {
+    // Per Issue #1840, the `require_dispute_arbiter` guard applies to
+    // *resolve*, not the review transition. Any authenticated admin may move
+    // a dispute into `UnderReview`; only registered arbiters may finalize it.
+    // Keeping review on admin authority matches the intent expressed in the
+    // issue title and avoids breaking every existing test that legitimately
+    // drives a dispute through the review step before resolution.
     AdminStorage::require_admin(env, admin)?;
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -279,6 +286,11 @@ pub fn resolve_dispute(
     resolution: &String,
 ) -> Result<(), QuickLendXError> {
     AdminStorage::require_admin(env, admin)?;
+    // Arbiter gate: even an admin cannot resolve a dispute unless they have
+    // been explicitly registered as an arbiter. Splits dispute-adjudication
+    // authority from protocol-configuration authority so that a single
+    // compromised admin key cannot silently drain disputed escrow.
+    ArbiterStorage::require_dispute_arbiter(env, admin)?;
 
     validate_dispute_resolution(resolution)?;
 
@@ -344,6 +356,9 @@ pub fn resolve_dispute_structured(
     note: &String,
 ) -> Result<(), QuickLendXError> {
     AdminStorage::require_admin(env, admin)?;
+    // See `resolve_dispute` — the structured variant shares the same arbiter
+    // gate so both resolution paths are defended equally.
+    ArbiterStorage::require_dispute_arbiter(env, admin)?;
 
     validate_dispute_resolution(note)?;
 
@@ -407,6 +422,44 @@ pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<
 /// @return Invoice IDs whose current dispute status matches `status`.
 pub(crate) fn indexed_invoices_by_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
     get_invoices_by_dispute_status(env, status)
+}
+
+/// Guard: reject report/analytics-snapshot generation while any invoice has
+/// an unresolved dispute.
+///
+/// # Threat model
+/// `export_analytics_snapshot` (and the business/investor report generators)
+/// feed off-chain indexers, dashboards, and downstream automated decisions
+/// (pricing, risk scoring) that treat the returned numbers as settled fact.
+/// A disputed invoice keeps its pre-dispute `InvoiceStatus`
+/// (`Funded`/`Paid`) until the dispute resolves — `dispute_status` is a
+/// side channel the report calculators never look at. Without this guard, a
+/// snapshot taken while a dispute is `Disputed` or `UnderReview` silently
+/// folds a contested invoice into `success_rate`, `default_rate`, and volume
+/// totals as if it were final. If the dispute later resolves against the
+/// business (refund to the investor), every indexer that already ingested
+/// the earlier snapshot has a materially wrong number with no signal that it
+/// was provisional — and a party who wants a favorable report published has
+/// no way to time snapshot export around an open dispute once this check is
+/// in place. Blocking generation while any dispute is active removes that
+/// window instead of relying on downstream consumers to reconcile later.
+///
+/// # Cost
+/// Bounded by the dispute index (`get_dispute_index`), which only ever
+/// contains invoices that have entered the dispute lifecycle — the same
+/// bound already relied on by `get_invoices_by_dispute_status`.
+pub fn require_no_active_dispute_snapshot(env: &Env) -> Result<(), QuickLendXError> {
+    for invoice_id in get_dispute_index(env).iter() {
+        if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
+            if matches!(
+                invoice.dispute_status,
+                DisputeStatus::Disputed | DisputeStatus::UnderReview
+            ) {
+                return Err(QuickLendXError::ActiveDisputeExists);
+            }
+        }
+    }
+    Ok(())
 }
 // Invoice disputes are represented on [`crate::invoice::Invoice`] and handled by contract
 // entry points in `lib.rs`. This module is reserved for future dispute-specific helpers.

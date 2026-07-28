@@ -79,7 +79,7 @@ fn store_invoice_with_description(
         &String::from_str(env, description),
         &crate::invoice::InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 #[test]

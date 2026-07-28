@@ -38,7 +38,7 @@ fn test_audit_invoice_created_and_trail() {
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let trail = client.get_invoice_audit_trail(&invoice_id);
     assert!(
         !trail.is_empty(),
@@ -63,7 +63,7 @@ fn test_audit_verify_produces_entry() {
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.verify_invoice(&invoice_id);
     let trail = client.get_invoice_audit_trail(&invoice_id);
     let has_verified = trail
@@ -88,7 +88,7 @@ fn test_audit_query_by_invoice() {
         &String::from_str(&env, "A"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let inv2 = client.store_invoice(
         &business,
         &2000i128,
@@ -97,7 +97,7 @@ fn test_audit_query_by_invoice() {
         &String::from_str(&env, "B"),
         &InvoiceCategory::Products,
         &Vec::new(&env),
-    );
+        &None);
     let filter = AuditQueryFilter {
         invoice_id: Some(inv1.clone()),
         operation: AuditOperationFilter::Any,
@@ -130,7 +130,7 @@ fn test_audit_query_by_operation() {
         &String::from_str(&env, "X"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let ids = client.get_audit_entries_by_operation(&AuditOperation::InvoiceCreated);
     assert!(
         !ids.is_empty(),
@@ -151,7 +151,7 @@ fn test_audit_query_by_actor() {
         &String::from_str(&env, "X"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.verify_invoice(&invoice_id);
     let admin_entries = client.get_audit_entries_by_actor(&admin);
     assert!(
@@ -173,7 +173,7 @@ fn test_audit_query_time_range() {
         &String::from_str(&env, "X"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let now = env.ledger().timestamp();
     let filter = AuditQueryFilter {
         invoice_id: None,
@@ -204,7 +204,7 @@ fn test_audit_query_limit_is_capped_to_max_query_limit() {
             &String::from_str(&env, "Cap"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
     }
 
     let filter = AuditQueryFilter {
@@ -236,7 +236,7 @@ fn test_audit_integrity_valid() {
         &String::from_str(&env, "X"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let valid = client.validate_invoice_audit_integrity(&invoice_id);
     assert!(valid, "valid trail should pass integrity check");
 }
@@ -262,7 +262,7 @@ fn test_audit_stats() {
         &String::from_str(&env, "X"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let stats = client.get_audit_stats();
     assert!(stats.total_entries >= 1);
 }
@@ -307,7 +307,7 @@ fn test_audit_stats_total_entries_after_invoice_create() {
         &String::from_str(&env, "Invoice 1"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let stats_after = client.get_audit_stats();
     assert_eq!(
@@ -331,7 +331,7 @@ fn test_audit_stats_total_entries_after_verify() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let stats_before = client.get_audit_stats();
     let count_before = stats_before.total_entries;
@@ -361,13 +361,13 @@ fn test_audit_stats_total_entries_after_bid() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.verify_invoice(&invoice_id);
 
     let stats_before = client.get_audit_stats();
     let count_before = stats_before.total_entries;
 
-    let _ = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let _ = client.place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let stats_after = client.get_audit_stats();
     assert_eq!(
@@ -392,9 +392,9 @@ fn test_audit_stats_total_entries_after_escrow() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let stats_before = client.get_audit_stats();
     let count_before = stats_before.total_entries;
@@ -426,7 +426,7 @@ fn test_audit_stats_multiple_operations() {
         &String::from_str(&env, "Invoice 1"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &2000i128,
@@ -435,7 +435,7 @@ fn test_audit_stats_multiple_operations() {
         &String::from_str(&env, "Invoice 2"),
         &InvoiceCategory::Products,
         &Vec::new(&env),
-    );
+        &None);
     let invoice_id3 = client.store_invoice(
         &business,
         &3000i128,
@@ -444,7 +444,7 @@ fn test_audit_stats_multiple_operations() {
         &String::from_str(&env, "Invoice 3"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Verify one (adds 2 entries)
     let _ = client.verify_invoice(&invoice_id3);
@@ -471,7 +471,7 @@ fn test_audit_stats_unique_actors_single() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let stats = client.get_audit_stats();
     assert_eq!(
@@ -495,9 +495,9 @@ fn test_audit_stats_unique_actors_multiple() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.verify_invoice(&invoice_id);
-    let _ = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let _ = client.place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let stats = client.get_audit_stats();
     assert_eq!(
@@ -521,7 +521,7 @@ fn test_audit_stats_unique_actors_duplicate_operations() {
         &String::from_str(&env, "Invoice 1"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &2000i128,
@@ -530,7 +530,7 @@ fn test_audit_stats_unique_actors_duplicate_operations() {
         &String::from_str(&env, "Invoice 2"),
         &InvoiceCategory::Products,
         &Vec::new(&env),
-    );
+        &None);
 
     let stats = client.get_audit_stats();
     assert_eq!(
@@ -555,7 +555,7 @@ fn test_audit_stats_date_range_single_entry() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let stats = client.get_audit_stats();
     assert!(
@@ -586,7 +586,7 @@ fn test_audit_stats_date_range_multiple_entries() {
         &String::from_str(&env, "Invoice 1"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Advance time
     env.ledger().with_mut(|li| {
@@ -602,7 +602,7 @@ fn test_audit_stats_date_range_multiple_entries() {
         &String::from_str(&env, "Invoice 2"),
         &InvoiceCategory::Products,
         &Vec::new(&env),
-    );
+        &None);
 
     let stats = client.get_audit_stats();
     assert!(
@@ -633,14 +633,14 @@ fn test_audit_stats_comprehensive_workflow() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Verify
     let _ = client.verify_invoice(&invoice_id);
 
     // Place bids
-    let _ = client.place_bid(&investor1, &invoice_id, &900i128, &950i128);
-    let bid_id2 = client.place_bid(&investor2, &invoice_id, &850i128, &900i128);
+    let _ = client.place_bid(&investor1, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id2 = client.place_bid(&investor2, &invoice_id, &850i128, &900i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Accept bid (creates escrow)
     let _ = client.accept_bid(&invoice_id, &bid_id2);
@@ -681,9 +681,9 @@ fn test_audit_stats_after_bid_withdrawal() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let stats_before = client.get_audit_stats();
     let count_before = stats_before.total_entries;
@@ -722,7 +722,7 @@ fn test_audit_stats_incremental_updates() {
         &String::from_str(&env, "Invoice 1"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let stats1 = client.get_audit_stats();
     assert_eq!(stats1.total_entries, initial + 1); // 1 entry per invoice
 
@@ -734,7 +734,7 @@ fn test_audit_stats_incremental_updates() {
         &String::from_str(&env, "Invoice 2"),
         &InvoiceCategory::Products,
         &Vec::new(&env),
-    );
+        &None);
     let stats2 = client.get_audit_stats();
     assert_eq!(stats2.total_entries, initial + 2);
 
@@ -746,7 +746,7 @@ fn test_audit_stats_incremental_updates() {
         &String::from_str(&env, "Invoice 3"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let stats3 = client.get_audit_stats();
     assert_eq!(stats3.total_entries, initial + 3);
 }
@@ -766,7 +766,7 @@ fn test_audit_trail_is_append_only() {
         &String::from_str(&env, "Append-only test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let trail_after_create = client.get_invoice_audit_trail(&invoice_id);
     let len_after_create = trail_after_create.len();
@@ -806,7 +806,7 @@ fn test_audit_entry_immutable_after_store() {
         &String::from_str(&env, "Immutability test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let trail = client.get_invoice_audit_trail(&invoice_id);
     let first_id = trail.get(0).unwrap();
@@ -839,7 +839,7 @@ fn test_audit_query_combined_actor_and_operation_filter() {
         &String::from_str(&env, "Filter test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.verify_invoice(&invoice_id);
 
     // Query: admin + InvoiceVerified
@@ -876,7 +876,7 @@ fn test_audit_query_time_range_no_match_returns_empty() {
         &String::from_str(&env, "Time filter test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Query a time range in the far future - no entries should match
     let far_future = env.ledger().timestamp() + 1_000_000;
@@ -910,9 +910,9 @@ fn test_audit_integrity_full_lifecycle() {
         &String::from_str(&env, "Lifecycle integrity"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
     let _ = client.accept_bid(&invoice_id, &bid_id);
 
     let valid = client.validate_invoice_audit_integrity(&invoice_id);
@@ -952,7 +952,7 @@ fn test_audit_append_only_no_overwrites() {
         &String::from_str(&env, "Overwrite test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let trail1 = client.get_invoice_audit_trail(&invoice_id);
     let count1 = trail1.len();
@@ -1005,7 +1005,7 @@ fn test_audit_append_only_high_volume() {
             &String::from_str(&env, &format!("Invoice {}", i)),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
         created_ids.push_back(invoice_id);
     }
 
@@ -1044,7 +1044,7 @@ fn test_audit_monotonic_ids_within_single_invoice() {
         &String::from_str(&env, "Monotonic test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let trail = client.get_invoice_audit_trail(&invoice_id);
     assert!(trail.len() >= 1);
@@ -1088,7 +1088,7 @@ fn test_audit_one_entry_per_invoice_create() {
         &String::from_str(&env, "One entry test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let stats_after = client.get_audit_stats();
     let count_after = stats_after.total_entries;
@@ -1116,7 +1116,7 @@ fn test_audit_one_entry_per_verify() {
         &String::from_str(&env, "Verify one entry test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let trail_before = client.get_invoice_audit_trail(&invoice_id);
     let count_before = trail_before.len();
@@ -1173,7 +1173,7 @@ fn test_audit_one_entry_per_bid() {
         &String::from_str(&env, "Bid one entry"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let _ = client.verify_invoice(&invoice_id);
 
@@ -1181,7 +1181,7 @@ fn test_audit_one_entry_per_bid() {
     let count_before = stats_before.total_entries;
 
     // place_bid should produce exactly 1 audit entry
-    let _bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let _bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let stats_after = client.get_audit_stats();
     let count_after = stats_after.total_entries;
@@ -1211,7 +1211,7 @@ fn test_audit_stats_reconciliation_total_count() {
             &String::from_str(&env, &format!("Reconcile {}", i)),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
     }
 
     // Query all audit entries with limit well above expected count
@@ -1254,14 +1254,14 @@ fn test_audit_stats_reconciliation_unique_actors() {
         &String::from_str(&env, "Actor test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Admin verifies
     let _ = client.verify_invoice(&invoice_id);
 
     // Two investors bid
-    let _ = client.place_bid(&investor1, &invoice_id, &900i128, &950i128);
-    let _ = client.place_bid(&investor2, &invoice_id, &850i128, &900i128);
+    let _ = client.place_bid(&investor1, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let _ = client.place_bid(&investor2, &invoice_id, &850i128, &900i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     let stats = client.get_audit_stats();
 
@@ -1291,7 +1291,7 @@ fn test_audit_stats_reconciliation_date_range_valid() {
         &String::from_str(&env, "Date range test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let ts_after = env.ledger().timestamp();
 
@@ -1334,7 +1334,7 @@ fn test_audit_order_preservation_timestamps() {
         &String::from_str(&env, "Order test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Add more operations to the same invoice
     let _ = client.verify_invoice(&invoice_id);
@@ -1376,7 +1376,7 @@ fn test_audit_no_tampering_entries_persist() {
         &String::from_str(&env, "Tampering test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let trail_v1 = client.get_invoice_audit_trail(&invoice_id);
     let first_entry_id = trail_v1.get(0).unwrap();
@@ -1392,7 +1392,7 @@ fn test_audit_no_tampering_entries_persist() {
             &String::from_str(&env, &format!("Other {}", i)),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
     }
 
     // Verify the first entry is still unchanged
@@ -1433,7 +1433,7 @@ fn test_audit_comprehensive_lifecycle_entry_count() {
         &String::from_str(&env, "Comprehensive test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let trail_after_create = client.get_invoice_audit_trail(&invoice_id);
     let count_after_create = trail_after_create.len();
 
@@ -1441,7 +1441,7 @@ fn test_audit_comprehensive_lifecycle_entry_count() {
     let trail_after_verify = client.get_invoice_audit_trail(&invoice_id);
     let count_after_verify = trail_after_verify.len();
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
     let trail_after_bid = client.get_invoice_audit_trail(&invoice_id);
     let count_after_bid = trail_after_bid.len();
 
@@ -1496,7 +1496,7 @@ fn test_audit_rapid_fire_operations() {
             &String::from_str(&env, &format!("Rapid {}", i)),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
     }
 
     let stats_after = client.get_audit_stats();
@@ -1526,7 +1526,7 @@ fn test_audit_large_amounts_recorded() {
         &String::from_str(&env, "Large amount"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let trail = client.get_invoice_audit_trail(&invoice_id);
     assert!(!trail.is_empty());
@@ -1557,7 +1557,7 @@ fn test_audit_hash_chain_empty_and_single_entry() {
         &String::from_str(&env, "hash chain single"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let trail = client.get_invoice_audit_trail(&invoice_id);
     assert_eq!(trail.len(), 1);
@@ -1583,7 +1583,7 @@ fn test_audit_hash_chain_tampered_middle_fails() {
         &String::from_str(&env, "hash chain tamper"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.verify_invoice(&invoice_id);
     crate::audit::log_payment_processed(
         &env,
