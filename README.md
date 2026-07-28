@@ -97,6 +97,8 @@ npm run dev
 - [`docs/QLX_RISK_PARAMETERS.md`](docs/QLX_RISK_PARAMETERS.md): Complete catalog of risk-related parameters with min/max/default values — investor tiers, business supply limits, bid controls, fee ceilings, and operational bounds.
 - [`docs/QLX_GOVERNANCE_PROPOSALS.md`](docs/QLX_GOVERNANCE_PROPOSALS.md): Governance proposal lifecycle, status transitions, and operator workflow.
 - [`docs/QLX_TREASURY_ROTATION.md`](docs/QLX_TREASURY_ROTATION.md): Treasury address rotation flow with two-step validation and timelock.
+- [`docs/QLX_MULTISIG_CONFIG.md`](docs/QLX_MULTISIG_CONFIG.md): Multisig setup, signer rotation, and threshold-signature verification for critical operations.
+- [`docs/QLX_ESCROW_TIME_LIMITS.md`](docs/QLX_ESCROW_TIME_LIMITS.md): How long escrows can remain unclaimed; release/refund paths, grace period, default handling, and the extend_escrow_expiry operation.
 - [`docs/APPEALS.md`](docs/APPEALS.md): Appeals process — who reviews, timeline, outcomes, and how they affect funds — operator-facing.
 - [`docs/EVENT_DASHBOARDS.md`](docs/EVENT_DASHBOARDS.md): Standard operator dashboards — panel URLs, PromQL queries, SQLite indexer queries, and alert rules for protocol health, event throughput, disputes, and settlement pipeline.
 
