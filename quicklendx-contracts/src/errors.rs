@@ -240,6 +240,25 @@ pub enum QuickLendXError {
     /// settlement ledger strictly auditable.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DuplicateNonce = 2209,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InsufficientKYCTier = 2210,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    PendingGovernanceProposal = 2211,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    UnstableCursor = 2212,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    SettlementCurrencyNotAllowed = 2213,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    UpgradePending = 2214,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    PerInvestorPositionCapExceeded = 2215,
+    /// The investor's KYC tier is too low for the requested operation.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    BidBelowTierMinimum = 2216,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidTransactionHash = 2217,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    BatchSizeExceeded = 2218,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -282,6 +301,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaxActiveBidsPerInvestorExceeded => symbol_short!("MAX_ACT"),
             QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
             QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
+            QuickLendXError::InsuranceClaimWindowClosed => symbol_short!("INS_WIN"),
             QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
             // Rating
             QuickLendXError::InvalidRating => symbol_short!("INV_RT"),
@@ -348,6 +368,14 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
             QuickLendXError::StaleInvestmentSnapshot => symbol_short!("STL_INV"),
             QuickLendXError::DuplicateNonce => symbol_short!("DUP_NONCE"),
+            QuickLendXError::PendingGovernanceProposal => symbol_short!("GOV_PROP"),
+            QuickLendXError::UnstableCursor => symbol_short!("UNSTABLE"),
+            QuickLendXError::SettlementCurrencyNotAllowed => symbol_short!("SETL_CR"),
+            QuickLendXError::UpgradePending => symbol_short!("UPG_PEND"),
+            QuickLendXError::PerInvestorPositionCapExceeded => symbol_short!("POS_CAP"),
+            QuickLendXError::BidBelowTierMinimum => symbol_short!("TIER_BID"),
+            QuickLendXError::InvalidTransactionHash => symbol_short!("TX_HASH"),
+            QuickLendXError::BatchSizeExceeded => symbol_short!("BATCH_SZ"),
         }
     }
 }
