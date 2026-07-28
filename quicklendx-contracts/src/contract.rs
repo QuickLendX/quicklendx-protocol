@@ -225,6 +225,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::DuplicateBid);
         }
         if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
             return Err(QuickLendXError::InvoiceFrozen);
         }
         // Store idempotency marker
@@ -246,6 +247,7 @@ impl QuickLendXContract {
 
     pub fn accept_bid(env: Env, invoice_id: BytesN<32>, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
         if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
             return Err(QuickLendXError::InvoiceFrozen);
         }
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;

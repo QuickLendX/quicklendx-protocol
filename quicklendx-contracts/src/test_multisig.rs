@@ -231,3 +231,53 @@ fn test_verify_op_invalid_signature() {
     // Verification must fail cryptographically (panics with HostError)
     client.verify_op(&message_hash, &signatures);
 }
+
+#[test]
+fn test_verify_op_over_quorum() {
+    let env = Env::default();
+    let contract_id = env.register(MultisigContract, ());
+    let client = MultisigContractClient::new(&env, &contract_id);
+
+    // Generate keys for N = 3 owners
+    let (pub0, priv0) = generate_keypair(&env, 1);
+    let (pub1, priv1) = generate_keypair(&env, 2);
+    let (pub2, priv2) = generate_keypair(&env, 3);
+
+    let mut owners = Vec::new(&env);
+    owners.push_back(pub0);
+    owners.push_back(pub1);
+    owners.push_back(pub2);
+
+    // Initialize with threshold = 2
+    client.initialize(&owners, &2);
+
+    let message_hash = BytesN::from_array(&env, &[9u8; 32]);
+    let message_bytes: [u8; 32] = [9u8; 32];
+
+    // All 3 owners sign the message (over quorum: 3 > threshold 2)
+    let sig0_bytes = priv0.sign(&message_bytes).to_bytes();
+    let sig1_bytes = priv1.sign(&message_bytes).to_bytes();
+    let sig2_bytes = priv2.sign(&message_bytes).to_bytes();
+
+    let sig0 = BytesN::from_array(&env, &sig0_bytes);
+    let sig1 = BytesN::from_array(&env, &sig1_bytes);
+    let sig2 = BytesN::from_array(&env, &sig2_bytes);
+
+    let mut signatures = Vec::new(&env);
+    signatures.push_back(OwnerSignature {
+        owner_index: 0,
+        signature: sig0,
+    });
+    signatures.push_back(OwnerSignature {
+        owner_index: 1,
+        signature: sig1,
+    });
+    signatures.push_back(OwnerSignature {
+        owner_index: 2,
+        signature: sig2,
+    });
+
+    // Verification should succeed even with more signatures than threshold
+    let res = client.try_verify_op(&message_hash, &signatures);
+    assert!(res.is_ok());
+}

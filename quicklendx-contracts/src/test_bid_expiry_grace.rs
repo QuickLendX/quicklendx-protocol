@@ -13,7 +13,7 @@
 //! - `set_bid_expiry_grace_seconds` enforces `[0, MAX_BID_EXPIRY_GRACE_SECONDS]`
 //!   and is admin-only.
 //! - `get_bid_expiry_grace_config` reports bounds, default, and `is_custom`.
-//! - `reset_bid_expiry_grace_to_default` restores the default and clears
+//! - `reset_bid_grace_to_default` restores the default and clears
 //!   `is_custom`.
 
 #![cfg(test)]
@@ -240,14 +240,14 @@ fn set_bid_expiry_grace_seconds_accepts_boundary_values() {
 
 #[test]
 fn get_bid_expiry_grace_config_reports_custom_after_set_and_clears_after_reset() {
-    let (_env, client, _admin) = setup();
+    let (_env, client, admin) = setup();
 
     client.set_bid_expiry_grace_seconds(&5_000u64);
     let config = client.get_bid_expiry_grace_config();
     assert_eq!(config.current_seconds, 5_000);
     assert!(config.is_custom);
 
-    client.reset_bid_expiry_grace_to_default();
+    client.reset_bid_grace_to_default(&admin);
     let config_after_reset = client.get_bid_expiry_grace_config();
     assert_eq!(config_after_reset.current_seconds, DEFAULT_BID_EXPIRY_GRACE_SECONDS);
     assert!(!config_after_reset.is_custom);

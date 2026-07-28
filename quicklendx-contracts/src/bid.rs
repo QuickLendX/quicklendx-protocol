@@ -1309,3 +1309,51 @@ impl BidStorage {
         Self::generate_next_bid_counter(env)
     }
 }
+
+/// Precondition check: verify a bid is compatible with the given invoice
+/// before proceeding with bid acceptance / matching logic.
+///
+/// # Checks
+/// 1. The bid belongs to the invoice (`bid.invoice_id == invoice.id`).
+/// 2. The bid is in `Placed` status (not yet Accepted, Cancelled, etc.).
+/// 3. The bid has not expired (`bid.expiration_timestamp > now`).
+/// 4. The bid amount is positive (`bid.bid_amount > 0`).
+/// 5. The bid amount does not exceed the invoice amount.
+///
+/// # Threat mitigated
+///
+/// Without this explicit precondition check, a caller could attempt to match
+/// a bid that belongs to a different invoice, or one that has already expired
+/// or been cancelled, leading to state corruption or inconsistent accounting.
+/// Each guard returns a distinct typed error so the caller (and any audit
+/// monitor) can distinguish between a wrong-invoice call (`Unauthorized`),
+/// an expired bid (`InvalidStatus`), and a zero-amount bid (`InvalidAmount`).
+///
+/// # Errors
+///
+/// | Condition | Error |
+/// |---|---|
+/// | bid does not reference this invoice | `Unauthorized` |
+/// | bid not in `Placed` state | `InvalidStatus` |
+/// | bid has expired | `InvalidStatus` |
+/// | bid amount ≤ 0 | `InvalidAmount` |
+/// | bid amount > invoice amount | `InvalidAmount` |
+pub fn verify_bid_match(env: &Env, bid: &Bid, invoice: &crate::types::Invoice) -> Result<(), QuickLendXError> {
+    if bid.invoice_id != invoice.id {
+        return Err(QuickLendXError::Unauthorized);
+    }
+
+    if bid.status != BidStatus::Placed {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if bid.is_expired(env.ledger().timestamp()) {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if bid.bid_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    Ok(())
+}

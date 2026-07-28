@@ -542,3 +542,47 @@ fn test_add_insurance_rejected_after_due_date() {
         "the rejected opt-in must not create an extra coverage record"
     );
 }
+
+#[test]
+fn test_add_insurance_rejected_when_timestamp_past_due_date() {
+    let env = Env::default();
+    let (client, admin, _) = setup(&env);
+
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 10_000);
+
+    let amount = 1_000i128;
+    // Set a due date that is 2 days in the future from the initial ledger time.
+    let due_date = env.ledger().timestamp() + 2 * 86_400;
+    let invoice_id = create_and_fund_invoice(
+        &env, &client, &admin, &business, &investor, amount, due_date,
+    );
+
+    let investment = client.get_invoice_investment(&invoice_id);
+    let investment_id = investment.investment_id;
+
+    // --- Advance time past the due date (timestamp > due_date) ---
+    let past_due_time = due_date + 1; // 1 second after due date
+    env.ledger().set_timestamp(past_due_time);
+
+    // --- Opt-in attempt when timestamp > due_date must be rejected ---
+    let provider = Address::generate(&env);
+    let result = client.try_add_investment_insurance(&investment_id, &provider, &50u32);
+    assert!(
+        result.is_err(),
+        "insurance opt-in must be rejected when timestamp > due_date"
+    );
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        crate::errors::QuickLendXError::InsuranceClaimWindowClosed,
+        "error must be InsuranceClaimWindowClosed (1410), not a generic error"
+    );
+
+    // Confirm no policy was recorded.
+    let records = client.query_investment_insurance(&investment_id);
+    assert_eq!(
+        records.len(),
+        0,
+        "the rejected opt-in must not create a coverage record"
+    );
+}

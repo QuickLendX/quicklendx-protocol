@@ -10,6 +10,7 @@
 | [OFF_CHAIN_SIGNATURES.md](OFF_CHAIN_SIGNATURES.md) | Threat model and implementation notes for all off-chain signed operations: KYC payloads, cursor attestations, dispute evidence (issue #1894) |
 | [DEFAULT_FLOW_DIAGRAM.md](DEFAULT_FLOW_DIAGRAM.md) | State-machine diagram from invoice past-due → default → recovery; grace period, finality guards, dispute interception, and concrete timeline example |
 | [QLX_INVOICE_LOCK_TIME_LIMITS.md](QLX_INVOICE_LOCK_TIME_LIMITS.md) | Contributor-facing summary of the practical invoice lock time limits, auto-release behavior, and the default grace-period path |
+| [QLX_INVOICE_TAXONOMY.md](QLX_INVOICE_TAXONOMY.md) | Canonical invoice categories and statuses defined in the contract, with transition table and concrete examples |
 | [errors.md](contracts/errors.md) | Error code reference (stable integers) |
 | [events.md](contracts/events.md) | Event schema and topic constants |
 | [security.md](contracts/security.md) | Reentrancy guard, pause circuit breaker, access control |
@@ -52,7 +53,7 @@
 | [QLX_GOVERNANCE_PROPOSALS.md](QLX_GOVERNANCE_PROPOSALS.md) | Governance proposal lifecycle status transitions and operator workflows |
 | [QLX_TREASURY_ROTATION.md](QLX_TREASURY_ROTATION.md) | Treasury address rotation flow with two-step validation and timelock |
 | [QLX_MULTISIG_CONFIG.md](QLX_MULTISIG_CONFIG.md) | Multisig setup, signer rotation, and threshold-signature verification for critical operations |
-| [QLX_DISPUTE_TIME_LIMITS.md](QLX_DISPUTE_TIME_LIMITS.md) | Dispute creation deadline, grace period, and auto-close threshold for operator reference |
+| [QLX_ESCROW_TIME_LIMITS.md](QLX_ESCROW_TIME_LIMITS.md) | Escrow Held status duration, release/refund paths, grace period, and default handling |
 | [MONITORING.md](MONITORING.md) | Per-event alert thresholds for contract events |
 | [DASHBOARD_QUERIES.md](DASHBOARD_QUERIES.md) | Full SQL reference for indexer health and workload queries |
 | [RUNBOOK_INCIDENT_RESPONSE.md](RUNBOOK_INCIDENT_RESPONSE.md) | Step-by-step operator playbook for unexpected contract behavior |
