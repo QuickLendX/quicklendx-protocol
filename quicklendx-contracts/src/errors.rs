@@ -31,6 +31,9 @@ pub enum QuickLendXError {
     /// this separates "who can configure the protocol" from "who can
     /// adjudicate a dispute".
     /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidFreezeReason = 1008,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvoiceLockExpired = 1009,
     NotArbiter = 1008,
 
     // Authorization (1100-1104)
@@ -278,6 +281,10 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
+            QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
+            QuickLendXError::InvoiceLockExpired => symbol_short!("INV_LK_XPD"),
+            QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
+            QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
             QuickLendXError::SelfCallNotAllowed => symbol_short!("SELF_NA"),
             // Input validation

@@ -10,9 +10,13 @@ use crate::types::{
     BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory,
     InvoiceLock, InvoiceStatus, InvestorFreezeInfo, PlatformFeeConfig, PruneReport, RebuildReport,
 };
+use crate::errors::QuickLendXError;
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
 pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
+
+/// Maximum time limit for invoice locks in seconds (30 days)
+pub const LOCK_TIME_LIMIT_SECONDS: u64 = 2_592_000;
 
 pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
 where
@@ -317,6 +321,28 @@ impl InvoiceStorage {
         } else {
             false
         }
+    }
+
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
+        Self::get_invoice_lock(env, invoice_id).is_locked()
+    }
+
+    /// Guard that rejects actions on locks older than the time limit.
+    ///
+    /// Returns `InvoiceLockExpired` if the invoice has been frozen for longer
+    /// than `LOCK_TIME_LIMIT_SECONDS` (30 days).
+    pub fn require_lock_within_time_limit(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        if let Some(freeze_info) = Self::get_freeze_info(env, invoice_id) {
+            let current_time = env.ledger().timestamp();
+            let lock_age = current_time.saturating_sub(freeze_info.frozen_at);
+            if lock_age > LOCK_TIME_LIMIT_SECONDS {
+                return Err(QuickLendXError::InvoiceLockExpired);
+            }
+        }
+        Ok(())
     }
 
     pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {

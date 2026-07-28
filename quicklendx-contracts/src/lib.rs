@@ -118,6 +118,7 @@ mod test_panic_handler;
 #[cfg(test)]
 mod test_due_date_guard;
 #[cfg(test)]
+mod test_lock_time_limit;
 mod test_auto_resolution_boundary;
 #[cfg(test)]
 mod test_cancel_invoice_matrix;
@@ -2369,6 +2370,10 @@ impl QuickLendXContract {
         // Validate invoice exists and is verified
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
+            return Err(QuickLendXError::InvoiceFrozen);
+        }
         require_no_active_freeze(&env, &invoice_id)?;
         if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
@@ -2461,6 +2466,10 @@ impl QuickLendXContract {
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
+            return Err(QuickLendXError::InvoiceFrozen);
+        }
         require_no_active_freeze(&env, &invoice_id)?;
         let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         let invoice_id = bid.invoice_id.clone();
