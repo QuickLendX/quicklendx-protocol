@@ -164,6 +164,12 @@ mod test_cleanup_pagination;
 mod test_config_bounds_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency;
+// Issue #2092 — currency-precision helper boundary tests; runs on every CI
+// matrix entry (no feature gate). Covers matching (decimals=0, 7, 18),
+// over-precision (decimals=19, 20, u32::MAX), and malformed cases
+// (unregistered address, wrong return type).
+#[cfg(test)]
+mod test_currency_precision;
 #[cfg(test)]
 mod test_currency_batch;
 #[cfg(all(test, feature = "legacy-tests"))]
