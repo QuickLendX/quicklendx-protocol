@@ -7,7 +7,6 @@ use crate::protocol_limits::{
     MAX_INVOICE_AMOUNT, MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_NOTES_LENGTH,
     MAX_REJECTION_REASON_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
 };
-use crate::storage::InvoiceStorage;
 use crate::types::BidStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Bytes, Env, String, Vec};
@@ -1211,6 +1210,43 @@ pub fn validate_invoice_category(
     }
 }
 
+/// Reject unknown or reserved invoice categories.
+///
+/// This is a tighter validation than [`validate_invoice_category`]: the
+/// catch-all `InvoiceCategory::Other` is treated as *reserved* and rejected
+/// because it is too generic for new invoices.  Requiring a specific category
+/// improves data quality, makes analytics more useful, and gives investors a
+/// clearer picture of the invoice they are funding.
+///
+/// As the protocol evolves, additional enum variants may be added that should
+/// also be rejected (e.g. a placeholder for a future regulatory regime, or a
+/// deprecated alias).  This function is the single point where those
+/// rejections are enforced, following the `require_*` naming convention used
+/// throughout the contract (`require_business_verification`,
+/// `require_regulatory_ok`, etc.).
+///
+/// # Threat mitigated
+///
+/// Without an explicit category-allowlist separate from the enum definition, a
+/// business could default to `Other` for every invoice, defeating the
+/// categorisation that investors and the protocol rely on for risk assessment.
+/// By treating `Other` as reserved, we force callers to select a meaningful
+/// category or add a new variant to the enum if none of the existing options
+/// truly fits.
+///
+/// # Errors
+///
+/// Returns `InvalidTag` for the reserved `Other` category.
+pub fn require_valid_invoice_category(
+    category: &crate::types::InvoiceCategory,
+) -> Result<(), QuickLendXError> {
+    // "Other" is reserved and not accepted for new invoices.
+    if matches!(category, crate::types::InvoiceCategory::Other) {
+        return Err(QuickLendXError::InvalidTag);
+    }
+    validate_invoice_category(category)
+}
+
 /// Validate invoice tags.
 ///
 /// Each tag is normalized (trimmed, ASCII-lowercased) before validation so that
@@ -2054,23 +2090,15 @@ pub fn validate_transaction_hash(env: &soroban_sdk::Env, hash: &soroban_sdk::Str
         return Err(crate::errors::QuickLendXError::InvalidTransactionHash);
     }
     
-    let mut is_hex = true;
-    let bytes = soroban_sdk::Bytes::from_string(env, hash);
-    for i in 0..64 {
+    let bytes = hash.to_bytes();
+    for i in 0..bytes.len() {
         let b = bytes.get(i).unwrap();
         match b {
             b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {}
-            _ => {
-                is_hex = false;
-                break;
-            }
+            _ => return Err(crate::errors::QuickLendXError::InvalidTransactionHash),
         }
     }
-    
-    if !is_hex {
-        return Err(crate::errors::QuickLendXError::InvalidTransactionHash);
-    }
-    
+
     Ok(())
 }
 

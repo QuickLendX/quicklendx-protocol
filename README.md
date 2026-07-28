@@ -39,6 +39,7 @@
   •  docs/INVESTOR_TIER.md : How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
   •  docs/BID_OVERBID_POLICY.md : What happens when a bid exceeds the invoice amount — rejection path and error code.
   •  docs/QLX_INVOICE_LOCK_TIME_LIMITS.md : Contributor-facing summary of invoice lock duration, auto-release behavior, and the default grace-period path.
+   •  docs/QLX_INVOICE_TAXONOMY.md : Canonical invoice categories and statuses with transition examples.
   •  quicklendx-contracts/README.md : Smart contract-specific documentation.
   •  quicklendx-contracts/docs/contracts/deterministic-time.md : Smart contract deterministic ledger time semantics.
   •  quicklendx-backend/README.md : Backend-specific documentation.
@@ -71,6 +72,7 @@ npm run dev
 - `docs/INVESTOR_TIER.md`: How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
 - `docs/KYC.md`: Business KYC vs investor KYC, what each gates.
 - [`docs/QLX_INVOICE_LOCK_TIME_LIMITS.md`](docs/QLX_INVOICE_LOCK_TIME_LIMITS.md): Contributor-facing summary of invoice lock duration, auto-release behavior, and the default grace-period path.
+- [`docs/QLX_INVOICE_TAXONOMY.md`](docs/QLX_INVOICE_TAXONOMY.md): Canonical invoice categories and statuses with transition examples.
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-contracts/docs/contracts/deterministic-time.md`: Smart contract deterministic ledger time semantics.
 - [`docs/README.md`](docs/README.md): Full documentation index — **start here**.
@@ -96,6 +98,7 @@ npm run dev
 - [`docs/QLX_GOVERNANCE_PROPOSALS.md`](docs/QLX_GOVERNANCE_PROPOSALS.md): Governance proposal lifecycle, status transitions, and operator workflow.
 - [`docs/QLX_TREASURY_ROTATION.md`](docs/QLX_TREASURY_ROTATION.md): Treasury address rotation flow with two-step validation and timelock.
 - [`docs/QLX_MULTISIG_CONFIG.md`](docs/QLX_MULTISIG_CONFIG.md): Multisig setup, signer rotation, and threshold-signature verification for critical operations.
+- [`docs/QLX_ESCROW_TIME_LIMITS.md`](docs/QLX_ESCROW_TIME_LIMITS.md): How long escrows can remain unclaimed; release/refund paths, grace period, default handling, and the extend_escrow_expiry operation.
 - [`docs/APPEALS.md`](docs/APPEALS.md): Appeals process — who reviews, timeline, outcomes, and how they affect funds — operator-facing.
 - [`docs/EVENT_DASHBOARDS.md`](docs/EVENT_DASHBOARDS.md): Standard operator dashboards — panel URLs, PromQL queries, SQLite indexer queries, and alert rules for protocol health, event throughput, disputes, and settlement pipeline.
 

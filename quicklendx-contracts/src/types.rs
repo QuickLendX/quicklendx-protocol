@@ -480,35 +480,4 @@ pub struct PaginatedCurrencies {
     pub has_more: bool,
 }
 
-/// Typed reason for freezing an investor account.
-///
-/// Symmetric with [`BusinessFreezeReason`] — every freeze must carry a
-/// typed reason so that audit logs and unfreeze workflows can operate on
-/// structured data rather than opaque booleans.
-#[contracttype]
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum InvestorFreezeReason {
-    /// Investor engaged in suspicious or fraudulent bid/investment activity.
-    FraudSuspected,
-    /// Investor failed or failed ongoing KYC/AML compliance checks.
-    ComplianceViolation,
-    /// Active dispute involving the investor's positions.
-    Dispute,
-    /// Investor requested a voluntary freeze.
-    Voluntary,
-    /// Admin-initiated freeze for an unspecified or catch-all reason.
-    AdminAction,
-}
 
-impl InvestorFreezeReason {
-    /// Returns a short human-readable label for event logging.
-    pub fn label(&self) -> &'static str {
-        match self {
-            Self::FraudSuspected => "fraud_suspected",
-            Self::ComplianceViolation => "compliance_violation",
-            Self::Dispute => "dispute",
-            Self::Voluntary => "voluntary",
-            Self::AdminAction => "admin_action",
-        }
-    }
-}

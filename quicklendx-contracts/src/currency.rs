@@ -245,14 +245,6 @@ impl CurrencyWhitelist {
         ))
     }
 
-    /// Returns the canonical zero address used for validation.
-    fn zero_address(env: &Env) -> Address {
-        Address::from_string(&String::from_str(
-            env,
-            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-        ))
-    }
-
     /// Assert that `currency` is permitted, respecting empty-list backward compatibility.
     ///
     /// # Parameters
