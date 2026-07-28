@@ -41,7 +41,7 @@ fn create_verified_invoice_for_bid_tests(
         &String::from_str(env, "Test invoice for bid validation"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     
     // Verify invoice
     client.verify_invoice(&invoice_id);
@@ -61,8 +61,9 @@ fn setup_investor_for_bid_tests(
 
 /// Helper to get current protocol limits
 fn get_protocol_limits_for_test(env: &Env) -> ProtocolLimits {
-    ProtocolLimitsContract::get_protocol_limits(env)
-}
+    ProtocolLimitsContract::get_protocol_limits(env),
+        min_investor_tier: crate::verification::InvestorTier::Basic,
+    }
 
 #[test]
 fn test_bid_validation_enforces_absolute_minimum() {
@@ -336,12 +337,12 @@ fn test_bid_validation_integration_with_place_bid() {
     };
     
     // Test 1: Place bid below minimum should fail
-    let result = client.place_bid(&investor, &invoice_id, &(effective_min - 1), &(invoice_amount + 100));
+    let result = client.place_bid(&investor, &invoice_id, &(effective_min - 1), &(invoice_amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), QuickLendXError::InvalidAmount);
     
     // Test 2: Place bid at minimum should succeed
-    let bid_id = client.place_bid(&investor, &invoice_id, &effective_min, &(invoice_amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &effective_min, &(invoice_amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     assert!(bid_id != BytesN::from_array(&env, &[0; 32]));
     
     // Verify bid was created and has correct amount
@@ -350,7 +351,7 @@ fn test_bid_validation_integration_with_place_bid() {
     assert_eq!(bid.status, BidStatus::Placed);
     
     // Test 3: Place second bid from same investor should fail (active bid protection)
-    let result = client.place_bid(&investor, &invoice_id, &(effective_min + 100), &(invoice_amount + 200));
+    let result = client.place_bid(&investor, &invoice_id, &(effective_min + 100), &(invoice_amount + 200), &BytesN::from_array(&env, &[0u8; 32]));
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), QuickLendXError::OperationNotAllowed);
 }
@@ -385,7 +386,7 @@ fn test_bid_validation_with_invoice_status_checks() {
         &String::from_str(env, "Unverified invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     
     // Get current protocol limits
     let limits = get_protocol_limits_for_test(&env);

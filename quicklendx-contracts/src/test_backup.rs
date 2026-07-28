@@ -40,7 +40,7 @@ fn create_invoice(
         &String::from_str(env, description),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 /// Create a minimal Invoice suitable for backup tests.
@@ -87,8 +87,10 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
         },
         total_paid: 0,
         payment_history: soroban_sdk::Vec::new(env),
+    },
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
-}
 
 /// Persist a complete, valid backup (metadata + data) and return its ID.
 fn create_valid_backup(env: &Env, invoices: Vec<Invoice>) -> soroban_sdk::BytesN<32> {
@@ -465,9 +467,12 @@ fn restore_from_backup_is_idempotent() {
     // Create two invoices and take a backup.
     let inv_a = create_invoice(&env, &client, 5_000, "A");
     let inv_b = create_invoice(&env, &client, 7_000, "B");
-    let _ = inv_a; let _ = inv_b;
+    let _ = inv_a;
+    let _ = inv_b;
 
-    let backup_id = client.create_backup(&admin, &String::from_str(&env, "idempotency-test")).unwrap();
+    let backup_id = client
+        .create_backup(&admin, &String::from_str(&env, "idempotency-test"))
+        .unwrap();
 
     let count1 = client.restore_backup(&admin, &backup_id).unwrap();
     let count2 = client.restore_backup(&admin, &backup_id).unwrap();
@@ -484,10 +489,14 @@ fn restore_order_independent_for_invoice_records() {
     let _ = env_b;
 
     let _ = create_invoice(&env, &client_a, 1_000, "X1");
-    let backup_x = client_a.create_backup(&admin_a, &String::from_str(&env, "backup-x")).unwrap();
+    let backup_x = client_a
+        .create_backup(&admin_a, &String::from_str(&env, "backup-x"))
+        .unwrap();
 
     let _ = create_invoice(&env, &client_a, 2_000, "X2");
-    let backup_y = client_a.create_backup(&admin_a, &String::from_str(&env, "backup-y")).unwrap();
+    let backup_y = client_a
+        .create_backup(&admin_a, &String::from_str(&env, "backup-y"))
+        .unwrap();
 
     // Order 1: restore X then Y
     let count_x1 = client_a.restore_backup(&admin_a, &backup_x).unwrap();
@@ -495,9 +504,13 @@ fn restore_order_independent_for_invoice_records() {
 
     // Order 2: restore Y then X on client_b
     let _ = create_invoice(&env_b, &client_b, 1_000, "X1");
-    let bx_b = client_b.create_backup(&admin_b, &String::from_str(&env_b, "backup-x")).unwrap();
+    let bx_b = client_b
+        .create_backup(&admin_b, &String::from_str(&env_b, "backup-x"))
+        .unwrap();
     let _ = create_invoice(&env_b, &client_b, 2_000, "X2");
-    let by_b = client_b.create_backup(&admin_b, &String::from_str(&env_b, "backup-y")).unwrap();
+    let by_b = client_b
+        .create_backup(&admin_b, &String::from_str(&env_b, "backup-y"))
+        .unwrap();
 
     let _count_y1 = client_b.restore_backup(&admin_b, &by_b).unwrap();
     let count_yx = client_b.restore_backup(&admin_b, &bx_b).unwrap();

@@ -51,6 +51,8 @@ fn make_input(env: &Env, currency: &Address, offset_secs: u64) -> InvoiceInput {
         description: String::from_str(env, "Batch invoice"),
         category: InvoiceCategory::Services,
         tags: Vec::new(env),
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     }
 }
 
@@ -164,7 +166,7 @@ fn test_batch_respects_active_invoice_cap() {
 
     // Lower the per-business limit to something small.
     // Default is 100; set it to 3 so we can test the cap easily.
-    client.set_protocol_limits(
+    client.set_protocol_limits_full(
         &admin,
         &10,    // min_invoice_amount
         &10,    // min_bid_amount
@@ -172,6 +174,7 @@ fn test_batch_respects_active_invoice_cap() {
         &365,   // max_due_date_days
         &604800, // grace_period_seconds (7 days)
         &3,     // max_invoices_per_business
+        &crate::verification::InvestorTier::Basic, // min_investor_tier
     );
 
     // First batch: 2 invoices — should succeed (2 < 3).
@@ -251,6 +254,8 @@ fn test_batch_bad_input_aborts_entirely() {
         description: String::from_str(&env, "Bad invoice"),
         category: InvoiceCategory::Services,
         tags: Vec::new(&env),
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     });
 
     let result = client.try_store_invoices_batch(&business, &inputs);

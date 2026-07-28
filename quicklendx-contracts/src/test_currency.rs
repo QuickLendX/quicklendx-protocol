@@ -149,7 +149,7 @@ fn test_invoice_with_non_whitelisted_currency_fails_when_whitelist_set() {
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     // Must surface the typed InvalidCurrency error, not a generic failure.
     assert_eq!(
         res,
@@ -173,7 +173,7 @@ fn test_invoice_with_whitelisted_currency_succeeds() {
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let got = client.get_invoice(&invoice_id);
     assert_eq!(got.amount, 1000i128);
 }
@@ -195,13 +195,13 @@ fn test_bid_on_invoice_with_non_whitelisted_currency_fails_when_whitelist_set() 
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     client.submit_investor_kyc(&investor, &String::from_str(&env, "KYC"));
     client.verify_investor(&investor, &5000i128);
     client.remove_currency(&admin, &currency_a);
     client.add_currency(&admin, &currency_b);
-    let res = client.try_place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    let res = client.try_place_bid(&investor, &invoice_id, &1000i128, &1100i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert!(res.is_err());
 }
 
@@ -289,7 +289,7 @@ fn test_clear_currencies_allows_all() {
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let got = client.get_invoice(&invoice_id);
     assert_eq!(got.amount, 1000i128);
 }
@@ -969,7 +969,7 @@ fn test_upload_invoice_with_non_whitelisted_currency_fails() {
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(
         res.is_err(),
         "upload_invoice must reject non-whitelisted currency"
@@ -994,7 +994,7 @@ fn test_upload_invoice_with_whitelisted_currency_succeeds() {
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let got = client.get_invoice(&invoice_id);
     assert_eq!(got.amount, 1000i128);
     assert_eq!(got.currency, currency);
@@ -1028,7 +1028,7 @@ fn test_remove_currency_immediately_blocks_store_invoice() {
         &String::from_str(&env, "Before remove"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(
         ok.is_ok(),
         "store_invoice must succeed with currency_a before removal"
@@ -1046,7 +1046,7 @@ fn test_remove_currency_immediately_blocks_store_invoice() {
         &String::from_str(&env, "After remove"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(
         err.is_err(),
         "store_invoice must reject currency_a immediately after remove_currency"
@@ -1061,7 +1061,7 @@ fn test_remove_currency_immediately_blocks_store_invoice() {
         &String::from_str(&env, "currency_b still allowed"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(ok_b.is_ok(), "store_invoice must still accept currency_b");
 }
 
@@ -1090,7 +1090,7 @@ fn test_set_currencies_blocks_old_and_allows_new_for_store_invoice() {
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(
         ok.is_ok(),
         "currency_a must be accepted before set_currencies"
@@ -1110,7 +1110,7 @@ fn test_set_currencies_blocks_old_and_allows_new_for_store_invoice() {
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(
         err_a.is_err(),
         "currency_a must be blocked after set_currencies"
@@ -1125,7 +1125,7 @@ fn test_set_currencies_blocks_old_and_allows_new_for_store_invoice() {
         &String::from_str(&env, "Desc"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(
         ok_b.is_ok(),
         "currency_b must be accepted after set_currencies"
@@ -1159,4 +1159,3 @@ fn test_add_currencies_batch_zero_address_fails() {
     let res = client.try_add_currencies_batch(&admin, &list);
     assert!(res.is_err(), "batch add should reject zero address");
 }
-

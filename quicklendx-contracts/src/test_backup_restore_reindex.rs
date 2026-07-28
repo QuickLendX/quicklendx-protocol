@@ -74,8 +74,10 @@ fn make_complex_invoice(
         total_paid: 0,
         payment_history: Vec::new(env),
         created_at: env.ledger().timestamp(),
+    },
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
-}
 
 fn create_valid_backup(env: &Env, invoices: Vec<Invoice>) -> BytesN<32> {
     let backup_id = BackupStorage::generate_backup_id(env);

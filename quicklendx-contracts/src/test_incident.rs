@@ -3,12 +3,19 @@
 #![cfg(test)]
 
 use crate::errors::QuickLendXError;
+use crate::events::{
+    IncidentModeEntered, IncidentModeExited, TOPIC_INCIDENT_MODE_ENTERED,
+    TOPIC_INCIDENT_MODE_EXITED,
+};
 use crate::incident::IncidentSnapshot;
 use crate::invoice::InvoiceCategory;
 use crate::maintenance::MAX_REASON_LEN;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{Address, Env, String, Vec};
+use soroban_sdk::{
+    xdr,
+    {testutils::Events, Address, Env, String, Symbol, TryFromVal, Val, Vec},
+};
 
 fn setup(env: &Env) -> (QuickLendXContractClient<'static>, Address) {
     env.mock_all_auths();
@@ -152,7 +159,7 @@ fn test_incident_mode_blocks_store_invoice() {
         &String::from_str(&env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::ContractPaused
@@ -183,4 +190,122 @@ fn test_reenter_realigns_drifted_flags() {
     let snapshot = client.enter_incident_mode(&admin, &reason(&env, "Realign"));
     assert!(snapshot.is_paused);
     assert!(snapshot.is_maintenance);
+}
+
+// ── Event emission tests ─────────────────────────────────────────────────────
+
+fn count_events_with_topic(env: &Env, topic_str: &str) -> usize {
+    let topic_sym = Symbol::new(env, topic_str);
+    let topic_xdr = xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
+    env.events()
+        .all()
+        .events()
+        .iter()
+        .filter(|e| match &e.body {
+            xdr::ContractEventBody::V0(body) => body.topics.first() == Some(&topic_xdr),
+        })
+        .count()
+}
+
+fn latest_payload<T>(env: &Env, topic_str: &str) -> T
+where
+    T: TryFromVal<Env, Val>,
+{
+    let topic_sym = Symbol::new(env, topic_str);
+    let topic_xdr = xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
+    let all = env.events().all();
+    for e in all.events().iter().rev() {
+        if let xdr::ContractEventBody::V0(body) = &e.body {
+            if body.topics.first() == Some(&topic_xdr) {
+                return T::try_from_val(
+                    env,
+                    &Val::try_from_val(env, &body.data).expect("data ScVal to Val"),
+                )
+                .expect("event payload decode");
+            }
+        }
+    }
+    panic!(
+        "topic {:?} not found in {} events",
+        topic_str,
+        all.events().len()
+    );
+}
+
+#[test]
+fn test_enter_incident_mode_emits_event() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+    let msg = "Oracle feed anomaly";
+
+    let _snapshot = client.enter_incident_mode(&admin, &reason(&env, msg));
+
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_INCIDENT_MODE_ENTERED),
+        1,
+        "enter_incident_mode should emit exactly one IncidentModeEntered event"
+    );
+
+    let event: IncidentModeEntered = latest_payload(&env, TOPIC_INCIDENT_MODE_ENTERED);
+    assert_eq!(event.admin, admin);
+    assert_eq!(event.reason, reason(&env, msg));
+    assert_eq!(event.timestamp, env.ledger().timestamp());
+}
+
+#[test]
+fn test_exit_incident_mode_emits_event() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    client.enter_incident_mode(&admin, &reason(&env, "Investigating"));
+    let _snapshot = client.exit_incident_mode(&admin);
+
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_INCIDENT_MODE_EXITED),
+        1,
+        "exit_incident_mode should emit exactly one IncidentModeExited event"
+    );
+
+    let event: IncidentModeExited = latest_payload(&env, TOPIC_INCIDENT_MODE_EXITED);
+    assert_eq!(event.admin, admin);
+    assert_eq!(event.timestamp, env.ledger().timestamp());
+}
+
+#[test]
+fn test_enter_incident_mode_reentry_emits_event_each_time() {
+    let env = Env::default();
+    let (client, admin) = setup(&env);
+
+    client.enter_incident_mode(&admin, &reason(&env, "First incident"));
+    client.enter_incident_mode(&admin, &reason(&env, "Second incident"));
+
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_INCIDENT_MODE_ENTERED),
+        2,
+        "re-entering incident mode should emit an event each time"
+    );
+
+    let event: IncidentModeEntered = latest_payload(&env, TOPIC_INCIDENT_MODE_ENTERED);
+    assert_eq!(event.reason, reason(&env, "Second incident"));
+}
+
+#[test]
+fn test_incident_mode_events_are_not_emitted_without_admin_auth() {
+    let env = Env::default();
+    let (client, _admin) = setup(&env);
+    let attacker = Address::generate(&env);
+
+    let result = client.try_enter_incident_mode(&attacker, &reason(&env, "attack"));
+    assert!(result.is_err());
+
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_INCIDENT_MODE_ENTERED),
+        0,
+        "non-admin should not emit IncidentModeEntered event"
+    );
+    assert_eq!(
+        count_events_with_topic(&env, TOPIC_INCIDENT_MODE_EXITED),
+        0,
+        "non-admin should not emit IncidentModeExited event"
+    );
 }
