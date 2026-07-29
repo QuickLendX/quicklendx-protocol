@@ -65,6 +65,7 @@ remaining points, and reset timers is not exposed.
 | Limit Type | Value | HTTP Status When Exceeded |
 |------------|-------|----------------------------|
 | JSON Body | 1MB | 413 Payload Too Large |
+| JSON Body on `POST /api/v1/events` | 256KB | 413 Payload Too Large |
 | Query per param | 2KB | 400 Bad Request |
 | Query total | 8KB | 400 Bad Request |
 | Header per key | 16KB | 431 Request Header Fields Too Large |
@@ -73,6 +74,7 @@ remaining points, and reset timers is not exposed.
 ### Rationale
 
 - **Body (1MB)**: Invoice metadata can be detailed JSON, but unbounded bodies cause memory pressure. 1MB accommodates complex invoices while preventing abuse.
+- **Body on the event ingest route (256KB)**: A batch is capped at 100 Soroban events, so 256KB is generous while keeping the indexer ingress far below the general budget. See [security.md](./security.md#event-ingest-endpoint-hardening) for the full framing policy, which also covers `Content-Length` and chunked-encoding handling.
 - **Query per param (2KB)**: 64-char hex invoice IDs are ~128 bytes. 2KB provides ample headroom for legitimate values.
 - **Query total (8KB)**: Allows multiple filter params (invoice_id, status, business, pagination) without hitting limits.
 - **Header per key (16KB)**: Large enough for JWT tokens (~1-4KB) with room for metadata.

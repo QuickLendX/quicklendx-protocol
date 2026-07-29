@@ -30,6 +30,12 @@ module.exports = {
       lines: 95,
       statements: 95,
     },
+    "src/middleware/event-ingest-limits.ts": {
+      branches: 95,
+      functions: 95,
+      lines: 95,
+      statements: 95,
+    },
   },
   collectCoverageFrom: [
     "scripts/lib/secret-scan-utils.js",
@@ -42,6 +48,7 @@ module.exports = {
     "src/middleware/access-log.ts",
     "src/services/eventProcessor.ts",
     "src/middleware/cache-headers.ts",
+    "src/middleware/event-ingest-limits.ts",
     "src/controllers/v1/bids.ts",
     "src/lib/entityId.ts",
   ],
