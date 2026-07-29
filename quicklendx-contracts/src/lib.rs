@@ -193,6 +193,10 @@ mod test_evidence_kind_guard_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
+mod test_due_date_guard;
+#[cfg(test)]
+mod test_lock_time_limit_guard;
+#[cfg(test)]
 // mod test_dispute_event_invariant;
 #[cfg(test)]
 mod test_dust_transfer;
