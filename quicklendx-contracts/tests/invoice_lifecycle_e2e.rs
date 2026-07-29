@@ -13,6 +13,8 @@
 //! | `test_partial_then_full_settle`       | Upload → Verify → Bid → Fund → Multiple partials → Final settle |
 
 use quicklendx_contracts::{
+    errors::QuickLendXError,
+    payments::EscrowStatus,
     types::{BidStatus, InvestmentStatus, InvoiceCategory, InvoiceStatus},
     QuickLendXContract, QuickLendXContractClient,
 };
@@ -43,8 +45,8 @@ struct Fixture {
 // (SAC) token, a verified business, and a verified investor.
 //
 // Token balances minted:
-// - business:    20 000 (enough to settle a 10 000 invoice after escrow release)
-// - investor:    15 000 (enough to fund a 10 000 bid)
+// - business: 200 000 000 (enough to settle a 100 000 000 invoice after escrow release)
+// - investor: 150 000 000 (enough to fund a 50 000 000 bid)
 // - contract:         1 (initialises the SAC instance so balance lookups work)
 //
 // Both business and investor approve the contract for their full balance so
@@ -74,13 +76,13 @@ fn setup_contract(env: &Env) -> Fixture {
     let sac = token::StellarAssetClient::new(env, &currency);
     let tok = token::Client::new(env, &currency);
 
-    sac.mint(&business, &20_000i128);
-    sac.mint(&investor, &15_000i128);
+    sac.mint(&business, &200_000_000i128);
+    sac.mint(&investor, &150_000_000i128);
     sac.mint(&contract_id, &1i128); // initialise SAC instance
 
     let exp = env.ledger().sequence() + 100_000;
-    tok.approve(&business, &contract_id, &20_000i128, &exp);
-    tok.approve(&investor, &contract_id, &15_000i128, &exp);
+    tok.approve(&business, &contract_id, &200_000_000i128, &exp);
+    tok.approve(&investor, &contract_id, &150_000_000i128, &exp);
 
     // Whitelist the currency
     client.add_currency(&admin, &currency);
@@ -89,9 +91,9 @@ fn setup_contract(env: &Env) -> Fixture {
     client.submit_kyc_application(&business, &String::from_str(env, "Business KYC"));
     client.verify_business(&admin, &business);
 
-    // Verify investor (KYC submit + admin approve, limit = 15 000)
+    // Verify investor (KYC submit + admin approve, limit = 150 000 000)
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
-    client.verify_investor(&investor, &15_000i128);
+    client.verify_investor(&investor, &150_000_000i128);
 
     Fixture {
         client,
@@ -101,6 +103,45 @@ fn setup_contract(env: &Env) -> Fixture {
         currency,
         contract_id,
     }
+}
+
+fn upload_verified_invoice(fx: &Fixture, amount: i128, description: &str) -> BytesN<32> {
+    let due_date = fx.client.env.ledger().timestamp() + 86_400;
+    let invoice_id = fx.client.upload_invoice(
+        &fx.business,
+        &amount,
+        &fx.currency,
+        &due_date,
+        &String::from_str(&fx.client.env, description),
+        &InvoiceCategory::Goods,
+        &Vec::new(&fx.client.env),
+        &None,
+    );
+
+    fx.client.verify_invoice(&invoice_id);
+
+    invoice_id
+}
+
+fn assert_invoice_still_verified_and_unfunded(fx: &Fixture, invoice_id: &BytesN<32>, amount: i128) {
+    let invoice = fx.client.get_invoice(invoice_id);
+
+    assert_eq!(invoice.amount, amount);
+    assert_eq!(invoice.status, InvoiceStatus::Verified);
+    assert_eq!(invoice.funded_amount, 0);
+    assert_eq!(invoice.total_paid, 0);
+    assert!(invoice.investor.is_none());
+    assert_eq!(invoice.payment_history.len(), 0);
+}
+
+fn assert_no_bid_or_escrow_created(fx: &Fixture, invoice_id: &BytesN<32>) {
+    assert_eq!(fx.client.get_bids_for_invoice(invoice_id).len(), 0);
+
+    let escrow_result = fx.client.try_get_escrow_details(invoice_id);
+    assert!(
+        matches!(escrow_result, Err(Ok(QuickLendXError::StorageKeyNotFound))),
+        "expected no escrow"
+    );
 }
 
 // ============================================================================
@@ -133,8 +174,8 @@ fn test_invoice_lifecycle_happy_path() {
     let fx = setup_contract(&env);
     let tok = token::Client::new(&env, &fx.currency);
 
-    let invoice_amount: i128 = 10_000;
-    let bid_amount: i128 = 9_000;
+    let invoice_amount: i128 = 100_000_000;
+    let bid_amount: i128 = 50_000_000;
 
     // ── Stage 1: Upload invoice ──────────────────────────────────────────────
     // Business uploads an invoice; status must be Pending.
@@ -147,6 +188,9 @@ fn test_invoice_lifecycle_happy_path() {
         &String::from_str(&env, "Consulting services"),
         &InvoiceCategory::Consulting,
         &Vec::new(&env),
+
+        &None,
+
     );
 
     let invoice = fx.client.get_invoice(&invoice_id);
@@ -271,7 +315,7 @@ fn test_invoice_lifecycle_happy_path() {
 
     // ── Stage 5: Process partial payment ────────────────────────────────────
     // Business makes a partial payment; total_paid must update, status stays Funded.
-    let partial_amount: i128 = 4_000;
+    let partial_amount: i128 = 40_000_000;
     fx.client.process_partial_payment(
         &invoice_id,
         &partial_amount,
@@ -359,6 +403,123 @@ fn test_invoice_lifecycle_happy_path() {
 }
 
 // ============================================================================
+// Issue #1937: Overbid refund path boundaries
+// ============================================================================
+
+#[test]
+fn test_boundary_bid_equal_to_invoice_amount_accepts_and_funds_exactly() {
+    let env = Env::default();
+    let fx = setup_contract(&env);
+    let tok = token::Client::new(&env, &fx.currency);
+
+    let invoice_amount: i128 = 10_000;
+    let invoice_id =
+        upload_verified_invoice(&fx, invoice_amount, "Boundary bid equal to invoice amount");
+    let bid_salt = BytesN::from_array(&env, &[11u8; 32]);
+
+    let investor_balance_before = tok.balance(&fx.investor);
+    let contract_balance_before = tok.balance(&fx.contract_id);
+
+    let bid_id = fx.client.place_bid(
+        &fx.investor,
+        &invoice_id,
+        &invoice_amount,
+        &(invoice_amount + 1_000),
+        &bid_salt,
+    );
+
+    let bid = fx.client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Placed);
+    assert_eq!(bid.bid_amount, invoice_amount);
+    assert_eq!(fx.client.get_bids_for_invoice(&invoice_id).len(), 1);
+
+    fx.client.accept_bid_and_fund(&invoice_id, &bid_id);
+
+    let escrow = fx.client.get_escrow_details(&invoice_id);
+    assert!(matches!(escrow.status, EscrowStatus::Held));
+    assert_eq!(escrow.amount, invoice_amount);
+    assert_eq!(escrow.investor, fx.investor);
+
+    let invoice = fx.client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+    assert_eq!(invoice.funded_amount, invoice_amount);
+    assert_eq!(invoice.investor, Some(fx.investor.clone()));
+
+    assert_eq!(
+        tok.balance(&fx.investor),
+        investor_balance_before - invoice_amount
+    );
+    assert_eq!(
+        tok.balance(&fx.contract_id),
+        contract_balance_before + invoice_amount
+    );
+}
+
+#[test]
+fn test_single_overbid_rejected_without_balance_or_state_changes() {
+    let env = Env::default();
+    let fx = setup_contract(&env);
+    let tok = token::Client::new(&env, &fx.currency);
+
+    let invoice_amount: i128 = 10_000;
+    let invoice_id = upload_verified_invoice(&fx, invoice_amount, "Single overbid rejected");
+    let overbid_amount = invoice_amount + 1;
+    let bid_salt = BytesN::from_array(&env, &[12u8; 32]);
+
+    let investor_balance_before = tok.balance(&fx.investor);
+    let contract_balance_before = tok.balance(&fx.contract_id);
+
+    let result = fx.client.try_place_bid(
+        &fx.investor,
+        &invoice_id,
+        &overbid_amount,
+        &(overbid_amount + 1_000),
+        &bid_salt,
+    );
+
+    assert!(
+        matches!(result, Err(Ok(QuickLendXError::InvoiceAmountInvalid))),
+        "expected InvoiceAmountInvalid for overbid"
+    );
+    assert_eq!(tok.balance(&fx.investor), investor_balance_before);
+    assert_eq!(tok.balance(&fx.contract_id), contract_balance_before);
+    assert_no_bid_or_escrow_created(&fx, &invoice_id);
+    assert_invoice_still_verified_and_unfunded(&fx, &invoice_id, invoice_amount);
+}
+
+#[test]
+fn test_multiple_overbids_rejected_independently_without_side_effects() {
+    let env = Env::default();
+    let fx = setup_contract(&env);
+    let tok = token::Client::new(&env, &fx.currency);
+
+    let invoice_amount: i128 = 10_000;
+    let invoice_id = upload_verified_invoice(&fx, invoice_amount, "Multiple overbids rejected");
+    let investor_balance_before = tok.balance(&fx.investor);
+    let contract_balance_before = tok.balance(&fx.contract_id);
+
+    for (salt_byte, overbid_amount) in [(21u8, 10_001i128), (22, 10_500), (23, 14_999)] {
+        let bid_salt = BytesN::from_array(&env, &[salt_byte; 32]);
+        let result = fx.client.try_place_bid(
+            &fx.investor,
+            &invoice_id,
+            &overbid_amount,
+            &(overbid_amount + 1),
+            &bid_salt,
+        );
+
+        assert!(
+            matches!(result, Err(Ok(QuickLendXError::InvoiceAmountInvalid))),
+            "expected InvoiceAmountInvalid for overbid {overbid_amount}"
+        );
+        assert_eq!(tok.balance(&fx.investor), investor_balance_before);
+        assert_eq!(tok.balance(&fx.contract_id), contract_balance_before);
+        assert_no_bid_or_escrow_created(&fx, &invoice_id);
+        assert_invoice_still_verified_and_unfunded(&fx, &invoice_id, invoice_amount);
+    }
+}
+
+// ============================================================================
 // Test 2 — Default branch: Upload → Verify → Bid → Fund → Expire → Refund
 // ============================================================================
 
@@ -386,8 +547,8 @@ fn test_invoice_lifecycle_default_branch() {
     let fx = setup_contract(&env);
     let tok = token::Client::new(&env, &fx.currency);
 
-    let invoice_amount: i128 = 10_000;
-    let bid_amount: i128 = 9_000;
+    let invoice_amount: i128 = 10_000_000;
+    let bid_amount: i128 = 9_000_000;
 
     // ── Stage 1: Upload invoice ──────────────────────────────────────────────
     // Business uploads an invoice.
@@ -400,6 +561,9 @@ fn test_invoice_lifecycle_default_branch() {
         &String::from_str(&env, "Goods delivery"),
         &InvoiceCategory::Consulting,
         &Vec::new(&env),
+
+        &None,
+
     );
 
     assert_eq!(
@@ -419,9 +583,13 @@ fn test_invoice_lifecycle_default_branch() {
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
     // Investor places a bid.
-    let bid_id = fx
-        .client
-        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]));
+    let bid_id = fx.client.place_bid(
+        &fx.investor,
+        &invoice_id,
+        &bid_amount,
+        &invoice_amount,
+        &BytesN::from_array(&fx.client.env, &[0u8; 32]),
+    );
     assert_eq!(
         fx.client.get_bid(&bid_id).unwrap().status,
         BidStatus::Placed,
@@ -503,7 +671,7 @@ fn test_invoice_lifecycle_default_branch() {
     // No funds lost: business balance unchanged throughout
     assert_eq!(
         tok.balance(&fx.business),
-        20_000i128,
+        200_000_000i128,
         "Stage 7: business balance must be unchanged"
     );
 
@@ -548,8 +716,8 @@ fn test_partial_then_full_settle() {
     let fx = setup_contract(&env);
     let tok = token::Client::new(&env, &fx.currency);
 
-    let invoice_amount: i128 = 10_000;
-    let bid_amount: i128 = 8_000;
+    let invoice_amount: i128 = 100_000_000;
+    let bid_amount: i128 = 50_000_000;
 
     // ── Stage 1: Upload invoice ──────────────────────────────────────────────
     // Business uploads an invoice.
@@ -562,6 +730,9 @@ fn test_partial_then_full_settle() {
         &String::from_str(&env, "Technology services"),
         &InvoiceCategory::Consulting,
         &Vec::new(&env),
+
+        &None,
+
     );
     assert_eq!(
         fx.client.get_invoice(&invoice_id).status,
@@ -580,9 +751,13 @@ fn test_partial_then_full_settle() {
 
     // ── Stage 3: Place bid ───────────────────────────────────────────────────
     // Investor places a bid.
-    let bid_id = fx
-        .client
-        .place_bid(&fx.investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&fx.client.env, &[0u8; 32]));
+    let bid_id = fx.client.place_bid(
+        &fx.investor,
+        &invoice_id,
+        &bid_amount,
+        &invoice_amount,
+        &BytesN::from_array(&fx.client.env, &[0u8; 32]),
+    );
     assert_eq!(
         fx.client.get_bid(&bid_id).unwrap().bid_amount,
         bid_amount,
@@ -603,12 +778,12 @@ fn test_partial_then_full_settle() {
     env.ledger().set_timestamp(2_000);
     fx.client.process_partial_payment(
         &invoice_id,
-        &2_000i128,
+        &20_000_000i128,
         &String::from_str(&env, "partial-1"),
     );
     let invoice = fx.client.get_invoice(&invoice_id);
     assert_eq!(
-        invoice.total_paid, 2_000,
+        invoice.total_paid, 20_000_000,
         "Stage 5a: total_paid must be 2 000"
     );
     assert_eq!(
@@ -620,12 +795,12 @@ fn test_partial_then_full_settle() {
     env.ledger().set_timestamp(3_000);
     fx.client.process_partial_payment(
         &invoice_id,
-        &2_000i128,
+        &20_000_000i128,
         &String::from_str(&env, "partial-2"),
     );
     let invoice = fx.client.get_invoice(&invoice_id);
     assert_eq!(
-        invoice.total_paid, 4_000,
+        invoice.total_paid, 40_000_000,
         "Stage 5b: total_paid must be 4 000"
     );
     assert_eq!(
@@ -637,12 +812,12 @@ fn test_partial_then_full_settle() {
     env.ledger().set_timestamp(4_000);
     fx.client.process_partial_payment(
         &invoice_id,
-        &2_000i128,
+        &20_000_000i128,
         &String::from_str(&env, "partial-3"),
     );
     let invoice = fx.client.get_invoice(&invoice_id);
     assert_eq!(
-        invoice.total_paid, 6_000,
+        invoice.total_paid, 60_000_000,
         "Stage 5c: total_paid must be 6 000"
     );
     assert_eq!(
@@ -662,7 +837,7 @@ fn test_partial_then_full_settle() {
     let investor_bal_before = tok.balance(&fx.investor);
 
     env.ledger().set_timestamp(5_000);
-    fx.client.settle_invoice(&invoice_id, &4_000i128);
+    fx.client.settle_invoice(&invoice_id, &40_000_000i128);
 
     let invoice = fx.client.get_invoice(&invoice_id);
     assert_eq!(

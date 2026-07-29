@@ -50,8 +50,9 @@ mod test_dispute {
     use crate::errors::QuickLendXError;
     use crate::invoice::{DisputeStatus, InvoiceCategory};
     use crate::types::DisputeResolution;
+    use crate::verification::validate_evidence_hash;
     use crate::{QuickLendXContract, QuickLendXContractClient};
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
+    use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, String, Vec};
 
     // -----------------------------------------------------------------------
     // Test helpers
@@ -99,7 +100,7 @@ mod test_dispute {
                 &String::from_str(env, "Test invoice for dispute"),
                 &InvoiceCategory::Services,
                 &Vec::new(env),
-            )
+                &None)
             .unwrap()
     }
 
@@ -2188,5 +2189,115 @@ mod test_dispute {
             client.get_invoice(&invoice_id).dispute_status,
             DisputeStatus::Disputed
         );
+    }
+
+    /// [TC-EH-01] Evidence hash validation accepts valid 32-byte payload.
+    ///
+    /// Prefer `test_evidence_hash_format` for CI coverage; these legacy cases
+    /// keep the dispute suite aligned with `validate_evidence_hash(&Bytes)`.
+    #[test]
+    fn test_validate_evidence_hash_accepts_valid_32_byte_hash() {
+        let env = Env::default();
+        let valid_hash = Bytes::from_slice(&env, &[0u8; 32]);
+        let result = validate_evidence_hash(&valid_hash);
+        assert!(result.is_ok(), "Valid 32-byte hash should pass validation");
+    }
+
+    /// [TC-EH-02] Evidence hash validation accepts non-zero 32-byte payload.
+    #[test]
+    fn test_validate_evidence_hash_accepts_non_zero_hash() {
+        let env = Env::default();
+        let mut hash_bytes = [0u8; 32];
+        for i in 0..32 {
+            hash_bytes[i] = (i as u8) + 1;
+        }
+        let valid_hash = Bytes::from_slice(&env, &hash_bytes);
+        let result = validate_evidence_hash(&valid_hash);
+        assert!(
+            result.is_ok(),
+            "Non-zero 32-byte hash should pass validation"
+        );
+    }
+
+    /// [TC-EH-03] Evidence hash validation accepts SHA-256-like hash.
+    #[test]
+    fn test_validate_evidence_hash_accepts_sha256_like_hash() {
+        let env = Env::default();
+        let hash_bytes = [
+            0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0x01, 0x12, 0x23, 0x34, 0x45, 0x56, 0x67, 0x78,
+            0x89, 0x9a, 0xab, 0xbc, 0xcd, 0xde, 0xef, 0xf0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
+            0x77, 0x88, 0x99, 0xaa,
+        ];
+        let valid_hash = Bytes::from_slice(&env, &hash_bytes);
+        let result = validate_evidence_hash(&valid_hash);
+        assert!(result.is_ok(), "SHA-256-like hash should pass validation");
+    }
+
+    /// [TC-EH-04] Evidence hash validation rejects non-32-byte payloads.
+    #[test]
+    fn test_validate_evidence_hash_rejects_wrong_length() {
+        let env = Env::default();
+        let too_short = Bytes::from_slice(&env, &[1u8; 31]);
+        let too_long = Bytes::from_slice(&env, &[1u8; 33]);
+        assert_eq!(
+            validate_evidence_hash(&too_short),
+            Err(QuickLendXError::InvalidDisputeEvidence)
+        );
+        assert_eq!(
+            validate_evidence_hash(&too_long),
+            Err(QuickLendXError::InvalidDisputeEvidence)
+        );
+    }
+
+    /// [TC-ARBITER-01] Arbiter registration and revocation flow.
+    /// Register an arbiter (admin), resolve a dispute, revoke the arbiter (via set_admin), 
+    /// attempt to resolve another dispute — must fail.
+    #[test]
+    fn test_arbiter_registration_and_revocation_flow() {
+        let (env, client, admin) = setup();
+        let business = create_verified_business(&env, &client, &admin);
+        
+        // 1. Resolve first dispute with the registered arbiter (admin)
+        let invoice_1 = create_test_invoice(&env, &client, &admin, &business, 100_000);
+        client.create_dispute(
+            &invoice_1,
+            &business,
+            &String::from_str(&env, "Reason 1"),
+            &String::from_str(&env, "Evidence 1"),
+        );
+        client.put_dispute_under_review(&invoice_1, &admin);
+        client.resolve_dispute(
+            &invoice_1,
+            &admin,
+            &String::from_str(&env, "Resolution 1"),
+        );
+        
+        // 2. Revoke the arbiter by transferring admin rights to a new address
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+
+        // 3. Setup a new dispute
+        let invoice_2 = create_test_invoice(&env, &client, &new_admin, &business, 200_000);
+        client.create_dispute(
+            &invoice_2,
+            &business,
+            &String::from_str(&env, "Reason 2"),
+            &String::from_str(&env, "Evidence 2"),
+        );
+        
+        // 4. Old arbiter attempts to put under review - must fail
+        let result1 = client.try_put_dispute_under_review(&invoice_2, &admin);
+        assert!(result1.is_err(), "Revoked arbiter cannot put dispute under review");
+        
+        // New arbiter puts under review
+        client.put_dispute_under_review(&invoice_2, &new_admin);
+        
+        // 5. Old arbiter attempts to resolve - must fail
+        let result2 = client.try_resolve_dispute(
+            &invoice_2,
+            &admin,
+            &String::from_str(&env, "Resolution 2"),
+        );
+        assert!(result2.is_err(), "Revoked arbiter cannot resolve dispute");
     }
 }

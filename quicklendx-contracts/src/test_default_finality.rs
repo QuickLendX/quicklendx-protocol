@@ -1,4 +1,4 @@
-#[cfg(test)]
+﻿#[cfg(test)]
 mod test_default_finality {
     use crate::defaults::handle_default;
     use crate::errors::QuickLendXError;
@@ -49,7 +49,9 @@ mod test_default_finality {
                 resolved_at: 0,
                 resolution_outcome: DisputeResolution::None,
             },
-        };
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
+    };
         InvoiceStorage::store_invoice(&env, &invoice);
 
         let bid_id = BytesN::from_array(&env, &[2; 32]);
@@ -59,7 +61,7 @@ mod test_default_finality {
         assert!(res_fund.is_err());
 
         // 2. Cannot be settled
-        let res_settle = client.try_settle_invoice(&invoice_id, &1000);
+        let res_settle = client.try_settle_invoice(&invoice_id, &1000, &client.get_investment(&invoice_id).unwrap());
         assert!(res_settle.is_err());
 
         // 3. Cannot have partial payments
@@ -105,7 +107,9 @@ mod test_default_finality {
                 resolved_at: 0,
                 resolution_outcome: DisputeResolution::None,
             },
-        };
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
+    };
         InvoiceStorage::store_invoice(&env, &invoice);
 
         let investment_id = BytesN::from_array(&env, &[4; 32]);
@@ -154,3 +158,4 @@ mod test_default_finality {
         assert_eq!(res2, Err(QuickLendXError::InvoiceAlreadyDefaulted));
     }
 }
+

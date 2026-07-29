@@ -42,6 +42,8 @@ mod test_init {
             max_due_date_days: 365,
             grace_period_seconds: 604800, // 7 days
             initial_currencies: Vec::new(env),
+            corridors: Vec::new(env),
+            backfill_max_batch_size: 100,
         }
     }
 
@@ -444,6 +446,8 @@ mod test_init {
             max_due_date_days: 0,
             grace_period_seconds: 0,
             initial_currencies: Vec::new(&env),
+            corridors: Vec::new(&env),
+            backfill_max_batch_size: 100,
         };
 
         let result = client.try_initialize(&params);
@@ -490,6 +494,8 @@ mod test_init {
             max_due_date_days: 0,
             grace_period_seconds: 0,
             initial_currencies: Vec::new(&env),
+            corridors: Vec::new(&env),
+            backfill_max_batch_size: 100,
         };
 
         let result = client.try_initialize(&params);
@@ -564,7 +570,7 @@ mod test_init {
         let non_admin = Address::generate(&env);
 
         let result =
-            client.try_set_protocol_config(&non_admin, &1_000_000i128, &365u64, &604800u64);
+            client.try_set_protocol_config(&non_admin, &1_000_000i128, &365u64, &604800u64, &100u32);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::NotAdmin)),
@@ -577,7 +583,7 @@ mod test_init {
         let (env, client, params) = setup_initialized();
 
         // Test invalid min amount
-        let result = client.try_set_protocol_config(&params.admin, &0i128, &365u64, &604800u64);
+        let result = client.try_set_protocol_config(&params.admin, &0i128, &365u64, &604800u64, &100u32);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvalidAmount)),
@@ -586,7 +592,7 @@ mod test_init {
 
         // Test invalid max days
         let result =
-            client.try_set_protocol_config(&params.admin, &1_000_000i128, &0u64, &604800u64);
+            client.try_set_protocol_config(&params.admin, &1_000_000i128, &0u64, &604800u64, &100u32);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvoiceDueDateInvalid)),
@@ -595,7 +601,7 @@ mod test_init {
 
         // Test invalid grace period
         let result =
-            client.try_set_protocol_config(&params.admin, &1_000_000i128, &365u64, &3_000_000u64);
+            client.try_set_protocol_config(&params.admin, &1_000_000i128, &365u64, &3_000_000u64, &100u32);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvalidTimestamp)),
@@ -607,7 +613,7 @@ mod test_init {
     fn test_set_protocol_config_emits_event() {
         let (env, client, params) = setup_initialized();
 
-        client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64);
+        client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64, &100u32);
 
         let events = env.events().all();
         let config_events: Vec<_> = events
@@ -812,7 +818,7 @@ mod test_init {
         let (env, client, params) = setup_initialized();
 
         // Update protocol config
-        client.set_protocol_config(&params.admin, 2_000_000, 180, 86400);
+        client.set_protocol_config(&params.admin, 2_000_000, 180, 86400, &100u32);
 
         // Update fee config
         client.set_fee_config(&params.admin, 300);
@@ -852,7 +858,7 @@ mod test_init {
         assert_eq!(client.get_current_admin(), Some(params.admin.clone()));
 
         // 4. Update configurations
-        client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64);
+        client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64, &100u32);
         client.set_fee_config(&params.admin, 300);
 
         let new_treasury = Address::generate(&env);
@@ -903,7 +909,7 @@ mod test_init {
         client.initialize(&params);
 
         // Update configs
-        client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64);
+        client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64, &100u32);
         client.set_fee_config(&params.admin, 300);
 
         let new_treasury = Address::generate(&env);

@@ -129,7 +129,7 @@ fn setup() -> (
         &String::from_str(&env, "Stress ceiling invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     (env, client, admin, investor, invoice_id)
@@ -249,7 +249,7 @@ fn test_rank_bids_full_capacity_orders_by_documented_chain() {
         if i == 0 {
             first_bid_id = Some(bid_id.clone());
         }
-        if i == MAX_BIDS_PER_INVOICE - 1
+        if i == MAX_BIDS_PER_INVOICE - 1 {
             last_bid_id = Some(bid_id);
         }
     }

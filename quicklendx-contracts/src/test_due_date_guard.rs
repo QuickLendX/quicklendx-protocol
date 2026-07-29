@@ -47,15 +47,17 @@ fn invoice_new_rejects_due_date_in_past() {
 
     let result = env.as_contract(&contract_id, || {
         Invoice::new(
-            &env,
-            business,
-            100i128,
-            currency,
-            999_999u64,
-            String::from_str(&env, "past-due invoice"),
-            InvoiceCategory::Services,
-            Vec::new(&env),
-        )
+&env,
+business,
+100i128,
+currency,
+999_999u64,
+String::from_str(&env, "past-due invoice"),
+InvoiceCategory::Services,
+Vec::new(&env),
+        None, /* early_payment_discount_bps */,
+        None
+)
     });
 
     assert_eq!(result.unwrap_err(), QuickLendXError::InvoiceDueDateInvalid);
@@ -71,15 +73,17 @@ fn invoice_new_rejects_due_date_equal_to_current_timestamp() {
 
     let result = env.as_contract(&contract_id, || {
         Invoice::new(
-            &env,
-            business,
-            100i128,
-            currency,
-            1_000_000u64,
-            String::from_str(&env, "due-now invoice"),
-            InvoiceCategory::Services,
-            Vec::new(&env),
-        )
+&env,
+business,
+100i128,
+currency,
+1_000_000u64,
+String::from_str(&env, "due-now invoice"),
+InvoiceCategory::Services,
+Vec::new(&env),
+        None, /* early_payment_discount_bps */,
+        None
+)
     });
 
     assert_eq!(result.unwrap_err(), QuickLendXError::InvoiceDueDateInvalid);
@@ -95,15 +99,17 @@ fn invoice_new_accepts_due_date_strictly_in_future() {
 
     let result = env.as_contract(&contract_id, || {
         Invoice::new(
-            &env,
-            business,
-            100i128,
-            currency,
-            1_000_001u64,
-            String::from_str(&env, "future invoice"),
-            InvoiceCategory::Services,
-            Vec::new(&env),
-        )
+&env,
+business,
+100i128,
+currency,
+1_000_001u64,
+String::from_str(&env, "future invoice"),
+InvoiceCategory::Services,
+Vec::new(&env),
+        None, /* early_payment_discount_bps */,
+        None
+)
     });
 
     assert!(

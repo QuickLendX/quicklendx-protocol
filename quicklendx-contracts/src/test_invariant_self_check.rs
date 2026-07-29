@@ -90,8 +90,10 @@ fn make_invoice(env: &Env, invoice_id: &BytesN<32>) -> Invoice {
         },
         total_paid: 0,
         payment_history: Vec::new(env),
+    },
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
-}
 
 #[test]
 fn test_fresh_contract_all_pass() {

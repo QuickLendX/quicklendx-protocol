@@ -282,6 +282,7 @@ investment_limit = base_limit × tier_multiplier × risk_multiplier / 100
 ## Related documents
 
 - [`docs/contracts/investor-kyc.md`](contracts/investor-kyc.md) — KYC lifecycle, verification flow, error reference
+- [`docs/QLX_INVESTOR_KYC_TIERS.md`](QLX_INVESTOR_KYC_TIERS.md) — Investor KYC tiers, performance requirements, and gating enforcements (operator-facing)
 - [`docs/contracts/verification.md`](contracts/verification.md) — Verification module reference
 - [`docs/contracts/limits.md`](contracts/limits.md) — Protocol-wide limit configuration
 - Source: [`quicklendx-contracts/src/verification.rs`](../quicklendx-contracts/src/verification.rs)
