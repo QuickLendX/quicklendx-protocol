@@ -172,8 +172,9 @@ pub fn process_partial_payment(
     payment_amount: i128,
     transaction_id: String,
 ) -> Result<(), QuickLendXError> {
-    let invoice =
-        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    let mut cache = crate::storage::StorageReadCache::new();
+
+    let invoice = cache.get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     let payer = invoice.business.clone();
 
     crate::qlx_log!(
@@ -191,26 +192,32 @@ pub fn process_partial_payment(
         transaction_id.clone(),
     )?;
 
+    // Invalidate cache since record_payment may have updated the invoice in storage.
+    cache.invalidate_invoice(invoice_id);
+
+    // Read updated invoice once; the cache avoids a redundant storage trip for
+    // the notification below.
+    let invoice_post = cache.get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
+
     // Backward-compatible event used across existing tests/consumers.
     emit_partial_payment(
         env,
-        &InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?,
+        &invoice_post,
         get_last_applied_amount(env, invoice_id)?,
         progress.total_paid,
         progress.progress_percent,
         transaction_id,
     );
 
-    if let Some(updated_invoice) = InvoiceStorage::get_invoice(env, invoice_id) {
-        // Lifecycle trigger: emits `NotificationType::PaymentReceived` for each
-        // applied partial payment. Notification failures must not roll back funds.
-        let applied = get_last_applied_amount(env, invoice_id).unwrap_or(payment_amount);
-        let _ = crate::notifications::NotificationSystem::notify_payment_received(
-            env,
-            &updated_invoice,
-            applied,
-        );
-    }
+    // Lifecycle trigger: emits `NotificationType::PaymentReceived` for each
+    // applied partial payment. Notification failures must not roll back funds.
+    let applied = get_last_applied_amount(env, invoice_id).unwrap_or(payment_amount);
+    let _ = crate::notifications::NotificationSystem::notify_payment_received(
+        env,
+        &invoice_post,
+        applied,
+    );
 
     if progress.total_paid >= progress.total_due {
         settle_invoice_internal(env, invoice_id)?;
