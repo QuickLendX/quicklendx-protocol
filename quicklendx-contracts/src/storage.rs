@@ -323,10 +323,6 @@ impl InvoiceStorage {
         }
     }
 
-    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
-        Self::get_invoice_lock(env, invoice_id).is_locked()
-    }
-
     /// Guard that rejects actions on locks older than the time limit.
     ///
     /// Returns `InvoiceLockExpired` if the invoice has been frozen for longer
@@ -986,6 +982,48 @@ impl StorageManager {
     }
 }
 
+/// Per-call cache for storage reads.
+///
+/// Caches a single `Invoice` lookup so that repeated reads of the same key
+/// within a contract invocation return the cached value and skip redundant
+/// host interface calls and duplicate TTL extensions.
+pub struct StorageReadCache {
+    cached_id: [u8; 32],
+    cached_invoice: Option<Invoice>,
+    has_cached: bool,
+}
+
+impl StorageReadCache {
+    pub fn new() -> Self {
+        Self {
+            cached_id: [0u8; 32],
+            cached_invoice: None,
+            has_cached: false,
+        }
+    }
+
+    /// Return a cached invoice if already fetched in this call, otherwise read
+    /// from persistent storage and cache the result.
+    pub fn get_invoice(&mut self, env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
+        if self.has_cached && invoice_id.to_array() == self.cached_id {
+            return self.cached_invoice.clone();
+        }
+        let invoice = InvoiceStorage::get_invoice(env, invoice_id);
+        self.cached_invoice = invoice.clone();
+        self.has_cached = true;
+        self.cached_id = invoice_id.to_array();
+        invoice
+    }
+
+    /// Invalidate the cache when the underlying storage has been updated so
+    /// that the next `get_invoice` performs a fresh read from storage.
+    pub fn invalidate_invoice(&mut self, invoice_id: &BytesN<32>) {
+        if self.has_cached && invoice_id.to_array() == self.cached_id {
+            self.has_cached = false;
+        }
+    }
+}
+
 /// Comprehensive integrity audit for protocol storage indexes.
 ///
 /// This helper provides deep inspection of secondary indexes to ensure no
@@ -1385,5 +1423,134 @@ impl InvoiceStorage {
             pruned,
             next_offset: end,
         }
+    }
+}
+
+#[cfg(test)]
+mod test_storage_read_cache {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, Address, Env};
+    use crate::types::{Invoice, InvoiceStatus, InvoiceCategory, DisputeStatus, Dispute, DisputeResolution, PaymentRecord, InvoiceRating};
+
+    fn create_sample_invoice(env: &Env, id: &BytesN<32>, business: &Address) -> Invoice {
+        Invoice {
+            id: id.clone(),
+            business: business.clone(),
+            amount: 1000,
+            currency: Address::generate(env),
+            due_date: env.ledger().timestamp() + 86400,
+            status: InvoiceStatus::Funded,
+            created_at: env.ledger().timestamp(),
+            description: String::from_str(env, "test invoice"),
+            metadata_customer_name: None,
+            metadata_customer_address: None,
+            metadata_tax_id: None,
+            metadata_notes: None,
+            metadata_line_items: Vec::new(env),
+            category: InvoiceCategory::Services,
+            tags: Vec::new(env),
+            funded_amount: 1000,
+            funded_at: Some(env.ledger().timestamp()),
+            investor: Some(business.clone()),
+            settled_at: None,
+            average_rating: None,
+            total_ratings: 0,
+            ratings: Vec::new(env),
+            dispute_status: DisputeStatus::None,
+            dispute: Dispute {
+                created_by: Address::generate(env),
+                created_at: 0,
+                reason: String::from_str(env, ""),
+                evidence: String::from_str(env, ""),
+                resolution: String::from_str(env, ""),
+                resolved_by: Address::generate(env),
+                resolved_at: 0,
+                resolution_outcome: DisputeResolution::None,
+            },
+            total_paid: 0,
+            payment_history: Vec::new(env),
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
+        }
+    }
+
+    #[test]
+    fn test_cache_hit_returns_same_invoice() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice = create_sample_invoice(&env, &invoice_id, &business);
+
+        InvoiceStorage::store_invoice(&env, &invoice);
+
+        let mut cache = StorageReadCache::new();
+        let first = cache.get_invoice(&env, &invoice_id);
+        assert!(first.is_some());
+        assert_eq!(first.as_ref().unwrap().amount, 1000);
+
+        // Second read should hit the cache and return the same value
+        // without an additional storage call.
+        let second = cache.get_invoice(&env, &invoice_id);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn test_cache_miss_after_invalidate() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        let mut invoice = create_sample_invoice(&env, &invoice_id, &business);
+
+        InvoiceStorage::store_invoice(&env, &invoice);
+
+        let mut cache = StorageReadCache::new();
+
+        // Seed cache
+        let cached = cache.get_invoice(&env, &invoice_id);
+        assert!(cached.is_some());
+
+        // Update the stored invoice
+        invoice.amount = 2000;
+        invoice.total_paid = 2000;
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Without invalidation the cache would return stale data (amount=1000).
+        // After invalidation it must do a fresh read.
+        cache.invalidate_invoice(&invoice_id);
+        let fresh = cache.get_invoice(&env, &invoice_id).unwrap();
+        assert_eq!(fresh.amount, 2000);
+    }
+
+    #[test]
+    fn test_cache_different_keys_independent() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let business = Address::generate(&env);
+
+        let id_a = BytesN::from_array(&env, &[1; 32]);
+        let id_b = BytesN::from_array(&env, &[2; 32]);
+        let inv_a = create_sample_invoice(&env, &id_a, &business);
+        let mut inv_b = create_sample_invoice(&env, &id_b, &business);
+        inv_b.amount = 500;
+
+        InvoiceStorage::store_invoice(&env, &inv_a);
+        InvoiceStorage::store_invoice(&env, &inv_b);
+
+        let mut cache = StorageReadCache::new();
+
+        let a1 = cache.get_invoice(&env, &id_a).unwrap();
+        assert_eq!(a1.amount, 1000);
+
+        let b1 = cache.get_invoice(&env, &id_b).unwrap();
+        assert_eq!(b1.amount, 500);
+
+        // Invalidate A — B should still be cached
+        cache.invalidate_invoice(&id_a);
+
+        let a2 = cache.get_invoice(&env, &id_a).unwrap();
+        assert_eq!(a2.amount, 1000); // fresh read, same value
     }
 }
