@@ -28,10 +28,10 @@ All tests are in `src/test_init_invariants.rs` — Section 7 "CORRIDOR LIST TEST
 ### ✅ Implementation details
 
 **Data model (`src/init.rs`):**
-- `CORRIDORS_KEY` storage key in `InitializationParams`
-- `corridors: Vec<Address>` field with doc comment
-- Validate no duplicates, no reserved addresses (admin, treasury, contract, zero)
-- Store if non-empty; `get_corridors()` returns empty vec if unset
+- `CORRIDORS_KEY` storage key
+- `corridors: Vec<Address>` field in `InitializationParams` with doc comment
+- Validation: no duplicates, no reserved addresses (admin, treasury, contract, zero)
+- Storage: persisted when non-empty; `get_corridors()` returns empty vec if unset
 
 **Contract entrypoints (`src/lib.rs`):**
 - `initialize(env, params)` — accepts `InitializationParams` with corridors
@@ -43,20 +43,16 @@ All tests are in `src/test_init_invariants.rs` — Section 7 "CORRIDOR LIST TEST
 **Alternate contract (`src/contract.rs`):**
 - Flat `initialize()` signature includes `corridors: Vec<Address>` arg
 
-### ✅ Lint, type-check, and tests
+### ✅ PR description references issue
 
-Implementation passes all existing build and test requirements. See `test_init_invariants.rs` for the corridor-specific test suite.
+This document is part of a PR that references `Closes #2375`.
 
 ## Files Changed
 
 | File | Change |
 |---|---|
-| `src/init.rs` | Added `corridors` field to `InitializationParams`, storage key, validation, store/get logic |
-| `src/lib.rs` | `initialize()` accepts `InitializationParams` (includes corridors), `get_corridors()` public getter |
-| `src/contract.rs` | Flat `initialize()` arg includes `corridors: Vec<Address>` |
-| `src/events.rs` | `ProtocolInitialized` event includes `corridors` field |
-| `src/test_init_invariants.rs` | 9 corridor-specific tests (happy + failure + idempotency + persistence) |
-
----
-
-*Verification prepared for PR closing #2375.*
+| `quicklendx-contracts/src/init.rs` | Added `corridors` field to `InitializationParams`, storage key, validation, store/get logic |
+| `quicklendx-contracts/src/lib.rs` | `initialize()` accepts `InitializationParams` (includes corridors), `get_corridors()` public getter |
+| `quicklendx-contracts/src/contract.rs` | Flat `initialize()` arg includes `corridors: Vec<Address>` |
+| `quicklendx-contracts/src/events.rs` | `ProtocolInitialized` event includes `corridors` field |
+| `quicklendx-contracts/src/test_init_invariants.rs` | 9 corridor-specific tests (happy + failure + idempotency + persistence) |
