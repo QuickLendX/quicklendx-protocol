@@ -55,12 +55,29 @@ class AuditService {
     return ulid();
   }
 
-  append(entry: Omit<AuditEntry, "id" | "timestamp">): AuditEntry {
+  append(
+    entry: Omit<AuditEntry, "id" | "timestamp" | "prevHash" | "entryHash">
+  ): AuditEntry {
     // Stamp the originating request id from async-local-storage so the audit
     // entry can be traced back to the inbound API call. An explicit value on
     // the entry wins; otherwise we fall back to the active request context.
     const requestId = entry.requestId ?? getCorrelationId() ?? undefined;
-    const full: AuditEntry = {
+    const timestamp = new Date().toISOString();
+    const filePath = this.logFilePath(timestamp.slice(0, 10));
+    let prevHash = AUDIT_CHAIN_GENESIS_HASH;
+    if (fs.existsSync(filePath)) {
+      const lines = fs.readFileSync(filePath, "utf8").split("\n").filter(Boolean);
+      if (lines.length > 0) {
+        try {
+          const previous = AuditEntrySchema.parse(JSON.parse(lines[lines.length - 1]));
+          prevHash = previous.entryHash;
+        } catch {
+          // Keep the genesis hash when the last line is malformed.
+        }
+      }
+    }
+
+    const full = {
       ...entry,
       requestId,
       id: this.generateId(),
