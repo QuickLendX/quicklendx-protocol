@@ -65,6 +65,8 @@ pub enum DataKey {
     EscrowExtension(BytesN<32>),
     InvestorFreezeInfo(Address),
     PerInvestorPositionCap(BytesN<32>),
+    /// Content-addressed dispute evidence bound to its owning invoice.
+    DisputeEvidence(BytesN<32>),
 }
 
 impl StorageKeys {

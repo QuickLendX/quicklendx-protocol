@@ -193,6 +193,8 @@ mod test_evidence_kind_guard_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
+mod test_dispute_evidence_identity;
+#[cfg(test)]
 mod test_due_date_guard;
 #[cfg(test)]
 mod test_lock_time_limit_guard;
@@ -4734,6 +4736,7 @@ impl QuickLendXContract {
         validate_dispute_reason(&reason)?;
         validate_dispute_evidence(&evidence)?;
         validate_dispute_eligibility(&invoice, &creator)?;
+        dispute::reserve_evidence(&env, &invoice_id, &creator, &evidence)?;
         dispute_timeline::clear_under_review_timestamp(&env, &invoice_id);
         invoice.dispute_status = DisputeStatus::Disputed;
         invoice.dispute = crate::types::Dispute {
@@ -4790,6 +4793,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::DisputeNotAuthorized);
         }
 
+        dispute::reserve_evidence(&env, &invoice_id, &creator, &evidence)?;
         invoice.dispute.evidence = evidence;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
@@ -5447,4 +5451,3 @@ impl QuickLendXContract {
         diagnostics::get_protocol_diagnostics(&env)
     }
 }
-
