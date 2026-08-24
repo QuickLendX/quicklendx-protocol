@@ -290,3 +290,8 @@ requests, and partial external side effects.
 
 This review is required before recovery is exposed through an application or
 operator CLI.
+
+The CLI should display the expected snapshot hash and target before requesting
+the admin signature. It should require an explicit confirmation that the reason
+matches the approved incident record, then print the resulting audit event for
+post-deployment verification.
