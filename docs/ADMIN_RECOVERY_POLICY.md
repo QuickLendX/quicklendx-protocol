@@ -295,3 +295,5 @@ The CLI should display the expected snapshot hash and target before requesting
 the admin signature. It should require an explicit confirmation that the reason
 matches the approved incident record, then print the resulting audit event for
 post-deployment verification.
+
+An unsigned or incomplete confirmation must abort before submission.
