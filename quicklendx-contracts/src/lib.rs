@@ -303,6 +303,8 @@ mod test_analytics_consistency;
 mod test_snapshot;
 #[cfg(test)]
 mod test_bid_capacity_stress;
+#[cfg(test)]
+mod test_fee_recipient_rotation_guard;
 // Issue #1891 â€” min-partial-fill amount boundary: at limit, one below, one above.
 #[cfg(test)]
 mod test_min_partial_fill_boundary;
@@ -801,12 +803,41 @@ impl QuickLendXContract {
         init::ProtocolInitializer::set_treasury(&env, &admin, &treasury)
     }
 
-    /// Admin-only: cancel a pending treasury address rotation before it executes.
+    /// Propose a delayed fee-recipient rotation (admin only).
+    pub fn initiate_treasury_rotation(
+        env: Env,
+        new_treasury: Address,
+    ) -> Result<fees::RecipientRotationRequest, QuickLendXError> {
+        let admin = BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        fees::FeeManager::initiate_treasury_rotation(&env, &admin, new_treasury)
+    }
+
+    /// Finalize a delayed fee-recipient rotation.
     ///
-    /// # Arguments
-    /// * `admin` - The address of the caller, must be the current admin.
-    pub fn cancel_treasury_rotation(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        admin::cancel_treasury_rotation(&env, &admin)
+    /// The configured admin must authorize the finalization, and the proposed
+    /// recipient must also authorize the underlying FeeManager confirmation.
+    /// Requiring both parties prevents an admin typo and prevents a proposed
+    /// recipient from changing control without administrator approval.
+    pub fn confirm_treasury_rotation(
+        env: Env,
+        new_treasury: Address,
+    ) -> Result<Address, QuickLendXError> {
+        let admin = BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+        fees::FeeManager::confirm_treasury_rotation(&env, &new_treasury)
+    }
+
+    /// Cancel a pending fee-recipient rotation (admin only).
+    pub fn cancel_treasury_rotation(env: Env) -> Result<(), QuickLendXError> {
+        let admin = BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        fees::FeeManager::cancel_treasury_rotation(&env, &admin)
+    }
+
+    /// Return the complete pending fee-recipient rotation request, if any.
+    pub fn get_pending_treasury_rotation(
+        env: Env,
+    ) -> Option<fees::RecipientRotationRequest> {
+        fees::FeeManager::get_pending_rotation(&env)
     }
 
     /// Get the pending treasury address and its execution timestamp, if any.
