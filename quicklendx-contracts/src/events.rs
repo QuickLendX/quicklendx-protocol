@@ -1648,6 +1648,8 @@ pub fn emit_treasury_rotation_confirmed(env: &Env, admin: &Address, new_address:
 }
 
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
+    // Cancellation is part of the auditable control-plane history even though
+    // it does not change the active recipient.
     env.events().publish(
         (symbol_short!("tr_rot_c"), admin.clone()),
         (),
