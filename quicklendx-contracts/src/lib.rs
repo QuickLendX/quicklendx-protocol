@@ -306,6 +306,7 @@ mod test_snapshot;
 #[cfg(test)]
 mod test_bid_capacity_stress;
 #[cfg(test)]
+mod test_investor_exposure_caps;
 mod test_fee_recipient_rotation_guard;
 // Issue #1891 â€” min-partial-fill amount boundary: at limit, one below, one above.
 #[cfg(test)]
@@ -2370,6 +2371,19 @@ impl QuickLendXContract {
     /// Get all bids placed by an investor across all invoices.
     pub fn get_all_bids_by_investor(env: Env, investor: Address) -> Vec<Bid> {
         bid::BidStorage::get_all_bids_by_investor(&env, &investor)
+    }
+
+    /// Return the principal currently reserved by an investor.
+    ///
+    /// Pending bids and funded active investments are both reservations. The
+    /// value is derived from their authoritative indexes in the same ledger
+    /// state used by `place_bid`, so terminal positions release capacity
+    /// without relying on a separately maintained analytics counter.
+    pub fn get_investor_active_exposure(env: Env, investor: Address) -> i128 {
+        let bid_exposure = BidStorage::get_active_bid_amount_sum_for_investor(&env, &investor);
+        let investment_exposure =
+            InvestmentStorage::get_active_investment_amount_sum_for_investor(&env, &investor);
+        bid_exposure.saturating_add(investment_exposure)
     }
 
     /// Place a bid on an invoice

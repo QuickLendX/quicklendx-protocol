@@ -1,5 +1,6 @@
 use crate::bid::BidStorage;
 use crate::errors::QuickLendXError;
+use crate::investment::InvestmentStorage;
 use crate::storage::InvoiceStorage;
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
@@ -1773,10 +1774,14 @@ pub fn validate_investor_investment(
         }
 
         // 2. Aggregate Limit Check
-        // Ensure that (new bid + existing active bids + total funded investments) fits within the limit
+        // Reservations are derived from the active bid and active investment
+        // indexes. `total_invested` is lifetime analytics and must not keep
+        // completed/defaulted/refunded positions consuming current capacity.
         let active_bid_exposure = BidStorage::get_active_bid_amount_sum_for_investor(env, investor);
+        let active_investment_exposure =
+            InvestmentStorage::get_active_investment_amount_sum_for_investor(env, investor);
         let total_risk_exposure = active_bid_exposure
-            .saturating_add(verification.total_invested)
+            .saturating_add(active_investment_exposure)
             .saturating_add(investment_amount);
 
         if total_risk_exposure > verification.investment_limit {
