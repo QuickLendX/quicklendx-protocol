@@ -16,7 +16,6 @@ pub use crate::types::{
 /// tag-based query/index operations predictable.
 pub const MAX_INVOICE_TAGS: u32 = 10;
 
-
 /// Require that the number of tags does not exceed the given cap.
 ///
 /// Defence-in-depth: even though tag vectors are individually bounded by
@@ -218,7 +217,7 @@ impl Invoice {
         env: &Env,
         grace_period: u64,
     ) -> Result<bool, QuickLendXError> {
-        if env.ledger().timestamp() <= self.grace_deadline(grace_period) {
+        if env.ledger().timestamp() <= self.checked_grace_deadline(grace_period)? {
             return Ok(false);
         }
         if self.status == InvoiceStatus::Funded {
@@ -405,6 +404,18 @@ impl Invoice {
         self.due_date.saturating_add(grace_period)
     }
 
+    /// Derive the deadline used by default/finality decisions.
+    ///
+    /// Saturating arithmetic is useful for legacy read-only callers, but it
+    /// would turn an invalid timestamp configuration into a silently extended
+    /// default window. Runtime transitions must use this checked variant so
+    /// malformed or overflowed deadlines fail closed.
+    pub fn checked_grace_deadline(&self, grace_period: u64) -> Result<u64, QuickLendXError> {
+        self.due_date
+            .checked_add(grace_period)
+            .ok_or(QuickLendXError::InvalidTimestamp)
+    }
+
     fn compute_average_rating(&self) -> u32 {
         if self.ratings.is_empty() {
             return 0;
@@ -469,4 +480,3 @@ fn zero_address(env: &Env) -> Address {
         "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
     )
 }
-

@@ -33,6 +33,7 @@
 
 use super::*;
 use crate::bid::BidStatus;
+use crate::invariants::run_invariant_checks;
 use crate::investment::InvestmentStatus;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
@@ -133,6 +134,20 @@ fn assert_invoice_count_invariant(client: &QuickLendXContractClient) {
         "Invoice count invariant broken: global={} bucket_sum={}",
         total, sum
     );
+}
+
+fn assert_bid_withdrawal_refund_invariant(
+    env: &Env,
+    client: &QuickLendXContractClient,
+) {
+    let report = env.as_contract(&client.address, || run_invariant_checks(env));
+    let name = String::from_str(env, "bid_withdrawal_refund_accounting");
+    let check = report
+        .checks
+        .iter()
+        .find(|check| check.check_name == name)
+        .expect("bid accounting invariant must be reported");
+    assert!(check.passed, "{}", check.evidence);
 }
 
 // --- Test 1: Accept flow ------------------------------------------------------
@@ -241,8 +256,40 @@ fn test_accept_bid_cross_module_consistency() {
         "Invoice must NOT appear in Verified status index after accept"
     );
 
+    assert_bid_withdrawal_refund_invariant(&env, &client);
+
     // -- Count invariant -------------------------------------------------------
     assert_invoice_count_invariant(&client);
+}
+
+#[test]
+fn test_withdraw_bid_and_duplicate_call_preserve_accounting() {
+    let (env, client, admin) = make_env();
+    let contract_id = client.address.clone();
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = make_token(&env, &contract_id, &business, &investor, 5_000, 10_000);
+    let (invoice_id, bid_id) = kyc_upload_bid(
+        &env, &client, &admin, &business, &investor, &currency, 8_000, 7_500,
+    );
+
+    client.withdraw_bid(&bid_id);
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        BidStatus::Withdrawn
+    );
+    assert_bid_withdrawal_refund_invariant(&env, &client);
+
+    let error = client
+        .try_withdraw_bid(&bid_id)
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error, QuickLendXError::OperationNotAllowed);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Verified
+    );
+    assert_bid_withdrawal_refund_invariant(&env, &client);
 }
 
 // --- Test 2: Refund flow ------------------------------------------------------
@@ -278,6 +325,23 @@ fn test_refund_escrow_cross_module_consistency() {
         client.get_invoice_investment(&invoice_id).unwrap().status,
         InvestmentStatus::Active
     );
+
+    // A failed transfer must leave every record eligible for a safe retry.
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    sac.burn(&contract_id, &bid_amount);
+    let error = client
+        .try_refund_escrow_funds(&invoice_id, &business)
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error, QuickLendXError::InsufficientFunds);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice_investment(&invoice_id).unwrap().status,
+        InvestmentStatus::Active
+    );
+    assert_bid_withdrawal_refund_invariant(&env, &client);
+
+    sac.mint(&contract_id, &bid_amount);
 
     // Trigger refund.
     client.refund_escrow_funds(&invoice_id, &business);
@@ -319,6 +383,15 @@ fn test_refund_escrow_cross_module_consistency() {
         refunded_list.contains(&invoice_id),
         "Invoice must appear in Refunded status index"
     );
+
+    assert_bid_withdrawal_refund_invariant(&env, &client);
+
+    let error = client
+        .try_refund_escrow_funds(&invoice_id, &business)
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error, QuickLendXError::InvalidStatus);
+    assert_bid_withdrawal_refund_invariant(&env, &client);
 
     // -- Count invariant -------------------------------------------------------
     assert_invoice_count_invariant(&client);
@@ -388,6 +461,8 @@ fn test_default_cross_module_consistency() {
         defaulted_list.contains(&invoice_id),
         "Invoice must appear in Defaulted status index"
     );
+
+    assert_bid_withdrawal_refund_invariant(&env, &client);
 
     // -- Count invariant -------------------------------------------------------
     assert_invoice_count_invariant(&client);

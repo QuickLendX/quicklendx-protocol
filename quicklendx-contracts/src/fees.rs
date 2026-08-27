@@ -316,10 +316,11 @@ impl FeeManager {
 
         // Fetch existing config and reject duplicate treasury address.
         let mut platform_config = Self::get_platform_fee_config(env)?;
-        if let Some(ref existing) = platform_config.treasury_address {
-            if *existing == treasury_address {
-                return Err(QuickLendXError::InvalidFeeConfiguration);
-            }
+        // The first configuration establishes the recipient.  Once a live
+        // recipient exists, all replacements must use the delayed rotation
+        // flow so no single admin mutation can redirect fees immediately.
+        if platform_config.treasury_address.is_some() {
+            return Err(QuickLendXError::OperationNotAllowed);
         }
 
         let treasury_config = TreasuryConfig {
@@ -1271,6 +1272,7 @@ impl FeeManager {
         }
 
         env.storage().instance().remove(&ROTATION_KEY);
+        crate::events::treasury_rotation_cancelled(env, admin);
         Ok(())
     }
 

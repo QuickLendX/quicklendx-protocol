@@ -11,10 +11,10 @@
 #![cfg(test)]
 
 use super::*;
-use crate::invoice::InvoiceCategory;
+use crate::invoice::{Invoice, InvoiceCategory};
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Env, String, Vec, token,
+    token, Address, BytesN, Env, String, Vec,
 };
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
@@ -54,7 +54,8 @@ fn due_date_equal_to_current_timestamp_is_rejected() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     assert!(result.is_err());
 }
 
@@ -75,7 +76,8 @@ fn due_date_one_second_after_now_is_accepted() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     assert!(result.is_ok());
 }
 
@@ -140,7 +142,8 @@ fn allows_payment_at_due() {
         &String::from_str(&env, "Past due"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     assert!(result.is_err());
 }
 
@@ -156,9 +159,11 @@ fn allows_payment_at_last_grace_period_ledger() {
     let due = now + 86_400;
     let grace_period = 7 * 86_400u64;
 
-    let invoice_id = create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due);
+    let invoice_id =
+        create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due);
 
-    env.ledger().with_mut(|l| l.timestamp = due + grace_period - 1);
+    env.ledger()
+        .with_mut(|l| l.timestamp = due + grace_period - 1);
     let expired = client.check_invoice_expiration(&invoice_id, &Some(grace_period));
     assert!(!expired);
     assert_eq!(
@@ -167,11 +172,7 @@ fn allows_payment_at_last_grace_period_ledger() {
     );
 
     client
-        .make_payment(
-            &invoice_id,
-            &100,
-            &String::from_str(&env, "tx-grace-last"),
-        )
+        .make_payment(&invoice_id, &100, &String::from_str(&env, "tx-grace-last"))
         .expect("payment at last grace-period ledger must succeed");
 
     assert_eq!(
@@ -192,7 +193,8 @@ fn handles_payment_at_grace_boundary() {
     let due = now + 86_400;
     let grace_period = 7 * 86_400u64;
 
-    let invoice_id = create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due);
+    let invoice_id =
+        create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due);
 
     let deadline = due + grace_period;
     env.ledger().with_mut(|l| l.timestamp = deadline);
@@ -204,11 +206,7 @@ fn handles_payment_at_grace_boundary() {
     );
 
     client
-        .make_payment(
-            &invoice_id,
-            &100,
-            &String::from_str(&env, "tx-boundary"),
-        )
+        .make_payment(&invoice_id, &100, &String::from_str(&env, "tx-boundary"))
         .expect("payment at exact grace boundary must succeed");
 
     assert_eq!(
@@ -229,9 +227,11 @@ fn rejects_payment_after_grace_period() {
     let due = now + 86_400;
     let grace_period = 7 * 86_400u64;
 
-    let invoice_id = create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due);
+    let invoice_id =
+        create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due);
 
-    env.ledger().with_mut(|l| l.timestamp = due + grace_period + 1);
+    env.ledger()
+        .with_mut(|l| l.timestamp = due + grace_period + 1);
     let expired = client.check_invoice_expiration(&invoice_id, &Some(grace_period));
     assert!(expired, "past grace period must expire invoice");
     assert_eq!(
@@ -239,14 +239,10 @@ fn rejects_payment_after_grace_period() {
         InvoiceStatus::Defaulted
     );
 
-    let result = client.try_make_payment(
-        &invoice_id,
-        &100,
-        &String::from_str(&env, "tx-after-grace"),
-    );
+    let result =
+        client.try_make_payment(&invoice_id, &100, &String::from_str(&env, "tx-after-grace"));
     assert!(result.is_err(), "payment after grace must be rejected");
 }
-
 
 #[test]
 fn due_date_zero_is_rejected() {
@@ -263,7 +259,8 @@ fn due_date_zero_is_rejected() {
         &String::from_str(&env, "Zero due date"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     assert!(result.is_err());
 }
 
@@ -286,7 +283,8 @@ fn invoice_not_overdue_at_exact_due_date() {
         &String::from_str(&env, "Boundary test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
 
     // Advance to exactly the due date
     env.ledger().with_mut(|l| l.timestamp = due);
@@ -313,7 +311,8 @@ fn invoice_overdue_one_second_after_due_date() {
         &String::from_str(&env, "Boundary test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
 
     let invoice = client.get_invoice(&invoice_id);
     // One second past due: should be overdue
@@ -339,7 +338,8 @@ fn grace_deadline_uses_saturating_add() {
         &String::from_str(&env, "Grace test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
 
     let invoice = client.get_invoice(&invoice_id);
 
@@ -366,11 +366,37 @@ fn grace_deadline_calculation_is_correct() {
         &String::from_str(&env, "Grace calc test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
 
     let invoice = client.get_invoice(&invoice_id);
     let deadline = invoice.grace_deadline(grace_period);
     assert_eq!(deadline, due + grace_period);
+}
+
+#[test]
+fn checked_grace_deadline_rejects_overflow() {
+    let env = Env::default();
+    env.ledger().with_mut(|ledger| ledger.timestamp = 1);
+    let invoice = Invoice::new(
+        &env,
+        Address::generate(&env),
+        1_000,
+        Address::generate(&env),
+        u64::MAX,
+        String::from_str(&env, "overflow boundary"),
+        InvoiceCategory::Services,
+        Vec::new(&env),
+        None,
+        None,
+        None,
+    )
+    .expect("maximum future due date is valid");
+
+    assert_eq!(
+        invoice.checked_grace_deadline(1),
+        Err(QuickLendXError::InvalidTimestamp)
+    );
 }
 
 #[test]
@@ -391,6 +417,7 @@ fn due_date_far_future_accepted() {
         &String::from_str(&env, "Far future"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     assert!(result.is_ok());
 }
