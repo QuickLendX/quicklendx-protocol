@@ -432,6 +432,14 @@ pub struct SearchResult {
 /// signal and what it counts as `reindexed`.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IndexCleanupReport {
+    pub scanned: u32,
+    pub removed: u32,
+    pub next_offset: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RebuildReport {
     /// Number of invoice IDs examined in this page.
     pub scanned: u32,

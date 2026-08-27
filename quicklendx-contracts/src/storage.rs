@@ -116,6 +116,18 @@ impl StorageKeys {
 /// 4. Document the migration in `docs/storage-key-stability.md`.
 pub struct Indexes;
 
+/// Selects one secondary invoice index for bounded integrity cleanup.
+#[derive(Clone)]
+#[contracttype]
+pub enum InvoiceIndex {
+    Business(Address),
+    Status(InvoiceStatus),
+    Customer(String),
+    TaxId(String),
+    Tag(String),
+    Category(InvoiceCategory),
+}
+
 impl Indexes {
     /// Returns the persistent storage key for the invoice list owned by a business.
     ///
@@ -263,6 +275,91 @@ impl Indexes {
 pub struct InvoiceStorage;
 
 impl InvoiceStorage {
+    fn raw_index_entries(env: &Env, index: &InvoiceIndex) -> Vec<BytesN<32>> {
+        match index {
+            InvoiceIndex::Business(business) => env.storage().persistent().get(&Indexes::invoices_by_business(business)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::Status(status) => env.storage().persistent().get(&Indexes::invoices_by_status(*status)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::Customer(name) => env.storage().persistent().get(&Indexes::invoices_by_customer(name)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::TaxId(tax_id) => env.storage().persistent().get(&Indexes::invoices_by_tax_id(tax_id)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::Tag(tag) => env.storage().persistent().get(&Indexes::invoices_by_tag(tag)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::Category(category) => env.storage().persistent().get(&Indexes::invoices_by_category(*category)).unwrap_or(Vec::new(env)),
+        }
+    }
+
+    fn index_entries(env: &Env, index: &InvoiceIndex) -> Vec<BytesN<32>> {
+        let mut valid = Vec::new(env);
+        for id in Self::raw_index_entries(env, index).iter() {
+            if Self::entry_matches(env, index, &id) && !valid.contains(&id) {
+                valid.push_back(id);
+            }
+        }
+        valid
+    }
+
+    fn entry_matches(env: &Env, index: &InvoiceIndex, id: &BytesN<32>) -> bool {
+        let Some(invoice) = Self::get(env, id) else {
+            return false;
+        };
+        match index {
+            InvoiceIndex::Business(business) => invoice.business == *business,
+            InvoiceIndex::Status(status) => invoice.status == *status,
+            InvoiceIndex::Customer(name) => invoice.metadata_customer_name.as_ref() == Some(name),
+            InvoiceIndex::TaxId(tax_id) => invoice.metadata_tax_id.as_ref() == Some(tax_id),
+            InvoiceIndex::Tag(tag) => invoice.tags.iter().any(|candidate| candidate == *tag),
+            InvoiceIndex::Category(category) => invoice.category == *category,
+        }
+    }
+
+    /// Remove invalid entries from one secondary index in a bounded, replayable page.
+    pub fn cleanup_index_page(
+        env: &Env,
+        index: &InvoiceIndex,
+        offset: u32,
+        limit: u32,
+    ) -> crate::types::IndexCleanupReport {
+        const MAX_INDEX_CLEANUP_PAGE: u32 = 100;
+        let capped_limit = limit.min(MAX_INDEX_CLEANUP_PAGE);
+        let mut entries = Self::raw_index_entries(env, index);
+        let total = entries.len();
+        let start = offset.min(total);
+        let end = start.saturating_add(capped_limit).min(total);
+        let mut removed = 0u32;
+        let mut valid_seen = Vec::new(env);
+        let mut position = start;
+        let mut scanned = 0u32;
+        while scanned < end.saturating_sub(start) && position < entries.len() {
+            let id = entries.get(position).unwrap();
+            let valid = Self::entry_matches(env, index, &id) && !valid_seen.contains(&id);
+            if valid {
+                valid_seen.push_back(id);
+                position += 1;
+            } else {
+                entries.remove(position);
+                removed = removed.saturating_add(1);
+            }
+            scanned += 1;
+        }
+
+        if removed > 0 {
+            let key = match index {
+                InvoiceIndex::Business(business) => Indexes::invoices_by_business(business),
+                InvoiceIndex::Status(status) => Indexes::invoices_by_status(*status),
+                InvoiceIndex::Customer(name) => Indexes::invoices_by_customer(name),
+                InvoiceIndex::TaxId(tax_id) => Indexes::invoices_by_tax_id(tax_id),
+                InvoiceIndex::Tag(tag) => Indexes::invoices_by_tag(tag),
+                InvoiceIndex::Category(category) => Indexes::invoices_by_category(*category),
+            };
+            env.storage().persistent().set(&key, &entries);
+            extend_persistent_ttl(env, &key);
+        }
+
+        crate::types::IndexCleanupReport {
+            scanned,
+            removed,
+            next_offset: if removed > 0 { start } else { end },
+        }
+    }
+
     /// Store an invoice and update all its secondary indexes.
     pub fn store(env: &Env, invoice: &Invoice) {
         crate::assert_view_only!(env);
@@ -385,11 +482,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_business(business);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Business(business.clone()))
     }
 
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
@@ -411,11 +504,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_status(status);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Status(status))
     }
 
     pub fn get_invoices_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
@@ -784,10 +873,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_invoices_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_customer(customer_name))
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Customer(customer_name.clone()))
     }
 
     pub fn get_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {
@@ -795,10 +881,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_invoices_by_tax_id(env: &Env, tax_id: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_tax_id(tax_id))
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::TaxId(tax_id.clone()))
     }
 
     pub fn get_by_tax_id(env: &Env, tax_id: &String) -> Vec<BytesN<32>> {
@@ -838,11 +921,7 @@ impl InvoiceStorage {
         env: &Env,
         category: &InvoiceCategory,
     ) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_category(*category);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Category(*category))
     }
 
     /// Efficiently counts invoices for a category directly from the category index.
@@ -864,10 +943,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_tag(tag))
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Tag(tag.clone()))
     }
 
     pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
