@@ -2473,71 +2473,13 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        if InvoiceStorage::is_frozen(&env, &invoice_id) {
-            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
-            return Err(QuickLendXError::InvoiceFrozen);
-        }
-        require_no_active_freeze(&env, &invoice_id)?;
-        let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
-        let invoice_id = bid.invoice_id.clone();
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
-        require_investor_not_frozen(&env, &bid.investor)?;
-        invoice.business.require_auth();
-
-        // Enforce business is active (not deleted/frozen).
-        require_business_active(&env, &invoice.business)?;
-
-        // Enforce KYC: a pending business must not accept bids.
-        require_business_not_pending(&env, &invoice.business)?;
-
-        if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
-            return Err(QuickLendXError::InvalidStatus);
-        }
-
-        let escrow_id = create_escrow(
-            &env,
-            &invoice_id,
-            &bid.investor,
-            &invoice.business,
-            bid.bid_amount,
-            &invoice.currency,
-        )?;
-        bid.status = BidStatus::Accepted;
-        BidStorage::update_bid(&env, &bid);
-        // Remove from old status list before changing status
-        InvoiceStorage::remove_from_status_invoices(&env, InvoiceStatus::Verified, &invoice_id);
-
-        invoice.mark_as_funded(
-            &env,
-            bid.investor.clone(),
-            bid.bid_amount,
-            env.ledger().timestamp(),
-        );
-        InvoiceStorage::update_invoice(&env, &invoice);
-
-        // Add to new status list after status change
-        InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Funded, &invoice_id);
-        let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
-        let investment = Investment {
-            investment_id: investment_id.clone(),
-            invoice_id: invoice_id.clone(),
-            investor: bid.investor.clone(),
-            amount: bid.bid_amount,
-            funded_at: env.ledger().timestamp(),
-            status: InvestmentStatus::Active,
-            insurance: Vec::new(&env),
-        };
-        InvestmentStorage::store_investment(&env, &investment);
-
-        let escrow = EscrowStorage::get_escrow(&env, &escrow_id).unwrap();
-        emit_escrow_created(&env, &escrow);
-        emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
-
-        Ok(())
+        // Keep the legacy entrypoint on the same atomic implementation as the
+        // explicit funding API.  The previous duplicate implementation
+        // replaced the caller-supplied invoice ID with `bid.invoice_id`
+        // before checking that the two IDs matched.  A bid from another
+        // invoice could consequently fund one invoice while indexing escrow
+        // and investment state under another.
+        do_accept_bid_and_fund(&env, &invoice_id, &bid_id).map(|_| ())
     }
 
     /// Add insurance coverage to an active investment (investor only).
@@ -5447,4 +5389,3 @@ impl QuickLendXContract {
         diagnostics::get_protocol_diagnostics(&env)
     }
 }
-
