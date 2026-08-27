@@ -963,7 +963,9 @@ impl BidStorage {
         let mut bids = Vec::new(env);
         for bid_id in Self::get_bids_for_invoice(env, invoice_id).iter() {
             if let Some(bid) = Self::get_bid(env, &bid_id) {
-                bids.push_back(bid);
+                if bid.invoice_id == *invoice_id {
+                    bids.push_back(bid);
+                }
             }
         }
         bids
@@ -974,7 +976,9 @@ impl BidStorage {
         let mut idx: u32 = 0;
         while idx < records.len() {
             let bid = records.get(idx).unwrap();
-            if bid.status == status {
+            let eligible = status != BidStatus::Placed
+                || !bid.is_expired(env.ledger().timestamp());
+            if bid.status == status && eligible {
                 filtered.push_back(bid);
             }
             idx += 1;

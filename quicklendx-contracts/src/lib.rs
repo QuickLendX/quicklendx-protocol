@@ -478,6 +478,7 @@ use verification::{
     InvestorVerificationStorage,
 };
 
+pub use crate::storage::InvoiceIndex;
 use crate::storage::{BidStorage, InvoiceStorage};
 
 /// Render a 1-5 rating score as a decimal `String` for audit-log serialization.
@@ -2090,7 +2091,16 @@ impl QuickLendXContract {
 
     /// Get all available invoices (verified and not funded)
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified)
+        let mut available = Vec::new(&env);
+        let now = env.ledger().timestamp();
+        for invoice_id in InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified).iter() {
+            if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+                if !invoice.is_overdue(now) {
+                    available.push_back(invoice_id);
+                }
+            }
+        }
+        available
     }
 
     /// Update invoice status (admin function)
@@ -4039,6 +4049,9 @@ impl QuickLendXContract {
 
         for invoice_id in verified_invoices.iter() {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+                if invoice.is_overdue(env.ledger().timestamp()) {
+                    continue;
+                }
                 // Filter by amount range
                 if let Some(min) = min_amount {
                     if invoice.amount < min {
@@ -5194,6 +5207,26 @@ impl QuickLendXContract {
         }
         let report = InvoiceStorage::rebuild_indexes_page(&env, offset, limit);
         Ok(report)
+    }
+
+    /// Remove invalid entries from one invoice index in a bounded admin page.
+    /// Missing records, status mismatches, metadata mismatches, and duplicates
+    /// are removed; canonical invoice records are never modified.
+    pub fn cleanup_invoice_index(
+        env: Env,
+        admin: Address,
+        index: InvoiceIndex,
+        offset: u32,
+        limit: u32,
+    ) -> Result<crate::types::IndexCleanupReport, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+        let config = init::ProtocolInitializer::get_protocol_config(&env)
+            .ok_or(QuickLendXError::OperationNotAllowed)?;
+        if limit > config.backfill_max_batch_size {
+            return Err(QuickLendXError::BatchSizeExceeded);
+        }
+        Ok(InvoiceStorage::cleanup_index_page(&env, &index, offset, limit))
     }
 
     /// Prune terminal-state invoices whose terminal timestamp is older than
