@@ -101,8 +101,8 @@ fn test_fresh_contract_all_pass() {
 
     let report = client.invariant_self_check(&admin);
 
-    // Eight composed checks, all green on an empty protocol.
-    assert_eq!(report.checks.len(), 8);
+    // Nine composed checks, all green on an empty protocol.
+    assert_eq!(report.checks.len(), 9);
     assert!(report.all_passed);
 }
 
@@ -138,6 +138,11 @@ fn test_populated_healthy_state_passes() {
     assert!(passed_for(&env, &report, "escrow_uniqueness"));
     assert!(passed_for(&env, &report, "settlement_accounting_identity"));
     assert!(passed_for(&env, &report, "settlement_total_invariant"));
+    assert!(passed_for(
+        &env,
+        &report,
+        "bid_withdrawal_refund_accounting"
+    ));
 }
 
 #[test]
