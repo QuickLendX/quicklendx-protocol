@@ -18,11 +18,18 @@
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::events::{emit_escrow_refunded, emit_investment_withdrawn, emit_invoice_funded};
-use crate::payments::{create_escrow, create_escrow_record_only, refund_escrow, EscrowStatus, EscrowStorage};
+use crate::events::{
+    emit_bid_accepted, emit_escrow_refunded, emit_investment_withdrawn, emit_invoice_funded,
+};
+use crate::payments::{
+    create_escrow, create_escrow_record_only, refund_escrow, EscrowStatus, EscrowStorage,
+};
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
-use crate::verification::{require_business_active, require_business_not_pending};
+use crate::verification::{
+    require_business_active, require_business_not_pending, require_investor_not_frozen,
+    require_investor_not_pending,
+};
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
 /// Loaded and validated state required to accept a bid.
@@ -90,7 +97,7 @@ pub(crate) fn load_accept_bid_context(
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    let bid = BidStorage::get_bid(env, bid_id).unwrap();
+    let bid = BidStorage::get_bid(env, bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if bid.invoice_id != *invoice_id {
         return Err(QuickLendXError::Unauthorized);
@@ -99,6 +106,12 @@ pub(crate) fn load_accept_bid_context(
     if bid.status != BidStatus::Placed {
         return Err(QuickLendXError::InvalidStatus);
     }
+
+    // KYC and freeze status are checked again at acceptance time. A bid can
+    // remain open after its investor's verification changes, so placement-time
+    // validation alone is not sufficient authorization for moving funds.
+    require_investor_not_frozen(env, &bid.investor)?;
+    require_investor_not_pending(env, &bid.investor)?;
 
     if bid.is_expired(env.ledger().timestamp()) {
         return Err(QuickLendXError::InvalidStatus);
@@ -139,21 +152,34 @@ pub fn accept_bid_and_fund(
 
     let mut escrow_amount = bid.bid_amount;
     if let Some(fee_bps) = invoice.origination_fee_bps {
-        let total_fee = (bid.bid_amount.checked_mul(fee_bps as i128).ok_or(QuickLendXError::ArithmeticOverflow)?)
-            .checked_div(10000).ok_or(QuickLendXError::ArithmeticOverflow)?;
-            
-        escrow_amount = bid.bid_amount.checked_sub(total_fee).ok_or(QuickLendXError::ArithmeticOverflow)?;
-        
+        let total_fee = (bid
+            .bid_amount
+            .checked_mul(fee_bps as i128)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?)
+        .checked_div(10000)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+
+        escrow_amount = bid
+            .bid_amount
+            .checked_sub(total_fee)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
+
         if total_fee > 0 {
             // Single transfer for the full bid amount avoids a stale balance read
             // that could occur when two sequential transfer_funds calls are made
             // from the same source address within one transaction.
-            crate::payments::transfer_funds(env, &invoice.currency, &bid.investor, &env.current_contract_address(), bid.bid_amount)?;
-            
+            crate::payments::transfer_funds(
+                env,
+                &invoice.currency,
+                &bid.investor,
+                &env.current_contract_address(),
+                bid.bid_amount,
+            )?;
+
             let mut fees_collected = soroban_sdk::Map::new(env);
             fees_collected.set(crate::fees::FeeType::Origination, total_fee);
             crate::fees::FeeManager::collect_fees(env, &bid.investor, fees_collected, total_fee)?;
-            
+
             // Funds are already in the contract from the single transfer above.
             // Create the escrow record without a second transfer.
             let escrow_id = create_escrow_record_only(
@@ -172,9 +198,11 @@ pub fn accept_bid_and_fund(
 
             // 7. Events
             emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
+            emit_bid_accepted(env, &bid, invoice_id, &invoice.business);
 
             // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
-            let _ = crate::notifications::NotificationSystem::notify_bid_accepted(env, &invoice, &bid);
+            let _ =
+                crate::notifications::NotificationSystem::notify_bid_accepted(env, &invoice, &bid);
 
             return Ok(escrow_id);
         }
@@ -197,6 +225,7 @@ pub fn accept_bid_and_fund(
 
     // 7. Events
     emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
+    emit_bid_accepted(env, &bid, invoice_id, &invoice.business);
 
     // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
     // after escrow funding and state transitions complete successfully.

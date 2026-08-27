@@ -109,9 +109,15 @@ pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64,
             }
             Ok(value)
         }
-        None => Ok(ProtocolInitializer::get_protocol_config(env)
-            .map(|config| config.grace_period_seconds)
-            .unwrap_or(DEFAULT_GRACE_PERIOD)),
+        None => {
+            let value = ProtocolInitializer::get_protocol_config(env)
+                .map(|config| config.grace_period_seconds)
+                .unwrap_or(DEFAULT_GRACE_PERIOD);
+            if value > MAX_GRACE_PERIOD {
+                return Err(QuickLendXError::InvalidTimestamp);
+            }
+            Ok(value)
+        }
     }
 }
 
@@ -158,7 +164,7 @@ pub fn mark_invoice_defaulted(
 
     let current_timestamp = env.ledger().timestamp();
     let grace = resolve_grace_period(env, grace_period)?;
-    let grace_deadline = invoice.grace_deadline(grace);
+    let grace_deadline = invoice.checked_grace_deadline(grace)?;
 
     if current_timestamp <= grace_deadline {
         return Err(QuickLendXError::OperationNotAllowed);
@@ -256,6 +262,7 @@ pub fn scan_funded_invoice_expirations(
     grace_period: u64,
     limit: Option<u32>,
 ) -> Result<OverdueScanResult, QuickLendXError> {
+    let grace_period = resolve_grace_period(env, Some(grace_period))?;
     let funded_invoices = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
     let total_funded = funded_invoices.len();
 
@@ -286,7 +293,7 @@ pub fn scan_funded_invoice_expirations(
                     );
                 }
 
-                if current_timestamp > invoice.grace_deadline(grace_period) {
+                if current_timestamp > invoice.checked_grace_deadline(grace_period)? {
                     let _ = invoice.check_and_handle_expiration(env, grace_period)?;
                 }
             }
@@ -362,9 +369,10 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
             .persistent()
             .get(&investor_history_key)
             .unwrap_or(0);
-        env.storage()
-            .persistent()
-            .set(&investor_history_key, &investor_history_count.saturating_add(1));
+        env.storage().persistent().set(
+            &investor_history_key,
+            &investor_history_count.saturating_add(1),
+        );
         crate::storage::bump_persistent(env, &investor_history_key);
     }
 

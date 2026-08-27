@@ -193,6 +193,8 @@ mod test_evidence_kind_guard_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
+mod test_dispute_evidence_identity;
+#[cfg(test)]
 mod test_due_date_guard;
 #[cfg(test)]
 mod test_lock_time_limit_guard;
@@ -305,6 +307,7 @@ mod test_snapshot;
 mod test_bid_capacity_stress;
 #[cfg(test)]
 mod test_investor_exposure_caps;
+mod test_fee_recipient_rotation_guard;
 // Issue #1891 â€” min-partial-fill amount boundary: at limit, one below, one above.
 #[cfg(test)]
 mod test_min_partial_fill_boundary;
@@ -478,6 +481,7 @@ use verification::{
     InvestorVerificationStorage,
 };
 
+pub use crate::storage::InvoiceIndex;
 use crate::storage::{BidStorage, InvoiceStorage};
 
 /// Render a 1-5 rating score as a decimal `String` for audit-log serialization.
@@ -803,12 +807,41 @@ impl QuickLendXContract {
         init::ProtocolInitializer::set_treasury(&env, &admin, &treasury)
     }
 
-    /// Admin-only: cancel a pending treasury address rotation before it executes.
+    /// Propose a delayed fee-recipient rotation (admin only).
+    pub fn initiate_treasury_rotation(
+        env: Env,
+        new_treasury: Address,
+    ) -> Result<fees::RecipientRotationRequest, QuickLendXError> {
+        let admin = BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        fees::FeeManager::initiate_treasury_rotation(&env, &admin, new_treasury)
+    }
+
+    /// Finalize a delayed fee-recipient rotation.
     ///
-    /// # Arguments
-    /// * `admin` - The address of the caller, must be the current admin.
-    pub fn cancel_treasury_rotation(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        admin::cancel_treasury_rotation(&env, &admin)
+    /// The configured admin must authorize the finalization, and the proposed
+    /// recipient must also authorize the underlying FeeManager confirmation.
+    /// Requiring both parties prevents an admin typo and prevents a proposed
+    /// recipient from changing control without administrator approval.
+    pub fn confirm_treasury_rotation(
+        env: Env,
+        new_treasury: Address,
+    ) -> Result<Address, QuickLendXError> {
+        let admin = BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        admin.require_auth();
+        fees::FeeManager::confirm_treasury_rotation(&env, &new_treasury)
+    }
+
+    /// Cancel a pending fee-recipient rotation (admin only).
+    pub fn cancel_treasury_rotation(env: Env) -> Result<(), QuickLendXError> {
+        let admin = BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        fees::FeeManager::cancel_treasury_rotation(&env, &admin)
+    }
+
+    /// Return the complete pending fee-recipient rotation request, if any.
+    pub fn get_pending_treasury_rotation(
+        env: Env,
+    ) -> Option<fees::RecipientRotationRequest> {
+        fees::FeeManager::get_pending_rotation(&env)
     }
 
     /// Get the pending treasury address and its execution timestamp, if any.
@@ -2061,7 +2094,16 @@ impl QuickLendXContract {
 
     /// Get all available invoices (verified and not funded)
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified)
+        let mut available = Vec::new(&env);
+        let now = env.ledger().timestamp();
+        for invoice_id in InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified).iter() {
+            if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+                if !invoice.is_overdue(now) {
+                    available.push_back(invoice_id);
+                }
+            }
+        }
+        available
     }
 
     /// Update invoice status (admin function)
@@ -2488,71 +2530,13 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        if InvoiceStorage::is_frozen(&env, &invoice_id) {
-            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
-            return Err(QuickLendXError::InvoiceFrozen);
-        }
-        require_no_active_freeze(&env, &invoice_id)?;
-        let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
-        let invoice_id = bid.invoice_id.clone();
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
-        require_investor_not_frozen(&env, &bid.investor)?;
-        invoice.business.require_auth();
-
-        // Enforce business is active (not deleted/frozen).
-        require_business_active(&env, &invoice.business)?;
-
-        // Enforce KYC: a pending business must not accept bids.
-        require_business_not_pending(&env, &invoice.business)?;
-
-        if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
-            return Err(QuickLendXError::InvalidStatus);
-        }
-
-        let escrow_id = create_escrow(
-            &env,
-            &invoice_id,
-            &bid.investor,
-            &invoice.business,
-            bid.bid_amount,
-            &invoice.currency,
-        )?;
-        bid.status = BidStatus::Accepted;
-        BidStorage::update_bid(&env, &bid);
-        // Remove from old status list before changing status
-        InvoiceStorage::remove_from_status_invoices(&env, InvoiceStatus::Verified, &invoice_id);
-
-        invoice.mark_as_funded(
-            &env,
-            bid.investor.clone(),
-            bid.bid_amount,
-            env.ledger().timestamp(),
-        );
-        InvoiceStorage::update_invoice(&env, &invoice);
-
-        // Add to new status list after status change
-        InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Funded, &invoice_id);
-        let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
-        let investment = Investment {
-            investment_id: investment_id.clone(),
-            invoice_id: invoice_id.clone(),
-            investor: bid.investor.clone(),
-            amount: bid.bid_amount,
-            funded_at: env.ledger().timestamp(),
-            status: InvestmentStatus::Active,
-            insurance: Vec::new(&env),
-        };
-        InvestmentStorage::store_investment(&env, &investment);
-
-        let escrow = EscrowStorage::get_escrow(&env, &escrow_id).unwrap();
-        emit_escrow_created(&env, &escrow);
-        emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
-
-        Ok(())
+        // Keep the legacy entrypoint on the same atomic implementation as the
+        // explicit funding API.  The previous duplicate implementation
+        // replaced the caller-supplied invoice ID with `bid.invoice_id`
+        // before checking that the two IDs matched.  A bid from another
+        // invoice could consequently fund one invoice while indexing escrow
+        // and investment state under another.
+        do_accept_bid_and_fund(&env, &invoice_id, &bid_id).map(|_| ())
     }
 
     /// Add insurance coverage to an active investment (investor only).
@@ -4081,6 +4065,9 @@ impl QuickLendXContract {
 
         for invoice_id in verified_invoices.iter() {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
+                if invoice.is_overdue(env.ledger().timestamp()) {
+                    continue;
+                }
                 // Filter by amount range
                 if let Some(min) = min_amount {
                     if invoice.amount < min {
@@ -4749,6 +4736,7 @@ impl QuickLendXContract {
         validate_dispute_reason(&reason)?;
         validate_dispute_evidence(&evidence)?;
         validate_dispute_eligibility(&invoice, &creator)?;
+        dispute::reserve_evidence(&env, &invoice_id, &creator, &evidence)?;
         dispute_timeline::clear_under_review_timestamp(&env, &invoice_id);
         invoice.dispute_status = DisputeStatus::Disputed;
         invoice.dispute = crate::types::Dispute {
@@ -4805,6 +4793,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::DisputeNotAuthorized);
         }
 
+        dispute::reserve_evidence(&env, &invoice_id, &creator, &evidence)?;
         invoice.dispute.evidence = evidence;
         InvoiceStorage::update_invoice(&env, &invoice);
         dispute::track_dispute_invoice(&env, &invoice_id);
@@ -5236,6 +5225,26 @@ impl QuickLendXContract {
         }
         let report = InvoiceStorage::rebuild_indexes_page(&env, offset, limit);
         Ok(report)
+    }
+
+    /// Remove invalid entries from one invoice index in a bounded admin page.
+    /// Missing records, status mismatches, metadata mismatches, and duplicates
+    /// are removed; canonical invoice records are never modified.
+    pub fn cleanup_invoice_index(
+        env: Env,
+        admin: Address,
+        index: InvoiceIndex,
+        offset: u32,
+        limit: u32,
+    ) -> Result<crate::types::IndexCleanupReport, QuickLendXError> {
+        admin.require_auth();
+        AdminStorage::require_admin(&env, &admin)?;
+        let config = init::ProtocolInitializer::get_protocol_config(&env)
+            .ok_or(QuickLendXError::OperationNotAllowed)?;
+        if limit > config.backfill_max_batch_size {
+            return Err(QuickLendXError::BatchSizeExceeded);
+        }
+        Ok(InvoiceStorage::cleanup_index_page(&env, &index, offset, limit))
     }
 
     /// Prune terminal-state invoices whose terminal timestamp is older than
