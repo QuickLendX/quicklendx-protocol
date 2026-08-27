@@ -15,6 +15,13 @@ pub mod verification;
 pub mod payments;
 pub mod invariants;
 pub mod types;
+pub mod kyc_policy;
+#[cfg(test)]
+mod test_kyc_policy_matrix;
+#[cfg(test)]
+mod test_kyc_policy_extended;
+#[cfg(test)]
+mod test_kyc_policy_entrypoints;
 
 // Hardcoded constant to break the circular dependency
 pub(crate) const MAX_QUERY_LIMIT: u32 = 100; 
