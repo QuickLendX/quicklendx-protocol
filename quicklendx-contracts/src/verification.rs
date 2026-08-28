@@ -1,5 +1,6 @@
 use crate::bid::BidStorage;
 use crate::errors::QuickLendXError;
+use crate::investment::InvestmentStorage;
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
@@ -1617,6 +1618,14 @@ pub fn get_investor_analytics(
     InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)
 }
 
+/// Get total active risk exposure (active bids + active investments) for an investor.
+pub fn get_investor_total_exposure(env: &Env, investor: &Address) -> i128 {
+    let active_bid_exposure = BidStorage::get_active_bid_amount_sum_for_investor(env, investor);
+    let active_investment_exposure =
+        InvestmentStorage::get_active_investment_amount_sum_for_investor(env, investor);
+    active_bid_exposure.saturating_add(active_investment_exposure)
+}
+
 /// Validate investor can make investment based on limits and risk
 pub fn validate_investor_investment(
     env: &Env,
@@ -1630,9 +1639,12 @@ pub fn validate_investor_investment(
         }
 
         // 2. Aggregate Limit Check
-        // Ensure that (new bid + existing active bids + total funded investments) fits within the limit
+        // Ensure that (new bid + existing active bids + active investments + total funded volume) fits within the limit
         let active_bid_exposure = BidStorage::get_active_bid_amount_sum_for_investor(env, investor);
+        let active_investment_exposure =
+            InvestmentStorage::get_active_investment_amount_sum_for_investor(env, investor);
         let total_risk_exposure = active_bid_exposure
+            .saturating_add(active_investment_exposure)
             .saturating_add(verification.total_invested)
             .saturating_add(investment_amount);
 

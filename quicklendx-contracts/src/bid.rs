@@ -983,6 +983,12 @@ impl BidStorage {
                 bid.status = BidStatus::Cancelled;
                 Self::update_bid(env, &bid);
                 crate::events::emit_bid_cancelled(env, &bid);
+                crate::audit::log_bid_withdrawn(
+                    env,
+                    bid.invoice_id.clone(),
+                    bid.investor.clone(),
+                    bid_id.clone(),
+                );
                 return true;
             }
         }

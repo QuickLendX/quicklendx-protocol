@@ -198,6 +198,9 @@ pub enum QuickLendXError {
     InvalidLedgerSequence = 2205,
     /// Insurance coverage is not active at the time of default/settlement.
     InsuranceNotActive = 2206,
+    AccountIsFrozen = 2207,
+    UnstableCursor = 2208,
+    BatchSizeExceeded = 2209,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -295,8 +298,11 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
-            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NO_ROT"),
+            QuickLendXError::InsuranceNotActive => symbol_short!("INS_NA"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_SEQ"),
+            QuickLendXError::AccountIsFrozen => symbol_short!("ACC_FRZ"),
+            QuickLendXError::UnstableCursor => symbol_short!("UNS_CRS"),
+            QuickLendXError::BatchSizeExceeded => symbol_short!("BTC_EXC"),
         }
     }
 }

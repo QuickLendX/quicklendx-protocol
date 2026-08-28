@@ -1,29 +1,7 @@
 #![allow(clippy::disallowed_methods)]
 #![no_std]
-#![allow(
-    dead_code,
-    unused_imports,
-    unused_variables,
-    unused_comparisons,
-    deprecated,
-    clippy::too_many_arguments,
-    clippy::doc_overindented_list_items,
-    clippy::absurd_extreme_comparisons,
-    clippy::needless_range_loop,
-    clippy::collapsible_match,
-    clippy::let_unit_value,
-    clippy::needless_borrow,
-    clippy::match_like_matches_macro,
-    clippy::needless_return,
-    clippy::disallowed_methods
-)]
-
-#[contracterror]
-#[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
-#[repr(u32)]
-pub enum QuickLendXError {
-    AccountIsFrozen = 1,
-}
+pub use errors::QuickLendXError;
+pub use types::InvoiceLock;
 
 extern crate alloc;
 
@@ -111,6 +89,8 @@ mod test_accept_bid_race;
 mod test_admin;
 #[cfg(test)]
 mod test_admin_events_audit_parity;
+#[cfg(test)]
+mod test_funding_events_audit_parity;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -336,7 +316,6 @@ use admin::AdminStorage;
 use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
 };
-use errors::QuickLendXError;
 use escrow::{
     accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
     withdraw_investment as do_withdraw_investment,
@@ -1300,30 +1279,36 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
-        env.storage()
-            .persistent()
-            .set(&DataKey::Frozen(target.clone()), &false);
-    }
 
-    pub fn is_frozen(env: Env, target: Address) -> bool {
-        env.storage()
-            .persistent()
-            .get(&DataKey::Frozen(target))
-            .unwrap_or(false)
-    }
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
 
-    pub fn create_invoice(
-        env: Env,
-        issuer: Address,
-        invoice_id: u64,
-    ) -> Result<(), QuickLendXError> {
-        issuer.require_auth();
-        if Self::is_frozen(env.clone(), issuer.clone()) {
-            return Err(QuickLendXError::AccountIsFrozen);
+        // When invoice is already funded, verify_invoice triggers release_escrow_funds (Issue #300)
+        if invoice.status == InvoiceStatus::Funded {
+            return Self::release_escrow_funds(env, invoice_id);
         }
-        env.storage()
-            .persistent()
-            .set(&DataKey::Invoice(invoice_id), &issuer);
+
+        // Only allow verification if pending
+        if invoice.status != InvoiceStatus::Pending {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
+        // Remove from pending status list
+        InvoiceStorage::remove_from_status_invoices(&env, InvoiceStatus::Pending, &invoice_id);
+
+        invoice.verify(&env, admin.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Add to verified status list
+        InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Verified, &invoice_id);
+
+        emit_invoice_verified(&env, &invoice);
+
+        // If invoice is funded (has escrow), release escrow funds to business
+        if invoice.status == InvoiceStatus::Funded {
+            Self::release_escrow_funds(env.clone(), invoice_id)?;
+        }
+
         Ok(())
     }
 
@@ -1893,8 +1878,15 @@ impl QuickLendXContract {
             expected_return
         );
 
-        // Emit bid placed event
+        // Emit bid placed event and audit entry
         emit_bid_placed(&env, &bid);
+        audit::log_bid_placed(
+            &env,
+            invoice_id.clone(),
+            investor.clone(),
+            bid_amount,
+            bid_id.clone(),
+        );
 
         Ok(bid_id)
     }
@@ -1934,6 +1926,9 @@ impl QuickLendXContract {
 
         // Enforce KYC: a pending business must not accept bids.
         require_business_not_pending(&env, &invoice.business)?;
+
+        // Re-verify investor KYC status and aggregate investment capacity before accepting bid.
+        validate_investor_investment(&env, &bid.investor, 0)?;
 
         if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
             return Err(QuickLendXError::InvalidStatus);
@@ -1977,6 +1972,19 @@ impl QuickLendXContract {
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id).unwrap();
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
+        audit::log_bid_accepted(
+            &env,
+            invoice_id.clone(),
+            bid.investor.clone(),
+            bid.bid_amount,
+        );
+        emit_invoice_funded(&env, &invoice_id, &bid.investor, bid.bid_amount);
+        audit::log_invoice_funded(
+            &env,
+            invoice_id.clone(),
+            bid.investor.clone(),
+            bid.bid_amount,
+        );
 
         Ok(())
     }
@@ -2409,6 +2417,7 @@ impl QuickLendXContract {
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
         let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
+        let existing = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits_authed(
             &env,
             &admin,
@@ -2935,7 +2944,7 @@ impl QuickLendXContract {
     ///      the contract's MAX_QUERY_LIMIT. Indexers should use this value as a starting point
     ///      for pagination to balance efficiency and memory usage.
     /// @return Default settlement batch size (25) — recommended number of payment records per page.
-    pub fn get_settlement_batch_size_soft_cap(_env: Env) -> u32 {
+    pub fn get_settlement_batch_soft_cap(_env: Env) -> u32 {
         settlement::default_settlement_batch_size_soft_cap()
     }
 
@@ -2943,7 +2952,7 @@ impl QuickLendXContract {
     /// @dev This represents the hard upper bound enforced by the contract. Query requests
     ///      exceeding this limit will be automatically clamped to this value by `get_payment_records`.
     /// @return Maximum settlement batch size (50) — hard cap for payment records per query.
-    pub fn get_settlement_batch_size_soft_cap_max(_env: Env) -> u32 {
+    pub fn get_settlement_batch_max_cap(_env: Env) -> u32 {
         settlement::max_settlement_batch_size_soft_cap()
     }
 
