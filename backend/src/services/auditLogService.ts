@@ -32,6 +32,8 @@ interface AuditAdminActionEvent {
   method: string;
   path: string;
   ip: string;
+  outcome?: Extract<AuditOutcome, "denied" | "performed">;
+  reason?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -56,11 +58,12 @@ class AuditLogService {
     this.push({
       timestamp: new Date().toISOString(),
       action: event.action,
-      outcome: "performed",
+      outcome: event.outcome ?? "performed",
       role: event.role,
       method: event.method,
       path: event.path,
       ip: event.ip,
+      reason: event.reason,
       metadata: event.metadata,
     });
   }
