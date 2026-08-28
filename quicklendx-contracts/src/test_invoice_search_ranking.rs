@@ -88,7 +88,9 @@ mod test_invoice_search_ranking {
             dispute,
             total_paid: 0,
             payment_history: Vec::new(env),
-        }
+        },
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
     /// Asserts the rank ordering ExactId > PartialMatch.
@@ -144,7 +146,9 @@ mod test_invoice_search_ranking {
             dispute,
             total_paid: 0,
             payment_history: Vec::new(&env),
-        };
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
+    };
 
         // Invoice 2: Partial description match
         let invoice_partial = create_test_invoice(
@@ -265,7 +269,9 @@ mod test_invoice_search_ranking {
             dispute,
             total_paid: 0,
             payment_history: Vec::new(&env),
-        };
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
+    };
 
         // Invoice with PartialMatch, created at 5000 (newer)
         let invoice_partial = create_test_invoice(

@@ -32,7 +32,7 @@ fn setup_initialized() -> (Env, QuickLendXContractClient<'static>, Address) {
         &VALID_MIN_INVOICE_AMOUNT,
         &VALID_MAX_DUE_DATE_DAYS,
         &VALID_GRACE_PERIOD_SECONDS,
-    );
+        &100u32);
 
     (env, client, admin)
 }
@@ -78,7 +78,7 @@ fn test_set_protocol_config_min_invoice_amount_bounds_matrix() {
                 &1i128,
                 &VALID_MAX_DUE_DATE_DAYS,
                 &VALID_GRACE_PERIOD_SECONDS,
-            )
+                &100u32)
             .is_ok(),
         "min_invoice_amount=1 must be accepted"
     );
@@ -91,7 +91,7 @@ fn test_set_protocol_config_min_invoice_amount_bounds_matrix() {
                 &rejected_min_invoice_amount,
                 &VALID_MAX_DUE_DATE_DAYS,
                 &VALID_GRACE_PERIOD_SECONDS,
-            ),
+                &100u32),
             QuickLendXError::InvalidAmount,
         );
         assert_eq!(client.get_min_invoice_amount(), 1);
@@ -110,7 +110,7 @@ fn test_set_protocol_config_due_date_bounds_matrix() {
                     &VALID_MIN_INVOICE_AMOUNT,
                     &accepted_max_due_date_days,
                     &VALID_GRACE_PERIOD_SECONDS,
-                )
+                    &100u32)
                 .is_ok(),
             "max_due_date_days={} must be accepted",
             accepted_max_due_date_days
@@ -129,7 +129,7 @@ fn test_set_protocol_config_due_date_bounds_matrix() {
                 &VALID_MIN_INVOICE_AMOUNT,
                 &rejected_max_due_date_days,
                 &VALID_GRACE_PERIOD_SECONDS,
-            ),
+                &100u32),
             QuickLendXError::InvoiceDueDateInvalid,
         );
         assert_eq!(client.get_max_due_date_days(), MAX_DUE_DATE_DAYS);
@@ -148,7 +148,7 @@ fn test_set_protocol_config_grace_period_bounds_matrix() {
                     &VALID_MIN_INVOICE_AMOUNT,
                     &VALID_MAX_DUE_DATE_DAYS,
                     &accepted_grace_period_seconds,
-                )
+                    &100u32)
                 .is_ok(),
             "grace_period_seconds={} must be accepted",
             accepted_grace_period_seconds
@@ -166,7 +166,7 @@ fn test_set_protocol_config_grace_period_bounds_matrix() {
             &VALID_MIN_INVOICE_AMOUNT,
             &VALID_MAX_DUE_DATE_DAYS,
             &(MAX_GRACE_PERIOD_SECONDS + 1),
-        ),
+            &100u32),
         QuickLendXError::InvalidTimestamp,
     );
     assert_eq!(client.get_grace_period_seconds(), MAX_GRACE_PERIOD_SECONDS);
@@ -193,7 +193,7 @@ fn test_config_bounds_reject_non_admin_without_mutation() {
             &1i128,
             &MAX_DUE_DATE_DAYS,
             &MAX_GRACE_PERIOD_SECONDS,
-        ),
+            &100u32),
         QuickLendXError::NotAdmin,
     );
 

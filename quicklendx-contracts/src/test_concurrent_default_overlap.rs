@@ -60,7 +60,7 @@ fn fund_invoice(
         &String::from_str(env, "inv"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(

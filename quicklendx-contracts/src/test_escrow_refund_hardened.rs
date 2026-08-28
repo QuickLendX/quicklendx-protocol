@@ -47,9 +47,9 @@ fn test_refund_only_by_admin_or_owner() {
         &String::from_str(&env, "Hardening test"),
         &InvoiceCategory::Technology,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
@@ -91,9 +91,9 @@ fn test_refund_fails_on_already_paid_invoice() {
         &String::from_str(&env, "Hardening test"),
         &InvoiceCategory::Technology,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
     // Bypass buggy settle_invoice (which has double require_auth in current codebase)
@@ -127,9 +127,9 @@ fn test_refund_status_bucket_integrity() {
         &String::from_str(&env, "Status bucket test"),
         &InvoiceCategory::Technology,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
     // Initial check
@@ -176,9 +176,9 @@ fn test_hardened_refund_exact_amount_recipient_and_idempotency() {
         &String::from_str(&env, "Hardened refund amount invoice"),
         &InvoiceCategory::Technology,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id: BytesN<32> = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
     let investor_balance_after_lock = token_client.balance(&investor);

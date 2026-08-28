@@ -103,15 +103,18 @@ fn invoice_not_overdue_when_due_date_equals_u64_max() {
     let invoice = env
         .as_contract(&contract_id, || {
             crate::invoice::Invoice::new(
-                &env,
-                business,
-                1_000,
-                currency,
-                u64::MAX, // due_date == u64::MAX
+&env,
+business,
+1_000,
+currency,
+u64::MAX,
+// due_date == u64::MAX
                 String::from_str(&env, "rollover test"),
-                InvoiceCategory::Services,
-                Vec::new(&env),
-            )
+InvoiceCategory::Services,
+Vec::new(&env),
+        None, /* early_payment_discount_bps */,
+        None
+)
         })
         .expect("invoice construction must succeed at NEAR_MAX");
 
@@ -136,15 +139,17 @@ fn invoice_not_overdue_after_clock_rollover_to_zero_when_due_date_is_u64_max() {
     let invoice = env
         .as_contract(&contract_id, || {
             crate::invoice::Invoice::new(
-                &env,
-                business,
-                1_000,
-                currency,
-                u64::MAX,
-                String::from_str(&env, "rollover test"),
-                InvoiceCategory::Services,
-                Vec::new(&env),
-            )
+&env,
+business,
+1_000,
+currency,
+u64::MAX,
+String::from_str(&env, "rollover test"),
+InvoiceCategory::Services,
+Vec::new(&env),
+        None, /* early_payment_discount_bps */,
+        None
+)
         })
         .expect("invoice construction must succeed");
 
@@ -168,15 +173,18 @@ fn invoice_is_overdue_at_u64_max_minus_one_when_due_date_is_small() {
     let invoice = env
         .as_contract(&contract_id, || {
             crate::invoice::Invoice::new(
-                &env,
-                business,
-                1_000,
-                currency,
-                2_000_000, // due_date well before NEAR_MAX
+&env,
+business,
+1_000,
+currency,
+2_000_000,
+// due_date well before NEAR_MAX
                 String::from_str(&env, "small due date"),
-                InvoiceCategory::Services,
-                Vec::new(&env),
-            )
+InvoiceCategory::Services,
+Vec::new(&env),
+        None, /* early_payment_discount_bps */,
+        None
+)
         })
         .expect("invoice construction must succeed");
 
@@ -200,15 +208,17 @@ fn grace_deadline_saturates_at_u64_max_when_due_date_is_near_max() {
     let invoice = env
         .as_contract(&contract_id, || {
             crate::invoice::Invoice::new(
-                &env,
-                business,
-                1_000,
-                currency,
-                u64::MAX,
-                String::from_str(&env, "grace saturation"),
-                InvoiceCategory::Services,
-                Vec::new(&env),
-            )
+&env,
+business,
+1_000,
+currency,
+u64::MAX,
+String::from_str(&env, "grace saturation"),
+InvoiceCategory::Services,
+Vec::new(&env),
+        None, /* early_payment_discount_bps */,
+        None
+)
         })
         .expect("invoice construction must succeed");
 
@@ -243,15 +253,18 @@ fn grace_deadline_at_u64_max_minus_one_saturates_with_overflow_grace_period() {
     let invoice = env
         .as_contract(&contract_id, || {
             crate::invoice::Invoice::new(
-                &env,
-                business,
-                1_000,
-                currency,
-                NEAR_MAX, // due_date == u64::MAX - 1
+&env,
+business,
+1_000,
+currency,
+NEAR_MAX,
+// due_date == u64::MAX - 1
                 String::from_str(&env, "near max due date"),
-                InvoiceCategory::Services,
-                Vec::new(&env),
-            )
+InvoiceCategory::Services,
+Vec::new(&env),
+        None, /* early_payment_discount_bps */,
+        None
+)
         })
         .expect("invoice construction must succeed");
 
@@ -409,7 +422,7 @@ fn store_invoice_accepted_when_ledger_timestamp_is_u64_max_minus_one() {
         &String::from_str(&env, "boundary invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(
         result.is_ok(),
         "store_invoice must succeed when ledger == u64::MAX - 1 and due_date == u64::MAX"
@@ -434,7 +447,7 @@ fn store_invoice_rejected_when_due_date_equals_ledger_at_u64_max() {
         &String::from_str(&env, "max timestamp invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(
         result.is_err(),
         "store_invoice must reject due_date == u64::MAX when ledger timestamp is also u64::MAX"
@@ -459,7 +472,7 @@ fn invoice_created_near_u64_max_is_not_overdue_after_clock_rollover_to_zero() {
         &String::from_str(&env, "pre-rollover invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Simulate rollover: clock resets to 0.
     env.ledger().set_timestamp(0);
@@ -489,7 +502,7 @@ fn grace_deadline_of_invoice_at_near_max_saturates_for_any_grace_period() {
         &String::from_str(&env, "grace saturation invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let invoice = client.get_invoice(&invoice_id);
 
@@ -529,7 +542,7 @@ fn bid_placed_at_u64_max_minus_one_has_expiration_saturated_to_u64_max() {
         &String::from_str(&env, "bid boundary invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(
@@ -575,7 +588,7 @@ fn cleanup_does_not_remove_bid_whose_expiration_saturated_to_u64_max() {
         &String::from_str(&env, "cleanup boundary invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(

@@ -61,6 +61,33 @@ pub struct Proposal {
 // Storage key helpers
 // ---------------------------------------------------------------------------
 
+fn active_proposals_key() -> Symbol {
+    symbol_short!("gov_act")
+}
+
+fn active_proposals_count(env: &Env) -> u32 {
+    env.storage().instance().get(&active_proposals_key()).unwrap_or(0)
+}
+
+fn increment_active_proposals(env: &Env) {
+    let count = active_proposals_count(env).saturating_add(1);
+    env.storage().instance().set(&active_proposals_key(), &count);
+}
+
+fn decrement_active_proposals(env: &Env) {
+    let count = active_proposals_count(env).saturating_sub(1);
+    env.storage().instance().set(&active_proposals_key(), &count);
+}
+
+/// Enforces that no governance proposal is currently active.
+/// Used to guard destructive operations against bypassing pending governance proposals.
+pub fn require_no_open_governance_proposal(env: &Env) -> Result<(), QuickLendXError> {
+    if active_proposals_count(env) > 0 {
+        return Err(QuickLendXError::PendingGovernanceProposal);
+    }
+    Ok(())
+}
+
 /// Returns the instance-storage key for a proposal.
 fn proposal_key(proposal_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
     (symbol_short!("gov_prop"), proposal_id.clone())
@@ -107,10 +134,7 @@ pub trait Governable {
     ///
     /// Called automatically by `run_proposal` after verifying the proposal
     /// status is `Passed`.  Implementations must be idempotent where possible.
-    fn execute_proposal(
-        env: &Env,
-        proposal_id: &BytesN<32>,
-    ) -> Result<(), QuickLendXError>;
+    fn execute_proposal(env: &Env, proposal_id: &BytesN<32>) -> Result<(), QuickLendXError>;
 
     // ------------------------------------------------------------------
     // Default implementations — override only if the protocol requires it
@@ -150,7 +174,11 @@ pub trait Governable {
         env.storage().instance().set(&key, &proposal);
         // Initialise empty voter set
         let empty: Vec<Address> = Vec::new(env);
-        env.storage().instance().set(&voted_key(&proposal_id), &empty);
+        env.storage()
+            .instance()
+            .set(&voted_key(&proposal_id), &empty);
+
+        increment_active_proposals(env);
 
         Ok(proposal)
     }
@@ -231,8 +259,7 @@ pub trait Governable {
         }
 
         let total = proposal.votes_for.saturating_add(proposal.votes_against);
-        let passed =
-            total >= Self::quorum() && proposal.votes_for > proposal.votes_against;
+        let passed = total >= Self::quorum() && proposal.votes_for > proposal.votes_against;
 
         proposal.status = if passed {
             ProposalStatus::Passed
@@ -241,6 +268,8 @@ pub trait Governable {
         };
 
         env.storage().instance().set(&key, &proposal);
+        decrement_active_proposals(env);
+        
         Ok(proposal.status)
     }
 
@@ -249,10 +278,7 @@ pub trait Governable {
     /// Calls `finalize_proposal` if the status is still `Active`, then
     /// delegates to [`Self::execute_proposal`] and marks the proposal
     /// `Executed`.  Returns `InvalidStatus` if the proposal is not `Passed`.
-    fn run_proposal(
-        env: &Env,
-        proposal_id: &BytesN<32>,
-    ) -> Result<(), QuickLendXError> {
+    fn run_proposal(env: &Env, proposal_id: &BytesN<32>) -> Result<(), QuickLendXError> {
         let key = proposal_key(proposal_id);
         let mut proposal: Proposal = env
             .storage()
@@ -281,13 +307,31 @@ pub trait Governable {
     }
 
     /// Read the current state of a proposal without mutating anything.
-    fn get_proposal(
-        env: &Env,
-        proposal_id: &BytesN<32>,
-    ) -> Result<Proposal, QuickLendXError> {
+    fn get_proposal(env: &Env, proposal_id: &BytesN<32>) -> Result<Proposal, QuickLendXError> {
         env.storage()
             .instance()
             .get(&proposal_key(proposal_id))
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 }
+
+/// Guard to reject stale governance-proposal references.
+///
+/// Compares a user-provided proposal reference (`gp`) against the on-chain proposal state (`current`).
+/// Returns `QuickLendXError::InvalidStatus` if they do not match.
+pub fn require_matching_governance_proposal(
+    gp: &Proposal,
+    current: &Proposal,
+) -> Result<(), QuickLendXError> {
+    if gp.id != current.id
+        || gp.proposer != current.proposer
+        || gp.votes_for != current.votes_for
+        || gp.votes_against != current.votes_against
+        || gp.voting_ends_at_ledger != current.voting_ends_at_ledger
+        || gp.status != current.status
+    {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+    Ok(())
+}
+
