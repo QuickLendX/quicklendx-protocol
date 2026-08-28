@@ -146,6 +146,8 @@ mod test_backup_retention_enforcement;
 mod test_backup_safety;
 #[cfg(test)]
 mod test_bid_cancel_accept_race;
+#[cfg(test)]
+mod test_bid_concurrency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_boundary;
 #[cfg(test)]
@@ -2336,11 +2338,11 @@ impl QuickLendXContract {
     /// Uses a read-check-write pattern that validates the bid is still in `Placed`
     /// status before transitioning. Terminal statuses (`Withdrawn`, `Accepted`,
     /// `Expired`, `Cancelled`) are immutable --- a bid that has already left `Placed`
-    /// will cause this function to return `false` without any state mutation,
+    /// will cause this function to return `BidStale` without any state mutation,
     /// preventing double-action execution regardless of call ordering.
-    pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool {
-        pause::PauseControl::require_not_paused(&env).is_ok()
-            && bid::BidStorage::cancel_bid(&env, &bid_id)
+    pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        bid::BidStorage::cancel_bid(&env, &bid_id)
     }
 
     /// Withdraw a bid (investor only, Placed --- Withdrawn).

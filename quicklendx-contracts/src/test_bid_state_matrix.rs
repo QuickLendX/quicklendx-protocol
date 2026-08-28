@@ -109,7 +109,7 @@ fn test_transition_placed_to_cancelled() {
     let invoice_id = ctx.create_verified_invoice();
     let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
     assert_eq!(ctx.bid_status(&bid_id), BidStatus::Placed);
-    ctx.client.cancel_bid(&bid_id);
+    assert!(ctx.client.cancel_bid(&bid_id).is_ok());
     assert_eq!(ctx.bid_status(&bid_id), BidStatus::Cancelled);
 }
 
@@ -132,7 +132,7 @@ fn test_cannot_accept_non_placed_bid() {
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
     let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
-    ctx.client.cancel_bid(&bid_id);
+    assert!(ctx.client.cancel_bid(&bid_id).is_ok());
     let result = ctx.client.try_accept_bid(&invoice_id, &bid_id);
     assert!(result.is_err());
 }
@@ -143,7 +143,7 @@ fn test_cannot_withdraw_non_placed_bid() {
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
     let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
-    ctx.client.cancel_bid(&bid_id);
+    assert!(ctx.client.cancel_bid(&bid_id).is_ok());
     let result = ctx.client.try_withdraw_bid(&bid_id);
     assert!(result.is_err());
 }
@@ -156,7 +156,7 @@ fn test_cannot_cancel_non_placed_bid() {
     let bid_id = ctx.place_bid(&invoice_id, &BytesN::from_array(&env, &[0u8; 32]));
     ctx.client.withdraw_bid(&bid_id);
     let cancelled = ctx.client.cancel_bid(&bid_id);
-    assert!(!cancelled);
+    assert_eq!(cancelled, Err(QuickLendXError::BidStale));
 }
 
 #[test]
@@ -169,7 +169,7 @@ fn test_terminal_bid_states_are_immutable() {
     let result = ctx.client.try_withdraw_bid(&bid_id);
     assert!(result.is_err());
     let cancelled = ctx.client.cancel_bid(&bid_id);
-    assert!(!cancelled);
+    assert_eq!(cancelled, Err(QuickLendXError::BidStale));
 }
 
 #[test]
@@ -198,7 +198,7 @@ fn test_transitions_guard_consistency() {
             }
             BidStatus::Cancelled => {
                 let res = ctx.client.cancel_bid(&bid_id);
-                if should_succeed { Ok(res) } else { Err(()) }
+                if should_succeed { Ok(res.is_ok()) } else { Err(()) }
             }
             BidStatus::Expired => {
                 ctx.env.ledger().set_timestamp(ctx.env.ledger().timestamp() + 86_400 * 40);

@@ -325,7 +325,7 @@ fn test_get_best_bid_equals_rank_bids_head_at_full_capacity() {
     // Surface the next-best by cancelling current best.
     let second_bid_id = ranked.get(1).unwrap().bid_id.clone();
     assert_ne!(best.bid_id, second_bid_id);
-    client.cancel_bid(&best.bid_id);
+    assert!(client.cancel_bid(&best.bid_id).is_ok());
 
     let best2 = client
         .get_best_bid(&invoice_id)
