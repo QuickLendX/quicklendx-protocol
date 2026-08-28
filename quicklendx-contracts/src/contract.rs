@@ -126,34 +126,20 @@ impl QuickLendXContract {
         description: soroban_sdk::Bytes,
         category: InvoiceCategory,
         tags: Vec<soroban_sdk::Bytes>,
+        nonce: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
-        // POLICY LAYER 1: Require explicit authorization from the business address.
-        // This ensures only the business itself can create invoices - not the admin,
-        // not a third party. Prevents impersonation and unauthorized storage writes.
+        if let Some(existing_id) = crate::idempotency::get_idempotency_result::<BytesN<32>>(&env, &nonce) {
+            return Ok(existing_id);
+        }
+
         business.require_auth();
-
-        // POLICY LAYER 2: Enforce KYC gating.
-        // Pending businesses are explicitly rejected with KYCAlreadyPending so
-        // callers can distinguish "not yet approved" from "rejected/unknown".
-        // This is the primary anti-spam control: only vetted businesses may write
-        // invoice data to on-chain storage.
         crate::verification::require_business_not_pending(&env, &business)?;
-
-        // POLICY LAYER 3: Regulatory compliance gate (reserved seam — no-op today).
-        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
-        // jurisdiction-specific or on-chain oracle-based compliance checks without
-        // touching this call site.
         crate::regulatory::require_regulatory_ok(&env, &business)?;
 
-        // Amount must be positive and fit safely in i128 arithmetic.
-        // Without the upper bound an attacker could submit i128::MAX, causing
-        // fee calculations (amount * fee_bps / 10_000) to overflow at settlement
-        // and trap funds.
         if amount <= 0 || amount > MAX_INVOICE_AMOUNT {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        // Enforce per-business invoice cap.
         ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
 
         let invoice_id: BytesN<32> = env
@@ -190,6 +176,7 @@ impl QuickLendXContract {
         };
 
         InvoiceStorage::store_invoice(&env, &invoice);
+        crate::idempotency::store_idempotency_result(&env, &nonce, &invoice_id);
         Ok(invoice_id)
     }
 
@@ -392,10 +379,36 @@ impl QuickLendXContract {
         InvoiceStorage::get_count_by_status(&env, status)
     }
 
-    pub fn update_invoice_metadata(env: Env, invoice_id: BytesN<32>, metadata: InvoiceMetadata) -> Result<(), QuickLendXError> {
+    pub fn update_invoice_metadata(env: Env, invoice_id: BytesN<32>, metadata: InvoiceMetadata, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
+        if crate::idempotency::idempotency_exists(&env, &nonce) {
+            return Ok(());
+        }
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.update_metadata(metadata);
         InvoiceStorage::update_invoice(&env, &invoice);
+        crate::idempotency::store_idempotency(&env, &nonce);
+        Ok(())
+    }
+
+    pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
+        if crate::idempotency::idempotency_exists(&env, &nonce) {
+            return Ok(());
+        }
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        invoice.status = InvoiceStatus::Cancelled;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        crate::idempotency::store_idempotency(&env, &nonce);
+        Ok(())
+    }
+
+    pub fn complete_invoice(env: Env, invoice_id: BytesN<32>, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
+        if crate::idempotency::idempotency_exists(&env, &nonce) {
+            return Ok(());
+        }
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        invoice.status = InvoiceStatus::Paid;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        crate::idempotency::store_idempotency(&env, &nonce);
         Ok(())
     }
 
