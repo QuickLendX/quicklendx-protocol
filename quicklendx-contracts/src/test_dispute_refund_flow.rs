@@ -1,4 +1,4 @@
-//! End-to-end dispute-resolution-to-refund regression.
+﻿//! End-to-end dispute-resolution-to-refund regression.
 //!
 //! The investor remedy is only final if the dispute, invoice, escrow, bid,
 //! investment, status indexes, and token balances all agree after the refund.
@@ -83,10 +83,16 @@ fn setup_funded_invoice_for_dispute() -> FundedDisputeFixture {
         &String::from_str(&env, "Disputed goods delivery"),
         &InvoiceCategory::Goods,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount);
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &bid_amount,
+        &invoice_amount,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
     FundedDisputeFixture {
@@ -207,7 +213,7 @@ fn dispute_resolved_against_business_refund_aligns_terminal_statuses() {
         "second refund attempt must not move funds"
     );
 
-    let settle_after_refund = fx.client.try_settle_invoice(&fx.invoice_id, &fx.bid_amount);
+    let settle_after_refund = fx.client.try_settle_invoice(&fx.invoice_id, &fx.bid_amount, &fx.client.get_investment(&fx.invoice_id).unwrap());
     assert!(matches!(
         settle_after_refund,
         Err(Ok(QuickLendXError::InvalidStatus))
@@ -218,3 +224,4 @@ fn dispute_resolved_against_business_refund_aligns_terminal_statuses() {
         "settlement attempt after refund must not move funds"
     );
 }
+

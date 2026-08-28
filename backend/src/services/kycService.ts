@@ -14,7 +14,6 @@
 
 import * as crypto from "crypto";
 import { getPreparedStatement } from "../lib/database";
-import { getPolicyFields, FieldTier, isSecret } from "../lib/logging/policy";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -23,51 +22,116 @@ import { getPolicyFields, FieldTier, isSecret } from "../lib/logging/policy";
 const ALGO = "aes-256-gcm";
 const IV_BYTES = 12; // 96-bit IV for GCM
 const TAG_BYTES = 16;
+const ENVELOPE_V2_PREFIX = "v2:";
+const PBKDF2_ITERATIONS = 100000;
+const PBKDF2_SALT = "quicklendx-kyc-salt";
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
 /** Fields redacted to "[REDACTED]" on every decrypt() call. */
-export const SENSITIVE_FIELDS = getPolicyFields(FieldTier.SECRET);
+export const SENSITIVE_FIELDS = [
+  // snake_case (legacy/storage)
+  "tax_id",
+  "customer_name",
+  "customer_address",
+  "date_of_birth",
+  "dateOfBirth",
+  "ssn",
+  "passport_number",
+  "passportNumber",
+  "national_id",
+  "phone_number",
+  "email",
+  "bank_account",
+  "bankAccountNumber",
+  "routingNumber",
+  "kyc_document",
+  "kyc_data",
+  // camelCase (API/tests)
+  "taxId",
+  "dateOfBirth",
+  "passportNumber",
+  "bankAccountNumber",
+  "routingNumber",
+] as const;
+
 export type SensitiveField = (typeof SENSITIVE_FIELDS)[number];
 
-export const PII_FIELDS = getPolicyFields(FieldTier.SECRET);
+export const PII_FIELDS = [
+  "tax_id",
+  "customer_name",
+  "customer_address",
+  "date_of_birth",
+  "ssn",
+  "passport_number",
+  "national_id",
+  "phone_number",
+  "email",
+  "bank_account",
+  "ipAddress",
+] as const;
+
 export type PiiField = (typeof PII_FIELDS)[number];
 
-/**
- * Encryption key management
- * In production, this should be integrated with a secure key management service (KMS)
- */
-interface EncryptionConfig {
-  encryptionKey: string;
+// ---------------------------------------------------------------------------
+// KeyRing interface and implementation
+// ---------------------------------------------------------------------------
+
+export interface KeyRing {
+  getActiveKeyId(): string;
+  getKey(keyId: string): Buffer;
 }
 
-let encryptionConfig: EncryptionConfig | null = null;
+interface KeyConfig {
+  activeKeyId: string;
+  keys: Record<string, string>; // keyId -> master key (for PBKDF2)
+}
+
+let keyRing: KeyRing | null = null;
+let encryptionConfig: KeyConfig | null = null;
 
 /**
- * Initialize encryption with a master key
- * In production, this should come from environment variables or KMS
+ * Initialize encryption with a key ring (backward compatible with single key)
  */
-export function initializeEncryption(masterKey: string): void {
-  // Derive a 256-bit key from the master key using PBKDF2
-  const salt = crypto.createHash("sha256").update("quicklendx-kyc-salt").digest();
-  const key = crypto.pbkdf2Sync(masterKey, salt, 100000, 32, "sha256");
-  
-  encryptionConfig = {
-    encryptionKey: key.toString("hex")
+export function initializeEncryption(
+  masterKeyOrConfig: string | { activeKeyId: string; keys: Record<string, string> }
+): void {
+  if (typeof masterKeyOrConfig === "string") {
+    // Backward compatibility: single key, default keyId = "v1"
+    encryptionConfig = {
+      activeKeyId: "v1",
+      keys: { "v1": masterKeyOrConfig }
+    };
+  } else {
+    encryptionConfig = masterKeyOrConfig;
+  }
+
+  keyRing = {
+    getActiveKeyId(): string {
+      if (!encryptionConfig) throw new Error("Encryption not initialized");
+      return encryptionConfig.activeKeyId;
+    },
+    getKey(keyId: string): Buffer {
+      if (!encryptionConfig) throw new Error("Encryption not initialized");
+      const masterKey = encryptionConfig.keys[keyId];
+      if (!masterKey) throw new Error(`Key not found: ${keyId}`);
+      const salt = crypto.createHash("sha256").update(PBKDF2_SALT).digest();
+      return crypto.pbkdf2Sync(masterKey, salt, PBKDF2_ITERATIONS, 32, "sha256");
+    }
   };
 }
 
 /**
- * Encrypt sensitive data using AES-256-GCM
+ * Encrypt sensitive data using AES-256-GCM (legacy v1 format)
  */
 export function encryptSensitiveData(plaintext: string): string {
-  if (!encryptionConfig) {
+  if (!keyRing || !encryptionConfig) {
     throw new Error("Encryption not initialized. Call initializeEncryption first.");
   }
 
-  const key = Buffer.from(encryptionConfig.encryptionKey, "hex");
+  const key = keyRing.getKey(encryptionConfig.activeKeyId);
   const iv = crypto.randomBytes(IV_BYTES);
   const cipher = crypto.createCipheriv(ALGO, key, iv);
 
@@ -81,27 +145,90 @@ export function encryptSensitiveData(plaintext: string): string {
 }
 
 /**
- * Decrypt sensitive data
+ * Encrypt sensitive data using versioned envelope v2 format
  */
-export function decryptSensitiveData(ciphertext: string): string {
-  if (!encryptionConfig) {
+export function encryptSensitiveDataV2(plaintext: string): string {
+  if (!keyRing || !encryptionConfig) {
     throw new Error("Encryption not initialized. Call initializeEncryption first.");
   }
 
-  const key = Buffer.from(encryptionConfig.encryptionKey, "hex");
+  const keyId = keyRing.getActiveKeyId();
+  const key = keyRing.getKey(keyId);
+  const iv = crypto.randomBytes(IV_BYTES);
+  const cipher = crypto.createCipheriv(ALGO, key, iv);
+
+  let encrypted = cipher.update(plaintext, "utf8", "hex");
+  encrypted += cipher.final("hex");
   
-  // Extract IV, authTag, and encrypted data
-  const iv = Buffer.from(ciphertext.substring(0, IV_BYTES * 2), "hex");
-  const authTag = Buffer.from(ciphertext.substring(IV_BYTES * 2, IV_BYTES * 2 + TAG_BYTES * 2), "hex");
-  const encrypted = ciphertext.substring(IV_BYTES * 2 + TAG_BYTES * 2);
+  const authTag = cipher.getAuthTag();
 
-  const decipher = crypto.createDecipheriv(ALGO, key, iv);
-  decipher.setAuthTag(authTag);
+  // Envelope v2 format: "v2:<keyId>:<iv>:<authTag>:<encrypted>"
+  return `${ENVELOPE_V2_PREFIX}${keyId}:${iv.toString("hex")}:${authTag.toString("hex")}:${encrypted}`;
+}
 
-  let decrypted = decipher.update(encrypted, "hex", "utf8");
-  decrypted += decipher.final("utf8");
+/**
+ * Decrypt sensitive data (supports both v1 and v2 formats)
+ */
+export function decryptSensitiveDataAny(ciphertext: string): string {
+  if (!keyRing) {
+    throw new Error("Encryption not initialized. Call initializeEncryption first.");
+  }
 
-  return decrypted;
+  if (ciphertext.startsWith(ENVELOPE_V2_PREFIX)) {
+    // Handle v2 format
+    const parts = ciphertext.slice(ENVELOPE_V2_PREFIX.length).split(":");
+    if (parts.length !== 4) {
+      throw new Error("Invalid v2 envelope format");
+    }
+    const [keyId, ivHex, authTagHex, encryptedHex] = parts;
+    const key = keyRing.getKey(keyId);
+    const iv = Buffer.from(ivHex, "hex");
+    const authTag = Buffer.from(authTagHex, "hex");
+
+    const decipher = crypto.createDecipheriv(ALGO, key, iv);
+    decipher.setAuthTag(authTag);
+
+    let decrypted = decipher.update(encryptedHex, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  } else {
+    // Handle legacy v1 format
+    if (!encryptionConfig) {
+      throw new Error("Encryption not initialized");
+    }
+    // Use any available key to try decrypting v1 (backward compatible)
+    // First try active key, then try others
+    let key: Buffer | null = null;
+    try {
+      key = keyRing.getKey(encryptionConfig.activeKeyId);
+    } catch {
+      for (const k in encryptionConfig.keys) {
+        try {
+          key = keyRing.getKey(k);
+          break;
+        } catch {}
+      }
+    }
+    if (!key) throw new Error("No key available to decrypt v1 format");
+
+    const iv = Buffer.from(ciphertext.substring(0, IV_BYTES * 2), "hex");
+    const authTag = Buffer.from(ciphertext.substring(IV_BYTES * 2, IV_BYTES * 2 + TAG_BYTES * 2), "hex");
+    const encrypted = ciphertext.substring(IV_BYTES * 2 + TAG_BYTES * 2);
+
+    const decipher = crypto.createDecipheriv(ALGO, key, iv);
+    decipher.setAuthTag(authTag);
+
+    let decrypted = decipher.update(encrypted, "hex", "utf8");
+    decrypted += decipher.final("utf8");
+    return decrypted;
+  }
+}
+
+/**
+ * Decrypt sensitive data (legacy, alias for decryptSensitiveDataAny for backward compatibility)
+ */
+export function decryptSensitiveData(ciphertext: string): string {
+  return decryptSensitiveDataAny(ciphertext);
 }
 
 /**
@@ -409,12 +536,12 @@ export function isEncryptionInitialized(): boolean {
 }
 
 export function createKycRecord(id: string, userId: string, kycData: Record<string, any>): KycRecord {
-  const encryptedData = encryptSensitiveData(JSON.stringify(kycData));
-  return { id, userId, status: "submitted", encryptedData, submittedAt: Date.now(), metadata: { version: "1.0", lastUpdated: Date.now() } };
+  const encryptedData = encryptSensitiveDataV2(JSON.stringify(kycData));
+  return { id, userId, status: "submitted", encryptedData, submittedAt: Date.now(), metadata: { version: "2.0", lastUpdated: Date.now() } };
 }
 
 export function getKycData(kycRecord: KycRecord): Record<string, any> {
-  return JSON.parse(decryptSensitiveData(kycRecord.encryptedData));
+  return JSON.parse(decryptSensitiveDataAny(kycRecord.encryptedData));
 }
 
 export function getKycStatus(businessId: string): { status: string; verifiedAt?: number } | null {

@@ -27,7 +27,6 @@ use crate::QuickLendXContract;
 /// which requires the full contract environment with audit logging).
 fn make_invoice(env: &Env, idx: u32) -> Invoice {
     use crate::invoice::{Dispute, DisputeStatus, InvoiceCategory, InvoiceStatus, LineItemRecord};
-    use crate::types::OptionalDisputeResolution;
     use soroban_sdk::{vec, Address, BytesN, String};
 
     let mut id_bytes = [0u8; 32];
@@ -56,7 +55,7 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
         settled_at: None,
         average_rating: None,
         total_ratings: 0,
-        ratings: vec![env],
+        ratings: soroban_sdk::Vec::new(env),
         dispute_status: DisputeStatus::None,
         dispute: Dispute {
             created_by: Address::generate(env),
@@ -66,12 +65,14 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: Address::generate(env),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         },
         total_paid: 0,
-        payment_history: vec![env],
+        payment_history: soroban_sdk::Vec::new(env),
+    },
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
-}
 
 fn setup_env() -> Env {
     let env = Env::default();
@@ -247,6 +248,7 @@ fn test_invoice_storage() {
             resolution: String::from_str(&env, ""),
             resolved_by: Address::generate(&env),
             resolved_at: 0,
+            resolution_outcome: DisputeResolution::None,
         };
 
         let invoice = Invoice {
@@ -265,7 +267,9 @@ fn test_invoice_storage() {
             ratings: Vec::new(&env),
             created_at: 1234567890,
             updated_at: 1234567890,
-        };
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
+    };
 
         // Test storing invoice
         InvoiceStorage::store(&env, &invoice);
@@ -575,6 +579,7 @@ fn create_test_invoice(env: &Env, id: BytesN<32>, business: Address) -> Invoice 
         resolution: String::from_str(env, ""),
         resolved_by: Address::generate(env),
         resolved_at: 0,
+        resolution_outcome: DisputeResolution::None,
     };
 
     Invoice {
@@ -974,7 +979,7 @@ fn test_maximum_values(env: &Env) {
             resolution: String::from_str(env, ""),
             resolved_by: Address::generate(env),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         },
         total_paid: 0,
         payment_history: Vec::new(env),

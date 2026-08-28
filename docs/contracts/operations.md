@@ -102,6 +102,8 @@ See [`pause.rs`](../../quicklendx-contracts/src/pause.rs) and the
 - `pause(admin)` — enter full pause. Admin-only; exempt from its own guard.
 - `unpause(admin)` — exit full pause. Admin-only; exempt from its own guard.
 - `is_paused() → bool` — current pause status. Always available (no auth).
+- `is_entrypoint_paused(entrypoint) → bool` — returns whether a specific guarded write entrypoint
+  is currently blocked by pause. Use one of the stable `EP_*` symbols from `pause.rs`.
 
 ### How it works
 

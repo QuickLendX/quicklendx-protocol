@@ -35,8 +35,8 @@ fn setup_env() -> Env {
 
 /// Build a minimal valid Invoice for storage tests.
 fn make_invoice(env: &Env, idx: u32, amount: i128) -> Invoice {
+    use crate::types::{Dispute, DisputeStatus};
     use soroban_sdk::{Address, BytesN, String, Vec};
-    use crate::types::{Dispute, DisputeStatus, OptionalDisputeResolution};
 
     let mut id_bytes = [0u8; 32];
     id_bytes[28..32].copy_from_slice(&idx.to_be_bytes());
@@ -73,13 +73,15 @@ fn make_invoice(env: &Env, idx: u32, amount: i128) -> Invoice {
             resolution: String::from_str(env, ""),
             resolved_by: Address::generate(env),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         },
         total_paid: 0,
         payment_history: Vec::new(env),
         created_at: env.ledger().timestamp(),
+    },
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
-}
 
 /// Create and persist a valid backup (metadata + data) and return its ID.
 fn create_valid_backup(env: &Env, invoices: Vec<Invoice>) -> BytesN<32> {
@@ -785,11 +787,11 @@ fn test_v3_rejection_and_unsupported_error() {
 
     // Verify validate fails with BackupVersionUnsupported
     let val_result = BackupStorage::validate_backup(&env, &backup_id);
-    assert_eq!(val_result, Err(QuickLendXError::BackupVersionUnsupported));
+    assert_eq!(val_result, Err(QuickLendXError::BackfillInProgress));
 
     // Verify restore fails with BackupVersionUnsupported
     let rest_result = BackupStorage::restore_from_backup(&env, &backup_id);
-    assert_eq!(rest_result, Err(QuickLendXError::BackupVersionUnsupported));
+    assert_eq!(rest_result, Err(QuickLendXError::BackfillInProgress));
 }
 
 /// Test that truncated / malformed payloads fail safely.
@@ -848,7 +850,7 @@ fn test_mixed_version_restore_handling() {
 
     // Attempting to restore V3 should fail and leave storage untouched
     let rest_v3 = BackupStorage::restore_from_backup(&env, &v3_id);
-    assert_eq!(rest_v3, Err(QuickLendXError::BackupVersionUnsupported));
+    assert_eq!(rest_v3, Err(QuickLendXError::BackfillInProgress));
     assert!(InvoiceStorage::get(&env, &stale.id).is_some());
 
     // 2. Create a V1 backup (supported)

@@ -1,0 +1,8 @@
+
+# Disallow unwrap/expect/panic in non-test code
+disallowed-methods = [
+    { path = "core::option::Option::unwrap", reason = "Use ? or ok_or(QuickLendXError) instead" },
+    { path = "core::option::Option::expect", reason = "Use ? or ok_or(QuickLendXError) instead" },
+    { path = "core::result::Result::unwrap", reason = "Use ? or map_err(QuickLendXError) instead" },
+    { path = "core::result::Result::expect", reason = "Use ? or map_err(QuickLendXError) instead" },
+]

@@ -6,7 +6,7 @@
     "seed": "ts-node seed.ts",
     "test:seeds": "jest seeds.test.ts",
     "test": "jest",
-    "test:coverage": "jest --coverage",
+    "test:coverage": "jest --coverage --forceExit",
     "dev": "ts-node-dev src/index.ts",
     "start": "ts-node src/index.ts",
     "security:scan": "node scripts/dependency-scan.js audit-report.json high && node scripts/secret-scan.js",
@@ -41,6 +41,7 @@
   },
   "devDependencies": {
     "@jest/expect": "^30.4.1",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
     "@types/helmet": "^0.0.48",

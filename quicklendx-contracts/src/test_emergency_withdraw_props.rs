@@ -1,13 +1,12 @@
 #![cfg(test)]
 extern crate std;
 
+use alloc::boxed::Box;
 use proptest::prelude::*;
 use proptest::test_runner::{Config, TestRunner};
 use std::env;
 
-use crate::emergency::{
-    DEFAULT_EMERGENCY_EXPIRATION_SECS, DEFAULT_EMERGENCY_TIMELOCK_SECS,
-};
+use crate::emergency::{DEFAULT_EMERGENCY_EXPIRATION_SECS, DEFAULT_EMERGENCY_TIMELOCK_SECS};
 
 const MAX_TIME: u64 = 1_000_000;
 /// Maximum seconds the generated time may exceed the initiation window so that

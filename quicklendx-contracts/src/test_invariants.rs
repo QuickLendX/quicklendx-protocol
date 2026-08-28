@@ -1,4 +1,4 @@
-//! Protocol-wide invariant tests for status/index coherence.
+﻿//! Protocol-wide invariant tests for status/index coherence.
 //!
 //! These tests verify that the protocol maintains critical invariants:
 //! - Invoice status lists remain coherent with primary records
@@ -74,7 +74,7 @@ fn create_test_invoice(
             resolution: String::from_str(env, ""),
             resolved_by: Address::generate(env),
             resolved_at: 0,
-            resolution_outcome: crate::types::OptionalDisputeResolution::None,
+            resolution_outcome: DisputeResolution::None,
         },
         total_paid: 0,
         payment_history: Vec::new(env),
@@ -922,12 +922,14 @@ fn test_invariants_after_full_lifecycle() {
         &String::from_str(&env, "Full lifecycle invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     client.process_partial_payment(
@@ -994,7 +996,7 @@ fn test_invariants_multi_entity_stress() {
             &String::from_str(&env, "T"),
             &InvoiceCategory::Consulting,
             &Vec::new(&env),
-        );
+            &None);
         ids.push_back(id);
     }
 
@@ -1074,11 +1076,11 @@ fn invariant_funded_invoice_has_one_escrow_one_investment() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // Place and accept bid
-    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Before accept: no escrow, no investment
     assert!(client.try_get_invoice_investment(&invoice_id).is_err());
@@ -1132,9 +1134,9 @@ fn invariant_cancel_bid_no_orphan_escrow_investment() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Cancel before funding
     let cancel_result = client.cancel_bid(&bid_id);
@@ -1197,10 +1199,10 @@ fn invariant_refund_atomic_state_transitions() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Refund the escrow
@@ -1264,10 +1266,10 @@ fn invariant_default_atomic_state_transitions() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Fast-forward past due date + grace period
@@ -1335,10 +1337,10 @@ fn invariant_settle_atomic_state_transitions() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Provide settlement tokens
@@ -1346,7 +1348,7 @@ fn invariant_settle_atomic_state_transitions() {
     tok.approve(&business, &contract_id, &10_000i128, &exp);
 
     // Settle the invoice
-    client.settle_invoice(&invoice_id, &5_000i128);
+    client.settle_invoice(&invoice_id, &5_000i128, &client.get_investment(&invoice_id).unwrap());
 
     // All transitions should be atomic and consistent
     let invoice = client.get_invoice(&invoice_id);
@@ -1408,9 +1410,9 @@ fn invariant_validate_no_orphan_investments_after_lifecycle() {
         &String::from_str(&env, "T"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &4_000i128, &5_000i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // After accept: no orphans
@@ -1419,7 +1421,7 @@ fn invariant_validate_no_orphan_investments_after_lifecycle() {
     // Settle
     sac.mint(&business, &5_000i128);
     tok.approve(&business, &contract_id, &10_000i128, &exp);
-    client.settle_invoice(&invoice_id, &5_000i128);
+    client.settle_invoice(&invoice_id, &5_000i128, &client.get_investment(&invoice_id).unwrap());
 
     // After settle: no orphans
     assert!(client.validate_no_orphan_investments());
@@ -1470,3 +1472,4 @@ fn invariant_count_equals_index_length_all_statuses() {
     verify_count_eq_index(&client, InvoiceStatus::Cancelled);
     verify_count_eq_index(&client, InvoiceStatus::Refunded);
 }
+

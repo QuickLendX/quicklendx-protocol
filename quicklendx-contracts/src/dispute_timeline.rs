@@ -34,7 +34,7 @@
 
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
-use crate::types::{Dispute, DisputeResolution, DisputeStatus, OptionalDisputeResolution};
+use crate::types::{Dispute, DisputeResolution, DisputeStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 // ---------------------------------------------------------------------------
@@ -80,7 +80,7 @@ pub struct DisputeTimelineEntry {
     pub summary: String,
     /// Structured resolution outcome (only present for "Resolved" events
     /// that were resolved using resolve_dispute_structured).
-    pub resolution_outcome: Option<u32>,
+    pub resolution_outcome: DisputeResolution,
 }
 
 /// Paginated dispute timeline response.
@@ -188,7 +188,7 @@ fn build_all_entries(
             // so callers can verify finality without exposing review identity.
             actor: dispute.resolved_by.clone(),
             summary: dispute.resolution.clone(),
-            resolution_outcome: dispute.resolution_outcome.clone(),
+            resolution_outcome: dispute.resolution_outcome,
         });
     }
 

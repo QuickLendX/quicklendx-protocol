@@ -2,6 +2,8 @@
 
 This document describes the accepted event schemas for the POST `/api/v1/events` endpoint. Send either a single event object or an array of event objects. Unknown or malformed events are rejected with a structured 400 response and raw payload values are not echoed in validation errors.
 
+> **Note for Operators:** For recommendations on which events to alert on and reasonable volume thresholds, see the [Monitoring Guide](MONITORING.md).
+
 ## Supported Event Types
 
 ### InvoiceSettled

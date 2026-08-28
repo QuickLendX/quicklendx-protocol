@@ -48,7 +48,7 @@ fn test_get_invoices_by_category_services() {
         &String::from_str(&env, "Services Invoice 1"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let invoice2_id = client.store_invoice(
         &business,
@@ -58,7 +58,7 @@ fn test_get_invoices_by_category_services() {
         &String::from_str(&env, "Products Invoice"),
         &InvoiceCategory::Products,
         &Vec::new(&env),
-    );
+        &None);
 
     let invoice3_id = client.store_invoice(
         &business,
@@ -68,7 +68,7 @@ fn test_get_invoices_by_category_services() {
         &String::from_str(&env, "Services Invoice 2"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Query Services category
     let services = client.get_invoices_by_category(&InvoiceCategory::Services);
@@ -97,7 +97,7 @@ fn test_get_invoices_by_category_all_categories() {
         &String::from_str(&env, "Services"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let products_id = client.store_invoice(
         &business,
@@ -107,7 +107,7 @@ fn test_get_invoices_by_category_all_categories() {
         &String::from_str(&env, "Products"),
         &InvoiceCategory::Products,
         &Vec::new(&env),
-    );
+        &None);
 
     let consulting_id = client.store_invoice(
         &business,
@@ -117,7 +117,7 @@ fn test_get_invoices_by_category_all_categories() {
         &String::from_str(&env, "Consulting"),
         &InvoiceCategory::Consulting,
         &Vec::new(&env),
-    );
+        &None);
 
     let goods_id = client.store_invoice(
         &business,
@@ -127,7 +127,7 @@ fn test_get_invoices_by_category_all_categories() {
         &String::from_str(&env, "Technology"),
         &InvoiceCategory::Technology,
         &Vec::new(&env),
-    );
+        &None);
 
     // Verify each category
     let services = client.get_invoices_by_category(&InvoiceCategory::Services);
@@ -184,7 +184,7 @@ fn test_get_invoice_count_by_category_matches_list_length_for_each_category() {
         &String::from_str(&env, "svc-1"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &1001,
@@ -193,7 +193,7 @@ fn test_get_invoice_count_by_category_matches_list_length_for_each_category() {
         &String::from_str(&env, "svc-2"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &1100,
@@ -202,7 +202,7 @@ fn test_get_invoice_count_by_category_matches_list_length_for_each_category() {
         &String::from_str(&env, "prod"),
         &InvoiceCategory::Products,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &1200,
@@ -211,7 +211,7 @@ fn test_get_invoice_count_by_category_matches_list_length_for_each_category() {
         &String::from_str(&env, "consult"),
         &InvoiceCategory::Consulting,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &1300,
@@ -220,7 +220,7 @@ fn test_get_invoice_count_by_category_matches_list_length_for_each_category() {
         &String::from_str(&env, "manufact"),
         &InvoiceCategory::Manufacturing,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &1400,
@@ -229,7 +229,7 @@ fn test_get_invoice_count_by_category_matches_list_length_for_each_category() {
         &String::from_str(&env, "tech"),
         &InvoiceCategory::Technology,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &1500,
@@ -238,7 +238,7 @@ fn test_get_invoice_count_by_category_matches_list_length_for_each_category() {
         &String::from_str(&env, "health"),
         &InvoiceCategory::Healthcare,
         &Vec::new(&env),
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &1600,
@@ -247,7 +247,7 @@ fn test_get_invoice_count_by_category_matches_list_length_for_each_category() {
         &String::from_str(&env, "other"),
         &InvoiceCategory::Other,
         &Vec::new(&env),
-    );
+        &None);
 
     let categories = [
         InvoiceCategory::Services,
@@ -321,7 +321,7 @@ fn test_get_invoices_by_category_with_status_filter() {
         &String::from_str(&env, "Pending Services"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let verified_id = client.store_invoice(
         &business,
@@ -331,7 +331,7 @@ fn test_get_invoices_by_category_with_status_filter() {
         &String::from_str(&env, "Verified Services"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&verified_id);
 
     let _products_pending_id = client.store_invoice(
@@ -342,7 +342,7 @@ fn test_get_invoices_by_category_with_status_filter() {
         &String::from_str(&env, "Pending Products"),
         &InvoiceCategory::Products,
         &Vec::new(&env),
-    );
+        &None);
 
     // Query Services category (should get both pending and verified)
     let services = client.get_invoices_by_category(&InvoiceCategory::Services);
@@ -387,7 +387,7 @@ fn test_get_invoices_by_tag_single_tag() {
         &String::from_str(&env, "Invoice 1"),
         &InvoiceCategory::Services,
         &tags1,
-    );
+        &None);
 
     let invoice2_id = client.store_invoice(
         &business,
@@ -397,7 +397,7 @@ fn test_get_invoices_by_tag_single_tag() {
         &String::from_str(&env, "Invoice 2"),
         &InvoiceCategory::Services,
         &tags2,
-    );
+        &None);
 
     let _invoice3_id = client.store_invoice(
         &business,
@@ -407,7 +407,7 @@ fn test_get_invoices_by_tag_single_tag() {
         &String::from_str(&env, "Invoice 3"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Query by "urgent" tag
     let urgent_invoices = client.get_invoices_by_tag(&String::from_str(&env, "urgent"));
@@ -452,7 +452,7 @@ fn test_get_invoices_by_tags_multiple() {
         &String::from_str(&env, "Invoice 1"),
         &InvoiceCategory::Services,
         &tags1,
-    );
+        &None);
 
     let invoice2_id = client.store_invoice(
         &business,
@@ -462,7 +462,7 @@ fn test_get_invoices_by_tags_multiple() {
         &String::from_str(&env, "Invoice 2"),
         &InvoiceCategory::Services,
         &tags2,
-    );
+        &None);
 
     let invoice3_id = client.store_invoice(
         &business,
@@ -472,7 +472,7 @@ fn test_get_invoices_by_tags_multiple() {
         &String::from_str(&env, "Invoice 3"),
         &InvoiceCategory::Services,
         &tags3,
-    );
+        &None);
 
     // Query by multiple tags (urgent AND tech)
     let mut search_tags = Vec::new(&env);
@@ -525,7 +525,7 @@ fn test_get_invoice_count_by_tag_matches_list_length_for_various_tags() {
         &String::from_str(&env, "i1"),
         &InvoiceCategory::Services,
         &tags1,
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &1100,
@@ -534,7 +534,7 @@ fn test_get_invoice_count_by_tag_matches_list_length_for_various_tags() {
         &String::from_str(&env, "i2"),
         &InvoiceCategory::Products,
         &tags2,
-    );
+        &None);
     let _ = client.store_invoice(
         &business,
         &1200,
@@ -543,7 +543,7 @@ fn test_get_invoice_count_by_tag_matches_list_length_for_various_tags() {
         &String::from_str(&env, "i3"),
         &InvoiceCategory::Technology,
         &tags3,
-    );
+        &None);
 
     let query_tags = [
         String::from_str(&env, "urgent"),
@@ -578,7 +578,7 @@ fn test_update_invoice_category() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Verify initial category
     let invoice = client.get_invoice(&invoice_id);
@@ -614,7 +614,7 @@ fn test_update_invoice_category_business_auth() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Note: With mock_all_auths(), authorization is bypassed
     // This test documents that update_invoice_category requires business owner auth
@@ -644,7 +644,7 @@ fn test_add_invoice_tag() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Add tag
     client.add_invoice_tag(&invoice_id, &String::from_str(&env, "urgent"));
@@ -669,7 +669,7 @@ fn test_add_multiple_tags() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Add multiple tags
     client.add_invoice_tag(&invoice_id, &String::from_str(&env, "urgent"));
@@ -702,7 +702,7 @@ fn test_add_invoice_tag_business_auth() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Note: With mock_all_auths(), authorization is bypassed
     // This test documents that add_invoice_tag requires business owner auth
@@ -735,7 +735,7 @@ fn test_remove_invoice_tag() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
 
     // Verify tags exist
     let urgent = client.get_invoices_by_tag(&String::from_str(&env, "urgent"));
@@ -771,7 +771,7 @@ fn test_remove_invoice_tag_business_auth() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
 
     // Note: With mock_all_auths(), authorization is bypassed
     // This test documents that remove_invoice_tag requires business owner auth
@@ -800,7 +800,7 @@ fn test_get_invoice_tags_returns_all_tags() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.add_invoice_tag(&invoice_id, &String::from_str(&env, "a"));
     client.add_invoice_tag(&invoice_id, &String::from_str(&env, "b"));
@@ -828,7 +828,7 @@ fn test_invoice_has_tag_true_and_false() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.add_invoice_tag(&invoice_id, &String::from_str(&env, "present"));
 
@@ -851,7 +851,7 @@ fn test_add_invoice_tag_duplicate_idempotent() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let tag = String::from_str(&env, "dup");
     client.add_invoice_tag(&invoice_id, &tag);
@@ -877,13 +877,10 @@ fn test_remove_invoice_tag_nonexistent_fails() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let result = client.try_remove_invoice_tag(&invoice_id, &String::from_str(&env, "nonexistent"));
-    assert!(
-        result.is_err(),
-        "remove_invoice_tag should fail for nonexistent tag"
-    );
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvoiceTagNotFound);
 }
 
 #[test]
@@ -901,7 +898,7 @@ fn test_update_invoice_category_index_update() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     assert!(client
         .get_invoices_by_category(&InvoiceCategory::Services)
@@ -934,7 +931,7 @@ fn test_add_tag_to_nonexistent_invoice() {
     let fake_id = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
 
     let result = client.try_add_invoice_tag(&fake_id, &String::from_str(&env, "urgent"));
-    assert!(result.is_err(), "Should fail for nonexistent invoice");
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvoiceNotFound);
 }
 
 #[test]
@@ -943,7 +940,7 @@ fn test_remove_tag_from_nonexistent_invoice() {
     let fake_id = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
 
     let result = client.try_remove_invoice_tag(&fake_id, &String::from_str(&env, "urgent"));
-    assert!(result.is_err(), "Should fail for nonexistent invoice");
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvoiceNotFound);
 }
 
 #[test]
@@ -952,7 +949,7 @@ fn test_update_category_nonexistent_invoice() {
     let fake_id = soroban_sdk::BytesN::from_array(&env, &[0u8; 32]);
 
     let result = client.try_update_invoice_category(&fake_id, &InvoiceCategory::Products);
-    assert!(result.is_err(), "Should fail for nonexistent invoice");
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvoiceNotFound);
 }
 
 // ============================================================================
@@ -978,7 +975,7 @@ fn test_complete_category_and_tag_workflow() {
         &String::from_str(&env, "Invoice"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
 
     // Verify initial state
     let services = client.get_invoices_by_category(&InvoiceCategory::Services);
@@ -1079,7 +1076,7 @@ fn test_category_index_old_bucket_cleared_after_update() {
         &String::from_str(&env, "Stale-entry regression"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.update_invoice_category(&id, &InvoiceCategory::Consulting);
 
@@ -1110,7 +1107,7 @@ fn test_category_index_no_stale_across_full_chain() {
         &String::from_str(&env, "Chain regression"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let chain = [
         InvoiceCategory::Products,
@@ -1154,7 +1151,7 @@ fn test_category_index_no_duplicate_on_same_category_update() {
         &String::from_str(&env, "Idempotent update regression"),
         &InvoiceCategory::Manufacturing,
         &Vec::new(&env),
-    );
+        &None);
 
     let count_before = client.get_invoice_count_by_category(&InvoiceCategory::Manufacturing);
     client.update_invoice_category(&id, &InvoiceCategory::Manufacturing);
@@ -1181,7 +1178,7 @@ fn test_category_index_sibling_invoices_unaffected() {
         &String::from_str(&env, "Sibling A"),
         &InvoiceCategory::Technology,
         &Vec::new(&env),
-    );
+        &None);
     let id_b = client.store_invoice(
         &business,
         &2000,
@@ -1190,7 +1187,7 @@ fn test_category_index_sibling_invoices_unaffected() {
         &String::from_str(&env, "Sibling B"),
         &InvoiceCategory::Technology,
         &Vec::new(&env),
-    );
+        &None);
 
     client.update_invoice_category(&id_a, &InvoiceCategory::Other);
 
@@ -1220,7 +1217,7 @@ fn test_category_count_consistent_with_list_after_updates() {
         &String::from_str(&env, "c1"),
         &InvoiceCategory::Healthcare,
         &Vec::new(&env),
-    );
+        &None);
     let id2 = client.store_invoice(
         &business,
         &1001,
@@ -1229,7 +1226,7 @@ fn test_category_count_consistent_with_list_after_updates() {
         &String::from_str(&env, "c2"),
         &InvoiceCategory::Healthcare,
         &Vec::new(&env),
-    );
+        &None);
 
     // Move id1 to Products.
     client.update_invoice_category(&id1, &InvoiceCategory::Products);
@@ -1265,7 +1262,7 @@ fn test_category_index_no_duplicate_on_store_twice() {
         &String::from_str(&env, "Dedup regression"),
         &InvoiceCategory::Other,
         &Vec::new(&env),
-    );
+        &None);
 
     // Directly verify the deduplication guard in add_category_index by checking
     // the count equals 1 after a single store.

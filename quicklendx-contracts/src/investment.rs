@@ -356,6 +356,7 @@ impl InvestmentStorage {
     }
 
     pub fn store_investment(env: &Env, investment: &Investment) {
+        crate::assert_view_only!(env);
         env.storage()
             .persistent()
             .set(&investment.investment_id, investment);
@@ -406,6 +407,7 @@ impl InvestmentStorage {
     /// Panics (contract error) if the transition `old_status -> new_status` is
     /// not in the allowed set defined by `InvestmentStatus::validate_transition`.
     pub fn update_investment(env: &Env, investment: &Investment) {
+        crate::assert_view_only!(env);
         // Retrieve the previous status to validate the transition.
         let previous_status = env
             .storage()
@@ -485,6 +487,36 @@ impl InvestmentStorage {
             extend_persistent_ttl(env, &ACTIVE_INDEX_KEY);
         }
         result
+    }
+
+    /// Return the principal reserved by all active investments for an investor.
+    ///
+    /// The active index is the authoritative reservation set. Terminal
+    /// investments are deliberately excluded, so a completed, defaulted,
+    /// refunded, or withdrawn position releases exposure without requiring a
+    /// second analytics counter to be kept in sync. A malformed non-positive
+    /// active record, missing indexed record, or arithmetic overflow fails
+    /// closed by returning `i128::MAX`.
+    pub fn get_active_investment_amount_sum_for_investor(env: &Env, investor: &Address) -> i128 {
+        let mut total = 0i128;
+        for investment_id in Self::get_active_investment_ids(env).iter() {
+            let Some(investment) = Self::get_investment(env, &investment_id) else {
+                return i128::MAX;
+            };
+            if investment.status != InvestmentStatus::Active {
+                return i128::MAX;
+            }
+            if investment.investor == *investor {
+                if investment.amount <= 0 {
+                    return i128::MAX;
+                }
+                total = match total.checked_add(investment.amount) {
+                    Some(value) => value,
+                    None => return i128::MAX,
+                };
+            }
+        }
+        total
     }
 
     /// Scan the active index and verify every listed investment is still `Active`.
@@ -583,4 +615,12 @@ impl InvestmentStorage {
         }
         result
     }
+}
+
+/// Requires that the investment is active.
+pub fn require_investment_active(investment: &Investment) -> Result<(), QuickLendXError> {
+    if investment.status != InvestmentStatus::Active {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+    Ok(())
 }

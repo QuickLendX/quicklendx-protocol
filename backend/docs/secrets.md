@@ -54,6 +54,9 @@ The scanner is also exercised by `backend/tests/secret-scan.test.ts` during `npm
 | `RATE_LIMIT_POINTS` | no | `100` | Requests per IP per minute |
 | `ADMIN_API_KEY` | yes | — | Min 32 chars; set via CI secret |
 | `WEBHOOK_SECRET` | yes | — | Min 16 chars; set via CI secret |
+| `KYC_ENCRYPTION_KEY` | no | — | Master key for KYC data encryption (single key mode) |
+| `KYC_ENCRYPTION_KEY_V1` | no | — | V1 master key for KYC data encryption (key ring mode) |
+| `KYC_ENCRYPTION_KEY_V2` | no | — | V2 master key for KYC data encryption (key ring mode) |
 
 Config is validated at startup via `src/config.ts` (zod). The app throws immediately if required vars are missing, listing field names only — values are never logged.
 
@@ -69,6 +72,23 @@ Set secrets through your CI/CD provider (GitHub Actions secrets, AWS SSM, etc.).
     WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
     NODE_ENV: production
 ```
+
+## KYC Key Rotation
+
+To rotate KYC encryption keys:
+
+1. Generate a new secure master key (use a cryptographically secure random generator)
+2. Add the new key to your environment variables (e.g., `KYC_ENCRYPTION_KEY_V2`)
+3. Run the migration script in dry run mode to verify:
+   ```bash
+   cd backend
+   DRY_RUN=true ts-node scripts/rotate-kyc-keys.ts
+   ```
+4. If dry run succeeds, apply changes:
+   ```bash
+   DRY_RUN=false ts-node scripts/rotate-kyc-keys.ts
+   ```
+5. Update your application configuration to use the new key as active
 
 ## Safe overrides
 

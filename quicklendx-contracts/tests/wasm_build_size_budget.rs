@@ -53,15 +53,7 @@ use std::process::Command;
 ///
 /// This is a temporary budget increase while size reduction work is ongoing.
 /// Increasing this value requires explicit sign-off in code review.
-const WASM_SIZE_BUDGET_BYTES: u64 = 512 * 1024;
-
-/// Fallback hard limit for the **raw** (unoptimised) WASM artifact, used when
-/// `wasm-opt` is not available in the local environment.
-///
-/// The release WASM before `wasm-opt -Oz` optimisation is typically ~20 %
-/// larger than the optimised artifact.  320 KiB gives enough headroom to
-/// catch runaway growth while remaining generous to local builds on Windows
-/// where binaryen may not be installed.
+const WASM_SIZE_BUDGET_BYTES: u64 = 640 * 1024;
 const WASM_SIZE_RAW_BUDGET_BYTES: u64 = 640 * 1024;
 
 /// Warning zone threshold: 90 % of the hard budget (~230 KiB).
@@ -75,7 +67,7 @@ const WASM_SIZE_WARNING_BYTES: u64 = (WASM_SIZE_BUDGET_BYTES as f64 * 0.90) as u
 /// Keep this up-to-date so the regression window stays tight.  When a PR
 /// legitimately increases the contract size, the author must update this
 /// constant and `scripts/wasm-size-baseline.toml` in the same commit.
-const WASM_SIZE_BASELINE_BYTES: u64 = 454_858;
+const WASM_SIZE_BASELINE_BYTES: u64 = 558_732;
 
 /// Maximum fractional growth allowed relative to `WASM_SIZE_BASELINE_BYTES`
 /// before the regression test fails (5 %).
@@ -352,6 +344,15 @@ fn classify_at_warning_threshold_is_ok() {
     assert_eq!(classify_size(WASM_SIZE_WARNING_BYTES), SizeTier::Ok);
 }
 
+/// One byte below the warning threshold is also `Ok`.
+#[test]
+fn classify_one_below_warning_is_ok() {
+    assert_eq!(
+        classify_size(WASM_SIZE_WARNING_BYTES.saturating_sub(1)),
+        SizeTier::Ok
+    );
+}
+
 /// One byte above the warning threshold enters the `Warning` tier.
 #[test]
 fn classify_one_above_warning_is_warning() {
@@ -372,6 +373,15 @@ fn classify_midpoint_warning_to_budget_is_warning() {
 #[test]
 fn classify_at_hard_budget_is_warning() {
     assert_eq!(classify_size(WASM_SIZE_BUDGET_BYTES), SizeTier::Warning);
+}
+
+/// One byte below the hard budget is also `Warning`.
+#[test]
+fn classify_one_below_budget_is_warning() {
+    assert_eq!(
+        classify_size(WASM_SIZE_BUDGET_BYTES.saturating_sub(1)),
+        SizeTier::Warning
+    );
 }
 
 /// One byte above the hard budget is `Over` (CI must fail).

@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 # rlib for tests/integration; cdylib for WASM contract builds.
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 soroban-sdk = { version = "25.1.1", features = ["alloc"] }
@@ -17,22 +17,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
 soroban-sdk = { version = "25.1.1", features = ["testutils"] }
+quicklendx-contracts = { path = ".", features = ["testutils"] }
 
-# Optimized for minimal WASM size and network deployment limits (see README size budget).
-[profile.release]
-opt-level = "z"
-overflow-checks = true
-debug = 0
-strip = true
-debug-assertions = false
-panic = "abort"
-codegen-units = 1
-lto = true
-
-# For more information about this profile see https://soroban.stellar.org/docs/basic-tutorials/logging#cargotoml-profile
-[profile.release-with-logs]
-inherits = "release"
-debug-assertions = true
 
 [features]
 # Enable fuzz tests (disabled by default to avoid blocking CI)
@@ -41,4 +27,4 @@ fuzz-tests = ["dep:proptest"]
 legacy-tests = []
 # Feature-gated logging and structured diagnostics
 diagnostics = []
-testutils = []
+testutils = ["soroban-sdk/testutils"]

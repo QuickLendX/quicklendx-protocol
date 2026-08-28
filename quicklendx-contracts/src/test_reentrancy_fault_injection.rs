@@ -1,4 +1,4 @@
-//! Hostile token reentrancy fault-injection tests.
+﻿//! Hostile token reentrancy fault-injection tests.
 //!
 //! This suite validates that every payment/escrow funds-moving entrypoint
 //! cannot be re-entered (directly or indirectly) during a token transfer.
@@ -20,11 +20,11 @@
 
 use crate::errors::QuickLendXError;
 use crate::reentrancy::{is_payment_guard_locked, with_payment_guard};
-use crate::types::{BidStatus, EscrowStatus, InvoiceCategory, InvoiceStatus, InvestmentStatus};
-use crate::{QuickLendXContractClient, QuickLendXContract};
+use crate::types::{BidStatus, EscrowStatus, InvestmentStatus, InvoiceCategory, InvoiceStatus};
+use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
-    contract, contractimpl, contracttype, testutils::Address as _, token, Address, BytesN, Env, String,
-    Vec,
+    contract, contractimpl, contracttype, testutils::Address as _, token, Address, BytesN, Env,
+    String, Vec,
 };
 
 // ----------------------------
@@ -88,12 +88,15 @@ impl HostileToken {
 
     /// Hostile re-entry hook entrypoint called from the token client.
     ///
-    /// In this repository’s Soroban tests we don't use callback-based Stellar Asset.
+    /// In this repositoryâ€™s Soroban tests we don't use callback-based Stellar Asset.
     /// Instead, QuickLendX must call into *this* token contract for transfers.
     ///
     /// NOTE: This token contract implements only the pieces needed by the tests.
     pub fn transfer_reenter(env: Env, to: Address, amount: i128, which: u32) {
-        let me: HostileToken = env.storage().instance().get_unchecked(&env, &String::from_str(&env, "self"));
+        let me: HostileToken = env
+            .storage()
+            .instance()
+            .get_unchecked(&env, &String::from_str(&env, "self"));
         let _ = (to, amount, which);
         // No-op: placeholder to satisfy compiler if not used.
         // Real re-entry behavior is implemented in `transfer` below.
@@ -107,8 +110,7 @@ impl HostileToken {
     // The goal is re-entry, not accounting accuracy.
 
     pub fn transfer(env: Env, from: Address, to: Address, amount: i128) {
-        let (target, invoice_id, bid_id, admin, business, investor, remaining) =
-            read_state(&env);
+        let (target, invoice_id, bid_id, admin, business, investor, remaining) = read_state(&env);
 
         // Re-enter only while depth remains.
         if remaining == 0 {
@@ -146,7 +148,7 @@ impl HostileToken {
                 );
             }
             2 => {
-                let _ = qc.try_settle_invoice(&invoice_id, &1i128);
+                let _ = qc.try_settle_invoice(&invoice_id, &1i128, &qc.get_investment(&invoice_id).unwrap());
             }
             3 => {
                 let _ = qc.try_refund_escrow_funds(&invoice_id, &admin);
@@ -160,13 +162,7 @@ impl HostileToken {
         let _ = (from, to, amount);
     }
 
-    pub fn transfer_from(
-        env: Env,
-        spender: Address,
-        from: Address,
-        to: Address,
-        amount: i128,
-    ) {
+    pub fn transfer_from(env: Env, spender: Address, from: Address, to: Address, amount: i128) {
         let _ = (spender, from, to, amount);
         // Delegate to `transfer` to trigger re-entry.
         let to2 = to;
@@ -174,15 +170,37 @@ impl HostileToken {
     }
 }
 
-fn read_state(env: &Env) -> (Address, BytesN<32>, BytesN<32>, Address, Address, Address, u32) {
-    let target = env.storage().instance().get(&String::from_str(env, "target")).unwrap();
+fn read_state(
+    env: &Env,
+) -> (
+    Address,
+    BytesN<32>,
+    BytesN<32>,
+    Address,
+    Address,
+    Address,
+    u32,
+) {
+    let target = env
+        .storage()
+        .instance()
+        .get(&String::from_str(env, "target"))
+        .unwrap();
     let invoice_id = env
         .storage()
         .instance()
         .get(&String::from_str(env, "invoice"))
         .unwrap();
-    let bid_id = env.storage().instance().get(&String::from_str(env, "bid")).unwrap();
-    let admin = env.storage().instance().get(&String::from_str(env, "admin")).unwrap();
+    let bid_id = env
+        .storage()
+        .instance()
+        .get(&String::from_str(env, "bid"))
+        .unwrap();
+    let admin = env
+        .storage()
+        .instance()
+        .get(&String::from_str(env, "admin"))
+        .unwrap();
     let business = env
         .storage()
         .instance()
@@ -200,13 +218,7 @@ fn read_state(env: &Env) -> (Address, BytesN<32>, BytesN<32>, Address, Address, 
         .unwrap_or(0u32);
 
     (
-        target,
-        invoice_id,
-        bid_id,
-        admin,
-        business,
-        investor,
-        remaining,
+        target, invoice_id, bid_id, admin, business, investor, remaining,
     )
 }
 
@@ -220,13 +232,27 @@ fn store_state(
     investor: &Address,
     remaining: u32,
 ) {
-    env.storage().instance().set(&String::from_str(env, "target"), target);
-    env.storage().instance().set(&String::from_str(env, "invoice"), invoice_id);
-    env.storage().instance().set(&String::from_str(env, "bid"), bid_id);
-    env.storage().instance().set(&String::from_str(env, "admin"), admin);
-    env.storage().instance().set(&String::from_str(env, "biz"), business);
-    env.storage().instance().set(&String::from_str(env, "inv"), investor);
-    env.storage().instance().set(&String::from_str(env, "rem"), remaining);
+    env.storage()
+        .instance()
+        .set(&String::from_str(env, "target"), target);
+    env.storage()
+        .instance()
+        .set(&String::from_str(env, "invoice"), invoice_id);
+    env.storage()
+        .instance()
+        .set(&String::from_str(env, "bid"), bid_id);
+    env.storage()
+        .instance()
+        .set(&String::from_str(env, "admin"), admin);
+    env.storage()
+        .instance()
+        .set(&String::from_str(env, "biz"), business);
+    env.storage()
+        .instance()
+        .set(&String::from_str(env, "inv"), investor);
+    env.storage()
+        .instance()
+        .set(&String::from_str(env, "rem"), remaining);
 }
 
 // ----------------------------
@@ -289,10 +315,10 @@ impl Fixture {
             &String::from_str(&env, "hostile-inj"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
         client.verify_invoice(&invoice_id);
 
-        let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &(1_100i128));
+        let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &(1_100i128), &BytesN::from_array(&env, &[0u8; 32]));
         client.accept_bid(&invoice_id, &bid_id);
 
         // Register hostile token and set as invoice currency by creating a new invoice.
@@ -321,9 +347,9 @@ impl Fixture {
             &String::from_str(&env, "hostile-inj-2"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        );
+            &None);
         client.verify_invoice(&invoice_id2);
-        let bid_id2 = client.place_bid(&investor, &invoice_id2, &1_000i128, &1_100i128);
+        let bid_id2 = client.place_bid(&investor, &invoice_id2, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
         // At this point escrow creation will attempt token transfer from investor to contract.
         // The token call will trigger hostile re-entry.
@@ -384,14 +410,15 @@ fn test_hostile_token_reentry_accept_bid_and_fund_is_blocked_p0() {
 fn test_hostile_token_reentry_deeply_nested_and_alternating_entrypoints_are_blocked() {
     let fixture = Fixture::new();
 
+    fixture.client.approve_early_escrow_release(&fixture.invoice_id, &fixture.business);
+    fixture.client.approve_early_escrow_release(&fixture.invoice_id, &fixture.investor);
+
     // We invoke one guarded entrypoint with guard held by the test harness.
     // During token transfer, HostileToken will attempt to re-enter different entrypoints.
     // All attempts must be blocked pre-mutation.
     let result = fixture.env.as_contract(&fixture.contract_id, || {
         with_payment_guard(&fixture.env, || {
-            fixture
-                .client
-                .try_release_escrow_funds(&fixture.invoice_id)
+            fixture.client.try_release_escrow_funds(&fixture.invoice_id)
         })
     });
 

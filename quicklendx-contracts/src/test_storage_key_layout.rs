@@ -15,6 +15,8 @@
 
 #![cfg(test)]
 
+extern crate alloc;
+use alloc::{format, vec::Vec};
 use soroban_sdk::{symbol_short, testutils::Address as _, Address, BytesN, Env, String};
 
 use crate::storage::{DataKey, Indexes, StorageKeys};
@@ -64,6 +66,26 @@ fn test_storage_key_investment_count_stable() {
     assert_eq!(StorageKeys::investment_count(), symbol_short!("inv_cnt"));
 }
 
+/// STORAGE CLASS: Persistent
+#[test]
+fn test_storage_key_business_default_history_stable() {
+    let env = setup();
+    assert_snapshot_entry("business_default_history", "biz_def_h");
+    let addr = Address::generate(&env);
+    let (sym, _) = StorageKeys::business_default_history(&addr);
+    assert_eq!(sym, symbol_short!("biz_def_h"));
+}
+
+/// STORAGE CLASS: Persistent
+#[test]
+fn test_storage_key_investor_default_history_stable() {
+    let env = setup();
+    assert_snapshot_entry("investor_default_history", "inv_def_h");
+    let addr = Address::generate(&env);
+    let (sym, _) = StorageKeys::investor_default_history(&addr);
+    assert_eq!(sym, symbol_short!("inv_def_h"));
+}
+
 // ---------------------------------------------------------------------------
 // Indexes — invoice secondary indexes (all Persistent)
 // ---------------------------------------------------------------------------
@@ -94,7 +116,7 @@ fn test_index_invoices_by_status_stable() {
     ];
     for (expected, status) in cases {
         assert_snapshot_entry(&format!("InvoiceStatus::{:?}", status), expected);
-        let (sym, status_sym) = Indexes::invoices_by_status(status.clone());
+        let (sym, status_sym) = Indexes::invoices_by_status(*status);
         assert_eq!(
             sym,
             symbol_short!("inv_st"),
@@ -167,7 +189,7 @@ fn test_index_invoices_by_category_stable() {
     ];
     for (expected, category) in cases {
         assert_snapshot_entry(&format!("InvoiceCategory::{:?}", category), expected);
-        let (sym, cat_sym) = Indexes::invoices_by_category(category.clone());
+        let (sym, cat_sym) = Indexes::invoices_by_category(*category);
         assert_eq!(
             sym,
             symbol_short!("inv_cat"),
@@ -231,7 +253,7 @@ fn test_index_bids_by_status_stable() {
     ];
     for (expected, status) in cases {
         assert_snapshot_entry(&format!("BidStatus::{:?}", status), expected);
-        let (sym, status_sym) = Indexes::bids_by_status(status.clone());
+        let (sym, status_sym) = Indexes::bids_by_status(*status);
         assert_eq!(
             sym,
             symbol_short!("bids_stat"),
@@ -291,7 +313,7 @@ fn test_index_investments_by_status_stable() {
     ];
     for (expected, status) in cases {
         assert_snapshot_entry(&format!("InvestmentStatus::{:?}", status), expected);
-        let (sym, status_sym) = Indexes::investments_by_status(status.clone());
+        let (sym, status_sym) = Indexes::investments_by_status(*status);
         assert_eq!(
             sym,
             symbol_short!("inv_st"),
@@ -341,6 +363,13 @@ fn test_bid_storage_ttl_key_stable() {
 fn test_bid_storage_max_active_bids_key_stable() {
     assert_snapshot_entry("max_active_bids_per_investor", "mx_actbd");
     assert_eq!(symbol_short!("mx_actbd"), symbol_short!("mx_actbd"));
+}
+
+/// STORAGE CLASS: Instance  Namespace: bid_grace (admin-configurable bid expiry grace period)
+#[test]
+fn test_bid_storage_expiry_grace_key_stable() {
+    assert_snapshot_entry("bid_expiry_grace_seconds", "bid_grace");
+    assert_eq!(symbol_short!("bid_grace"), symbol_short!("bid_grace"));
 }
 
 // ---------------------------------------------------------------------------

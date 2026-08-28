@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { ulid } from 'ulid';
 import { getDatabase, getPreparedStatement } from '../lib/database';
+import { CircuitBreaker } from '../lib/circuitBreaker';
 import {
   NotificationEvent,
   NotificationType,
@@ -9,6 +10,8 @@ import {
 } from '../types/contract';
 import { config } from '../config';
 import { NotificationDedupCache } from './notificationDedupCache';
+import { auditService } from './auditService';
+import { alertRouter, Severity } from './alertRouter';
 
 // Map NotificationType enum values to the notify_* column names
 const PREF_COLUMN: Record<NotificationType, string> = {
@@ -22,6 +25,7 @@ export class NotificationService {
   private static instance: NotificationService;
   private transporter: nodemailer.Transporter;
   private dedupCache: NotificationDedupCache;
+  private circuitBreaker: CircuitBreaker;
 
   private constructor() {
     this.dedupCache = new NotificationDedupCache(
@@ -340,10 +344,11 @@ export class NotificationService {
   }
 
   /**
-   * Number of cache entries evicted due to max-size (for metrics / #1054).
+   * Close the SMTP transport during graceful shutdown so in-flight sends
+   * complete and no new ones start.
    */
-  get dedupCacheEvictions(): number {
-    return this.dedupCache.evictions;
+  public closeTransport(): void {
+    this.transporter.close();
   }
 }
 

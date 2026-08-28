@@ -59,6 +59,18 @@ Soroban invocation observes one ledger close and this entrypoint performs no
 storage writes, indexers do not see torn reads where one metric reflects a newer
 ledger than another.
 
+## Dispute guard
+
+`export_analytics_snapshot` fails with `QuickLendXError::ActiveDisputeExists`
+while any invoice has an unresolved dispute (`DisputeStatus::Disputed` or
+`DisputeStatus::UnderReview`). A disputed invoice keeps its pre-dispute
+`InvoiceStatus` until the dispute resolves, so without this guard a snapshot
+taken mid-dispute would fold a contested invoice into `success_rate`,
+`default_rate`, and volume totals as if it were already settled. Retry once
+outstanding disputes reach `Resolved`. See
+[`require_no_active_dispute_snapshot`](../src/dispute.rs) for the full threat
+model.
+
 ## Iteration bound
 
 The entrypoint reuses the existing calculators and scans the stored invoice
@@ -67,3 +79,9 @@ status indexes. Invoice creation is constrained by the protocol's
 and bid-related indexes are separately capped by their module limits. The
 snapshot itself introduces no new unbounded storage growth or additional nested
 iteration beyond those existing bounded indexes.
+
+## See also
+
+For how `schema_version` relates to the protocol version and backup format
+version — and the overall rules for which contract versions interoperate — see
+[CONTRACT_VERSION_COMPATIBILITY.md](../../docs/CONTRACT_VERSION_COMPATIBILITY.md).

@@ -1,6 +1,7 @@
 //! Bench helpers for gas/cpu instruction measurement.
 //! This module is compiled only for tests and provides a `measure` helper.
 
+#[cfg(any(test, feature = "testutils"))]
 use soroban_sdk::Env;
 
 /// @notice Budget deltas recorded for a scenario.
@@ -18,6 +19,8 @@ pub struct BudgetDelta {
 /// @param label The label of the scenario being measured.
 /// @param f The closure executing the contract invocation.
 /// @return The recorded BudgetDelta.
+/// Measure the budget delta for a closure.
+/// Returns a `BudgetDelta` containing instruction count and I/O bytes.
 pub fn measure<F: FnOnce()>(env: &Env, _label: &str, f: F) -> BudgetDelta {
     f();
     let estimate = env.cost_estimate();
@@ -27,4 +30,10 @@ pub fn measure<F: FnOnce()>(env: &Env, _label: &str, f: F) -> BudgetDelta {
         read_bytes: resources.disk_read_bytes as u64,
         write_bytes: resources.write_bytes as u64,
     }
+}
+
+/// Helper to retrieve only the number of CPU instructions used.
+/// Useful in tests that need to assert on instruction budget.
+pub fn instructions_used(env: &Env) -> u64 {
+    env.cost_estimate().resources().instructions as u64
 }

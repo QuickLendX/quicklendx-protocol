@@ -1,14 +1,16 @@
 use crate::bid::BidStorage;
 use crate::errors::QuickLendXError;
+use crate::investment::InvestmentStorage;
+use crate::storage::InvoiceStorage;
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
-    MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_REJECTION_REASON_LENGTH,
-    MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
+    MAX_INVOICE_AMOUNT, MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_NOTES_LENGTH,
+    MAX_REJECTION_REASON_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
 };
 use crate::types::BidStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Vec};
+use soroban_sdk::{contracttype, symbol_short, vec, Address, Bytes, Env, String, Vec};
 
 /// Maximum normalized tags allowed on an invoice.
 pub const MAX_INVOICE_TAG_COUNT: u32 = 10;
@@ -36,7 +38,7 @@ pub struct BusinessVerification {
 }
 
 #[contracttype]
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, Eq, PartialEq, Debug, PartialOrd, Ord)]
 pub enum InvestorTier {
     Basic,
     Silver,
@@ -156,14 +158,12 @@ impl BusinessVerificationStorage {
         new_rejection_reason: &Option<String>,
     ) -> Result<(), QuickLendXError> {
         if let Some(old_ver) = old_verification {
-            // If there was an old rejection reason, the new one must match exactly
+            // If there was an old rejection reason and a new rejection reason is provided, they must match
             if let Some(old_reason) = &old_ver.rejection_reason {
                 if let Some(new_reason) = new_rejection_reason {
                     if old_reason != new_reason {
                         return Err(QuickLendXError::InvalidKYCStatus); // Cannot change rejection reason
                     }
-                } else {
-                    return Err(QuickLendXError::InvalidKYCStatus); // Cannot remove rejection reason
                 }
             }
         }
@@ -349,7 +349,6 @@ impl BusinessVerificationStorage {
 
     /// @deprecated Use `admin::AdminStorage::initialize()` or `admin::AdminStorage::set_admin()` instead
     /// This function is kept for backward compatibility with existing tests.
-    
     /// Returns true if the business is marked as deleted.
     pub fn is_deleted(env: &Env, business: &Address) -> bool {
         let deleted = Self::get_deleted_businesses(env);
@@ -372,6 +371,19 @@ impl BusinessVerificationStorage {
             .set(&Self::DELETED_BUSINESSES_KEY, &deleted);
     }
 
+    fn remove_from_deleted_businesses(env: &Env, business: &Address) {
+        let deleted = Self::get_deleted_businesses(env);
+        let mut new_deleted = vec![env];
+        for addr in deleted.iter() {
+            if addr != *business {
+                new_deleted.push_back(addr);
+            }
+        }
+        env.storage()
+            .instance()
+            .set(&Self::DELETED_BUSINESSES_KEY, &new_deleted);
+    }
+
     /// Deletes a business: removes from any status list and marks as deleted.
     pub fn delete_business(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
         // Remove from verified, pending, rejected lists if present
@@ -390,6 +402,34 @@ impl BusinessVerificationStorage {
             return Ok(());
         }
         Self::add_to_deleted_businesses(env, business);
+        Ok(())
+    }
+
+    /// Restores a previously deleted business: removes from the deleted list and
+    /// re-adds to the appropriate status list based on the existing verification record.
+    ///
+    /// # Errors
+    /// - `BusinessNotVerified` if the business has no verification record.
+    /// - `BusinessDeleted` if the business is not currently deleted (no-op).
+    pub fn restore_business(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+        if !Self::is_deleted(env, business) {
+            return Err(QuickLendXError::BusinessDeleted);
+        }
+        Self::remove_from_deleted_businesses(env, business);
+        // Re-add to the status list matching the existing verification record.
+        if let Some(verification) = Self::get_verification(env, business) {
+            match verification.status {
+                BusinessVerificationStatus::Verified => {
+                    Self::add_to_verified_businesses(env, business);
+                }
+                BusinessVerificationStatus::Pending => {
+                    Self::add_to_pending_businesses(env, business);
+                }
+                BusinessVerificationStatus::Rejected => {
+                    Self::add_to_rejected_businesses(env, business);
+                }
+            }
+        }
         Ok(())
     }
 
@@ -753,6 +793,7 @@ pub fn normalize_tag(env: &Env, tag: &String) -> Result<String, QuickLendXError>
 /// @param investor The address of the bidding investor
 /// @return Success if bid passes all validation rules
 /// @error InvalidAmount if bid amount is below minimum or exceeds invoice amount
+/// @error PerInvestorPositionCapExceeded if bid exceeds invoice per_investor_position_cap
 /// @error InvalidStatus if invoice is not in Verified state or is past due date
 /// @error Unauthorized if business tries to bid on own invoice
 /// @error OperationNotAllowed if investor already has an active bid on this invoice
@@ -806,8 +847,21 @@ pub fn validate_bid(
         return Err(QuickLendXError::InvoiceAmountInvalid);
     }
 
+    // Per-invoice whale defence: reject bids above the configured position cap.
+    // Missing / None storage means uncapped (invoice.amount remains the ceiling).
+    if let Some(cap) = InvoiceStorage::get_per_investor_position_cap(env, &invoice.id) {
+        if bid_amount > cap {
+            return Err(QuickLendXError::PerInvestorPositionCapExceeded);
+        }
+    }
+
     // Expected return must exceed the original bid to avoid negative payoff.
     if expected_return <= bid_amount {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    // Expected return must fit safely in i128 arithmetic.
+    if expected_return > MAX_INVOICE_AMOUNT {
         return Err(QuickLendXError::InvalidAmount);
     }
 
@@ -953,6 +1007,21 @@ pub fn require_business_verification(env: &Env, business: &Address) -> Result<()
     Ok(())
 }
 
+/// Enforce that a business KYC verification record has a valid (Verified) KYC status/tier.
+///
+/// Symmetric guard for business KYC tiers.
+///
+/// # Errors
+/// - `KYCAlreadyPending` if the business KYC application is pending review
+/// - `BusinessNotVerified` if the business KYC application is rejected or not verified
+pub fn require_valid_business_kyc_tier(t: &BusinessVerification) -> Result<(), QuickLendXError> {
+    match t.status {
+        BusinessVerificationStatus::Verified => Ok(()),
+        BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
+        BusinessVerificationStatus::Rejected => Err(QuickLendXError::BusinessNotVerified),
+    }
+}
+
 /// Enforce that a business is not in KYC-pending state before allowing a sensitive operation.
 ///
 /// Pending businesses have submitted KYC but have not yet been approved or rejected.
@@ -967,13 +1036,23 @@ pub fn require_business_not_pending(env: &Env, business: &Address) -> Result<(),
         return Err(QuickLendXError::BusinessDeleted);
     }
     match BusinessVerificationStorage::get_verification(env, business) {
-        Some(v) => match v.status {
-            BusinessVerificationStatus::Pending => Err(QuickLendXError::KYCAlreadyPending),
-            BusinessVerificationStatus::Verified => Ok(()),
-            BusinessVerificationStatus::Rejected => Err(QuickLendXError::BusinessNotVerified),
-        },
+        Some(v) => require_valid_business_kyc_tier(&v),
         None => Err(QuickLendXError::BusinessNotVerified),
     }
+}
+
+/// Enforce that a business is active (not deleted/frozen) before performing an operation.
+///
+/// A deleted/frozen business must not be allowed to mutate any outstanding invoices.
+/// This is a defence-in-depth check that complements the KYC status guards.
+///
+/// # Errors
+/// - `BusinessDeleted` if the business has been deleted/frozen.
+pub fn require_business_active(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    if BusinessVerificationStorage::is_deleted(env, business) {
+        return Err(QuickLendXError::BusinessDeleted);
+    }
+    Ok(())
 }
 
 /// Enforce that an investor is not in KYC-pending state before allowing a sensitive operation.
@@ -996,6 +1075,31 @@ pub fn require_investor_not_pending(env: &Env, investor: &Address) -> Result<(),
     }
 }
 
+/// Enforce that an investor is not frozen before performing an operation.
+///
+/// A frozen investor must not be allowed to place bids, withdraw bids, or
+/// perform any investment action until unfrozen by an admin.
+///
+/// # Errors
+/// - `InvestorFrozen` if the investor has a freeze record.
+pub fn require_investor_not_frozen(env: &Env, investor: &Address) -> Result<(), QuickLendXError> {
+    if InvoiceStorage::get_investor_freeze_info(env, investor).is_some() {
+        return Err(QuickLendXError::InvestorFrozen);
+    }
+    Ok(())
+}
+
+/// Regulatory compliance gate, reserved for future jurisdiction/sanctions-list
+/// checks (see `docs/contracts/currency-whitelist.md` "Regulatory Compliance").
+///
+/// No such checks exist yet: this is intentionally a no-op by default and
+/// unconditionally returns `Ok(())` for any address and any ledger/storage
+/// state. Call sites can be wired in ahead of the actual regulatory logic
+/// landing so they don't need to change again once it does.
+pub fn require_regulatory_ok(_env: &Env, _address: &Address) -> Result<(), QuickLendXError> {
+    Ok(())
+}
+
 // Keep the existing invoice verification function
 pub fn verify_invoice_data(
     env: &Env,
@@ -1008,7 +1112,7 @@ pub fn verify_invoice_data(
     // First check if business is verified (temporarily disabled for debugging)
     // require_business_verification(env, business)?;
 
-    if amount <= 0 {
+    if amount <= 0 || amount > crate::protocol_limits::MAX_INVOICE_AMOUNT {
         return Err(QuickLendXError::InvalidAmount);
     }
     let current_timestamp = env.ledger().timestamp();
@@ -1018,6 +1122,11 @@ pub fn verify_invoice_data(
 
     // Validate due date bounds using protocol limits (Default 365 days)
     let limits = crate::protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
+
+    if amount < limits.min_invoice_amount {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
     let max_horizon = limits.max_due_date_days.saturating_mul(86400);
     let max_due_date = current_timestamp.saturating_add(max_horizon);
 
@@ -1102,6 +1211,43 @@ pub fn validate_invoice_category(
     }
 }
 
+/// Reject unknown or reserved invoice categories.
+///
+/// This is a tighter validation than [`validate_invoice_category`]: the
+/// catch-all `InvoiceCategory::Other` is treated as *reserved* and rejected
+/// because it is too generic for new invoices.  Requiring a specific category
+/// improves data quality, makes analytics more useful, and gives investors a
+/// clearer picture of the invoice they are funding.
+///
+/// As the protocol evolves, additional enum variants may be added that should
+/// also be rejected (e.g. a placeholder for a future regulatory regime, or a
+/// deprecated alias).  This function is the single point where those
+/// rejections are enforced, following the `require_*` naming convention used
+/// throughout the contract (`require_business_verification`,
+/// `require_regulatory_ok`, etc.).
+///
+/// # Threat mitigated
+///
+/// Without an explicit category-allowlist separate from the enum definition, a
+/// business could default to `Other` for every invoice, defeating the
+/// categorisation that investors and the protocol rely on for risk assessment.
+/// By treating `Other` as reserved, we force callers to select a meaningful
+/// category or add a new variant to the enum if none of the existing options
+/// truly fits.
+///
+/// # Errors
+///
+/// Returns `InvalidTag` for the reserved `Other` category.
+pub fn require_valid_invoice_category(
+    category: &crate::types::InvoiceCategory,
+) -> Result<(), QuickLendXError> {
+    // "Other" is reserved and not accepted for new invoices.
+    if matches!(category, crate::types::InvoiceCategory::Other) {
+        return Err(QuickLendXError::InvalidTag);
+    }
+    validate_invoice_category(category)
+}
+
 /// Validate invoice tags.
 ///
 /// Each tag is normalized (trimmed, ASCII-lowercased) before validation so that
@@ -1173,7 +1319,7 @@ pub fn verify_investor(
             // Calculate risk score and determine tier
             let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
             validate_risk_score(risk_score)?;
-            let tier = compute_investor_tier(env, investor, risk_score)?;
+            let tier = determine_investor_tier(env, investor, risk_score)?;
             let risk_level = determine_risk_level(risk_score);
 
             // Calculate final investment limit based on tier and risk
@@ -1228,6 +1374,72 @@ pub fn reject_investor(
     Ok(())
 }
 
+/// Revoke a previously-verified investor's KYC (admin only).
+///
+/// # Threat mitigated
+/// A verified investor whose identity/compliance status is later found to be
+/// invalid (sanctions hit, fraudulent KYC, compromised key) would otherwise
+/// retain the ability to place and fund bids indefinitely. Without an explicit
+/// revoke path, an admin can only set a new investment limit — they cannot stop
+/// the investor from continuing to bid. This entrypoint moves the investor from
+/// `Verified` back to `Rejected`, which causes `validate_investor_investment`
+/// (and therefore `validate_bid`) to fail with `BusinessNotVerified`, blocking
+/// all further bids until the investor re-submits KYC and is re-verified.
+///
+/// Emits a `kyc_revoke` event recording the investor, admin, timestamp, and
+/// reason for the audit trail.
+///
+/// # Errors
+/// - `NotAdmin` if `admin` is not a contract admin
+/// - `KYCNotFound` if the investor has no KYC record
+/// - `InvalidKYCStatus` if the investor is not currently `Verified`
+/// - `InvalidDescription` if `reason` exceeds `MAX_REJECTION_REASON_LENGTH`
+pub fn revoke_investor_kyc(
+    env: &Env,
+    admin: &Address,
+    investor: &Address,
+    reason: String,
+) -> Result<(), QuickLendXError> {
+    check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
+    admin.require_auth();
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
+        return Err(QuickLendXError::NotAdmin);
+    }
+
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
+
+    // Only a currently-verified investor can be revoked. Pending/rejected
+    // investors are already blocked from bidding, so revoking them is a no-op
+    // that we reject explicitly to keep the state machine auditable.
+    if !matches!(verification.status, BusinessVerificationStatus::Verified) {
+        return Err(QuickLendXError::InvalidKYCStatus);
+    }
+
+    verification.status = BusinessVerificationStatus::Rejected;
+    verification.verified_at = Some(env.ledger().timestamp());
+    verification.verified_by = Some(admin.clone());
+    verification.rejection_reason = Some(reason.clone());
+    verification.compliance_notes = Some(String::from_str(env, "KYC revoked by admin"));
+
+    InvestorVerificationStorage::update(env, &verification);
+    emit_investor_kyc_revoked(env, investor, admin, &reason);
+    Ok(())
+}
+
+fn emit_investor_kyc_revoked(env: &Env, investor: &Address, admin: &Address, reason: &String) {
+    #[allow(deprecated)]
+    env.events().publish(
+        (symbol_short!("kyc_revk"),),
+        (
+            investor.clone(),
+            admin.clone(),
+            env.ledger().timestamp(),
+            reason.clone(),
+        ),
+    );
+}
+
 pub fn get_investor_verification(env: &Env, investor: &Address) -> Option<InvestorVerification> {
     InvestorVerificationStorage::get(env, investor)
 }
@@ -1279,12 +1491,12 @@ pub fn calculate_investor_risk_score(
     Ok(risk_score)
 }
 
-/// Determine an investor's tier from their stored verification record.
+/// Compute investor tier from the investor record and a risk score.
 ///
-/// Loads the investor's tracked performance counters and delegates to the
-/// deterministic [`compute_investor_tier`]. Returns [`InvestorTier::Basic`]
-/// when the investor has no verification record yet.
-pub fn determine_investor_tier(
+/// This wrapper is used by public contract entrypoints and internal business
+/// logic, while the core deterministic tier rules are implemented in the
+/// `compute_investor_tier_from_stats` helper.
+pub fn compute_investor_tier(
     env: &Env,
     investor: &Address,
     risk_score: u32,
@@ -1292,7 +1504,7 @@ pub fn determine_investor_tier(
     validate_risk_score(risk_score)?;
 
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
-        return compute_tier_from_counters(
+        return compute_investor_tier_from_stats(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
@@ -1303,14 +1515,14 @@ pub fn determine_investor_tier(
     Ok(InvestorTier::Basic)
 }
 
+/// Determine investor tier based on risk score and investment history.
 /// Calculate the investor tier using deterministic performance thresholds.
 ///
 /// Promotion is based on the investor's accumulated performance counters and
 /// risk score. The mapping is stable and idempotent: the same counters always
 /// yield the same tier.
 ///
-/// Threshold table (a tier requires every column in its row to be satisfied;
-/// otherwise the next lower tier is tried, falling back to `Basic`):
+/// Threshold table:
 /// | Tier | Risk Score | Total Invested | Successful Investments | Max Default Rate |
 /// |------|------------|----------------|------------------------|------------------|
 /// | VIP | <= 10 | >= 5,000,000 | >= 50 | <= 5% |
@@ -1318,11 +1530,26 @@ pub fn determine_investor_tier(
 /// | Gold | <= 40 | >= 100,000 | >= 10 | <= 15% |
 /// | Silver | <= 60 | >= 10,000 | >= 3 | <= 25% |
 /// | Basic | otherwise | - | - | - |
-///
-/// The default rate is `defaulted_investments / (successful_investments +
-/// defaulted_investments)`, evaluated without division as
-/// `defaulted * 100 <= max_pct * total_count` to stay integer-exact.
-pub fn compute_investor_tier(
+pub fn determine_investor_tier(
+    env: &Env,
+    investor: &Address,
+    risk_score: u32,
+) -> Result<InvestorTier, QuickLendXError> {
+    validate_risk_score(risk_score)?;
+
+    if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
+        return compute_investor_tier_from_stats(
+            verification.total_invested,
+            verification.successful_investments,
+            verification.defaulted_investments,
+            risk_score,
+        );
+    }
+
+    Ok(InvestorTier::Basic)
+}
+
+pub fn compute_investor_tier_from_stats(
     total_invested: i128,
     successful_investments: u32,
     defaulted_investments: u32,
@@ -1330,39 +1557,49 @@ pub fn compute_investor_tier(
 ) -> Result<InvestorTier, QuickLendXError> {
     validate_risk_score(risk_score)?;
 
-    let total_count = successful_investments as u64 + defaulted_investments as u64;
-    let defaulted = defaulted_investments as u64;
-    let default_rate_within = |max_pct: u64| defaulted * 100 <= max_pct * total_count;
-
-    let tier = if risk_score <= 10
-        && total_invested >= 5_000_000
-        && successful_investments >= 50
-        && default_rate_within(5)
-    {
-        InvestorTier::VIP
-    } else if risk_score <= 20
-        && total_invested >= 1_000_000
-        && successful_investments >= 20
-        && default_rate_within(10)
-    {
-        InvestorTier::Platinum
-    } else if risk_score <= 40
-        && total_invested >= 100_000
-        && successful_investments >= 10
-        && default_rate_within(15)
-    {
-        InvestorTier::Gold
-    } else if risk_score <= 60
-        && total_invested >= 10_000
-        && successful_investments >= 3
-        && default_rate_within(25)
-    {
-        InvestorTier::Silver
+    let total_active_or_completed = successful_investments.saturating_add(defaulted_investments);
+    let default_rate_pct = if total_active_or_completed > 0 {
+        (defaulted_investments as u64)
+            .saturating_mul(100)
+            .checked_div(total_active_or_completed as u64)
+            .unwrap_or(0) as u32
     } else {
-        InvestorTier::Basic
+        0
     };
 
-    Ok(tier)
+    if risk_score <= VIP_RISK_SCORE_MAX
+        && total_invested >= VIP_TOTAL_INVESTED_MIN
+        && successful_investments >= VIP_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= VIP_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::VIP);
+    }
+
+    if risk_score <= PLATINUM_RISK_SCORE_MAX
+        && total_invested >= PLATINUM_TOTAL_INVESTED_MIN
+        && successful_investments >= PLATINUM_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= PLATINUM_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::Platinum);
+    }
+
+    if risk_score <= GOLD_RISK_SCORE_MAX
+        && total_invested >= GOLD_TOTAL_INVESTED_MIN
+        && successful_investments >= GOLD_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= GOLD_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::Gold);
+    }
+
+    if risk_score <= SILVER_RISK_SCORE_MAX
+        && total_invested >= SILVER_TOTAL_INVESTED_MIN
+        && successful_investments >= SILVER_SUCCESSFUL_INVESTMENTS_MIN
+        && default_rate_pct <= SILVER_DEFAULT_RATE_MAX_PCT
+    {
+        return Ok(InvestorTier::Silver);
+    }
+
+    Ok(InvestorTier::Basic)
 }
 
 /// Determine risk level based on risk score
@@ -1374,55 +1611,6 @@ pub fn determine_risk_level(risk_score: u32) -> InvestorRiskLevel {
         76..=100 => InvestorRiskLevel::VeryHigh,
         _ => InvestorRiskLevel::VeryHigh, // fallback safety
     }
-}
-
-/// Core tier computation using raw counters (total invested, successes, defaults).
-pub fn compute_investor_tier(
-    total_invested: i128,
-    successful_investments: u32,
-    defaulted_investments: u32,
-    risk_score: u32,
-) -> Result<InvestorTier, QuickLendXError> {
-    let total = successful_investments.saturating_add(defaulted_investments);
-    let default_rate = if total > 0 {
-        (defaulted_investments.saturating_mul(100)) / total
-    } else {
-        0u32
-    };
-
-    if risk_score <= 10
-        && total_invested >= 5_000_000
-        && successful_investments >= 50
-        && default_rate <= 5
-    {
-        return Ok(InvestorTier::VIP);
-    }
-
-    if risk_score <= 20
-        && total_invested >= 1_000_000
-        && successful_investments >= 20
-        && default_rate <= 10
-    {
-        return Ok(InvestorTier::Platinum);
-    }
-
-    if risk_score <= 40
-        && total_invested >= 100_000
-        && successful_investments >= 10
-        && default_rate <= 15
-    {
-        return Ok(InvestorTier::Gold);
-    }
-
-    if risk_score <= 60
-        && total_invested >= 10_000
-        && successful_investments >= 3
-        && default_rate <= 25
-    {
-        return Ok(InvestorTier::Silver);
-    }
-
-    Ok(InvestorTier::Basic)
 }
 
 /// Calculate investment limit based on tier and risk level
@@ -1479,6 +1667,25 @@ fn recover_base_limit_from_current_limit(
         .saturating_div(combined_multiplier)
 }
 
+/// Enforce minimum investment amount based on tier.
+/// Higher tiers can still invest small amounts, but minimums prevent dust bids.
+pub fn require_tier_min_investment_amount(
+    tier: &InvestorTier,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
+    let min_amount = match tier {
+        InvestorTier::Basic => 100,
+        InvestorTier::Silver => 200,
+        InvestorTier::Gold => 300,
+        InvestorTier::Platinum => 400,
+        InvestorTier::VIP => 500,
+    };
+    if amount < min_amount {
+        return Err(QuickLendXError::BidBelowTierMinimum);
+    }
+    Ok(())
+}
+
 /// Update investor analytics after an investment
 pub fn update_investor_analytics(
     env: &Env,
@@ -1518,7 +1725,7 @@ pub fn update_investor_analytics(
         verification.risk_score =
             calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
         verification.risk_level = determine_risk_level(verification.risk_score);
-        verification.tier = compute_tier_from_counters(
+        verification.tier = compute_investor_tier_from_stats(
             verification.total_invested,
             verification.successful_investments,
             verification.defaulted_investments,
@@ -1552,17 +1759,29 @@ pub fn validate_investor_investment(
     investor: &Address,
     investment_amount: i128,
 ) -> Result<(), QuickLendXError> {
+    require_investor_not_frozen(env, investor)?;
+
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+
     if let Some(verification) = InvestorVerificationStorage::get(env, investor) {
+        if verification.tier < limits.min_investor_tier {
+            return Err(QuickLendXError::InsufficientKYCTier);
+        }
+
         // 1. Verification status check
         if !matches!(verification.status, BusinessVerificationStatus::Verified) {
             return Err(QuickLendXError::BusinessNotVerified);
         }
 
         // 2. Aggregate Limit Check
-        // Ensure that (new bid + existing active bids + total funded investments) fits within the limit
+        // Reservations are derived from the active bid and active investment
+        // indexes. `total_invested` is lifetime analytics and must not keep
+        // completed/defaulted/refunded positions consuming current capacity.
         let active_bid_exposure = BidStorage::get_active_bid_amount_sum_for_investor(env, investor);
+        let active_investment_exposure =
+            InvestmentStorage::get_active_investment_amount_sum_for_investor(env, investor);
         let total_risk_exposure = active_bid_exposure
-            .saturating_add(verification.total_invested)
+            .saturating_add(active_investment_exposure)
             .saturating_add(investment_amount);
 
         if total_risk_exposure > verification.investment_limit {
@@ -1593,6 +1812,73 @@ pub fn validate_investor_investment(
     } else {
         Err(QuickLendXError::KYCNotFound)
     }
+}
+
+/// Recompute investor rating from on-chain history deterministically.
+///
+/// Recalculates the risk score via `calculate_investor_risk_score`, then
+/// derives the tier, risk level, and investment limit from the updated score
+/// and the investor's accumulated performance counters.  Updates the stored
+/// verification record and returns the full updated record.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `admin` - The admin address (must be authorized)
+/// * `investor` - The investor address to recompute the rating for
+///
+/// # Returns
+/// * `Ok(InvestorVerification)` - The updated verification record with the new rating
+///
+/// # Errors
+/// * `NotAdmin` if the caller is not the current admin
+/// * `KYCNotFound` if the investor has no verification record
+pub fn investor_rating_recompute(
+    env: &Env,
+    admin: &Address,
+    investor: &Address,
+) -> Result<InvestorVerification, QuickLendXError> {
+    admin.require_auth();
+    if !crate::admin::AdminStorage::is_admin(env, admin) {
+        return Err(QuickLendXError::NotAdmin);
+    }
+
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
+
+    if !matches!(verification.status, BusinessVerificationStatus::Verified) {
+        return Err(QuickLendXError::InvalidKYCStatus);
+    }
+
+    let prior_tier = verification.tier.clone();
+    let prior_risk_level = verification.risk_level.clone();
+    let base_limit = recover_base_limit_from_current_limit(
+        verification.investment_limit,
+        &prior_tier,
+        &prior_risk_level,
+    )
+    .max(1);
+
+    let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
+    validate_risk_score(risk_score)?;
+
+    let tier = compute_investor_tier_from_stats(
+        verification.total_invested,
+        verification.successful_investments,
+        verification.defaulted_investments,
+        risk_score,
+    )?;
+    let risk_level = determine_risk_level(risk_score);
+    let investment_limit = calculate_investment_limit(&tier, &risk_level, base_limit);
+
+    verification.risk_score = risk_score;
+    verification.risk_level = risk_level;
+    verification.tier = tier;
+    verification.investment_limit = investment_limit;
+    verification.compliance_notes =
+        Some(String::from_str(env, "Investor rating recomputed from on-chain history"));
+
+    InvestorVerificationStorage::update(env, &verification);
+    Ok(verification)
 }
 
 /// Set investment limit for a verified investor (admin only)
@@ -1650,8 +1936,8 @@ pub fn recompute_investor_tier(
         return Err(QuickLendXError::NotAdmin);
     }
 
-    let mut verification = InvestorVerificationStorage::get(env, investor)
-        .ok_or(QuickLendXError::KYCNotFound)?;
+    let mut verification =
+        InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
 
     if !matches!(verification.status, BusinessVerificationStatus::Verified) {
         return Err(QuickLendXError::InvalidKYCStatus);
@@ -1669,7 +1955,7 @@ pub fn recompute_investor_tier(
     let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
     validate_risk_score(risk_score)?;
 
-    let tier = compute_investor_tier(
+    let tier = compute_investor_tier_from_stats(
         verification.total_invested,
         verification.successful_investments,
         verification.defaulted_investments,
@@ -1682,7 +1968,8 @@ pub fn recompute_investor_tier(
     verification.risk_level = risk_level;
     verification.tier = tier;
     verification.investment_limit = investment_limit;
-    verification.compliance_notes = Some(String::from_str(env, "Investor tier recomputed by admin"));
+    verification.compliance_notes =
+        Some(String::from_str(env, "Investor tier recomputed by admin"));
 
     InvestorVerificationStorage::update(env, &verification);
     Ok(())
@@ -1783,6 +2070,43 @@ pub fn validate_dispute_evidence(evidence: &String) -> Result<(), QuickLendXErro
     Ok(())
 }
 
+/// Required length for an evidence hash (`BytesN<32>` / SHA-256 digest size).
+pub const EVIDENCE_HASH_LENGTH: u32 = 32;
+
+/// @notice Validate evidence hash format (32-byte BytesN required).
+/// @dev Evidence hashes must be exactly [`EVIDENCE_HASH_LENGTH`] bytes so callers can
+///      safely convert the payload to `BytesN<32>` (SHA-256 and similar digests).
+/// @param evidence_hash The raw evidence hash bytes to validate.
+/// @return Ok(()) if `evidence_hash.len() == 32`, Err(InvalidDisputeEvidence) otherwise.
+pub fn validate_evidence_hash(evidence_hash: &Bytes) -> Result<(), QuickLendXError> {
+    if evidence_hash.len() != EVIDENCE_HASH_LENGTH {
+        return Err(QuickLendXError::InvalidDisputeEvidence);
+    }
+    Ok(())
+}
+
+/// @notice Validate transaction hash format (64-character hex string required).
+/// @dev Used to validate `transaction_id` during settlement partial payments to prevent
+///      replay bypasses or storage bloat via malformed/empty nonces.
+/// @param hash The transaction hash string to validate.
+/// @return Ok(()) if valid 64-char hex, Err(InvalidTransactionHash) otherwise.
+pub fn validate_transaction_hash(env: &soroban_sdk::Env, hash: &soroban_sdk::String) -> Result<(), crate::errors::QuickLendXError> {
+    if hash.len() != 64 {
+        return Err(crate::errors::QuickLendXError::InvalidTransactionHash);
+    }
+    
+    let bytes = hash.to_bytes();
+    for i in 0..bytes.len() {
+        let b = bytes.get(i).unwrap();
+        match b {
+            b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {}
+            _ => return Err(crate::errors::QuickLendXError::InvalidTransactionHash),
+        }
+    }
+
+    Ok(())
+}
+
 /// @notice Validate dispute resolution string.
 /// @dev Rejects empty strings and strings exceeding MAX_DISPUTE_RESOLUTION_LENGTH (2000 chars).
 /// @param resolution The resolution text to validate.
@@ -1833,4 +2157,44 @@ pub fn validate_dispute_eligibility(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod test_invoice_category_helper {
+    use super::*;
+    use crate::types::InvoiceCategory;
+    use soroban_sdk::{Env, IntoVal, TryFromVal, Val};
+    use proptest::prelude::*;
+
+    #[test]
+    fn test_known_categories_valid() {
+        let env = Env::default();
+        // The discriminants for InvoiceCategory are 0 through 8.
+        for i in 0u32..=8 {
+            let val = i.into_val(&env);
+            let cat_res: Result<InvoiceCategory, _> = InvoiceCategory::try_from_val(&env, &val);
+            assert!(cat_res.is_ok(), "Known category discriminant {} should deserialize", i);
+            assert_eq!(validate_invoice_category(&cat_res.unwrap()), Ok(()));
+        }
+    }
+
+    #[test]
+    fn test_reserved_category_invalid() {
+        let env = Env::default();
+        // 9 is the first reserved/undefined discriminant
+        let val = 9u32.into_val(&env);
+        let cat_res: Result<InvoiceCategory, _> = InvoiceCategory::try_from_val(&env, &val);
+        assert!(cat_res.is_err(), "Reserved category 9 should fail deserialization");
+    }
+
+    proptest! {
+        #![proptest_config(ProptestConfig::with_cases(100))]
+        #[test]
+        fn test_arbitrary_category_invalid(i in 9u32..=u32::MAX) {
+            let env = Env::default();
+            let val = i.into_val(&env);
+            let cat_res: Result<InvoiceCategory, _> = InvoiceCategory::try_from_val(&env, &val);
+            assert!(cat_res.is_err(), "Arbitrary category {} should fail", i);
+        }
+    }
 }

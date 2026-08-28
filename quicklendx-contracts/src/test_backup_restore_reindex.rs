@@ -32,7 +32,7 @@ fn make_complex_invoice(
     customer_name: &str,
     tax_id: &str,
 ) -> Invoice {
-    use crate::types::{Dispute, OptionalDisputeResolution};
+    use crate::types::Dispute;
 
     let mut id_bytes = [0u8; 32];
     id_bytes[28..32].copy_from_slice(&idx.to_be_bytes());
@@ -69,13 +69,15 @@ fn make_complex_invoice(
             resolution: String::from_str(env, ""),
             resolved_by: Address::generate(env),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         },
         total_paid: 0,
         payment_history: Vec::new(env),
         created_at: env.ledger().timestamp(),
+    },
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
-}
 
 fn create_valid_backup(env: &Env, invoices: Vec<Invoice>) -> BytesN<32> {
     let backup_id = BackupStorage::generate_backup_id(env);

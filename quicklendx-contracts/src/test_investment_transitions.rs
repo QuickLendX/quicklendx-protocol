@@ -1,7 +1,7 @@
-//! Comprehensive investment lifecycle transition invariant tests.
+﻿//! Comprehensive investment lifecycle transition invariant tests.
 //!
 //! Tests enforce:
-//! - **All allowed transitions work correctly** (Active → terminal states)
+//! - **All allowed transitions work correctly** (Active â†’ terminal states)
 //! - **Terminal states are immutable** (cannot transition further)
 //! - **No double-payout** (transitions are idempotent)
 //! - **Index consistency** (active-index cleaned on terminal transitions)
@@ -18,9 +18,9 @@
 //! | test_terminal_revert_defaulted | Defaulted | Any | Revert attempt | Fails with InvalidStatus |
 //! | test_terminal_revert_refunded | Refunded | Any | Revert attempt | Fails with InvalidStatus |
 //! | test_terminal_revert_withdrawn | Withdrawn | Any | Revert attempt | Fails with InvalidStatus |
-//! | test_no_orphan_after_completion | Active → Completed | Check orphans | After completion | validate_no_orphan returns true |
+//! | test_no_orphan_after_completion | Active â†’ Completed | Check orphans | After completion | validate_no_orphan returns true |
 //! | test_concurrent_investments | Multiple Active | Mix of terminals | Complex flow | All transitions succeed independently |
-//! | test_multiple_settlement_attempts | Active → Completed | Reprocess | Prevent double-payout | Second attempt rejected |
+//! | test_multiple_settlement_attempts | Active â†’ Completed | Reprocess | Prevent double-payout | Second attempt rejected |
 //! | test_active_index_consistency | N Active investments | Various states | State mutation | Index always consistent with storage |
 
 use super::*;
@@ -33,9 +33,9 @@ use soroban_sdk::{
     token, Address, Bytes, BytesN, Env, String, Vec,
 };
 
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // HELPERS & SETUP
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Test setup context holding environment and contract
 struct TestContext {
@@ -115,14 +115,14 @@ impl TestContext {
                 &String::from_str(&self.env, "Test invoice"),
                 &InvoiceCategory::Services,
                 &Vec::new(&self.env),
-            )
+        &None)
             .unwrap();
         self.client.verify_invoice(&invoice_id).unwrap();
 
         // Place and accept bid to create investment
         let bid_id = self
             .client
-            .place_bid(investor, &invoice_id, &bid_amount, &invoice_amount)
+            .place_bid(investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]))
             .unwrap();
         self.client.accept_bid(&invoice_id, &bid_id).unwrap();
 
@@ -151,11 +151,11 @@ impl TestContext {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // TEST: ALLOWED TRANSITIONS FROM ACTIVE
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/// Test: Active → Completed transition succeeds, removes from active index, and is idempotent
+/// Test: Active â†’ Completed transition succeeds, removes from active index, and is idempotent
 /// Validates: Settlement success, index cleanup, double-settlement prevention
 #[test]
 fn test_transition_active_to_completed() {
@@ -193,7 +193,7 @@ fn test_transition_active_to_completed() {
     assert_eq!(invoice.status, InvoiceStatus::Paid);
 }
 
-/// Test: Active → Defaulted transition succeeds and prevents further transitions
+/// Test: Active â†’ Defaulted transition succeeds and prevents further transitions
 /// Validates: Default transition success, terminal immutability
 #[test]
 fn test_transition_active_to_defaulted() {
@@ -228,7 +228,7 @@ fn test_transition_active_to_defaulted() {
     ctx.assert_no_orphans();
 }
 
-/// Test: Active → Refunded transition succeeds when invoice is cancelled
+/// Test: Active â†’ Refunded transition succeeds when invoice is cancelled
 /// Validates: Refund transition success, index cleanup
 #[test]
 fn test_transition_active_to_refunded() {
@@ -272,7 +272,7 @@ fn test_transition_active_to_refunded() {
     ctx.assert_no_orphans();
 }
 
-/// Test: Active → Withdrawn transition succeeds when investor withdraws
+/// Test: Active â†’ Withdrawn transition succeeds when investor withdraws
 /// Validates: Withdrawal transition success, index cleanup
 #[test]
 fn test_transition_active_to_withdrawn() {
@@ -304,15 +304,15 @@ fn test_transition_active_to_withdrawn() {
     ctx.assert_no_orphans();
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // TEST: TERMINAL STATE IMMUTABILITY
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Test: Completed state cannot transition to other states
 /// Validates: Terminal immutability, transition validation
 #[test]
 fn test_terminal_completed_is_immutable() {
-    // Completed is terminal — attempting to update to any other status should fail
+    // Completed is terminal â€” attempting to update to any other status should fail
     let status_completed = InvestmentStatus::Completed;
 
     // Test attempted transitions from Completed
@@ -406,9 +406,9 @@ fn test_terminal_withdrawn_is_immutable() {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // TEST: NO-ORPHAN INDEX CONSISTENCY
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Test: Active index is cleaned after completion
 /// Validates: Index consistency after terminal transition
@@ -427,7 +427,7 @@ fn test_no_orphan_after_completion() {
     assert!(ctx.is_in_active_index(&investment_id));
 
     // Complete the investment
-    ctx.client.settle_invoice(&invoice_id, &1_000).unwrap();
+    ctx.client.settle_invoice(&invoice_id, &1_000, &ctx.client.get_investment(&invoice_id).unwrap()).unwrap();
 
     // Verify removed from active index
     assert!(!ctx.is_in_active_index(&investment_id));
@@ -485,9 +485,9 @@ fn test_no_orphan_after_refund() {
     ctx.assert_no_orphans();
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // TEST: DOUBLE-PAYOUT PREVENTION & IDEMPOTENCY
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Test: Second settlement of same invoice is rejected or idempotent
 /// Validates: Double-payout prevention
@@ -501,7 +501,7 @@ fn test_double_settlement_prevention() {
     let invoice_id = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
 
     // First settlement
-    ctx.client.settle_invoice(&invoice_id, &1_000).unwrap();
+    ctx.client.settle_invoice(&invoice_id, &1_000, &ctx.client.get_investment(&invoice_id).unwrap()).unwrap();
     let investment_after_first = ctx.get_investment(&invoice_id);
     assert_eq!(investment_after_first.status, InvestmentStatus::Completed);
 
@@ -543,9 +543,9 @@ fn test_double_default_prevention() {
     ctx.assert_no_orphans();
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // TEST: CONCURRENT & COMPLEX SCENARIOS
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Test: Multiple concurrent investments transition independently
 /// Validates: Index consistency with multiple state changes
@@ -577,7 +577,7 @@ fn test_concurrent_investments_independent_transitions() {
     assert_eq!(active_before, 3);
 
     // Transition 1: Settle (completed)
-    ctx.client.settle_invoice(&invoice1, &1_000);
+    ctx.client.settle_invoice(&invoice1, &1_000, &ctx.client.get_investment(&invoice1).unwrap());
     assert!(!ctx.is_in_active_index(&inv1));
 
     // Transition 2: Default
@@ -623,7 +623,7 @@ fn test_transitions_guard_consistency() {
         assert_eq!(
             result.is_ok(),
             should_succeed,
-            "Transition {:?} → {:?} should {}",
+            "Transition {:?} â†’ {:?} should {}",
             from,
             to,
             if should_succeed { "succeed" } else { "fail" }
@@ -631,9 +631,9 @@ fn test_transitions_guard_consistency() {
     }
 }
 
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // TEST: SECURITY PROPERTIES
-// ────────────────────────────────────────────────────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// Test: No Active investment can remain in index after terminal transition
 /// This is a security property that should always hold
@@ -653,7 +653,7 @@ fn test_active_index_cant_contain_terminal_investments() {
     let inv2 = ctx.get_investment(&invoice_id2).investment_id;
 
     // Create terminal states
-    ctx.client.settle_invoice(&invoice_id1, &1_000).unwrap();
+    ctx.client.settle_invoice(&invoice_id1, &1_000, &ctx.client.get_investment(&invoice_id1).unwrap()).unwrap();
 
     ctx.env
         .ledger()
@@ -691,7 +691,7 @@ fn test_terminal_investments_do_not_reenter_active_set() {
     let currency = ctx.make_token(&business, &investor);
 
     let invoice_id = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
-    ctx.client.settle_invoice(&invoice_id, &1_000).unwrap();
+    ctx.client.settle_invoice(&invoice_id, &1_000, &ctx.client.get_investment(&invoice_id).unwrap()).unwrap();
 
     let completed_investment = ctx.get_investment(&invoice_id);
     assert_eq!(completed_investment.status, InvestmentStatus::Completed);
@@ -731,7 +731,7 @@ fn test_index_integrity_under_mutations() {
 
     // Settle all
     for invoice_id in invoice_ids.iter() {
-        ctx.client.settle_invoice(&invoice_id, &1_000).unwrap();
+        ctx.client.settle_invoice(&invoice_id, &1_000, &ctx.client.get_investment(&invoice_id).unwrap()).unwrap();
     }
 
     let after_count = ctx.client.get_active_investment_ids().len();
@@ -746,3 +746,4 @@ fn test_index_integrity_under_mutations() {
 
     ctx.assert_no_orphans();
 }
+

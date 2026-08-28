@@ -5,7 +5,8 @@ mod test_invoice_search_ranking {
     use crate::invoice_search::InvoiceSearch;
     use crate::storage::InvoiceStorage;
     use crate::types::{
-        Dispute, Invoice, InvoiceCategory, InvoiceStatus, SearchRank, SearchResult, DisputeResolution,
+        Dispute, DisputeResolution, Invoice, InvoiceCategory, InvoiceStatus, SearchRank,
+        SearchResult,
     };
     use crate::QuickLendXContract;
     use soroban_sdk::testutils::Address as _;
@@ -57,7 +58,7 @@ mod test_invoice_search_ranking {
             resolution: String::from_str(env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         };
 
         Invoice {
@@ -87,7 +88,9 @@ mod test_invoice_search_ranking {
             dispute,
             total_paid: 0,
             payment_history: Vec::new(env),
-        }
+        },
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
     /// Asserts the rank ordering ExactId > PartialMatch.
@@ -112,7 +115,7 @@ mod test_invoice_search_ranking {
             resolution: String::from_str(&env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         };
 
         // Invoice 1: Exact ID match
@@ -143,7 +146,9 @@ mod test_invoice_search_ranking {
             dispute,
             total_paid: 0,
             payment_history: Vec::new(&env),
-        };
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
+    };
 
         // Invoice 2: Partial description match
         let invoice_partial = create_test_invoice(
@@ -233,7 +238,7 @@ mod test_invoice_search_ranking {
             resolution: String::from_str(&env, ""),
             resolved_by: business.clone(),
             resolved_at: 0,
-            resolution_outcome: None,
+            resolution_outcome: DisputeResolution::None,
         };
 
         // Invoice with Exact ID match, created at 1000
@@ -264,7 +269,9 @@ mod test_invoice_search_ranking {
             dispute,
             total_paid: 0,
             payment_history: Vec::new(&env),
-        };
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
+    };
 
         // Invoice with PartialMatch, created at 5000 (newer)
         let invoice_partial = create_test_invoice(
