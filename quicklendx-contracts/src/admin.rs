@@ -6,9 +6,10 @@
 
 #![allow(dead_code)]
 
+use crate::audit::{address_to_audit_string, log_config_change, AuditOperation};
 use crate::errors::QuickLendXError;
 use crate::storage;
-use soroban_sdk::{symbol_short, Address, Env, Symbol};
+use soroban_sdk::{symbol_short, Address, Env, String, Symbol};
 
 /// Current admin storage key.
 pub const ADMIN_KEY: Symbol = symbol_short!("admin");
@@ -50,6 +51,15 @@ impl AdminStorage {
         env.storage().instance().set(&ADMIN_KEY, admin);
         env.storage().instance().set(&ADMIN_INITIALIZED_KEY, &true);
 
+        log_config_change(
+            env,
+            AuditOperation::AdminInitialized,
+            admin.clone(),
+            "admin_init",
+            None,
+            Some(address_to_audit_string(env, admin)),
+        );
+
         crate::events::emit_admin_initialized(env, admin);
         Ok(())
     }
@@ -89,6 +99,15 @@ impl AdminStorage {
         Self::set_transfer_lock(env, true);
         env.storage().instance().set(&ADMIN_KEY, new_admin);
         Self::set_transfer_lock(env, false);
+
+        log_config_change(
+            env,
+            AuditOperation::AdminTransferred,
+            current_admin.clone(),
+            "admin_transfer",
+            Some(address_to_audit_string(env, current_admin)),
+            Some(address_to_audit_string(env, new_admin)),
+        );
 
         crate::events::emit_admin_transferred(env, current_admin, new_admin);
         Ok(())
@@ -130,6 +149,15 @@ impl AdminStorage {
             .set(&ADMIN_PENDING_KEY, pending_admin);
         Self::set_transfer_lock(env, true);
 
+        log_config_change(
+            env,
+            AuditOperation::AdminTransferInitiated,
+            current_admin.clone(),
+            "admin_pending",
+            None,
+            Some(address_to_audit_string(env, pending_admin)),
+        );
+
         crate::events::emit_admin_transfer_initiated(env, current_admin, pending_admin);
         Ok(())
     }
@@ -157,6 +185,15 @@ impl AdminStorage {
         env.storage().instance().remove(&ADMIN_PENDING_KEY);
         Self::set_transfer_lock(env, false);
 
+        log_config_change(
+            env,
+            AuditOperation::AdminTransferred,
+            pending_admin.clone(),
+            "admin_accept",
+            Some(address_to_audit_string(env, &current_admin)),
+            Some(address_to_audit_string(env, pending_admin)),
+        );
+
         crate::events::emit_admin_transferred(env, &current_admin, pending_admin);
         Ok(())
     }
@@ -173,6 +210,15 @@ impl AdminStorage {
             Self::get_pending_admin(env).ok_or(QuickLendXError::OperationNotAllowed)?;
         env.storage().instance().remove(&ADMIN_PENDING_KEY);
         Self::set_transfer_lock(env, false);
+
+        log_config_change(
+            env,
+            AuditOperation::AdminTransferCancelled,
+            current_admin.clone(),
+            "admin_cancel",
+            Some(address_to_audit_string(env, &pending_admin)),
+            None,
+        );
 
         crate::events::emit_admin_transfer_cancelled(env, current_admin, &pending_admin);
         Ok(())
@@ -194,6 +240,15 @@ impl AdminStorage {
             env.storage().instance().remove(&ADMIN_PENDING_KEY);
             Self::set_transfer_lock(env, false);
         }
+
+        log_config_change(
+            env,
+            AuditOperation::AdminTwoStepUpdated,
+            admin.clone(),
+            "two_step",
+            Some(String::from_str(env, if !enabled { "true" } else { "false" })),
+            Some(String::from_str(env, if enabled { "true" } else { "false" })),
+        );
 
         crate::events::emit_admin_two_step_updated(env, admin, enabled);
         Ok(())
@@ -396,6 +451,14 @@ pub fn cancel_treasury_rotation(env: &Env, admin: &Address) -> Result<(), QuickL
     }
 
     storage::remove_pending_treasury(env);
+    log_config_change(
+        env,
+        AuditOperation::TreasuryRotationCancelled,
+        admin.clone(),
+        "cancel_treasury_rotation",
+        None,
+        None,
+    );
     crate::events::treasury_rotation_cancelled(env, admin);
     Ok(())
 }

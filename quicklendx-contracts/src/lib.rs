@@ -101,6 +101,8 @@ mod test_cancel_invoice_matrix;
 mod test_invoice;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
+#[cfg(test)]
+mod test_admin_events_audit_parity;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
