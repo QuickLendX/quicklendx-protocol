@@ -4,8 +4,8 @@ use crate::errors::QuickLendXError;
 use crate::verification::{
     BusinessVerification, BusinessVerificationStatus, BusinessVerificationStorage,
 };
-use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{Address, Env, String};
 
 fn setup_env() -> (Env, Address) {
@@ -191,15 +191,18 @@ fn test_business_verification_full_state_transition_matrix() {
         for new_status in &new_statuses {
             let is_allowed = match (old_status, new_status) {
                 (None, BusinessVerificationStatus::Pending) => true,
-                (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Verified) => {
-                    true
-                }
-                (Some(BusinessVerificationStatus::Pending), BusinessVerificationStatus::Rejected) => {
-                    true
-                }
-                (Some(BusinessVerificationStatus::Rejected), BusinessVerificationStatus::Pending) => {
-                    true
-                }
+                (
+                    Some(BusinessVerificationStatus::Pending),
+                    BusinessVerificationStatus::Verified,
+                ) => true,
+                (
+                    Some(BusinessVerificationStatus::Pending),
+                    BusinessVerificationStatus::Rejected,
+                ) => true,
+                (
+                    Some(BusinessVerificationStatus::Rejected),
+                    BusinessVerificationStatus::Pending,
+                ) => true,
                 _ => false,
             };
 
@@ -230,12 +233,8 @@ fn allows_full_lifecycle_storage_updates_across_all_valid_transitions() {
     let (env, business) = setup_env();
 
     // 1. None -> Pending
-    let pending_ver = create_verification(
-        &env,
-        &business,
-        BusinessVerificationStatus::Pending,
-        None,
-    );
+    let pending_ver =
+        create_verification(&env, &business, BusinessVerificationStatus::Pending, None);
     assert!(BusinessVerificationStorage::update_verification(&env, &pending_ver).is_ok());
     assert_eq!(
         BusinessVerificationStorage::get_pending_businesses(&env).len(),
@@ -302,12 +301,8 @@ fn allows_full_lifecycle_storage_updates_across_all_valid_transitions() {
     );
 
     // 5. Verified -> Pending (invalid, should fail)
-    let re_pending = create_verification(
-        &env,
-        &business,
-        BusinessVerificationStatus::Pending,
-        None,
-    );
+    let re_pending =
+        create_verification(&env, &business, BusinessVerificationStatus::Pending, None);
     assert_eq!(
         BusinessVerificationStorage::update_verification(&env, &re_pending),
         Err(QuickLendXError::InvalidKYCStatus)

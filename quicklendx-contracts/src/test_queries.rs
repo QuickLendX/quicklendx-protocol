@@ -793,7 +793,8 @@ mod escrow_query_consistency {
             &String::from_str(env, "Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(env),
-            &None);
+            &None,
+        );
         client.verify_invoice(&invoice_id);
 
         let bid_id = client.place_bid(
@@ -832,7 +833,8 @@ mod escrow_query_consistency {
     fn test_status_match_released() {
         let (env, client, admin) = setup_contract();
         let amount = 5_000i128;
-        let (business, investor, _, invoice_id, _) = setup_funded_invoice(&env, &client, &admin, amount);
+        let (business, investor, _, invoice_id, _) =
+            setup_funded_invoice(&env, &client, &admin, amount);
 
         client.approve_early_escrow_release(&invoice_id, &business);
         client.approve_early_escrow_release(&invoice_id, &investor);
@@ -932,8 +934,14 @@ mod escrow_query_consistency {
         let se = client.try_get_escrow_status(&ghost);
 
         // Both surfaces must return an error (either StorageKeyNotFound or Abort).
-        assert!(de.is_err(), "get_escrow_details must error for missing record");
-        assert!(se.is_err(), "get_escrow_status must error for missing record");
+        assert!(
+            de.is_err(),
+            "get_escrow_details must error for missing record"
+        );
+        assert!(
+            se.is_err(),
+            "get_escrow_status must error for missing record"
+        );
     }
 
     /// A verified invoice that was never funded returns an error
@@ -960,14 +968,21 @@ mod escrow_query_consistency {
             &String::from_str(&env, "Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None);
+            &None,
+        );
         client.verify_invoice(&invoice_id);
 
         let de = client.try_get_escrow_details(&invoice_id);
         let se = client.try_get_escrow_status(&invoice_id);
 
-        assert!(de.is_err(), "get_escrow_details must error for unfunded invoice");
-        assert!(se.is_err(), "get_escrow_status must error for unfunded invoice");
+        assert!(
+            de.is_err(),
+            "get_escrow_details must error for unfunded invoice"
+        );
+        assert!(
+            se.is_err(),
+            "get_escrow_status must error for unfunded invoice"
+        );
     }
 
     /// Error is deterministic: repeated calls consistently return errors.
@@ -994,7 +1009,8 @@ mod escrow_query_consistency {
     #[test]
     fn test_cross_invoice_queries_are_isolated() {
         let (env, client, admin) = setup_contract();
-        let (business_a, investor_a, _, invoice_a, _) = setup_funded_invoice(&env, &client, &admin, 4_000);
+        let (business_a, investor_a, _, invoice_a, _) =
+            setup_funded_invoice(&env, &client, &admin, 4_000);
         let (_, _, _, invoice_b, _) = setup_funded_invoice(&env, &client, &admin, 6_000);
 
         // Release A; B must remain Held.

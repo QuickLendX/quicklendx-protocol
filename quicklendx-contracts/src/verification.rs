@@ -1,13 +1,13 @@
 use crate::bid::BidStorage;
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
-use crate::storage::InvoiceStorage;
 use crate::protocol_limits::{
     check_string_length, ProtocolLimitsContract, MAX_ADDRESS_LENGTH, MAX_DESCRIPTION_LENGTH,
     MAX_DISPUTE_EVIDENCE_LENGTH, MAX_DISPUTE_REASON_LENGTH, MAX_DISPUTE_RESOLUTION_LENGTH,
     MAX_INVOICE_AMOUNT, MAX_KYC_DATA_LENGTH, MAX_NAME_LENGTH, MAX_NOTES_LENGTH,
     MAX_REJECTION_REASON_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH,
 };
+use crate::storage::InvoiceStorage;
 use crate::types::BidStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Bytes, Env, String, Vec};
@@ -16,6 +16,11 @@ use soroban_sdk::{contracttype, symbol_short, vec, Address, Bytes, Env, String, 
 pub const MAX_INVOICE_TAG_COUNT: u32 = 10;
 /// Maximum line items allowed in structured invoice metadata.
 pub const MAX_METADATA_LINE_ITEMS: u32 = 100;
+
+/// Check if actual investor KYC tier meets or exceeds required tier.
+pub fn is_investor_kyc_tier_sufficient(actual: u32, required: u32) -> bool {
+    actual >= required
+}
 
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
@@ -1874,8 +1879,10 @@ pub fn investor_rating_recompute(
     verification.risk_level = risk_level;
     verification.tier = tier;
     verification.investment_limit = investment_limit;
-    verification.compliance_notes =
-        Some(String::from_str(env, "Investor rating recomputed from on-chain history"));
+    verification.compliance_notes = Some(String::from_str(
+        env,
+        "Investor rating recomputed from on-chain history",
+    ));
 
     InvestorVerificationStorage::update(env, &verification);
     Ok(verification)
@@ -2090,11 +2097,14 @@ pub fn validate_evidence_hash(evidence_hash: &Bytes) -> Result<(), QuickLendXErr
 ///      replay bypasses or storage bloat via malformed/empty nonces.
 /// @param hash The transaction hash string to validate.
 /// @return Ok(()) if valid 64-char hex, Err(InvalidTransactionHash) otherwise.
-pub fn validate_transaction_hash(env: &soroban_sdk::Env, hash: &soroban_sdk::String) -> Result<(), crate::errors::QuickLendXError> {
+pub fn validate_transaction_hash(
+    env: &soroban_sdk::Env,
+    hash: &soroban_sdk::String,
+) -> Result<(), crate::errors::QuickLendXError> {
     if hash.len() != 64 {
         return Err(crate::errors::QuickLendXError::InvalidTransactionHash);
     }
-    
+
     let bytes = hash.to_bytes();
     for i in 0..bytes.len() {
         let b = bytes.get(i).unwrap();
@@ -2163,18 +2173,24 @@ pub fn validate_dispute_eligibility(
 mod test_invoice_category_helper {
     use super::*;
     use crate::types::InvoiceCategory;
-    use soroban_sdk::{Env, IntoVal, TryFromVal, Val};
     use proptest::prelude::*;
+    use soroban_sdk::{Env, IntoVal, TryFromVal, Val};
 
     #[test]
     fn test_known_categories_valid() {
-        let env = Env::default();
-        // The discriminants for InvoiceCategory are 0 through 8.
-        for i in 0u32..=8 {
-            let val = i.into_val(&env);
-            let cat_res: Result<InvoiceCategory, _> = InvoiceCategory::try_from_val(&env, &val);
-            assert!(cat_res.is_ok(), "Known category discriminant {} should deserialize", i);
-            assert_eq!(validate_invoice_category(&cat_res.unwrap()), Ok(()));
+        let known = [
+            InvoiceCategory::Services,
+            InvoiceCategory::Goods,
+            InvoiceCategory::Consulting,
+            InvoiceCategory::Logistics,
+            InvoiceCategory::Products,
+            InvoiceCategory::Manufacturing,
+            InvoiceCategory::Technology,
+            InvoiceCategory::Healthcare,
+            InvoiceCategory::Other,
+        ];
+        for cat in known {
+            assert_eq!(validate_invoice_category(&cat), Ok(()));
         }
     }
 
@@ -2182,9 +2198,12 @@ mod test_invoice_category_helper {
     fn test_reserved_category_invalid() {
         let env = Env::default();
         // 9 is the first reserved/undefined discriminant
-        let val = 9u32.into_val(&env);
+        let val: Val = 9u32.into_val(&env);
         let cat_res: Result<InvoiceCategory, _> = InvoiceCategory::try_from_val(&env, &val);
-        assert!(cat_res.is_err(), "Reserved category 9 should fail deserialization");
+        assert!(
+            cat_res.is_err(),
+            "Reserved category 9 should fail deserialization"
+        );
     }
 
     proptest! {
@@ -2192,7 +2211,7 @@ mod test_invoice_category_helper {
         #[test]
         fn test_arbitrary_category_invalid(i in 9u32..=u32::MAX) {
             let env = Env::default();
-            let val = i.into_val(&env);
+            let val: Val = i.into_val(&env);
             let cat_res: Result<InvoiceCategory, _> = InvoiceCategory::try_from_val(&env, &val);
             assert!(cat_res.is_err(), "Arbitrary category {} should fail", i);
         }

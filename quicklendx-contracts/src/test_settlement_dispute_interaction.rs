@@ -1,4 +1,4 @@
-﻿//! Integration tests for settlement-dispute interaction and "logical reorg" recovery.
+//! Integration tests for settlement-dispute interaction and "logical reorg" recovery.
 //!
 //! # Purpose
 //!
@@ -72,8 +72,8 @@
 use crate::contract::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
 use crate::types::{DisputeStatus, InvoiceCategory, InvoiceStatus};
-use soroban_sdk::testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation};
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation};
 use soroban_sdk::{symbol_short, token, Address, Env, String};
 
 // Test helper: Create a test currency token
@@ -117,7 +117,13 @@ fn setup_funded_invoice(
     client.verify_invoice(admin, &invoice_id);
 
     // Investor places bid and it gets accepted
-    let bid_id = client.place_bid(&invoice_id, investor, &amount, &(amount + 1000), &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &invoice_id,
+        investor,
+        &amount,
+        &(amount + 1000),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(business, &invoice_id, &bid_id);
 
     (invoice_id, currency)
@@ -170,7 +176,11 @@ fn test_settlement_blocked_during_active_dispute() {
     // Step 3: Attempt to finalize settlement â†’ MUST FAIL
     // Settlement requires invoice status == Funded AND no active dispute
     let remaining = amount - partial_amount;
-    let settle_result = client.try_settle_invoice(&invoice_id, &remaining, &client.get_investment(&invoice_id).unwrap());
+    let settle_result = client.try_settle_invoice(
+        &invoice_id,
+        &remaining,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
 
     // Expected: Settlement fails because dispute blocks finalization
     assert!(settle_result.is_err());
@@ -234,7 +244,13 @@ fn test_dispute_resolves_in_favor_of_investor() {
     assert_eq!(invoice.dispute_status, DisputeStatus::UnderReview);
 
     // Attempt settlement during UnderReview â†’ BLOCKED
-    let settle_result = client.try_settle_invoice(&invoice_id, &(amount - partial, &client.get_investment(&invoice_id).unwrap()));
+    let settle_result = client.try_settle_invoice(
+        &invoice_id,
+        &(
+            amount - partial,
+            &client.get_investment(&invoice_id).unwrap(),
+        ),
+    );
     assert!(settle_result.is_err());
 
     // Admin resolves in favor of investor
@@ -311,7 +327,11 @@ fn test_dispute_resolves_in_favor_of_business() {
 
     // Attempt settlement â†’ BLOCKED
     let remaining = amount - partial;
-    let blocked = client.try_settle_invoice(&invoice_id, &remaining, &client.get_investment(&invoice_id).unwrap());
+    let blocked = client.try_settle_invoice(
+        &invoice_id,
+        &remaining,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
     assert!(blocked.is_err());
 
     // Admin resolves in favor of business
@@ -543,7 +563,11 @@ fn test_partial_payments_during_dispute() {
 
     // Verify settlement is STILL blocked despite reaching 80% payment
     let remaining = amount - progress.total_paid;
-    let settle_attempt = client.try_settle_invoice(&invoice_id, &remaining, &client.get_investment(&invoice_id).unwrap());
+    let settle_attempt = client.try_settle_invoice(
+        &invoice_id,
+        &remaining,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
     assert!(settle_attempt.is_err());
 
     // Admin resolves dispute in favor of business
@@ -591,11 +615,13 @@ fn test_settlement_guard_rejects_active_dispute_negative() {
 
     // Try to settle entire amount during an active dispute.
     // This MUST return the explicitly typed DisputeActive error.
-    let settle_result = client.try_settle_invoice(&invoice_id, &amount, &client.get_investment(&invoice_id).unwrap());
-    
+    let settle_result = client.try_settle_invoice(
+        &invoice_id,
+        &amount,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
+
     assert!(settle_result.is_err());
     let err = settle_result.err().unwrap().unwrap();
     assert_eq!(err, QuickLendXError::DisputeActive);
 }
-
-

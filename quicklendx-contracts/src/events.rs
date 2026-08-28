@@ -1440,7 +1440,12 @@ pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Add
     .publish(env);
 }
 
-pub fn emit_bid_expiry_grace_updated(env: &Env, old_seconds: u64, new_seconds: u64, admin: &Address) {
+pub fn emit_bid_expiry_grace_updated(
+    env: &Env,
+    old_seconds: u64,
+    new_seconds: u64,
+    admin: &Address,
+) {
     BidExpiryGraceUpdated {
         old_seconds,
         new_seconds,
@@ -1633,7 +1638,12 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
         .publish((symbol_short!("adm_init"),), (admin.clone(),));
 }
 
-pub fn emit_treasury_rotation_initiated(env: &Env, admin: &Address, new_address: &Address, deadline: u64) {
+pub fn emit_treasury_rotation_initiated(
+    env: &Env,
+    admin: &Address,
+    new_address: &Address,
+    deadline: u64,
+) {
     env.events().publish(
         (symbol_short!("tr_rot_i"), admin.clone()),
         (new_address.clone(), deadline),
@@ -1650,10 +1660,8 @@ pub fn emit_treasury_rotation_confirmed(env: &Env, admin: &Address, new_address:
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
     // Cancellation is part of the auditable control-plane history even though
     // it does not change the active recipient.
-    env.events().publish(
-        (symbol_short!("tr_rot_c"), admin.clone()),
-        (),
-    );
+    env.events()
+        .publish((symbol_short!("tr_rot_c"), admin.clone()), ());
 }
 
 // ── Upgrade events ──────────────────────────────────────────────────────────

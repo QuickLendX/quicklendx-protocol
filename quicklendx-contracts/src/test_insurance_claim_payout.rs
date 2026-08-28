@@ -102,7 +102,8 @@ fn create_and_fund_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(
@@ -515,7 +516,11 @@ fn test_add_insurance_rejected_after_due_date() {
     let provider_a = Address::generate(&env);
     client.add_investment_insurance(&investment_id, &provider_a, &50u32);
     let records = client.query_investment_insurance(&investment_id);
-    assert_eq!(records.len(), 1, "one policy should be active before due date");
+    assert_eq!(
+        records.len(),
+        1,
+        "one policy should be active before due date"
+    );
     assert!(records.get(0).unwrap().active);
 
     // --- Advance time past the due date (invoice is now overdue) ---

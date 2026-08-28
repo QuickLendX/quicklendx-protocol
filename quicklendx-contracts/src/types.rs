@@ -487,5 +487,3 @@ pub struct PaginatedCurrencies {
     pub total_count: u32,
     pub has_more: bool,
 }
-
-

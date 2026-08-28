@@ -57,18 +57,18 @@ fn make_empty_invoice(env: &Env, contract_id: &Address) -> Invoice {
     let currency = Address::generate(env);
     env.as_contract(contract_id, || {
         Invoice::new(
-env,
-business,
-1_000,
-currency,
-env.ledger().timestamp() + 86_400,
-String::from_str(env, "tag-boundary invoice"),
-InvoiceCategory::Services,
-Vec::new(env),
-None,
-        None, /* early_payment_discount_bps */,
-        
-)
+            env,
+            business,
+            1_000,
+            currency,
+            env.ledger().timestamp() + 86_400,
+            String::from_str(env, "tag-boundary invoice"),
+            InvoiceCategory::Services,
+            Vec::new(env),
+            None,
+            None,
+            None,
+        )
         .expect("baseline invoice creation must succeed")
     })
 }
@@ -192,18 +192,18 @@ fn invoice_new_accepts_distinct_tags_below_max_invoice_tags_cap() {
     let invoice = env
         .as_contract(&contract_id, || {
             Invoice::new(
-&env,
-business,
-1_000,
-currency,
-env.ledger().timestamp() + 86_400,
-String::from_str(&env, "below-cap invoice"),
-InvoiceCategory::Services,
-tags,
-None,
-            None, /* early_payment_discount_bps */,
-            
-)
+                &env,
+                business,
+                1_000,
+                currency,
+                env.ledger().timestamp() + 86_400,
+                String::from_str(&env, "below-cap invoice"),
+                InvoiceCategory::Services,
+                tags,
+                None,
+                None,
+                None,
+            )
         })
         .expect("Invoice::new must succeed below the tag cap");
     assert_eq!(invoice.tags.len(), below);
@@ -222,18 +222,18 @@ fn invoice_new_accepts_distinct_tags_exactly_at_max_invoice_tags_cap() {
     let invoice = env
         .as_contract(&contract_id, || {
             Invoice::new(
-&env,
-business,
-1_000,
-currency,
-env.ledger().timestamp() + 86_400,
-String::from_str(&env, "at-cap invoice"),
-InvoiceCategory::Services,
-tags,
-None,
-            None, /* early_payment_discount_bps */,
-            
-)
+                &env,
+                business,
+                1_000,
+                currency,
+                env.ledger().timestamp() + 86_400,
+                String::from_str(&env, "at-cap invoice"),
+                InvoiceCategory::Services,
+                tags,
+                None,
+                None,
+                None,
+            )
         })
         .expect("Invoice::new must succeed at exactly the tag cap");
     assert_eq!(invoice.tags.len(), MAX_INVOICE_TAGS);
@@ -252,18 +252,18 @@ fn invoice_new_rejects_distinct_tags_one_over_max_invoice_tags_cap() {
     let err = env
         .as_contract(&contract_id, || {
             Invoice::new(
-&env,
-business,
-1_000,
-currency,
-env.ledger().timestamp() + 86_400,
-String::from_str(&env, "over-cap invoice"),
-InvoiceCategory::Services,
-tags,
-None,
-            None, /* early_payment_discount_bps */,
-            
-)
+                &env,
+                business,
+                1_000,
+                currency,
+                env.ledger().timestamp() + 86_400,
+                String::from_str(&env, "over-cap invoice"),
+                InvoiceCategory::Services,
+                tags,
+                None,
+                None,
+                None,
+            )
         })
         .unwrap_err();
     assert_eq!(err, QuickLendXError::TagLimitExceeded);
@@ -291,18 +291,18 @@ fn invoice_new_invalid_tags_fail_with_invalid_tag_not_tag_limit_exceeded() {
     let err = env
         .as_contract(&contract_id, || {
             Invoice::new(
-&env,
-business,
-1_000,
-currency,
-env.ledger().timestamp() + 86_400,
-String::from_str(&env, "invalid-tag invoice"),
-InvoiceCategory::Services,
-tags,
-None,
-            None, /* early_payment_discount_bps */,
-            
-)
+                &env,
+                business,
+                1_000,
+                currency,
+                env.ledger().timestamp() + 86_400,
+                String::from_str(&env, "invalid-tag invoice"),
+                InvoiceCategory::Services,
+                tags,
+                None,
+                None,
+                None,
+            )
         })
         .unwrap_err();
     assert_eq!(err, QuickLendXError::InvalidTag);

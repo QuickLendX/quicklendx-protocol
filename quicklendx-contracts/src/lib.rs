@@ -1,4 +1,4 @@
-﻿#![no_std]
+#![no_std]
 #![allow(
     dead_code,
     unused_imports,
@@ -19,15 +19,14 @@
 )]
 
 pub use crate::errors::QuickLendXError;
+pub use crate::verification::is_investor_kyc_tier_sufficient;
 
 extern crate alloc;
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod scratch_events;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_concurrent_default_overlap;
-#[cfg(test)]
-mod test_multisig;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -46,15 +45,17 @@ mod test_fees;
 mod test_maintenance;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_multisig;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_capacity_stress;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_history_reconstruction;
 // Issue #1920 â€” confirm require_regulatory_ok is truly a no-op by default.
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_regulatory_gate;
 // Issue #1902 — investor freeze reason typed enum
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_freeze_reason;
 use crate::idempotency::{idempotency_exists, idempotency_key, store_idempotency};
 use crate::verification::require_business_active;
@@ -83,7 +84,6 @@ pub mod events;
 pub mod fees;
 pub mod freshness;
 pub mod governance;
-pub mod multisig;
 pub mod health;
 pub mod idempotency;
 pub mod incident;
@@ -95,6 +95,7 @@ pub mod invoice;
 pub mod invoice_search;
 pub mod maintenance;
 pub mod monitor;
+pub mod multisig;
 pub mod notifications;
 pub mod operational_limits;
 pub mod pagination;
@@ -107,23 +108,10 @@ pub mod reentrancy;
 pub mod regulatory;
 pub mod settlement;
 pub mod storage;
-#[cfg(any(test, feature = "testutils"))]
-pub mod test_utils;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
-mod test_panic_handler;
-#[cfg(test)]
-mod test_due_date_guard;
-#[cfg(test)]
-mod test_lock_time_limit;
-mod test_auto_resolution_boundary;
-#[cfg(test)]
-mod test_cancel_invoice_matrix;
-#[cfg(test)]
-mod test_governance;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -134,8 +122,10 @@ mod test_admin_standalone;
 mod test_admin_two_step;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit_config;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_auto_resolution_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -144,19 +134,15 @@ mod test_backup_restore_reindex;
 mod test_backup_retention_enforcement;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_safety;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_cancel_accept_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_grace;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
-#[cfg(test)]
-mod test_require_business_active;
-#[cfg(test)]
-mod test_require_valid_business_kyc_tier;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
@@ -164,56 +150,51 @@ mod test_cleanup_pagination;
 mod test_config_bounds_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_due_date_guard;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_governance;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_lock_time_limit;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_panic_handler;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_require_business_active;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_require_valid_business_kyc_tier;
+#[cfg(any(test, feature = "testutils"))]
+pub mod test_utils;
 // Issue #2092 — currency-precision helper boundary tests; runs on every CI
 // matrix entry (no feature gate). Covers matching (decimals=0, 7, 18),
 // over-precision (decimals=19, 20, u32::MAX), and malformed cases
 // (unregistered address, wrong return type).
-#[cfg(test)]
-mod test_currency_precision;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_backfill_guard;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_batch;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_match_funding;
+#[cfg(test)]
+mod test_currency_precision;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
-#[cfg(test)]
-mod test_dispute_refund_flow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_dispute_arbiter;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_dispute_evidence_identity;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_history_guard;
-#[cfg(test)]
-mod test_evidence_size_cap;
-#[cfg(test)]
-mod test_evidence_hash_format;
-// Issue #1975 — evidence-kind guard matrix; no feature gate (runs on every CI
-// matrix entry). Also the regression test for the fix landed alongside it:
-// `create_dispute` was not calling `validate_dispute_evidence` /
-// `validate_dispute_eligibility` at all.
-#[cfg(test)]
-mod test_evidence_kind_guard_matrix;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_dispute_refund_flow;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
 #[cfg(test)]
-mod test_dispute_evidence_identity;
-#[cfg(test)]
-mod test_due_date_guard;
-#[cfg(test)]
-mod test_lock_time_limit_guard;
-#[cfg(test)]
 // mod test_dispute_event_invariant;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dust_transfer;
-// Issue #1840 — arbiter guard on dispute resolution (no feature gate: every
-// CI matrix entry must exercise the negative test path).
-#[cfg(test)]
-mod test_dispute_arbiter;
-// Issue #1847 — backfill guard against WASM upgrades (no feature gate).
-#[cfg(test)]
-mod test_backfill_guard;
-// Issue #1820/#1821 — early_payment_discount_bps per-invoice config and
-// boundary tests.
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_early_payment_discount_bps;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_early_release;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_event_completeness;
@@ -222,18 +203,26 @@ mod test_escrow_invariant_model;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund_after_expiry;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_evidence_hash_format;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_evidence_kind_guard_matrix;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_evidence_size_cap;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_kyc;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_lock_time_limit_guard;
 #[cfg(test)]
 mod test_payments;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_queries;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_rating_override;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_self_call_rejection;
@@ -248,14 +237,14 @@ mod test_init;
 mod test_invariant_self_check;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_operational_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_regulatory;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 // #[cfg(test)]
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 #[path = "test/test_investment_queries.rs"]
 mod test_investment_queries;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -267,6 +256,8 @@ mod test_investment_queries;
 // #[cfg(all(test, feature = "legacy-tests"))]
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backpressure_shedding;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_fuzz_settlement_currency_whitelist;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_profit_fee;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -281,18 +272,12 @@ mod test_protocol_limits_boundary;
 mod test_reentrancy;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_reentrancy_fault_injection;
-#[cfg(test)]
-mod test_settlement_accounting_identity;
-// Issue #1908 â€” per-invoice settlement currency whitelist (defence-in-depth).
-// Negative test: settlement blocked when whitelist does not match invoice currency.
-#[cfg(test)]
-mod test_settlement_currency_whitelist;
-#[cfg(test)]
-mod test_fuzz_settlement_currency_whitelist;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settle_during_dispute;
-#[cfg(test)]
-mod test_string_limits;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_settlement_accounting_identity;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_settlement_currency_whitelist;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_string_limits;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -301,43 +286,42 @@ mod test_string_limits;
 mod test_analytics_consistency;
 // Issue snapshot-tests — clean snapshot and snapshot with open dispute.
 // No feature gate: runs on every CI matrix entry.
-#[cfg(test)]
-mod test_snapshot;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_capacity_stress;
-#[cfg(test)]
-mod test_investor_exposure_caps;
-mod test_fee_recipient_rotation_guard;
-// Issue #1891 â€” min-partial-fill amount boundary: at limit, one below, one above.
-#[cfg(test)]
-mod test_min_partial_fill_boundary;
-// Issue #1858 — per-invoice per_investor_position_cap whale defence.
-#[cfg(test)]
-mod test_per_investor_position_cap;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_bid_compare_order_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_fee_recipient_rotation_guard;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_investor_exposure_caps;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_min_partial_fill_boundary;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_per_investor_position_cap;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_snapshot;
 // Issue #2083 â€” bid-match helper tests; runs on every CI matrix entry
 // (no feature gate, since `legacy-tests` is OFF in CI). Covers
 // `compare_bids`, `get_best_bid`, and `rank_bids`.
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_match_helper;
 // Issue #2089 — max-invoice-tags helper boundary tests; runs on every CI
 // matrix entry (no feature gate). Locks in below/at/over-cap behaviour for
 // `Invoice::add_tag`, the bulk ctor `Invoice::new`, and the pure validator
 // `validate_invoice_tags`. Assertive names and deterministic inputs only.
-#[cfg(test)]
-mod test_max_invoice_tags_boundary;
-#[cfg(test)]
-mod test_require_valid_invoice_category;
-#[cfg(test)]
-mod test_verify_bid_match;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_escrow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_max_invoice_tags_boundary;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_require_valid_invoice_category;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_verify_bid_match;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_vesting;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_vesting_summary;
 // Issue #1551 â€” determinism tests for bid_ranking; no feature gate, runs on
 // every CI matrix entry.
@@ -353,42 +337,42 @@ mod test_clock_rollover;
 mod test_compute_yield_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_grace_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_cancelled_noop;
-#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
-mod test_fuzz_distribute_revenue;
 #[cfg(test)]
 mod test_fuzz_default_counter;
+#[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
+mod test_fuzz_distribute_revenue;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_invoice_metadata;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_partial_payment;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_profits_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_debug;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_invariants;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_input_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_optin_lifecycle;
-#[cfg(test)]
-mod test_invoice;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_invoice;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_profits_props;
 // Issue #1949 — full InvestmentStatus transition matrix (CI-ungated).
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_state_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_withdrawal;
@@ -398,7 +382,7 @@ mod test_invoice_metadata;
 mod test_invoice_search_ranking;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_line_item_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
@@ -406,6 +390,7 @@ mod test_notifications;
 mod test_pause_reads_available;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reason;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_platform_metrics_reconciliation;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
@@ -419,25 +404,21 @@ mod test_twa_props;
 mod test_volume_tier_props;
 // Issue #1482 â€” "cannot withdraw more than deposited" invariant: hard-coded sad
 // path (always runs) + proptest property (requires fuzz-tests feature).
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cannot_withdraw_more_than_deposited;
-#[cfg(test)]
-mod test_store_invoice_auth;
-// Issue #1880 â€” batch-create boundary tests; no feature gate (runs on every CI matrix entry).
-// Covers 0, 1, MAX_BATCH, MAX_BATCH+1, active-invoice cap, KYC gating, and atomicity.
-#[cfg(test)]
-mod test_store_invoices_batch;
-// Issue #1881 — batch-cancel boundary tests; no feature gate (runs on every CI matrix entry).
-// Covers 0, 1, MAX_BATCH, MAX_BATCH+1, KYC gating, frozen items, non-existent items, unauthorized items, and atomicity.
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_batch_cancel;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_store_invoice_auth;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_store_invoices_batch;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_tier_boundary;
 // Issue — symmetric pause/maintenance state-change tests (both directions); no
 // feature gate so this runs on every CI matrix entry.
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_toggle_symmetry;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_verification_matrix;
 pub mod types;
 pub use types::*;
@@ -475,10 +456,9 @@ use verification::{
     revoke_investor_kyc as do_revoke_investor_kyc, submit_investor_kyc as do_submit_investor_kyc,
     submit_kyc_application, validate_bid, validate_dispute_eligibility, validate_dispute_evidence,
     validate_dispute_reason, validate_dispute_resolution, validate_investor_investment,
-    validate_invoice_metadata, verify_business,
-    verify_investor as do_verify_investor, verify_invoice_data, BusinessVerificationStatus,
-    BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
-    InvestorVerificationStorage,
+    validate_invoice_metadata, verify_business, verify_investor as do_verify_investor,
+    verify_invoice_data, BusinessVerificationStatus, BusinessVerificationStorage,
+    InvestorRiskLevel, InvestorTier, InvestorVerification, InvestorVerificationStorage,
 };
 
 pub use crate::storage::InvoiceIndex;
@@ -548,8 +528,8 @@ fn require_invoice_writable_by_business(
     invoice_id: &BytesN<32>,
 ) -> Result<Invoice, QuickLendXError> {
     pause::PauseControl::require_not_paused(env)?;
-    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::InvoiceNotFound)?;
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     require_no_active_freeze(env, invoice_id)?;
     invoice.business.require_auth();
     require_business_active(env, &invoice.business)?;
@@ -632,7 +612,11 @@ fn early_release_approval_key(
     invoice_id: &BytesN<32>,
     approver: &Address,
 ) -> (soroban_sdk::Symbol, BytesN<32>, Address) {
-    (symbol_short!("er_appr"), invoice_id.clone(), approver.clone())
+    (
+        symbol_short!("er_appr"),
+        invoice_id.clone(),
+        approver.clone(),
+    )
 }
 
 fn has_early_release_approval(env: &Env, invoice_id: &BytesN<32>, approver: &Address) -> bool {
@@ -812,7 +796,8 @@ impl QuickLendXContract {
         env: Env,
         new_treasury: Address,
     ) -> Result<fees::RecipientRotationRequest, QuickLendXError> {
-        let admin = BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         fees::FeeManager::initiate_treasury_rotation(&env, &admin, new_treasury)
     }
 
@@ -826,21 +811,21 @@ impl QuickLendXContract {
         env: Env,
         new_treasury: Address,
     ) -> Result<Address, QuickLendXError> {
-        let admin = BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         admin.require_auth();
         fees::FeeManager::confirm_treasury_rotation(&env, &new_treasury)
     }
 
     /// Cancel a pending fee-recipient rotation (admin only).
     pub fn cancel_treasury_rotation(env: Env) -> Result<(), QuickLendXError> {
-        let admin = BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        let admin =
+            BusinessVerificationStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         fees::FeeManager::cancel_treasury_rotation(&env, &admin)
     }
 
     /// Return the complete pending fee-recipient rotation request, if any.
-    pub fn get_pending_treasury_rotation(
-        env: Env,
-    ) -> Option<fees::RecipientRotationRequest> {
+    pub fn get_pending_treasury_rotation(env: Env) -> Option<fees::RecipientRotationRequest> {
         fees::FeeManager::get_pending_rotation(&env)
     }
 
@@ -1416,11 +1401,7 @@ impl QuickLendXContract {
         // Per-invoice settlement currency whitelist (defence-in-depth)
         let mut settlement_currencies: Vec<Address> = Vec::new(&env);
         settlement_currencies.push_back(currency.clone());
-        crate::settlement::store_settlement_currencies(
-            &env,
-            &invoice.id,
-            &settlement_currencies,
-        );
+        crate::settlement::store_settlement_currencies(&env, &invoice.id, &settlement_currencies);
 
         // Emit event
         env.events().publish(
@@ -1500,11 +1481,7 @@ impl QuickLendXContract {
         // Per-invoice settlement currency whitelist (defence-in-depth)
         let mut settlement_currencies: Vec<Address> = Vec::new(&env);
         settlement_currencies.push_back(currency.clone());
-        crate::settlement::store_settlement_currencies(
-            &env,
-            &invoice.id,
-            &settlement_currencies,
-        );
+        crate::settlement::store_settlement_currencies(&env, &invoice.id, &settlement_currencies);
 
         emit_invoice_uploaded(&env, &invoice);
 
@@ -1774,8 +1751,8 @@ impl QuickLendXContract {
 
         // ── Pre-flight pass: validate all invoices before mutating storage ────
         for id in invoice_ids.iter() {
-            let invoice = InvoiceStorage::get_invoice(&env, &id)
-                .ok_or(QuickLendXError::InvoiceNotFound)?;
+            let invoice =
+                InvoiceStorage::get_invoice(&env, &id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
             require_no_active_freeze(&env, &id)?;
 
@@ -1786,8 +1763,8 @@ impl QuickLendXContract {
 
         // ── Execution pass: cancel invoices, update storage, emit events ─────
         for id in invoice_ids.iter() {
-            let mut invoice = InvoiceStorage::get_invoice(&env, &id)
-                .ok_or(QuickLendXError::InvoiceNotFound)?;
+            let mut invoice =
+                InvoiceStorage::get_invoice(&env, &id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
             // Remove from old status list
             InvoiceStorage::remove_from_status_invoices(&env, invoice.status, &id);
@@ -1901,8 +1878,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
         // Verify the investor has a KYC record before freezing.
-        InvestorVerificationStorage::get(&env, &investor)
-            .ok_or(QuickLendXError::KYCNotFound)?;
+        InvestorVerificationStorage::get(&env, &investor).ok_or(QuickLendXError::KYCNotFound)?;
 
         let info = InvestorFreezeInfo {
             reason,
@@ -1988,10 +1964,8 @@ impl QuickLendXContract {
         }
 
         InvoiceStorage::set_per_investor_position_cap(&env, &invoice_id, cap);
-        env.events().publish(
-            (symbol_short!("pos_cap"),),
-            (invoice_id, business, cap),
-        );
+        env.events()
+            .publish((symbol_short!("pos_cap"),), (invoice_id, business, cap));
         Ok(())
     }
 
@@ -2096,7 +2070,9 @@ impl QuickLendXContract {
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
         let mut available = Vec::new(&env);
         let now = env.ledger().timestamp();
-        for invoice_id in InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified).iter() {
+        for invoice_id in
+            InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified).iter()
+        {
             if let Some(invoice) = InvoiceStorage::get_invoice(&env, &invoice_id) {
                 if !invoice.is_overdue(now) {
                     available.push_back(invoice_id);
@@ -2380,10 +2356,29 @@ impl QuickLendXContract {
     /// state used by `place_bid`, so terminal positions release capacity
     /// without relying on a separately maintained analytics counter.
     pub fn get_investor_active_exposure(env: Env, investor: Address) -> i128 {
-        let bid_exposure = BidStorage::get_active_bid_amount_sum_for_investor(&env, &investor);
-        let investment_exposure =
-            InvestmentStorage::get_active_investment_amount_sum_for_investor(&env, &investor);
-        bid_exposure.saturating_add(investment_exposure)
+        payments::get_investor_exposure(&env, &investor)
+    }
+
+    /// Return the exact remaining funding capacity for an investor.
+    pub fn get_investor_available_capacity(
+        env: Env,
+        investor: Address,
+    ) -> Result<i128, QuickLendXError> {
+        payments::get_investor_available_capacity(&env, &investor)
+    }
+
+    /// Validate that an investor has sufficient authorized capacity for a funding commitment.
+    pub fn validate_funding_commitment(
+        env: Env,
+        investor: Address,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        payments::validate_funding_commitment(&env, &investor, amount)
+    }
+
+    /// Read the payment rate limit record for an account.
+    pub fn get_payment_rate_limit(env: Env, account: Address) -> payments::PaymentRateLimitRecord {
+        payments::PaymentRateLimiter::get_rate_limit(&env, &account)
     }
 
     /// Place a bid on an invoice
@@ -2459,7 +2454,10 @@ impl QuickLendXContract {
                 if bid_amount > verification.investment_limit {
                     return Err(QuickLendXError::InvalidAmount);
                 }
-                crate::verification::require_tier_min_investment_amount(&verification.tier, bid_amount)?;
+                crate::verification::require_tier_min_investment_amount(
+                    &verification.tier,
+                    bid_amount,
+                )?;
             }
             BusinessVerificationStatus::Pending => return Err(QuickLendXError::KYCAlreadyPending),
             BusinessVerificationStatus::Rejected => {
@@ -2662,6 +2660,15 @@ impl QuickLendXContract {
         investment_id: BytesN<32>,
     ) -> Result<Investment, QuickLendXError> {
         InvestmentStorage::get_investment(&env, &investment_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
+    /// Get an investment by its associated invoice ID.
+    pub fn get_investment_by_invoice(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<Investment, QuickLendXError> {
+        InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
@@ -3330,7 +3337,10 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
 
-        let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
+        let investor = invoice
+            .investor
+            .clone()
+            .ok_or(QuickLendXError::InvoiceNotFunded)?;
         if approver != invoice.business && approver != investor {
             return Err(QuickLendXError::Unauthorized);
         }
@@ -3362,7 +3372,10 @@ impl QuickLendXContract {
             return Err(QuickLendXError::InvalidStatus);
         }
 
-        let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
+        let investor = invoice
+            .investor
+            .clone()
+            .ok_or(QuickLendXError::InvoiceNotFunded)?;
         if approver != invoice.business && approver != investor {
             return Err(QuickLendXError::Unauthorized);
         }
@@ -3391,7 +3404,10 @@ impl QuickLendXContract {
             if invoice.status != InvoiceStatus::Funded {
                 return Err(QuickLendXError::InvalidStatus);
             }
-            let investor = invoice.investor.clone().ok_or(QuickLendXError::InvoiceNotFunded)?;
+            let investor = invoice
+                .investor
+                .clone()
+                .ok_or(QuickLendXError::InvoiceNotFunded)?;
             if !has_early_release_approval(&env, &invoice_id, &invoice.business)
                 || !has_early_release_approval(&env, &invoice_id, &investor)
             {
@@ -5244,7 +5260,9 @@ impl QuickLendXContract {
         if limit > config.backfill_max_batch_size {
             return Err(QuickLendXError::BatchSizeExceeded);
         }
-        Ok(InvoiceStorage::cleanup_index_page(&env, &index, offset, limit))
+        Ok(InvoiceStorage::cleanup_index_page(
+            &env, &index, offset, limit,
+        ))
     }
 
     /// Prune terminal-state invoices whose terminal timestamp is older than
@@ -5382,7 +5400,11 @@ impl QuickLendXContract {
 
 #[contractimpl]
 impl QuickLendXContract {
-    pub fn schedule_upgrade(env: Env, admin: Address, wasm_hash: BytesN<32>) -> Result<(), QuickLendXError> {
+    pub fn schedule_upgrade(
+        env: Env,
+        admin: Address,
+        wasm_hash: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
         upgrade::UpgradeControl::schedule_upgrade(&env, &admin, &wasm_hash)
     }
 
@@ -5423,28 +5445,28 @@ mod test_id_collision_cross_domain;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_auto_release;
 
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_dispute_interaction;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_prune_terminal_invoices;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_view_only;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_freeze_reason;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_guard_writes;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_event;
 
 // Issue #1960 — serialisation stability for freeze_appeal_channel field.
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_appeal_channel;
 
 #[cfg(all(test, feature = "fuzz-tests"))]

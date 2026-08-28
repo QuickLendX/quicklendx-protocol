@@ -97,7 +97,8 @@ fn create_and_fund_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(
@@ -163,10 +164,22 @@ fn test_investor_default_history_isolated_per_investor() {
     let grace_period = 7 * 24 * 60 * 60;
 
     let invoice_a = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor_a, amount, due_date,
+        &env,
+        &client,
+        &admin,
+        &business,
+        &investor_a,
+        amount,
+        due_date,
     );
     let invoice_b = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor_b, amount, due_date,
+        &env,
+        &client,
+        &admin,
+        &business,
+        &investor_b,
+        amount,
+        due_date,
     );
 
     let default_time = due_date + grace_period + 1;
@@ -307,7 +320,8 @@ fn test_cannot_default_unfunded_invoice() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
 
     // Verify invoice is verified, not funded
@@ -337,7 +351,8 @@ fn test_cannot_default_pending_invoice() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
 
     // Invoice is pending, not verified
     let invoice = client.get_invoice(&invoice_id);

@@ -451,7 +451,9 @@ impl BidStorage {
         }
 
         let old_seconds = Self::get_bid_expiry_grace_seconds(env);
-        env.storage().instance().set(&BID_EXPIRY_GRACE_KEY, &seconds);
+        env.storage()
+            .instance()
+            .set(&BID_EXPIRY_GRACE_KEY, &seconds);
         emit_bid_expiry_grace_updated(env, old_seconds, seconds, admin);
         Ok(seconds)
     }
@@ -976,8 +978,7 @@ impl BidStorage {
         let mut idx: u32 = 0;
         while idx < records.len() {
             let bid = records.get(idx).unwrap();
-            let eligible = status != BidStatus::Placed
-                || !bid.is_expired(env.ledger().timestamp());
+            let eligible = status != BidStatus::Placed || !bid.is_expired(env.ledger().timestamp());
             if bid.status == status && eligible {
                 filtered.push_back(bid);
             }
@@ -1342,7 +1343,11 @@ impl BidStorage {
 /// | bid has expired | `InvalidStatus` |
 /// | bid amount ≤ 0 | `InvalidAmount` |
 /// | bid amount > invoice amount | `InvalidAmount` |
-pub fn verify_bid_match(env: &Env, bid: &Bid, invoice: &crate::types::Invoice) -> Result<(), QuickLendXError> {
+pub fn verify_bid_match(
+    env: &Env,
+    bid: &Bid,
+    invoice: &crate::types::Invoice,
+) -> Result<(), QuickLendXError> {
     if bid.invoice_id != invoice.id {
         return Err(QuickLendXError::Unauthorized);
     }

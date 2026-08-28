@@ -158,7 +158,8 @@ fn upload_and_verify_invoice(
         &String::from_str(env, "Settlement/refund race regression invoice"),
         &InvoiceCategory::Technology,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
     invoice_id
 }

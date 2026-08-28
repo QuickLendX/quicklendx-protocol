@@ -58,11 +58,7 @@ fn create_verified_business(
     business
 }
 
-fn create_verified_investor(
-    env: &Env,
-    client: &QuickLendXContractClient,
-    limit: i128,
-) -> Address {
+fn create_verified_investor(env: &Env, client: &QuickLendXContractClient, limit: i128) -> Address {
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "KYC data"));
     client.verify_investor(&investor, &limit);
@@ -101,7 +97,8 @@ fn create_funded_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(
@@ -333,7 +330,10 @@ fn default_grace_period_boundary_not_defaultable_at_exact_deadline() {
         "Default grace: must not default at exact deadline, got: {:?}",
         result
     );
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 }
 
 /// With the protocol default grace period: one second after the deadline
@@ -389,7 +389,10 @@ fn zero_grace_period_not_defaultable_at_due_date() {
         "Zero grace: must not default at exact due_date, got: {:?}",
         result
     );
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
 }
 
 /// Zero grace period: one second after the due_date the invoice IS defaultable.
@@ -484,7 +487,8 @@ fn non_funded_invoice_not_defaultable_after_deadline() {
         &String::from_str(&env, "Not funded"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
 
     // Jump well past any deadline.

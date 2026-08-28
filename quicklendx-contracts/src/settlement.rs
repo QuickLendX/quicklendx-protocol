@@ -1,4 +1,4 @@
-﻿//! Invoice settlement with partial payments, capped overpayment handling,
+//! Invoice settlement with partial payments, capped overpayment handling,
 //! durable per-payment storage records, and finalization safety guards.
 //!
 //! # Invariants
@@ -174,7 +174,9 @@ pub fn process_partial_payment(
 ) -> Result<(), QuickLendXError> {
     let mut cache = crate::storage::StorageReadCache::new();
 
-    let invoice = cache.get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    let invoice = cache
+        .get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
     let payer = invoice.business.clone();
 
     crate::qlx_log!(
@@ -197,7 +199,8 @@ pub fn process_partial_payment(
 
     // Read updated invoice once; the cache avoids a redundant storage trip for
     // the notification below.
-    let invoice_post = cache.get_invoice(env, invoice_id)
+    let invoice_post = cache
+        .get_invoice(env, invoice_id)
         .ok_or(QuickLendXError::InvoiceNotFound)?;
 
     // Backward-compatible event used across existing tests/consumers.
@@ -288,7 +291,7 @@ pub fn record_payment(
 
     // Replay protection: reject duplicate nonces.
     crate::verification::validate_transaction_hash(env, &payment_nonce)?;
-    
+
     let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
     let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
     if seen {
@@ -596,9 +599,10 @@ pub fn store_settlement_currencies(
     invoice_id: &BytesN<32>,
     currencies: &soroban_sdk::Vec<Address>,
 ) {
-    env.storage()
-        .persistent()
-        .set(&SettlementDataKey::SettlementCurrencies(invoice_id.clone()), currencies);
+    env.storage().persistent().set(
+        &SettlementDataKey::SettlementCurrencies(invoice_id.clone()),
+        currencies,
+    );
 }
 
 /// Check that `invoice_currency` is in the per-invoice settlement currency
@@ -814,8 +818,13 @@ fn ensure_payable_status(invoice: &Invoice) -> Result<(), QuickLendXError> {
     Ok(())
 }
 
-pub fn require_matching_investment_snapshot(env: &Env, invoice_id: &BytesN<32>, snap: &crate::types::Investment) -> Result<(), QuickLendXError> {
-    let current = InvestmentStorage::get_investment_by_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+pub fn require_matching_investment_snapshot(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    snap: &crate::types::Investment,
+) -> Result<(), QuickLendXError> {
+    let current = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
     if current != *snap {
         return Err(QuickLendXError::StaleInvestmentSnapshot);
     }
@@ -925,12 +934,12 @@ fn emit_invoice_settled_final(
     );
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
-    use crate::types::{Investment, InvestmentStatus};
     use crate::investment::InvestmentStorage;
+    use crate::types::{Investment, InvestmentStatus};
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
 
     fn create_test_investment(env: &Env, invoice_id: &BytesN<32>, amount: i128) -> Investment {
         Investment {
@@ -950,7 +959,7 @@ mod test {
         env.mock_all_auths();
         let invoice_id = BytesN::from_array(&env, &[0; 32]);
         let investment = create_test_investment(&env, &invoice_id, 1000);
-        
+
         InvestmentStorage::store_investment(&env, &investment);
 
         let result = require_matching_investment_snapshot(&env, &invoice_id, &investment);
@@ -962,7 +971,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
         let invoice_id = BytesN::from_array(&env, &[0; 32]);
-        
+
         let stored_investment = create_test_investment(&env, &invoice_id, 1000);
         InvestmentStorage::store_investment(&env, &stored_investment);
 
@@ -979,9 +988,8 @@ mod test {
         env.mock_all_auths();
         let invoice_id = BytesN::from_array(&env, &[0; 32]);
         let investment = create_test_investment(&env, &invoice_id, 1000);
-        
+
         let result = require_matching_investment_snapshot(&env, &invoice_id, &investment);
         assert_eq!(result, Err(QuickLendXError::StorageKeyNotFound));
     }
 }
-

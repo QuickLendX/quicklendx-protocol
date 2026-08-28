@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 use crate::alloc::string::ToString;
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
@@ -77,7 +77,8 @@ impl TestFixture {
             &String::from_str(&self.env, "Test invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        &None);
+            &None,
+        );
         self.client.verify_invoice(&invoice_id);
         let bid_id = self.client.place_bid(
             &self.investor,
@@ -88,7 +89,11 @@ impl TestFixture {
         );
         self.client.accept_bid(&invoice_id, &bid_id);
         self.env.ledger().set_timestamp(timestamp + 10);
-        self.client.settle_invoice(&invoice_id, &amount, &self.client.get_investment(&invoice_id).unwrap());
+        self.client.settle_invoice(
+            &invoice_id,
+            &amount,
+            &self.client.get_investment(&invoice_id).unwrap(),
+        );
         let inv = self.client.get_invoice(&invoice_id);
         assert_eq!(inv.status, InvoiceStatus::Paid);
         invoice_id
@@ -113,7 +118,8 @@ impl TestFixture {
                     &String::from_str(&self.env, "Test invoice"),
                     &InvoiceCategory::Services,
                     &Vec::new(&self.env),
-        &None);
+                    &None,
+                );
                 self.client.verify_invoice(&invoice_id);
                 let bid_id = self.client.place_bid(
                     &self.investor,
@@ -154,7 +160,8 @@ impl TestFixture {
                     &String::from_str(&self.env, "Test invoice"),
                     &InvoiceCategory::Services,
                     &Vec::new(&self.env),
-        &None);
+                    &None,
+                );
                 if status == InvoiceStatus::Verified {
                     self.client.verify_invoice(&invoice_id);
                 }
@@ -174,7 +181,8 @@ impl TestFixture {
             &String::from_str(&self.env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        &None);
+            &None,
+        );
         self.client.verify_invoice(&invoice_id);
         let bid_id = self.client.place_bid(
             &self.investor,
@@ -428,4 +436,3 @@ fn test_index_cleanup_no_orphans() {
         "invoice should be deleted from persistent storage"
     );
 }
-

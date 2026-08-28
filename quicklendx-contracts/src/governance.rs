@@ -66,17 +66,24 @@ fn active_proposals_key() -> Symbol {
 }
 
 fn active_proposals_count(env: &Env) -> u32 {
-    env.storage().instance().get(&active_proposals_key()).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&active_proposals_key())
+        .unwrap_or(0)
 }
 
 fn increment_active_proposals(env: &Env) {
     let count = active_proposals_count(env).saturating_add(1);
-    env.storage().instance().set(&active_proposals_key(), &count);
+    env.storage()
+        .instance()
+        .set(&active_proposals_key(), &count);
 }
 
 fn decrement_active_proposals(env: &Env) {
     let count = active_proposals_count(env).saturating_sub(1);
-    env.storage().instance().set(&active_proposals_key(), &count);
+    env.storage()
+        .instance()
+        .set(&active_proposals_key(), &count);
 }
 
 /// Enforces that no governance proposal is currently active.
@@ -269,7 +276,7 @@ pub trait Governable {
 
         env.storage().instance().set(&key, &proposal);
         decrement_active_proposals(env);
-        
+
         Ok(proposal.status)
     }
 
@@ -334,4 +341,3 @@ pub fn require_matching_governance_proposal(
     }
     Ok(())
 }
-

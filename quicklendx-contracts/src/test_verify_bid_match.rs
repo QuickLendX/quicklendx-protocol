@@ -29,7 +29,9 @@
 
 use crate::bid::{verify_bid_match, Bid, BidStatus};
 use crate::errors::QuickLendXError;
-use crate::types::{Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceStatus};
+use crate::types::{
+    Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceStatus,
+};
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
     Address, BytesN, Env, String, Vec,
@@ -111,8 +113,7 @@ fn verify_bid_match_succeeds_for_valid_match() {
     let investor = Address::generate(&env);
     let bid = make_bid(&env, &invoice_id, &investor, 1);
 
-    verify_bid_match(&env, &bid, &invoice)
-        .expect("valid bid-invoice pair must pass");
+    verify_bid_match(&env, &bid, &invoice).expect("valid bid-invoice pair must pass");
 }
 
 // ============================================================================
@@ -148,8 +149,7 @@ fn verify_bid_match_rejects_non_placed_status() {
     let mut bid = make_bid(&env, &invoice_id, &investor, 1);
     bid.status = BidStatus::Cancelled;
 
-    let err = verify_bid_match(&env, &bid, &invoice)
-        .expect_err("cancelled bid must fail");
+    let err = verify_bid_match(&env, &bid, &invoice).expect_err("cancelled bid must fail");
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
 
@@ -162,8 +162,7 @@ fn verify_bid_match_rejects_accepted_status() {
     let mut bid = make_bid(&env, &invoice_id, &investor, 1);
     bid.status = BidStatus::Accepted;
 
-    let err = verify_bid_match(&env, &bid, &invoice)
-        .expect_err("accepted bid must fail");
+    let err = verify_bid_match(&env, &bid, &invoice).expect_err("accepted bid must fail");
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
 
@@ -176,8 +175,7 @@ fn verify_bid_match_rejects_expired_status() {
     let mut bid = make_bid(&env, &invoice_id, &investor, 1);
     bid.status = BidStatus::Expired;
 
-    let err = verify_bid_match(&env, &bid, &invoice)
-        .expect_err("expired-status bid must fail");
+    let err = verify_bid_match(&env, &bid, &invoice).expect_err("expired-status bid must fail");
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
 
@@ -190,8 +188,7 @@ fn verify_bid_match_rejects_withdrawn_status() {
     let mut bid = make_bid(&env, &invoice_id, &investor, 1);
     bid.status = BidStatus::Withdrawn;
 
-    let err = verify_bid_match(&env, &bid, &invoice)
-        .expect_err("withdrawn bid must fail");
+    let err = verify_bid_match(&env, &bid, &invoice).expect_err("withdrawn bid must fail");
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
 
@@ -210,8 +207,7 @@ fn verify_bid_match_rejects_expired_timestamp() {
     let mut bid = make_bid(&env, &invoice_id, &investor, 1);
     bid.expiration_timestamp = 999_999; // expired (before current timestamp)
 
-    let err = verify_bid_match(&env, &bid, &invoice)
-        .expect_err("expired bid must fail");
+    let err = verify_bid_match(&env, &bid, &invoice).expect_err("expired bid must fail");
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
 
@@ -229,8 +225,7 @@ fn verify_bid_match_rejects_zero_amount() {
     let mut bid = make_bid(&env, &invoice_id, &investor, 1);
     bid.bid_amount = 0;
 
-    let err = verify_bid_match(&env, &bid, &invoice)
-        .expect_err("zero-amount bid must fail");
+    let err = verify_bid_match(&env, &bid, &invoice).expect_err("zero-amount bid must fail");
     assert_eq!(err, QuickLendXError::InvalidAmount);
 }
 
@@ -244,7 +239,6 @@ fn verify_bid_match_rejects_negative_amount() {
     let mut bid = make_bid(&env, &invoice_id, &investor, 1);
     bid.bid_amount = -1;
 
-    let err = verify_bid_match(&env, &bid, &invoice)
-        .expect_err("negative-amount bid must fail");
+    let err = verify_bid_match(&env, &bid, &invoice).expect_err("negative-amount bid must fail");
     assert_eq!(err, QuickLendXError::InvalidAmount);
 }

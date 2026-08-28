@@ -100,7 +100,8 @@ mod test_dispute {
                 &String::from_str(env, "Test invoice for dispute"),
                 &InvoiceCategory::Services,
                 &Vec::new(env),
-                &None)
+                &None,
+            )
             .unwrap()
     }
 
@@ -2250,13 +2251,13 @@ mod test_dispute {
     }
 
     /// [TC-ARBITER-01] Arbiter registration and revocation flow.
-    /// Register an arbiter (admin), resolve a dispute, revoke the arbiter (via set_admin), 
+    /// Register an arbiter (admin), resolve a dispute, revoke the arbiter (via set_admin),
     /// attempt to resolve another dispute — must fail.
     #[test]
     fn test_arbiter_registration_and_revocation_flow() {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        
+
         // 1. Resolve first dispute with the registered arbiter (admin)
         let invoice_1 = create_test_invoice(&env, &client, &admin, &business, 100_000);
         client.create_dispute(
@@ -2266,12 +2267,8 @@ mod test_dispute {
             &String::from_str(&env, "Evidence 1"),
         );
         client.put_dispute_under_review(&invoice_1, &admin);
-        client.resolve_dispute(
-            &invoice_1,
-            &admin,
-            &String::from_str(&env, "Resolution 1"),
-        );
-        
+        client.resolve_dispute(&invoice_1, &admin, &String::from_str(&env, "Resolution 1"));
+
         // 2. Revoke the arbiter by transferring admin rights to a new address
         let new_admin = Address::generate(&env);
         client.set_admin(&new_admin);
@@ -2284,20 +2281,20 @@ mod test_dispute {
             &String::from_str(&env, "Reason 2"),
             &String::from_str(&env, "Evidence 2"),
         );
-        
+
         // 4. Old arbiter attempts to put under review - must fail
         let result1 = client.try_put_dispute_under_review(&invoice_2, &admin);
-        assert!(result1.is_err(), "Revoked arbiter cannot put dispute under review");
-        
+        assert!(
+            result1.is_err(),
+            "Revoked arbiter cannot put dispute under review"
+        );
+
         // New arbiter puts under review
         client.put_dispute_under_review(&invoice_2, &new_admin);
-        
+
         // 5. Old arbiter attempts to resolve - must fail
-        let result2 = client.try_resolve_dispute(
-            &invoice_2,
-            &admin,
-            &String::from_str(&env, "Resolution 2"),
-        );
+        let result2 =
+            client.try_resolve_dispute(&invoice_2, &admin, &String::from_str(&env, "Resolution 2"));
         assert!(result2.is_err(), "Revoked arbiter cannot resolve dispute");
     }
 }

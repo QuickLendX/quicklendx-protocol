@@ -58,10 +58,11 @@ mod test_invoice_search {
             dispute: Default::default(),
             total_paid: 0,
             payment_history: Vec::new(env),
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
         };
-        invoice,
-        origination_fee_bps: None,
-        early_payment_discount_bps: None,
+        invoice
     }
 
     #[test]
