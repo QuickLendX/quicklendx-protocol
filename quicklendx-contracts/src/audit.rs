@@ -34,6 +34,7 @@
 //! See `src/test_audit.rs` for comprehensive integrity tests.
 
 use crate::errors::QuickLendXError;
+use crate::observability::OBSERVABILITY_SCHEMA_VERSION;
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{
     contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Symbol, Vec,
@@ -187,6 +188,10 @@ pub const CONFIG_AUDIT_SENTINEL: [u8; 32] = [0xCFu8; 32];
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct AuditLogEntry {
+    /// Version of the event/audit schema used for this record.
+    pub schema_version: u32,
+    /// Correlation id shared with the committed protocol event.
+    pub operation_id: BytesN<32>,
     pub audit_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
     pub operation: AuditOperation,
@@ -265,13 +270,16 @@ impl AuditLogEntry {
         amount: Option<i128>,
         additional_data: Option<String>,
     ) -> Self {
-        let audit_id = Self::generate_audit_id(env);
+        let operation_id = crate::observability::allocate_operation_id(env);
+        let audit_id = operation_id.clone();
         let timestamp = env.ledger().timestamp();
         let block_height = env.ledger().sequence();
 
         let prev_hash = AuditStorage::last_entry_hash(env, &invoice_id);
 
         Self {
+            schema_version: OBSERVABILITY_SCHEMA_VERSION,
+            operation_id,
             audit_id,
             invoice_id,
             operation,
@@ -287,7 +295,8 @@ impl AuditLogEntry {
         }
     }
 
-    /// Generate unique audit ID
+    /// Generate unique audit ID (legacy helper retained for source compatibility).
+    #[allow(dead_code)]
     fn generate_audit_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let sequence = env.ledger().sequence();
@@ -319,6 +328,12 @@ impl AuditLogEntry {
 
     /// Validate audit log entry integrity
     pub fn validate_integrity(&self, env: &Env) -> Result<bool, QuickLendXError> {
+        if self.schema_version != OBSERVABILITY_SCHEMA_VERSION
+            || self.operation_id != self.audit_id
+        {
+            return Ok(false);
+        }
+
         // Check timestamp is not in future
         if self.timestamp > env.ledger().timestamp() {
             return Ok(false);
@@ -407,6 +422,8 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
 fn hash_audit_entry(env: &Env, entry: &AuditLogEntry) -> BytesN<32> {
     let mut preimage = Bytes::new(env);
     preimage.append(&Bytes::from_slice(env, AuditLogEntry::HASH_DOMAIN_TAG));
+    preimage.append(&Bytes::from_array(env, &entry.schema_version.to_be_bytes()));
+    preimage.append(&entry.operation_id.clone().to_xdr(env));
     preimage.append(&entry.prev_hash.clone().to_xdr(env));
     preimage.append(&entry.audit_id.clone().to_xdr(env));
     preimage.append(&entry.invoice_id.clone().to_xdr(env));
@@ -486,6 +503,12 @@ impl AuditStorage {
     /// The entry remains in storage unchanged and is only removed by explicit
     /// cleanup (never by this function or any query).
     pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) {
+        // A correlation id is the immutable key. Reject duplicate appends rather
+        // than overwriting an existing committed record.
+        if Self::get_audit_entry(env, &entry.operation_id).is_some() {
+            panic!("duplicate observability operation id");
+        }
+
         // Store individual entry
         env.storage().instance().set(&entry.audit_id, entry);
 

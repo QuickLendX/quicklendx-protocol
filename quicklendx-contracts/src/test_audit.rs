@@ -26,6 +26,27 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
 }
 
 #[test]
+fn test_audit_records_are_versioned_and_correlated() {
+    let (env, client, _admin, business) = setup();
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &1000i128,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "correlation"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let trail = client.get_invoice_audit_trail(&invoice_id);
+    let entry = client.get_audit_entry(&trail.get(0).unwrap());
+    assert_eq!(entry.schema_version, crate::observability::OBSERVABILITY_SCHEMA_VERSION);
+    assert_eq!(entry.operation_id, entry.audit_id);
+    assert!(client.verify_audit_chain(&invoice_id));
+}
+
+#[test]
 fn test_audit_invoice_created_and_trail() {
     let (env, client, _admin, business) = setup();
     let currency = Address::generate(&env);

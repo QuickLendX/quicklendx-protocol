@@ -89,6 +89,7 @@ pub mod invoice_search;
 pub mod maintenance;
 pub mod monitor;
 pub mod notifications;
+pub mod observability;
 pub mod pagination;
 pub mod pause;
 pub mod payments;
@@ -3592,6 +3593,11 @@ impl QuickLendXContract {
 
     pub fn get_audit_entry(env: Env, audit_id: BytesN<32>) -> Option<audit::AuditLogEntry> {
         audit::AuditStorage::get_audit_entry(&env, &audit_id)
+    }
+
+    /// Return the current observability schema version.
+    pub fn get_observability_schema_version(_env: Env) -> u32 {
+        observability::OBSERVABILITY_SCHEMA_VERSION
     }
 
     /// Get all audit entry IDs for a given operation type.
