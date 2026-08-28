@@ -1,6 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  trackWalletConnectAttempt,
+  trackWalletConnected,
+  trackWalletConnectFailed,
+  trackWalletDisconnected,
+} from "../lib/wallet-telemetry";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -230,14 +236,16 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
   const handleConnect = useCallback(async () => {
     setState("CONNECTING");
     setErrorMessage("");
+    trackWalletConnectAttempt({ walletType: "freighter", network: expectedNetwork });
     try {
-      // TODO: replace with Freighter SDK call
+      // Replace with Freighter SDK call when ready
       // const { address } = await getAddress();
       // const { network } = await getNetwork();
       // if (network !== expectedNetwork) { setState("WRONG_NETWORK"); return; }
       // setAddress(address);
       // setState("CONNECTED");
       // setModalOpen(false);
+      // trackWalletConnected({ address, walletType: "freighter", network: expectedNetwork });
       // onConnect?.(address);
 
       // Placeholder: simulate async connection
@@ -245,6 +253,11 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
       throw new Error("SDK_NOT_INTEGRATED");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
+      trackWalletConnectFailed({
+        error: msg,
+        walletType: "freighter",
+        network: expectedNetwork,
+      });
       const userMessage =
         msg === "SDK_NOT_INTEGRATED"
           ? "Wallet SDK not yet integrated. See docs/ux/wallet-connect.md."
@@ -258,17 +271,17 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
       setErrorMessage(userMessage);
       setState("ERROR");
     }
-  }, []);
+  }, [expectedNetwork]);
 
   const handleDisconnect = useCallback(async () => {
     setState("DISCONNECTING");
     setAccountMenuOpen(false);
-    // TODO: clear Freighter session if SDK provides a method
+    trackWalletDisconnected({ address, network: expectedNetwork });
     await new Promise((r) => setTimeout(r, 300));
     setAddress("");
     setState("NOT_CONNECTED");
     onDisconnect?.();
-  }, [onDisconnect]);
+  }, [address, expectedNetwork, onDisconnect]);
 
   // -------------------------------------------------------------------------
   // Render helpers
