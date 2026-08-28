@@ -109,7 +109,10 @@ mod evidence_identity_tests {
         let evidence = String::from_str(&env, "provider-reference-1");
         let digest = reserve_evidence(&env, &invoice, &creator, &evidence).unwrap();
         assert_eq!(digest, env.crypto().sha256(&evidence.to_bytes()));
-        assert_eq!(reserve_evidence(&env, &invoice, &creator, &evidence), Err(QuickLendXError::InvalidDisputeEvidence));
+        assert_eq!(
+            reserve_evidence(&env, &invoice, &creator, &evidence),
+            Err(QuickLendXError::InvalidDisputeEvidence)
+        );
     }
 
     #[test]
@@ -156,7 +159,7 @@ pub(crate) fn reserve_evidence(
     creator: &Address,
     evidence: &String,
 ) -> Result<BytesN<32>, QuickLendXError> {
-    let digest = env.crypto().sha256(&evidence.to_bytes());
+    let digest: BytesN<32> = env.crypto().sha256(&evidence.to_bytes()).into();
     let key = DataKey::DisputeEvidence(digest.clone());
     if env.storage().persistent().has(&key) {
         return Err(QuickLendXError::InvalidDisputeEvidence);

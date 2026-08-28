@@ -1910,6 +1910,19 @@ impl QuickLendXContract {
             frozen_at: env.ledger().timestamp(),
         };
         InvoiceStorage::set_investor_freeze_info(&env, &investor, &info);
+
+        // Emit structured event and audit log entry
+        // Note: `reason` was moved into `info.reason` above; re-read from the stored info.
+        events::emit_investor_frozen(&env, &investor, &admin, &info.reason);
+        audit::log_kyc_operation(
+            &env,
+            audit::AuditOperation::InvestorFrozen,
+            admin,
+            None,
+            Some(String::from_str(&env, "Frozen")),
+            Some(String::from_str(&env, "investor")),
+        );
+
         Ok(())
     }
 
@@ -1927,6 +1940,18 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
         InvoiceStorage::remove_investor_freeze_info(&env, &investor);
+
+        // Emit structured event and audit log entry
+        events::emit_investor_unfrozen(&env, &investor, &admin);
+        audit::log_kyc_operation(
+            &env,
+            audit::AuditOperation::InvestorUnfrozen,
+            admin,
+            Some(String::from_str(&env, "Frozen")),
+            Some(String::from_str(&env, "Unfrozen")),
+            Some(String::from_str(&env, "investor")),
+        );
+
         Ok(())
     }
 

@@ -5,12 +5,12 @@
 
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
+use crate::errors::QuickLendXError;
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory,
-    InvoiceLock, InvoiceStatus, InvestorFreezeInfo, PlatformFeeConfig, PruneReport, RebuildReport,
+    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, InvestorFreezeInfo, Invoice,
+    InvoiceCategory, InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
 };
-use crate::errors::QuickLendXError;
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
 pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
@@ -279,12 +279,36 @@ pub struct InvoiceStorage;
 impl InvoiceStorage {
     fn raw_index_entries(env: &Env, index: &InvoiceIndex) -> Vec<BytesN<32>> {
         match index {
-            InvoiceIndex::Business(business) => env.storage().persistent().get(&Indexes::invoices_by_business(business)).unwrap_or(Vec::new(env)),
-            InvoiceIndex::Status(status) => env.storage().persistent().get(&Indexes::invoices_by_status(*status)).unwrap_or(Vec::new(env)),
-            InvoiceIndex::Customer(name) => env.storage().persistent().get(&Indexes::invoices_by_customer(name)).unwrap_or(Vec::new(env)),
-            InvoiceIndex::TaxId(tax_id) => env.storage().persistent().get(&Indexes::invoices_by_tax_id(tax_id)).unwrap_or(Vec::new(env)),
-            InvoiceIndex::Tag(tag) => env.storage().persistent().get(&Indexes::invoices_by_tag(tag)).unwrap_or(Vec::new(env)),
-            InvoiceIndex::Category(category) => env.storage().persistent().get(&Indexes::invoices_by_category(*category)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::Business(business) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_business(business))
+                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::Status(status) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_status(*status))
+                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::Customer(name) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_customer(name))
+                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::TaxId(tax_id) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_tax_id(tax_id))
+                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::Tag(tag) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_tag(tag))
+                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::Category(category) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_category(*category))
+                .unwrap_or(Vec::new(env)),
         }
     }
 
@@ -343,16 +367,40 @@ impl InvoiceStorage {
         }
 
         if removed > 0 {
-            let key = match index {
-                InvoiceIndex::Business(business) => Indexes::invoices_by_business(business),
-                InvoiceIndex::Status(status) => Indexes::invoices_by_status(*status),
-                InvoiceIndex::Customer(name) => Indexes::invoices_by_customer(name),
-                InvoiceIndex::TaxId(tax_id) => Indexes::invoices_by_tax_id(tax_id),
-                InvoiceIndex::Tag(tag) => Indexes::invoices_by_tag(tag),
-                InvoiceIndex::Category(category) => Indexes::invoices_by_category(*category),
+            // Each index variant returns a different key tuple type, so we
+            // must store in a separate branch to satisfy the type checker.
+            match index {
+                InvoiceIndex::Business(business) => {
+                    let key = Indexes::invoices_by_business(business);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::Status(status) => {
+                    let key = Indexes::invoices_by_status(*status);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::Customer(name) => {
+                    let key = Indexes::invoices_by_customer(name);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::TaxId(tax_id) => {
+                    let key = Indexes::invoices_by_tax_id(tax_id);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::Tag(tag) => {
+                    let key = Indexes::invoices_by_tag(tag);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::Category(category) => {
+                    let key = Indexes::invoices_by_category(*category);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
             };
-            env.storage().persistent().set(&key, &entries);
-            extend_persistent_ttl(env, &key);
         }
 
         crate::types::IndexCleanupReport {
@@ -466,12 +514,12 @@ impl InvoiceStorage {
         extend_persistent_ttl(env, &key);
     }
 
-    pub fn get_investor_freeze_info(
-        env: &Env,
-        investor: &Address,
-    ) -> Option<InvestorFreezeInfo> {
+    pub fn get_investor_freeze_info(env: &Env, investor: &Address) -> Option<InvestorFreezeInfo> {
         let key = DataKey::InvestorFreezeInfo(investor.clone());
-        let result = env.storage().persistent().get::<_, InvestorFreezeInfo>(&key);
+        let result = env
+            .storage()
+            .persistent()
+            .get::<_, InvestorFreezeInfo>(&key);
         if result.is_some() {
             extend_persistent_ttl(env, &key);
         }
@@ -538,11 +586,7 @@ impl InvoiceStorage {
     ///
     /// Passing `None` removes the cap (uncapped). Callers must validate
     /// `cap > 0 && cap <= invoice.amount` before storing `Some(cap)`.
-    pub fn set_per_investor_position_cap(
-        env: &Env,
-        invoice_id: &BytesN<32>,
-        cap: Option<i128>,
-    ) {
+    pub fn set_per_investor_position_cap(env: &Env, invoice_id: &BytesN<32>, cap: Option<i128>) {
         crate::assert_view_only!(env);
         let key = DataKey::PerInvestorPositionCap(invoice_id.clone());
         match cap {
@@ -1507,8 +1551,11 @@ impl InvoiceStorage {
 #[cfg(test)]
 mod test_storage_read_cache {
     use super::*;
+    use crate::types::{
+        Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceRating,
+        InvoiceStatus, PaymentRecord,
+    };
     use soroban_sdk::{testutils::Address as _, Address, Env};
-    use crate::types::{Invoice, InvoiceStatus, InvoiceCategory, DisputeStatus, Dispute, DisputeResolution, PaymentRecord, InvoiceRating};
 
     fn create_sample_invoice(env: &Env, id: &BytesN<32>, business: &Address) -> Invoice {
         Invoice {

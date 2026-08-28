@@ -4,8 +4,8 @@ use crate::audit::OpType;
 use crate::fees::FeeType;
 use crate::payments::Escrow;
 use crate::types::Bid;
-use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
-use crate::verification::InvestorVerification;
+use crate::types::{InvestorFreezeReason, Invoice, InvoiceMetadata, PlatformFeeConfig};
+use crate::verification::{InvestorRiskLevel, InvestorTier, InvestorVerification};
 use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 // ============================================================================
@@ -75,6 +75,44 @@ pub const TOPIC_TREASURY_ROTATION_CANCELLED: &str = "treasury_rotation_cancelled
 /// The payload includes a `freeze_appeal_channel` field that points consumers
 /// to the appeals process documented in `docs/APPEALS.md`.
 pub const TOPIC_INVOICE_FROZEN: &str = "invoice_frozen";
+
+// ============================================================================
+// KYC / Participant-Identity Topic Constants
+//
+// Pinned topic strings for the full KYC lifecycle. Off-chain indexers
+// subscribe to these to track participant eligibility transitions.
+// ============================================================================
+
+/// Topic for `KycSubmitted` events.
+///
+/// Emitted when a business or investor submits a KYC application (first
+/// submission or resubmission after rejection).
+pub const TOPIC_KYC_SUBMITTED: &str = "kyc_submitted";
+
+/// Topic for `KycVerified` events.
+///
+/// Emitted when an admin verifies (approves) a business or investor KYC record.
+pub const TOPIC_KYC_VERIFIED: &str = "kyc_verified";
+
+/// Topic for `KycRejected` events.
+///
+/// Emitted when an admin rejects a pending business or investor KYC record.
+pub const TOPIC_KYC_REJECTED: &str = "kyc_rejected";
+
+/// Topic for `KycRevoked` events.
+///
+/// Emitted when an admin revokes a previously-verified investor's KYC.
+pub const TOPIC_KYC_REVOKED: &str = "kyc_revoked";
+
+/// Topic for `InvestorFrozen` events.
+///
+/// Emitted when an admin freezes an investor, blocking all investment actions.
+pub const TOPIC_INVESTOR_FROZEN: &str = "investor_frozen";
+
+/// Topic for `InvestorUnfrozen` events.
+///
+/// Emitted when an admin unfreezes an investor, restoring investment actions.
+pub const TOPIC_INVESTOR_UNFROZEN: &str = "investor_unfrozen";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -400,11 +438,129 @@ pub struct InvoiceMetadataCleared {
     pub business: Address,
 }
 
+/// Emitted when an investor is verified by an admin.
+///
+/// Topic: [`TOPIC_INVESTOR_VERIFIED`] (if defined) or the struct topic.
+///
+/// # Fields
+/// - `investor` – Address of the verified investor.
+/// - `investment_limit` – Computed investment limit for this investor.
+/// - `verified_at` – Ledger timestamp when verification occurred.
+/// - `verified_by` – Address of the admin who performed the verification.
+/// - `tier` – Investor tier (serialized as u32: 0=Basic, 1=Silver, 2=Gold, 3=Platinum, 4=VIP).
+/// - `risk_level` – Risk level (serialized as u32: 0=Low, 1=Medium, 2=High, 3=VeryHigh).
+/// - `risk_score` – Numeric risk score (0–100).
 #[contractevent]
 pub struct InvestorVerified {
     pub investor: Address,
     pub investment_limit: i128,
     pub verified_at: u64,
+    pub verified_by: Address,
+    pub tier: u32,
+    pub risk_level: u32,
+    pub risk_score: u32,
+}
+
+/// Emitted when a business or investor submits a KYC application.
+///
+/// Topic: [`TOPIC_KYC_SUBMITTED`] (`"kyc_submitted"`)
+///
+/// # Fields
+/// - `subject` – Address of the business or investor submitting KYC.
+/// - `is_resubmit` – `true` if this is a resubmission after a prior rejection.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycSubmitted {
+    pub subject: Address,
+    pub is_resubmit: bool,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin verifies (approves) a business or investor KYC record.
+///
+/// Topic: [`TOPIC_KYC_VERIFIED`] (`"kyc_verified"`)
+///
+/// # Fields
+/// - `subject` – Address of the verified business or investor.
+/// - `admin` – Address of the admin who performed the verification.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycVerified {
+    pub subject: Address,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin rejects a pending business or investor KYC record.
+///
+/// Topic: [`TOPIC_KYC_REJECTED`] (`"kyc_rejected"`)
+///
+/// # Fields
+/// - `subject` – Address of the rejected business or investor.
+/// - `admin` – Address of the admin who performed the rejection.
+/// - `reason` – Auditable rejection reason.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycRejected {
+    pub subject: Address,
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin revokes a previously-verified investor's KYC.
+///
+/// Topic: [`TOPIC_KYC_REVOKED`] (`"kyc_revoked"`)
+///
+/// # Fields
+/// - `investor` – Address of the investor whose KYC was revoked.
+/// - `admin` – Address of the admin who performed the revocation.
+/// - `reason` – Auditable revocation reason.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycRevoked {
+    pub investor: Address,
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin freezes an investor, blocking all investment actions.
+///
+/// Topic: [`TOPIC_INVESTOR_FROZEN`] (`"investor_frozen"`)
+///
+/// # Fields
+/// - `investor` – Address of the frozen investor.
+/// - `admin` – Address of the admin who performed the freeze.
+/// - `reason` – The freeze reason (serialized as string).
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvestorFrozen {
+    pub investor: Address,
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin unfreezes an investor, restoring investment actions.
+///
+/// Topic: [`TOPIC_INVESTOR_UNFROZEN`] (`"investor_unfrozen"`)
+///
+/// # Fields
+/// - `investor` – Address of the unfrozen investor.
+/// - `admin` – Address of the admin who performed the unfreeze.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvestorUnfrozen {
+    pub investor: Address,
+    pub admin: Address,
+    pub timestamp: u64,
 }
 
 #[derive(Debug, PartialEq)]
@@ -847,10 +1003,120 @@ pub fn emit_invoice_metadata_cleared(env: &Env, invoice: &Invoice) {
 }
 
 pub fn emit_investor_verified(env: &Env, verification: &InvestorVerification) {
+    let tier_num = match verification.tier {
+        InvestorTier::Basic => 0u32,
+        InvestorTier::Silver => 1,
+        InvestorTier::Gold => 2,
+        InvestorTier::Platinum => 3,
+        InvestorTier::VIP => 4,
+    };
+    let risk_num = match verification.risk_level {
+        InvestorRiskLevel::Low => 0u32,
+        InvestorRiskLevel::Medium => 1,
+        InvestorRiskLevel::High => 2,
+        InvestorRiskLevel::VeryHigh => 3,
+    };
     InvestorVerified {
         investor: verification.investor.clone(),
         investment_limit: verification.investment_limit,
         verified_at: verification.verified_at.unwrap_or(0),
+        verified_by: verification
+            .verified_by
+            .clone()
+            .unwrap_or(Address::from_str(
+                env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            )),
+        tier: tier_num,
+        risk_level: risk_num,
+        risk_score: verification.risk_score,
+    }
+    .publish(env);
+}
+
+// ============================================================================
+// KYC / Participant-Identity Event Emitters
+//
+// These replace the private raw-symbol emitters previously scattered in
+// verification.rs. Every KYC lifecycle transition now emits a structured
+// #[contractevent] with a pinned TOPIC_* constant for indexer stability.
+// ============================================================================
+
+/// Emitted when a business or investor submits a KYC application.
+pub fn emit_kyc_submitted(env: &Env, subject: &Address, is_resubmit: bool) {
+    KycSubmitted {
+        subject: subject.clone(),
+        is_resubmit,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin verifies (approves) a business or investor KYC record.
+pub fn emit_kyc_verified(env: &Env, subject: &Address, admin: &Address) {
+    KycVerified {
+        subject: subject.clone(),
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin rejects a pending business or investor KYC record.
+pub fn emit_kyc_rejected(env: &Env, subject: &Address, admin: &Address, reason: &String) {
+    KycRejected {
+        subject: subject.clone(),
+        admin: admin.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin revokes a previously-verified investor's KYC.
+pub fn emit_kyc_revoked(env: &Env, investor: &Address, admin: &Address, reason: &String) {
+    KycRevoked {
+        investor: investor.clone(),
+        admin: admin.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin freezes an investor, blocking all investment actions.
+pub fn emit_investor_frozen(
+    env: &Env,
+    investor: &Address,
+    admin: &Address,
+    reason: &InvestorFreezeReason,
+) {
+    let reason_str = match reason {
+        crate::types::InvestorFreezeReason::AdminAction => String::from_str(env, "AdminAction"),
+        crate::types::InvestorFreezeReason::KYCExpired => String::from_str(env, "KYCExpired"),
+        crate::types::InvestorFreezeReason::ComplianceViolation => {
+            String::from_str(env, "ComplianceViolation")
+        }
+        crate::types::InvestorFreezeReason::SuspiciousActivity => {
+            String::from_str(env, "SuspiciousActivity")
+        }
+        crate::types::InvestorFreezeReason::LegalHold => String::from_str(env, "LegalHold"),
+    };
+    InvestorFrozen {
+        investor: investor.clone(),
+        admin: admin.clone(),
+        reason: reason_str,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin unfreezes an investor, restoring investment actions.
+pub fn emit_investor_unfrozen(env: &Env, investor: &Address, admin: &Address) {
+    InvestorUnfrozen {
+        investor: investor.clone(),
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
     }
     .publish(env);
 }
@@ -1440,7 +1706,12 @@ pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Add
     .publish(env);
 }
 
-pub fn emit_bid_expiry_grace_updated(env: &Env, old_seconds: u64, new_seconds: u64, admin: &Address) {
+pub fn emit_bid_expiry_grace_updated(
+    env: &Env,
+    old_seconds: u64,
+    new_seconds: u64,
+    admin: &Address,
+) {
     BidExpiryGraceUpdated {
         old_seconds,
         new_seconds,
@@ -1633,7 +1904,12 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
         .publish((symbol_short!("adm_init"),), (admin.clone(),));
 }
 
-pub fn emit_treasury_rotation_initiated(env: &Env, admin: &Address, new_address: &Address, deadline: u64) {
+pub fn emit_treasury_rotation_initiated(
+    env: &Env,
+    admin: &Address,
+    new_address: &Address,
+    deadline: u64,
+) {
     env.events().publish(
         (symbol_short!("tr_rot_i"), admin.clone()),
         (new_address.clone(), deadline),
@@ -1650,10 +1926,8 @@ pub fn emit_treasury_rotation_confirmed(env: &Env, admin: &Address, new_address:
 pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
     // Cancellation is part of the auditable control-plane history even though
     // it does not change the active recipient.
-    env.events().publish(
-        (symbol_short!("tr_rot_c"), admin.clone()),
-        (),
-    );
+    env.events()
+        .publish((symbol_short!("tr_rot_c"), admin.clone()), ());
 }
 
 // ── Upgrade events ──────────────────────────────────────────────────────────

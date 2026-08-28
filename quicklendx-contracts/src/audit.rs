@@ -71,6 +71,18 @@ pub enum AuditOperation {
     ConfigRevenueDistributionChanged,
     /// Admin manually overrode an invoice's computed average rating.
     RatingOverridden,
+    /// A business or investor submitted a KYC application (first time or resubmission).
+    KycSubmitted,
+    /// Admin verified (approved) a business or investor KYC record.
+    KycVerified,
+    /// Admin rejected a pending business or investor KYC record.
+    KycRejected,
+    /// Admin revoked a previously-verified investor's KYC.
+    KycRevoked,
+    /// An investor was frozen (all investment actions blocked).
+    InvestorFrozen,
+    /// An investor was unfrozen (investment actions restored).
+    InvestorUnfrozen,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -103,6 +115,12 @@ pub enum OpType {
     ConfigFeeStructureChanged,
     ConfigRevenueDistributionChanged,
     RatingOverridden,
+    KycSubmitted,
+    KycVerified,
+    KycRejected,
+    KycRevoked,
+    InvestorFrozen,
+    InvestorUnfrozen,
 }
 
 impl OpType {
@@ -131,6 +149,12 @@ impl OpType {
             OpType::ConfigFeeStructureChanged => symbol_short!("cfg_fstr"),
             OpType::ConfigRevenueDistributionChanged => symbol_short!("cfg_rev"),
             OpType::RatingOverridden => symbol_short!("rt_over"),
+            OpType::KycSubmitted => symbol_short!("kyc_sub"),
+            OpType::KycVerified => symbol_short!("kyc_ver"),
+            OpType::KycRejected => symbol_short!("kyc_rej"),
+            OpType::KycRevoked => symbol_short!("kyc_rev"),
+            OpType::InvestorFrozen => symbol_short!("inv_frz"),
+            OpType::InvestorUnfrozen => symbol_short!("inv_unf"),
         }
     }
 
@@ -159,6 +183,12 @@ impl OpType {
             OpType::ConfigFeeStructureChanged => 19,
             OpType::ConfigRevenueDistributionChanged => 20,
             OpType::RatingOverridden => 21,
+            OpType::KycSubmitted => 22,
+            OpType::KycVerified => 23,
+            OpType::KycRejected => 24,
+            OpType::KycRevoked => 25,
+            OpType::InvestorFrozen => 26,
+            OpType::InvestorUnfrozen => 27,
         }
     }
 }
@@ -190,6 +220,12 @@ impl From<AuditOperation> for OpType {
                 OpType::ConfigRevenueDistributionChanged
             }
             AuditOperation::RatingOverridden => OpType::RatingOverridden,
+            AuditOperation::KycSubmitted => OpType::KycSubmitted,
+            AuditOperation::KycVerified => OpType::KycVerified,
+            AuditOperation::KycRejected => OpType::KycRejected,
+            AuditOperation::KycRevoked => OpType::KycRevoked,
+            AuditOperation::InvestorFrozen => OpType::InvestorFrozen,
+            AuditOperation::InvestorUnfrozen => OpType::InvestorUnfrozen,
         }
     }
 }
@@ -207,6 +243,14 @@ pub const AUDIT_CHAIN_GENESIS: [u8; 32] = [0u8; 32];
 /// Distinct from `AUDIT_CHAIN_GENESIS` (`[0u8; 32]`) to prevent overlap
 /// between the per-invoice genesis sentinel and the config trail key.
 pub const CONFIG_AUDIT_SENTINEL: [u8; 32] = [0xCFu8; 32];
+
+/// Fixed sentinel `invoice_id` for all KYC-related audit entries.
+///
+/// KYC operations (submit, verify, reject, revoke, freeze, unfreeze) are not
+/// scoped to any invoice. They share this virtual trail so every KYC audit
+/// entry chains with the same hash-link ordering guarantee as invoice-local
+/// and config-change trails.
+pub const KYC_AUDIT_SENTINEL: [u8; 32] = [0x4Bu8; 32]; // 'K' for KYC
 
 /// Audit log entry structure
 ///
@@ -430,6 +474,12 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::ConfigFeeStructureChanged => 19,
         AuditOperation::ConfigRevenueDistributionChanged => 20,
         AuditOperation::RatingOverridden => 21,
+        AuditOperation::KycSubmitted => 22,
+        AuditOperation::KycVerified => 23,
+        AuditOperation::KycRejected => 24,
+        AuditOperation::KycRevoked => 25,
+        AuditOperation::InvestorFrozen => 26,
+        AuditOperation::InvestorUnfrozen => 27,
     }
 }
 
@@ -1146,5 +1196,36 @@ pub(crate) fn log_config_change(
         new_value,
         None,
         Some(String::from_str(env, param)),
+    );
+}
+
+/// Append a KYC-related audit entry to the shared `KYC_AUDIT_SENTINEL` trail.
+///
+/// Every KYC state transition (submit, verify, reject, revoke, freeze, unfreeze)
+/// calls this function so the append-only audit log captures the full
+/// participant-identity lifecycle on the same hash-chain infrastructure used
+/// for invoice and config trails.
+///
+/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
+/// guarantee the preceding storage write and this audit append both commit or
+/// both roll back — there is no partial-success scenario.
+pub(crate) fn log_kyc_operation(
+    env: &Env,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    additional_data: Option<String>,
+) {
+    let sentinel = BytesN::from_array(env, &KYC_AUDIT_SENTINEL);
+    log_operation(
+        env,
+        sentinel,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        None,
+        additional_data,
     );
 }
