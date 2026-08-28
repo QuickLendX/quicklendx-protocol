@@ -948,9 +948,26 @@ impl InvoiceStorage {
         Self::index_entries(env, &InvoiceIndex::Tag(tag.clone()))
     }
 
-    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+    /// Look up invoices matching every tag in `tags` (AND logic).
+    ///
+    /// # Resource bound
+    /// `tags.len()` is rejected above [`crate::verification::MAX_INVOICE_TAG_COUNT`]
+    /// *before* any index work begins. No invoice can ever be stored with more
+    /// tags than that cap (enforced at creation by
+    /// [`crate::verification::validate_invoice_tags`]), so a query requesting
+    /// more tags than the cap can never match anything — it can only force the
+    /// contract to redo the tag-index scan below once per extra tag. Without
+    /// this check, an unauthenticated caller could pass an arbitrarily long
+    /// `tags` vector and multiply the cost of this call by its length.
+    pub fn get_invoices_by_tags(
+        env: &Env,
+        tags: &Vec<String>,
+    ) -> Result<Vec<BytesN<32>>, QuickLendXError> {
+        if tags.len() > crate::verification::MAX_INVOICE_TAG_COUNT {
+            return Err(QuickLendXError::TagLimitExceeded);
+        }
         if tags.is_empty() {
-            return Vec::new(env);
+            return Ok(Vec::new(env));
         }
         let mut result = Vec::new(env);
         let first_tag = tags.get(0).unwrap();
@@ -970,7 +987,7 @@ impl InvoiceStorage {
                 result.push_back(id);
             }
         }
-        result
+        Ok(result)
     }
 
     pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
