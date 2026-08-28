@@ -1,4 +1,4 @@
-﻿#![no_std]
+#![no_std]
 #![allow(
     dead_code,
     unused_imports,
@@ -26,6 +26,9 @@ extern crate alloc;
 mod scratch_events;
 #[cfg(test)]
 mod test_concurrent_default_overlap;
+#[cfg(test)]
+// Storage and migration compatibility regression tests (issue #2508).
+mod test_storage_migration_compat;
 #[cfg(test)]
 mod test_multisig;
 #[cfg(all(test, feature = "legacy-tests"))]

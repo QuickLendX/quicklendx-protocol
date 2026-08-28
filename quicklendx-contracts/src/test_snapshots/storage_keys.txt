@@ -77,3 +77,10 @@ symbol | InvoiceCategory::Manufacturing | manufac
 symbol | InvoiceCategory::Technology    | tech
 symbol | InvoiceCategory::Healthcare    | health
 symbol | InvoiceCategory::Other         | other
+
+# ── Storage schema version and migration keys ─────────────────────────────────
+# BREAKING: renaming any of these keys loses migration state on deployed contracts.
+instance   | schema_version                | sch_ver
+instance   | migration_pending_version     | mig_ver
+persistent | migration_offset              | mig_off
+persistent | migration_records             | mig_rec
