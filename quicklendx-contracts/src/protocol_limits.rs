@@ -5,6 +5,18 @@ use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
 use crate::types::InvoiceStatus;
 
+/// Hard upper bound for invoice amounts.
+///
+/// Kept well below `i128::MAX` so that downstream arithmetic — fee
+/// calculations (`amount * fee_bps / 10_000`), analytics aggregation
+/// (`saturating_add` across invoices), and settlement splits — cannot
+/// silently truncate or overflow.
+///
+/// An attacker submitting an invoice with `i128::MAX` could cause fee
+/// calculations to overflow at settlement, trapping funds or producing
+/// incorrect accounting. This constant closes that window.
+pub const MAX_INVOICE_AMOUNT: i128 = i128::MAX / 10_000;
+
 #[allow(dead_code)]
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
@@ -22,6 +34,8 @@ pub struct ProtocolLimits {
     pub grace_period_seconds: u64,
     /// Max invoices per business. **Inclusivity**: Inclusive (active_count < limit), 0 = unlimited.
     pub max_invoices_per_business: u32,
+    /// Minimum KYC tier required for placing a bid.
+    pub min_investor_tier: crate::verification::InvestorTier,
 }
 
 #[allow(dead_code)]
@@ -148,6 +162,7 @@ impl ProtocolLimitsContract {
             max_due_date_days: DEFAULT_MAX_DUE_DAYS,
             grace_period_seconds: DEFAULT_GRACE_PERIOD,
             max_invoices_per_business: DEFAULT_MAX_INVOICES_PER_BUSINESS,
+            min_investor_tier: crate::verification::InvestorTier::Basic,
         };
 
         env.storage().instance().set(&LIMITS_KEY, &limits);
@@ -165,6 +180,7 @@ impl ProtocolLimitsContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
         max_invoices_per_business: u32,
+        min_investor_tier: crate::verification::InvestorTier,
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
         Self::set_protocol_limits_authed(
@@ -176,6 +192,7 @@ impl ProtocolLimitsContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            min_investor_tier,
         )
     }
 
@@ -191,6 +208,7 @@ impl ProtocolLimitsContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
         max_invoices_per_business: u32,
+        min_investor_tier: crate::verification::InvestorTier,
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
         validate_protocol_limits_params(
@@ -208,6 +226,7 @@ impl ProtocolLimitsContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            min_investor_tier,
         };
 
         env.storage().instance().set(&LIMITS_KEY, &limits);
@@ -227,6 +246,7 @@ impl ProtocolLimitsContract {
                 max_due_date_days: DEFAULT_MAX_DUE_DAYS,
                 grace_period_seconds: DEFAULT_GRACE_PERIOD,
                 max_invoices_per_business: DEFAULT_MAX_INVOICES_PER_BUSINESS,
+                min_investor_tier: crate::verification::InvestorTier::Basic,
             })
     }
 

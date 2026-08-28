@@ -77,7 +77,7 @@ fn funded_setup(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     (business, investor, invoice_id)
 }
@@ -168,7 +168,7 @@ fn test_bid_ttl_change_is_forward_only_and_best_bid_honors_boundary() {
     assert_eq!(bid_long_after.expiration_timestamp, long_expiration);
 
     // Place a new, shorter-lived bid after the TTL change.
-    let bid_short_id = client.place_bid(&investor, &invoice_id, &5_000, &5_500);
+    let bid_short_id = client.place_bid(&investor, &invoice_id, &5_000, &5_500, &BytesN::from_array(&env, &[0u8; 32]));
     let bid_short = client.get_bid(&bid_short_id).unwrap();
     assert!(bid_short.expiration_timestamp < long_expiration);
 

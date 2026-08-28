@@ -38,7 +38,7 @@ fn create_invoice_at(
         &String::from_str(env, "invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 // ---------------------------------------------------------------------------

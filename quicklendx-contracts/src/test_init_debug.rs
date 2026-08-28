@@ -14,7 +14,11 @@ fn setup() -> (Env, QuickLendXContractClient<'static>) {
     (env, client)
 }
 
-fn base_params(admin: Address, treasury: Address, currencies: Vec<Address>) -> InitializationParams {
+fn base_params(
+    admin: Address,
+    treasury: Address,
+    currencies: Vec<Address>,
+) -> InitializationParams {
     InitializationParams {
         admin,
         treasury,
@@ -23,6 +27,8 @@ fn base_params(admin: Address, treasury: Address, currencies: Vec<Address>) -> I
         max_due_date_days: 365,
         grace_period_seconds: 604800,
         initial_currencies: currencies,
+        corridors: Vec::new(&env),
+        backfill_max_batch_size: 100,
     }
 }
 
@@ -142,7 +148,14 @@ fn test_require_not_reserved_allows_regular_without_explicit_admin() {
     let regular = Address::generate(&env);
     // Pass None for admin/treasury - should fetch from storage
     let contract_id = contract_addr.clone();
-    let result = call_require_not_reserved(&env, &contract_id, &regular, None, None, Some(contract_addr));
+    let result = call_require_not_reserved(
+        &env,
+        &contract_id,
+        &regular,
+        None,
+        None,
+        Some(contract_addr),
+    );
     assert_eq!(result, Ok(()));
 }
 
@@ -150,7 +163,8 @@ fn test_require_not_reserved_allows_regular_without_explicit_admin() {
 fn test_require_not_reserved_rejects_admin_without_explicit_admin() {
     let (env, admin, treasury, contract_addr) = setup_initialized();
     let contract_id = contract_addr.clone();
-    let err = call_require_not_reserved(&env, &contract_id, &admin, None, None, Some(contract_addr));
+    let err =
+        call_require_not_reserved(&env, &contract_id, &admin, None, None, Some(contract_addr));
     assert_eq!(err, Err(QuickLendXError::InvalidCurrency));
 }
 

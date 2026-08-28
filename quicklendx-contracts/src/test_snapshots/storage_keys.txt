@@ -37,6 +37,7 @@ persistent | investments_by_status         | inv_st
 persistent | all_bids                      | all_bids
 instance   | bid_ttl                       | bid_ttl
 instance   | max_active_bids_per_investor  | mx_actbd
+instance   | bid_expiry_grace_seconds      | bid_grace
 
 # ── InvestmentStorage: additional investment keys ────────────────────────────
 persistent | invoice_to_investment_map     | inv_map

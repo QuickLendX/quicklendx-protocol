@@ -42,6 +42,7 @@ pub enum FeeType {
     Verification,
     EarlyPayment,
     LatePayment,
+    Origination,
 }
 
 /// Volume tier for discounted fees
@@ -222,6 +223,7 @@ fn fee_type_label(fee_type: &FeeType) -> &'static str {
         FeeType::Verification => "Verification",
         FeeType::EarlyPayment => "EarlyPayment",
         FeeType::LatePayment => "LatePayment",
+        FeeType::Origination => "Origination",
     }
 }
 
@@ -314,10 +316,11 @@ impl FeeManager {
 
         // Fetch existing config and reject duplicate treasury address.
         let mut platform_config = Self::get_platform_fee_config(env)?;
-        if let Some(ref existing) = platform_config.treasury_address {
-            if *existing == treasury_address {
-                return Err(QuickLendXError::InvalidFeeConfiguration);
-            }
+        // The first configuration establishes the recipient.  Once a live
+        // recipient exists, all replacements must use the delayed rotation
+        // flow so no single admin mutation can redirect fees immediately.
+        if platform_config.treasury_address.is_some() {
+            return Err(QuickLendXError::OperationNotAllowed);
         }
 
         let treasury_config = TreasuryConfig {
@@ -410,6 +413,13 @@ impl FeeManager {
         }
     }
 
+    pub fn get_fee_schedule(env: &Env) -> Vec<FeeStructure> {
+        env.storage()
+            .instance()
+            .get(&FEE_CONFIG_KEY)
+            .unwrap_or_else(|| Vec::new(env))
+    }
+
     pub fn get_fee_structure(
         env: &Env,
         fee_type: &FeeType,
@@ -482,8 +492,8 @@ impl FeeManager {
                     return Err(QuickLendXError::InvalidFeeConfiguration);
                 }
             }
-            FeeType::EarlyPayment | FeeType::LatePayment => {
-                // Early/late payment fees may have different thresholds
+            FeeType::EarlyPayment | FeeType::LatePayment | FeeType::Origination => {
+                // Early/late/origination payment fees may have different thresholds
                 // Allow more flexibility but still bounded
                 let calculated_max_threshold = (base_fee_bps as i128)
                     .saturating_mul(500)
@@ -662,6 +672,7 @@ impl FeeManager {
         transaction_amount: i128,
         is_early_payment: bool,
         is_late_payment: bool,
+        late_payment_penalty_bps: Option<u32>,
     ) -> Result<i128, QuickLendXError> {
         if transaction_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
@@ -697,7 +708,9 @@ impl FeeManager {
                     .ok_or(QuickLendXError::ArithmeticOverflow)?;
             }
             if is_late_payment && structure.fee_type == FeeType::LatePayment {
-                let late = Self::checked_mul_div(fee, LATE_FEE_SURCHARGE_BPS, BPS_DENOMINATOR)?;
+                let surcharge_bps = late_payment_penalty_bps
+                    .unwrap_or(LATE_FEE_SURCHARGE_BPS as u32) as i128;
+                let late = Self::checked_mul_div(fee, surcharge_bps, BPS_DENOMINATOR)?;
                 fee = fee
                     .checked_add(late)
                     .ok_or(QuickLendXError::ArithmeticOverflow)?;
@@ -1165,22 +1178,38 @@ impl FeeManager {
 
         let now = env.ledger().timestamp();
         let request = RecipientRotationRequest {
-            new_address,
+            new_address: new_address.clone(),
             initiated_by: admin.clone(),
             initiated_at: now,
             confirmation_deadline: now.saturating_add(ROTATION_TTL_SECONDS),
         };
 
         env.storage().instance().set(&ROTATION_KEY, &request);
-        
+
         crate::events::emit_treasury_rotation_initiated(
             env,
-            &new_address,
             admin,
+            &new_address,
             request.confirmation_deadline,
         );
-        
+
         Ok(request)
+    }
+
+    #[inline]
+    pub fn require_treasury_rotation_within_window(
+        env: &Env,
+        now: u64,
+        request: &RecipientRotationRequest,
+    ) -> Result<(), QuickLendXError> {
+        if now < request.initiated_at.saturating_add(MIN_ROTATION_DELAY_SECONDS) {
+            return Err(QuickLendXError::RotationTimelockNotElapsed);
+        }
+        if now > request.confirmation_deadline {
+            env.storage().instance().remove(&ROTATION_KEY);
+            return Err(QuickLendXError::RotationExpired);
+        }
+        Ok(())
     }
 
     /// Confirm the pending treasury rotation.
@@ -1206,23 +1235,11 @@ impl FeeManager {
 
         let now = env.ledger().timestamp();
 
-        // Enforce minimum delay: cannot confirm before min_delay has elapsed.
-        if now
-            < request
-                .initiated_at
-                .saturating_add(MIN_ROTATION_DELAY_SECONDS)
-        {
-            return Err(QuickLendXError::RotationTimelockNotElapsed);
-        }
-
-        if now > request.confirmation_deadline {
-            env.storage().instance().remove(&ROTATION_KEY);
-            return Err(QuickLendXError::RotationExpired);
-        }
+        Self::require_treasury_rotation_within_window(env, now, &request)?;
 
         let mut platform_config = Self::get_platform_fee_config(env)?;
         let old_treasury = platform_config.treasury_address.clone();
-        
+
         platform_config.treasury_address = Some(new_address.clone());
         platform_config.updated_at = now;
         platform_config.updated_by = new_address.clone();
@@ -1255,6 +1272,7 @@ impl FeeManager {
         }
 
         env.storage().instance().remove(&ROTATION_KEY);
+        crate::events::treasury_rotation_cancelled(env, admin);
         Ok(())
     }
 

@@ -61,6 +61,33 @@ pub struct Proposal {
 // Storage key helpers
 // ---------------------------------------------------------------------------
 
+fn active_proposals_key() -> Symbol {
+    symbol_short!("gov_act")
+}
+
+fn active_proposals_count(env: &Env) -> u32 {
+    env.storage().instance().get(&active_proposals_key()).unwrap_or(0)
+}
+
+fn increment_active_proposals(env: &Env) {
+    let count = active_proposals_count(env).saturating_add(1);
+    env.storage().instance().set(&active_proposals_key(), &count);
+}
+
+fn decrement_active_proposals(env: &Env) {
+    let count = active_proposals_count(env).saturating_sub(1);
+    env.storage().instance().set(&active_proposals_key(), &count);
+}
+
+/// Enforces that no governance proposal is currently active.
+/// Used to guard destructive operations against bypassing pending governance proposals.
+pub fn require_no_open_governance_proposal(env: &Env) -> Result<(), QuickLendXError> {
+    if active_proposals_count(env) > 0 {
+        return Err(QuickLendXError::PendingGovernanceProposal);
+    }
+    Ok(())
+}
+
 /// Returns the instance-storage key for a proposal.
 fn proposal_key(proposal_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
     (symbol_short!("gov_prop"), proposal_id.clone())
@@ -239,6 +266,8 @@ pub trait Governable {
         };
 
         env.storage().instance().set(&key, &proposal);
+        decrement_active_proposals(env);
+        
         Ok(proposal.status)
     }
 
@@ -283,3 +312,24 @@ pub trait Governable {
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 }
+
+/// Guard to reject stale governance-proposal references.
+///
+/// Compares a user-provided proposal reference (`gp`) against the on-chain proposal state (`current`).
+/// Returns `QuickLendXError::InvalidStatus` if they do not match.
+pub fn require_matching_governance_proposal(
+    gp: &Proposal,
+    current: &Proposal,
+) -> Result<(), QuickLendXError> {
+    if gp.id != current.id
+        || gp.proposer != current.proposer
+        || gp.votes_for != current.votes_for
+        || gp.votes_against != current.votes_against
+        || gp.voting_ends_at_ledger != current.voting_ends_at_ledger
+        || gp.status != current.status
+    {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+    Ok(())
+}
+

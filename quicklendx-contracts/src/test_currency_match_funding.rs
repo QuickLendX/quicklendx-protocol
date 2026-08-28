@@ -28,10 +28,10 @@ fn test_accept_bid_and_fund_uses_invoice_currency_for_escrow_and_release() {
         &String::from_str(&env, "Invoice currency match test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500), &BytesN::from_array(&env, &[0u8; 32]));
 
     let investor_balance_before = token::Client::new(&env, &currency).balance(&investor);
     let contract_balance_before = token::Client::new(&env, &currency).balance(&contract_id);
@@ -66,6 +66,8 @@ fn test_accept_bid_and_fund_uses_invoice_currency_for_escrow_and_release() {
         "Contract balance should increase by funded amount"
     );
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client
         .release_escrow_funds(&invoice_id)
         .expect("Release should succeed");
@@ -104,12 +106,12 @@ fn test_place_bid_rejected_when_invoice_currency_removed_from_whitelist() {
         &String::from_str(&env, "Whitelist removal regression test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.remove_currency(&admin, &currency);
 
-    let result = client.try_place_bid(&investor, &invoice_id, &amount, &(amount + 500));
+    let result = client.try_place_bid(&investor, &invoice_id, &amount, &(amount + 500), &BytesN::from_array(&env, &[0u8; 32]));
     assert!(
         result.is_err(),
         "Bid placement must be rejected when invoice currency is no longer whitelisted"

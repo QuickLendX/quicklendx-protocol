@@ -195,6 +195,21 @@ pub fn paginate_slice<T: Clone>(items: &[T], offset: u32, limit: u32) -> Vec<T> 
     items[(start as usize)..(end as usize)].to_vec()
 }
 
+/// Compute pagination metadata (total count, has_more) for a filtered collection.
+///
+/// Returns `(total_count, has_more)` where:
+/// * `total_count` is the size of the filtered set **before** pagination.
+/// * `has_more` is `true` iff additional pages exist past `offset + limit`.
+///
+/// This helper is intended for paginated query endpoints that construct their
+/// own result vecs (e.g. using Soroban `Vec`) and need to attach metadata.
+#[inline]
+pub fn pagination_metadata(offset: u32, limit: u32, total_count: u32) -> (u32, bool) {
+    let capped_limit = cap_query_limit(limit);
+    let has_more = offset.saturating_add(capped_limit) < total_count;
+    (total_count, has_more)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -10,9 +10,13 @@ use crate::types::{
     BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory,
     InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
 };
+use crate::errors::QuickLendXError;
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
 pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
+
+/// Maximum time limit for invoice locks in seconds (30 days)
+pub const LOCK_TIME_LIMIT_SECONDS: u64 = 2_592_000;
 
 pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
 where
@@ -32,7 +36,7 @@ where
 /// Storage key for the pending treasury address during a rotation.
 pub const PENDING_TREASURY_KEY: Symbol = symbol_short!("pnd_trs");
 /// Storage key for the pending treasury execution timestamp.
-pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("pnd_tr_ts");
+pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("trs_ts");
 
 /// Counter and configuration keys for the contract.
 ///
@@ -58,6 +62,11 @@ pub enum DataKey {
     Investment(BytesN<32>),
     FrozenInvoice(BytesN<32>),
     FreezeInfo(BytesN<32>),
+    EscrowExtension(BytesN<32>),
+    InvestorFreezeInfo(Address),
+    PerInvestorPositionCap(BytesN<32>),
+    /// Content-addressed dispute evidence bound to its owning invoice.
+    DisputeEvidence(BytesN<32>),
 }
 
 impl StorageKeys {
@@ -103,6 +112,18 @@ impl StorageKeys {
 /// 3. Obtain admin/security-team review of the snapshot diff.
 /// 4. Document the migration in `docs/storage-key-stability.md`.
 pub struct Indexes;
+
+/// Selects one secondary invoice index for bounded integrity cleanup.
+#[derive(Clone)]
+#[contracttype]
+pub enum InvoiceIndex {
+    Business(Address),
+    Status(InvoiceStatus),
+    Customer(String),
+    TaxId(String),
+    Tag(String),
+    Category(InvoiceCategory),
+}
 
 impl Indexes {
     /// Returns the persistent storage key for the invoice list owned by a business.
@@ -251,6 +272,91 @@ impl Indexes {
 pub struct InvoiceStorage;
 
 impl InvoiceStorage {
+    fn raw_index_entries(env: &Env, index: &InvoiceIndex) -> Vec<BytesN<32>> {
+        match index {
+            InvoiceIndex::Business(business) => env.storage().persistent().get(&Indexes::invoices_by_business(business)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::Status(status) => env.storage().persistent().get(&Indexes::invoices_by_status(*status)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::Customer(name) => env.storage().persistent().get(&Indexes::invoices_by_customer(name)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::TaxId(tax_id) => env.storage().persistent().get(&Indexes::invoices_by_tax_id(tax_id)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::Tag(tag) => env.storage().persistent().get(&Indexes::invoices_by_tag(tag)).unwrap_or(Vec::new(env)),
+            InvoiceIndex::Category(category) => env.storage().persistent().get(&Indexes::invoices_by_category(*category)).unwrap_or(Vec::new(env)),
+        }
+    }
+
+    fn index_entries(env: &Env, index: &InvoiceIndex) -> Vec<BytesN<32>> {
+        let mut valid = Vec::new(env);
+        for id in Self::raw_index_entries(env, index).iter() {
+            if Self::entry_matches(env, index, &id) && !valid.contains(&id) {
+                valid.push_back(id);
+            }
+        }
+        valid
+    }
+
+    fn entry_matches(env: &Env, index: &InvoiceIndex, id: &BytesN<32>) -> bool {
+        let Some(invoice) = Self::get(env, id) else {
+            return false;
+        };
+        match index {
+            InvoiceIndex::Business(business) => invoice.business == *business,
+            InvoiceIndex::Status(status) => invoice.status == *status,
+            InvoiceIndex::Customer(name) => invoice.metadata_customer_name.as_ref() == Some(name),
+            InvoiceIndex::TaxId(tax_id) => invoice.metadata_tax_id.as_ref() == Some(tax_id),
+            InvoiceIndex::Tag(tag) => invoice.tags.iter().any(|candidate| candidate == *tag),
+            InvoiceIndex::Category(category) => invoice.category == *category,
+        }
+    }
+
+    /// Remove invalid entries from one secondary index in a bounded, replayable page.
+    pub fn cleanup_index_page(
+        env: &Env,
+        index: &InvoiceIndex,
+        offset: u32,
+        limit: u32,
+    ) -> crate::types::IndexCleanupReport {
+        const MAX_INDEX_CLEANUP_PAGE: u32 = 100;
+        let capped_limit = limit.min(MAX_INDEX_CLEANUP_PAGE);
+        let mut entries = Self::raw_index_entries(env, index);
+        let total = entries.len();
+        let start = offset.min(total);
+        let end = start.saturating_add(capped_limit).min(total);
+        let mut removed = 0u32;
+        let mut valid_seen = Vec::new(env);
+        let mut position = start;
+        let mut scanned = 0u32;
+        while scanned < end.saturating_sub(start) && position < entries.len() {
+            let id = entries.get(position).unwrap();
+            let valid = Self::entry_matches(env, index, &id) && !valid_seen.contains(&id);
+            if valid {
+                valid_seen.push_back(id);
+                position += 1;
+            } else {
+                entries.remove(position);
+                removed = removed.saturating_add(1);
+            }
+            scanned += 1;
+        }
+
+        if removed > 0 {
+            let key = match index {
+                InvoiceIndex::Business(business) => Indexes::invoices_by_business(business),
+                InvoiceIndex::Status(status) => Indexes::invoices_by_status(*status),
+                InvoiceIndex::Customer(name) => Indexes::invoices_by_customer(name),
+                InvoiceIndex::TaxId(tax_id) => Indexes::invoices_by_tax_id(tax_id),
+                InvoiceIndex::Tag(tag) => Indexes::invoices_by_tag(tag),
+                InvoiceIndex::Category(category) => Indexes::invoices_by_category(*category),
+            };
+            env.storage().persistent().set(&key, &entries);
+            extend_persistent_ttl(env, &key);
+        }
+
+        crate::types::IndexCleanupReport {
+            scanned,
+            removed,
+            next_offset: if removed > 0 { start } else { end },
+        }
+    }
+
     /// Store an invoice and update all its secondary indexes.
     pub fn store(env: &Env, invoice: &Invoice) {
         crate::assert_view_only!(env);
@@ -275,31 +381,61 @@ impl InvoiceStorage {
         Self::store(env, invoice)
     }
 
-    pub fn set_invoice_lock(env: &Env, invoice_id: &BytesN<32>, lock: InvoiceLock) {
+    pub fn set_frozen(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        frozen: bool,
+        reason: Option<BusinessFreezeReason>,
+    ) {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
-        if lock == InvoiceLock::None {
-            env.storage().persistent().remove(&key);
-        } else {
-            env.storage().persistent().set(&key, &lock);
+        if frozen {
+            // Store the typed reason; callers must supply one when freezing.
+            let r = reason.unwrap_or(BusinessFreezeReason::AdminAction);
+            env.storage().persistent().set(&key, &r);
             extend_persistent_ttl(env, &key);
+        } else {
+            env.storage().persistent().remove(&key);
         }
     }
 
-    pub fn get_invoice_lock(env: &Env, invoice_id: &BytesN<32>) -> InvoiceLock {
+    pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
         if let Some(lock) = env.storage().persistent().get::<_, InvoiceLock>(&key) {
             extend_persistent_ttl(env, &key);
-            lock
+            lock.is_locked()
+        } else if env
+            .storage()
+            .persistent()
+            .get::<_, BusinessFreezeReason>(&key)
+            .is_some()
+        {
+            // Backward-compatible: a typed freeze reason also means frozen.
+            extend_persistent_ttl(env, &key);
+            true
         } else {
-            InvoiceLock::None
+            false
         }
     }
 
-    pub fn set_freeze_info(
+    /// Guard that rejects actions on locks older than the time limit.
+    ///
+    /// Returns `InvoiceLockExpired` if the invoice has been frozen for longer
+    /// than `LOCK_TIME_LIMIT_SECONDS` (30 days).
+    pub fn require_lock_within_time_limit(
         env: &Env,
         invoice_id: &BytesN<32>,
-        info: &FreezeInfo,
-    ) {
+    ) -> Result<(), QuickLendXError> {
+        if let Some(freeze_info) = Self::get_freeze_info(env, invoice_id) {
+            let current_time = env.ledger().timestamp();
+            let lock_age = current_time.saturating_sub(freeze_info.frozen_at);
+            if lock_age > LOCK_TIME_LIMIT_SECONDS {
+                return Err(QuickLendXError::InvoiceLockExpired);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {
         let key = DataKey::FreezeInfo(invoice_id.clone());
         env.storage().persistent().set(&key, info);
         extend_persistent_ttl(env, &key);
@@ -319,12 +455,31 @@ impl InvoiceStorage {
         env.storage().persistent().remove(&key);
     }
 
+    pub fn set_investor_freeze_info(env: &Env, investor: &Address, info: &InvestorFreezeInfo) {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
+        env.storage().persistent().set(&key, info);
+        extend_persistent_ttl(env, &key);
+    }
+
+    pub fn get_investor_freeze_info(
+        env: &Env,
+        investor: &Address,
+    ) -> Option<InvestorFreezeInfo> {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
+        let result = env.storage().persistent().get::<_, InvestorFreezeInfo>(&key);
+        if result.is_some() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
+    }
+
+    pub fn remove_investor_freeze_info(env: &Env, investor: &Address) {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
+        env.storage().persistent().remove(&key);
+    }
+
     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_business(business);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Business(business.clone()))
     }
 
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
@@ -346,11 +501,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_status(status);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Status(status))
     }
 
     pub fn get_invoices_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
@@ -368,6 +519,36 @@ impl InvoiceStorage {
 
     pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
         Self::get(env, invoice_id)
+    }
+
+    /// Returns the optional absolute per-investor position cap for an invoice.
+    ///
+    /// `None` means the invoice is uncapped (only face value / protocol limits apply).
+    pub fn get_per_investor_position_cap(env: &Env, invoice_id: &BytesN<32>) -> Option<i128> {
+        let key = DataKey::PerInvestorPositionCap(invoice_id.clone());
+        env.storage().persistent().get(&key)
+    }
+
+    /// Sets or clears the absolute per-investor position cap for an invoice.
+    ///
+    /// Passing `None` removes the cap (uncapped). Callers must validate
+    /// `cap > 0 && cap <= invoice.amount` before storing `Some(cap)`.
+    pub fn set_per_investor_position_cap(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        cap: Option<i128>,
+    ) {
+        crate::assert_view_only!(env);
+        let key = DataKey::PerInvestorPositionCap(invoice_id.clone());
+        match cap {
+            Some(value) => {
+                env.storage().persistent().set(&key, &value);
+                extend_persistent_ttl(env, &key);
+            }
+            None => {
+                env.storage().persistent().remove(&key);
+            }
+        }
     }
 
     pub fn update(env: &Env, invoice: &Invoice) {
@@ -457,6 +638,7 @@ impl InvoiceStorage {
     }
 
     pub fn clear_all(env: &Env) {
+        crate::governance::require_no_open_governance_proposal(env).unwrap();
         let ids = Self::get_all_invoice_ids(env);
         for id in ids.iter() {
             Self::delete_invoice(env, &id);
@@ -688,10 +870,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_invoices_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_customer(customer_name))
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Customer(customer_name.clone()))
     }
 
     pub fn get_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {
@@ -699,10 +878,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_invoices_by_tax_id(env: &Env, tax_id: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_tax_id(tax_id))
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::TaxId(tax_id.clone()))
     }
 
     pub fn get_by_tax_id(env: &Env, tax_id: &String) -> Vec<BytesN<32>> {
@@ -742,11 +918,7 @@ impl InvoiceStorage {
         env: &Env,
         category: &InvoiceCategory,
     ) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_category(*category);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Category(*category))
     }
 
     /// Efficiently counts invoices for a category directly from the category index.
@@ -768,10 +940,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_tag(tag))
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Tag(tag.clone()))
     }
 
     pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
@@ -848,6 +1017,7 @@ const VIEW_ONLY_KEY: Symbol = symbol_short!("view_onl");
 
 impl StorageManager {
     pub fn clear_all_mappings(env: &Env) {
+        crate::governance::require_no_open_governance_proposal(env).unwrap();
         env.storage()
             .persistent()
             .remove(&StorageKeys::invoice_count());
@@ -882,6 +1052,48 @@ impl StorageManager {
         let result = f();
         Self::set_view_only(env, previous);
         result
+    }
+}
+
+/// Per-call cache for storage reads.
+///
+/// Caches a single `Invoice` lookup so that repeated reads of the same key
+/// within a contract invocation return the cached value and skip redundant
+/// host interface calls and duplicate TTL extensions.
+pub struct StorageReadCache {
+    cached_id: [u8; 32],
+    cached_invoice: Option<Invoice>,
+    has_cached: bool,
+}
+
+impl StorageReadCache {
+    pub fn new() -> Self {
+        Self {
+            cached_id: [0u8; 32],
+            cached_invoice: None,
+            has_cached: false,
+        }
+    }
+
+    /// Return a cached invoice if already fetched in this call, otherwise read
+    /// from persistent storage and cache the result.
+    pub fn get_invoice(&mut self, env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
+        if self.has_cached && invoice_id.to_array() == self.cached_id {
+            return self.cached_invoice.clone();
+        }
+        let invoice = InvoiceStorage::get_invoice(env, invoice_id);
+        self.cached_invoice = invoice.clone();
+        self.has_cached = true;
+        self.cached_id = invoice_id.to_array();
+        invoice
+    }
+
+    /// Invalidate the cache when the underlying storage has been updated so
+    /// that the next `get_invoice` performs a fresh read from storage.
+    pub fn invalidate_invoice(&mut self, invoice_id: &BytesN<32>) {
+        if self.has_cached && invoice_id.to_array() == self.cached_id {
+            self.has_cached = false;
+        }
     }
 }
 
@@ -1284,5 +1496,134 @@ impl InvoiceStorage {
             pruned,
             next_offset: end,
         }
+    }
+}
+
+#[cfg(test)]
+mod test_storage_read_cache {
+    use super::*;
+    use soroban_sdk::{testutils::Address as _, Address, Env};
+    use crate::types::{Invoice, InvoiceStatus, InvoiceCategory, DisputeStatus, Dispute, DisputeResolution, PaymentRecord, InvoiceRating};
+
+    fn create_sample_invoice(env: &Env, id: &BytesN<32>, business: &Address) -> Invoice {
+        Invoice {
+            id: id.clone(),
+            business: business.clone(),
+            amount: 1000,
+            currency: Address::generate(env),
+            due_date: env.ledger().timestamp() + 86400,
+            status: InvoiceStatus::Funded,
+            created_at: env.ledger().timestamp(),
+            description: String::from_str(env, "test invoice"),
+            metadata_customer_name: None,
+            metadata_customer_address: None,
+            metadata_tax_id: None,
+            metadata_notes: None,
+            metadata_line_items: Vec::new(env),
+            category: InvoiceCategory::Services,
+            tags: Vec::new(env),
+            funded_amount: 1000,
+            funded_at: Some(env.ledger().timestamp()),
+            investor: Some(business.clone()),
+            settled_at: None,
+            average_rating: None,
+            total_ratings: 0,
+            ratings: Vec::new(env),
+            dispute_status: DisputeStatus::None,
+            dispute: Dispute {
+                created_by: Address::generate(env),
+                created_at: 0,
+                reason: String::from_str(env, ""),
+                evidence: String::from_str(env, ""),
+                resolution: String::from_str(env, ""),
+                resolved_by: Address::generate(env),
+                resolved_at: 0,
+                resolution_outcome: DisputeResolution::None,
+            },
+            total_paid: 0,
+            payment_history: Vec::new(env),
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
+        }
+    }
+
+    #[test]
+    fn test_cache_hit_returns_same_invoice() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice = create_sample_invoice(&env, &invoice_id, &business);
+
+        InvoiceStorage::store_invoice(&env, &invoice);
+
+        let mut cache = StorageReadCache::new();
+        let first = cache.get_invoice(&env, &invoice_id);
+        assert!(first.is_some());
+        assert_eq!(first.as_ref().unwrap().amount, 1000);
+
+        // Second read should hit the cache and return the same value
+        // without an additional storage call.
+        let second = cache.get_invoice(&env, &invoice_id);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn test_cache_miss_after_invalidate() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        let mut invoice = create_sample_invoice(&env, &invoice_id, &business);
+
+        InvoiceStorage::store_invoice(&env, &invoice);
+
+        let mut cache = StorageReadCache::new();
+
+        // Seed cache
+        let cached = cache.get_invoice(&env, &invoice_id);
+        assert!(cached.is_some());
+
+        // Update the stored invoice
+        invoice.amount = 2000;
+        invoice.total_paid = 2000;
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Without invalidation the cache would return stale data (amount=1000).
+        // After invalidation it must do a fresh read.
+        cache.invalidate_invoice(&invoice_id);
+        let fresh = cache.get_invoice(&env, &invoice_id).unwrap();
+        assert_eq!(fresh.amount, 2000);
+    }
+
+    #[test]
+    fn test_cache_different_keys_independent() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let business = Address::generate(&env);
+
+        let id_a = BytesN::from_array(&env, &[1; 32]);
+        let id_b = BytesN::from_array(&env, &[2; 32]);
+        let inv_a = create_sample_invoice(&env, &id_a, &business);
+        let mut inv_b = create_sample_invoice(&env, &id_b, &business);
+        inv_b.amount = 500;
+
+        InvoiceStorage::store_invoice(&env, &inv_a);
+        InvoiceStorage::store_invoice(&env, &inv_b);
+
+        let mut cache = StorageReadCache::new();
+
+        let a1 = cache.get_invoice(&env, &id_a).unwrap();
+        assert_eq!(a1.amount, 1000);
+
+        let b1 = cache.get_invoice(&env, &id_b).unwrap();
+        assert_eq!(b1.amount, 500);
+
+        // Invalidate A — B should still be cached
+        cache.invalidate_invoice(&id_a);
+
+        let a2 = cache.get_invoice(&env, &id_a).unwrap();
+        assert_eq!(a2.amount, 1000); // fresh read, same value
     }
 }

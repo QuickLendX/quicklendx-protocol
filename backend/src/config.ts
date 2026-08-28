@@ -55,6 +55,8 @@ const schema = z.object({
   // Alert routing configuration
   ALERT_ROUTES_JSON: z.string().optional(),
   ALERT_DEDUPE_WINDOW_MS: z.coerce.number().int().min(0).default(15 * 60 * 1000), // 15 minutes
+  MAX_NOTIFICATION_DEDUP_ENTRIES: z.coerce.number().int().min(1).default(10_000),
+  NOTIFICATION_DEDUP_TTL_MS: z.coerce.number().int().min(1).default(24 * 60 * 60 * 1000),
   PAGERDUTY_INTEGRATION_KEY: isProduction
     ? z.string().min(1).optional()
     : z.string().min(1).optional(),
@@ -120,4 +122,3 @@ export const retentionConfig = {
   actor: config.RETENTION_AUDIT_ACTOR,
   archiveEnabled: false, // We'll use false as default for now
 } as const;
-

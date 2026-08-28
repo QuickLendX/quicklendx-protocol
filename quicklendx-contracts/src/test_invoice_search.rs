@@ -59,7 +59,9 @@ mod test_invoice_search {
             total_paid: 0,
             payment_history: Vec::new(env),
         };
-        invoice
+        invoice,
+        origination_fee_bps: None,
+        early_payment_discount_bps: None,
     }
 
     #[test]
@@ -223,7 +225,7 @@ mod test_invoice_search {
         // Create more than MAX_SEARCH_RESULTS invoices
         for i in 0..60 {
             let description = format!("service {}", i);
-            let invoice = create_test_invoice(&env, &business, &description, None, None);
+            let invoice = create_test_invoice(&env, &business, &description, None);
             InvoiceStorage::store_invoice(&env, &invoice);
         }
 
