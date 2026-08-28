@@ -1164,4 +1164,39 @@ mod payments_tests {
         });
         assert_eq!(result, Ok(()));
     }
+
+    #[test]
+    fn test_held_reserve_legacy_migration_compatibility() {
+        let (env, contract_id) = contract_env();
+        let currency = Address::generate(&env);
+
+        env.as_contract(&contract_id, || {
+            // Write raw legacy i128 directly to persistent storage key
+            let key = (HELD_ESCROW_RESERVE_KEY.clone(), currency.clone());
+            env.storage().persistent().set(&key, &50_000i128);
+
+            // Fetching through EscrowStorage should deserialize successfully
+            let amount = EscrowStorage::get_held_reserve(&env, &currency);
+            assert_eq!(amount, 50_000);
+
+            // It should be marked incomplete because it hasn't been verified/repaired yet
+            assert!(!EscrowStorage::is_held_reserve_complete(&env, &currency));
+        });
+    }
+
+    #[test]
+    fn test_held_reserve_malformed_negative_amount_fails_closed() {
+        let (env, contract_id) = contract_env();
+        let currency = Address::generate(&env);
+
+        env.as_contract(&contract_id, || {
+            // Write corrupted negative reserve record
+            let key = (HELD_ESCROW_RESERVE_KEY.clone(), currency.clone());
+            env.storage().persistent().set(&key, &-10_000i128);
+
+            let amount = EscrowStorage::get_held_reserve(&env, &currency);
+            assert_eq!(amount, 0);
+            assert!(!EscrowStorage::is_held_reserve_complete(&env, &currency));
+        });
+    }
 }

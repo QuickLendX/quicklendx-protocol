@@ -86,7 +86,7 @@ String::from_str(env, "Matrix test invoice"),
 InvoiceCategory::Services,
 Vec::new(env),
 None,
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         
 )
         .unwrap();

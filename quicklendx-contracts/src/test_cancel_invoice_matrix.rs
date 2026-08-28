@@ -103,7 +103,7 @@ env.ledger().timestamp() + 86_400,
 String::from_str(&env, "owner matrix"),
 InvoiceCategory::Services,
 Vec::new(&env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
         .expect("invoice creation")

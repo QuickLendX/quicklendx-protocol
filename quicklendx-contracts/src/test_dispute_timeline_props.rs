@@ -108,7 +108,7 @@ env.ledger().timestamp() + 30 * 24 * 60 * 60,
 String::from_str(env, "Dispute timeline property invoice"),
 InvoiceCategory::Services,
 Vec::new(env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
             .expect("invoice should build");

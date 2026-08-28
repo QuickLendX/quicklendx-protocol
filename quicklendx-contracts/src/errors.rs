@@ -282,7 +282,6 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
-            QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
             QuickLendXError::InvoiceLockExpired => symbol_short!("LK_EXP"),
             QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
             QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
@@ -294,7 +293,6 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidCurrency => symbol_short!("INV_CR"),
             QuickLendXError::InvalidTimestamp => symbol_short!("INV_TM"),
             QuickLendXError::InvalidDescription => symbol_short!("INV_DS"),
-            QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
             // Storage
             QuickLendXError::StorageError => symbol_short!("STORE"),
             QuickLendXError::StorageKeyNotFound => symbol_short!("KEY_NF"),
@@ -370,7 +368,6 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackfillInProgress => symbol_short!("BKF_IP"),
-            QuickLendXError::DuplicateBid => symbol_short!("BID_DUP"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LS"),
             QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
             QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),

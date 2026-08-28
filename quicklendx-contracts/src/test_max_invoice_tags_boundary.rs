@@ -66,7 +66,7 @@ String::from_str(env, "tag-boundary invoice"),
 InvoiceCategory::Services,
 Vec::new(env),
 None,
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         
 )
         .expect("baseline invoice creation must succeed")
@@ -201,7 +201,7 @@ String::from_str(&env, "below-cap invoice"),
 InvoiceCategory::Services,
 tags,
 None,
-            None, /* early_payment_discount_bps */,
+            None, /* early_payment_discount_bps */
             
 )
         })
@@ -231,7 +231,7 @@ String::from_str(&env, "at-cap invoice"),
 InvoiceCategory::Services,
 tags,
 None,
-            None, /* early_payment_discount_bps */,
+            None, /* early_payment_discount_bps */
             
 )
         })
@@ -261,7 +261,7 @@ String::from_str(&env, "over-cap invoice"),
 InvoiceCategory::Services,
 tags,
 None,
-            None, /* early_payment_discount_bps */,
+            None, /* early_payment_discount_bps */
             
 )
         })
@@ -300,7 +300,7 @@ String::from_str(&env, "invalid-tag invoice"),
 InvoiceCategory::Services,
 tags,
 None,
-            None, /* early_payment_discount_bps */,
+            None, /* early_payment_discount_bps */
             
 )
         })

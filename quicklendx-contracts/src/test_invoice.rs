@@ -157,7 +157,7 @@ due_date,
 description,
 category,
 tags,
-    None, /* early_payment_discount_bps */,
+    None, /* early_payment_discount_bps */
     None
 ).expect("Invoice creation should succeed");
 
@@ -209,7 +209,7 @@ description.clone(),
 category,
 tags.clone(),
 None,
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         
 )
         .expect("Invoice creation should succeed");

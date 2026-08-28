@@ -338,7 +338,7 @@ due_date,
 String::from_str(&env, "Test"),
 InvoiceCategory::Services,
 Vec::new(&env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
     });

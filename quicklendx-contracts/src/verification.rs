@@ -2171,7 +2171,7 @@ mod test_invoice_category_helper {
         let env = Env::default();
         // The discriminants for InvoiceCategory are 0 through 8.
         for i in 0u32..=8 {
-            let val = i.into_val(&env);
+            let val: soroban_sdk::Val = i.into_val(&env);
             let cat_res: Result<InvoiceCategory, _> = InvoiceCategory::try_from_val(&env, &val);
             assert!(cat_res.is_ok(), "Known category discriminant {} should deserialize", i);
             assert_eq!(validate_invoice_category(&cat_res.unwrap()), Ok(()));
@@ -2182,7 +2182,7 @@ mod test_invoice_category_helper {
     fn test_reserved_category_invalid() {
         let env = Env::default();
         // 9 is the first reserved/undefined discriminant
-        let val = 9u32.into_val(&env);
+        let val: soroban_sdk::Val = 9u32.into_val(&env);
         let cat_res: Result<InvoiceCategory, _> = InvoiceCategory::try_from_val(&env, &val);
         assert!(cat_res.is_err(), "Reserved category 9 should fail deserialization");
     }
@@ -2192,7 +2192,7 @@ mod test_invoice_category_helper {
         #[test]
         fn test_arbitrary_category_invalid(i in 9u32..=u32::MAX) {
             let env = Env::default();
-            let val = i.into_val(&env);
+            let val: soroban_sdk::Val = i.into_val(&env);
             let cat_res: Result<InvoiceCategory, _> = InvoiceCategory::try_from_val(&env, &val);
             assert!(cat_res.is_err(), "Arbitrary category {} should fail", i);
         }

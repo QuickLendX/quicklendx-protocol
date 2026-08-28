@@ -28,7 +28,7 @@ env.ledger().timestamp() + 86400,
 String::from_str(env, "Test invoice"),
 InvoiceCategory::Services,
 tags,
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
     .unwrap()

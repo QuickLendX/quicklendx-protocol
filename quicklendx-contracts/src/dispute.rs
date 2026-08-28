@@ -108,7 +108,8 @@ mod evidence_identity_tests {
         let creator = Address::generate(&env);
         let evidence = String::from_str(&env, "provider-reference-1");
         let digest = reserve_evidence(&env, &invoice, &creator, &evidence).unwrap();
-        assert_eq!(digest, env.crypto().sha256(&evidence.to_bytes()));
+        let expected: BytesN<32> = env.crypto().sha256(&evidence.to_bytes()).into();
+        assert_eq!(digest, expected);
         assert_eq!(reserve_evidence(&env, &invoice, &creator, &evidence), Err(QuickLendXError::InvalidDisputeEvidence));
     }
 
@@ -157,7 +158,8 @@ pub(crate) fn reserve_evidence(
     evidence: &String,
 ) -> Result<BytesN<32>, QuickLendXError> {
     let digest = env.crypto().sha256(&evidence.to_bytes());
-    let key = DataKey::DisputeEvidence(digest.clone());
+    let digest_bytes: BytesN<32> = digest.into();
+    let key = DataKey::DisputeEvidence(digest_bytes.clone());
     if env.storage().persistent().has(&key) {
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }
@@ -165,9 +167,9 @@ pub(crate) fn reserve_evidence(
     crate::storage::extend_persistent_ttl(env, &key);
     env.events().publish(
         (symbol_short!("evidence"),),
-        (invoice_id.clone(), creator.clone(), digest.clone()),
+        (invoice_id.clone(), creator.clone(), digest_bytes.clone()),
     );
-    Ok(digest)
+    Ok(digest_bytes)
 }
 fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> {
     Ok(())

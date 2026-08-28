@@ -112,7 +112,7 @@ u64::MAX,
                 String::from_str(&env, "rollover test"),
 InvoiceCategory::Services,
 Vec::new(&env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
         })
@@ -147,7 +147,7 @@ u64::MAX,
 String::from_str(&env, "rollover test"),
 InvoiceCategory::Services,
 Vec::new(&env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
         })
@@ -182,7 +182,7 @@ currency,
                 String::from_str(&env, "small due date"),
 InvoiceCategory::Services,
 Vec::new(&env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
         })
@@ -216,7 +216,7 @@ u64::MAX,
 String::from_str(&env, "grace saturation"),
 InvoiceCategory::Services,
 Vec::new(&env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
         })
@@ -262,7 +262,7 @@ NEAR_MAX,
                 String::from_str(&env, "near max due date"),
 InvoiceCategory::Services,
 Vec::new(&env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
         })

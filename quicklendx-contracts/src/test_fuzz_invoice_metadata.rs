@@ -48,7 +48,7 @@ env.ledger().timestamp() + 86400,
 SStr::from_str(env, "fuzz invoice"),
 InvoiceCategory::Services,
 SVec::new(env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
     .expect("baseline invoice creation must succeed");
@@ -106,7 +106,7 @@ env.ledger().timestamp() + 86400,
 SStr::from_str(&env, "t"),
 InvoiceCategory::Services,
 tags,
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 );
             prop_assert!(result.is_ok(), "count={} should succeed", count);
@@ -134,7 +134,7 @@ env.ledger().timestamp() + 86400,
 SStr::from_str(&env, "t"),
 InvoiceCategory::Services,
 tags,
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 );
             prop_assert_eq!(

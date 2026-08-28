@@ -55,7 +55,7 @@ currency,
 String::from_str(&env, "past-due invoice"),
 InvoiceCategory::Services,
 Vec::new(&env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
     });
@@ -81,7 +81,7 @@ currency,
 String::from_str(&env, "due-now invoice"),
 InvoiceCategory::Services,
 Vec::new(&env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
     });
@@ -107,7 +107,7 @@ currency,
 String::from_str(&env, "future invoice"),
 InvoiceCategory::Services,
 Vec::new(&env),
-        None, /* early_payment_discount_bps */,
+        None, /* early_payment_discount_bps */
         None
 )
     });
