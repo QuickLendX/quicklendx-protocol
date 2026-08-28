@@ -1104,6 +1104,46 @@ pub fn log_escrow_created(
     );
 }
 
+/// Log escrow released.
+pub fn log_escrow_released(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowReleased,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow released")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log escrow refunded.
+pub fn log_escrow_refunded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowRefunded,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow refunded")),
+        Some(amount),
+        None,
+    );
+}
+
 /// Log settlement completed (full payment).
 pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
     log_operation(
