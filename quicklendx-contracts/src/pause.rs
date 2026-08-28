@@ -1,4 +1,5 @@
 use crate::admin::AdminStorage;
+use crate::audit::{log_config_change, AuditOperation};
 use crate::errors::QuickLendXError;
 use soroban_sdk::{symbol_short, vec, Address, Env, String, Symbol, Vec};
 
@@ -44,6 +45,18 @@ impl PauseControl {
             return Ok(());
         }
         Self::apply_paused(env, paused);
+        log_config_change(
+            env,
+            if paused {
+                AuditOperation::ProtocolPaused
+            } else {
+                AuditOperation::ProtocolUnpaused
+            },
+            admin.clone(),
+            "pause",
+            Some(String::from_str(env, if !paused { "true" } else { "false" })),
+            Some(String::from_str(env, if paused { "true" } else { "false" })),
+        );
         if paused {
             crate::events::emit_paused(env, admin);
         } else {
