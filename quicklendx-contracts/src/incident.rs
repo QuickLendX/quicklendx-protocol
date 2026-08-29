@@ -59,7 +59,9 @@ impl IncidentControl {
         }
 
         MaintenanceControl::apply_maintenance_mode(env, true, reason, admin)?;
-        PauseControl::apply_paused(env, true);
+        PauseControl::apply_paused(env, true, Some(crate::pause::PauseReason::Incident));
+
+        crate::events::emit_incident_mode_entered(env, admin, reason);
 
         Ok(Self::snapshot_from_state(env))
     }
@@ -75,8 +77,10 @@ impl IncidentControl {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
 
-        PauseControl::apply_paused(env, false);
+        PauseControl::apply_paused(env, false, None);
         MaintenanceControl::apply_maintenance_mode(env, false, &String::from_str(env, ""), admin)?;
+
+        crate::events::emit_incident_mode_exited(env, admin);
 
         Ok(Self::snapshot_from_state(env))
     }

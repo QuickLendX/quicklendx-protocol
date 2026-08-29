@@ -34,6 +34,7 @@
 //! See `src/test_audit.rs` for comprehensive integrity tests.
 
 use crate::errors::QuickLendXError;
+use crate::observability::OBSERVABILITY_SCHEMA_VERSION;
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{
     contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Symbol, Vec,
@@ -71,6 +72,28 @@ pub enum AuditOperation {
     ConfigRevenueDistributionChanged,
     /// Admin manually overrode an invoice's computed average rating.
     RatingOverridden,
+    /// Admin subsystem initialized.
+    AdminInitialized,
+    /// Admin role transferred.
+    AdminTransferred,
+    /// Two-step admin transfer initiated.
+    AdminTransferInitiated,
+    /// Two-step admin transfer cancelled.
+    AdminTransferCancelled,
+    /// Two-step transfer mode updated.
+    AdminTwoStepUpdated,
+    /// Protocol contract paused.
+    ProtocolPaused,
+    /// Protocol contract unpaused.
+    ProtocolUnpaused,
+    /// Emergency withdrawal initiated.
+    EmergencyWithdrawalInitiated,
+    /// Emergency withdrawal executed.
+    EmergencyWithdrawalExecuted,
+    /// Emergency withdrawal cancelled.
+    EmergencyWithdrawalCancelled,
+    /// Pending treasury address rotation cancelled.
+    TreasuryRotationCancelled,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -103,6 +126,17 @@ pub enum OpType {
     ConfigFeeStructureChanged,
     ConfigRevenueDistributionChanged,
     RatingOverridden,
+    AdminInitialized,
+    AdminTransferred,
+    AdminTransferInitiated,
+    AdminTransferCancelled,
+    AdminTwoStepUpdated,
+    ProtocolPaused,
+    ProtocolUnpaused,
+    EmergencyWithdrawalInitiated,
+    EmergencyWithdrawalExecuted,
+    EmergencyWithdrawalCancelled,
+    TreasuryRotationCancelled,
 }
 
 impl OpType {
@@ -131,6 +165,17 @@ impl OpType {
             OpType::ConfigFeeStructureChanged => symbol_short!("cfg_fstr"),
             OpType::ConfigRevenueDistributionChanged => symbol_short!("cfg_rev"),
             OpType::RatingOverridden => symbol_short!("rt_over"),
+            OpType::AdminInitialized => symbol_short!("adm_init"),
+            OpType::AdminTransferred => symbol_short!("adm_trf"),
+            OpType::AdminTransferInitiated => symbol_short!("adm_req"),
+            OpType::AdminTransferCancelled => symbol_short!("adm_cnl"),
+            OpType::AdminTwoStepUpdated => symbol_short!("adm_2st"),
+            OpType::ProtocolPaused => symbol_short!("paused"),
+            OpType::ProtocolUnpaused => symbol_short!("unpaused"),
+            OpType::EmergencyWithdrawalInitiated => symbol_short!("emg_init"),
+            OpType::EmergencyWithdrawalExecuted => symbol_short!("emg_exec"),
+            OpType::EmergencyWithdrawalCancelled => symbol_short!("emg_cnl"),
+            OpType::TreasuryRotationCancelled => symbol_short!("tr_rot_cn"),
         }
     }
 
@@ -159,6 +204,17 @@ impl OpType {
             OpType::ConfigFeeStructureChanged => 19,
             OpType::ConfigRevenueDistributionChanged => 20,
             OpType::RatingOverridden => 21,
+            OpType::AdminInitialized => 22,
+            OpType::AdminTransferred => 23,
+            OpType::AdminTransferInitiated => 24,
+            OpType::AdminTransferCancelled => 25,
+            OpType::AdminTwoStepUpdated => 26,
+            OpType::ProtocolPaused => 27,
+            OpType::ProtocolUnpaused => 28,
+            OpType::EmergencyWithdrawalInitiated => 29,
+            OpType::EmergencyWithdrawalExecuted => 30,
+            OpType::EmergencyWithdrawalCancelled => 31,
+            OpType::TreasuryRotationCancelled => 32,
         }
     }
 }
@@ -190,6 +246,17 @@ impl From<AuditOperation> for OpType {
                 OpType::ConfigRevenueDistributionChanged
             }
             AuditOperation::RatingOverridden => OpType::RatingOverridden,
+            AuditOperation::AdminInitialized => OpType::AdminInitialized,
+            AuditOperation::AdminTransferred => OpType::AdminTransferred,
+            AuditOperation::AdminTransferInitiated => OpType::AdminTransferInitiated,
+            AuditOperation::AdminTransferCancelled => OpType::AdminTransferCancelled,
+            AuditOperation::AdminTwoStepUpdated => OpType::AdminTwoStepUpdated,
+            AuditOperation::ProtocolPaused => OpType::ProtocolPaused,
+            AuditOperation::ProtocolUnpaused => OpType::ProtocolUnpaused,
+            AuditOperation::EmergencyWithdrawalInitiated => OpType::EmergencyWithdrawalInitiated,
+            AuditOperation::EmergencyWithdrawalExecuted => OpType::EmergencyWithdrawalExecuted,
+            AuditOperation::EmergencyWithdrawalCancelled => OpType::EmergencyWithdrawalCancelled,
+            AuditOperation::TreasuryRotationCancelled => OpType::TreasuryRotationCancelled,
         }
     }
 }
@@ -208,6 +275,14 @@ pub const AUDIT_CHAIN_GENESIS: [u8; 32] = [0u8; 32];
 /// between the per-invoice genesis sentinel and the config trail key.
 pub const CONFIG_AUDIT_SENTINEL: [u8; 32] = [0xCFu8; 32];
 
+/// Fixed sentinel `invoice_id` for all KYC-related audit entries.
+///
+/// KYC operations (submit, verify, reject, revoke, freeze, unfreeze) are not
+/// scoped to any invoice. They share this virtual trail so every KYC audit
+/// entry chains with the same hash-link ordering guarantee as invoice-local
+/// and config-change trails.
+pub const KYC_AUDIT_SENTINEL: [u8; 32] = [0x4Bu8; 32]; // 'K' for KYC
+
 /// Audit log entry structure
 ///
 /// **IMMUTABLE**: Once created, this entry is never modified or overwritten.
@@ -215,6 +290,10 @@ pub const CONFIG_AUDIT_SENTINEL: [u8; 32] = [0xCFu8; 32];
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct AuditLogEntry {
+    /// Version of the event/audit schema used for this record.
+    pub schema_version: u32,
+    /// Correlation id shared with the committed protocol event.
+    pub operation_id: BytesN<32>,
     pub audit_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
     pub operation: AuditOperation,
@@ -293,13 +372,16 @@ impl AuditLogEntry {
         amount: Option<i128>,
         additional_data: Option<String>,
     ) -> Self {
-        let audit_id = Self::generate_audit_id(env);
+        let operation_id = crate::observability::allocate_operation_id(env);
+        let audit_id = operation_id.clone();
         let timestamp = env.ledger().timestamp();
         let block_height = env.ledger().sequence();
 
         let prev_hash = AuditStorage::last_entry_hash(env, &invoice_id);
 
         Self {
+            schema_version: OBSERVABILITY_SCHEMA_VERSION,
+            operation_id,
             audit_id,
             invoice_id,
             operation,
@@ -315,7 +397,8 @@ impl AuditLogEntry {
         }
     }
 
-    /// Generate unique audit ID
+    /// Generate unique audit ID (legacy helper retained for source compatibility).
+    #[allow(dead_code)]
     fn generate_audit_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let sequence = env.ledger().sequence();
@@ -347,6 +430,12 @@ impl AuditLogEntry {
 
     /// Validate audit log entry integrity
     pub fn validate_integrity(&self, env: &Env) -> Result<bool, QuickLendXError> {
+        if self.schema_version != OBSERVABILITY_SCHEMA_VERSION
+            || self.operation_id != self.audit_id
+        {
+            return Ok(false);
+        }
+
         // Check timestamp is not in future
         if self.timestamp > env.ledger().timestamp() {
             return Ok(false);
@@ -430,12 +519,25 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::ConfigFeeStructureChanged => 19,
         AuditOperation::ConfigRevenueDistributionChanged => 20,
         AuditOperation::RatingOverridden => 21,
+        AuditOperation::AdminInitialized => 22,
+        AuditOperation::AdminTransferred => 23,
+        AuditOperation::AdminTransferInitiated => 24,
+        AuditOperation::AdminTransferCancelled => 25,
+        AuditOperation::AdminTwoStepUpdated => 26,
+        AuditOperation::ProtocolPaused => 27,
+        AuditOperation::ProtocolUnpaused => 28,
+        AuditOperation::EmergencyWithdrawalInitiated => 29,
+        AuditOperation::EmergencyWithdrawalExecuted => 30,
+        AuditOperation::EmergencyWithdrawalCancelled => 31,
+        AuditOperation::TreasuryRotationCancelled => 32,
     }
 }
 
 fn hash_audit_entry(env: &Env, entry: &AuditLogEntry) -> BytesN<32> {
     let mut preimage = Bytes::new(env);
     preimage.append(&Bytes::from_slice(env, AuditLogEntry::HASH_DOMAIN_TAG));
+    preimage.append(&Bytes::from_array(env, &entry.schema_version.to_be_bytes()));
+    preimage.append(&entry.operation_id.clone().to_xdr(env));
     preimage.append(&entry.prev_hash.clone().to_xdr(env));
     preimage.append(&entry.audit_id.clone().to_xdr(env));
     preimage.append(&entry.invoice_id.clone().to_xdr(env));
@@ -515,6 +617,12 @@ impl AuditStorage {
     /// The entry remains in storage unchanged and is only removed by explicit
     /// cleanup (never by this function or any query).
     pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) {
+        // A correlation id is the immutable key. Reject duplicate appends rather
+        // than overwriting an existing committed record.
+        if Self::get_audit_entry(env, &entry.operation_id).is_some() {
+            panic!("duplicate observability operation id");
+        }
+
         // Store individual entry
         env.storage().instance().set(&entry.audit_id, entry);
 
@@ -1027,6 +1135,46 @@ pub fn log_escrow_created(
     );
 }
 
+/// Log escrow released.
+pub fn log_escrow_released(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowReleased,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow released")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log escrow refunded.
+pub fn log_escrow_refunded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowRefunded,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow refunded")),
+        Some(amount),
+        None,
+    );
+}
+
 /// Log settlement completed (full payment).
 pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
     log_operation(
@@ -1146,5 +1294,36 @@ pub(crate) fn log_config_change(
         new_value,
         None,
         Some(String::from_str(env, param)),
+    );
+}
+
+/// Append a KYC-related audit entry to the shared `KYC_AUDIT_SENTINEL` trail.
+///
+/// Every KYC state transition (submit, verify, reject, revoke, freeze, unfreeze)
+/// calls this function so the append-only audit log captures the full
+/// participant-identity lifecycle on the same hash-chain infrastructure used
+/// for invoice and config trails.
+///
+/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
+/// guarantee the preceding storage write and this audit append both commit or
+/// both roll back — there is no partial-success scenario.
+pub(crate) fn log_kyc_operation(
+    env: &Env,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    additional_data: Option<String>,
+) {
+    let sentinel = BytesN::from_array(env, &KYC_AUDIT_SENTINEL);
+    log_operation(
+        env,
+        sentinel,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        None,
+        additional_data,
     );
 }

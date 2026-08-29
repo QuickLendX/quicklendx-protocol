@@ -9,14 +9,14 @@
 //! | Caller            | Bid status | Expected outcome          |
 //! |-------------------|------------|---------------------------|
 //! | Bid owner         | Placed     | Ok - status -> Cancelled   |
-//! | Bid owner         | Cancelled  | false (no-op)             |
-//! | Bid owner         | Accepted   | false (no-op)             |
-//! | Bid owner         | Withdrawn  | false (no-op)             |
-//! | Bid owner         | Expired    | false (no-op)             |
+//! | Bid owner         | Cancelled  | Err(BidStale)             |
+//! | Bid owner         | Accepted   | Err(BidStale)             |
+//! | Bid owner         | Withdrawn  | Err(BidStale)             |
+//! | Bid owner         | Expired    | Err(BidStale)             |
 //! | Third party       | Placed     | Auth panic (rejected)     |
 //! | Business owner    | Placed     | Auth panic (rejected)     |
 //! | Admin             | Placed     | Auth panic (rejected)     |
-//! | Non-existent bid  | -          | false (no-op)             |
+//! | Non-existent bid  | -          | Err(BidStale)             |
 //!
 //! # Security assumptions validated
 //! - `require_auth()` is called on `bid.investor` inside `cancel_bid`; any
@@ -24,7 +24,7 @@
 //! - Admin has **no** special override for `cancel_bid`; cancellation is
 //!   strictly investor-only.
 //! - Cancellation is idempotent on terminal states (Cancelled/Accepted/
-//!   Withdrawn/Expired) - returns false without mutating state.
+//!   Withdrawn/Expired) - returns Err(BidStale) without mutating state.
 //! - A cancelled bid cannot be re-cancelled or re-placed.
 
 #![cfg(test)]
@@ -75,12 +75,36 @@ fn place_bid(
         &String::from_str(env, "inv"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "kyc"));
     client.verify_investor(&admin, &investor, &10_000i128);
-    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
     (bid_id, investor, invoice_id)
+}
+
+#[test]
+fn test_investor_cannot_bid_below_tier_minimum() {
+    let (env, client, admin, business) = setup();
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+    let due = env.ledger().timestamp() + 86_400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &1_000i128,
+        &currency,
+        &due,
+        &String::from_str(&env, "inv"),
+        &crate::invoice::InvoiceCategory::Services,
+        &Vec::new(&env),
+    );
+    let investor = Address::generate(&env);
+    client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
+    client.verify_investor(&admin, &investor, &10_000i128); // default becomes Basic tier
+
+    // Basic tier minimum is 100, we bid 99
+    let result = client.try_place_bid(&investor, &invoice_id, &99i128, &105i128);
+    assert_eq!(result, Err(Ok(crate::errors::QuickLendXError::BidBelowTierMinimum)));
 }
 
 // ===========================================================================
@@ -94,7 +118,7 @@ fn test_investor_can_cancel_own_placed_bid() {
 
     // mock_all_auths is active - investor auth is satisfied
     let result = client.cancel_bid(&bid_id);
-    assert!(result, "investor should be able to cancel their own Placed bid");
+    assert!(result.is_ok(), "investor should be able to cancel their own Placed bid");
 
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(
@@ -135,7 +159,7 @@ fn test_invoice_lock_round_trip_admin_api() {
         &String::from_str(&env, "inv"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let current_lock = client.get_invoice_lock(&invoice_id);
     assert_eq!(current_lock, InvoiceLock::None, "new invoices should start unlocked");
@@ -150,49 +174,49 @@ fn test_invoice_lock_round_trip_admin_api() {
 }
 
 #[test]
-fn test_cancel_bid_returns_true_on_success() {
+fn test_cancel_bid_returns_ok_on_success() {
     let (env, client, admin, business) = setup();
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
-    assert_eq!(client.cancel_bid(&bid_id), true);
+    assert!(client.cancel_bid(&bid_id).is_ok());
 }
 
 // ===========================================================================
-// 2. IDEMPOTENCY - terminal states return false without mutation
+// 2. IDEMPOTENCY - terminal states return Err(BidStale) without mutation
 // ===========================================================================
 
 #[test]
-fn test_cancel_already_cancelled_bid_returns_false() {
+fn test_cancel_already_cancelled_bid_returns_bid_stale() {
     let (env, client, admin, business) = setup();
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
     client.cancel_bid(&bid_id); // first cancel
     let result = client.cancel_bid(&bid_id); // second cancel
-    assert!(!result, "cancelling an already-Cancelled bid must return false");
+    assert_eq!(result, Err(QuickLendXError::BidStale), "cancelling an already-Cancelled bid must return BidStale");
 }
 
 #[test]
-fn test_cancel_accepted_bid_returns_false() {
+fn test_cancel_accepted_bid_returns_bid_stale() {
     let (env, client, admin, business) = setup();
     let (bid_id, _, invoice_id) = place_bid(&env, &client, &admin, &business);
     client.accept_bid(&invoice_id, &bid_id);
     let result = client.cancel_bid(&bid_id);
-    assert!(!result, "cancelling an Accepted bid must return false");
+    assert_eq!(result, Err(QuickLendXError::BidStale), "cancelling an Accepted bid must return BidStale");
 }
 
 #[test]
-fn test_cancel_withdrawn_bid_returns_false() {
+fn test_cancel_withdrawn_bid_returns_bid_stale() {
     let (env, client, admin, business) = setup();
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
     client.withdraw_bid(&bid_id).unwrap();
     let result = client.cancel_bid(&bid_id);
-    assert!(!result, "cancelling a Withdrawn bid must return false");
+    assert_eq!(result, Err(QuickLendXError::BidStale), "cancelling a Withdrawn bid must return BidStale");
 }
 
 #[test]
-fn test_cancel_nonexistent_bid_returns_false() {
+fn test_cancel_nonexistent_bid_returns_bid_stale() {
     let (env, client, _, _) = setup();
     let fake_id = BytesN::from_array(&env, &[0u8; 32]);
     let result = client.cancel_bid(&fake_id);
-    assert!(!result, "cancelling a non-existent bid must return false");
+    assert_eq!(result, Err(QuickLendXError::BidStale), "cancelling a non-existent bid must return BidStale");
 }
 
 // ===========================================================================
@@ -380,7 +404,7 @@ fn test_cancel_bid_does_not_affect_other_bids_on_same_invoice() {
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
     client.verify_investor(&admin, &investor_b, &10_000i128);
-    let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &850i128);
+    let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &850i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Cancel only bid A
     client.cancel_bid(&bid_id_a);
@@ -463,8 +487,8 @@ fn test_investor_can_cancel_multiple_own_bids() {
     let (bid_id_1, investor, _) = place_bid(&env, &client, &admin, &business);
     let (bid_id_2, _, _) = place_bid(&env, &client, &admin, &business);
 
-    assert!(client.cancel_bid(&bid_id_1), "first cancel must succeed");
-    assert!(client.cancel_bid(&bid_id_2), "second cancel must succeed");
+    assert!(client.cancel_bid(&bid_id_1).is_ok(), "first cancel must succeed");
+    assert!(client.cancel_bid(&bid_id_2).is_ok(), "second cancel must succeed");
 
     assert_eq!(
         client.get_bid(&bid_id_1).unwrap().status,
@@ -533,7 +557,7 @@ fn test_freeze_invoice_blocks_bids() {
         &soroban_sdk::String::from_str(&env, "inv"),
         &crate::invoice::InvoiceCategory::Services,
         &soroban_sdk::Vec::new(&env),
-    );
+        &None);
 
     // Freeze it
     client.freeze_invoice(&admin, &invoice_id, &BusinessFreezeReason::AdminAction);
@@ -543,7 +567,7 @@ fn test_freeze_invoice_blocks_bids() {
     client.submit_investor_kyc(&investor, &soroban_sdk::String::from_str(&env, "kyc"));
     client.verify_investor(&admin, &investor, &10_000i128);
 
-    let result = client.try_place_bid(&investor, &invoice_id, &900i128, &950i128);
+    let result = client.try_place_bid(&investor, &invoice_id, &900i128, &950i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert!(result.is_err(), "should block bid on frozen invoice");
     assert_eq!(
         result.unwrap_err().expect("expected contract error"),
@@ -579,7 +603,7 @@ fn test_freeze_with_typed_reason_stored_and_enforced() {
         &soroban_sdk::String::from_str(&env, "typed-freeze-test"),
         &crate::invoice::InvoiceCategory::Services,
         &soroban_sdk::Vec::new(&env),
-    );
+        &None);
 
     // Freeze with a specific typed reason
     client.freeze_invoice(
@@ -608,7 +632,7 @@ fn test_freeze_with_typed_reason_stored_and_enforced() {
     client.submit_investor_kyc(&investor, &soroban_sdk::String::from_str(&env, "kyc"));
     client.verify_investor(&admin, &investor, &50_000i128);
 
-    let result = client.try_place_bid(&investor, &invoice_id, &1_800i128, &1_900i128);
+    let result = client.try_place_bid(&investor, &invoice_id, &1_800i128, &1_900i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert!(
         result.is_err(),
         "bid MUST be rejected on a frozen invoice (negative test)"
@@ -646,7 +670,7 @@ fn test_all_business_freeze_reason_variants() {
             &soroban_sdk::String::from_str(&env, reason.label()),
             &crate::invoice::InvoiceCategory::Services,
             &soroban_sdk::Vec::new(&env),
-        );
+        &None);
 
         client.freeze_invoice(&admin, &invoice_id, reason);
 

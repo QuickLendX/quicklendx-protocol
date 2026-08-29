@@ -36,12 +36,192 @@ fn validate_token_address(
     }
 }
 
+/// Assert that `amount` is compatible with the declared decimal precision of
+/// `currency`.
+///
+/// # Threat model
+/// Without this check, a caller who passes a currency address whose token
+/// contract either (a) does not implement `decimals()`, or (b) reports an
+/// unexpectedly large decimal count, could supply amounts whose scale is
+/// incompatible with how the contract interprets them. This leads to silent
+/// truncation or mis-scaled transfers, draining escrow value that the caller did
+/// not intend to lock.
+///
+/// # Errors
+/// * [`QuickLendXError::InvalidAmount`] — `amount` is zero or negative.
+/// * [`QuickLendXError::InvalidCurrency`] — the token contract does not
+///   expose a `decimals` entry-point or returns a value greater than 18.
+pub fn require_matching_currency_precision(
+    env: &Env,
+    currency: &Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
+    if amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let result: Result<Result<u32, _>, _> = env.try_invoke_contract::<u32, QuickLendXError>(
+        currency,
+        &symbol_short!("decimals"),
+        soroban_sdk::vec![env],
+    );
+
+    match result {
+        Ok(Ok(decimals)) if decimals <= 18 => Ok(()),
+        _ => Err(QuickLendXError::InvalidCurrency),
+    }
+}
+
 /// Minimum transfer amount to prevent dust transfers.
 /// Matches the test-mode MIN_TRANSFER from protocol_limits.rs.
 #[cfg(not(test))]
-const MIN_TRANSFER: i128 = 1_000_000; // 1 token (6 decimals)
+pub const MIN_TRANSFER: i128 = 1_000_000; // 1 token (6 decimals)
 #[cfg(test)]
-const MIN_TRANSFER: i128 = 10;
+pub const MIN_TRANSFER: i128 = 10;
+
+/// Maximum number of payment/escrow operations allowed per rate-limit window per account.
+#[cfg(not(test))]
+pub const MAX_PAYMENTS_PER_WINDOW: u32 = 20;
+#[cfg(test)]
+pub const MAX_PAYMENTS_PER_WINDOW: u32 = 5;
+
+/// Window duration for payment rate limiting (in seconds).
+pub const PAYMENT_RATE_LIMIT_WINDOW_SECS: u64 = 60;
+
+const PAYMENT_RATE_LIMIT_KEY: Symbol = symbol_short!("pay_rl");
+
+/// Snapshot of an account's payment rate limit state.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PaymentRateLimitRecord {
+    pub window_start: u64,
+    pub count: u32,
+}
+
+/// Bounded rate limiter for payment, escrow, and funding commitment operations.
+pub struct PaymentRateLimiter;
+
+impl PaymentRateLimiter {
+    fn key(account: &Address) -> (Symbol, Address) {
+        (PAYMENT_RATE_LIMIT_KEY, account.clone())
+    }
+
+    /// Check and advance the rate limit for `account`.
+    /// Rejects with [`QuickLendXError::OperationNotAllowed`] when the account exceeds
+    /// the allowed operation count in the active window.
+    pub fn check_and_record(env: &Env, account: &Address) -> Result<(), QuickLendXError> {
+        let key = Self::key(account);
+        let now = env.ledger().timestamp();
+        let mut record = env
+            .storage()
+            .persistent()
+            .get::<_, PaymentRateLimitRecord>(&key)
+            .unwrap_or(PaymentRateLimitRecord {
+                window_start: now,
+                count: 0,
+            });
+
+        if now
+            >= record
+                .window_start
+                .saturating_add(PAYMENT_RATE_LIMIT_WINDOW_SECS)
+        {
+            record.window_start = now;
+            record.count = 1;
+        } else {
+            if record.count >= MAX_PAYMENTS_PER_WINDOW {
+                return Err(QuickLendXError::OperationNotAllowed);
+            }
+            record.count = record.count.saturating_add(1);
+        }
+
+        env.storage().persistent().set(&key, &record);
+        extend_persistent_ttl(env, &key);
+        Ok(())
+    }
+
+    /// Read the rate limit record for `account` without mutating storage.
+    pub fn get_rate_limit(env: &Env, account: &Address) -> PaymentRateLimitRecord {
+        let key = Self::key(account);
+        let now = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .get::<_, PaymentRateLimitRecord>(&key)
+            .map(|mut r| {
+                if now
+                    >= r.window_start
+                        .saturating_add(PAYMENT_RATE_LIMIT_WINDOW_SECS)
+                {
+                    r.window_start = now;
+                    r.count = 0;
+                }
+                r
+            })
+            .unwrap_or(PaymentRateLimitRecord {
+                window_start: now,
+                count: 0,
+            })
+    }
+}
+
+/// Return the principal currently reserved by an investor across pending bids and active investments.
+pub fn get_investor_exposure(env: &Env, investor: &Address) -> i128 {
+    let bid_exposure =
+        crate::storage::BidStorage::get_active_bid_amount_sum_for_investor(env, investor);
+    let investment_exposure =
+        crate::storage::InvestmentStorage::get_active_investment_amount_sum_for_investor(
+            env, investor,
+        );
+    bid_exposure.saturating_add(investment_exposure)
+}
+
+/// Return the exact available funding capacity for an investor.
+///
+/// # Invariants
+/// - An unverified or frozen investor has no available capacity.
+/// - Capacity = max(0, verification.investment_limit - active_exposure).
+/// - Fails closed on arithmetic overflow or missing verification record.
+pub fn get_investor_available_capacity(
+    env: &Env,
+    investor: &Address,
+) -> Result<i128, QuickLendXError> {
+    crate::verification::require_investor_not_frozen(env, investor)?;
+    crate::verification::require_investor_not_pending(env, investor)?;
+    let verification = crate::verification::InvestorVerificationStorage::get(env, investor)
+        .ok_or(QuickLendXError::KYCNotFound)?;
+
+    if !matches!(
+        verification.status,
+        crate::verification::BusinessVerificationStatus::Verified
+    ) {
+        return Err(QuickLendXError::BusinessNotVerified);
+    }
+
+    let exposure = get_investor_exposure(env, investor);
+    if exposure >= i128::MAX {
+        return Err(QuickLendXError::ArithmeticOverflow);
+    }
+
+    Ok(verification.investment_limit.saturating_sub(exposure))
+}
+
+/// Validate that an investor has sufficient authorized capacity for a new funding commitment of `amount`.
+pub fn validate_funding_commitment(
+    env: &Env,
+    investor: &Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
+    if amount <= 0 || amount > crate::protocol_limits::MAX_INVOICE_AMOUNT {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let available_capacity = get_investor_available_capacity(env, investor)?;
+    if amount > available_capacity {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    crate::verification::validate_investor_investment(env, investor, amount)
+}
 
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
@@ -436,6 +616,86 @@ impl EscrowStorage {
     }
 }
 
+/// Shared validation logic for escrow creation.
+///
+/// Returns `(next_held_reserve)` on success.
+fn validate_and_prepare_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    business: &Address,
+    amount: i128,
+    currency: &Address,
+) -> Result<HeldEscrowReserve, QuickLendXError> {
+    if amount <= 0 || amount > crate::protocol_limits::MAX_INVOICE_AMOUNT {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if amount < MIN_TRANSFER {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    require_matching_currency_precision(env, currency, amount)?;
+
+    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some() {
+        return Err(QuickLendXError::InvoiceAlreadyFunded);
+    }
+
+    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    if invoice.business != *business {
+        return Err(QuickLendXError::Unauthorized);
+    }
+
+    if invoice.currency != *currency {
+        return Err(QuickLendXError::InvalidCurrency);
+    }
+
+    EscrowStorage::require_no_active_reserve_repair(env, currency)?;
+    let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
+
+    validate_token_address(env, currency, investor)?;
+
+    PaymentRateLimiter::check_and_record(env, investor)?;
+
+    Ok(next_held_reserve)
+}
+
+/// Write the escrow record and update the held-reserve accumulator.
+///
+/// # Panics
+/// Panics if `next_held_reserve` was not obtained by calling
+/// [`validate_and_prepare_escrow`] with the same arguments.
+fn write_escrow_record(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    business: &Address,
+    amount: i128,
+    currency: &Address,
+    next_held_reserve: &HeldEscrowReserve,
+) -> BytesN<32> {
+    let escrow_id = EscrowStorage::generate_unique_escrow_id(env);
+    let escrow = Escrow {
+        escrow_id: escrow_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        business: business.clone(),
+        amount,
+        currency: currency.clone(),
+        created_at: env.ledger().timestamp(),
+        status: EscrowStatus::Held,
+    };
+
+    EscrowStorage::store_escrow(env, &escrow);
+    EscrowStorage::set_held_reserve_record(env, currency, next_held_reserve);
+    EscrowStorage::mark_reserve_accounted(env, &escrow_id);
+    crate::qlx_log!(env, "payment", "Escrow created successfully");
+    emit_escrow_created(env, &escrow);
+    escrow_id
+}
+
 /// Create escrow: transfer `amount` from investor to contract and store escrow record.
 ///
 /// ## One-Escrow-Per-Invoice Guard
@@ -468,20 +728,8 @@ pub fn create_escrow(
     amount: i128,
     currency: &Address,
 ) -> Result<BytesN<32>, QuickLendXError> {
-    if amount <= 0 {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some() {
-        return Err(QuickLendXError::InvoiceAlreadyFunded);
-    }
-
-    EscrowStorage::require_no_active_reserve_repair(env, currency)?;
-    let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
-
-    // Compliance-layer seam: verify the token address is a registered contract
-    // before issuing any cross-contract calls to it.
-    validate_token_address(env, currency, investor)?;
+    let next_held_reserve =
+        validate_and_prepare_escrow(env, invoice_id, investor, business, amount, currency)?;
 
     crate::qlx_log!(env, "payment", "Creating escrow: amount={}", amount);
 
@@ -489,23 +737,30 @@ pub fn create_escrow(
     let contract_address = env.current_contract_address();
     transfer_funds(env, currency, investor, &contract_address, amount)?;
 
-    let escrow_id = EscrowStorage::generate_unique_escrow_id(env);
-    let escrow = Escrow {
-        escrow_id: escrow_id.clone(),
-        invoice_id: invoice_id.clone(),
-        investor: investor.clone(),
-        business: business.clone(),
+    let escrow_id = write_escrow_record(
+        env,
+        invoice_id,
+        investor,
+        business,
         amount,
-        currency: currency.clone(),
-        created_at: env.ledger().timestamp(),
-        status: EscrowStatus::Held,
-    };
+        currency,
+        &next_held_reserve,
+    );
+    Ok(escrow_id)
+}
 
     EscrowStorage::store_escrow(env, &escrow);
     EscrowStorage::set_held_reserve_record(env, currency, &next_held_reserve);
     EscrowStorage::mark_reserve_accounted(env, &escrow_id);
     crate::qlx_log!(env, "payment", "Escrow created successfully");
     emit_escrow_created(env, &escrow);
+    crate::audit::log_escrow_created(
+        env,
+        invoice_id.clone(),
+        investor.clone(),
+        amount,
+        escrow_id.clone(),
+    );
     Ok(escrow_id)
 }
 
@@ -529,7 +784,15 @@ pub fn create_escrow(
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the release can be safely retried.
 pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    if escrow.business != invoice.business {
+        return Err(QuickLendXError::Unauthorized);
+    }
 
     if escrow.status != EscrowStatus::Held {
         // Prevents repeated release (idempotency)
@@ -564,6 +827,20 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     }
     escrow.status = EscrowStatus::Released;
     EscrowStorage::update_escrow(env, &escrow);
+    crate::events::emit_escrow_released(
+        env,
+        &escrow.escrow_id,
+        invoice_id,
+        &escrow.business,
+        escrow.amount,
+    );
+    crate::audit::log_escrow_released(
+        env,
+        invoice_id.clone(),
+        escrow.business.clone(),
+        escrow.amount,
+        escrow.escrow_id.clone(),
+    );
     crate::qlx_log!(
         env,
         "payment",
@@ -584,7 +861,17 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the refund can be safely retried.
 pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    if let Some(ref inv_investor) = invoice.investor {
+        if escrow.investor != *inv_investor {
+            return Err(QuickLendXError::Unauthorized);
+        }
+    }
 
     if escrow.status != EscrowStatus::Held {
         return Err(QuickLendXError::InvalidStatus);
@@ -618,6 +905,20 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
     }
     escrow.status = EscrowStatus::Refunded;
     EscrowStorage::update_escrow(env, &escrow);
+    crate::events::emit_escrow_refunded(
+        env,
+        &escrow.escrow_id,
+        invoice_id,
+        &escrow.investor,
+        escrow.amount,
+    );
+    crate::audit::log_escrow_refunded(
+        env,
+        invoice_id.clone(),
+        escrow.investor.clone(),
+        escrow.amount,
+        escrow.escrow_id.clone(),
+    );
     crate::qlx_log!(
         env,
         "payment",
@@ -641,12 +942,6 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
 /// - Balance and allowance are checked **before** the token call so that the contract
 ///   never enters a partial-transfer state.
 /// - When `from == to` the function is a no-op (returns `Ok(())`).
-/// Minimum transfer amount. Below this, transfers are rejected as dust to
-/// prevent dust attacks and uneconomical token movements.
-#[cfg(not(any(test, feature = "testutils")))]
-const MIN_TRANSFER: i128 = 1_000_000; // 1 token (6 decimals)
-#[cfg(any(test, feature = "testutils"))]
-const MIN_TRANSFER: i128 = 10;
 
 pub fn transfer_funds(
     env: &Env,
@@ -655,12 +950,8 @@ pub fn transfer_funds(
     to: &Address,
     amount: i128,
 ) -> Result<(), QuickLendXError> {
-    if amount < MIN_TRANSFER {
-        return Err(QuickLendXError::InvalidAmount);
-    }
-
-    // Reject amounts below the minimum transfer threshold (dust prevention)
-    if amount < MIN_TRANSFER {
+    // Reject amounts below the minimum transfer threshold (dust prevention) or exceeding upper bound
+    if amount < MIN_TRANSFER || amount > crate::protocol_limits::MAX_INVOICE_AMOUNT {
         return Err(QuickLendXError::InvalidAmount);
     }
 
@@ -787,7 +1078,7 @@ mod payments_tests {
             &token_admin,
             &investor,
             0, // zero balance
-            i128::MAX,
+            crate::protocol_limits::MAX_INVOICE_AMOUNT,
         );
 
         let invoice_id = BytesN::from_array(&env, &[2u8; 32]);
@@ -799,7 +1090,7 @@ mod payments_tests {
                 &invoice_id,
                 &investor,
                 &Address::generate(&env),
-                i128::MAX,
+                crate::protocol_limits::MAX_INVOICE_AMOUNT,
                 &currency,
             )
         });
@@ -847,11 +1138,13 @@ mod payments_tests {
     // Max-amount with sufficient balance
     // -----------------------------------------------------------------------
 
-    /// The largest representable positive amount (`i128::MAX`) can succeed
+    /// The maximum allowed invoice amount (`MAX_INVOICE_AMOUNT`) can succeed
     /// when the investor balance is sufficient and the allowance is granted.
-    /// This documents the upper-bound happy path.
+    /// Amounts strictly greater than `MAX_INVOICE_AMOUNT` are rejected to prevent overflow.
     #[test]
     fn test_create_escrow_max_amount_with_sufficient_balance_succeeds() {
+        use crate::protocol_limits::MAX_INVOICE_AMOUNT;
+
         let (env, contract_id) = contract_env();
         let investor = Address::generate(&env);
         let token_admin = Address::generate(&env);
@@ -860,8 +1153,8 @@ mod payments_tests {
             &contract_id,
             &token_admin,
             &investor,
-            i128::MAX,
-            i128::MAX,
+            MAX_INVOICE_AMOUNT,
+            MAX_INVOICE_AMOUNT,
         );
 
         let invoice_id = BytesN::from_array(&env, &[4u8; 32]);
@@ -873,7 +1166,7 @@ mod payments_tests {
                 &invoice_id,
                 &investor,
                 &Address::generate(&env),
-                i128::MAX,
+                MAX_INVOICE_AMOUNT,
                 &currency,
             )
         });
@@ -882,13 +1175,27 @@ mod payments_tests {
             "max-amount escrow must succeed with sufficient balance"
         );
         assert_eq!(tok.balance(&investor), 0);
-        assert_eq!(tok.balance(&contract_id), i128::MAX);
+        assert_eq!(tok.balance(&contract_id), MAX_INVOICE_AMOUNT);
 
         let escrow = env.as_contract(&contract_id, || {
             EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap()
         });
-        assert_eq!(escrow.amount, i128::MAX);
+        assert_eq!(escrow.amount, MAX_INVOICE_AMOUNT);
         assert_eq!(escrow.status, EscrowStatus::Held);
+
+        // Over MAX_INVOICE_AMOUNT is rejected with InvalidAmount
+        let invoice_id_over = BytesN::from_array(&env, &[44u8; 32]);
+        let result_over = env.as_contract(&contract_id, || {
+            create_escrow(
+                &env,
+                &invoice_id_over,
+                &investor,
+                &Address::generate(&env),
+                MAX_INVOICE_AMOUNT + 1,
+                &currency,
+            )
+        });
+        assert_eq!(result_over, Err(QuickLendXError::InvalidAmount));
     }
 
     // -----------------------------------------------------------------------

@@ -4,9 +4,9 @@ use crate::audit::OpType;
 use crate::fees::FeeType;
 use crate::payments::Escrow;
 use crate::types::Bid;
-use crate::types::{Invoice, InvoiceMetadata, PlatformFeeConfig};
-use crate::verification::InvestorVerification;
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+use crate::types::{InvestorFreezeReason, Invoice, InvoiceMetadata, PlatformFeeConfig};
+use crate::verification::{InvestorRiskLevel, InvestorTier, InvestorVerification};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 // ============================================================================
 // Topic Constants
@@ -69,6 +69,52 @@ pub const TOPIC_TREASURY_ROTATION_INITIATED: &str = "treasury_rotation_initiated
 pub const TOPIC_TREASURY_ROTATION_CONFIRMED: &str = "treasury_rotation_confirmed";
 /// Topic for `TreasuryRotationCancelled` events.
 pub const TOPIC_TREASURY_ROTATION_CANCELLED: &str = "treasury_rotation_cancelled";
+/// Topic for `InvoiceFrozen` events.
+///
+/// Emitted when an admin applies a freeze to an invoice via `freeze_invoice`.
+/// The payload includes a `freeze_appeal_channel` field that points consumers
+/// to the appeals process documented in `docs/APPEALS.md`.
+pub const TOPIC_INVOICE_FROZEN: &str = "invoice_frozen";
+
+// ============================================================================
+// Storage-schema version and migration topic constants
+//
+// These pin the exact event topics used by the migration lifecycle machinery.
+// Off-chain reconciliation tools must subscribe to these topics to track
+// schema upgrades and ensure no committed protocol action is lost.
+// Any rename here is a BREAKING schema change.
+// ============================================================================
+
+/// Topic emitted when a storage schema migration is started.
+///
+/// Subscribers can use `schema_from` and `schema_to` to determine which
+/// migration is in progress and whether a rollback is needed.
+pub const TOPIC_MIGRATION_STARTED: &str = "migration_started";
+
+/// Topic emitted when a storage schema migration completes successfully.
+///
+/// The `records_migrated` field allows off-chain tools to verify record counts
+/// against their own state.
+pub const TOPIC_MIGRATION_COMPLETED: &str = "migration_completed";
+
+/// Topic emitted when a storage schema migration is rolled back.
+///
+/// A rollback leaves storage at `schema_from` with no partial state.
+pub const TOPIC_MIGRATION_ROLLED_BACK: &str = "migration_rolled_back";
+
+/// Topic emitted when a storage schema migration fails partway through.
+///
+/// The `records_migrated` field indicates how many records were processed
+/// before the failure.  The migration is resumable from `next_offset`.
+pub const TOPIC_MIGRATION_FAILED: &str = "migration_failed";
+
+/// Topic emitted when the storage schema version is recorded or updated.
+pub const TOPIC_SCHEMA_VERSION_SET: &str = "schema_version_set";
+
+/// Topic constants for upgrade lifecycle events.
+pub const TOPIC_UPGRADE_SCHEDULED: &str = "upg_sch";
+pub const TOPIC_UPGRADE_CANCELLED: &str = "upg_can";
+pub const TOPIC_UPGRADE_EXECUTED: &str = "upg_exe";
 
 // ============================================================================
 // Protocol-level semantic aliases
@@ -394,11 +440,129 @@ pub struct InvoiceMetadataCleared {
     pub business: Address,
 }
 
+/// Emitted when an investor is verified by an admin.
+///
+/// Topic: [`TOPIC_INVESTOR_VERIFIED`] (if defined) or the struct topic.
+///
+/// # Fields
+/// - `investor` – Address of the verified investor.
+/// - `investment_limit` – Computed investment limit for this investor.
+/// - `verified_at` – Ledger timestamp when verification occurred.
+/// - `verified_by` – Address of the admin who performed the verification.
+/// - `tier` – Investor tier (serialized as u32: 0=Basic, 1=Silver, 2=Gold, 3=Platinum, 4=VIP).
+/// - `risk_level` – Risk level (serialized as u32: 0=Low, 1=Medium, 2=High, 3=VeryHigh).
+/// - `risk_score` – Numeric risk score (0–100).
 #[contractevent]
 pub struct InvestorVerified {
     pub investor: Address,
     pub investment_limit: i128,
     pub verified_at: u64,
+    pub verified_by: Address,
+    pub tier: u32,
+    pub risk_level: u32,
+    pub risk_score: u32,
+}
+
+/// Emitted when a business or investor submits a KYC application.
+///
+/// Topic: [`TOPIC_KYC_SUBMITTED`] (`"kyc_submitted"`)
+///
+/// # Fields
+/// - `subject` – Address of the business or investor submitting KYC.
+/// - `is_resubmit` – `true` if this is a resubmission after a prior rejection.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycSubmitted {
+    pub subject: Address,
+    pub is_resubmit: bool,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin verifies (approves) a business or investor KYC record.
+///
+/// Topic: [`TOPIC_KYC_VERIFIED`] (`"kyc_verified"`)
+///
+/// # Fields
+/// - `subject` – Address of the verified business or investor.
+/// - `admin` – Address of the admin who performed the verification.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycVerified {
+    pub subject: Address,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin rejects a pending business or investor KYC record.
+///
+/// Topic: [`TOPIC_KYC_REJECTED`] (`"kyc_rejected"`)
+///
+/// # Fields
+/// - `subject` – Address of the rejected business or investor.
+/// - `admin` – Address of the admin who performed the rejection.
+/// - `reason` – Auditable rejection reason.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycRejected {
+    pub subject: Address,
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin revokes a previously-verified investor's KYC.
+///
+/// Topic: [`TOPIC_KYC_REVOKED`] (`"kyc_revoked"`)
+///
+/// # Fields
+/// - `investor` – Address of the investor whose KYC was revoked.
+/// - `admin` – Address of the admin who performed the revocation.
+/// - `reason` – Auditable revocation reason.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycRevoked {
+    pub investor: Address,
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin freezes an investor, blocking all investment actions.
+///
+/// Topic: [`TOPIC_INVESTOR_FROZEN`] (`"investor_frozen"`)
+///
+/// # Fields
+/// - `investor` – Address of the frozen investor.
+/// - `admin` – Address of the admin who performed the freeze.
+/// - `reason` – The freeze reason (serialized as string).
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvestorFrozen {
+    pub investor: Address,
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin unfreezes an investor, restoring investment actions.
+///
+/// Topic: [`TOPIC_INVESTOR_UNFROZEN`] (`"investor_unfrozen"`)
+///
+/// # Fields
+/// - `investor` – Address of the unfrozen investor.
+/// - `admin` – Address of the admin who performed the unfreeze.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvestorUnfrozen {
+    pub investor: Address,
+    pub admin: Address,
+    pub timestamp: u64,
 }
 
 #[derive(Debug, PartialEq)]
@@ -649,6 +813,14 @@ pub struct BidTtlUpdated {
     pub timestamp: u64,
 }
 
+#[contractevent]
+pub struct BidExpiryGraceUpdated {
+    pub old_seconds: u64,
+    pub new_seconds: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
 pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
     TtlExtended {
         kind: kind.clone(),
@@ -685,6 +857,7 @@ pub struct ProtocolInitialized {
     pub max_due_date_days: u64,
     pub grace_period_seconds: u64,
     pub backfill_max_batch_size: u32,
+    pub corridors: Vec<Address>,
     pub timestamp: u64,
 }
 
@@ -711,6 +884,65 @@ pub fn emit_paused(env: &Env, admin: &Address) {
 pub fn emit_unpaused(env: &Env, admin: &Address) {
     Unpaused {
         admin: admin.clone(),
+    }
+    .publish(env);
+}
+
+// ============================================================================
+// Freeze / Unfreeze Events
+// ============================================================================
+
+/// Emitted when an admin applies a freeze to an invoice via `freeze_invoice`.
+///
+/// Topic: [`TOPIC_INVOICE_FROZEN`] (`"invoice_frozen"`)
+///
+/// # Fields
+/// - `invoice_id` – The frozen invoice.
+/// - `frozen_by` – Address of the admin who applied the freeze.
+/// - `reason` – Machine-readable label for the [`crate::types::BusinessFreezeReason`]
+///   variant (e.g. `"admin_action"`, `"compliance_violation"`, `"fraud_suspected"`).
+/// - `freeze_appeal_channel` – A short pointer to the off-chain appeals process.
+///   Set to `"docs/APPEALS.md"` by the emitter.  Downstream consumers (dashboards,
+///   notification pipelines) can surface this string directly to the affected
+///   business so they know where to file an appeal without paging an engineer.
+///   This field contains **no PII** — it is a static URL/path.
+/// - `timestamp` – Ledger timestamp at emission time.
+///
+/// # Backwards compatibility
+/// This event is **additive**.  Indexers that do not recognise the
+/// `freeze_appeal_channel` field can safely ignore it.
+///
+/// # Security
+/// No PII is included.  The `reason` field is the string label returned by
+/// `BusinessFreezeReason::label()`, not a free-text admin comment.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceFrozen {
+    pub invoice_id: BytesN<32>,
+    pub frozen_by: Address,
+    pub reason: String,
+    pub freeze_appeal_channel: String,
+    pub timestamp: u64,
+}
+
+/// Emit an [`InvoiceFrozen`] event.
+///
+/// `reason_label` should come from [`crate::types::BusinessFreezeReason::label()`].
+/// `freeze_appeal_channel` is always `"docs/APPEALS.md"` — a static pointer
+/// to the operator-facing appeals runbook so that any off-chain consumer of
+/// this event knows immediately where to direct the frozen business.
+pub fn emit_invoice_frozen(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    frozen_by: &Address,
+    reason_label: &str,
+) {
+    InvoiceFrozen {
+        invoice_id: invoice_id.clone(),
+        frozen_by: frozen_by.clone(),
+        reason: String::from_str(env, reason_label),
+        freeze_appeal_channel: String::from_str(env, "docs/APPEALS.md"),
+        timestamp: env.ledger().timestamp(),
     }
     .publish(env);
 }
@@ -773,10 +1005,120 @@ pub fn emit_invoice_metadata_cleared(env: &Env, invoice: &Invoice) {
 }
 
 pub fn emit_investor_verified(env: &Env, verification: &InvestorVerification) {
+    let tier_num = match verification.tier {
+        InvestorTier::Basic => 0u32,
+        InvestorTier::Silver => 1,
+        InvestorTier::Gold => 2,
+        InvestorTier::Platinum => 3,
+        InvestorTier::VIP => 4,
+    };
+    let risk_num = match verification.risk_level {
+        InvestorRiskLevel::Low => 0u32,
+        InvestorRiskLevel::Medium => 1,
+        InvestorRiskLevel::High => 2,
+        InvestorRiskLevel::VeryHigh => 3,
+    };
     InvestorVerified {
         investor: verification.investor.clone(),
         investment_limit: verification.investment_limit,
         verified_at: verification.verified_at.unwrap_or(0),
+        verified_by: verification
+            .verified_by
+            .clone()
+            .unwrap_or(Address::from_str(
+                env,
+                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+            )),
+        tier: tier_num,
+        risk_level: risk_num,
+        risk_score: verification.risk_score,
+    }
+    .publish(env);
+}
+
+// ============================================================================
+// KYC / Participant-Identity Event Emitters
+//
+// These replace the private raw-symbol emitters previously scattered in
+// verification.rs. Every KYC lifecycle transition now emits a structured
+// #[contractevent] with a pinned TOPIC_* constant for indexer stability.
+// ============================================================================
+
+/// Emitted when a business or investor submits a KYC application.
+pub fn emit_kyc_submitted(env: &Env, subject: &Address, is_resubmit: bool) {
+    KycSubmitted {
+        subject: subject.clone(),
+        is_resubmit,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin verifies (approves) a business or investor KYC record.
+pub fn emit_kyc_verified(env: &Env, subject: &Address, admin: &Address) {
+    KycVerified {
+        subject: subject.clone(),
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin rejects a pending business or investor KYC record.
+pub fn emit_kyc_rejected(env: &Env, subject: &Address, admin: &Address, reason: &String) {
+    KycRejected {
+        subject: subject.clone(),
+        admin: admin.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin revokes a previously-verified investor's KYC.
+pub fn emit_kyc_revoked(env: &Env, investor: &Address, admin: &Address, reason: &String) {
+    KycRevoked {
+        investor: investor.clone(),
+        admin: admin.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin freezes an investor, blocking all investment actions.
+pub fn emit_investor_frozen(
+    env: &Env,
+    investor: &Address,
+    admin: &Address,
+    reason: &InvestorFreezeReason,
+) {
+    let reason_str = match reason {
+        crate::types::InvestorFreezeReason::AdminAction => String::from_str(env, "AdminAction"),
+        crate::types::InvestorFreezeReason::KYCExpired => String::from_str(env, "KYCExpired"),
+        crate::types::InvestorFreezeReason::ComplianceViolation => {
+            String::from_str(env, "ComplianceViolation")
+        }
+        crate::types::InvestorFreezeReason::SuspiciousActivity => {
+            String::from_str(env, "SuspiciousActivity")
+        }
+        crate::types::InvestorFreezeReason::LegalHold => String::from_str(env, "LegalHold"),
+    };
+    InvestorFrozen {
+        investor: investor.clone(),
+        admin: admin.clone(),
+        reason: reason_str,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin unfreezes an investor, restoring investment actions.
+pub fn emit_investor_unfrozen(env: &Env, investor: &Address, admin: &Address) {
+    InvestorUnfrozen {
+        investor: investor.clone(),
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
     }
     .publish(env);
 }
@@ -1366,6 +1708,21 @@ pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Add
     .publish(env);
 }
 
+pub fn emit_bid_expiry_grace_updated(
+    env: &Env,
+    old_seconds: u64,
+    new_seconds: u64,
+    admin: &Address,
+) {
+    BidExpiryGraceUpdated {
+        old_seconds,
+        new_seconds,
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
 #[contractevent]
 pub struct EmergencyWithdrawalInitiated {
     pub token: Address,
@@ -1528,6 +1885,7 @@ pub fn emit_protocol_initialized(
     max_due_date_days: u64,
     grace_period_seconds: u64,
     backfill_max_batch_size: u32,
+    corridors: &Vec<Address>,
 ) {
     ProtocolInitialized {
         admin: admin.clone(),
@@ -1537,6 +1895,7 @@ pub fn emit_protocol_initialized(
         max_due_date_days,
         grace_period_seconds,
         backfill_max_batch_size,
+        corridors: corridors.clone(),
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);
@@ -1547,11 +1906,28 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
         .publish((symbol_short!("adm_init"),), (admin.clone(),));
 }
 
-pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
+pub fn emit_treasury_rotation_initiated(
+    env: &Env,
+    admin: &Address,
+    new_address: &Address,
+    deadline: u64,
+) {
     env.events().publish(
-        (symbol_short!("tr_rot_c"), admin.clone()),
-        (),
+        (symbol_short!("tr_rot_i"), admin.clone()),
+        (new_address.clone(), deadline),
     );
+}
+
+pub fn emit_treasury_rotation_confirmed(env: &Env, admin: &Address, new_address: &Address) {
+    env.events().publish(
+        (symbol_short!("tr_rot_f"), admin.clone()),
+        (new_address.clone(), env.ledger().timestamp()),
+    );
+}
+
+pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("tr_rot_cn"), admin.clone()), ());
 }
 
 // ── Upgrade events ──────────────────────────────────────────────────────────
@@ -1578,4 +1954,263 @@ pub fn emit_upgrade_executed(env: &Env, admin: &Address, wasm_hash: &BytesN<32>)
         (symbol_short!("upg_exe"),),
         (admin.clone(), wasm_hash.clone()),
     );
+}
+
+// ── Incident mode events ─────────────────────────────────────────────────────
+
+/// Emitted when the admin enters coordinated incident mode (pause + maintenance).
+#[contractevent]
+pub struct IncidentModeEntered {
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when the admin exits coordinated incident mode (unpause + disable maintenance).
+#[contractevent]
+pub struct IncidentModeExited {
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+pub fn emit_incident_mode_entered(env: &Env, admin: &Address, reason: &String) {
+    IncidentModeEntered {
+        admin: admin.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_incident_mode_exited(env: &Env, admin: &Address) {
+    IncidentModeExited {
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+// ── Arbiter (dispute-resolution) events ──────────────────────────────────────
+
+/// Emitted when an admin registers a new dispute arbiter.
+pub fn arbiter_registered(env: &Env, admin: &Address, arbiter: &Address) {
+    env.events().publish(
+        (symbol_short!("arb_reg"),),
+        (admin.clone(), arbiter.clone(), env.ledger().timestamp()),
+    );
+}
+
+/// Emitted when an admin revokes a previously registered dispute arbiter.
+pub fn arbiter_revoked(env: &Env, admin: &Address, arbiter: &Address) {
+    env.events().publish(
+        (symbol_short!("arb_rvk"),),
+        (admin.clone(), arbiter.clone(), env.ledger().timestamp()),
+    );
+}
+
+// ── Backfill lifecycle events ────────────────────────────────────────────────
+
+/// Emitted when a destructive backfill (e.g. `restore_from_backup`) begins.
+/// While this flag is set, the contract refuses to schedule a WASM upgrade.
+pub fn backfill_started(env: &Env, actor: &Address) {
+    env.events().publish(
+        (symbol_short!("bkf_sta"),),
+        (actor.clone(), env.ledger().timestamp()),
+    );
+}
+
+/// Emitted when a backfill finishes — flag is cleared and contracts are free
+/// to migrate again.
+pub fn backfill_finished(env: &Env, actor: &Address, restored_count: u32) {
+    env.events().publish(
+        (symbol_short!("bkf_end"),),
+        (actor.clone(), restored_count, env.ledger().timestamp()),
+    );
+}
+
+// ============================================================================
+// Storage schema version and migration lifecycle events
+// ============================================================================
+
+/// Emitted when the contract records a new storage schema version.
+///
+/// # Fields
+/// - `schema_version` – The new schema version number.
+/// - `set_by`         – The admin who triggered the version bump.
+/// - `timestamp`      – Ledger timestamp at emission time.
+///
+/// # Compatibility
+/// This event is additive.  Indexers that only understand earlier versions
+/// can safely ignore the `schema_version` payload.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct SchemaVersionSet {
+    pub schema_version: u32,
+    pub set_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when a paginated schema migration begins (first page of a run).
+///
+/// # Fields
+/// - `schema_from`    – Version being migrated away from.
+/// - `schema_to`      – Version being migrated to.
+/// - `initiated_by`   – Admin who started the migration.
+/// - `timestamp`      – Ledger timestamp at emission time.
+///
+/// # Design invariant
+/// Only one migration may be in progress at a time.  If a `MigrationStarted`
+/// event is observed without a subsequent `MigrationCompleted` or
+/// `MigrationRolledBack`, the migration is considered "in progress" and
+/// writes to migrated entities must be rejected until it finishes.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct MigrationStarted {
+    pub schema_from: u32,
+    pub schema_to: u32,
+    pub initiated_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when every record has been migrated and the schema version is
+/// committed to the new value.
+///
+/// # Fields
+/// - `schema_from`      – The old schema version.
+/// - `schema_to`        – The new, committed schema version.
+/// - `records_migrated` – Total number of records processed.
+/// - `completed_by`     – Admin who committed the final page.
+/// - `timestamp`        – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct MigrationCompleted {
+    pub schema_from: u32,
+    pub schema_to: u32,
+    pub records_migrated: u32,
+    pub completed_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when an in-progress migration is explicitly rolled back.
+///
+/// After this event the schema version is restored to `schema_from` and
+/// storage is guaranteed to contain no partial new-schema records.
+///
+/// # Fields
+/// - `schema_from`      – The version rolled back to.
+/// - `schema_to`        – The version that was being migrated to.
+/// - `rolled_back_by`   – Admin who performed the rollback.
+/// - `timestamp`        – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct MigrationRolledBack {
+    pub schema_from: u32,
+    pub schema_to: u32,
+    pub rolled_back_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when a migration page fails partway through.
+///
+/// The migration is resumable: pass `next_offset` as the starting offset
+/// for the next invocation.
+///
+/// # Fields
+/// - `schema_from`      – Version being migrated from.
+/// - `schema_to`        – Version being migrated to.
+/// - `records_migrated` – Number of records successfully migrated so far.
+/// - `next_offset`      – Offset to resume from on the next call.
+/// - `reason`           – Machine-readable failure label (no PII).
+/// - `timestamp`        – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct MigrationFailed {
+    pub schema_from: u32,
+    pub schema_to: u32,
+    pub records_migrated: u32,
+    pub next_offset: u32,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+// ── Emitter helpers ──────────────────────────────────────────────────────────
+
+/// Emit a [`SchemaVersionSet`] event.
+pub fn emit_schema_version_set(env: &Env, schema_version: u32, set_by: &Address) {
+    SchemaVersionSet {
+        schema_version,
+        set_by: set_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emit a [`MigrationStarted`] event.
+pub fn emit_migration_started(
+    env: &Env,
+    schema_from: u32,
+    schema_to: u32,
+    initiated_by: &Address,
+) {
+    MigrationStarted {
+        schema_from,
+        schema_to,
+        initiated_by: initiated_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emit a [`MigrationCompleted`] event.
+pub fn emit_migration_completed(
+    env: &Env,
+    schema_from: u32,
+    schema_to: u32,
+    records_migrated: u32,
+    completed_by: &Address,
+) {
+    MigrationCompleted {
+        schema_from,
+        schema_to,
+        records_migrated,
+        completed_by: completed_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emit a [`MigrationRolledBack`] event.
+pub fn emit_migration_rolled_back(
+    env: &Env,
+    schema_from: u32,
+    schema_to: u32,
+    rolled_back_by: &Address,
+) {
+    MigrationRolledBack {
+        schema_from,
+        schema_to,
+        rolled_back_by: rolled_back_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emit a [`MigrationFailed`] event.
+pub fn emit_migration_failed(
+    env: &Env,
+    schema_from: u32,
+    schema_to: u32,
+    records_migrated: u32,
+    next_offset: u32,
+    reason: &str,
+) {
+    MigrationFailed {
+        schema_from,
+        schema_to,
+        records_migrated,
+        next_offset,
+        reason: String::from_str(env, reason),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }

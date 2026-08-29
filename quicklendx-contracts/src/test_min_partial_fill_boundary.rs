@@ -33,9 +33,7 @@
 
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
-use crate::protocol_limits::{
-    compute_min_bid_amount, DEFAULT_MIN_BID_AMOUNT, DEFAULT_MIN_BID_BPS,
-};
+use crate::protocol_limits::{compute_min_bid_amount, DEFAULT_MIN_BID_AMOUNT, DEFAULT_MIN_BID_BPS};
 use crate::verification::validate_bid;
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
@@ -86,6 +84,7 @@ fn setup_verified_invoice(
         &String::from_str(env, "test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
     (invoice_id, business, currency)
@@ -297,12 +296,12 @@ fn compute_min_bid_amount_returns_absolute_floor_when_dominant() {
         max_due_date_days: 365,
         grace_period_seconds: 604_800,
         max_invoices_per_business: 100,
+        min_investor_tier: crate::verification::InvestorTier::Basic,
     };
     // 500 * 1 % = 5 < 10 → absolute floor wins
     let result = compute_min_bid_amount(500, &limits);
     assert_eq!(
-        result,
-        DEFAULT_MIN_BID_AMOUNT,
+        result, DEFAULT_MIN_BID_AMOUNT,
         "absolute floor must dominate when pct_min < min_bid_amount"
     );
 }
@@ -318,6 +317,7 @@ fn compute_min_bid_amount_returns_percentage_floor_when_dominant() {
         max_due_date_days: 365,
         grace_period_seconds: 604_800,
         max_invoices_per_business: 100,
+        min_investor_tier: crate::verification::InvestorTier::Basic,
     };
     // 5_000 * 1 % = 50 > 10 → percentage floor wins
     let result = compute_min_bid_amount(5_000, &limits);

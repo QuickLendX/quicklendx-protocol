@@ -107,6 +107,9 @@ not the pause flag, is the safety control for recovery.
 
 ## See also
 
+- [`docs/QLX_MULTISIG_ROTATION.md`](QLX_MULTISIG_ROTATION.md) — Step-by-step
+  operator guide for safely rotating signers on a multisig-controlled admin
+  account, with concrete Soroban CLI examples and timelock procedures.
 - [`docs/RUNBOOK_INCIDENT_RESPONSE.md`](RUNBOOK_INCIDENT_RESPONSE.md) — operator
   playbook for incident-mode recovery.
 - [`docs/UPGRADE_PATHS.md`](UPGRADE_PATHS.md) — contract upgrade procedures.

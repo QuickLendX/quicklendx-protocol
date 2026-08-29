@@ -355,6 +355,13 @@ fn test_bid_storage_max_active_bids_key_stable() {
     assert_eq!(symbol_short!("mx_actbd"), symbol_short!("mx_actbd"));
 }
 
+/// STORAGE CLASS: Instance  Namespace: bid_grace (admin-configurable bid expiry grace period)
+#[test]
+fn test_bid_storage_expiry_grace_key_stable() {
+    assert_snapshot_entry("bid_expiry_grace_seconds", "bid_grace");
+    assert_eq!(symbol_short!("bid_grace"), symbol_short!("bid_grace"));
+}
+
 // ---------------------------------------------------------------------------
 // InvestmentStorage — extra persistent/instance keys
 // ---------------------------------------------------------------------------

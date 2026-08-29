@@ -106,6 +106,7 @@ fn create_funded_invoice(
         &String::from_str(env, "Default matrix invoice"),
         &crate::invoice::InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
@@ -350,7 +351,11 @@ fn prepare_case(
     case: MatrixCase,
 ) {
     if case.settlement_finalized {
-        client.settle_invoice(invoice_id, &amount);
+        client.settle_invoice(
+            invoice_id,
+            &amount,
+            &client.get_investment(invoice_id).unwrap(),
+        );
     }
 
     set_invoice_status_for_case(

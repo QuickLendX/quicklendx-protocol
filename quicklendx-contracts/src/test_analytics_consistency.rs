@@ -33,6 +33,7 @@ use super::*;
 use crate::analytics::{AnalyticsCalculator, TimePeriod};
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use proptest::prelude::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, Env, String, Vec,
@@ -67,7 +68,40 @@ fn upload(
         &String::from_str(env, desc),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     )
+}
+
+proptest! {
+    #[test]
+    fn get_period_dates_saturates_underflow_for_small_timestamps(timestamp in 0u64..=86_399u64) {
+        for period in [
+            TimePeriod::Daily,
+            TimePeriod::Weekly,
+            TimePeriod::Monthly,
+            TimePeriod::Quarterly,
+            TimePeriod::Yearly,
+            TimePeriod::AllTime,
+        ]
+        .iter()
+        {
+            let (start_date, end_date) = AnalyticsCalculator::get_period_dates(timestamp, period.clone());
+            prop_assert!(start_date <= end_date);
+            prop_assert_eq!(end_date, timestamp);
+            if *period != TimePeriod::AllTime {
+                prop_assert_eq!(start_date, 0);
+            }
+        }
+    }
+}
+
+#[test]
+fn get_period_dates_all_time_keeps_full_history_window() {
+    let timestamp = 10_000u64;
+    let (start_date, end_date) =
+        AnalyticsCalculator::get_period_dates(timestamp, TimePeriod::AllTime);
+    assert_eq!(start_date, 0);
+    assert_eq!(end_date, timestamp);
 }
 
 // --- 1. generated_at correctness --------------------------------------------

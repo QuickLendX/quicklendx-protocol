@@ -99,6 +99,8 @@ fn setup_escrow(env: &Env) -> (Address, Address, Address, BytesN<32>, Address, Q
         total_paid: 0,
         payment_history: Vec::new(env),
         origination_fee_bps: None,
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     };
     InvoiceStorage::store(env, &invoice);
 
@@ -193,4 +195,35 @@ fn extend_escrow_expiry_not_held() {
 
     // This should fail with InvalidStatus
     client.extend_escrow_expiry(&admin, &inv_id, &new_due_date);
+}
+
+#[test]
+#[should_panic(expected = "HostError: Error(Value, InvalidInput)")]
+fn extend_escrow_expiry_past_ledger_cap() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000_000);
+
+    let (admin, _investor, _business, inv_id, _currency, client) = setup_escrow(&env);
+
+    // Default max_due_date_days is 365.  Setting a due date more than 365 days
+    // from now must be rejected by the ledger-cap guard.
+    let past_cap = env.ledger().timestamp() + SECONDS_PER_DAY * 366;
+    client.extend_escrow_expiry(&admin, &inv_id, &past_cap);
+}
+
+#[test]
+fn extend_escrow_expiry_at_ledger_cap_boundary() {
+    let env = Env::default();
+    env.mock_all_auths();
+    env.ledger().set_timestamp(1_000_000);
+
+    let (admin, _investor, _business, inv_id, _currency, client) = setup_escrow(&env);
+
+    // Exactly at the 365-day cap boundary should succeed.
+    let at_cap = env.ledger().timestamp() + SECONDS_PER_DAY * 365;
+    client.extend_escrow_expiry(&admin, &inv_id, &at_cap);
+
+    let updated = InvoiceStorage::get_invoice(&env, &inv_id).unwrap();
+    assert_eq!(updated.due_date, at_cap);
 }
