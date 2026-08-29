@@ -3,7 +3,7 @@
 /// Provides secure, admin-gated operations for protocol and fee configuration,
 /// including **dry-run preview** functions that return a projected before/after
 /// diff without writing to storage.
-use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, symbol_short, Address, Env, String};
 
 use crate::errors::ContractError;
 use crate::storage_types::{DataKey, FeeConfig, ProtocolConfig};
@@ -42,6 +42,14 @@ pub struct FeeConfigDiff {
     pub projected: FeeConfig,
     /// `true` when `current == projected` (no-op change).
     pub is_noop: bool,
+}
+
+/// A recovery mutation must name its target and carry a bounded human reason.
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct RecoveryAudit {
+    pub target: soroban_sdk::Symbol,
+    pub reason: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -94,7 +102,7 @@ pub fn get_protocol_config(env: &Env) -> Result<ProtocolConfig, ContractError> {
 /// - `max_due_date_days` must be in `[1, 730]`  
 /// - `grace_period_seconds` must be ≤ 2_592_000 (30 days)
 pub fn validate_protocol_config(cfg: &ProtocolConfig) -> Result<(), ContractError> {
-    if cfg.min_invoice_amount <= 0 {
+    if cfg.min_invoice_amount == 0 {
         return Err(ContractError::InvalidAmount);
     }
     if cfg.max_due_date_days == 0 || cfg.max_due_date_days > 730 {
@@ -225,6 +233,62 @@ impl AdminContract {
     ) -> Result<(), ContractError> {
         require_admin(&env, &admin)?;
         apply_fee_config(&env, &new_config)
+    }
+
+    fn validate_recovery_reason(reason: &String) -> Result<(), ContractError> {
+        if reason.len() == 0 || reason.len() > 256 {
+            return Err(ContractError::InvalidParameter);
+        }
+        Ok(())
+    }
+
+    /// Recover protocol configuration with optimistic ownership/state checks.
+    ///
+    /// The expected value prevents an operator from overwriting a concurrent
+    /// change. Validation and all checks happen before the single storage write.
+    pub fn recover_protocol_config(
+        env: Env,
+        admin: Address,
+        expected_current: ProtocolConfig,
+        replacement: ProtocolConfig,
+        reason: String,
+    ) -> Result<(), ContractError> {
+        require_admin(&env, &admin)?;
+        Self::validate_recovery_reason(&reason)?;
+        let current = get_protocol_config(&env)?;
+        if current != expected_current {
+            return Err(ContractError::OperationNotAllowed);
+        }
+        validate_protocol_config(&replacement)?;
+        env.storage().instance().set(&DataKey::ProtocolConfig, &replacement);
+        env.events().publish(
+            (symbol_short!("adm_rec"), symbol_short!("proto")),
+            (admin, RecoveryAudit { target: symbol_short!("proto"), reason }),
+        );
+        Ok(())
+    }
+
+    /// Recover fee configuration with optimistic ownership/state checks.
+    pub fn recover_fee_config(
+        env: Env,
+        admin: Address,
+        expected_current: FeeConfig,
+        replacement: FeeConfig,
+        reason: String,
+    ) -> Result<(), ContractError> {
+        require_admin(&env, &admin)?;
+        Self::validate_recovery_reason(&reason)?;
+        let current = get_fee_config(&env)?;
+        if current != expected_current {
+            return Err(ContractError::OperationNotAllowed);
+        }
+        validate_fee_config(&replacement)?;
+        env.storage().instance().set(&DataKey::FeeConfig, &replacement);
+        env.events().publish(
+            (symbol_short!("adm_rec"), symbol_short!("fee")),
+            (admin, RecoveryAudit { target: symbol_short!("fee"), reason }),
+        );
+        Ok(())
     }
 
     // -----------------------------------------------------------------------

@@ -1,6 +1,7 @@
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec, Bytes, xdr::ToXdr};
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
+use crate::protocol_limits::MAX_INVOICE_AMOUNT;
 use crate::types::{
     Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus, 
     DisputeStatus, PaymentRecord, InvoiceRating, Escrow, EscrowStatus,
@@ -29,6 +30,7 @@ impl QuickLendXContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
         initial_currencies: Vec<Address>,
+        corridors: Vec<Address>,
     ) -> Result<(), QuickLendXError> {
         let params = InitializationParams {
             admin,
@@ -38,7 +40,8 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             initial_currencies,
-        backfill_max_batch_size: 100,
+            corridors,
+            backfill_max_batch_size: 100,
         };
         ProtocolInitializer::initialize(&env, &params)
     }
@@ -123,26 +126,20 @@ impl QuickLendXContract {
         description: soroban_sdk::Bytes,
         category: InvoiceCategory,
         tags: Vec<soroban_sdk::Bytes>,
+        nonce: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
-        // POLICY LAYER 1: Require explicit authorization from the business address.
-        // This ensures only the business itself can create invoices - not the admin,
-        // not a third party. Prevents impersonation and unauthorized storage writes.
+        if let Some(existing_id) = crate::idempotency::get_idempotency_result::<BytesN<32>>(&env, &nonce) {
+            return Ok(existing_id);
+        }
+
         business.require_auth();
-
-        // POLICY LAYER 2: Enforce KYC gating.
-        // Pending businesses are explicitly rejected with KYCAlreadyPending so
-        // callers can distinguish "not yet approved" from "rejected/unknown".
-        // This is the primary anti-spam control: only vetted businesses may write
-        // invoice data to on-chain storage.
         crate::verification::require_business_not_pending(&env, &business)?;
-
-        // POLICY LAYER 3: Regulatory compliance gate (reserved seam — no-op today).
-        // Replace the body of `require_regulatory_ok` in `regulatory.rs` to add
-        // jurisdiction-specific or on-chain oracle-based compliance checks without
-        // touching this call site.
         crate::regulatory::require_regulatory_ok(&env, &business)?;
 
-        // Enforce per-business invoice cap.
+        if amount <= 0 || amount > MAX_INVOICE_AMOUNT {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
         ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
 
         let invoice_id: BytesN<32> = env
@@ -179,6 +176,7 @@ impl QuickLendXContract {
         };
 
         InvoiceStorage::store_invoice(&env, &invoice);
+        crate::idempotency::store_idempotency_result(&env, &nonce, &invoice_id);
         Ok(invoice_id)
     }
 
@@ -214,6 +212,7 @@ impl QuickLendXContract {
             return Err(QuickLendXError::DuplicateBid);
         }
         if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
             return Err(QuickLendXError::InvoiceFrozen);
         }
         // Store idempotency marker
@@ -235,6 +234,7 @@ impl QuickLendXContract {
 
     pub fn accept_bid(env: Env, invoice_id: BytesN<32>, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
         if InvoiceStorage::is_frozen(&env, &invoice_id) {
+            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
             return Err(QuickLendXError::InvoiceFrozen);
         }
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -306,6 +306,25 @@ impl QuickLendXContract {
         BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
     }
 
+    pub fn get_investor_active_exposure(env: Env, investor: Address) -> i128 {
+        crate::payments::get_investor_exposure(&env, &investor)
+    }
+
+    pub fn get_investor_available_capacity(
+        env: Env,
+        investor: Address,
+    ) -> Result<i128, QuickLendXError> {
+        crate::payments::get_investor_available_capacity(&env, &investor)
+    }
+
+    pub fn validate_funding_commitment(
+        env: Env,
+        investor: Address,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        crate::payments::validate_funding_commitment(&env, &investor, amount)
+    }
+
     pub fn submit_kyc_application(env: Env, business: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
         submit_kyc_application(&env, &business, kyc_data)
     }
@@ -318,6 +337,15 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         crate::admin::AdminStorage::require_admin(&env, &admin)?;
         InvoiceStorage::set_frozen(&env, &invoice_id, true, Some(reason));
+        // Emit InvoiceFrozen with freeze_appeal_channel so off-chain consumers
+        // (dashboards, notification pipelines, indexers) can immediately surface
+        // the appeals path to the affected business.  Issue #1959.
+        crate::events::emit_invoice_frozen(
+            &env,
+            &invoice_id,
+            &admin,
+            reason.label(),
+        );
         Ok(())
     }
 
@@ -342,6 +370,7 @@ impl QuickLendXContract {
 
     /// Delete a business, removing it from any status list and marking as deleted.
     pub fn delete_business(env: Env, business: Address) -> Result<(), QuickLendXError> {
+        crate::governance::require_no_open_governance_proposal(&env)?;
         BusinessVerificationStorage::delete_business(&env, &business)
     }
 
@@ -369,14 +398,41 @@ impl QuickLendXContract {
         InvoiceStorage::get_count_by_status(&env, status)
     }
 
-    pub fn update_invoice_metadata(env: Env, invoice_id: BytesN<32>, metadata: InvoiceMetadata) -> Result<(), QuickLendXError> {
+    pub fn update_invoice_metadata(env: Env, invoice_id: BytesN<32>, metadata: InvoiceMetadata, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
+        if crate::idempotency::idempotency_exists(&env, &nonce) {
+            return Ok(());
+        }
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.update_metadata(metadata);
         InvoiceStorage::update_invoice(&env, &invoice);
+        crate::idempotency::store_idempotency(&env, &nonce);
+        Ok(())
+    }
+
+    pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
+        if crate::idempotency::idempotency_exists(&env, &nonce) {
+            return Ok(());
+        }
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        invoice.status = InvoiceStatus::Cancelled;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        crate::idempotency::store_idempotency(&env, &nonce);
+        Ok(())
+    }
+
+    pub fn complete_invoice(env: Env, invoice_id: BytesN<32>, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
+        if crate::idempotency::idempotency_exists(&env, &nonce) {
+            return Ok(());
+        }
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        invoice.status = InvoiceStatus::Paid;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        crate::idempotency::store_idempotency(&env, &nonce);
         Ok(())
     }
 
     pub fn clear_invoice_metadata(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        crate::governance::require_no_open_governance_proposal(&env)?;
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.clear_metadata();
         InvoiceStorage::update_invoice(&env, &invoice);
@@ -513,6 +569,7 @@ impl QuickLendXContract {
 
     pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
+        crate::governance::require_no_open_governance_proposal(&env)?;
         let mut backup = BackupStorage::get_backup(&env, &backup_id).ok_or(QuickLendXError::OperationNotAllowed)?;
         backup.status = BackupStatus::Archived;
         BackupStorage::update_backup(&env, &backup)?;

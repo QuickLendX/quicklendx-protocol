@@ -363,7 +363,7 @@ fn test_create_escrow_max_amount_with_zero_balance_returns_insufficient_funds() 
             &invoice_id,
             &investor,
             &Address::generate(&env),
-            i128::MAX,
+            crate::protocol_limits::MAX_INVOICE_AMOUNT,
             &currency,
         )
     });
@@ -384,9 +384,14 @@ fn test_create_escrow_max_amount_with_sufficient_balance_succeeds() {
         .address();
     let sac = token::StellarAssetClient::new(&env, &currency);
     let tok = token::Client::new(&env, &currency);
-    sac.mint(&investor, &i128::MAX);
+    sac.mint(&investor, &crate::protocol_limits::MAX_INVOICE_AMOUNT);
     let expiry = env.ledger().sequence() + 10_000;
-    tok.approve(&investor, &contract_id, &i128::MAX, &expiry);
+    tok.approve(
+        &investor,
+        &contract_id,
+        &crate::protocol_limits::MAX_INVOICE_AMOUNT,
+        &expiry,
+    );
 
     let invoice_id = BytesN::from_array(&env, &[0x13; 32]);
 
@@ -396,7 +401,7 @@ fn test_create_escrow_max_amount_with_sufficient_balance_succeeds() {
             &invoice_id,
             &investor,
             &Address::generate(&env),
-            i128::MAX,
+            crate::protocol_limits::MAX_INVOICE_AMOUNT,
             &currency,
         )
     });
@@ -405,12 +410,15 @@ fn test_create_escrow_max_amount_with_sufficient_balance_succeeds() {
         "max-amount escrow must succeed with sufficient balance"
     );
     assert_eq!(tok.balance(&investor), 0);
-    assert_eq!(tok.balance(&contract_id), i128::MAX);
+    assert_eq!(
+        tok.balance(&contract_id),
+        crate::protocol_limits::MAX_INVOICE_AMOUNT
+    );
 
     let escrow = env.as_contract(&contract_id, || {
         crate::payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap()
     });
-    assert_eq!(escrow.amount, i128::MAX);
+    assert_eq!(escrow.amount, crate::protocol_limits::MAX_INVOICE_AMOUNT);
     assert_eq!(escrow.status, crate::payments::EscrowStatus::Held);
 }
 
@@ -647,4 +655,232 @@ fn test_refund_escrow_success() {
         EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap()
     });
     assert_eq!(stored.status, EscrowStatus::Refunded);
+}
+
+// ============================================================================
+// Investor Exposure, Available Capacity & Funding Commitments
+// ============================================================================
+
+fn setup_verified_investor_record(
+    env: &Env,
+    contract_id: &Address,
+    investor: &Address,
+    limit: i128,
+) {
+    use crate::verification::{
+        BusinessVerificationStatus, InvestorRiskLevel, InvestorTier, InvestorVerification,
+        InvestorVerificationStorage,
+    };
+    use soroban_sdk::String;
+
+    env.as_contract(contract_id, || {
+        let record = InvestorVerification {
+            investor: investor.clone(),
+            status: BusinessVerificationStatus::Verified,
+            verified_at: Some(env.ledger().timestamp()),
+            verified_by: None,
+            kyc_data: String::from_str(env, "kyc-data"),
+            investment_limit: limit,
+            submitted_at: env.ledger().timestamp(),
+            tier: InvestorTier::Basic,
+            risk_level: InvestorRiskLevel::Low,
+            risk_score: 0,
+            total_invested: 0,
+            total_returns: 0,
+            successful_investments: 0,
+            defaulted_investments: 0,
+            last_activity: env.ledger().timestamp(),
+            rejection_reason: None,
+            compliance_notes: None,
+        };
+        InvestorVerificationStorage::store(env, &record);
+    });
+}
+
+#[test]
+fn test_investor_available_capacity_and_commitments() {
+    use crate::payments::{
+        get_investor_available_capacity, get_investor_exposure, validate_funding_commitment,
+    };
+    use crate::storage::{BidStorage, InvestmentStorage};
+    use crate::types::{Bid, BidStatus, Investment, InvestmentStatus};
+    use soroban_sdk::testutils::Ledger as _;
+
+    let (env, contract_id) = setup();
+    env.ledger().set_timestamp(1_000);
+    let investor = Address::generate(&env);
+    let limit = 50_000i128;
+
+    setup_verified_investor_record(&env, &contract_id, &investor, limit);
+
+    // Initial state: 0 exposure, full available capacity
+    let initial_exp = env.as_contract(&contract_id, || get_investor_exposure(&env, &investor));
+    assert_eq!(initial_exp, 0);
+
+    let initial_cap = env.as_contract(&contract_id, || {
+        get_investor_available_capacity(&env, &investor).unwrap()
+    });
+    assert_eq!(initial_cap, limit);
+
+    // Valid commitment within capacity
+    let valid_commit = env.as_contract(&contract_id, || {
+        validate_funding_commitment(&env, &investor, 20_000)
+    });
+    assert_eq!(valid_commit, Ok(()));
+
+    // Commitment exceeding capacity is rejected
+    let excess_commit = env.as_contract(&contract_id, || {
+        validate_funding_commitment(&env, &investor, limit + 1)
+    });
+    assert_eq!(excess_commit, Err(QuickLendXError::InvalidAmount));
+
+    // Place an active bid
+    let bid_id = BytesN::from_array(&env, &[101u8; 32]);
+    let invoice_id = BytesN::from_array(&env, &[102u8; 32]);
+    env.as_contract(&contract_id, || {
+        let bid = Bid {
+            bid_id: bid_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            bid_amount: 15_000,
+            expected_return: 16_000,
+            status: BidStatus::Placed,
+            timestamp: env.ledger().timestamp(),
+            expiration_timestamp: env.ledger().timestamp() + 3_600,
+        };
+        BidStorage::store_bid(&env, &bid);
+    });
+
+    let exp_after_bid = env.as_contract(&contract_id, || get_investor_exposure(&env, &investor));
+    assert_eq!(exp_after_bid, 15_000);
+
+    let cap_after_bid = env.as_contract(&contract_id, || {
+        get_investor_available_capacity(&env, &investor).unwrap()
+    });
+    assert_eq!(cap_after_bid, 35_000);
+
+    // Add an active investment
+    let investment_id = BytesN::from_array(&env, &[103u8; 32]);
+    env.as_contract(&contract_id, || {
+        let investment = Investment {
+            investment_id: investment_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
+            amount: 20_000,
+            funded_at: env.ledger().timestamp(),
+            status: InvestmentStatus::Active,
+            insurance: soroban_sdk::Vec::new(&env),
+        };
+        InvestmentStorage::store_investment(&env, &investment);
+    });
+
+    let exp_after_inv = env.as_contract(&contract_id, || get_investor_exposure(&env, &investor));
+    assert_eq!(exp_after_inv, 35_000);
+
+    let cap_after_inv = env.as_contract(&contract_id, || {
+        get_investor_available_capacity(&env, &investor).unwrap()
+    });
+    assert_eq!(cap_after_inv, 15_000);
+
+    // Completing an investment restores capacity exactly
+    env.as_contract(&contract_id, || {
+        let mut inv = InvestmentStorage::get_investment(&env, &investment_id).unwrap();
+        inv.status = InvestmentStatus::Completed;
+        InvestmentStorage::update_investment(&env, &inv);
+    });
+
+    let exp_after_complete =
+        env.as_contract(&contract_id, || get_investor_exposure(&env, &investor));
+    assert_eq!(exp_after_complete, 15_000);
+
+    let cap_after_complete = env.as_contract(&contract_id, || {
+        get_investor_available_capacity(&env, &investor).unwrap()
+    });
+    assert_eq!(cap_after_complete, 35_000);
+}
+
+// ============================================================================
+// Payment Rate Limiter & Throttling Recovery
+// ============================================================================
+
+#[test]
+fn test_payment_rate_limiter_burst_and_recovery() {
+    use crate::payments::{
+        PaymentRateLimiter, MAX_PAYMENTS_PER_WINDOW, PAYMENT_RATE_LIMIT_WINDOW_SECS,
+    };
+    use soroban_sdk::testutils::Ledger as _;
+
+    let (env, contract_id) = setup();
+    env.ledger().set_timestamp(1_000);
+    let investor_a = Address::generate(&env);
+    let investor_b = Address::generate(&env);
+
+    // Initial check passes for account A up to MAX_PAYMENTS_PER_WINDOW
+    for i in 0..MAX_PAYMENTS_PER_WINDOW {
+        let res = env.as_contract(&contract_id, || {
+            PaymentRateLimiter::check_and_record(&env, &investor_a)
+        });
+        assert_eq!(res, Ok(()), "iteration {i} must succeed under rate limit");
+    }
+
+    // Exceeding burst limit is throttled with OperationNotAllowed
+    let throttled = env.as_contract(&contract_id, || {
+        PaymentRateLimiter::check_and_record(&env, &investor_a)
+    });
+    assert_eq!(throttled, Err(QuickLendXError::OperationNotAllowed));
+
+    // Independent account B is unaffected by Account A's throttling
+    let res_b = env.as_contract(&contract_id, || {
+        PaymentRateLimiter::check_and_record(&env, &investor_b)
+    });
+    assert_eq!(
+        res_b,
+        Ok(()),
+        "Account B must not be throttled by Account A"
+    );
+
+    // Advance ledger timestamp beyond PAYMENT_RATE_LIMIT_WINDOW_SECS (window resets)
+    env.ledger()
+        .set_timestamp(1_000 + PAYMENT_RATE_LIMIT_WINDOW_SECS + 1);
+
+    // Account A recovers after window reset
+    let recovered = env.as_contract(&contract_id, || {
+        PaymentRateLimiter::check_and_record(&env, &investor_a)
+    });
+    assert_eq!(
+        recovered,
+        Ok(()),
+        "Account A must recover after rate limit window elapses"
+    );
+}
+
+// ============================================================================
+// Resource Bounds: MAX_INVOICE_AMOUNT & Dust Transfers
+// ============================================================================
+
+#[test]
+fn test_transfer_funds_max_invoice_amount_boundary() {
+    use crate::protocol_limits::MAX_INVOICE_AMOUNT;
+
+    let (env, contract_id) = setup();
+    let from = Address::generate(&env);
+    let to = Address::generate(&env);
+    let currency = setup_token(
+        &env,
+        &contract_id,
+        &[(from.clone(), i128::MAX)],
+        &[(from.clone(), i128::MAX)],
+    );
+
+    // Exactly MAX_INVOICE_AMOUNT succeeds
+    let at_max = env.as_contract(&contract_id, || {
+        transfer_funds(&env, &currency, &from, &to, MAX_INVOICE_AMOUNT)
+    });
+    assert_eq!(at_max, Ok(()));
+
+    // Exceeding MAX_INVOICE_AMOUNT is rejected with InvalidAmount
+    let over_max = env.as_contract(&contract_id, || {
+        transfer_funds(&env, &currency, &from, &to, MAX_INVOICE_AMOUNT + 1)
+    });
+    assert_eq!(over_max, Err(QuickLendXError::InvalidAmount));
 }

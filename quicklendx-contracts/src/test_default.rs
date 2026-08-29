@@ -97,6 +97,7 @@ fn create_and_fund_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
@@ -264,6 +265,7 @@ fn test_cannot_default_unfunded_invoice() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
@@ -294,6 +296,7 @@ fn test_cannot_default_pending_invoice() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     // Invoice is pending, not verified

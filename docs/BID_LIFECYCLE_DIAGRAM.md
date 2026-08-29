@@ -107,7 +107,9 @@ contract.withdraw_bid(env, bid_id: BytesN<32>) -> Result<(), QuickLendXError>
 ### Placed → Expired (automatic)
 
 No explicit entrypoint transitions a bid to `Expired`. The transition happens
-inside the following paths when `current_timestamp ≥ expiration_timestamp`:
+inside the following paths once the bid becomes **cleanup-eligible**
+(`current_timestamp ≥ expiration_timestamp + bid_expiry_grace_seconds`; see
+[Bid Expiry Grace Period](#bid-expiry-grace-period) below):
 
 - `cleanup_expired_bids` / `cleanup_expired_bids_paged` — public permissionless
   cleanup that scans and prunes expired bids.
@@ -140,6 +142,48 @@ TTL can be configured by admin between 1 and 30 days via `set_bid_ttl_days`.
 The investor active-bid limit can be set to any `u32`; `0` disables enforcement.
 Each change emits a `ttl_upd` event for auditability.
 
+## Bid Expiry Grace Period
+
+Once a bid's `expiration_timestamp` passes, it is immediately treated as
+expired for **acceptance** (`accept_bid` rejects it) and for **active-bid
+counting** (`get_active_bid_amount_sum_for_investor`,
+`count_active_placed_bids_for_investor`) — this is unchanged and governed by
+the raw `Bid::is_expired` predicate.
+
+What *is* delayed is the permissionless cleanup path: the storage transition
+from `Placed` to `Expired` (and the accompanying index pruning) performed by
+`cleanup_expired_bids` / `cleanup_expired_bids_paged` / `refresh_expired_bids`
+/ `refresh_investor_bids` only fires once `Bid::is_cleanup_eligible` is true,
+i.e. `current_timestamp >= expiration_timestamp + bid_expiry_grace_seconds`.
+This gives investors (or the wider system) a buffer window after raw expiry
+before any third-party caller can force the cleanup, without ever making an
+already-dead bid acceptable again.
+
+| Constant                              | Value        | Admin entrypoint                        |
+|----------------------------------------|--------------|------------------------------------------|
+| `DEFAULT_BID_EXPIRY_GRACE_SECONDS`     | 0 (no grace — matches pre-existing immediate-cleanup behaviour) | `reset_bid_expiry_grace_to_default` |
+| `MIN_BID_EXPIRY_GRACE_SECONDS`         | 0            | —                                          |
+| `MAX_BID_EXPIRY_GRACE_SECONDS`         | 2592000 (30 days) | —                                     |
+
+The default of `0` is intentional: it keeps out-of-the-box cleanup behaviour
+byte-for-byte identical to before this feature existed. Operators opt into a
+buffer window by calling `set_bid_expiry_grace_seconds` with a positive value.
+
+```rust
+// Admin-only.
+contract.set_bid_expiry_grace_seconds(env, seconds: u64) -> Result<u64, QuickLendXError>
+contract.reset_bid_expiry_grace_to_default(env) -> Result<u64, QuickLendXError>
+
+// Read-only.
+contract.get_bid_expiry_grace_seconds(env) -> u64
+contract.get_bid_expiry_grace_config(env) -> BidExpiryGraceConfig
+```
+
+`set_bid_expiry_grace_seconds` rejects out-of-range values with
+`InvalidTimestamp` (matching the convention used by the invoice-side
+`defaults::resolve_grace_period`), and emits a `BidExpiryGraceUpdated` event
+on every successful change (including resets).
+
 ## Expiry Semantics
 
 ```rust
@@ -147,6 +191,12 @@ Each change emits a `ttl_upd` event for auditability.
 // Valid until the second before expiry; expired at the expiry boundary.
 pub fn is_expired(&self, current_timestamp: u64) -> bool {
     current_timestamp >= self.expiration_timestamp
+}
+
+// A bid becomes eligible for permissionless cleanup once the grace period
+// has also elapsed on top of the raw expiry boundary.
+pub fn is_cleanup_eligible(&self, current_timestamp: u64, grace_seconds: u64) -> bool {
+    current_timestamp >= self.expiration_timestamp.saturating_add(grace_seconds)
 }
 ```
 
@@ -231,6 +281,7 @@ Detailed cross-module invariants: [`docs/contracts/lifecycle.md`](contracts/life
 | `get_all_bids_by_investor`     | `Vec<Bid>`                   | All bids across all invoices.      |
 | `get_bid_ttl_config`           | `BidTtlConfig`               | Full TTL config snapshot.          |
 | `get_bid_limit_config`         | `BidLimitConfig`             | Full bid limit policy snapshot.    |
+| `get_bid_expiry_grace_config`  | `BidExpiryGraceConfig`       | Full cleanup grace-period snapshot.|
 
 ## Error Codes
 

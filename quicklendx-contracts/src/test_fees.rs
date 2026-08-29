@@ -1062,3 +1062,27 @@ fn test_calculate_transaction_fees_platinum_late_payment_preserves_penalty() {
     // LatePayment: 100 + 20% surcharge = 120 (no tier discount)
     assert_eq!(fees, 418);
 }
+
+/// Test getting the fee schedule
+#[test]
+fn test_get_fee_schedule() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+
+    // Before initialization, the fee schedule should be empty
+    let empty_schedule = client.get_fee_schedule();
+    assert_eq!(empty_schedule.len(), 0);
+
+    // Initialize fee system
+    client.initialize_fee_system(&admin);
+
+    // After initialization, it should contain the default fee structures
+    let schedule = client.get_fee_schedule();
+    assert_eq!(schedule.len(), 3);
+    assert_eq!(schedule.get(0).unwrap().fee_type, FeeType::Platform);
+    assert_eq!(schedule.get(1).unwrap().fee_type, FeeType::Processing);
+    assert_eq!(schedule.get(2).unwrap().fee_type, FeeType::Verification);
+}

@@ -25,11 +25,8 @@ impl UpgradeControl {
     ///
     /// Returns `(wasm_hash, scheduled_at)` when an upgrade is pending,
     /// or `None` when no upgrade is scheduled.
-    pub fn get_pending_upgrade(
-        env: &Env,
-    ) -> Option<(BytesN<32>, u64)> {
-        let wasm_hash: BytesN<32> =
-            env.storage().instance().get(&PENDING_UPGRADE_WASM_KEY)?;
+    pub fn get_pending_upgrade(env: &Env) -> Option<(BytesN<32>, u64)> {
+        let wasm_hash: BytesN<32> = env.storage().instance().get(&PENDING_UPGRADE_WASM_KEY)?;
         let scheduled_at: u64 = env
             .storage()
             .instance()
@@ -69,6 +66,13 @@ impl UpgradeControl {
             return Err(QuickLendXError::OperationNotAllowed);
         }
 
+        // Migration safety: refuse to schedule an upgrade while a destructive
+        // backfill (currently `restore_from_backup`) is mutating invoice
+        // state. Letting the new contract code come online between clear and
+        // rebuild would leave it reading half-restored state with no flag to
+        // detect the partial view.
+        crate::backup::BackupStorage::require_no_pending_backfill(env)?;
+
         env.storage()
             .instance()
             .set(&PENDING_UPGRADE_WASM_KEY, wasm_hash);
@@ -77,7 +81,11 @@ impl UpgradeControl {
             .set(&PENDING_UPGRADE_AT_KEY, &env.ledger().timestamp());
 
         // Auto-pause: block state mutations until the upgrade is resolved.
-        crate::pause::PauseControl::apply_paused(env, true);
+        crate::pause::PauseControl::apply_paused(
+            env,
+            true,
+            Some(crate::pause::PauseReason::PendingUpgrade),
+        );
 
         crate::events::emit_upgrade_scheduled(env, admin, wasm_hash);
         Ok(())
@@ -104,7 +112,7 @@ impl UpgradeControl {
         env.storage().instance().remove(&PENDING_UPGRADE_AT_KEY);
 
         // Restore write access.
-        crate::pause::PauseControl::apply_paused(env, false);
+        crate::pause::PauseControl::apply_paused(env, false, None);
 
         crate::events::emit_upgrade_cancelled(env, admin, &wasm_hash);
         Ok(())
@@ -127,11 +135,12 @@ impl UpgradeControl {
 
         env.storage().instance().remove(&PENDING_UPGRADE_WASM_KEY);
         env.storage().instance().remove(&PENDING_UPGRADE_AT_KEY);
-        crate::pause::PauseControl::apply_paused(env, false);
+        crate::pause::PauseControl::apply_paused(env, false, None);
 
         crate::events::emit_upgrade_executed(env, admin, &wasm_hash);
 
-        env.deployer().update_current_contract_wasm(wasm_hash.clone());
+        env.deployer()
+            .update_current_contract_wasm(wasm_hash.clone());
 
         Ok(())
     }

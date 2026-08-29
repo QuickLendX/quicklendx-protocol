@@ -19,7 +19,7 @@
 //!    goes through pre-computed safe bounds.
 
 use crate::errors::QuickLendXError;
-use alloc::vec::Vec;
+use alloc::{format, string::String, vec::Vec};
 
 /// Maximum number of records returned by paginated query endpoints.
 pub const MAX_QUERY_LIMIT: u32 = 50;
@@ -55,6 +55,40 @@ impl PageCursor {
     #[inline]
     pub const fn new(offset: u32, generation: u64) -> Self {
         Self { offset, generation }
+    }
+
+    /// Encode a cursor into a deterministic, reviewable string form.
+    ///
+    /// The encoding is intentionally simple and unambiguous:
+    /// `generation_offset`, where both components are base-10 digits.
+    /// This preserves ordering and makes invalid values easy to reject without
+    /// any lossy transformation or off-by-one interpretation.
+    #[inline]
+    pub fn encode(&self) -> String {
+        format!("{}_{}", self.generation, self.offset)
+    }
+
+    /// Decode a cursor produced by [`PageCursor::encode`].
+    ///
+    /// Rejects malformed or ambiguous payloads rather than silently accepting
+    /// non-numeric data or multiple separators.
+    #[inline]
+    pub fn decode(raw: &str) -> Result<Self, QuickLendXError> {
+        let mut parts = raw.split('_');
+        let generation_str = parts.next().ok_or(QuickLendXError::InvalidAmount)?;
+        let offset_str = parts.next().ok_or(QuickLendXError::InvalidAmount)?;
+        if parts.next().is_some() || generation_str.is_empty() || offset_str.is_empty() {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let generation = generation_str
+            .parse::<u64>()
+            .map_err(|_| QuickLendXError::InvalidAmount)?;
+        let offset = offset_str
+            .parse::<u32>()
+            .map_err(|_| QuickLendXError::InvalidAmount)?;
+
+        Ok(Self::new(offset, generation))
     }
 
     /// Validate that this cursor's snapshot generation matches the current snapshot generation.
@@ -232,5 +266,18 @@ mod tests {
             cursor.require_stable(100),
             Err(QuickLendXError::UnstableCursor)
         );
+    }
+
+    #[test]
+    fn test_page_cursor_round_trip_and_invalid_input() {
+        let original = PageCursor::new(7, 42);
+        let encoded = original.encode();
+        assert_eq!(encoded, "42_7");
+        assert_eq!(PageCursor::decode(&encoded), Ok(original));
+
+        assert_eq!(PageCursor::decode("42"), Err(QuickLendXError::InvalidAmount));
+        assert_eq!(PageCursor::decode("abc_7"), Err(QuickLendXError::InvalidAmount));
+        assert_eq!(PageCursor::decode("42_abc"), Err(QuickLendXError::InvalidAmount));
+        assert_eq!(PageCursor::decode("42_7_9"), Err(QuickLendXError::InvalidAmount));
     }
 }
