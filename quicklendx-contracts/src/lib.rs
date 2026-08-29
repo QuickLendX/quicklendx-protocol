@@ -4059,6 +4059,40 @@ impl QuickLendXContract {
         )
     }
 
+    /// Cursor-stable variant of [`Self::get_investor_investments_paged`]
+    /// (#2456). See `investment_queries::InvestmentQueries::
+    /// get_investor_investments_paginated_cursored`'s doc comment for the
+    /// full cursor protocol and `ISSUE_2456_IMPLEMENTATION.md` for the
+    /// design note.
+    ///
+    /// Pass `cursor_generation: None` for the first page; pass the
+    /// `generation` field from the previous response back in on every
+    /// subsequent call for the same investor/filter. Returns
+    /// `Err(QuickLendXError::UnstableCursor)` if a new investment was
+    /// recorded for `investor` since the cursor's generation was issued,
+    /// rather than silently returning a page that skips or duplicates
+    /// records relative to earlier pages the caller already fetched.
+    ///
+    /// Purely additive alongside [`Self::get_investor_investments_paged`] —
+    /// that entrypoint's request/response shape is unchanged.
+    pub fn get_investor_investments_paged_cursored(
+        env: Env,
+        investor: Address,
+        status_filter: Option<InvestmentStatus>,
+        offset: u32,
+        limit: u32,
+        cursor_generation: Option<u64>,
+    ) -> Result<investment_queries::InvestorInvestmentsPage, QuickLendXError> {
+        investment_queries::InvestmentQueries::get_investor_investments_paginated_cursored(
+            &env,
+            &investor,
+            status_filter,
+            offset,
+            limit,
+            cursor_generation,
+        )
+    }
+
     /// Get available invoices with pagination and optional filters
     /// @notice Get available invoices with pagination and optional filters
     /// @param min_amount Optional minimum invoice amount filter
