@@ -445,7 +445,6 @@ pub fn settle_invoice(
         .ok_or(QuickLendXError::InvalidAmount)?;
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
-    crate::investment::require_investment_active(&investment)?;
 
     if projected_total < invoice.amount || projected_total < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);

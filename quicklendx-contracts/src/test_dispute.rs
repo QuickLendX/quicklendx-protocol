@@ -2198,7 +2198,10 @@ mod test_dispute {
     #[test]
     fn test_validate_evidence_hash_accepts_valid_32_byte_hash() {
         let env = Env::default();
-        let valid_hash = Bytes::from_slice(&env, &[0u8; 32]);
+
+        // Create a valid 32-byte hash (all zeros for test purposes)
+        let valid_hash = BytesN::from_array(&env, &[0u8; 32]);
+
         let result = validate_evidence_hash(&valid_hash);
         assert!(result.is_ok(), "Valid 32-byte hash should pass validation");
     }
@@ -2207,11 +2210,14 @@ mod test_dispute {
     #[test]
     fn test_validate_evidence_hash_accepts_non_zero_hash() {
         let env = Env::default();
+
+        // Create a valid 32-byte hash with non-zero values
         let mut hash_bytes = [0u8; 32];
         for i in 0..32 {
             hash_bytes[i] = (i as u8) + 1;
         }
-        let valid_hash = Bytes::from_slice(&env, &hash_bytes);
+        let valid_hash = BytesN::from_array(&env, &hash_bytes);
+
         let result = validate_evidence_hash(&valid_hash);
         assert!(
             result.is_ok(),
@@ -2223,12 +2229,15 @@ mod test_dispute {
     #[test]
     fn test_validate_evidence_hash_accepts_sha256_like_hash() {
         let env = Env::default();
+
+        // Create a hash that resembles a real SHA-256 output
         let hash_bytes = [
             0xa1, 0xb2, 0xc3, 0xd4, 0xe5, 0xf6, 0x01, 0x12, 0x23, 0x34, 0x45, 0x56, 0x67, 0x78,
             0x89, 0x9a, 0xab, 0xbc, 0xcd, 0xde, 0xef, 0xf0, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66,
             0x77, 0x88, 0x99, 0xaa,
         ];
-        let valid_hash = Bytes::from_slice(&env, &hash_bytes);
+        let valid_hash = BytesN::from_array(&env, &hash_bytes);
+
         let result = validate_evidence_hash(&valid_hash);
         assert!(result.is_ok(), "SHA-256-like hash should pass validation");
     }

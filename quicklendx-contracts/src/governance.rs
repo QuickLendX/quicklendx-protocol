@@ -178,8 +178,6 @@ pub trait Governable {
             .instance()
             .set(&voted_key(&proposal_id), &empty);
 
-        increment_active_proposals(env);
-
         Ok(proposal)
     }
 

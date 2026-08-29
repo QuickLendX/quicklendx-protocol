@@ -135,7 +135,6 @@ fn test_default_after_grace_period() {
 
     // Mark as defaulted
     assert_eq!(client.get_business_default_history(&business), 0);
-    assert_eq!(client.get_investor_default_history(&investor), 0);
     client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
 
     // Verify invoice is now defaulted
@@ -144,48 +143,6 @@ fn test_default_after_grace_period() {
 
     // Verify business default history counter incremented
     assert_eq!(client.get_business_default_history(&business), 1);
-
-    // Verify investor default history counter incremented
-    assert_eq!(client.get_investor_default_history(&investor), 1);
-}
-
-/// The investor default counter increments once per defaulted invoice funded
-/// by that investor, and never touches an unrelated investor's counter.
-#[test]
-fn test_investor_default_history_isolated_per_investor() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor_a = create_verified_investor(&env, &client, &admin, 10000);
-    let investor_b = create_verified_investor(&env, &client, &admin, 10000);
-
-    let amount = 1000;
-    let due_date = env.ledger().timestamp() + 86400;
-    let grace_period = 7 * 24 * 60 * 60;
-
-    let invoice_a = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor_a, amount, due_date,
-    );
-    let invoice_b = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor_b, amount, due_date,
-    );
-
-    let default_time = due_date + grace_period + 1;
-    env.ledger().set_timestamp(default_time);
-
-    assert_eq!(client.get_investor_default_history(&investor_a), 0);
-    assert_eq!(client.get_investor_default_history(&investor_b), 0);
-
-    // Only invoice_a (funded by investor_a) defaults.
-    client.mark_invoice_defaulted(&invoice_a, &Some(grace_period));
-
-    assert_eq!(client.get_investor_default_history(&investor_a), 1);
-    assert_eq!(client.get_investor_default_history(&investor_b), 0);
-
-    // Now default invoice_b too; investor_a's counter must stay unaffected.
-    client.mark_invoice_defaulted(&invoice_b, &Some(grace_period));
-
-    assert_eq!(client.get_investor_default_history(&investor_a), 1);
-    assert_eq!(client.get_investor_default_history(&investor_b), 1);
 }
 
 #[test]

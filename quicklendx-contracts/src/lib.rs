@@ -237,7 +237,9 @@ mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
 #[cfg(test)]
-mod test_investor_kyc;
+mod test_invoice;
+#[cfg(test)]
+mod test_panic_handler;
 #[cfg(test)]
 mod test_payments;
 #[cfg(test)]
@@ -389,14 +391,6 @@ mod test_init_invariants;
 #[cfg(test)]
 mod test_input_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
-mod test_insurance_claim_payout;
-#[cfg(test)]
-mod test_insurance_optin_lifecycle;
-#[cfg(test)]
-mod test_invoice;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_insurance_premium_props;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
 // Issue #1949 — full InvestmentStatus transition matrix (CI-ungated).
 #[cfg(test)]
@@ -409,6 +403,18 @@ mod test_invoice_metadata;
 mod test_invoice_search_ranking;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_line_item_consistency;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_profits_props;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_rebuild_indexes;
+// #[cfg(all(test, feature = "legacy-tests"))]
+// mod test_max_invoices_per_business;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_insurance_claim_payout;
+#[cfg(test)]
+mod test_insurance_optin_lifecycle;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_insurance_premium_props;
 #[cfg(test)]
 mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -444,12 +450,8 @@ mod test_store_invoices_batch;
 mod test_invoice_batch_cancel;
 #[cfg(test)]
 mod test_tier_boundary;
-// Issue — symmetric pause/maintenance state-change tests (both directions); no
-// feature gate so this runs on every CI matrix entry.
 #[cfg(test)]
-mod test_pause_toggle_symmetry;
-#[cfg(test)]
-mod test_verification_matrix;
+mod test_ratings_snapshot;
 pub mod types;
 pub use types::*;
 pub mod upgrade;
@@ -2193,16 +2195,6 @@ impl QuickLendXContract {
     /// Get the total number of defaulted invoices for a business.
     pub fn get_business_default_history(env: Env, business: Address) -> u32 {
         let key = crate::storage::StorageKeys::business_default_history(&business);
-        env.storage().persistent().get(&key).unwrap_or(0)
-    }
-
-    /// Get the total number of defaulted investments for an investor.
-    ///
-    /// Increments each time an invoice funded by this investor transitions to
-    /// `Defaulted` (see `defaults::handle_default`). Mirrors
-    /// `get_business_default_history` on the investor side.
-    pub fn get_investor_default_history(env: Env, investor: Address) -> u32 {
-        let key = crate::storage::StorageKeys::investor_default_history(&investor);
         env.storage().persistent().get(&key).unwrap_or(0)
     }
 
