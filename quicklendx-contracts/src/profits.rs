@@ -499,7 +499,11 @@ pub fn calculate_treasury_split_checked(
 ///
 /// # Returns
 /// `true` if calculation is dust-free, `false` otherwise
-#[allow(dead_code)]
+///
+/// Used as a defense-in-depth check in `settlement::settle_invoice_internal`
+/// (#2464), re-verifying the same `investor_return + platform_fee ==
+/// total_paid` identity that function's own `checked_add`-based check
+/// already asserts, through an independently-implemented path.
 pub fn verify_no_dust(investor_return: i128, platform_fee: i128, payment_amount: i128) -> bool {
     investor_return.saturating_add(platform_fee) == payment_amount
 }

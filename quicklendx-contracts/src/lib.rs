@@ -5426,6 +5426,9 @@ mod test_id_stability;
 #[cfg(test)]
 mod test_settlement_auto_release;
 
+#[cfg(test)]
+mod test_settlement_atomic_rollback;
+
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_dispute_interaction;
 
