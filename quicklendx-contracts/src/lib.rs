@@ -1,10 +1,13 @@
 #![no_std]
 
-use core::panic::PanicInfo;
+use soroban_sdk::{contract, contractimpl, Env};
 
-#[panic_handler]
-fn panic(_info: &PanicInfo) -> ! {
-    loop {}
+#[contract]
+pub struct QuickLendXContract;
+
+#[contractimpl]
+impl QuickLendXContract {
+    pub fn hello(env: Env) ->کور { // or your actual contract methods
+        // Replace with your actual implementation
+    }
 }
-
-pub fn placeholder() {}
