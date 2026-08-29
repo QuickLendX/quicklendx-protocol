@@ -150,6 +150,8 @@ mod test_bid_cancel_accept_race;
 mod test_bid_expiry_boundary;
 #[cfg(test)]
 mod test_bid_expiry_grace;
+#[cfg(test)]
+mod test_bid_audit_parity;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(test)]
@@ -2365,6 +2367,8 @@ impl QuickLendXContract {
         BidStorage::update_bid(&env, &bid);
         crate::qlx_log!(&env, "bid", "Bid withdrawn");
         emit_bid_withdrawn(&env, &bid);
+        // Audit trail: emitted only after the Withdrawn transition is committed.
+        audit::log_bid_withdrawn(&env, bid.invoice_id.clone(), bid.investor.clone(), bid_id);
         Ok(())
     }
 
@@ -2508,6 +2512,9 @@ impl QuickLendXContract {
 
         // Emit bid placed event
         emit_bid_placed(&env, &bid);
+        // Audit trail: recorded only after the bid is committed (stored +
+        // indexed + idempotency marker), in lock-step with the emitted event.
+        audit::log_bid_placed(&env, invoice_id, investor, bid_amount, bid_id.clone());
 
         Ok(bid_id)
     }

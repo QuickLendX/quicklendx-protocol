@@ -71,6 +71,13 @@ pub enum AuditOperation {
     ConfigRevenueDistributionChanged,
     /// Admin manually overrode an invoice's computed average rating.
     RatingOverridden,
+    /// A placed bid was cancelled by its investor (Placed -> Cancelled).
+    ///
+    /// Added at the end of the enum to preserve the on-disk serialization of
+    /// previously stored entries.
+    BidCancelled,
+    /// A placed bid transitioned to Expired (via TTL/grace cleanup).
+    BidExpired,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -103,6 +110,8 @@ pub enum OpType {
     ConfigFeeStructureChanged,
     ConfigRevenueDistributionChanged,
     RatingOverridden,
+    BidCancelled,
+    BidExpired,
 }
 
 impl OpType {
@@ -131,6 +140,8 @@ impl OpType {
             OpType::ConfigFeeStructureChanged => symbol_short!("cfg_fstr"),
             OpType::ConfigRevenueDistributionChanged => symbol_short!("cfg_rev"),
             OpType::RatingOverridden => symbol_short!("rt_over"),
+            OpType::BidCancelled => symbol_short!("bid_can"),
+            OpType::BidExpired => symbol_short!("bid_exp"),
         }
     }
 
@@ -159,6 +170,8 @@ impl OpType {
             OpType::ConfigFeeStructureChanged => 19,
             OpType::ConfigRevenueDistributionChanged => 20,
             OpType::RatingOverridden => 21,
+            OpType::BidCancelled => 22,
+            OpType::BidExpired => 23,
         }
     }
 }
@@ -190,6 +203,8 @@ impl From<AuditOperation> for OpType {
                 OpType::ConfigRevenueDistributionChanged
             }
             AuditOperation::RatingOverridden => OpType::RatingOverridden,
+            AuditOperation::BidCancelled => OpType::BidCancelled,
+            AuditOperation::BidExpired => OpType::BidExpired,
         }
     }
 }
@@ -430,6 +445,8 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::ConfigFeeStructureChanged => 19,
         AuditOperation::ConfigRevenueDistributionChanged => 20,
         AuditOperation::RatingOverridden => 21,
+        AuditOperation::BidCancelled => 22,
+        AuditOperation::BidExpired => 23,
     }
 }
 
@@ -959,13 +976,35 @@ pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) 
     );
 }
 
+/// Human-readable correlation string that ties an audit entry to the bid that
+/// produced it, so downstream systems can match the emitted bid event
+/// (`BidPlaced`/`BidAccepted`/... which carry `bid_id`) to its audit record.
+fn bid_correlation(env: &Env, bid_id: &BytesN<32>) -> String {
+    let mut hex_bytes = alloc::vec::Vec::new();
+    for byte in bid_id.to_array().iter() {
+        let high = byte >> 4;
+        let low = byte & 0x0F;
+        hex_bytes.push(nibble_to_hex(high));
+        hex_bytes.push(nibble_to_hex(low));
+    }
+    String::from_str(env, &(core::str::from_utf8(&hex_bytes).unwrap_or("")))
+}
+
+fn nibble_to_hex(nibble: u8) -> u8 {
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + (nibble - 10)
+    }
+}
+
 /// Log bid placed.
 pub fn log_bid_placed(
     env: &Env,
     invoice_id: BytesN<32>,
     actor: Address,
     bid_amount: i128,
-    _bid_id: BytesN<32>,
+    bid_id: BytesN<32>,
 ) {
     log_operation(
         env,
@@ -975,12 +1014,18 @@ pub fn log_bid_placed(
         None,
         Some(String::from_str(env, "Bid placed")),
         Some(bid_amount),
-        None,
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
 /// Log bid accepted.
-pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+pub fn log_bid_accepted(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    bid_id: BytesN<32>,
+) {
     log_operation(
         env,
         invoice_id,
@@ -989,12 +1034,12 @@ pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amoun
         None,
         Some(String::from_str(env, "Bid accepted")),
         Some(amount),
-        None,
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
 /// Log bid withdrawn.
-pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid_id: BytesN<32>) {
+pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
     log_operation(
         env,
         invoice_id,
@@ -1003,7 +1048,45 @@ pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid
         None,
         Some(String::from_str(env, "Bid withdrawn")),
         None,
+        Some(bid_correlation(env, &bid_id)),
+    );
+}
+
+/// Log bid cancelled (Placed -> Cancelled).
+pub fn log_bid_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidCancelled,
+        actor,
         None,
+        Some(String::from_str(env, "Bid cancelled")),
+        None,
+        Some(bid_correlation(env, &bid_id)),
+    );
+}
+
+/// Log bid expired (Placed -> Expired via TTL/grace cleanup).
+///
+/// The actor is the bid's investor: expiry is a self-triggered transition of
+/// that bid's lifecycle, and using a real address keeps the audit entry
+/// attributable without inventing a synthetic system address.
+pub fn log_bid_expired(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    bid_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidExpired,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid expired")),
+        Some(amount),
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
