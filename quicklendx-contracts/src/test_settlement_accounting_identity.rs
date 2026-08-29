@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::profits::{
@@ -53,7 +53,8 @@ fn setup_funded_invoice_with_fee(
         &String::from_str(env, "Invoice for accounting identity tests"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(
@@ -206,7 +207,11 @@ fn test_settlement_accounting_identity_partial_then_final() {
         assert_eq!(progress_after_partial.status, InvoiceStatus::Funded);
 
         let remaining_due = invoice_amount - partial_payment;
-        client.settle_invoice(&invoice_id, &remaining_due, &client.get_investment(&invoice_id).unwrap());
+        client.settle_invoice(
+            &invoice_id,
+            &remaining_due,
+            &client.get_investment(&invoice_id).unwrap(),
+        );
 
         let investor_received = token_client.balance(&investor) - investor_before;
         let implied_platform_fee = invoice_amount - investor_received;
@@ -241,4 +246,3 @@ fn test_settlement_accounting_identity_treasury_split_is_dust_free() {
         }
     }
 }
-

@@ -71,7 +71,8 @@ fn upload(env: &Env, client: &QuickLendXContractClient, business: &Address) -> B
         &String::from_str(env, "matrix invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None)
+        &None,
+    )
 }
 
 // ============================================================================

@@ -129,7 +129,8 @@ fn setup() -> (
         &String::from_str(&env, "Stress ceiling invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
 
     (env, client, admin, investor, invoice_id)

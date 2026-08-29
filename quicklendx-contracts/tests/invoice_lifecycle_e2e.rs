@@ -116,6 +116,8 @@ fn upload_verified_invoice(fx: &Fixture, amount: i128, description: &str) -> Byt
         &InvoiceCategory::Goods,
         &Vec::new(&fx.client.env),
         &None,
+        &None,
+        &None,
     );
 
     fx.client.verify_invoice(&invoice_id);
@@ -342,7 +344,8 @@ fn test_invoice_lifecycle_happy_path() {
     let business_bal_before = tok.balance(&fx.business);
     let investor_bal_before_settle = tok.balance(&fx.investor);
 
-    fx.client.settle_invoice(&invoice_id, &remaining);
+    let snap = fx.client.get_investment_by_invoice(&invoice_id);
+    fx.client.settle_invoice(&invoice_id, &remaining, &snap);
 
     let invoice = fx.client.get_invoice(&invoice_id);
     assert_eq!(
@@ -831,7 +834,9 @@ fn test_partial_then_full_settle() {
     let investor_bal_before = tok.balance(&fx.investor);
 
     env.ledger().set_timestamp(5_000);
-    fx.client.settle_invoice(&invoice_id, &40_000_000i128);
+    let snap = fx.client.get_investment_by_invoice(&invoice_id);
+    fx.client
+        .settle_invoice(&invoice_id, &40_000_000i128, &snap);
 
     let invoice = fx.client.get_invoice(&invoice_id);
     assert_eq!(

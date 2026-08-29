@@ -306,6 +306,25 @@ impl QuickLendXContract {
         BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
     }
 
+    pub fn get_investor_active_exposure(env: Env, investor: Address) -> i128 {
+        crate::payments::get_investor_exposure(&env, &investor)
+    }
+
+    pub fn get_investor_available_capacity(
+        env: Env,
+        investor: Address,
+    ) -> Result<i128, QuickLendXError> {
+        crate::payments::get_investor_available_capacity(&env, &investor)
+    }
+
+    pub fn validate_funding_commitment(
+        env: Env,
+        investor: Address,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        crate::payments::validate_funding_commitment(&env, &investor, amount)
+    }
+
     pub fn submit_kyc_application(env: Env, business: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
         submit_kyc_application(&env, &business, kyc_data)
     }

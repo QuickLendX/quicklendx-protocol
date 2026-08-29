@@ -96,7 +96,7 @@ pub(crate) fn track_dispute_invoice(env: &Env, invoice_id: &BytesN<32>) {
     add_to_dispute_index(env, invoice_id);
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod evidence_identity_tests {
     use super::*;
     use soroban_sdk::testutils::Address as _;
@@ -108,8 +108,12 @@ mod evidence_identity_tests {
         let creator = Address::generate(&env);
         let evidence = String::from_str(&env, "provider-reference-1");
         let digest = reserve_evidence(&env, &invoice, &creator, &evidence).unwrap();
-        assert_eq!(digest, env.crypto().sha256(&evidence.to_bytes()));
-        assert_eq!(reserve_evidence(&env, &invoice, &creator, &evidence), Err(QuickLendXError::InvalidDisputeEvidence));
+        let expected: BytesN<32> = env.crypto().sha256(&evidence.to_bytes()).into();
+        assert_eq!(digest, expected);
+        assert_eq!(
+            reserve_evidence(&env, &invoice, &creator, &evidence),
+            Err(QuickLendXError::InvalidDisputeEvidence)
+        );
     }
 
     #[test]

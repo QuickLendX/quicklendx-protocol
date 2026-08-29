@@ -53,7 +53,8 @@ fn verified_invoice(
             &String::from_str(env, "Verified invoice"),
             &InvoiceCategory::Services,
             &Vec::new(env),
-            &None)
+            &None,
+        )
         .expect("host error")
         .expect("conversion error");
     client.verify_invoice(&invoice_id);
@@ -95,7 +96,8 @@ fn test_store_invoice_zero_amount() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvalidAmount,
     );
 }
@@ -115,7 +117,8 @@ fn test_store_invoice_negative_amount() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvalidAmount,
     );
 }
@@ -154,7 +157,8 @@ fn test_store_invoice_amount_at_max_boundary() {
         &String::from_str(&env, "At max boundary"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None));
+        &None,
+    ));
 }
 
 #[test]
@@ -192,7 +196,8 @@ fn test_upload_invoice_zero_amount() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvalidAmount,
     );
 }
@@ -212,7 +217,8 @@ fn test_upload_invoice_negative_amount() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvalidAmount,
     );
 }
@@ -329,7 +335,8 @@ fn test_store_invoice_past_due_date() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvoiceDueDateInvalid,
     );
 }
@@ -350,7 +357,8 @@ fn test_store_invoice_zero_due_date() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvoiceDueDateInvalid,
     );
 }
@@ -371,7 +379,8 @@ fn test_upload_invoice_past_due_date() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvoiceDueDateInvalid,
     );
 }
@@ -392,7 +401,8 @@ fn test_upload_invoice_zero_due_date() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvoiceDueDateInvalid,
     );
 }
@@ -412,7 +422,8 @@ fn test_store_invoice_empty_description() {
             &String::from_str(&env, ""),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvalidDescription,
     );
 }
@@ -432,7 +443,8 @@ fn test_upload_invoice_empty_description() {
             &String::from_str(&env, ""),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvalidDescription,
     );
 }
@@ -452,7 +464,8 @@ fn test_store_invoice_oversized_description() {
             &create_string(&env, 1_025),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None),
+            &None,
+        ),
         QuickLendXError::InvalidDescription,
     );
 }
@@ -499,7 +512,8 @@ fn test_store_invoice_too_many_tags() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &tags,
-            &None),
+            &None,
+        ),
         QuickLendXError::TagLimitExceeded,
     );
 }
@@ -521,7 +535,8 @@ fn test_store_invoice_oversized_tag() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &tags,
-            &None),
+            &None,
+        ),
         QuickLendXError::InvalidTag,
     );
 }
@@ -543,7 +558,8 @@ fn test_store_invoice_empty_tag_after_normalization() {
             &String::from_str(&env, "Test"),
             &InvoiceCategory::Services,
             &tags,
-            &None),
+            &None,
+        ),
         QuickLendXError::InvalidTag,
     );
 }
@@ -580,7 +596,8 @@ fn test_no_panics_on_invalid_inputs() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None));
+        &None,
+    ));
     assert_no_host_error(client.try_store_invoice(
         &business,
         &-1,
@@ -589,7 +606,8 @@ fn test_no_panics_on_invalid_inputs() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None));
+        &None,
+    ));
     assert_no_host_error(client.try_store_invoice(
         &business,
         &1000,
@@ -598,7 +616,8 @@ fn test_no_panics_on_invalid_inputs() {
         &String::from_str(&env, ""),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None));
+        &None,
+    ));
     assert_no_host_error(client.try_upload_invoice(
         &verified,
         &100,
@@ -607,7 +626,8 @@ fn test_no_panics_on_invalid_inputs() {
         &String::from_str(&env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None));
+        &None,
+    ));
     assert_no_host_error(client.try_set_bid_ttl_days(&0));
     assert_no_host_error(client.try_set_bid_ttl_days(&31));
 }
@@ -626,7 +646,8 @@ fn test_update_invoice_metadata_oversized_fields() {
         &String::from_str(&env, "Valid"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
 
     let oversized_name = create_string(&env, 151); // MAX_NAME_LENGTH is 150
 

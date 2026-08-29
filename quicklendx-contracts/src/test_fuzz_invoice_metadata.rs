@@ -40,17 +40,18 @@ fn make_invoice_unit(env: &Env) -> (Invoice, Address) {
     let business = Address::generate(env);
     let currency = Address::generate(env);
     let inv = Invoice::new(
-env,
-business.clone(),
-1000,
-currency,
-env.ledger().timestamp() + 86400,
-SStr::from_str(env, "fuzz invoice"),
-InvoiceCategory::Services,
-SVec::new(env),
-        None, /* early_payment_discount_bps */,
-        None
-)
+        env,
+        business.clone(),
+        1000,
+        currency,
+        env.ledger().timestamp() + 86400,
+        SStr::from_str(env, "fuzz invoice"),
+        InvoiceCategory::Services,
+        SVec::new(env),
+        None,
+        None,
+        None,
+    )
     .expect("baseline invoice creation must succeed");
     (inv, business)
 }
@@ -98,17 +99,18 @@ proptest! {
                 tags.push_back(SStr::from_str(&env, &alloc::format!("tag{}", i)));
             }
             let result = Invoice::new(
-&env,
-business,
-1000,
-currency,
-env.ledger().timestamp() + 86400,
-SStr::from_str(&env, "t"),
-InvoiceCategory::Services,
-tags,
-        None, /* early_payment_discount_bps */,
-        None
-);
+                &env,
+                business,
+                1000,
+                currency,
+                env.ledger().timestamp() + 86400,
+                SStr::from_str(&env, "t"),
+                InvoiceCategory::Services,
+                tags,
+                None,
+                None,
+                None,
+            );
             prop_assert!(result.is_ok(), "count={} should succeed", count);
             prop_assert_eq!(result.unwrap().tags.len(), count);
         });
@@ -126,17 +128,18 @@ tags,
                 tags.push_back(SStr::from_str(&env, &alloc::format!("tag{}", i)));
             }
             let result = Invoice::new(
-&env,
-business,
-1000,
-currency,
-env.ledger().timestamp() + 86400,
-SStr::from_str(&env, "t"),
-InvoiceCategory::Services,
-tags,
-        None, /* early_payment_discount_bps */,
-        None
-);
+                &env,
+                business,
+                1000,
+                currency,
+                env.ledger().timestamp() + 86400,
+                SStr::from_str(&env, "t"),
+                InvoiceCategory::Services,
+                tags,
+                None,
+                None,
+                None,
+            );
             prop_assert_eq!(
                 result,
                 Err(QuickLendXError::TagLimitExceeded),

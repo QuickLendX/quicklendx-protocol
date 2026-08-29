@@ -30,12 +30,16 @@ mod test_fuzz_settlement_currency_whitelist {
         client.initialize_fee_system(&admin);
 
         let token_admin = Address::generate(env);
-        let currency = env.register_stellar_asset_contract_v2(token_admin.clone()).address();
+        let currency = env
+            .register_stellar_asset_contract_v2(token_admin.clone())
+            .address();
         let token_client = token::Client::new(env, &currency);
         let sac = token::StellarAssetClient::new(env, &currency);
 
         let other_token_admin = Address::generate(env);
-        let other_token = env.register_stellar_asset_contract_v2(other_token_admin.clone()).address();
+        let other_token = env
+            .register_stellar_asset_contract_v2(other_token_admin.clone())
+            .address();
 
         let balance: i128 = 500_000;
         sac.mint(&business, &balance);
@@ -88,11 +92,11 @@ mod test_fuzz_settlement_currency_whitelist {
             let (client, invoice_id, currency, other_token) = setup_funded_invoice(&env);
 
             let mut whitelist: Vec<Address> = Vec::new(&env);
-            
+
             for _ in 0..random_tokens {
                 whitelist.push_back(Address::generate(&env));
             }
-            
+
             whitelist.push_back(other_token);
 
             if include_invoice_currency {

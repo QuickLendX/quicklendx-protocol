@@ -34,7 +34,6 @@ pub enum PauseReason {
 }
 
 impl PauseControl {
-
     pub fn is_paused(env: &Env) -> bool {
         if !env.storage().instance().get(&PAUSED_KEY).unwrap_or(false) {
             return false;
@@ -126,4 +125,3 @@ impl PauseControl {
             || entrypoint == String::from_str(env, "accept_bid")
     }
 }
-

@@ -115,7 +115,8 @@ fn pause_auto_expires_after_max_pause_duration() {
     );
 
     // One second past the boundary — auto-expires.
-    env.ledger().set_timestamp(paused_at + MAX_PAUSE_DURATION + 1);
+    env.ledger()
+        .set_timestamp(paused_at + MAX_PAUSE_DURATION + 1);
     assert!(
         !client.is_paused(),
         "auto-expires one second past MAX_PAUSE_DURATION"
@@ -151,7 +152,8 @@ fn writes_unblocked_after_auto_expiry() {
 
     // Advance past the duration — auto-expiry occurs.
     let paused_at = env.ledger().timestamp();
-    env.ledger().set_timestamp(paused_at + MAX_PAUSE_DURATION + 1);
+    env.ledger()
+        .set_timestamp(paused_at + MAX_PAUSE_DURATION + 1);
     assert!(!client.is_paused(), "auto-expired");
 
     // Same call now succeeds.

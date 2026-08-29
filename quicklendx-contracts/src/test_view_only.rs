@@ -55,6 +55,7 @@ fn test_view_only_allows_writes_normally() {
         metadata_notes: None,
         metadata_line_items: Vec::new(&env),
         origination_fee_bps: None,
+        late_payment_penalty_bps: None,
         early_payment_discount_bps: None,
     };
 
@@ -109,6 +110,7 @@ fn test_view_only_panics_on_invoice_store() {
         metadata_notes: None,
         metadata_line_items: Vec::new(&env),
         origination_fee_bps: None,
+        late_payment_penalty_bps: None,
         early_payment_discount_bps: None,
     };
 

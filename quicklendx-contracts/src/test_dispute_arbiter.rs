@@ -17,7 +17,8 @@ use crate::errors::QuickLendXError;
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 
 const REASON: &str = "lorem ipsum dolor sit amet consectetur adipiscing elit";
-const EVIDENCE: &str = "evidence placeholder, padded to satisfy minimum length easily trailing padding";
+const EVIDENCE: &str =
+    "evidence placeholder, padded to satisfy minimum length easily trailing padding";
 const RESOLUTION: &str = "resolution note, padded out to satisfy the minimum length requirement";
 
 fn setup() -> (Env, Address, Address, Address) {
@@ -227,7 +228,10 @@ fn non_admin_arbiter_still_blocked_by_require_admin() {
 
     let non_admin_arbiter = Address::generate(&env);
     crate::arbiter::ArbiterStorage::register_arbiter(&env, &admin, &non_admin_arbiter).unwrap();
-    assert!(crate::arbiter::ArbiterStorage::is_arbiter(&env, &non_admin_arbiter));
+    assert!(crate::arbiter::ArbiterStorage::is_arbiter(
+        &env,
+        &non_admin_arbiter
+    ));
 
     let err = crate::dispute::resolve_dispute(
         &env,
