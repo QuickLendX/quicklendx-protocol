@@ -546,6 +546,32 @@ impl InvestmentStorage {
         (symbol_short!("invst_inv"), investor.clone())
     }
 
+    fn investor_generation_key(investor: &Address) -> (Symbol, Address) {
+        (symbol_short!("inv_gen"), investor.clone())
+    }
+
+    /// Current pagination-stability generation for `investor`'s investment
+    /// index (see [`Self::add_to_investor_index`]).
+    ///
+    /// Starts at `0` for an investor with no recorded generation bump yet
+    /// (including one with no investments at all) and increments by exactly
+    /// `1` each time a genuinely new investment id is appended to their
+    /// index. Callers pagination-querying this investor's investments use
+    /// this to detect whether the index changed between two page requests
+    /// — see `investment_queries::InvestmentQueries::
+    /// get_investor_investments_paginated_cursored` (#2456).
+    pub fn get_investor_generation(env: &Env, investor: &Address) -> u64 {
+        let key = Self::investor_generation_key(investor);
+        env.storage().persistent().get(&key).unwrap_or(0)
+    }
+
+    fn bump_investor_generation(env: &Env, investor: &Address) {
+        let key = Self::investor_generation_key(investor);
+        let next = Self::get_investor_generation(env, investor).saturating_add(1);
+        env.storage().persistent().set(&key, &next);
+        extend_persistent_ttl(env, &key);
+    }
+
     /// Get all investments for an investor
     pub fn get_investments_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
         let key = Self::investor_index_key(investor);
@@ -560,7 +586,12 @@ impl InvestmentStorage {
         result
     }
 
-    /// Add investment to investor index
+    /// Add investment to investor index.
+    ///
+    /// Bumps [`Self::get_investor_generation`] exactly when a new id is
+    /// actually appended — not on a no-op duplicate call — so pagination
+    /// cursors captured before this call see a generation mismatch and fail
+    /// closed instead of silently skipping or duplicating records (#2456).
     pub fn add_to_investor_index(env: &Env, investor: &Address, investment_id: &BytesN<32>) {
         let key = Self::investor_index_key(investor);
         let mut investments = Self::get_investments_by_investor(env, investor);
@@ -576,6 +607,7 @@ impl InvestmentStorage {
             investments.push_back(investment_id.clone());
             env.storage().persistent().set(&key, &investments);
             extend_persistent_ttl(env, &key);
+            Self::bump_investor_generation(env, investor);
         }
     }
 
