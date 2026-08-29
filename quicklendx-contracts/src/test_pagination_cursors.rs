@@ -45,7 +45,7 @@ fn test_business_invoices_cursored_pagination() {
     let id1 = create_invoice_at(&env, &client, &business, 1_000);
     let id2 = create_invoice_at(&env, &client, &business, 2_000);
 
-    let page1 = client.get_business_invoices_paged_cursored(
+    let page1 = client.get_business_invoices_cursor(
         &business,
         &Option::<InvoiceStatus>::None,
         &0u32,
@@ -59,7 +59,7 @@ fn test_business_invoices_cursored_pagination() {
     let gen = page1.generation;
 
     // Stable cursor works
-    let page2 = client.get_business_invoices_paged_cursored(
+    let page2 = client.get_business_invoices_cursor(
         &business,
         &Option::<InvoiceStatus>::None,
         &1u32,
@@ -74,7 +74,7 @@ fn test_business_invoices_cursored_pagination() {
     create_invoice_at(&env, &client, &business, 3_000);
 
     let err = client
-        .try_get_business_invoices_paged_cursored(
+        .try_get_business_invoices_cursor(
             &business,
             &Option::<InvoiceStatus>::None,
             &1u32,

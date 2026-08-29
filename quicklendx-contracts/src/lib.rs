@@ -1,4 +1,4 @@
-#![no_std]
+﻿#![no_std]
 #![allow(
     dead_code,
     unused_imports,
@@ -102,6 +102,7 @@ pub mod maintenance;
 pub mod monitor;
 pub mod multisig;
 pub mod notifications;
+pub mod observability;
 pub mod operational_limits;
 pub mod pagination;
 pub mod panic_handler;
@@ -233,6 +234,8 @@ mod test_panic_handler;
 mod test_payments;
 #[cfg(test)]
 mod test_payments_auth;
+#[cfg(test)]
+mod test_payments_repayment;
 #[cfg(test)]
 mod test_queries;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -456,12 +459,17 @@ use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_dispute_created,
     emit_dispute_rejected, emit_dispute_resolved, emit_dispute_under_review, emit_escrow_created,
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
-    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
+    emit_investor_verified, emit_invoice_cancelled, emit_invoice_funded,
+    emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_uploaded,
+    emit_invoice_verified,
 };
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
-use payments::{create_escrow, release_escrow, require_matching_currency_precision, EscrowStorage};
+use payments::{
+    create_escrow, release_escrow, repay_escrow as do_repay_escrow,
+    repay_escrow_with_key as do_repay_escrow_with_key, require_matching_currency_precision,
+    EscrowStorage,
+};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
@@ -2425,14 +2433,6 @@ impl QuickLendXContract {
 
     /// Return the principal currently reserved by an investor.
     ///
-    /// Pending bids and funded active investments are both reservations. The
-    /// value is derived from their authoritative indexes in the same ledger
-    /// state used by `place_bid`, so terminal positions release capacity
-    /// without relying on a separately maintained analytics counter.
-    pub fn get_investor_active_exposure(env: Env, investor: Address) -> i128 {
-        payments::get_investor_exposure(&env, &investor)
-    }
-
     /// Return the exact remaining funding capacity for an investor.
     pub fn get_investor_available_capacity(
         env: Env,
@@ -3639,6 +3639,69 @@ impl QuickLendXContract {
         reentrancy::with_payment_guard(&env, || do_refund_escrow_funds(&env, &invoice_id, &caller))
     }
 
+    /// Distribute a repayment from custodied escrow funds to the investor,
+    /// treasury (platform fee), and release the principal back to the business.
+    ///
+    /// Protected by payment reentrancy guard. Pause-gated.
+    ///
+    /// # Returns
+    /// * `Ok(RepaymentAllocation)` on successful distribution
+    ///
+    /// # Errors
+    /// * `StorageKeyNotFound` — no escrow/invoice for `invoice_id`
+    /// * `InvalidStatus` — escrow is not `Held`
+    /// * `InvalidAmount` / `ArithmeticOverflow` — allocation bounds violated
+    /// * `InsufficientFunds` — contract does not custody `payment_amount`
+    /// * `TokenTransferFailed` — a token call panicked
+    /// * `ContractPaused` if the protocol is paused
+    /// * `OperationNotAllowed` if reentrancy is detected
+    pub fn repay_escrow(
+        env: Env,
+        invoice_id: BytesN<32>,
+        payment_amount: i128,
+        late_fee_bps: i128,
+    ) -> Result<payments::RepaymentAllocation, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        reentrancy::with_payment_guard(&env, || {
+            do_repay_escrow(&env, &invoice_id, payment_amount, late_fee_bps)
+        })
+    }
+
+    /// Repay an escrow while binding the operation to a durable request key.
+    ///
+    /// # Idempotency contract
+    /// - A **safe retry** (same `request_key`, `invoice_id`, `payment_amount`,
+    ///   and `late_fee_bps`) returns the cached [`payments::RepaymentAllocation`]
+    ///   without moving funds again.
+    /// - **Conflicting reuse** of `request_key` with a different payload is
+    ///   rejected with [`QuickLendXError::DuplicateBid`] and leaves all state
+    ///   unchanged.
+    /// - A **rejected or failed attempt never stores a record**, so a corrected
+    ///   retry with the same key remains available and no partial state lingers.
+    ///
+    /// Protected by payment reentrancy guard. Pause-gated.
+    ///
+    /// # Returns
+    /// * `Ok(RepaymentAllocation)` on successful distribution
+    ///
+    /// # Errors
+    /// * `DuplicateBid` — `request_key` was already used with different parameters
+    /// * Forwarded from [`repay_escrow`] on first attempt
+    /// * `ContractPaused` if the protocol is paused
+    /// * `OperationNotAllowed` if reentrancy is detected
+    pub fn repay_escrow_with_key(
+        env: Env,
+        invoice_id: BytesN<32>,
+        payment_amount: i128,
+        late_fee_bps: i128,
+        request_key: BytesN<32>,
+    ) -> Result<payments::RepaymentAllocation, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        reentrancy::with_payment_guard(&env, || {
+            do_repay_escrow_with_key(&env, &invoice_id, payment_amount, late_fee_bps, &request_key)
+        })
+    }
+
     /// Withdraw an active investment, refunding escrowed funds to the investor.
     ///
     /// Only the investor may call this. The investment must be in `Active` status
@@ -4178,7 +4241,7 @@ impl QuickLendXContract {
     }
 
     /// Cursor-stable variant of `get_business_invoices_paged`
-    pub fn get_business_invoices_paged_cursored(
+    pub fn get_business_invoices_cursor(
         env: Env,
         business: Address,
         status_filter: Option<InvoiceStatus>,
@@ -4267,7 +4330,7 @@ impl QuickLendXContract {
     ///
     /// Purely additive alongside [`Self::get_investor_investments_paged`] —
     /// that entrypoint's request/response shape is unchanged.
-    pub fn get_investor_investments_paged_cursored(
+    pub fn get_investor_investments_cursor(
         env: Env,
         investor: Address,
         status_filter: Option<InvestmentStatus>,
@@ -4363,7 +4426,7 @@ impl QuickLendXContract {
     }
 
     /// Cursor-stable variant of `get_available_invoices_paged`
-    pub fn get_available_invoices_paged_cursored(
+    pub fn get_available_invoices_cursor(
         env: Env,
         min_amount: Option<i128>,
         max_amount: Option<i128>,
@@ -5766,5 +5829,4 @@ impl QuickLendXContract {
         diagnostics::get_protocol_diagnostics(&env)
     }
 }
-# [ c f g ( t e s t ) ]   m o d   t e s t _ a u t h o r i z a t i o n ;  
- 
+#[cfg(test)] mod test_authorization;

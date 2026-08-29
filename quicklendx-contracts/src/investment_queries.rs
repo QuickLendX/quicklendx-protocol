@@ -257,7 +257,7 @@ impl InvestmentQueries {
     /// Purely additive. [`Self::get_investor_investments_paginated`] and the
     /// `get_investor_investments_paged` contract entrypoint built on it are
     /// completely unchanged — this is a new function and a new contract
-    /// entrypoint (`get_investor_investments_paged_cursored`), not a
+    /// entrypoint (`get_investor_investments_cursor`), not a
     /// modification of an existing one. No existing caller's request or
     /// response shape changes.
     ///

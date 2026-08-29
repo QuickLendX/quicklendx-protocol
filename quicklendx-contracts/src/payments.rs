@@ -1365,6 +1365,76 @@ pub fn repay_escrow(
     Ok(allocation)
 }
 
+const REPAYMENT_RECORD_KEY: Symbol = symbol_short!("rep_rec");
+
+#[contracttype]
+#[derive(Clone)]
+pub struct RepaymentRecord {
+    pub invoice_id: BytesN<32>,
+    pub payment_amount: i128,
+    pub late_fee_bps: i128,
+    pub allocation: RepaymentAllocation,
+}
+
+fn get_repayment_record(env: &Env, request_key: &BytesN<32>) -> Option<RepaymentRecord> {
+    env.storage()
+        .persistent()
+        .get(&(REPAYMENT_RECORD_KEY, request_key.clone()))
+}
+
+fn store_repayment_record(env: &Env, request_key: &BytesN<32>, record: &RepaymentRecord) {
+    let key = (REPAYMENT_RECORD_KEY, request_key.clone());
+    env.storage().persistent().set(&key, record);
+    extend_persistent_ttl(env, &key);
+}
+
+/// Repay an escrow while binding the operation to a durable request key.
+///
+/// # Idempotency contract
+/// - A **safe retry** (same `request_key`, `invoice_id`, `payment_amount`, and
+///   `late_fee_bps`) returns the cached [`RepaymentAllocation`] without moving
+///   funds again.
+/// - **Conflicting reuse** of `request_key` with a different payload is rejected
+///   with [`QuickLendXError::DuplicateBid`] and leaves all state unchanged.
+/// - A **rejected or failed attempt never stores a record**, so a corrected
+///   retry with the same key remains available and no partial state lingers.
+///
+/// On a fresh attempt this defers to [`repay_escrow`], inheriting its
+/// no-partial-state guarantees, and only on success binds the request key to
+/// the repayment payload and allocation.
+pub fn repay_escrow_with_key(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    payment_amount: i128,
+    late_fee_bps: i128,
+    request_key: &BytesN<32>,
+) -> Result<RepaymentAllocation, QuickLendXError> {
+    if let Some(record) = get_repayment_record(env, request_key) {
+        if record.invoice_id == *invoice_id
+            && record.payment_amount == payment_amount
+            && record.late_fee_bps == late_fee_bps
+        {
+            return Ok(record.allocation);
+        }
+        return Err(QuickLendXError::DuplicateBid);
+    }
+
+    let allocation = repay_escrow(env, invoice_id, payment_amount, late_fee_bps)?;
+
+    store_repayment_record(
+        env,
+        request_key,
+        &RepaymentRecord {
+            invoice_id: invoice_id.clone(),
+            payment_amount,
+            late_fee_bps,
+            allocation: allocation.clone(),
+        },
+    );
+
+    Ok(allocation)
+}
+
 #[cfg(test)]
 mod payments_tests {
     use super::*;

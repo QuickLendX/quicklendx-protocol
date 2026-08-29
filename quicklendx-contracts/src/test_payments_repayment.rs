@@ -203,3 +203,133 @@ fn test_repay_escrow_overcharge_rejected() {
     assert_eq!(result, Err(Ok(QuickLendXError::InvalidAmount)));
     assert_eq!(client.get_escrow_status(&invoice_id), EscrowStatus::Held);
 }
+
+// ============================================================================
+// Idempotency tests for repay_escrow_with_key
+// ============================================================================
+
+fn request_key(env: &Env, seed: u8) -> BytesN<32> {
+    BytesN::from_array(env, &[seed; 32])
+}
+
+#[test]
+fn test_keyed_repay_safe_retry_is_idempotent() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+    let amount = 10_000i128;
+    let payment_amount = 11_000i128;
+    let (invoice_id, _business, _investor, currency) = fund_invoice(&env, &client, &admin, amount);
+
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    sac_client.mint(&contract_id, &payment_amount);
+
+    let key = request_key(&env, 1);
+
+    let first = client
+        .try_repay_escrow_with_key(&invoice_id, &payment_amount, &0, &key)
+        .expect("host ok")
+        .expect("first repayment succeeds");
+    let second = client
+        .try_repay_escrow_with_key(&invoice_id, &payment_amount, &0, &key)
+        .expect("host ok")
+        .expect("safe retry succeeds");
+
+    assert_eq!(first.principal_return, second.principal_return);
+    assert_eq!(first.investor_return, second.investor_return);
+    assert_eq!(first.platform_fee, second.platform_fee);
+    assert_eq!(
+        token_client.balance(&contract_id),
+        amount + payment_amount - first.investor_return - first.platform_fee
+    );
+    assert_eq!(client.get_escrow_status(&invoice_id), EscrowStatus::Released);
+}
+
+#[test]
+fn test_keyed_repay_conflicting_reuse_rejected() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+    let amount = 10_000i128;
+    let (invoice_id, _business, _investor, currency) = fund_invoice(&env, &client, &admin, amount);
+
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    sac_client.mint(&contract_id, &11_000);
+
+    let key = request_key(&env, 2);
+    let _ = client
+        .try_repay_escrow_with_key(&invoice_id, &11_000, &0, &key)
+        .expect("host ok")
+        .expect("first repayment succeeds");
+
+    let conflict = client.try_repay_escrow_with_key(&invoice_id, &12_000, &0, &key);
+    assert!(conflict.is_err(), "conflicting reuse must be rejected");
+    let err = conflict.unwrap_err().unwrap();
+    assert_eq!(err, QuickLendXError::DuplicateBid);
+    assert_eq!(
+        token_client.balance(&contract_id),
+        amount + 11_000 - 10_980 - 20
+    );
+}
+
+#[test]
+fn test_keyed_repay_rejected_attempt_does_not_poison_key() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+    let amount = 10_000i128;
+    let payment_amount = 11_000i128;
+    let (invoice_id, _business, _investor, currency) = fund_invoice(&env, &client, &admin, amount);
+
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+
+    // Only partially custody the repayment (short by 1) -> must fail.
+    sac_client.mint(&contract_id, &(payment_amount - 1));
+
+    let key = request_key(&env, 3);
+    let first = client.try_repay_escrow_with_key(&invoice_id, &payment_amount, &0, &key);
+    assert_eq!(first, Err(Ok(QuickLendXError::InsufficientFunds)));
+
+    // No record stored; corrected retry with full custody must succeed.
+    sac_client.mint(&contract_id, &1);
+    let corrected = client
+        .try_repay_escrow_with_key(&invoice_id, &payment_amount, &0, &key)
+        .expect("host ok")
+        .expect("corrected retry succeeds");
+    assert_eq!(corrected.investor_return, 10_980);
+    assert_eq!(client.get_escrow_status(&invoice_id), EscrowStatus::Released);
+}
+
+#[test]
+fn test_keyed_repay_timeout_retry_same_result_across_ledgers() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+    let amount = 10_000i128;
+    let payment_amount = 11_000i128;
+    let (invoice_id, _business, _investor, currency) = fund_invoice(&env, &client, &admin, amount);
+
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    sac_client.mint(&contract_id, &payment_amount);
+
+    let key = request_key(&env, 4);
+    let first = client
+        .try_repay_escrow_with_key(&invoice_id, &payment_amount, &0, &key)
+        .expect("host ok")
+        .expect("first repayment succeeds");
+
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 86_400 * 5);
+
+    let second = client
+        .try_repay_escrow_with_key(&invoice_id, &payment_amount, &0, &key)
+        .expect("host ok")
+        .expect("timeout retry succeeds");
+
+    assert_eq!(first.investor_return, second.investor_return);
+    assert_eq!(first.platform_fee, second.platform_fee);
+    assert_eq!(
+        token_client.balance(&contract_id),
+        amount + payment_amount - first.investor_return - first.platform_fee
+    );
+}

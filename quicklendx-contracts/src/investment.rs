@@ -611,20 +611,6 @@ impl InvestmentStorage {
         }
     }
 
-    /// Calculate total amount of all active investments for a given investor.
-    pub fn get_active_investment_amount_sum_for_investor(env: &Env, investor: &Address) -> i128 {
-        let mut total: i128 = 0;
-        let investments = Self::get_investments_by_investor(env, investor);
-        for id in investments.iter() {
-            if let Some(inv) = Self::get_investment(env, &id) {
-                if inv.status == InvestmentStatus::Active {
-                    total = total.saturating_add(inv.amount);
-                }
-            }
-        }
-        total
-    }
-
     // --- Aliases and compatibility methods ---
 
     pub fn store(env: &Env, investment: &Investment) {
