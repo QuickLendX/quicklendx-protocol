@@ -290,6 +290,10 @@ impl Invoice {
 
     pub fn cancel(&mut self, env: &Env, actor: Address) -> Result<(), QuickLendXError> {
         require_matching_business_invoice_ownership(env, &actor, self)?;
+        match self.status {
+            InvoiceStatus::Pending | InvoiceStatus::Verified => {}
+            _ => return Err(QuickLendXError::InvalidStatus),
+        }
         self.status = InvoiceStatus::Cancelled;
         Ok(())
     }

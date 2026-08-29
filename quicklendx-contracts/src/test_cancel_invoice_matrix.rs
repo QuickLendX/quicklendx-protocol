@@ -182,34 +182,25 @@ fn test_cancel_allowed_from_verified_updates_indexes() {
 // State-precondition gap (documented finding)
 // ============================================================================
 
-/// FINDING: cancelling from a post-funding state (`Funded`) currently
-/// **succeeds** because neither `Invoice::cancel` nor `cancel_invoice` enforces
-/// a status precondition. The issue's intent is that this be rejected with an
-/// `InvalidStatus`-style error; pinning the present behaviour here means a
-/// future guard will flip this assertion and prompt an update.
+/// A stale or repeated cancellation attempt on a funded invoice must be rejected
+/// without mutating the recorded lifecycle state.
 #[test]
-fn test_cancel_from_funded_currently_succeeds_documents_gap() {
+fn test_cancel_from_funded_rejects_with_invalid_status() {
     let (env, client, admin) = setup();
     let business = verified_business(&env, &client, &admin);
     let invoice_id = upload(&env, &client, &business);
 
     client.verify_invoice(&invoice_id);
-    // Drive the invoice into a Funded state via the admin status setter.
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Funded);
     assert_eq!(
         client.get_invoice(&invoice_id).status,
         InvoiceStatus::Funded
     );
 
-    // No status guard today: this transition is accepted.
     let result = client.try_cancel_invoice(&invoice_id);
-    assert!(
-        result.is_ok(),
-        "FINDING: cancel_invoice lacks a status precondition; a funded invoice \
-         is cancellable today. Add a Pending/Verified-only guard to fix."
-    );
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidStatus)));
     assert_eq!(
         client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Cancelled
+        InvoiceStatus::Funded
     );
 }

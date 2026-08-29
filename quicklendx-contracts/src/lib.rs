@@ -1715,6 +1715,13 @@ impl QuickLendXContract {
         // Enforce KYC: a pending business must not cancel invoices.
         require_business_not_pending(&env, &invoice.business)?;
 
+        // Reject stale/replayed cancellation attempts: once an invoice is funded,
+        // settled, defaulted, cancelled, or refunded, the lifecycle is terminal and
+        // must not be mutated by a later retry or concurrent duplicate request.
+        if !matches!(invoice.status, InvoiceStatus::Pending | InvoiceStatus::Verified) {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+
         // Remove from old status list
         InvoiceStorage::remove_from_status_invoices(&env, invoice.status, &invoice_id);
 
@@ -1786,6 +1793,9 @@ impl QuickLendXContract {
 
             if invoice.business != business {
                 return Err(QuickLendXError::Unauthorized);
+            }
+            if !matches!(invoice.status, InvoiceStatus::Pending | InvoiceStatus::Verified) {
+                return Err(QuickLendXError::InvalidStatus);
             }
         }
 
