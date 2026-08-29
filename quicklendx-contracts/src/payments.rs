@@ -165,14 +165,16 @@ impl PaymentRateLimiter {
 }
 
 /// Return the principal currently reserved by an investor across pending bids and active investments.
-pub fn get_investor_exposure(env: &Env, investor: &Address) -> i128 {
+pub fn get_investor_exposure(env: &Env, investor: &Address) -> Result<i128, QuickLendXError> {
     let bid_exposure =
         crate::storage::BidStorage::get_active_bid_amount_sum_for_investor(env, investor);
     let investment_exposure =
         crate::storage::InvestmentStorage::get_active_investment_amount_sum_for_investor(
             env, investor,
         );
-    bid_exposure.saturating_add(investment_exposure)
+    bid_exposure
+        .checked_add(investment_exposure)
+        .ok_or(QuickLendXError::ArithmeticOverflow)
 }
 
 /// Return the exact available funding capacity for an investor.
@@ -197,12 +199,9 @@ pub fn get_investor_available_capacity(
         return Err(QuickLendXError::BusinessNotVerified);
     }
 
-    let exposure = get_investor_exposure(env, investor);
-    if exposure >= i128::MAX {
-        return Err(QuickLendXError::ArithmeticOverflow);
-    }
+    let exposure = get_investor_exposure(env, investor)?;
 
-    Ok(verification.investment_limit.saturating_sub(exposure))
+    Ok(verification.investment_limit.checked_sub(exposure).unwrap_or(0))
 }
 
 /// Validate that an investor has sufficient authorized capacity for a new funding commitment of `amount`.

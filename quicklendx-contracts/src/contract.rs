@@ -322,7 +322,7 @@ impl QuickLendXContract {
         BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
     }
 
-    pub fn get_investor_active_exposure(env: Env, investor: Address) -> i128 {
+    pub fn get_investor_active_exposure(env: Env, investor: Address) -> Result<i128, QuickLendXError> {
         crate::payments::get_investor_exposure(&env, &investor)
     }
 
