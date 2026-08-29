@@ -16,6 +16,13 @@ Business and investor actors share the status/expiry predicate. Their action
 authorization is applied after eligibility, so an invalid actor cannot turn a
 pending or expired record into a generic authorization success.
 
+## Replay protection and idempotency
+
+Every KYC-dependent operation binds to a request key / nonce parameter (`nonce: u64`):
+- **Safe Retries**: Repeated invocations with identical parameters (record version, actor, action, and nonce) yield deterministic idempotent success without side-effect re-execution.
+- **Conflicting Reuse**: Attempting to reuse an active nonce with conflicting operation parameters (different actor or action) returns `KycEligibilityError::ReplayedNonce`.
+- **Failure State Cleanliness**: Operations failing eligibility (missing, pending, revoked, expired) return early before registering nonce tracking, leaving no partial or unauthorized state.
+
 ## Migration and rollback
 
 Call sites can migrate to the policy without changing stored record shape. Add
@@ -28,7 +35,7 @@ KYC freshness is a safety requirement.
 
 The tests cover each status, exact expiry, before/after expiry, missing records,
 both actor classes, all dependent actions, terminal immutability, version
-replays, and invalid expiry. No KYC payload or identity is logged by the
+replays, invalid expiry, and nonce replay/idempotency invariants. No KYC payload or identity is logged by the
 policy.
 
 ## Decision table
@@ -54,7 +61,9 @@ choosing a different entrypoint or actor label.
 - Pending and revoked are not collapsed into a generic verified value.
 - Verification version numbers must increase for non-terminal updates.
 - Terminal outcomes are not recalculated after KYC changes.
-- No policy function performs a storage write or transfers funds.
+- Durable nonce binding prevents replay attacks across identical or reordered requests.
+- Retries with identical request parameters produce deterministic safe responses.
+- No policy function performs a storage write or transfers funds when eligibility fails.
 - Callers receive stable enum errors suitable for API mapping.
 - Invalid zero expiry is rejected even if the status is pending.
 
@@ -62,7 +71,7 @@ choosing a different entrypoint or actor label.
 
 An entrypoint must load the actor's KYC record, call the policy, and only then
 perform a state mutation, make a bid visible, or transfer funds. It must pass
-the same ledger timestamp to the policy and to any audit record. It must not
+the same ledger timestamp and operation nonce to the policy and to any audit record. It must not
 cache a successful decision across a transaction boundary. If the operation is
 already terminal, it must pass an explicit terminal flag and preserve the
 existing financial record rather than deriving a new outcome from current KYC.
@@ -72,7 +81,7 @@ existing financial record rather than deriving a new outcome from current KYC.
 The unit tests exercise the predicate directly. The matrix tests exercise the
 five record states across all dependent actions and both actor types. Boundary
 tests cover zero, one, exact expiry, one tick after expiry, and maximum time.
-Version tests cover new, repeated, lower, and terminal updates. This keeps the
+Version and nonce tests cover new, repeated, lower, conflicting reuse, and terminal updates. This keeps the
 policy reviewable even while individual contract entrypoints evolve.
 
 ## Upgrade considerations
