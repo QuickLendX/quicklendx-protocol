@@ -4,6 +4,7 @@ import { getCorrelationId, withCorrelationId } from '../lib/requestContext';
 
 export class EventProcessor {
   private static instance: EventProcessor;
+  private processedEvents: Set<string>;
 
   private eventLog: Array<{ seq: number; id: string; type: string; timestamp: number; correlationId?: string }> = [];
   private sequence: number = 0;
@@ -27,22 +28,35 @@ export class EventProcessor {
     timestamp: number
   ): Promise<void> {
     const correlationId = getCorrelationId();
-    
-    // Notify business that invoice is funded
-    const businessEvent: NotificationEvent = {
-      id: `${eventId}_business`,
-      type: NotificationType.InvoiceFunded,
-      user_id: business,
-      invoice_id: invoiceId,
-      amount,
-      timestamp,
-    };
-
-    await notificationService.processNotification(businessEvent);
-
-    // Could also notify investor, but for now focusing on business notifications
     const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
-    console.log(`${correlationPrefix}EventProcessor: Processed InvoiceSettled event ${eventId}`);
+    const processedKey = `InvoiceSettled:${eventId}`;
+
+    if (this.processedEvents.has(processedKey)) {
+      console.log(`${correlationPrefix}EventProcessor: Skipping already processed InvoiceSettled event ${eventId}`);
+      return;
+    }
+
+    this.processedEvents.add(processedKey);
+
+    try {
+      // Notify business that invoice is funded
+      const businessEvent: NotificationEvent = {
+        id: `${eventId}_business`,
+        type: NotificationType.InvoiceFunded,
+        user_id: business,
+        invoice_id: invoiceId,
+        amount,
+        timestamp,
+      };
+
+      await notificationService.processNotification(businessEvent);
+
+      // Could also notify investor, but for now focusing on business notifications
+      console.log(`${correlationPrefix}EventProcessor: Processed InvoiceSettled event ${eventId}`);
+    } catch (error) {
+      this.processedEvents.delete(processedKey);
+      throw error;
+    }
   }
 
   // Process payment recorded event
@@ -54,21 +68,34 @@ export class EventProcessor {
     timestamp: number
   ): Promise<void> {
     const correlationId = getCorrelationId();
-    
-    // Notify business that payment was received
-    const businessEvent: NotificationEvent = {
-      id: `${eventId}_business`,
-      type: NotificationType.PaymentReceived,
-      user_id: payer, // Assuming payer is the business in this context
-      invoice_id: invoiceId,
-      amount,
-      timestamp,
-    };
-
-    await notificationService.processNotification(businessEvent);
-    
     const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
-    console.log(`${correlationPrefix}EventProcessor: Processed PaymentRecorded event ${eventId}`);
+    const processedKey = `PaymentRecorded:${eventId}`;
+
+    if (this.processedEvents.has(processedKey)) {
+      console.log(`${correlationPrefix}EventProcessor: Skipping already processed PaymentRecorded event ${eventId}`);
+      return;
+    }
+
+    this.processedEvents.add(processedKey);
+
+    try {
+      // Notify business that payment was received
+      const businessEvent: NotificationEvent = {
+        id: `${eventId}_business`,
+        type: NotificationType.PaymentReceived,
+        user_id: payer, // Assuming payer is the business in this context
+        invoice_id: invoiceId,
+        amount,
+        timestamp,
+      };
+
+      await notificationService.processNotification(businessEvent);
+
+      console.log(`${correlationPrefix}EventProcessor: Processed PaymentRecorded event ${eventId}`);
+    } catch (error) {
+      this.processedEvents.delete(processedKey);
+      throw error;
+    }
   }
 
   // Process dispute created event
@@ -79,20 +106,33 @@ export class EventProcessor {
     timestamp: number
   ): Promise<void> {
     const correlationId = getCorrelationId();
-    
-    // Notify relevant parties about dispute
-    const disputeEvent: NotificationEvent = {
-      id: `${eventId}_dispute`,
-      type: NotificationType.DisputeOpened,
-      user_id: initiator,
-      invoice_id: invoiceId,
-      timestamp,
-    };
-
-    await notificationService.processNotification(disputeEvent);
-    
     const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
-    console.log(`${correlationPrefix}EventProcessor: Processed DisputeCreated event ${eventId}`);
+    const processedKey = `DisputeCreated:${eventId}`;
+
+    if (this.processedEvents.has(processedKey)) {
+      console.log(`${correlationPrefix}EventProcessor: Skipping already processed DisputeCreated event ${eventId}`);
+      return;
+    }
+
+    this.processedEvents.add(processedKey);
+
+    try {
+      // Notify relevant parties about dispute
+      const disputeEvent: NotificationEvent = {
+        id: `${eventId}_dispute`,
+        type: NotificationType.DisputeOpened,
+        user_id: initiator,
+        invoice_id: invoiceId,
+        timestamp,
+      };
+
+      await notificationService.processNotification(disputeEvent);
+
+      console.log(`${correlationPrefix}EventProcessor: Processed DisputeCreated event ${eventId}`);
+    } catch (error) {
+      this.processedEvents.delete(processedKey);
+      throw error;
+    }
   }
 
   // Process dispute resolved event
@@ -103,20 +143,33 @@ export class EventProcessor {
     timestamp: number
   ): Promise<void> {
     const correlationId = getCorrelationId();
-    
-    // Notify relevant parties about resolution
-    const resolutionEvent: NotificationEvent = {
-      id: `${eventId}_resolution`,
-      type: NotificationType.DisputeResolved,
-      user_id: resolvedBy,
-      invoice_id: invoiceId,
-      timestamp,
-    };
-
-    await notificationService.processNotification(resolutionEvent);
-    
     const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
-    console.log(`${correlationPrefix}EventProcessor: Processed DisputeResolved event ${eventId}`);
+    const processedKey = `DisputeResolved:${eventId}`;
+
+    if (this.processedEvents.has(processedKey)) {
+      console.log(`${correlationPrefix}EventProcessor: Skipping already processed DisputeResolved event ${eventId}`);
+      return;
+    }
+
+    this.processedEvents.add(processedKey);
+
+    try {
+      // Notify relevant parties about resolution
+      const resolutionEvent: NotificationEvent = {
+        id: `${eventId}_resolution`,
+        type: NotificationType.DisputeResolved,
+        user_id: resolvedBy,
+        invoice_id: invoiceId,
+        timestamp,
+      };
+
+      await notificationService.processNotification(resolutionEvent);
+
+      console.log(`${correlationPrefix}EventProcessor: Processed DisputeResolved event ${eventId}`);
+    } catch (error) {
+      this.processedEvents.delete(processedKey);
+      throw error;
+    }
   }
 
   // Generic event processor that can be called from indexer

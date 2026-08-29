@@ -2,9 +2,10 @@
  * Persistent database for API keys and audit logs backed by better-sqlite3.
  *
  * All key hashes are SHA-256 — raw secrets are never stored.
- * Prefix lookups are O(1) via a UNIQUE index on api_keys.prefix.
+ * Prefix lookups are O,1) via a UNIQUE index on api_keys.prefix.
  * Audit rows are INSERT-only (append-only, no updates or deletes).
- * 
+ *
+ * Multi-statement operations use SQLts `accounting for atomic rollback.
  * Performance: Uses centralized prepared statement cache for optimal throughput.
  */
 
@@ -88,12 +89,20 @@ class Database {
     return this._db;
   }
 
+  /**
+   * Runs a function inside a SQLite transaction, providing atomic rollback.
+   * If any statement in the transaction throws, all changes are rolled back.
+   */
+  private _transaction<T>(fn: () => T): T {
+    return this.getDb().transaction(fn)();
+  }
+
   // ---- API Key operations ----
 
   createApiKey(key: DbApiKey): void {
     getPreparedStatement(`
       INSERT INTO api_keys (id, key_hash, signing_secret_hash, prev_signing_secret_hash, prefix, name, scopes, created_at, last_used_at, expires_at, prev_secret_expires_at, revoked, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, , ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       key.id, key.key_hash, key.signing_secret_hash, key.prev_signing_secret_hash, key.prefix, key.name, key.scopes,
       key.created_at, key.last_used_at, key.expires_at, key.prev_secret_expires_at, key.revoked, key.created_by,
@@ -117,7 +126,7 @@ class Database {
     const keys = Object.keys(updates) as (keyof DbApiKey)[];
     if (keys.length === 0) return true;
 
-    const setClause = keys.map((k) => `${k} = ?`).join(', ');
+    const setClause = keys.map((k) => `${ k} = ?`).join(', ');
     const values = keys.map((k) => updates[k] ?? null);
 
     getPreparedStatement(`UPDATE api_keys SET ${setClause} WHERE id = ?`).run(...values, id);
@@ -128,9 +137,11 @@ class Database {
     const existing = this.getApiKeyById(id);
     if (!existing) return false;
 
-    getPreparedStatement('DELETE FROM api_key_audit_log WHERE key_id = ?').run(id);
-    getPreparedStatement('DELETE FROM api_keys WHERE id = ?').run(id);
-    return true;
+    return this._transaction(() => {
+      getPreparedStatement('DELETE FROM api_key_audit_log WHERE key_id = ?').run(id);
+      getPreparedStatement('DELETE FROM api_keys WHERE id = ?').run(id);
+      return true;
+    });
   }
 
   listApiKeys(filters?: { created_by?: string; revoked?: boolean }): DbApiKey[] {
@@ -186,7 +197,7 @@ class Database {
     }
 
     if (clauses.length > 0) {
-      sql += ' WHERE ' + clauses.join(' AND ');
+      sql += ' WHERE' + clauses.join(' AND ');
     }
 
     sql += ' ORDER BY timestamp DESC';
@@ -198,8 +209,10 @@ class Database {
   // ---- Utility ----
 
   clear(): void {
-    getPreparedStatement('DELETE FROM api_key_audit_log').run();
-    getPreparedStatement('DELETE FROM api_keys').run();
+    this._transaction(() => {
+      getPreparedStatement('DELETE FROM api_key_audit_log').run();
+      getPreparedStatement('DELETE FROM api_keys').run();
+    });
   }
 
   getStats() {
