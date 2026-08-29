@@ -27,15 +27,54 @@ use crate::payments::{
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
 use crate::verification::{
-    require_business_active, require_business_not_pending, require_investor_not_frozen,
-    require_investor_not_pending,
+    require_business_active, require_business_not_pending, validate_investor_investment,
 };
-use soroban_sdk::{Address, BytesN, Env, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
 /// Loaded and validated state required to accept a bid.
 pub(crate) struct AcceptBidContext {
     pub invoice: crate::types::Invoice,
     pub bid: crate::types::Bid,
+}
+
+/// Durable outcome of a keyed bid-acceptance operation.
+///
+/// The record binds a caller-provided `request_key` to the exact payload it
+/// funded (`invoice_id` + `bid_id`) and to the resulting `escrow_id`. Safe
+/// retries replay the same payload against the same key and receive the cached
+/// escrow ID deterministically; reusing the key with a different payload is
+/// rejected.
+#[contracttype]
+#[derive(Clone)]
+pub struct BidAcceptanceRecord {
+    pub invoice_id: BytesN<32>,
+    pub bid_id: BytesN<32>,
+    pub escrow_id: BytesN<32>,
+}
+
+/// Storage namespace for keyed bid-acceptance records.
+const BID_ACCEPTANCE_RECORD_KEY: Symbol = symbol_short!("bid_acc");
+
+/// Look up a durable bid-acceptance record by request key.
+fn get_bid_acceptance_record(
+    env: &Env,
+    request_key: &BytesN<32>,
+) -> Option<BidAcceptanceRecord> {
+    env.storage()
+        .persistent()
+        .get(&(BID_ACCEPTANCE_RECORD_KEY, request_key.clone()))
+}
+
+/// Persist a durable bid-acceptance record and extend its TTL so it does not
+/// expire while the escrow it references remains live.
+fn store_bid_acceptance_record(
+    env: &Env,
+    request_key: &BytesN<32>,
+    record: &BidAcceptanceRecord,
+) {
+    let key = (BID_ACCEPTANCE_RECORD_KEY, request_key.clone());
+    env.storage().persistent().set(&key, record);
+    crate::storage::extend_persistent_ttl(env, &key);
 }
 
 /// Validate the invoice, bid, and escrow state before any funds move.
@@ -114,12 +153,15 @@ pub(crate) fn load_accept_bid_context(
     require_investor_not_pending(env, &bid.investor)?;
 
     if bid.is_expired(env.ledger().timestamp()) {
-        return Err(QuickLendXError::InvalidStatus);
+        return Err(QuickLendXError::BidStale);
     }
 
     if bid.bid_amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
     }
+
+    // Re-verify investor KYC status and aggregate investment capacity before accepting bid.
+    validate_investor_investment(env, &bid.investor, 0)?;
 
     Ok(AcceptBidContext { invoice, bid })
 }
@@ -234,6 +276,56 @@ pub fn accept_bid_and_fund(
     Ok(escrow_id)
 }
 
+/// Accept a bid and fund the invoice while binding the operation to a durable
+/// request key.
+///
+/// # Idempotency contract
+/// - A **safe retry** (same `request_key`, `invoice_id`, and `bid_id`) does
+///   not move funds again: the previously created escrow ID is returned
+///   deterministically, after re-verifying the recording invoice's business
+///   authorization.
+/// - **Conflicting reuse** of `request_key` with a different payload is
+///   rejected with [`QuickLendXError::DuplicateBid`] and leaves all state
+///   unchanged.
+/// - A **rejected or failed attempt never stores a record**, so a corrected
+///   retry with the same key remains available and no partial state lingers.
+///
+/// On a fresh attempt this defers to `accept_bid_and_fund`, inheriting the
+/// one-escrow-per-invoice two-layer guard and all lifecycle checks, and only
+/// on success binds the request key to the funded payload and escrow ID.
+pub fn accept_bid_and_fund_with_key(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    bid_id: &BytesN<32>,
+    request_key: &BytesN<32>,
+) -> Result<BytesN<32>, QuickLendXError> {
+    if let Some(record) = get_bid_acceptance_record(env, request_key) {
+        if record.invoice_id == *invoice_id && record.bid_id == *bid_id {
+            let invoice = InvoiceStorage::get_invoice(env, &record.invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+            invoice.business.require_auth();
+            require_business_active(env, &invoice.business)?;
+            require_business_not_pending(env, &invoice.business)?;
+            return Ok(record.escrow_id);
+        }
+        return Err(QuickLendXError::DuplicateBid);
+    }
+
+    let escrow_id = accept_bid_and_fund(env, invoice_id, bid_id)?;
+
+    store_bid_acceptance_record(
+        env,
+        request_key,
+        &BidAcceptanceRecord {
+            invoice_id: invoice_id.clone(),
+            bid_id: bid_id.clone(),
+            escrow_id: escrow_id.clone(),
+        },
+    );
+
+    Ok(escrow_id)
+}
+
 /// State transitions that follow a successful escrow creation and funding.
 fn update_states_after_funding(
     env: &Env,
@@ -268,7 +360,29 @@ fn update_states_after_funding(
     };
     InvestmentStorage::store_investment(env, &investment);
 
-    Ok(())
+    crate::qlx_log!(env, "escrow", "Invoice funded and bid accepted");
+
+    // 7. Audit & Events
+    crate::events::emit_bid_accepted(env, &bid, invoice_id, &invoice.business);
+    crate::audit::log_bid_accepted(
+        env,
+        invoice_id.clone(),
+        bid.investor.clone(),
+        bid.bid_amount,
+    );
+    emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
+    crate::audit::log_invoice_funded(
+        env,
+        invoice_id.clone(),
+        bid.investor.clone(),
+        bid.bid_amount,
+    );
+
+    // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
+    // after escrow funding and state transitions complete successfully.
+    let _ = crate::notifications::NotificationSystem::notify_bid_accepted(env, &invoice, &bid);
+
+    Ok(escrow_id)
 }
 
 /// Explicitly refund escrowed funds to the investor.

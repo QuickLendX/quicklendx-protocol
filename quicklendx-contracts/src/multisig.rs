@@ -1,6 +1,5 @@
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short,
-    BytesN, Env, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, BytesN, Env, Symbol, Vec,
 };
 
 #[contracterror]
@@ -82,11 +81,8 @@ impl MultisigContract {
 
             let public_key = owners.get(index).unwrap();
             // Cryptographically verify signature
-            env.crypto().ed25519_verify(
-                &public_key,
-                &message_hash.clone().into(),
-                &sig.signature,
-            );
+            env.crypto()
+                .ed25519_verify(&public_key, &message_hash.clone().into(), &sig.signature);
         }
 
         Ok(())

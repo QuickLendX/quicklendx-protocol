@@ -16,8 +16,8 @@
 //! - Isolation: other users' grants are excluded
 
 use crate::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{token, Address, Env};
 
 const ADMIN_BALANCE: i128 = 100_000_000;
@@ -70,10 +70,22 @@ fn returns_zeroed_summary_when_no_schedules_have_been_created() {
     // never executes.
     let summary = client.get_vesting_summary(&user);
 
-    assert_eq!(summary.grant_count, 0, "grant_count must be 0 with empty storage");
-    assert_eq!(summary.total_granted, 0, "total_granted must be 0 with empty storage");
-    assert_eq!(summary.total_released, 0, "total_released must be 0 with empty storage");
-    assert_eq!(summary.total_releasable, 0, "total_releasable must be 0 with empty storage");
+    assert_eq!(
+        summary.grant_count, 0,
+        "grant_count must be 0 with empty storage"
+    );
+    assert_eq!(
+        summary.total_granted, 0,
+        "total_granted must be 0 with empty storage"
+    );
+    assert_eq!(
+        summary.total_released, 0,
+        "total_released must be 0 with empty storage"
+    );
+    assert_eq!(
+        summary.total_releasable, 0,
+        "total_releasable must be 0 with empty storage"
+    );
 }
 
 // ── Issue boundary: Single ledger ─────────────────────────────────────────────
@@ -98,10 +110,19 @@ fn returns_grant_count_one_for_single_schedule_before_cliff() {
     // Still at timestamp 1_000 — before cliff — nothing releasable yet.
     let summary = client.get_vesting_summary(&user);
 
-    assert_eq!(summary.grant_count, 1, "exactly one schedule must be counted");
-    assert_eq!(summary.total_granted, 5_000, "total_granted must equal the schedule amount");
+    assert_eq!(
+        summary.grant_count, 1,
+        "exactly one schedule must be counted"
+    );
+    assert_eq!(
+        summary.total_granted, 5_000,
+        "total_granted must equal the schedule amount"
+    );
     assert_eq!(summary.total_released, 0);
-    assert_eq!(summary.total_releasable, 0, "cliff not reached → nothing releasable");
+    assert_eq!(
+        summary.total_releasable, 0,
+        "cliff not reached → nothing releasable"
+    );
 }
 
 /// Single ledger: one schedule, queried at midpoint after cliff →
@@ -154,12 +175,24 @@ fn counts_only_own_grants_across_wide_range_of_schedule_ids() {
     let summary_b = client.get_vesting_summary(&user_b);
 
     // User A: 3 grants, total 3_000
-    assert_eq!(summary_a.grant_count, 3, "user_a must have exactly 3 grants");
-    assert_eq!(summary_a.total_granted, 3_000, "user_a total_granted mismatch");
+    assert_eq!(
+        summary_a.grant_count, 3,
+        "user_a must have exactly 3 grants"
+    );
+    assert_eq!(
+        summary_a.total_granted, 3_000,
+        "user_a total_granted mismatch"
+    );
 
     // User B: 2 grants, total 4_000
-    assert_eq!(summary_b.grant_count, 2, "user_b must have exactly 2 grants");
-    assert_eq!(summary_b.total_granted, 4_000, "user_b total_granted mismatch");
+    assert_eq!(
+        summary_b.grant_count, 2,
+        "user_b must have exactly 2 grants"
+    );
+    assert_eq!(
+        summary_b.total_granted, 4_000,
+        "user_b total_granted mismatch"
+    );
 }
 
 /// Wide range: a user with no grants in a populated schedule registry

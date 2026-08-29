@@ -780,7 +780,7 @@ fn test_cancel_bid_before_funding_invariants() {
 
     // Cancel the bid before accepting
     let cancel_result = client.cancel_bid(&bid_id);
-    assert!(cancel_result, "cancel_bid should return true");
+    assert!(cancel_result.is_ok(), "cancel_bid should return Ok(())");
 
     // -- Post-cancellation assertions ---------------------------------------
     // Bid is Cancelled

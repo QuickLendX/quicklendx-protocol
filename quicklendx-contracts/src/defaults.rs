@@ -378,20 +378,6 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
         .set(&history_key, &history_count.saturating_add(1));
     crate::storage::bump_persistent(env, &history_key);
 
-    if let Some(investor) = invoice.investor.clone() {
-        let investor_history_key = crate::storage::StorageKeys::investor_default_history(&investor);
-        let investor_history_count: u32 = env
-            .storage()
-            .persistent()
-            .get(&investor_history_key)
-            .unwrap_or(0);
-        env.storage().persistent().set(
-            &investor_history_key,
-            &investor_history_count.saturating_add(1),
-        );
-        crate::storage::bump_persistent(env, &investor_history_key);
-    }
-
     emit_invoice_expired(env, &invoice);
 
     // `investment` was already looked up above, and its only failable

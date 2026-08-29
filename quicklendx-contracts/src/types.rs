@@ -311,6 +311,21 @@ pub struct RatingsSnapshot {
     pub ledger_sequence: u32,
 }
 
+pub const RATINGS_SNAPSHOT_SCHEMA_VERSION: u32 = 1;
+
+/// Versioned ratings snapshot for off-chain indexers and downstream contracts.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct RatingsSnapshot {
+    pub schema_version: u32,
+    pub invoice_id: BytesN<32>,
+    pub average_rating: Option<u32>,
+    pub total_ratings: u32,
+    pub highest_rating: Option<u32>,
+    pub lowest_rating: Option<u32>,
+    pub ledger_sequence: u32,
+}
+
 /// Input type for a single invoice within a `store_invoices_batch` call.
 ///
 /// Bundles every per-invoice field so the batch entrypoint can accept a
@@ -474,6 +489,15 @@ pub struct PaginatedBytes32Vec {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvoicePage {
+    pub items: Vec<BytesN<32>>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub generation: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaginatedBids {
     pub items: Vec<crate::bid::Bid>,
     pub total_count: u32,
@@ -487,5 +511,3 @@ pub struct PaginatedCurrencies {
     pub total_count: u32,
     pub has_more: bool,
 }
-
-

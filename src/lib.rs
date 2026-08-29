@@ -1,39 +1,40 @@
 #![no_std]
-use soroban_sdk::{contract, contractimpl, Env};
-use crate::errors::QuickLendXError; // Fixes the import error
+use crate::errors::QuickLendXError;
+use soroban_sdk::{contract, contractimpl, Env}; // Fixes the import error
 
 pub mod admin;
 pub mod errors;
 pub mod events;
 pub mod fees;
 pub mod init;
+pub mod invariants;
+pub mod kyc_nonces;
+pub mod kyc_policy;
 pub mod pause;
+pub mod payment_token_policy;
+pub mod payments;
 pub mod profits;
 pub mod settlement;
 pub mod storage_types;
-pub mod verification;
-pub mod payments;
-pub mod invariants;
-pub mod types;
-pub mod payment_token_policy;
 #[cfg(test)]
-mod test_payment_token_policy;
-#[cfg(test)]
-mod test_payment_token_policy_matrix;
-#[cfg(test)]
-mod test_payment_token_policy_batch;
-#[cfg(test)]
-mod test_payment_token_policy_regression;
-pub mod kyc_policy;
-#[cfg(test)]
-mod test_kyc_policy_matrix;
+mod test_kyc_policy_entrypoints;
 #[cfg(test)]
 mod test_kyc_policy_extended;
 #[cfg(test)]
-mod test_kyc_policy_entrypoints;
+mod test_kyc_policy_matrix;
+#[cfg(test)]
+mod test_payment_token_policy;
+#[cfg(test)]
+mod test_payment_token_policy_batch;
+#[cfg(test)]
+mod test_payment_token_policy_matrix;
+#[cfg(test)]
+mod test_payment_token_policy_regression;
+pub mod types;
+pub mod verification;
 
 // Hardcoded constant to break the circular dependency
-pub(crate) const MAX_QUERY_LIMIT: u32 = 100; 
+pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
 
 #[contract]
 pub struct QuickLendX;

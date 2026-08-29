@@ -75,9 +75,7 @@ fn validate_invoice_accepts_due_date_within_lower_bound() {
 #[test]
 fn validate_invoice_accepts_due_date_within_upper_bound() {
     let (env, contract_id) = setup_env();
-    let one_day_before_max = env.ledger().timestamp()
-        + 365 * SECONDS_PER_DAY
-        - 1;
+    let one_day_before_max = env.ledger().timestamp() + 365 * SECONDS_PER_DAY - 1;
     let result = env.as_contract(&contract_id, || {
         ProtocolLimitsContract::validate_invoice(env.clone(), valid_amount(), one_day_before_max)
     });

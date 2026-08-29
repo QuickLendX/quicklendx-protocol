@@ -69,12 +69,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     (env, client, admin)
 }
 
-fn make_token(
-    env: &Env,
-    contract_id: &Address,
-    business: &Address,
-    investor: &Address,
-) -> Address {
+fn make_token(env: &Env, contract_id: &Address, business: &Address, investor: &Address) -> Address {
     let token_admin = Address::generate(env);
     let currency = env
         .register_stellar_asset_contract_v2(token_admin)
@@ -114,9 +109,17 @@ fn funded_invoice(
         &due_date,
         &String::from_str(env, "matrix invoice"),
         &InvoiceCategory::Services,
-        &Vec::new(env), &None);
+        &Vec::new(env),
+        &None,
+    );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &bid_amount,
+        &invoice_amount,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
 
     (business, investor, currency, invoice_id)
@@ -253,7 +256,9 @@ fn test_entrypoint_active_to_completed_via_settle() {
 
     let inv = client.get_invoice_investment(&invoice_id);
     assert_eq!(inv.status, InvestmentStatus::Completed);
-    assert!(!client.get_active_investment_ids().contains(&inv.investment_id));
+    assert!(!client
+        .get_active_investment_ids()
+        .contains(&inv.investment_id));
     assert!(client.validate_no_orphan_investments());
     assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
 }
@@ -271,7 +276,9 @@ fn test_entrypoint_active_to_defaulted_via_mark_defaulted() {
 
     let inv = client.get_invoice_investment(&invoice_id);
     assert_eq!(inv.status, InvestmentStatus::Defaulted);
-    assert!(!client.get_active_investment_ids().contains(&inv.investment_id));
+    assert!(!client
+        .get_active_investment_ids()
+        .contains(&inv.investment_id));
     assert!(client.validate_no_orphan_investments());
 }
 
@@ -286,7 +293,9 @@ fn test_entrypoint_active_to_refunded_via_refund_escrow() {
 
     let inv = client.get_invoice_investment(&invoice_id);
     assert_eq!(inv.status, InvestmentStatus::Refunded);
-    assert!(!client.get_active_investment_ids().contains(&inv.investment_id));
+    assert!(!client
+        .get_active_investment_ids()
+        .contains(&inv.investment_id));
     assert!(client.validate_no_orphan_investments());
 }
 
@@ -300,7 +309,9 @@ fn test_entrypoint_active_to_withdrawn_via_withdraw() {
 
     let inv = client.get_invoice_investment(&invoice_id);
     assert_eq!(inv.status, InvestmentStatus::Withdrawn);
-    assert!(!client.get_active_investment_ids().contains(&inv.investment_id));
+    assert!(!client
+        .get_active_investment_ids()
+        .contains(&inv.investment_id));
     assert!(client.validate_no_orphan_investments());
 }
 
