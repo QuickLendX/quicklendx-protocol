@@ -232,6 +232,8 @@ mod test_panic_handler;
 #[cfg(test)]
 mod test_payments;
 #[cfg(test)]
+mod test_payments_repayment;
+#[cfg(test)]
 mod test_payments_auth;
 #[cfg(test)]
 mod test_queries;
@@ -461,7 +463,10 @@ use events::{
 };
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
-use payments::{create_escrow, release_escrow, require_matching_currency_precision, EscrowStorage};
+use payments::{
+    create_escrow, release_escrow, repay_escrow, require_matching_currency_precision, EscrowStorage,
+    RepaymentAllocation,
+};
 use profits::{calculate_profit as do_calculate_profit, PlatformFee};
 use settlement::{
     process_partial_payment as do_process_partial_payment, settle_invoice as do_settle_invoice,
@@ -2932,6 +2937,27 @@ impl QuickLendXContract {
         pause::PauseControl::require_not_paused(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         reentrancy::with_payment_guard(&env, || do_refund_escrow_funds(&env, &invoice_id, &admin))
+    }
+
+    /// Repay an escrow: distribute the custodied repayment to the investor
+    /// (principal + profit), route the platform fee to the treasury, and release
+    /// the original principal back to the business — all with deterministic,
+    /// overflow-safe allocation.
+    ///
+    /// Protected by payment reentrancy guard.
+    ///
+    /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// breaker is engaged, before any repayment state is mutated.
+    pub fn repay_escrow(
+        env: Env,
+        invoice_id: BytesN<32>,
+        payment_amount: i128,
+        late_fee_bps: i128,
+    ) -> Result<RepaymentAllocation, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        reentrancy::with_payment_guard(&env, || {
+            repay_escrow(&env, &invoice_id, payment_amount, late_fee_bps)
+        })
     }
 
     /// Clean up expired bids for an invoice (alias for cleanup_expired_bids).

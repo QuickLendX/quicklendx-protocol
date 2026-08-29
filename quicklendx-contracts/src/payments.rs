@@ -401,7 +401,12 @@ impl EscrowStorage {
             return Ok(reserve);
         }
 
-        reserve.amount -= amount;
+        // `reserve.amount >= amount` is guaranteed here, so this cannot underflow;
+        // `checked_sub` is used to make the invariant explicit and panic-safe.
+        reserve.amount = reserve
+            .amount
+            .checked_sub(amount)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
         Ok(reserve)
     }
 
@@ -641,8 +646,8 @@ fn validate_and_prepare_escrow(
         return Err(QuickLendXError::InvoiceAlreadyFunded);
     }
 
-    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if invoice.business != *business {
         return Err(QuickLendXError::Unauthorized);
@@ -749,6 +754,42 @@ pub fn create_escrow(
     Ok(escrow_id)
 }
 
+/// Record an escrow entry *without* moving tokens.
+///
+/// Used by the origination-fee funding path, where the investor's bid amount has
+/// already been transferred into the contract (and the origination fee collected)
+/// in a single transfer. This mirrors [`write_escrow_record`] but additionally
+/// updates the held-reserve accumulator and writes the audit trail, and never
+/// performs a token transfer.
+///
+/// # Errors
+/// * [`QuickLendXError::ArithmeticOverflow`] — if updating the held-reserve
+///   accumulator would overflow.
+pub fn create_escrow_record_only(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    business: &Address,
+    amount: i128,
+    currency: &Address,
+) -> Result<BytesN<32>, QuickLendXError> {
+    if amount <= 0 || amount > crate::protocol_limits::MAX_INVOICE_AMOUNT {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let escrow_id = EscrowStorage::generate_unique_escrow_id(env);
+    let escrow = Escrow {
+        escrow_id: escrow_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        business: business.clone(),
+        amount,
+        currency: currency.clone(),
+        created_at: env.ledger().timestamp(),
+        status: EscrowStatus::Held,
+    };
+
+    let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
     EscrowStorage::store_escrow(env, &escrow);
     EscrowStorage::set_held_reserve_record(env, currency, &next_held_reserve);
     EscrowStorage::mark_reserve_accounted(env, &escrow_id);
@@ -787,8 +828,8 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if escrow.business != invoice.business {
         return Err(QuickLendXError::Unauthorized);
@@ -864,8 +905,8 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if let Some(ref inv_investor) = invoice.investor {
         if escrow.investor != *inv_investor {
@@ -980,6 +1021,336 @@ pub fn transfer_funds(
 
     token_client.transfer_from(&contract_address, from, to, &amount);
     Ok(())
+}
+
+/// Internal transfer used by exact repayment allocation where the amount is the
+/// precise, already-validated output of [`allocate_repayment`] (and may legitimately
+/// fall below `MIN_TRANSFER`).
+///
+/// Same safety guarantees as [`transfer_funds`] (balance/allowance checked *before*
+/// the token call, `from == to` rejected) but without the dust floor, so that the
+/// investor return, platform fee, and principal legs of a repayment can be moved
+/// exactly without truncation. Still enforces the upper `MAX_INVOICE_AMOUNT` bound.
+pub(crate) fn transfer_funds_exact(
+    env: &Env,
+    currency: &Address,
+    from: &Address,
+    to: &Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
+    if amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if amount > crate::protocol_limits::MAX_INVOICE_AMOUNT {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if from == to {
+        return Err(QuickLendXError::SelfTransfer);
+    }
+
+    let token_client = token::Client::new(env, currency);
+    let contract_address = env.current_contract_address();
+
+    let available_balance = token_client.balance(from);
+    if available_balance < amount {
+        return Err(QuickLendXError::InsufficientFunds);
+    }
+
+    if from == &contract_address {
+        token_client.transfer(from, to, &amount);
+        return Ok(());
+    }
+
+    let allowance = token_client.allowance(from, &contract_address);
+    if allowance < amount {
+        return Err(QuickLendXError::OperationNotAllowed);
+    }
+
+    token_client.transfer_from(&contract_address, from, to, &amount);
+    Ok(())
+}
+
+// ============================================================================
+// Repayment allocation engine
+// ============================================================================
+//
+// Deterministic, overflow-safe repayment splitting for the escrow-based
+// repayment path. Given a custodied `principal` (the escrow amount) and the
+// `payment` the business repaid into the contract, this computes:
+//
+//   * `gross_profit`   = max(0, payment - principal)
+//   * `platform_fee`   = floor(gross_profit * fee_bps / 10_000)   (investor-favored)
+//   * `late_fee`       = floor(principal   * late_fee_bps / 10_000)
+//   * `investor_return`= payment - platform_fee - late_fee        (>= 0)
+//   * `treasury_amount`= floor(total_fee * treasury_share_bps / 10_000)
+//   * `treasury_remaining` = total_fee - treasury_amount
+//
+// where `total_fee = platform_fee + late_fee`.
+//
+// # Invariants (enforced, never assumed)
+// * `investor_return + platform_fee + late_fee == payment`   (no dust; platform
+//   absorbs the floor-division remainder because `investor_return` is computed by
+//   exact subtraction).
+// * `treasury_amount + treasury_remaining == total_fee`.
+// * Every component is non-negative.
+// * All arithmetic uses `checked_*` and rejects invalid sign/scale/overflow
+//   *before* any state is mutated by the caller.
+
+/// Deterministic breakdown of a repayment allocation.
+#[contracttype]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+pub struct RepaymentAllocation {
+    /// Original escrow principal returned to the business (loan release).
+    pub principal_return: i128,
+    /// Gross profit before fees (payment - principal), 0 when no profit.
+    pub gross_profit: i128,
+    /// Platform fee deducted from profit (investor-favored floor).
+    pub platform_fee: i128,
+    /// Late-payment surcharge on the principal.
+    pub late_fee: i128,
+    /// Net amount returned to the investor (principal + net profit).
+    pub investor_return: i128,
+    /// Portion of the fee routed to the treasury.
+    pub treasury_amount: i128,
+    /// Remainder of the fee retained by the protocol.
+    pub treasury_remaining: i128,
+}
+
+/// Allocate a repayment deterministically with strict, checked arithmetic.
+///
+/// All inputs are validated up front: `principal` must be positive and within the
+/// protocol amount bound; `payment` must be non-negative and within the bound.
+/// Basis-point parameters are clamped to `[0, 10_000]` so a misconfigured or
+/// adversarial caller cannot produce a fee outside `[0, gross_profit]`.
+///
+/// # Errors
+/// * [`QuickLendXError::InvalidAmount`] — `principal <= 0`, `payment < 0`, an
+///   amount exceeds `MAX_INVOICE_AMOUNT`, or the computed fees would exceed the
+///   payment (over-charge), or a conservation invariant is violated.
+/// * [`QuickLendXError::ArithmeticOverflow`] — any intermediate multiplication or
+///   division would overflow `i128`.
+pub fn allocate_repayment(
+    principal: i128,
+    payment: i128,
+    fee_bps: i128,
+    late_fee_bps: i128,
+    treasury_share_bps: i128,
+) -> Result<RepaymentAllocation, QuickLendXError> {
+    if principal <= 0 || payment < 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+    if principal > crate::protocol_limits::MAX_INVOICE_AMOUNT
+        || payment > crate::protocol_limits::MAX_INVOICE_AMOUNT
+    {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let denom = crate::profits::BPS_DENOMINATOR;
+    let fee_bps = fee_bps.clamp(0, denom);
+    let late_fee_bps = late_fee_bps.clamp(0, denom);
+    let treasury_share_bps = treasury_share_bps.clamp(0, denom);
+
+    // Gross profit relative to principal (floored at zero for loss/breakeven).
+    let gross_profit = payment
+        .checked_sub(principal)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .max(0);
+
+    // Platform fee: floor(gross_profit * fee_bps / denom). fee_bps <= denom so
+    // platform_fee <= gross_profit (never negative).
+    let platform_fee = gross_profit
+        .checked_mul(fee_bps)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_div(denom)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+
+    // Late fee: floor(principal * late_fee_bps / denom).
+    let late_fee = principal
+        .checked_mul(late_fee_bps)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_div(denom)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+
+    // Investor return is the exact remainder after fees are removed from the
+    // payment. If the fees would exhaust more than the payment, reject rather
+    // than silently short-changing the investor.
+    let investor_return = payment
+        .checked_sub(platform_fee)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_sub(late_fee)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    if investor_return < 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    // Treasury split of the total fee (platform + late).
+    let total_fee = platform_fee
+        .checked_add(late_fee)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    let treasury_amount = total_fee
+        .checked_mul(treasury_share_bps)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_div(denom)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    let treasury_remaining = total_fee
+        .checked_sub(treasury_amount)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+
+    // Conservation invariants — must hold by construction; enforce defensively.
+    let recon = investor_return
+        .checked_add(platform_fee)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_add(late_fee)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    if recon != payment {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+    if treasury_amount
+        .checked_add(treasury_remaining)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        != total_fee
+    {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    Ok(RepaymentAllocation {
+        principal_return: principal,
+        gross_profit,
+        platform_fee,
+        late_fee,
+        investor_return,
+        treasury_amount,
+        treasury_remaining,
+    })
+}
+
+/// Distribute a repayment from custodied escrow funds to the investor, the
+/// treasury (platform fee), and release the principal back to the business.
+///
+/// This is the escrow-Held alternative to the settlement payout. It is atomic in
+/// the same sense as [`release_escrow`]/[`refund_escrow`]: every validation and
+/// the reserve decrease are computed *before* any token transfer, and the escrow
+/// status is only updated after all transfers succeed, so a failed or rejected
+/// call leaves no partial state.
+///
+/// # Arguments
+/// * `invoice_id` — invoice whose escrow is being repaid.
+/// * `payment_amount` — total amount the business repaid into the contract
+///   (must already be custodied; the contract balance is checked first).
+/// * `late_fee_bps` — late-payment surcharge in basis points (0 disables).
+///
+/// # Errors
+/// * [`QuickLendXError::StorageKeyNotFound`] — no escrow/invoice for `invoice_id`.
+/// * [`QuickLendXError::InvalidStatus`] — escrow is not `Held` (already repaid) or
+///   a reserve repair is active.
+/// * [`QuickLendXError::InvalidAmount`] / [`QuickLendXError::ArithmeticOverflow`]
+///   — forwarded from [`allocate_repayment`] or the reserve update.
+/// * [`QuickLendXError::InsufficientFunds`] — the contract does not custody
+///   `payment_amount` (the business repayment has not been received).
+/// * [`QuickLendXError::TokenTransferFailed`] — a token call panicked; escrow
+///   status is **not** updated so the repayment can be safely retried.
+pub fn repay_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    payment_amount: i128,
+    late_fee_bps: i128,
+) -> Result<RepaymentAllocation, QuickLendXError> {
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    if escrow.status != EscrowStatus::Held {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    EscrowStorage::require_no_active_reserve_repair(env, &escrow.currency)?;
+
+    let principal = escrow.amount;
+    let currency = escrow.currency.clone();
+    let investor = escrow.investor.clone();
+    let business = escrow.business.clone();
+
+    let fee_bps = crate::profits::PlatformFee::get_config(env).fee_bps as i128;
+
+    // Compute the allocation (all checked; rejects overflow/over-charge/scale).
+    let allocation = allocate_repayment(
+        principal,
+        payment_amount,
+        fee_bps,
+        late_fee_bps,
+        crate::profits::BPS_DENOMINATOR,
+    )?;
+
+    // Pre-flight: the contract must custody the full repayment before moving funds.
+    let contract_address = env.current_contract_address();
+    let token_client = token::Client::new(env, &currency);
+    let contract_balance = token_client.balance(&contract_address);
+    let required = payment_amount
+        .checked_add(principal)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    if contract_balance < required {
+        return Err(QuickLendXError::InsufficientFunds);
+    }
+
+    // Reserve decrease is computed before transfers (mirrors release/refund).
+    let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {
+        Some(EscrowStorage::held_reserve_after_decrease(
+            env, &currency, principal,
+        )?)
+    } else {
+        None
+    };
+
+    // Move funds: investor return, treasury fee, and principal release to business.
+    // Each leg is exact; failures leave escrow status unchanged.
+    transfer_funds_exact(
+        env,
+        &currency,
+        &contract_address,
+        &investor,
+        allocation.investor_return,
+    )?;
+
+    if allocation.treasury_amount > 0 {
+        if let Some(treasury) = crate::fees::FeeManager::get_treasury_address(env) {
+            transfer_funds_exact(
+                env,
+                &currency,
+                &contract_address,
+                &treasury,
+                allocation.treasury_amount,
+            )?;
+        }
+        // If no treasury is configured the fee is intentionally retained by the
+        // contract; the accounting identity still balances.
+    }
+
+    transfer_funds_exact(env, &currency, &contract_address, &business, principal)?;
+
+    // Commit: reserve and escrow status only after all transfers succeeded.
+    if let Some(next_held_reserve) = next_held_reserve {
+        EscrowStorage::set_held_reserve_record(env, &currency, &next_held_reserve);
+        EscrowStorage::clear_reserve_accounted(env, &escrow.escrow_id);
+    }
+    escrow.status = EscrowStatus::Released;
+    EscrowStorage::update_escrow(env, &escrow);
+
+    crate::events::emit_escrow_released(env, &escrow.escrow_id, invoice_id, &business, principal);
+    crate::qlx_log!(
+        env,
+        "payment",
+        "Escrow repaid: investor_return={} platform_fee={} principal={}",
+        allocation.investor_return,
+        allocation.platform_fee,
+        principal
+    );
+
+    Ok(allocation)
 }
 
 #[cfg(test)]
@@ -1302,5 +1673,118 @@ mod payments_tests {
             )
         });
         assert_eq!(r2, Err(QuickLendXError::InvoiceAlreadyFunded));
+    }
+
+    // -----------------------------------------------------------------------
+    // Repayment allocation engine: deterministic, overflow-safe
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_allocate_repayment_zero_principal_rejected() {
+        assert_eq!(
+            allocate_repayment(0, 1000, 200, 0, 10_000),
+            Err(QuickLendXError::InvalidAmount)
+        );
+    }
+
+    #[test]
+    fn test_allocate_repayment_negative_payment_rejected() {
+        assert_eq!(
+            allocate_repayment(1000, -1, 200, 0, 10_000),
+            Err(QuickLendXError::InvalidAmount)
+        );
+    }
+
+    #[test]
+    fn test_allocate_repayment_basic_profit() {
+        // principal 1000, payment 1100, fee 200 bps -> fee 2, investor 1098
+        let a = allocate_repayment(1000, 1100, 200, 0, 10_000).unwrap();
+        assert_eq!(a.platform_fee, 2);
+        assert_eq!(a.investor_return, 1098);
+        assert_eq!(a.principal_return, 1000);
+        assert_eq!(a.gross_profit, 100);
+        assert_eq!(a.treasury_amount, 2);
+        assert_eq!(a.treasury_remaining, 0);
+        assert_eq!(a.investor_return + a.platform_fee + a.late_fee, 1100);
+    }
+
+    #[test]
+    fn test_allocate_repayment_loss_no_fee() {
+        let a = allocate_repayment(1000, 900, 200, 0, 10_000).unwrap();
+        assert_eq!(a.platform_fee, 0);
+        assert_eq!(a.investor_return, 900);
+        assert_eq!(a.gross_profit, 0);
+        assert_eq!(a.investor_return + a.platform_fee + a.late_fee, 900);
+    }
+
+    #[test]
+    fn test_allocate_repayment_fractional_rounding_favors_investor() {
+        // profit 1, fee 200 bps -> 0.02 floors to 0; investor gets full payment
+        let a = allocate_repayment(1000, 1001, 200, 0, 10_000).unwrap();
+        assert_eq!(a.platform_fee, 0);
+        assert_eq!(a.investor_return, 1001);
+    }
+
+    #[test]
+    fn test_allocate_repayment_late_fee() {
+        // principal 1000, late_fee_bps 500 (5%) -> late_fee 50
+        // payment 1100, fee 200 bps on profit 100 -> 2
+        let a = allocate_repayment(1000, 1100, 200, 500, 10_000).unwrap();
+        assert_eq!(a.late_fee, 50);
+        assert_eq!(a.platform_fee, 2);
+        assert_eq!(a.investor_return, 1100 - 50 - 2);
+        assert_eq!(a.treasury_amount, 52);
+        assert_eq!(a.investor_return + a.platform_fee + a.late_fee, 1100);
+    }
+
+    #[test]
+    fn test_allocate_repayment_treasury_split() {
+        // principal 0 so all payment is profit: payment 10_000, fee 1000 bps -> fee 1000
+        let a = allocate_repayment(0, 10_000, 1000, 0, 5000).unwrap();
+        assert_eq!(a.platform_fee, 1000);
+        assert_eq!(a.treasury_amount, 500);
+        assert_eq!(a.treasury_remaining, 500);
+        assert_eq!(a.investor_return, 9000);
+        assert_eq!(a.investor_return + a.platform_fee + a.late_fee, 10_000);
+    }
+
+    #[test]
+    fn test_allocate_repayment_overcharge_rejected() {
+        // late fee would exceed the payment: principal 1000, payment 10, late 100%
+        assert_eq!(
+            allocate_repayment(1000, 10, 0, 10_000, 10_000),
+            Err(QuickLendXError::InvalidAmount)
+        );
+    }
+
+    #[test]
+    fn test_allocate_repayment_max_amount_no_overflow() {
+        let m = crate::protocol_limits::MAX_INVOICE_AMOUNT;
+        let principal = m / 2;
+        let a = allocate_repayment(principal, m, 1000, 0, 10_000).unwrap();
+        let expected_fee = (m - principal) * 1000 / 10_000;
+        assert_eq!(a.platform_fee, expected_fee);
+        assert_eq!(a.investor_return + a.platform_fee, m);
+    }
+
+    #[test]
+    fn test_allocate_repayment_exceeds_max_bound_rejected() {
+        let m = crate::protocol_limits::MAX_INVOICE_AMOUNT;
+        assert_eq!(
+            allocate_repayment(m + 1, 10, 200, 0, 10_000),
+            Err(QuickLendXError::InvalidAmount)
+        );
+        assert_eq!(
+            allocate_repayment(10, m + 1, 200, 0, 10_000),
+            Err(QuickLendXError::InvalidAmount)
+        );
+    }
+
+    #[test]
+    fn test_allocate_repayment_fee_bps_clamped() {
+        // fee_bps beyond 10000 is clamped, so it behaves like 10000 (full profit)
+        let a = allocate_repayment(0, 10_000, 99_999, 0, 10_000).unwrap();
+        assert_eq!(a.platform_fee, 10_000);
+        assert_eq!(a.investor_return, 0);
     }
 }
