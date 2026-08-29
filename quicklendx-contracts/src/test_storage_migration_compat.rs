@@ -1,4 +1,4 @@
-﻿//! Storage and migration compatibility tests for QuickLendX.
+//! Storage and migration compatibility tests for QuickLendX.
 //!
 //! # Purpose
 //! These tests provide a deterministic, reviewable guarantee that:
@@ -253,6 +253,44 @@ fn test_legacy_data_survives_migration() {
     assert_eq!(retrieved.amount, 5_000);
     assert_eq!(retrieved.status, InvoiceStatus::Pending);
     assert_eq!(retrieved.business, business);
+    assert_eq!(StorageMigration::get_schema_version(&env), 1);
+    assert!(!StorageMigration::is_migration_in_progress(&env));
+}
+
+#[test]
+fn test_legacy_bid_survives_migration() {
+    use crate::bid::{Bid, BidStatus, BidStorage};
+    use soroban_sdk::{BytesN, Address};
+
+    let (env, admin) = setup();
+
+    let bid_id = BytesN::from_array(&env, &[0xBBu8; 32]);
+    let invoice_id = BytesN::from_array(&env, &[0xAAu8; 32]);
+    let investor = Address::generate(&env);
+
+    let legacy_bid = Bid {
+        bid_id: bid_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        bid_amount: 1_000,
+        expected_return: 1_100,
+        timestamp: env.ledger().timestamp(),
+        status: BidStatus::Placed,
+        expiration_timestamp: env.ledger().timestamp() + 86_400,
+    };
+
+    BidStorage::store_bid(&env, &legacy_bid);
+    assert_eq!(StorageMigration::get_schema_version(&env), 0);
+
+    StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
+    StorageMigration::advance_migration_page(&env, 1, 1);
+    StorageMigration::commit_migration(&env, &admin).unwrap();
+
+    let retrieved = BidStorage::get_bid(&env, &bid_id)
+        .expect("legacy bid must still exist after migration");
+    assert_eq!(retrieved.bid_amount, 1_000);
+    assert_eq!(retrieved.status, BidStatus::Placed);
+    assert_eq!(retrieved.investor, investor);
     assert_eq!(StorageMigration::get_schema_version(&env), 1);
     assert!(!StorageMigration::is_migration_in_progress(&env));
 }
