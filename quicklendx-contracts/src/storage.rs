@@ -311,6 +311,47 @@ impl Indexes {
 pub struct InvoiceStorage;
 
 impl InvoiceStorage {
+    fn business_generation_key(business: &Address) -> (Symbol, Address) {
+        (symbol_short!("biz_gen"), business.clone())
+    }
+
+    pub fn get_business_generation(env: &Env, business: &Address) -> u64 {
+        let key = Self::business_generation_key(business);
+        env.storage().persistent().get(&key).unwrap_or(0)
+    }
+
+    pub fn bump_business_generation(env: &Env, business: &Address) {
+        let key = Self::business_generation_key(business);
+        let next = Self::get_business_generation(env, business).saturating_add(1);
+        env.storage().persistent().set(&key, &next);
+        extend_persistent_ttl(env, &key);
+    }
+
+    fn status_generation_key(status: InvoiceStatus) -> (Symbol, Symbol) {
+        let status_symbol = match status {
+            InvoiceStatus::Pending => symbol_short!("g_pending"),
+            InvoiceStatus::Verified => symbol_short!("g_verif"),
+            InvoiceStatus::Funded => symbol_short!("g_funded"),
+            InvoiceStatus::Paid => symbol_short!("g_paid"),
+            InvoiceStatus::Defaulted => symbol_short!("g_default"),
+            InvoiceStatus::Cancelled => symbol_short!("g_cancel"),
+            InvoiceStatus::Refunded => symbol_short!("g_refund"),
+        };
+        (symbol_short!("st_gen"), status_symbol)
+    }
+
+    pub fn get_status_generation(env: &Env, status: InvoiceStatus) -> u64 {
+        let key = Self::status_generation_key(status);
+        env.storage().persistent().get(&key).unwrap_or(0)
+    }
+
+    pub fn bump_status_generation(env: &Env, status: InvoiceStatus) {
+        let key = Self::status_generation_key(status);
+        let next = Self::get_status_generation(env, status).saturating_add(1);
+        env.storage().persistent().set(&key, &next);
+        extend_persistent_ttl(env, &key);
+    }
+
     fn raw_index_entries(env: &Env, index: &InvoiceIndex) -> Vec<BytesN<32>> {
         match index {
             InvoiceIndex::Business(business) => env
@@ -406,11 +447,13 @@ impl InvoiceStorage {
                     let key = Indexes::invoices_by_business(business);
                     env.storage().persistent().set(&key, &entries);
                     extend_persistent_ttl(env, &key);
+                    Self::bump_business_generation(env, business);
                 }
                 InvoiceIndex::Status(status) => {
                     let key = Indexes::invoices_by_status(*status);
                     env.storage().persistent().set(&key, &entries);
                     extend_persistent_ttl(env, &key);
+                    Self::bump_status_generation(env, *status);
                 }
                 InvoiceIndex::Customer(name) => {
                     let key = Indexes::invoices_by_customer(name);
@@ -794,6 +837,7 @@ impl InvoiceStorage {
             let key = Indexes::invoices_by_business(business);
             env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
+            Self::bump_business_generation(env, business);
         }
     }
 
@@ -804,6 +848,7 @@ impl InvoiceStorage {
             let key = Indexes::invoices_by_business(business);
             env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
+            Self::bump_business_generation(env, business);
         }
     }
 
@@ -814,6 +859,7 @@ impl InvoiceStorage {
             let key = Indexes::invoices_by_status(status);
             env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
+            Self::bump_status_generation(env, status);
         }
     }
 
@@ -824,6 +870,7 @@ impl InvoiceStorage {
             let key = Indexes::invoices_by_status(status);
             env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
+            Self::bump_status_generation(env, status);
         }
     }
 

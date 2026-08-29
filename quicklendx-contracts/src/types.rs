@@ -489,6 +489,15 @@ pub struct PaginatedBytes32Vec {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvoicePage {
+    pub items: Vec<BytesN<32>>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub generation: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaginatedBids {
     pub items: Vec<crate::bid::Bid>,
     pub total_count: u32,
