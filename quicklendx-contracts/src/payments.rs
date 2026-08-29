@@ -641,8 +641,8 @@ fn validate_and_prepare_escrow(
         return Err(QuickLendXError::InvoiceAlreadyFunded);
     }
 
-    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if invoice.business != *business {
         return Err(QuickLendXError::Unauthorized);
@@ -749,21 +749,6 @@ pub fn create_escrow(
     Ok(escrow_id)
 }
 
-    EscrowStorage::store_escrow(env, &escrow);
-    EscrowStorage::set_held_reserve_record(env, currency, &next_held_reserve);
-    EscrowStorage::mark_reserve_accounted(env, &escrow_id);
-    crate::qlx_log!(env, "payment", "Escrow created successfully");
-    emit_escrow_created(env, &escrow);
-    crate::audit::log_escrow_created(
-        env,
-        invoice_id.clone(),
-        investor.clone(),
-        amount,
-        escrow_id.clone(),
-    );
-    Ok(escrow_id)
-}
-
 /// Release escrow funds to business (contract -> business).
 ///
 /// # Requirements
@@ -787,8 +772,8 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if escrow.business != invoice.business {
         return Err(QuickLendXError::Unauthorized);
@@ -864,8 +849,8 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if let Some(ref inv_investor) = invoice.investor {
         if escrow.investor != *inv_investor {

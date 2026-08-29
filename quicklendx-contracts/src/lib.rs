@@ -27,11 +27,6 @@ extern crate alloc;
 mod scratch_events;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_concurrent_default_overlap;
-#[cfg(test)]
-// Storage and migration compatibility regression tests (issue #2508).
-mod test_storage_migration_compat;
-#[cfg(test)]
-mod test_multisig;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -50,12 +45,17 @@ mod test_fees;
 mod test_maintenance;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
+#[cfg(test)]
+mod test_multisig;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_multisig;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_capacity_stress;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_history_reconstruction;
+#[cfg(test)]
+// Storage and migration compatibility regression tests (issue #2508).
+mod test_storage_migration_compat;
 // Issue #1920 â€” confirm require_regulatory_ok is truly a no-op by default.
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_regulatory_gate;
@@ -121,8 +121,6 @@ mod test_accept_bid_race;
 mod test_admin;
 #[cfg(test)]
 mod test_admin_events_audit_parity;
-#[cfg(test)]
-mod test_funding_events_audit_parity;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -163,6 +161,8 @@ mod test_config_bounds_matrix;
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_due_date_guard;
+#[cfg(test)]
+mod test_funding_events_audit_parity;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_governance;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -277,6 +277,7 @@ mod test_profit_fee;
 mod test_protocol_health;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_limits_boundary;
+// Issue #2439 – resource and rate limit integration/regression tests
 #[cfg(all(test, feature = "legacy-tests"))]
 // mod test_refund;
 // #[cfg(all(test, feature = "legacy-tests"))]
@@ -285,6 +286,8 @@ mod test_protocol_limits_boundary;
 mod test_reentrancy;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_reentrancy_fault_injection;
+#[cfg(test)]
+mod test_resource_rate_limits;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_settle_during_dispute;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -427,16 +430,16 @@ mod test_volume_tier_props;
 mod test_cannot_withdraw_more_than_deposited;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_batch_cancel;
+#[cfg(test)]
+mod test_pagination_cursors;
+#[cfg(test)]
+mod test_ratings_snapshot;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_store_invoice_auth;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_store_invoices_batch;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_tier_boundary;
-#[cfg(test)]
-mod test_ratings_snapshot;
-#[cfg(test)]
-mod test_pagination_cursors;
 pub mod types;
 pub use types::*;
 pub mod upgrade;
@@ -1739,7 +1742,10 @@ impl QuickLendXContract {
         // Reject stale/replayed cancellation attempts: once an invoice is funded,
         // settled, defaulted, cancelled, or refunded, the lifecycle is terminal and
         // must not be mutated by a later retry or concurrent duplicate request.
-        if !matches!(invoice.status, InvoiceStatus::Pending | InvoiceStatus::Verified) {
+        if !matches!(
+            invoice.status,
+            InvoiceStatus::Pending | InvoiceStatus::Verified
+        ) {
             return Err(QuickLendXError::InvalidStatus);
         }
 
@@ -1815,7 +1821,10 @@ impl QuickLendXContract {
             if invoice.business != business {
                 return Err(QuickLendXError::Unauthorized);
             }
-            if !matches!(invoice.status, InvoiceStatus::Pending | InvoiceStatus::Verified) {
+            if !matches!(
+                invoice.status,
+                InvoiceStatus::Pending | InvoiceStatus::Verified
+            ) {
                 return Err(QuickLendXError::InvalidStatus);
             }
         }
@@ -2615,8 +2624,7 @@ impl QuickLendXContract {
         let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         let invoice_id = bid.invoice_id.clone();
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        let mut bid =
-            BidStorage::get_bid(&env, &bid_id).unwrap();
+        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
         invoice.business.require_auth();
 
         // Enforce business is active (not deleted/frozen).
@@ -2667,8 +2675,7 @@ impl QuickLendXContract {
         };
         InvestmentStorage::store_investment(&env, &investment);
 
-        let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
-            .unwrap();
+        let escrow = EscrowStorage::get_escrow(&env, &escrow_id).unwrap();
         emit_escrow_created(&env, &escrow);
         emit_bid_accepted(&env, &bid, &invoice_id, &invoice.business);
         audit::log_bid_accepted(
@@ -4191,7 +4198,8 @@ impl QuickLendXContract {
             pagination::require_stable_cursor(expected, current_generation)?;
         }
 
-        let page = Self::get_business_invoices_paged(env.clone(), business, status_filter, offset, limit);
+        let page =
+            Self::get_business_invoices_paged(env.clone(), business, status_filter, offset, limit);
 
         Ok(InvoicePage {
             items: page.items,
@@ -4372,7 +4380,8 @@ impl QuickLendXContract {
         limit: u32,
         cursor_generation: Option<u64>,
     ) -> Result<InvoicePage, QuickLendXError> {
-        let current_generation = InvoiceStorage::get_status_generation(&env, InvoiceStatus::Verified);
+        let current_generation =
+            InvoiceStorage::get_status_generation(&env, InvoiceStatus::Verified);
         if let Some(expected) = cursor_generation {
             pagination::require_stable_cursor(expected, current_generation)?;
         }

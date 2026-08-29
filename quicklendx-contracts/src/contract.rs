@@ -2,8 +2,12 @@ use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec, Bytes, xdr:
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::MAX_INVOICE_AMOUNT;
+use crate::protocol_limits::{
+    check_and_record_mutation, require_batch_size_bound, require_description_bound,
+    require_kyc_data_bound, require_status_batch_bound, require_tags_bound,
+};
 use crate::types::{
-    Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus, 
+    Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus,
     DisputeStatus, PaymentRecord, InvoiceRating, Escrow, EscrowStatus,
     BusinessFreezeReason,
 };
@@ -133,6 +137,14 @@ impl QuickLendXContract {
         }
 
         business.require_auth();
+
+        // #2439 – per-address rate limit (cheap check before any heavy work)
+        check_and_record_mutation(&env, &business)?;
+
+        // #2439 – hard input-size ceilings (reject oversized payloads early)
+        require_description_bound(&description)?;
+        require_tags_bound(&tags)?;
+
         crate::verification::require_business_not_pending(&env, &business)?;
         crate::regulatory::require_regulatory_ok(&env, &business)?;
 
@@ -211,6 +223,8 @@ impl QuickLendXContract {
         if idempotency_exists(&env, &idem_key) {
             return Err(QuickLendXError::DuplicateBid);
         }
+        // #2439 – per-address rate limit
+        check_and_record_mutation(&env, &investor)?;
         if InvoiceStorage::is_frozen(&env, &invoice_id) {
             InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
             return Err(QuickLendXError::InvoiceFrozen);
@@ -326,6 +340,9 @@ impl QuickLendXContract {
     }
 
     pub fn submit_kyc_application(env: Env, business: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
+        // #2439 – input-size ceiling before any expensive work
+        require_kyc_data_bound(&kyc_data)?;
+        check_and_record_mutation(&env, &business)?;
         submit_kyc_application(&env, &business, kyc_data)
     }
 
@@ -375,6 +392,9 @@ impl QuickLendXContract {
     }
 
     pub fn submit_investor_kyc(env: Env, investor: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
+        // #2439 – input-size ceiling
+        require_kyc_data_bound(&kyc_data)?;
+        check_and_record_mutation(&env, &investor)?;
         InvestorVerificationStorage::submit(&env, &investor, kyc_data)
     }
 
@@ -402,6 +422,9 @@ impl QuickLendXContract {
         if crate::idempotency::idempotency_exists(&env, &nonce) {
             return Ok(());
         }
+        // #2439 – rate-limit on invoice owner
+        let invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        check_and_record_mutation(&env, &invoice.business)?;
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.update_metadata(metadata);
         InvoiceStorage::update_invoice(&env, &invoice);
@@ -413,6 +436,10 @@ impl QuickLendXContract {
         if crate::idempotency::idempotency_exists(&env, &nonce) {
             return Ok(());
         }
+        // #2439 – rate-limit on the invoice owner (read-only lookup first)
+        let invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        check_and_record_mutation(&env, &invoice.business)?;
+        // Re-read after the check to ensure we operate on the latest state
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.status = InvoiceStatus::Cancelled;
         InvoiceStorage::update_invoice(&env, &invoice);
@@ -424,6 +451,9 @@ impl QuickLendXContract {
         if crate::idempotency::idempotency_exists(&env, &nonce) {
             return Ok(());
         }
+        // #2439 – rate-limit on the invoice owner
+        let invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        check_and_record_mutation(&env, &invoice.business)?;
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.status = InvoiceStatus::Paid;
         InvoiceStorage::update_invoice(&env, &invoice);
@@ -447,14 +477,16 @@ impl QuickLendXContract {
         InvoiceStorage::get_by_tax_id(&env, &tax_id)
     }
 
-    pub fn get_invoices_by_status_batch(env: Env, ids: Vec<BytesN<32>>) -> Vec<Option<InvoiceStatus>> {
+    pub fn get_invoices_by_status_batch(env: Env, ids: Vec<BytesN<32>>) -> Result<Vec<Option<InvoiceStatus>>, QuickLendXError> {
+        // #2439 – hard ceiling on the number of IDs accepted per call
+        require_status_batch_bound(&ids)?;
         let mut results = Vec::new(&env);
         for id in ids.iter() {
             if results.len() >= 50 { break; }
             let status = InvoiceStorage::get(&env, &id).map(|i| i.status);
             results.push_back(status);
         }
-        results
+        Ok(results)
     }
 
     pub fn add_invoice_rating(
