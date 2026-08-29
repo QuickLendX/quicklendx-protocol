@@ -26,15 +26,15 @@ fn test_cancel_treasury_rotation_by_admin_succeeds() {
     client.set_treasury(&admin, &new_treasury);
     let pending = client.get_pending_treasury();
     assert!(pending.is_some());
-    client.cancel_treasury_rotation(&admin);
+    client.cancel_treasury_rotation();
     assert!(client.get_pending_treasury().is_none());
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #1858)")]
 fn test_cancel_treasury_rotation_fails_if_no_pending_rotation() {
-    let (_env, client, admin) = setup();
-    client.cancel_treasury_rotation(&admin);
+    let (_env, client, _admin) = setup();
+    client.cancel_treasury_rotation();
 }
 
 #[test]

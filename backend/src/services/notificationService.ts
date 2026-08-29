@@ -10,6 +10,8 @@ import {
 } from '../types/contract';
 import { config } from '../config';
 import { NotificationDedupCache } from './notificationDedupCache';
+import { auditService } from './auditService';
+import { alertRouter, Severity } from './alertRouter';
 
 // Map NotificationType enum values to the notify_* column names
 const PREF_COLUMN: Record<NotificationType, string> = {

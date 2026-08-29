@@ -401,10 +401,71 @@ export class FileRawEventStore implements RawEventStore {
     if (typeof cursor !== "number" || cursor < 0) {
       throw new Error("Invalid cursor for rollback");
     }
+    await fs.mkdir(this.dataDir, { recursive: true });
+
     const all = await this.getAllEvents();
     const kept = all.filter((e) => e.ledger <= cursor);
-    await this.replaceEvents(kept);
-    await this.setReplayCursor(cursor);
+    const eventsContent = kept.map((e) => JSON.stringify(e)).join("\n") + "\n";
+    const cursorContent = JSON.stringify({ ledger: cursor, updatedAt: new Date().toISOString() });
+
+    const eventsTmp = this.eventsFile + ".tmp";
+    const cursorTmp = this.cursorFile + ".tmp";
+    const eventsBak = this.eventsFile + ".bak";
+    const cursorBak = this.cursorFile + ".bak";
+
+    // Write new state to temporary files.
+    await fs.writeFile(eventsTmp, eventsContent, "utf8");
+    await fs.writeFile(cursorTmp, cursorContent, "utf8");
+
+    // Determine whether original files exist, and back them up.
+    const eventsExists = await this.fileExists(this.eventsFile);
+    const cursorExists = await this.fileExists(this.cursorFile);
+
+    try {
+      if (eventsExists) {
+        await fs.rename(this.eventsFile, eventsBak);
+      }
+      if (cursorExists) {
+        await fs.rename(this.cursorFile, cursorBak);
+      }
+
+      // Atomically move new files into place.
+      await fs.rename(eventsTmp, this.eventsFile);
+      try {
+        await fs.rename(cursorTmp, this.cursorFile);
+      } catch (err) {
+        // Try to restore events if cursor rename fails.
+        await fs.rename(this.eventsFile, eventsTmp);
+        if (eventsExists) await fs.rename(eventsBak, this.eventsFile);
+        if (cursorExists) await fs.rename(cursorBak, this.cursorFile);
+        throw err;
+      }
+
+      // Success: remove backups.
+      if (eventsExists) await fs.unlink(eventsBak).catch(() => {});
+      if (cursorExists) await fs.unlink(cursorBak).catch(() => {});
+    } catch (err) {
+      // Best-effort cleanup of temp files.
+      await fs.unlink(eventsTmp).catch(() => {});
+      await fs.unlink(cursorTmp).catch(() => {});
+      // If backups were created but not restored, attempt restore.
+      if (eventsExists && (await this.fileExists(eventsBak))) {
+        await fs.rename(eventsBak, this.eventsFile).catch(() => {});
+      }
+      if (cursorExists && (await this.fileExists(cursorBak))) {
+        await fs.rename(cursorBak, this.cursorFile).catch(() => {});
+      }
+      throw err;
+    }
+  }
+
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async getAllEvents(): Promise<RawEvent[]> {

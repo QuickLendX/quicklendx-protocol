@@ -47,8 +47,10 @@ mod test_default_finality {
                 resolution: String::from_str(&env, ""),
                 resolved_by: admin.clone(),
                 resolved_at: 0,
-                resolution_outcome: DisputeResolution::None,
             },
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
         };
         InvoiceStorage::store_invoice(&env, &invoice);
 
@@ -59,7 +61,11 @@ mod test_default_finality {
         assert!(res_fund.is_err());
 
         // 2. Cannot be settled
-        let res_settle = client.try_settle_invoice(&invoice_id, &1000);
+        let res_settle = client.try_settle_invoice(
+            &invoice_id,
+            &1000,
+            &client.get_investment(&invoice_id).unwrap(),
+        );
         assert!(res_settle.is_err());
 
         // 3. Cannot have partial payments
@@ -103,8 +109,10 @@ mod test_default_finality {
                 resolution: String::from_str(&env, ""),
                 resolved_by: admin.clone(),
                 resolved_at: 0,
-                resolution_outcome: DisputeResolution::None,
             },
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
         };
         InvoiceStorage::store_invoice(&env, &invoice);
 

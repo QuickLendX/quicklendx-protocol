@@ -5,6 +5,11 @@ This document explains the two types of KYC (Know Your Customer) used in QuickLe
 ## Business KYC
 Business KYC is required for businesses that want to create invoices on the platform. It gates the ability to list invoices and receive funds.
 
+**What it gates:**
+- Creating new invoices
+- Receiving funds from investors
+- Updating business profile details
+
 Only businesses with a `Verified` KYC status — referred to as **tier-N businesses** — may call `store_invoice` or `upload_invoice`. This check is enforced at the **contract level**: no front-end bypass can circumvent it.
 
 **What it gates:**

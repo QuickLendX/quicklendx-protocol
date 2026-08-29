@@ -74,6 +74,9 @@ fn make_complex_invoice(
         total_paid: 0,
         payment_history: Vec::new(env),
         created_at: env.ledger().timestamp(),
+        origination_fee_bps: None,
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     }
 }
 

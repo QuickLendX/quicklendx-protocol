@@ -46,6 +46,7 @@ fn valid_params(env: &Env) -> InitializationParams {
         max_due_date_days: 365,
         grace_period_seconds: 604_800, // 7 days
         initial_currencies: Vec::new(env),
+        corridors: Vec::new(env),
         backfill_max_batch_size: 100,
     }
 }
@@ -54,8 +55,7 @@ fn valid_params(env: &Env) -> InitializationParams {
 fn initialized(env: &Env, client: &QuickLendXContractClient) -> InitializationParams {
     let p = valid_params(env);
     client.initialize(&p);
-    p,
-        backfill_max_batch_size: 100,
+    p
 }
 
 // ===========================================================================
@@ -811,5 +811,133 @@ fn test_validation_order_fee_before_amount() {
     assert_eq!(
         client.try_initialize(&p),
         Err(Ok(QuickLendXError::InvalidFeeBasisPoints)),
+    );
+}
+
+// ===========================================================================
+// 7. CORRIDOR LIST TESTS
+// ===========================================================================
+
+/// Happy path: initializing with an empty corridor list must succeed.
+#[test]
+fn test_init_with_empty_corridors_succeeds() {
+    let (env, client) = setup();
+    let mut p = valid_params(&env);
+    p.corridors = Vec::new(&env);
+    assert!(client.try_initialize(&p).is_ok());
+    let stored = ProtocolInitializer::get_corridors(&env);
+    assert!(stored.is_empty());
+}
+
+/// Happy path: initializing with a non-empty corridor list must succeed.
+#[test]
+fn test_init_with_non_empty_corridors_succeeds() {
+    let (env, client) = setup();
+    let corridor1 = Address::generate(&env);
+    let corridor2 = Address::generate(&env);
+    let mut p = valid_params(&env);
+    p.corridors = Vec::from_array(&env, [corridor1.clone(), corridor2.clone()]);
+    assert!(client.try_initialize(&p).is_ok());
+    let stored = ProtocolInitializer::get_corridors(&env);
+    assert_eq!(stored.len(), 2);
+    assert_eq!(stored.get(0).unwrap(), corridor1);
+    assert_eq!(stored.get(1).unwrap(), corridor2);
+}
+
+/// Failure mode: duplicate corridors must be rejected.
+#[test]
+fn test_init_with_duplicate_corridors_fails() {
+    let (env, client) = setup();
+    let addr = Address::generate(&env);
+    let mut p = valid_params(&env);
+    p.corridors = Vec::from_array(&env, [addr.clone(), addr]);
+    assert_eq!(
+        client.try_initialize(&p),
+        Err(Ok(QuickLendXError::InvalidAddress)),
+    );
+}
+
+/// Failure mode: corridor equal to admin must be rejected.
+#[test]
+fn test_init_with_corridor_equal_to_admin_fails() {
+    let (env, client) = setup();
+    let mut p = valid_params(&env);
+    let admin = p.admin.clone();
+    p.corridors = Vec::from_array(&env, [admin]);
+    assert_eq!(
+        client.try_initialize(&p),
+        Err(Ok(QuickLendXError::InvalidAddress)),
+    );
+}
+
+/// Failure mode: corridor equal to treasury must be rejected.
+#[test]
+fn test_init_with_corridor_equal_to_treasury_fails() {
+    let (env, client) = setup();
+    let mut p = valid_params(&env);
+    let treasury = p.treasury.clone();
+    p.corridors = Vec::from_array(&env, [treasury]);
+    assert_eq!(
+        client.try_initialize(&p),
+        Err(Ok(QuickLendXError::InvalidAddress)),
+    );
+}
+
+/// Failure mode: corridor equal to the contract address must be rejected.
+#[test]
+fn test_init_with_corridor_equal_to_contract_fails() {
+    let (env, client) = setup();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client2 = QuickLendXContractClient::new(&env, &contract_id);
+    let mut p = valid_params(&env);
+    p.corridors = Vec::from_array(&env, [contract_id]);
+    assert_eq!(
+        client2.try_initialize(&p),
+        Err(Ok(QuickLendXError::InvalidAddress)),
+    );
+}
+
+/// Failure mode: corridor equal to zero address must be rejected.
+#[test]
+fn test_init_with_corridor_equal_to_zero_fails() {
+    let (env, client) = setup();
+    let zero = Address::from_string(&soroban_sdk::String::from_str(
+        &env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
+    let mut p = valid_params(&env);
+    p.corridors = Vec::from_array(&env, [zero]);
+    assert_eq!(
+        client.try_initialize(&p),
+        Err(Ok(QuickLendXError::InvalidAddress)),
+    );
+}
+
+/// Idempotency: re-initializing with the same corridor list must succeed.
+#[test]
+fn test_reinit_with_same_corridors_succeeds() {
+    let (env, client) = setup();
+    let p = valid_params(&env);
+    client.initialize(&p);
+    assert!(client.try_initialize(&p).is_ok());
+}
+
+/// Stored corridors survive a re-init with the same params.
+#[test]
+fn test_corridors_persist_across_idempotent_reinit() {
+    let (env, client) = setup();
+    let corridor = Address::generate(&env);
+    let mut p = valid_params(&env);
+    p.corridors = Vec::from_array(&env, [corridor.clone()]);
+    client.initialize(&p);
+    assert_eq!(
+        ProtocolInitializer::get_corridors(&env).get(0).unwrap(),
+        corridor,
+    );
+    // Idempotent reinit
+    assert!(client.try_initialize(&p).is_ok());
+    assert_eq!(
+        ProtocolInitializer::get_corridors(&env).get(0).unwrap(),
+        corridor,
     );
 }

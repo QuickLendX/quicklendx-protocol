@@ -1,4 +1,4 @@
-//! Cross-module state consistency regression tests for QuickLendX.
+﻿//! Cross-module state consistency regression tests for QuickLendX.
 //!
 //! # Purpose
 //!
@@ -33,6 +33,7 @@
 
 use super::*;
 use crate::bid::BidStatus;
+use crate::invariants::run_invariant_checks;
 use crate::investment::InvestmentStatus;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
@@ -105,13 +106,13 @@ fn kyc_upload_bid(
         &String::from_str(env, "Consistency regression invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(investor, &50_000i128);
 
-    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &invoice_amount);
+    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
     (invoice_id, bid_id)
 }
 
@@ -133,6 +134,20 @@ fn assert_invoice_count_invariant(client: &QuickLendXContractClient) {
         "Invoice count invariant broken: global={} bucket_sum={}",
         total, sum
     );
+}
+
+fn assert_bid_withdrawal_refund_invariant(
+    env: &Env,
+    client: &QuickLendXContractClient,
+) {
+    let report = env.as_contract(&client.address, || run_invariant_checks(env));
+    let name = String::from_str(env, "bid_withdrawal_refund_accounting");
+    let check = report
+        .checks
+        .iter()
+        .find(|check| check.check_name == name)
+        .expect("bid accounting invariant must be reported");
+    assert!(check.passed, "{}", check.evidence);
 }
 
 // --- Test 1: Accept flow ------------------------------------------------------
@@ -241,8 +256,40 @@ fn test_accept_bid_cross_module_consistency() {
         "Invoice must NOT appear in Verified status index after accept"
     );
 
+    assert_bid_withdrawal_refund_invariant(&env, &client);
+
     // -- Count invariant -------------------------------------------------------
     assert_invoice_count_invariant(&client);
+}
+
+#[test]
+fn test_withdraw_bid_and_duplicate_call_preserve_accounting() {
+    let (env, client, admin) = make_env();
+    let contract_id = client.address.clone();
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = make_token(&env, &contract_id, &business, &investor, 5_000, 10_000);
+    let (invoice_id, bid_id) = kyc_upload_bid(
+        &env, &client, &admin, &business, &investor, &currency, 8_000, 7_500,
+    );
+
+    client.withdraw_bid(&bid_id);
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        BidStatus::Withdrawn
+    );
+    assert_bid_withdrawal_refund_invariant(&env, &client);
+
+    let error = client
+        .try_withdraw_bid(&bid_id)
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error, QuickLendXError::OperationNotAllowed);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Verified
+    );
+    assert_bid_withdrawal_refund_invariant(&env, &client);
 }
 
 // --- Test 2: Refund flow ------------------------------------------------------
@@ -278,6 +325,23 @@ fn test_refund_escrow_cross_module_consistency() {
         client.get_invoice_investment(&invoice_id).unwrap().status,
         InvestmentStatus::Active
     );
+
+    // A failed transfer must leave every record eligible for a safe retry.
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    sac.burn(&contract_id, &bid_amount);
+    let error = client
+        .try_refund_escrow_funds(&invoice_id, &business)
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error, QuickLendXError::InsufficientFunds);
+    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice_investment(&invoice_id).unwrap().status,
+        InvestmentStatus::Active
+    );
+    assert_bid_withdrawal_refund_invariant(&env, &client);
+
+    sac.mint(&contract_id, &bid_amount);
 
     // Trigger refund.
     client.refund_escrow_funds(&invoice_id, &business);
@@ -319,6 +383,15 @@ fn test_refund_escrow_cross_module_consistency() {
         refunded_list.contains(&invoice_id),
         "Invoice must appear in Refunded status index"
     );
+
+    assert_bid_withdrawal_refund_invariant(&env, &client);
+
+    let error = client
+        .try_refund_escrow_funds(&invoice_id, &business)
+        .unwrap()
+        .unwrap_err();
+    assert_eq!(error, QuickLendXError::InvalidStatus);
+    assert_bid_withdrawal_refund_invariant(&env, &client);
 
     // -- Count invariant -------------------------------------------------------
     assert_invoice_count_invariant(&client);
@@ -389,6 +462,8 @@ fn test_default_cross_module_consistency() {
         "Invoice must appear in Defaulted status index"
     );
 
+    assert_bid_withdrawal_refund_invariant(&env, &client);
+
     // -- Count invariant -------------------------------------------------------
     assert_invoice_count_invariant(&client);
 }
@@ -437,7 +512,7 @@ fn test_finalize_settle_cross_module_consistency() {
     tok.approve(&business, &contract_id, &(invoice_amount * 4), &exp);
 
     // Settle.
-    client.settle_invoice(&invoice_id, &invoice_amount);
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap());
 
     // -- Invoice assertions ----------------------------------------------------
     let invoice = client.get_invoice(&invoice_id);
@@ -534,7 +609,7 @@ fn test_no_orphan_after_sequential_operations() {
     sac.mint(&business_a, &amount_a);
     let exp2 = env.ledger().sequence() + 10_000;
     tok.approve(&business_a, &contract_id, &(amount_a * 4), &exp2);
-    client.settle_invoice(&invoice_a, &amount_a);
+    client.settle_invoice(&invoice_a, &amount_a, &client.get_investment(&invoice_a).unwrap());
 
     // Refund Invoice B.
     client.refund_escrow_funds(&invoice_b, &business_b);
@@ -616,9 +691,9 @@ fn test_query_canonical_record_agreement() {
         &String::from_str(&env, "Second regression invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&inv2);
-    let bid2 = client.place_bid(&investor, &inv2, &4_000i128, &5_000i128);
+    let bid2 = client.place_bid(&investor, &inv2, &4_000i128, &5_000i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&inv2, &bid2);
 
     // Both appear in the Funded index - verify each canonical record agrees.
@@ -646,7 +721,7 @@ fn test_query_canonical_record_agreement() {
     sac.mint(&business, &5_000i128);
     let exp = env.ledger().sequence() + 10_000;
     tok.approve(&business, &contract_id, &20_000i128, &exp);
-    client.settle_invoice(&inv1, &5_000i128);
+    client.settle_invoice(&inv1, &5_000i128, &client.get_investment(&inv1).unwrap());
 
     // Re-check: inv1 must NOT be in the Funded index; its record must be Paid.
     let funded_ids_after = client.get_invoices_by_status(&InvoiceStatus::Funded);
@@ -705,7 +780,7 @@ fn test_cancel_bid_before_funding_invariants() {
 
     // Cancel the bid before accepting
     let cancel_result = client.cancel_bid(&bid_id);
-    assert!(cancel_result, "cancel_bid should return true");
+    assert!(cancel_result.is_ok(), "cancel_bid should return Ok(())");
 
     // -- Post-cancellation assertions ---------------------------------------
     // Bid is Cancelled
@@ -794,7 +869,7 @@ fn test_multiple_bids_single_accept_invariants() {
         &String::from_str(env, "Multi-bid invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(&investor1, &String::from_str(env, "Investor 1 KYC"));
@@ -802,8 +877,8 @@ fn test_multiple_bids_single_accept_invariants() {
     client.verify_investor(&investor1, &50_000i128);
     client.verify_investor(&investor2, &50_000i128);
 
-    let bid1_id = client.place_bid(&investor1, &invoice_id, &5_000i128, &6_000i128);
-    let bid2_id = client.place_bid(&investor2, &invoice_id, &5_500i128, &6_000i128);
+    let bid1_id = client.place_bid(&investor1, &invoice_id, &5_000i128, &6_000i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid2_id = client.place_bid(&investor2, &invoice_id, &5_500i128, &6_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Accept bid2
     client.accept_bid(&invoice_id, &bid2_id);
@@ -938,7 +1013,7 @@ fn test_status_index_coherence_after_all_transitions() {
         &String::from_str(&env, "Lifecycle test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Initial: Pending
     let pending_count = client.get_invoice_count_by_status(&InvoiceStatus::Pending);
@@ -952,7 +1027,7 @@ fn test_status_index_coherence_after_all_transitions() {
     // Setup investor and bid
     client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC"));
     client.verify_investor(&investor, &50_000i128);
-    let bid_id = client.place_bid(&investor, &invoice_id, &8_000i128, &10_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &8_000i128, &10_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Fund: moves to Funded
     client.accept_bid(&invoice_id, &bid_id);
@@ -974,3 +1049,4 @@ fn test_status_index_coherence_after_all_transitions() {
     assert_invoice_count_invariant(&client);
     assert!(client.validate_no_orphan_investments(), "No orphan investments after default");
 }
+

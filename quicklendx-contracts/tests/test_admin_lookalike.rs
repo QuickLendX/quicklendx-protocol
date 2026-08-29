@@ -2,8 +2,8 @@
 
 extern crate std;
 
-use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
 use quicklendx_contracts::errors::QuickLendXError;
+use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 fn setup_with_admin() -> (Env, QuickLendXContractClient<'static>, Address) {

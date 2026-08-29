@@ -32,7 +32,7 @@ fn create_base_invoice(
         &String::from_str(env, "Base invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     (business, id)
 }
 
