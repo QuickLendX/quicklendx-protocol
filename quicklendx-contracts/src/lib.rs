@@ -448,8 +448,9 @@ use defaults::{
     handle_default as do_handle_default, mark_invoice_defaulted as do_mark_invoice_defaulted,
 };
 use escrow::{
-    accept_bid_and_fund as do_accept_bid_and_fund, refund_escrow_funds as do_refund_escrow_funds,
-    withdraw_investment as do_withdraw_investment,
+    accept_bid_and_fund as do_accept_bid_and_fund,
+    accept_bid_and_fund_with_key as do_accept_bid_and_fund_with_key,
+    refund_escrow_funds as do_refund_escrow_funds, withdraw_investment as do_withdraw_investment,
 };
 use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_dispute_created,
@@ -1657,6 +1658,39 @@ impl QuickLendXContract {
         reentrancy::with_payment_guard(&env, || do_accept_bid_and_fund(&env, &invoice_id, &bid_id))
     }
 
+    /// Accept a bid and fund the invoice, bound to a durable request key.
+    ///
+    /// # Idempotency contract
+    /// - A safe retry (same `request_key`, `invoice_id`, `bid_id`) returns the
+    ///   previously created escrow ID without moving funds again.
+    /// - Conflicting reuse of `request_key` with a different payload returns
+    ///   [`QuickLendXError::DuplicateBid`].
+    /// - Rejected or failed attempts never store a record, so corrected retries
+    ///   with the same key remain available and no partial state lingers.
+    ///
+    /// # Returns
+    /// * `Ok(BytesN<32>)` - The escrow ID (fresh funding or cached safe replay)
+    ///
+    /// # Errors
+    /// * Same as [`Self::accept_bid_and_fund`], plus `DuplicateBid` on
+    ///   conflicting reuse of `request_key`
+    /// * `OperationNotAllowed` if reentrancy is detected
+    /// * `ContractPaused` if the protocol is paused (checked first)
+    ///
+    /// Pause-gated: rejects with `ContractPaused` when the emergency circuit
+    /// breaker is engaged.
+    pub fn accept_bid_and_fund_with_key(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+        request_key: BytesN<32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        reentrancy::with_payment_guard(&env, || {
+            do_accept_bid_and_fund_with_key(&env, &invoice_id, &bid_id, &request_key)
+        })
+    }
+
     /// Verify an invoice (admin or automated process)
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
@@ -2652,6 +2686,24 @@ impl QuickLendXContract {
         );
 
         Ok(())
+    }
+
+    /// Accept a bid, bound to a durable request key.
+    ///
+    /// Delegates to [`Self::accept_bid_and_fund_with_key`] and discards the
+    /// escrow ID; the idempotency contract is identical: a safe retry returns
+    /// `Ok(())` without moving funds again, while conflicting reuse of
+    /// `request_key` returns [`QuickLendXError::DuplicateBid`].
+    pub fn accept_bid_with_key(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+        request_key: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        pause::PauseControl::require_not_paused(&env)?;
+        reentrancy::with_payment_guard(&env, || {
+            do_accept_bid_and_fund_with_key(&env, &invoice_id, &bid_id, &request_key).map(|_| ())
+        })
     }
 
     /// Add insurance coverage to an active investment (investor only).
