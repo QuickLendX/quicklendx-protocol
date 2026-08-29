@@ -92,6 +92,7 @@ pub mod operational_limits;
 pub mod pagination;
 pub mod panic_handler;
 pub mod pause;
+pub mod payment_token_policy;
 pub mod payments;
 pub mod profits;
 pub mod protocol_limits;
