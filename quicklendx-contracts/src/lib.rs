@@ -5766,5 +5766,4 @@ impl QuickLendXContract {
         diagnostics::get_protocol_diagnostics(&env)
     }
 }
-# [ c f g ( t e s t ) ]   m o d   t e s t _ a u t h o r i z a t i o n ;  
- 
+#[cfg(test)] mod test_authorization;
