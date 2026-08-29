@@ -156,7 +156,7 @@ pub(crate) fn reserve_evidence(
     creator: &Address,
     evidence: &String,
 ) -> Result<BytesN<32>, QuickLendXError> {
-    let digest = env.crypto().sha256(&evidence.to_bytes());
+    let digest = env.crypto().sha256(&evidence.to_bytes()).to_bytes();
     let key = DataKey::DisputeEvidence(digest.clone());
     if env.storage().persistent().has(&key) {
         return Err(QuickLendXError::InvalidDisputeEvidence);
