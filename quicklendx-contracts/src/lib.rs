@@ -435,6 +435,8 @@ mod test_store_invoices_batch;
 mod test_tier_boundary;
 #[cfg(test)]
 mod test_ratings_snapshot;
+#[cfg(test)]
+mod test_pagination_cursors;
 pub mod types;
 pub use types::*;
 pub mod upgrade;
@@ -4123,6 +4125,30 @@ impl QuickLendXContract {
         }
     }
 
+    /// Cursor-stable variant of `get_business_invoices_paged`
+    pub fn get_business_invoices_paged_cursored(
+        env: Env,
+        business: Address,
+        status_filter: Option<InvoiceStatus>,
+        offset: u32,
+        limit: u32,
+        cursor_generation: Option<u64>,
+    ) -> Result<InvoicePage, QuickLendXError> {
+        let current_generation = InvoiceStorage::get_business_generation(&env, &business);
+        if let Some(expected) = cursor_generation {
+            pagination::require_stable_cursor(expected, current_generation)?;
+        }
+
+        let page = Self::get_business_invoices_paged(env.clone(), business, status_filter, offset, limit);
+
+        Ok(InvoicePage {
+            items: page.items,
+            total_count: page.total_count,
+            has_more: page.has_more,
+            generation: current_generation,
+        })
+    }
+
     /// Get investments by investor with optional status filter and pagination
     /// Retrieves paginated investments for a specific investor with enhanced boundary checking.
     ///
@@ -4282,6 +4308,38 @@ impl QuickLendXContract {
             total_count,
             has_more,
         }
+    }
+
+    /// Cursor-stable variant of `get_available_invoices_paged`
+    pub fn get_available_invoices_paged_cursored(
+        env: Env,
+        min_amount: Option<i128>,
+        max_amount: Option<i128>,
+        category_filter: Option<InvoiceCategory>,
+        offset: u32,
+        limit: u32,
+        cursor_generation: Option<u64>,
+    ) -> Result<InvoicePage, QuickLendXError> {
+        let current_generation = InvoiceStorage::get_status_generation(&env, InvoiceStatus::Verified);
+        if let Some(expected) = cursor_generation {
+            pagination::require_stable_cursor(expected, current_generation)?;
+        }
+
+        let page = Self::get_available_invoices_paged(
+            env.clone(),
+            min_amount,
+            max_amount,
+            category_filter,
+            offset,
+            limit,
+        );
+
+        Ok(InvoicePage {
+            items: page.items,
+            total_count: page.total_count,
+            has_more: page.has_more,
+            generation: current_generation,
+        })
     }
 
     /// Get bid history for an invoice with pagination
