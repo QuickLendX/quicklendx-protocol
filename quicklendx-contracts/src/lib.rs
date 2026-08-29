@@ -235,6 +235,8 @@ mod test_investor_kyc;
 #[cfg(test)]
 mod test_payments;
 #[cfg(test)]
+mod test_payments_auth;
+#[cfg(test)]
 mod test_queries;
 #[cfg(test)]
 mod test_rating_override;

@@ -491,6 +491,17 @@ fn validate_and_prepare_escrow(
         return Err(QuickLendXError::InvoiceAlreadyFunded);
     }
 
+    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    if invoice.business != *business {
+        return Err(QuickLendXError::Unauthorized);
+    }
+
+    if invoice.currency != *currency {
+        return Err(QuickLendXError::InvalidCurrency);
+    }
+
     EscrowStorage::require_no_active_reserve_repair(env, currency)?;
     let next_held_reserve = EscrowStorage::held_reserve_after_increase(env, currency, amount)?;
 
@@ -622,7 +633,15 @@ pub fn create_escrow_record_only(
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the release can be safely retried.
 pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    if escrow.business != invoice.business {
+        return Err(QuickLendXError::Unauthorized);
+    }
 
     if escrow.status != EscrowStatus::Held {
         // Prevents repeated release (idempotency)
@@ -677,7 +696,17 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the refund can be safely retried.
 pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
+    let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    let invoice = InvoiceStorage::get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+    if let Some(ref inv_investor) = invoice.investor {
+        if escrow.investor != *inv_investor {
+            return Err(QuickLendXError::Unauthorized);
+        }
+    }
 
     if escrow.status != EscrowStatus::Held {
         return Err(QuickLendXError::InvalidStatus);
