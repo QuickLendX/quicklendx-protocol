@@ -641,43 +641,6 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     ensure_payable_status(&invoice)?;
     require_no_active_dispute(&invoice)?;
 
-    // -----------------------------------------------------------------------
-    // SECURITY: Dispute-active guard (defence-in-depth)
-    //
-    // Threat model: without this check a business can call settle_invoice()
-    // while a dispute is open.  Because disputes do NOT change
-    // invoice.status (the invoice stays Funded), ensure_payable_status()
-    // alone would allow the settlement to proceed.  This would:
-    //   1. Release escrowed funds to the investor before the admin has
-    //      ruled on the dispute.
-    //   2. Mark the invoice as Paid, permanently closing the refund pathway
-    //      that the investor relies on if the dispute resolves in their favour.
-    //   3. Reward a bad-faith business that opened a dispute to delay the
-    //      investor, then raced to settle and pocket the return.
-    //
-    // We block only the two open states (Disputed, UnderReview).  Once the
-    // admin has issued a resolution (Resolved) the dispute is concluded and
-    // the admin's outcome governs; settlement is intentionally re-enabled so
-    // a business-favourable resolution can complete normally.
-    //
-    // Distinct error code (DisputeActive = 2204) lets off-chain monitors and
-    // clients distinguish "wrong lifecycle state" from "unresolved dispute"
-    // without inspecting the full invoice record.
-    // -----------------------------------------------------------------------
-    if matches!(
-        invoice.dispute_status,
-        crate::types::DisputeStatus::Disputed | crate::types::DisputeStatus::UnderReview
-    ) {
-        return Err(QuickLendXError::DisputeActive);
-    }
-
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Settlement currency whitelist (defence-in-depth) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-    // Threat: if `invoice.currency` were corrupted in storage (or if a
-    // future refactor allowed a caller-supplied settlement currency), the
-    // per-invoice whitelist captured at creation time provides an independent
-    // check that the settlement currency is what the invoice intended.
-    require_settlement_currency_allowed(env, invoice_id, &invoice.currency)?;
-
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
     if invoice.total_paid < invoice.amount || invoice.total_paid < investment.amount {
@@ -811,14 +774,6 @@ fn ensure_payable_status(invoice: &Invoice) -> Result<(), QuickLendXError> {
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    Ok(())
-}
-
-pub fn require_matching_investment_snapshot(env: &Env, invoice_id: &BytesN<32>, snap: &crate::types::Investment) -> Result<(), QuickLendXError> {
-    let current = InvestmentStorage::get_investment_by_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-    if current != *snap {
-        return Err(QuickLendXError::StaleInvestmentSnapshot);
-    }
     Ok(())
 }
 

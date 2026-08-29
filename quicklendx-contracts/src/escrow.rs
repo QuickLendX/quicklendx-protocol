@@ -27,8 +27,7 @@ use crate::payments::{
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
 use crate::verification::{
-    require_business_active, require_business_not_pending, require_investor_not_frozen,
-    require_investor_not_pending,
+    require_business_active, require_business_not_pending, validate_investor_investment,
 };
 use soroban_sdk::{Address, BytesN, Env, Vec};
 
@@ -120,6 +119,9 @@ pub(crate) fn load_accept_bid_context(
     if bid.bid_amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
     }
+
+    // Re-verify investor KYC status and aggregate investment capacity before accepting bid.
+    validate_investor_investment(env, &bid.investor, 0)?;
 
     Ok(AcceptBidContext { invoice, bid })
 }
@@ -268,7 +270,29 @@ fn update_states_after_funding(
     };
     InvestmentStorage::store_investment(env, &investment);
 
-    Ok(())
+    crate::qlx_log!(env, "escrow", "Invoice funded and bid accepted");
+
+    // 7. Audit & Events
+    crate::events::emit_bid_accepted(env, &bid, invoice_id, &invoice.business);
+    crate::audit::log_bid_accepted(
+        env,
+        invoice_id.clone(),
+        bid.investor.clone(),
+        bid.bid_amount,
+    );
+    emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
+    crate::audit::log_invoice_funded(
+        env,
+        invoice_id.clone(),
+        bid.investor.clone(),
+        bid.bid_amount,
+    );
+
+    // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
+    // after escrow funding and state transitions complete successfully.
+    let _ = crate::notifications::NotificationSystem::notify_bid_accepted(env, &invoice, &bid);
+
+    Ok(escrow_id)
 }
 
 /// Explicitly refund escrowed funds to the investor.

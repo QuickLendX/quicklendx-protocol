@@ -588,28 +588,18 @@ pub fn create_escrow(
     Ok(escrow_id)
 }
 
-/// Create escrow record without transferring funds (funds must already be in the contract).
-///
-/// Use this when the investor's full bid amount has already been transferred to
-/// the contract (e.g., in flows that split a single transfer into fee + escrow).
-/// All the same validations as [`create_escrow`] are performed, but the token
-/// transfer step is skipped.
-///
-/// # Errors
-/// Same as [`create_escrow`] except token-transfer errors are not possible.
-pub fn create_escrow_record_only(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-    investor: &Address,
-    business: &Address,
-    amount: i128,
-    currency: &Address,
-) -> Result<BytesN<32>, QuickLendXError> {
-    let next_held_reserve = validate_and_prepare_escrow(env, invoice_id, investor, business, amount, currency)?;
-
-    crate::qlx_log!(env, "payment", "Creating escrow record (funds pre-transferred): amount={}", amount);
-
-    let escrow_id = write_escrow_record(env, invoice_id, investor, business, amount, currency, &next_held_reserve);
+    EscrowStorage::store_escrow(env, &escrow);
+    EscrowStorage::set_held_reserve_record(env, currency, &next_held_reserve);
+    EscrowStorage::mark_reserve_accounted(env, &escrow_id);
+    crate::qlx_log!(env, "payment", "Escrow created successfully");
+    emit_escrow_created(env, &escrow);
+    crate::audit::log_escrow_created(
+        env,
+        invoice_id.clone(),
+        investor.clone(),
+        amount,
+        escrow_id.clone(),
+    );
     Ok(escrow_id)
 }
 
@@ -676,6 +666,20 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
     }
     escrow.status = EscrowStatus::Released;
     EscrowStorage::update_escrow(env, &escrow);
+    crate::events::emit_escrow_released(
+        env,
+        &escrow.escrow_id,
+        invoice_id,
+        &escrow.business,
+        escrow.amount,
+    );
+    crate::audit::log_escrow_released(
+        env,
+        invoice_id.clone(),
+        escrow.business.clone(),
+        escrow.amount,
+        escrow.escrow_id.clone(),
+    );
     crate::qlx_log!(
         env,
         "payment",
@@ -740,6 +744,20 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
     }
     escrow.status = EscrowStatus::Refunded;
     EscrowStorage::update_escrow(env, &escrow);
+    crate::events::emit_escrow_refunded(
+        env,
+        &escrow.escrow_id,
+        invoice_id,
+        &escrow.investor,
+        escrow.amount,
+    );
+    crate::audit::log_escrow_refunded(
+        env,
+        invoice_id.clone(),
+        escrow.investor.clone(),
+        escrow.amount,
+        escrow.escrow_id.clone(),
+    );
     crate::qlx_log!(
         env,
         "payment",

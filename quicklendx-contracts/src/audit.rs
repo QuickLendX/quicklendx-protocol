@@ -72,6 +72,28 @@ pub enum AuditOperation {
     ConfigRevenueDistributionChanged,
     /// Admin manually overrode an invoice's computed average rating.
     RatingOverridden,
+    /// Admin subsystem initialized.
+    AdminInitialized,
+    /// Admin role transferred.
+    AdminTransferred,
+    /// Two-step admin transfer initiated.
+    AdminTransferInitiated,
+    /// Two-step admin transfer cancelled.
+    AdminTransferCancelled,
+    /// Two-step transfer mode updated.
+    AdminTwoStepUpdated,
+    /// Protocol contract paused.
+    ProtocolPaused,
+    /// Protocol contract unpaused.
+    ProtocolUnpaused,
+    /// Emergency withdrawal initiated.
+    EmergencyWithdrawalInitiated,
+    /// Emergency withdrawal executed.
+    EmergencyWithdrawalExecuted,
+    /// Emergency withdrawal cancelled.
+    EmergencyWithdrawalCancelled,
+    /// Pending treasury address rotation cancelled.
+    TreasuryRotationCancelled,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -104,6 +126,17 @@ pub enum OpType {
     ConfigFeeStructureChanged,
     ConfigRevenueDistributionChanged,
     RatingOverridden,
+    AdminInitialized,
+    AdminTransferred,
+    AdminTransferInitiated,
+    AdminTransferCancelled,
+    AdminTwoStepUpdated,
+    ProtocolPaused,
+    ProtocolUnpaused,
+    EmergencyWithdrawalInitiated,
+    EmergencyWithdrawalExecuted,
+    EmergencyWithdrawalCancelled,
+    TreasuryRotationCancelled,
 }
 
 impl OpType {
@@ -132,6 +165,17 @@ impl OpType {
             OpType::ConfigFeeStructureChanged => symbol_short!("cfg_fstr"),
             OpType::ConfigRevenueDistributionChanged => symbol_short!("cfg_rev"),
             OpType::RatingOverridden => symbol_short!("rt_over"),
+            OpType::AdminInitialized => symbol_short!("adm_init"),
+            OpType::AdminTransferred => symbol_short!("adm_trf"),
+            OpType::AdminTransferInitiated => symbol_short!("adm_req"),
+            OpType::AdminTransferCancelled => symbol_short!("adm_cnl"),
+            OpType::AdminTwoStepUpdated => symbol_short!("adm_2st"),
+            OpType::ProtocolPaused => symbol_short!("paused"),
+            OpType::ProtocolUnpaused => symbol_short!("unpaused"),
+            OpType::EmergencyWithdrawalInitiated => symbol_short!("emg_init"),
+            OpType::EmergencyWithdrawalExecuted => symbol_short!("emg_exec"),
+            OpType::EmergencyWithdrawalCancelled => symbol_short!("emg_cnl"),
+            OpType::TreasuryRotationCancelled => symbol_short!("tr_rot_cn"),
         }
     }
 
@@ -160,6 +204,17 @@ impl OpType {
             OpType::ConfigFeeStructureChanged => 19,
             OpType::ConfigRevenueDistributionChanged => 20,
             OpType::RatingOverridden => 21,
+            OpType::AdminInitialized => 22,
+            OpType::AdminTransferred => 23,
+            OpType::AdminTransferInitiated => 24,
+            OpType::AdminTransferCancelled => 25,
+            OpType::AdminTwoStepUpdated => 26,
+            OpType::ProtocolPaused => 27,
+            OpType::ProtocolUnpaused => 28,
+            OpType::EmergencyWithdrawalInitiated => 29,
+            OpType::EmergencyWithdrawalExecuted => 30,
+            OpType::EmergencyWithdrawalCancelled => 31,
+            OpType::TreasuryRotationCancelled => 32,
         }
     }
 }
@@ -191,6 +246,17 @@ impl From<AuditOperation> for OpType {
                 OpType::ConfigRevenueDistributionChanged
             }
             AuditOperation::RatingOverridden => OpType::RatingOverridden,
+            AuditOperation::AdminInitialized => OpType::AdminInitialized,
+            AuditOperation::AdminTransferred => OpType::AdminTransferred,
+            AuditOperation::AdminTransferInitiated => OpType::AdminTransferInitiated,
+            AuditOperation::AdminTransferCancelled => OpType::AdminTransferCancelled,
+            AuditOperation::AdminTwoStepUpdated => OpType::AdminTwoStepUpdated,
+            AuditOperation::ProtocolPaused => OpType::ProtocolPaused,
+            AuditOperation::ProtocolUnpaused => OpType::ProtocolUnpaused,
+            AuditOperation::EmergencyWithdrawalInitiated => OpType::EmergencyWithdrawalInitiated,
+            AuditOperation::EmergencyWithdrawalExecuted => OpType::EmergencyWithdrawalExecuted,
+            AuditOperation::EmergencyWithdrawalCancelled => OpType::EmergencyWithdrawalCancelled,
+            AuditOperation::TreasuryRotationCancelled => OpType::TreasuryRotationCancelled,
         }
     }
 }
@@ -445,6 +511,17 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::ConfigFeeStructureChanged => 19,
         AuditOperation::ConfigRevenueDistributionChanged => 20,
         AuditOperation::RatingOverridden => 21,
+        AuditOperation::AdminInitialized => 22,
+        AuditOperation::AdminTransferred => 23,
+        AuditOperation::AdminTransferInitiated => 24,
+        AuditOperation::AdminTransferCancelled => 25,
+        AuditOperation::AdminTwoStepUpdated => 26,
+        AuditOperation::ProtocolPaused => 27,
+        AuditOperation::ProtocolUnpaused => 28,
+        AuditOperation::EmergencyWithdrawalInitiated => 29,
+        AuditOperation::EmergencyWithdrawalExecuted => 30,
+        AuditOperation::EmergencyWithdrawalCancelled => 31,
+        AuditOperation::TreasuryRotationCancelled => 32,
     }
 }
 
@@ -1045,6 +1122,46 @@ pub fn log_escrow_created(
         actor,
         None,
         Some(String::from_str(env, "Escrow created")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log escrow released.
+pub fn log_escrow_released(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowReleased,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow released")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log escrow refunded.
+pub fn log_escrow_refunded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowRefunded,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow refunded")),
         Some(amount),
         None,
     );
