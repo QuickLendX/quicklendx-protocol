@@ -34,10 +34,10 @@ extern crate alloc;
 use crate::errors::QuickLendXError;
 use crate::invoice::{Invoice, InvoiceCategory, MAX_INVOICE_TAGS};
 use crate::verification::{validate_invoice_tags, MAX_INVOICE_TAG_COUNT};
-use crate::QuickLendXContract;
+use crate::{QuickLendXContract, QuickLendXContractClient};
 
 use alloc::format;
-use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 // ---------------------------------------------------------------------------
 // Shared helpers
@@ -380,4 +380,100 @@ fn validate_invoice_tags_accepts_empty_vector_below_max_invoice_tag_count() {
         let tags: Vec<String> = Vec::new(&env);
         assert!(validate_invoice_tags(&env, &tags).is_ok());
     });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 4. get_invoices_by_tags query boundary — resource/rate-limit regression
+//    (issue #2509)
+// ═══════════════════════════════════════════════════════════════════════════
+//
+// `InvoiceStorage::get_invoices_by_tags` (behind the public,
+// unauthenticated `QuickLendXContract::get_invoices_by_tags` entrypoint)
+// previously accepted an unbounded `tags: Vec<String>` and, for every tag
+// past the first, re-ran a full tag-index scan. Since no invoice can ever be
+// stored with more than `MAX_INVOICE_TAG_COUNT` tags (locked in above), a
+// query naming more tags than that can never match anything — it can only
+// force wasted, caller-controlled work. Any caller could pass an
+// arbitrarily long `tags` vector to multiply the cost of a single call with
+// no authorization required.
+//
+// These tests exercise the bound through the actual contract client (the
+// integration boundary real callers use), not the internal storage helper
+// directly, mirroring the below/at/over/far-over boundary pattern used for
+// `validate_invoice_tags` above.
+
+/// Unwraps a `try_get_invoices_by_tags` call down to the contract's own
+/// `Result`, panicking on any unexpected host/conversion-level error so
+/// test failures point at the real assertion instead of a decoding issue.
+fn get_invoices_by_tags_result(
+    client: &QuickLendXContractClient,
+    tags: &Vec<String>,
+) -> Result<Vec<BytesN<32>>, QuickLendXError> {
+    match client.try_get_invoices_by_tags(tags) {
+        Ok(Ok(ids)) => Ok(ids),
+        Err(Ok(err)) => Err(err),
+        other => panic!("unexpected host/conversion error: {:?}", other),
+    }
+}
+
+/// The query accepts a tag count strictly below the cap and returns an
+/// empty match set (no invoices exist yet) rather than erroring — proves
+/// the bound check does not reject legitimate, well-formed input.
+#[test]
+fn get_invoices_by_tags_query_accepts_tag_count_below_max_invoice_tag_count() {
+    let (env, contract_id) = fresh_env_with_contract();
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let tags = distinct_tags_vec(&env, MAX_INVOICE_TAG_COUNT.saturating_sub(1));
+
+    let result = get_invoices_by_tags_result(&client, &tags);
+    assert!(
+        result.is_ok(),
+        "expected Ok below cap, got {:?}",
+        result.unwrap_err()
+    );
+    assert!(result.unwrap().is_empty());
+}
+
+/// The query accepts exactly `MAX_INVOICE_TAG_COUNT` tags — the inclusive
+/// upper bound of legitimate input, since a real invoice may carry exactly
+/// that many tags.
+#[test]
+fn get_invoices_by_tags_query_accepts_tag_count_exactly_at_max_invoice_tag_count() {
+    let (env, contract_id) = fresh_env_with_contract();
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let tags = distinct_tags_vec(&env, MAX_INVOICE_TAG_COUNT);
+
+    let result = get_invoices_by_tags_result(&client, &tags);
+    assert!(
+        result.is_ok(),
+        "expected Ok at exact cap, got {:?}",
+        result.unwrap_err()
+    );
+}
+
+/// The query rejects `MAX_INVOICE_TAG_COUNT + 1` tags with the same stable
+/// `TagLimitExceeded` error already used for the write-side cap, giving
+/// callers one consistent, actionable error for "too many tags" everywhere
+/// in the contract's public API.
+#[test]
+fn get_invoices_by_tags_query_rejects_tag_count_one_over_max_invoice_tag_count() {
+    let (env, contract_id) = fresh_env_with_contract();
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let tags = distinct_tags_vec(&env, MAX_INVOICE_TAG_COUNT + 1);
+
+    let err = get_invoices_by_tags_result(&client, &tags).unwrap_err();
+    assert_eq!(err, QuickLendXError::TagLimitExceeded);
+}
+
+/// The query keeps rejecting far past the cap — an order of magnitude over
+/// — proving the check is a real bound and not a fragile off-by-one
+/// comparison that only happens to catch the first overflow.
+#[test]
+fn get_invoices_by_tags_query_rejects_tag_count_far_over_max_invoice_tag_count() {
+    let (env, contract_id) = fresh_env_with_contract();
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let tags = distinct_tags_vec(&env, MAX_INVOICE_TAG_COUNT * 10);
+
+    let err = get_invoices_by_tags_result(&client, &tags).unwrap_err();
+    assert_eq!(err, QuickLendXError::TagLimitExceeded);
 }

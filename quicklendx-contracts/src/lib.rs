@@ -3594,8 +3594,17 @@ impl QuickLendXContract {
         InvoiceStorage::get_invoices_by_tag(&env, &tag)
     }
 
-    /// Get invoices by multiple tags (AND logic)
-    pub fn get_invoices_by_tags(env: Env, tags: Vec<String>) -> Vec<BytesN<32>> {
+    /// Get invoices by multiple tags (AND logic).
+    ///
+    /// Returns `QuickLendXError::TagLimitExceeded` if `tags.len()` exceeds
+    /// `verification::MAX_INVOICE_TAG_COUNT` (10) — the same cap already
+    /// enforced when tags are attached to an invoice, so no query can ever
+    /// need more than that many to match anything. See
+    /// `InvoiceStorage::get_invoices_by_tags` for the resource-bound rationale.
+    pub fn get_invoices_by_tags(
+        env: Env,
+        tags: Vec<String>,
+    ) -> Result<Vec<BytesN<32>>, QuickLendXError> {
         InvoiceStorage::get_invoices_by_tags(&env, &tags)
     }
 
