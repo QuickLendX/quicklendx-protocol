@@ -159,6 +159,8 @@ mod test_cancel_invoice_matrix;
 mod test_cleanup_pagination;
 #[cfg(test)]
 mod test_config_bounds_matrix;
+#[cfg(test)]
+mod test_invoice_lifecycle_invariants;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -2149,6 +2151,37 @@ impl QuickLendXContract {
 
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
+
+        // Enforce the documented lifecycle at the public admin entry point.
+        //
+        // Legal transition matrix (QE-2026-08 / issue #2433):
+        //   Pending -> Verified  (verification)
+        //   Verified -> Funded   (funding; normally reached via accept_bid)
+        //   Funded  -> Paid      (settlement; normally reached via payment flows)
+        //
+        // All other requests are rejected with `InvalidStatus` BEFORE any state or
+        // status index is touched, so rejected, stale, repeated, and out-of-order
+        // operations leave no partial/unauthorized state:
+        //   * Backward transitions (e.g. Funded -> Verified) are illegal.
+        //   * Skipped transitions (e.g. Pending -> Paid, `settlement before funding`)
+        //     are illegal — they would otherwise misprice exposure.
+        //   * Repeated transitions (e.g. Verified -> Verified) are illegal.
+        //   * Terminal states (`InvoiceStatus::is_terminal`), including `Paid`, can
+        //     never be left — an invoice that has settled may not be re-opened.
+        //
+        // `Defaulted` is intentionally NOT part of this local matrix: every request
+        // for a default is routed through `do_mark_invoice_defaulted` above, which
+        // centrally enforces the richer default-finality checks (grace window,
+        // escrow state, duplicate-default guard) before mutating anything.
+        let allowed = matches!(
+            (invoice.status, new_status),
+            (InvoiceStatus::Pending, InvoiceStatus::Verified)
+                | (InvoiceStatus::Verified, InvoiceStatus::Funded)
+                | (InvoiceStatus::Funded, InvoiceStatus::Paid)
+        );
+        if !allowed {
+            return Err(QuickLendXError::InvalidStatus);
+        }
 
         // Remove from old status list
         InvoiceStorage::remove_from_status_invoices(&env, invoice.status, &invoice_id);
