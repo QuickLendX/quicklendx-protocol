@@ -714,7 +714,7 @@ fn test_investor_available_capacity_and_commitments() {
     setup_verified_investor_record(&env, &contract_id, &investor, limit);
 
     // Initial state: 0 exposure, full available capacity
-    let initial_exp = env.as_contract(&contract_id, || get_investor_exposure(&env, &investor));
+    let initial_exp = env.as_contract(&contract_id, || get_investor_exposure(&env, &investor).unwrap());
     assert_eq!(initial_exp, 0);
 
     let initial_cap = env.as_contract(&contract_id, || {
@@ -751,7 +751,7 @@ fn test_investor_available_capacity_and_commitments() {
         BidStorage::store_bid(&env, &bid);
     });
 
-    let exp_after_bid = env.as_contract(&contract_id, || get_investor_exposure(&env, &investor));
+    let exp_after_bid = env.as_contract(&contract_id, || get_investor_exposure(&env, &investor).unwrap());
     assert_eq!(exp_after_bid, 15_000);
 
     let cap_after_bid = env.as_contract(&contract_id, || {
@@ -774,7 +774,7 @@ fn test_investor_available_capacity_and_commitments() {
         InvestmentStorage::store_investment(&env, &investment);
     });
 
-    let exp_after_inv = env.as_contract(&contract_id, || get_investor_exposure(&env, &investor));
+    let exp_after_inv = env.as_contract(&contract_id, || get_investor_exposure(&env, &investor).unwrap());
     assert_eq!(exp_after_inv, 35_000);
 
     let cap_after_inv = env.as_contract(&contract_id, || {
@@ -790,7 +790,7 @@ fn test_investor_available_capacity_and_commitments() {
     });
 
     let exp_after_complete =
-        env.as_contract(&contract_id, || get_investor_exposure(&env, &investor));
+        env.as_contract(&contract_id, || get_investor_exposure(&env, &investor).unwrap());
     assert_eq!(exp_after_complete, 15_000);
 
     let cap_after_complete = env.as_contract(&contract_id, || {
