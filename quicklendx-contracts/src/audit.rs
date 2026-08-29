@@ -275,6 +275,14 @@ pub const AUDIT_CHAIN_GENESIS: [u8; 32] = [0u8; 32];
 /// between the per-invoice genesis sentinel and the config trail key.
 pub const CONFIG_AUDIT_SENTINEL: [u8; 32] = [0xCFu8; 32];
 
+/// Fixed sentinel `invoice_id` for all KYC-related audit entries.
+///
+/// KYC operations (submit, verify, reject, revoke, freeze, unfreeze) are not
+/// scoped to any invoice. They share this virtual trail so every KYC audit
+/// entry chains with the same hash-link ordering guarantee as invoice-local
+/// and config-change trails.
+pub const KYC_AUDIT_SENTINEL: [u8; 32] = [0x4Bu8; 32]; // 'K' for KYC
+
 /// Audit log entry structure
 ///
 /// **IMMUTABLE**: Once created, this entry is never modified or overwritten.
@@ -1286,5 +1294,36 @@ pub(crate) fn log_config_change(
         new_value,
         None,
         Some(String::from_str(env, param)),
+    );
+}
+
+/// Append a KYC-related audit entry to the shared `KYC_AUDIT_SENTINEL` trail.
+///
+/// Every KYC state transition (submit, verify, reject, revoke, freeze, unfreeze)
+/// calls this function so the append-only audit log captures the full
+/// participant-identity lifecycle on the same hash-chain infrastructure used
+/// for invoice and config trails.
+///
+/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
+/// guarantee the preceding storage write and this audit append both commit or
+/// both roll back — there is no partial-success scenario.
+pub(crate) fn log_kyc_operation(
+    env: &Env,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    additional_data: Option<String>,
+) {
+    let sentinel = BytesN::from_array(env, &KYC_AUDIT_SENTINEL);
+    log_operation(
+        env,
+        sentinel,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        None,
+        additional_data,
     );
 }

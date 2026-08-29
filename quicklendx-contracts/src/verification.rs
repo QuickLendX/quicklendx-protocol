@@ -920,12 +920,30 @@ pub fn submit_kyc_application(
 
     BusinessVerificationStorage::update_verification(env, &verification)?;
 
-    // Emit appropriate event based on whether this is a resubmission
-    if matches!(old_status, Some(BusinessVerificationStatus::Rejected)) {
-        emit_kyc_resubmitted(env, business);
-    } else {
-        emit_kyc_submitted(env, business);
-    }
+    // Emit structured event and audit log entry
+    let is_resubmit = matches!(old_status, Some(BusinessVerificationStatus::Rejected));
+    crate::events::emit_kyc_submitted(env, business, is_resubmit);
+    let old_status_str = match &old_status {
+        Some(BusinessVerificationStatus::Pending) => Some(String::from_str(env, "Pending")),
+        Some(BusinessVerificationStatus::Verified) => Some(String::from_str(env, "Verified")),
+        Some(BusinessVerificationStatus::Rejected) => Some(String::from_str(env, "Rejected")),
+        None => None,
+    };
+    crate::audit::log_kyc_operation(
+        env,
+        crate::audit::AuditOperation::KycSubmitted,
+        business.clone(),
+        old_status_str,
+        Some(String::from_str(env, "Pending")),
+        Some(String::from_str(
+            env,
+            if is_resubmit {
+                "resubmission"
+            } else {
+                "new_submission"
+            },
+        )),
+    );
 
     Ok(())
 }
@@ -957,7 +975,15 @@ pub fn verify_business(
     verification.rejection_reason = None;
 
     BusinessVerificationStorage::update_verification(env, &verification)?;
-    emit_business_verified(env, business, admin);
+    crate::events::emit_kyc_verified(env, business, admin);
+    crate::audit::log_kyc_operation(
+        env,
+        crate::audit::AuditOperation::KycVerified,
+        admin.clone(),
+        Some(String::from_str(env, "Pending")),
+        Some(String::from_str(env, "Verified")),
+        Some(String::from_str(env, "business")),
+    );
     Ok(())
 }
 
@@ -994,7 +1020,15 @@ pub fn reject_business(
     verification.rejection_reason = Some(reason.clone());
 
     BusinessVerificationStorage::update_verification(env, &verification)?;
-    emit_business_rejected(env, business, admin, &reason);
+    crate::events::emit_kyc_rejected(env, business, admin, &reason);
+    crate::audit::log_kyc_operation(
+        env,
+        crate::audit::AuditOperation::KycRejected,
+        admin.clone(),
+        Some(String::from_str(env, "Pending")),
+        Some(String::from_str(env, "Rejected")),
+        Some(reason),
+    );
     Ok(())
 }
 
@@ -1147,55 +1181,7 @@ pub fn verify_invoice_data(
 }
 
 // Enhanced event emission functions for comprehensive audit trail
-fn emit_kyc_submitted(env: &Env, business: &Address) {
-    #[allow(deprecated)]
-    env.events().publish(
-        (symbol_short!("kyc_sub"),),
-        (
-            business.clone(),
-            env.ledger().timestamp(),
-            String::from_str(env, "submitted"),
-        ),
-    );
-}
-
-fn emit_business_verified(env: &Env, business: &Address, admin: &Address) {
-    #[allow(deprecated)]
-    env.events().publish(
-        (symbol_short!("bus_ver"),),
-        (
-            business.clone(),
-            admin.clone(),
-            env.ledger().timestamp(),
-            String::from_str(env, "verified"),
-        ),
-    );
-}
-
-fn emit_business_rejected(env: &Env, business: &Address, admin: &Address, reason: &String) {
-    #[allow(deprecated)]
-    env.events().publish(
-        (symbol_short!("bus_rej"),),
-        (
-            business.clone(),
-            admin.clone(),
-            env.ledger().timestamp(),
-            reason.clone(),
-        ),
-    );
-}
-
-fn emit_kyc_resubmitted(env: &Env, business: &Address) {
-    #[allow(deprecated)]
-    env.events().publish(
-        (symbol_short!("kyc_resub"),),
-        (
-            business.clone(),
-            env.ledger().timestamp(),
-            String::from_str(env, "resubmitted"),
-        ),
-    );
-}
+// (All KYC events are now emitted via crate::events::* for schema stability)
 
 /// Validate invoice category
 pub fn validate_invoice_category(
@@ -1297,7 +1283,28 @@ pub fn submit_investor_kyc(
     kyc_data: String,
 ) -> Result<(), QuickLendXError> {
     investor.require_auth();
-    InvestorVerificationStorage::submit(env, investor, kyc_data)
+    // Determine if this is a resubmission before the state changes
+    let is_resubmit = InvestorVerificationStorage::get(env, investor)
+        .map(|v| matches!(v.status, BusinessVerificationStatus::Rejected))
+        .unwrap_or(false);
+    InvestorVerificationStorage::submit(env, investor, kyc_data)?;
+    crate::events::emit_kyc_submitted(env, investor, is_resubmit);
+    crate::audit::log_kyc_operation(
+        env,
+        crate::audit::AuditOperation::KycSubmitted,
+        investor.clone(),
+        None,
+        Some(String::from_str(env, "Pending")),
+        Some(String::from_str(
+            env,
+            if is_resubmit {
+                "resubmission"
+            } else {
+                "new_submission"
+            },
+        )),
+    );
+    Ok(())
 }
 
 pub fn verify_investor(
@@ -1340,6 +1347,14 @@ pub fn verify_investor(
             verification.compliance_notes = Some(String::from_str(env, "Verified by admin"));
 
             InvestorVerificationStorage::update(env, &verification);
+            crate::audit::log_kyc_operation(
+                env,
+                crate::audit::AuditOperation::KycVerified,
+                admin.clone(),
+                Some(String::from_str(env, "Pending")),
+                Some(String::from_str(env, "Verified")),
+                Some(String::from_str(env, "investor")),
+            );
             Ok(verification)
         }
     }
@@ -1372,10 +1387,19 @@ pub fn reject_investor(
     verification.status = BusinessVerificationStatus::Rejected;
     verification.verified_at = Some(env.ledger().timestamp());
     verification.verified_by = Some(admin.clone());
-    verification.rejection_reason = Some(reason);
+    verification.rejection_reason = Some(reason.clone());
     verification.compliance_notes = Some(String::from_str(env, "Rejected by admin"));
 
     InvestorVerificationStorage::update(env, &verification);
+    crate::events::emit_kyc_rejected(env, investor, admin, &reason);
+    crate::audit::log_kyc_operation(
+        env,
+        crate::audit::AuditOperation::KycRejected,
+        admin.clone(),
+        Some(String::from_str(env, "Pending")),
+        Some(String::from_str(env, "Rejected")),
+        Some(reason),
+    );
     Ok(())
 }
 
@@ -1428,21 +1452,16 @@ pub fn revoke_investor_kyc(
     verification.compliance_notes = Some(String::from_str(env, "KYC revoked by admin"));
 
     InvestorVerificationStorage::update(env, &verification);
-    emit_investor_kyc_revoked(env, investor, admin, &reason);
-    Ok(())
-}
-
-fn emit_investor_kyc_revoked(env: &Env, investor: &Address, admin: &Address, reason: &String) {
-    #[allow(deprecated)]
-    env.events().publish(
-        (symbol_short!("kyc_revk"),),
-        (
-            investor.clone(),
-            admin.clone(),
-            env.ledger().timestamp(),
-            reason.clone(),
-        ),
+    crate::events::emit_kyc_revoked(env, investor, admin, &reason);
+    crate::audit::log_kyc_operation(
+        env,
+        crate::audit::AuditOperation::KycRevoked,
+        admin.clone(),
+        Some(String::from_str(env, "Verified")),
+        Some(String::from_str(env, "Rejected")),
+        Some(reason),
     );
+    Ok(())
 }
 
 pub fn get_investor_verification(env: &Env, investor: &Address) -> Option<InvestorVerification> {
