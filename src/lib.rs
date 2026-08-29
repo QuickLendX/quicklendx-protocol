@@ -15,6 +15,7 @@ pub mod verification;
 pub mod payments;
 pub mod invariants;
 pub mod types;
+pub mod kyc_policy;
 
 // Hardcoded constant to break the circular dependency
 pub(crate) const MAX_QUERY_LIMIT: u32 = 100; 
