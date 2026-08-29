@@ -262,6 +262,13 @@ pub enum QuickLendXError {
     InvalidTransactionHash = 2217,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     BatchSizeExceeded = 2218,
+    /// A bid was rejected because it is stale: the bid has been cancelled,
+    /// expired, or otherwise transitioned out of `Placed` status between
+    /// when the caller read it and when the operation was submitted.
+    /// Client retry contract: re-read bid state, select a new best bid
+    /// if needed, and resubmit.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    BidStale = 2219,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -384,7 +391,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::BidBelowTierMinimum => symbol_short!("TIER_BID"),
             QuickLendXError::InvalidTransactionHash => symbol_short!("TX_HASH"),
             QuickLendXError::BatchSizeExceeded => symbol_short!("BATCH_SZ"),
+            QuickLendXError::BidStale => symbol_short!("BID_STL"),
         }
     }
 }
-

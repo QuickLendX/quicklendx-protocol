@@ -254,7 +254,7 @@ fn test_cancel_then_accept_same_bid_rejects_accept_and_leaves_no_partial_state()
     );
 
     assert!(
-        fixture.client.cancel_bid(&fixture.bid_id),
+        fixture.client.cancel_bid(&fixture.bid_id).is_ok(),
         "first cancel must transition Placed -> Cancelled"
     );
 
@@ -301,10 +301,9 @@ fn test_cancel_then_accept_same_bid_rejects_accept_and_leaves_no_partial_state()
 }
 
 /// Race ordering: the business acceptance is ordered before the investor
-/// cancellation. `cancel_bid` currently exposes non-`Placed` rejection as a
-/// deterministic `false` return rather than a `QuickLendXError`; this documents
-/// that API gap while still asserting the second transition cannot mutate
-/// funded invoice, escrow, or investment state.
+/// cancellation. `cancel_bid` rejects non-`Placed` bids with
+/// `Err(QuickLendXError::BidStale)`; this asserts the second transition cannot
+/// mutate funded invoice, escrow, or investment state.
 #[test]
 fn test_accept_then_cancel_same_bid_rejects_cancel_and_preserves_funded_state() {
     let fixture = build_cancel_accept_fixture();
@@ -317,9 +316,10 @@ fn test_accept_then_cancel_same_bid_rejects_cancel_and_preserves_funded_state() 
         "first accept must succeed before any cancellation; got {accept:?}"
     );
 
-    assert!(
-        !fixture.client.cancel_bid(&fixture.bid_id),
-        "cancel_bid must return false once the bid is Accepted"
+    assert_eq!(
+        fixture.client.cancel_bid(&fixture.bid_id),
+        Err(QuickLendXError::BidStale),
+        "cancel_bid must return Err(BidStale) once the bid is Accepted"
     );
 
     assert_funded_state(

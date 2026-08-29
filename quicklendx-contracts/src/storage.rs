@@ -382,16 +382,38 @@ impl InvoiceStorage {
         }
 
         if removed > 0 {
-            let key = match index {
-                InvoiceIndex::Business(business) => Indexes::invoices_by_business(business),
-                InvoiceIndex::Status(status) => Indexes::invoices_by_status(*status),
-                InvoiceIndex::Customer(name) => Indexes::invoices_by_customer(name),
-                InvoiceIndex::TaxId(tax_id) => Indexes::invoices_by_tax_id(tax_id),
-                InvoiceIndex::Tag(tag) => Indexes::invoices_by_tag(tag),
-                InvoiceIndex::Category(category) => Indexes::invoices_by_category(*category),
+            match index {
+                InvoiceIndex::Business(business) => {
+                    let key = Indexes::invoices_by_business(business);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::Status(status) => {
+                    let key = Indexes::invoices_by_status(*status);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::Customer(name) => {
+                    let key = Indexes::invoices_by_customer(name);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::TaxId(tax_id) => {
+                    let key = Indexes::invoices_by_tax_id(tax_id);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::Tag(tag) => {
+                    let key = Indexes::invoices_by_tag(tag);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::Category(category) => {
+                    let key = Indexes::invoices_by_category(*category);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
             };
-            env.storage().persistent().set(&key, &entries);
-            extend_persistent_ttl(env, &key);
         }
 
         crate::types::IndexCleanupReport {

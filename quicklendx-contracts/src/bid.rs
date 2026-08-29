@@ -451,7 +451,9 @@ impl BidStorage {
         }
 
         let old_seconds = Self::get_bid_expiry_grace_seconds(env);
-        env.storage().instance().set(&BID_EXPIRY_GRACE_KEY, &seconds);
+        env.storage()
+            .instance()
+            .set(&BID_EXPIRY_GRACE_KEY, &seconds);
         emit_bid_expiry_grace_updated(env, old_seconds, seconds, admin);
         Ok(seconds)
     }
@@ -976,8 +978,7 @@ impl BidStorage {
         let mut idx: u32 = 0;
         while idx < records.len() {
             let bid = records.get(idx).unwrap();
-            let eligible = status != BidStatus::Placed
-                || !bid.is_expired(env.ledger().timestamp());
+            let eligible = status != BidStatus::Placed || !bid.is_expired(env.ledger().timestamp());
             if bid.status == status && eligible {
                 filtered.push_back(bid);
             }
@@ -1128,20 +1129,25 @@ impl BidStorage {
     }
 
     /// Cancel a placed bid by bid_id. Only transitions Placed -> Cancelled.
-    /// Returns false if bid not found or already not Placed.
-    pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> bool {
-        if let Some(mut bid) = Self::get_bid(env, bid_id) {
-            // SECURITY FIX: User must authorize their own bid cancellation
-            bid.investor.require_auth();
+    ///
+    /// # Errors
+    /// - `StorageKeyNotFound` if the bid does not exist.
+    /// - `BidStale` if the bid is not in `Placed` status (already cancelled,
+    ///   accepted, expired, or withdrawn).
+    /// - Host-level auth panic if the caller is not `bid.investor`.
+    pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+        let mut bid = Self::get_bid(env, bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        // SECURITY FIX: User must authorize their own bid cancellation
+        bid.investor.require_auth();
 
-            if bid.status == BidStatus::Placed {
-                bid.status = BidStatus::Cancelled;
-                Self::update_bid(env, &bid);
-                crate::events::emit_bid_cancelled(env, &bid);
-                return true;
-            }
+        if bid.status != BidStatus::Placed {
+            return Err(QuickLendXError::BidStale);
         }
-        false
+
+        bid.status = BidStatus::Cancelled;
+        Self::update_bid(env, &bid);
+        crate::events::emit_bid_cancelled(env, &bid);
+        Ok(())
     }
 
     /// Return all bids placed by an investor across all invoices, with their full Bid records.
@@ -1342,7 +1348,11 @@ impl BidStorage {
 /// | bid has expired | `InvalidStatus` |
 /// | bid amount ≤ 0 | `InvalidAmount` |
 /// | bid amount > invoice amount | `InvalidAmount` |
-pub fn verify_bid_match(env: &Env, bid: &Bid, invoice: &crate::types::Invoice) -> Result<(), QuickLendXError> {
+pub fn verify_bid_match(
+    env: &Env,
+    bid: &Bid,
+    invoice: &crate::types::Invoice,
+) -> Result<(), QuickLendXError> {
     if bid.invoice_id != invoice.id {
         return Err(QuickLendXError::Unauthorized);
     }
@@ -1352,7 +1362,7 @@ pub fn verify_bid_match(env: &Env, bid: &Bid, invoice: &crate::types::Invoice) -
     }
 
     if bid.is_expired(env.ledger().timestamp()) {
-        return Err(QuickLendXError::InvalidStatus);
+        return Err(QuickLendXError::BidStale);
     }
 
     if bid.bid_amount <= 0 {

@@ -9,6 +9,7 @@
 //! - Edge cases and error handling
 
 use super::*;
+use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::payments::EscrowStatus;
 use soroban_sdk::{
@@ -807,7 +808,7 @@ fn test_complete_lifecycle_with_refund() {
 // RACE CONDITION TESTS - bid cancellation and withdrawal
 // ============================================================================
 
-/// cancel_bid on a Withdrawn bid returns false (terminal state is immutable).
+/// cancel_bid on a Withdrawn bid returns Err(BidStale) (terminal state is immutable).
 #[test]
 fn test_cancel_bid_after_withdraw_is_noop() {
     let (env, client, admin) = setup_env();
@@ -836,8 +837,11 @@ fn test_cancel_bid_after_withdraw_is_noop() {
     );
 
     // Concurrent cancel must be a no-op
-    let result = client.cancel_bid(&bid_id);
-    assert!(!result, "cancel after withdraw must return false");
+    assert_eq!(
+        client.cancel_bid(&bid_id),
+        Err(QuickLendXError::BidStale),
+        "cancel after withdraw must return Err(BidStale)"
+    );
     assert_eq!(
         client.get_bid(&bid_id).unwrap().status,
         crate::bid::BidStatus::Withdrawn,
@@ -883,7 +887,7 @@ fn test_withdraw_bid_after_cancel_fails() {
     );
 }
 
-/// Double cancel returns false on the second call - idempotent terminal state.
+/// Double cancel returns Err(BidStale) on the second call - idempotent terminal state.
 #[test]
 fn test_double_cancel_second_is_noop() {
     let (env, client, admin) = setup_env();
@@ -904,10 +908,11 @@ fn test_double_cancel_second_is_noop() {
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
 
-    assert!(client.cancel_bid(&bid_id), "first cancel must succeed");
-    assert!(
-        !client.cancel_bid(&bid_id),
-        "second cancel must return false"
+    assert!(client.cancel_bid(&bid_id).is_ok(), "first cancel must succeed");
+    assert_eq!(
+        client.cancel_bid(&bid_id),
+        Err(QuickLendXError::BidStale),
+        "second cancel must return Err(BidStale)"
     );
     assert_eq!(
         client.get_bid(&bid_id).unwrap().status,
@@ -945,7 +950,7 @@ fn test_double_withdraw_second_fails() {
     );
 }
 
-/// cancel_bid on an Accepted bid returns false - accepted is a terminal state.
+/// cancel_bid on an Accepted bid returns Err(BidStale) - accepted is a terminal state.
 #[test]
 fn test_cancel_bid_after_accept_is_noop() {
     let (env, client, admin) = setup_env();
@@ -969,8 +974,11 @@ fn test_cancel_bid_after_accept_is_noop() {
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
-    let result = client.cancel_bid(&bid_id);
-    assert!(!result, "cancel after accept must return false");
+    assert_eq!(
+        client.cancel_bid(&bid_id),
+        Err(QuickLendXError::BidStale),
+        "cancel after accept must return Err(BidStale)"
+    );
     assert_eq!(
         client.get_bid(&bid_id).unwrap().status,
         crate::bid::BidStatus::Accepted,
@@ -1011,7 +1019,7 @@ fn test_withdraw_bid_after_accept_fails() {
     );
 }
 
-/// cancel_bid on an Expired bid returns false - expired is a terminal state.
+/// cancel_bid on an Expired bid returns Err(BidStale) - expired is a terminal state.
 #[test]
 fn test_cancel_bid_after_expiry_is_noop() {
     let (env, client, admin) = setup_env();
@@ -1041,8 +1049,11 @@ fn test_cancel_bid_after_expiry_is_noop() {
         client.get_bid(&bid_id).unwrap().status,
         crate::bid::BidStatus::Expired
     );
-    let result = client.cancel_bid(&bid_id);
-    assert!(!result, "cancel after expiry must return false");
+    assert_eq!(
+        client.cancel_bid(&bid_id),
+        Err(QuickLendXError::BidStale),
+        "cancel after expiry must return Err(BidStale)"
+    );
     assert_eq!(
         client.get_bid(&bid_id).unwrap().status,
         crate::bid::BidStatus::Expired,

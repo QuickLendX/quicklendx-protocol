@@ -114,7 +114,7 @@ pub(crate) fn load_accept_bid_context(
     require_investor_not_pending(env, &bid.investor)?;
 
     if bid.is_expired(env.ledger().timestamp()) {
-        return Err(QuickLendXError::InvalidStatus);
+        return Err(QuickLendXError::BidStale);
     }
 
     if bid.bid_amount <= 0 {
