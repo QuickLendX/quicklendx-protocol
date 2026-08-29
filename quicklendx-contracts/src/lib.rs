@@ -4997,6 +4997,11 @@ impl QuickLendXContract {
         audit::AuditStorage::get_audit_entry(&env, &audit_id)
     }
 
+    /// Return the current observability schema version.
+    pub fn get_observability_schema_version(_env: Env) -> u32 {
+        observability::OBSERVABILITY_SCHEMA_VERSION
+    }
+
     /// Get all audit entry IDs for a given operation type.
     pub fn get_audit_entries_by_operation(
         env: Env,
