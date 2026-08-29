@@ -2,3 +2,6 @@
 *.sh text eol=lf
 .github/**/*.yml text eol=lf
 .github/**/*.yaml text eol=lf
+quicklendx-contracts/src/lib.rs text working-tree-encoding=UTF-16LE text=auto
+quicklendx-contracts/src/lib.rs text working-tree-encoding=UTF-16LE text=auto
+quicklendx-contracts/src/lib.rs filter=utf16
