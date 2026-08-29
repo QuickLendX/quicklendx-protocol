@@ -2796,7 +2796,9 @@ impl QuickLendXContract {
         let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
 
         let result = reentrancy::with_payment_guard(&env, || {
-            do_settle_invoice(&env, &invoice_id, payment_amount, &snap)
+            let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+            do_settle_invoice(&env, &invoice_id, payment_amount, &snap, &invoice.business)
         });
 
         if result.is_ok() {
@@ -3585,7 +3587,8 @@ impl QuickLendXContract {
 
             let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
                 .ok_or(QuickLendXError::StorageKeyNotFound)?;
-            release_escrow(&env, &invoice_id)?;
+            escrow.business.require_auth();
+            release_escrow(&env, &invoice_id, &escrow.business)?;
             emit_escrow_released(
                 &env,
                 &escrow.escrow_id,
@@ -3604,15 +3607,14 @@ impl QuickLendXContract {
             let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
                 .ok_or(QuickLendXError::InvoiceNotFound)?;
 
-            // Strictly enforce that escrow can only be released for Funded invoices.
-            // This prevents premature release even if an escrow object exists (e.g. from tests).
             if invoice.status != InvoiceStatus::Funded {
                 return Err(QuickLendXError::InvalidStatus);
             }
 
             let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
 
-            release_escrow(&env, &invoice_id)?;
+            escrow.business.require_auth();
+            release_escrow(&env, &invoice_id, &escrow.business)?;
 
             emit_escrow_released(
                 &env,

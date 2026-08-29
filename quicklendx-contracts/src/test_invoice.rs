@@ -47,6 +47,8 @@ fn create_test_invoice(
         &InvoiceCategory::Services,
         &Vec::new(env),
         &None,
+        &None,
+        &None,
     )
 }
 
@@ -160,6 +162,9 @@ fn test_invoice_cancel_authorization() {
                 description,
                 category,
                 tags,
+                None,
+                None,
+                None,
             )
         })
         .expect("Invoice creation should succeed");
@@ -213,6 +218,9 @@ fn test_invoice_cancel_no_state_preconditions() {
                     description.clone(),
                     category,
                     tags.clone(),
+                    None,
+                    None,
+                    None,
                 )
             })
             .expect("Invoice creation should succeed");

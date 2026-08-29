@@ -430,7 +430,7 @@ pub fn refund_escrow_funds(
 
     // 5. Transfer funds and update escrow state
     // This calls payments::refund_escrow which handles the token transfer and status update
-    refund_escrow(env, invoice_id)?;
+    refund_escrow(env, invoice_id, caller)?;
 
     // 6. Update internal states
 
@@ -548,7 +548,7 @@ pub fn withdraw_investment(
     }
 
     // 5. Refund escrowed funds to the investor (token transfer + escrow status → Refunded)
-    refund_escrow(env, invoice_id)?;
+    refund_escrow(env, invoice_id, investor)?;
 
     // 6. Restore invoice to Verified state and clear funded fields
     let previous_status = invoice.status;

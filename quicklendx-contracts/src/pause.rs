@@ -60,7 +60,7 @@ impl PauseControl {
         if current == paused {
             return Ok(());
         }
-        Self::apply_paused(env, paused);
+        Self::apply_paused(env, paused, None);
         log_config_change(
             env,
             if paused {

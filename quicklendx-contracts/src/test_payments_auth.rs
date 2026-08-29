@@ -98,7 +98,7 @@ fn test_release_escrow_cross_tenant_rejected() {
         crate::payments::EscrowStorage::store_escrow(&env, &escrow);
 
         // Releasing should fail because escrow.business != invoice.business
-        let result = release_escrow(&env, &invoice_id);
+        let result = release_escrow(&env, &invoice_id, &forged_business);
         assert_eq!(result, Err(QuickLendXError::Unauthorized));
     });
 }
@@ -130,7 +130,7 @@ fn test_refund_escrow_cross_tenant_rejected() {
         crate::payments::EscrowStorage::store_escrow(&env, &escrow);
 
         // Refunding should fail because escrow.investor != invoice.investor
-        let result = refund_escrow(&env, &invoice_id);
+        let result = refund_escrow(&env, &invoice_id, &forged_investor);
         assert_eq!(result, Err(QuickLendXError::Unauthorized));
     });
 }
@@ -142,10 +142,10 @@ fn test_release_and_refund_escrow_missing_state_handled() {
 
     env.as_contract(&contract_id, || {
         // Missing escrow gracefully errors out rather than panic/unwrap
-        let result_release = release_escrow(&env, &invoice_id);
+        let result_release = release_escrow(&env, &invoice_id, &business);
         assert_eq!(result_release, Err(QuickLendXError::StorageKeyNotFound));
 
-        let result_refund = refund_escrow(&env, &invoice_id);
+        let result_refund = refund_escrow(&env, &invoice_id, &actual_investor);
         assert_eq!(result_refund, Err(QuickLendXError::StorageKeyNotFound));
     });
 }

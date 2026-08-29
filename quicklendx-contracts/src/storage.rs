@@ -8,7 +8,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 use crate::errors::QuickLendXError;
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus, PlatformFeeConfig,
+    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvestorFreezeInfo, InvoiceStatus, PlatformFeeConfig,
     PruneReport, RebuildReport,
 };
 
