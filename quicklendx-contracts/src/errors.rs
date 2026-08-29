@@ -267,6 +267,17 @@ pub enum QuickLendXError {
     /// if needed, and resubmit.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     BidStale = 2219,
+    /// Per-address mutation rate limit exceeded within the current rate-limit
+    /// window.  The caller exceeded the maximum number of state-mutating
+    /// transactions allowed per address per window.  Retry after the window
+    /// resets (next `RATE_LIMIT_WINDOW_SEQUENCES` ledger sequences).
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    MutationLimitExceeded = 2220,
+    /// An input field exceeds the hard size ceiling for the given resource.
+    /// This is an early-exit guard placed *before* expensive parsing, hashing,
+    /// or storage writes so that an oversized payload is rejected cheaply.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InputTooLarge = 2221,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -386,6 +397,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidTransactionHash => symbol_short!("TX_HASH"),
             QuickLendXError::BatchSizeExceeded => symbol_short!("BATCH_SZ"),
             QuickLendXError::BidStale => symbol_short!("BID_STL"),
+            QuickLendXError::MutationLimitExceeded => symbol_short!("MUT_LIM"),
+            QuickLendXError::InputTooLarge => symbol_short!("IN_TOO_L"),
         }
     }
 }
