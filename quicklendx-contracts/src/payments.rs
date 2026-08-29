@@ -232,6 +232,22 @@ pub enum EscrowStatus {
     Refunded, // Funds refunded to investor
 }
 
+impl EscrowStatus {
+    /// Validates whether the state can legally transition to `next`.
+    /// 
+    /// Enforces the legal transition matrix for escrow lifecycle:
+    /// - `Held` -> `Released`
+    /// - `Held` -> `Refunded`
+    /// All other transitions (including repeated terminal states) are rejected.
+    pub fn verify_transition(&self, next: &EscrowStatus) -> Result<(), QuickLendXError> {
+        match (self, next) {
+            (EscrowStatus::Held, EscrowStatus::Released) => Ok(()),
+            (EscrowStatus::Held, EscrowStatus::Refunded) => Ok(()),
+            _ => Err(QuickLendXError::InvalidStatus),
+        }
+    }
+}
+
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
@@ -794,10 +810,8 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
         return Err(QuickLendXError::Unauthorized);
     }
 
-    if escrow.status != EscrowStatus::Held {
-        // Prevents repeated release (idempotency)
-        return Err(QuickLendXError::InvalidStatus);
-    }
+    // Enforce the legal transition matrix
+    escrow.status.verify_transition(&EscrowStatus::Released)?;
 
     EscrowStorage::require_no_active_reserve_repair(env, &escrow.currency)?;
     let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {
@@ -873,9 +887,8 @@ pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLend
         }
     }
 
-    if escrow.status != EscrowStatus::Held {
-        return Err(QuickLendXError::InvalidStatus);
-    }
+    // Enforce the legal transition matrix
+    escrow.status.verify_transition(&EscrowStatus::Refunded)?;
 
     EscrowStorage::require_no_active_reserve_repair(env, &escrow.currency)?;
     let next_held_reserve = if EscrowStorage::is_reserve_accounted(env, &escrow.escrow_id) {

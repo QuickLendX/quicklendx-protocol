@@ -765,15 +765,16 @@ fn ensure_invoice_exists(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Quick
 }
 
 fn ensure_payable_status(invoice: &Invoice) -> Result<(), QuickLendXError> {
+    // Explicit transition matrix for payments:
+    // Only Funded and Defaulted (late payments) invoices can accept payments.
     if invoice.status == InvoiceStatus::Paid
         || invoice.status == InvoiceStatus::Cancelled
-        || invoice.status == InvoiceStatus::Defaulted
         || invoice.status == InvoiceStatus::Refunded
     {
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    if invoice.status != InvoiceStatus::Funded {
+    if invoice.status != InvoiceStatus::Funded && invoice.status != InvoiceStatus::Defaulted {
         return Err(QuickLendXError::InvalidStatus);
     }
 
