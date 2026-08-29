@@ -184,16 +184,18 @@ impl QuickLendXContract {
         InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
     }
 
-    pub fn update_invoice_status(env: Env, invoice_id: BytesN<32>, status: InvoiceStatus) -> Result<(), QuickLendXError> {
+    pub fn update_invoice_status(env: Env, admin: Address, invoice_id: BytesN<32>, status: InvoiceStatus) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.status = status;
         InvoiceStorage::update_invoice(&env, &invoice);
         Ok(())
     }
 
-    pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+    pub fn verify_invoice(env: Env, admin: Address, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        invoice.status = InvoiceStatus::Verified;
+        invoice.verify(&env, admin.clone());
         InvoiceStorage::update_invoice(&env, &invoice);
         Ok(())
     }
@@ -398,43 +400,45 @@ impl QuickLendXContract {
         InvoiceStorage::get_count_by_status(&env, status)
     }
 
-    pub fn update_invoice_metadata(env: Env, invoice_id: BytesN<32>, metadata: InvoiceMetadata, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
+    pub fn update_invoice_metadata(env: Env, caller: Address, invoice_id: BytesN<32>, metadata: InvoiceMetadata, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
         if crate::idempotency::idempotency_exists(&env, &nonce) {
             return Ok(());
         }
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        invoice.update_metadata(metadata);
+        invoice.update_metadata(&env, &caller, metadata)?;
         InvoiceStorage::update_invoice(&env, &invoice);
         crate::idempotency::store_idempotency(&env, &nonce);
         Ok(())
     }
 
-    pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
+    pub fn cancel_invoice(env: Env, caller: Address, invoice_id: BytesN<32>, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
         if crate::idempotency::idempotency_exists(&env, &nonce) {
             return Ok(());
         }
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        invoice.status = InvoiceStatus::Cancelled;
+        invoice.cancel(&env, caller.clone())?;
         InvoiceStorage::update_invoice(&env, &invoice);
         crate::idempotency::store_idempotency(&env, &nonce);
         Ok(())
     }
 
-    pub fn complete_invoice(env: Env, invoice_id: BytesN<32>, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
+    pub fn complete_invoice(env: Env, caller: Address, invoice_id: BytesN<32>, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
         if crate::idempotency::idempotency_exists(&env, &nonce) {
             return Ok(());
         }
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        invoice.status = InvoiceStatus::Paid;
+        crate::invoice::require_matching_business_invoice_ownership(&env, &caller, &invoice)?;
+        caller.require_auth();
+        invoice.mark_as_paid(&env, caller.clone(), env.ledger().timestamp());
         InvoiceStorage::update_invoice(&env, &invoice);
         crate::idempotency::store_idempotency(&env, &nonce);
         Ok(())
     }
 
-    pub fn clear_invoice_metadata(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+    pub fn clear_invoice_metadata(env: Env, caller: Address, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         crate::governance::require_no_open_governance_proposal(&env)?;
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        invoice.clear_metadata();
+        invoice.clear_metadata(&env, &caller)?;
         InvoiceStorage::update_invoice(&env, &invoice);
         Ok(())
     }
