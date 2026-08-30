@@ -23,10 +23,15 @@ pub fn authorize_payment(config: Option<TokenConfig>, already_funded: bool) -> R
 pub fn apply_token_update(admin: TokenAddress, expected_admin: TokenPolicyAdmin, current: Option<TokenConfig>, token: TokenAddress, enabled: bool, expected_version: u32, request_key: [u8; 32]) -> Result<(TokenConfig, TokenConfigEvent), TokenPolicyError> {
     if admin == [0; 32] || expected_admin.address == [0; 32] { return Err(TokenPolicyError::InvalidAdmin); }
     if admin != expected_admin.address { return Err(TokenPolicyError::Unauthorized); }
-    let old = current.unwrap_or(TokenConfig { token, enabled: false, version: 0 });
+    let old = current.unwrap_or(TokenConfig { token, enabled: false, version: 0, request_key: [0; 32], previous_enabled: false });
+    
+    if old.request_key == request_key && request_key != [0; 32] {
+        return Ok((old, TokenConfigEvent { token, old_enabled: old.previous_enabled, new_enabled: old.enabled, old_version: old.version.saturating_sub(1), new_version: old.version }));
+    }
+    
     if old.token != token || expected_version != old.version { return Err(TokenPolicyError::VersionConflict); }
     let new_version = old.version.checked_add(1).ok_or(TokenPolicyError::InvalidVersion)?;
-    let next = TokenConfig { token, enabled, version: new_version };
+    let next = TokenConfig { token, enabled, version: new_version, request_key, previous_enabled: old.enabled };
     let event = TokenConfigEvent { token, old_enabled: old.enabled, new_enabled: enabled, old_version: old.version, new_version };
     Ok((next, event))
 }
@@ -96,7 +101,7 @@ impl TokenAllowlist {
     }
     pub fn replace(&mut self, config: TokenConfig) -> Result<(), TokenPolicyError> {
         let mut index = 0;
-        while index < self.entries.len() { if let Some(existing) = self.entries[index] { if existing.token == config.token { if config.version != existing.version + 1 { return Err(TokenPolicyError::VersionConflict); } self.entries[index] = Some(config); return Ok(()); } } index += 1; }
+        while index < self.entries.len() { if let Some(existing) = self.entries[index] { if existing.token == config.token { if config == existing { return Ok(()); } if config.version != existing.version + 1 { return Err(TokenPolicyError::VersionConflict); } self.entries[index] = Some(config); return Ok(()); } } index += 1; }
         Err(TokenPolicyError::Unsupported)
     }
     pub fn contains_enabled(&self, token: TokenAddress) -> bool { self.find(token).map(|config| config.enabled).unwrap_or(false) }
