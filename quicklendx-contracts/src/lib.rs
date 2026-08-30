@@ -97,6 +97,7 @@ pub mod maintenance;
 pub mod monitor;
 pub mod notifications;
 pub mod operational_limits;
+pub mod kyc_policy;
 pub mod pagination;
 pub mod panic_handler;
 pub mod pause;
@@ -2322,6 +2323,34 @@ impl QuickLendXContract {
     /// Get investors by risk level
     pub fn get_investors_by_risk_level(env: Env, risk_level: InvestorRiskLevel) -> Vec<Address> {
         InvestorVerificationStorage::get_investors_by_risk_level(&env, risk_level)
+    }
+
+    // -----------------------------------------------------------------------
+    // Paginated KYC / participant identity queries (Issue #2476)
+    // -----------------------------------------------------------------------
+
+    /// Paginated query for businesses in a specific KYC status.
+    ///
+    /// Returns at most `limit` (clamped to `MAX_QUERY_LIMIT`) addresses sorted
+    /// by `(submitted_at ASC, address ASC)`. Pass `cursor = None` for the first
+    /// page; use the returned `next_cursor` to fetch subsequent pages.
+    pub fn get_businesses_paged(
+        env: Env,
+        status: verification::BusinessVerificationStatus,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<kyc_policy::KycPageResult, QuickLendXError> {
+        kyc_policy::get_businesses_paged(&env, status, cursor, limit)
+    }
+
+    /// Paginated query for investors in a specific KYC status.
+    pub fn get_investors_paged(
+        env: Env,
+        status: verification::BusinessVerificationStatus,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<kyc_policy::KycPageResult, QuickLendXError> {
+        kyc_policy::get_investors_paged(&env, status, cursor, limit)
     }
 
     /// Calculate investor risk score

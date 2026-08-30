@@ -192,6 +192,9 @@ pub enum QuickLendXError {
     /// Ledger sequences start at 1; sequence 0 indicates an uninitialised or default-constructed value.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidLedgerSequence = 2205,
+    /// The cursor string supplied to a paginated KYC query is malformed,
+    /// contains non-digit characters, or would overflow a u32 offset.
+    InvalidCursor = 2206,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -287,7 +290,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
             QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
             QuickLendXError::NoPendingTreasuryRotation => symbol_short!("NTR_ROT"),
-            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LSQ")
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LSQ"),
+            QuickLendXError::InvalidCursor => symbol_short!("INV_CUR"),
         }
     }
 }
