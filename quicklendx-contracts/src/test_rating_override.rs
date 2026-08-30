@@ -44,17 +44,18 @@ fn seed_invoice(env: &Env, contract_id: &Address) -> BytesN<32> {
         let business = Address::generate(env);
         let currency = Address::generate(env);
         let invoice = Invoice::new(
-env,
-business,
-1_000i128,
-currency,
-env.ledger().timestamp() + 86_400,
-String::from_str(env, "Test invoice"),
-InvoiceCategory::Services,
-Vec::new(env),
-        None, /* early_payment_discount_bps */
-        None
-)
+            env,
+            business,
+            1_000i128,
+            currency,
+            env.ledger().timestamp() + 86_400,
+            String::from_str(env, "Test invoice"),
+            InvoiceCategory::Services,
+            Vec::new(env),
+            None,
+            None,
+            None,
+        )
         .unwrap();
         let id = invoice.id.clone();
         InvoiceStorage::store_invoice(env, &invoice);
@@ -263,12 +264,7 @@ fn test_rating_override_revert_failed_attempt_preserves_current_override_rating(
     let invoice_id = seed_invoice(&env, &client.address);
     let rater = Address::generate(&env);
 
-    client.add_invoice_rating(
-        &invoice_id,
-        &4u32,
-        &String::from_str(&env, "Good"),
-        &rater,
-    );
+    client.add_invoice_rating(&invoice_id, &4u32, &String::from_str(&env, "Good"), &rater);
 
     // Override to 2
     let override_reason = String::from_str(&env, "Override to 2");
@@ -285,12 +281,8 @@ fn test_rating_override_revert_failed_attempt_preserves_current_override_rating(
     assert_eq!(invalid_rating_res, Err(Ok(QuickLendXError::InvalidRating)));
 
     // Revert attempt with empty reason fails
-    let empty_reason_res = client.try_rating_override(
-        &admin,
-        &invoice_id,
-        &4u32,
-        &String::from_str(&env, ""),
-    );
+    let empty_reason_res =
+        client.try_rating_override(&admin, &invoice_id, &4u32, &String::from_str(&env, ""));
     assert_eq!(
         empty_reason_res,
         Err(Ok(QuickLendXError::InvalidRatingOverrideReason))
@@ -359,4 +351,3 @@ fn test_rating_override_revert_on_frozen_invoice_fails() {
     // Rating remains at 1
     assert_eq!(client.get_invoice(&invoice_id).average_rating, Some(1));
 }
-

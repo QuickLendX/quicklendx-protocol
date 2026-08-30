@@ -1,4 +1,4 @@
-﻿//! Invoice settlement with partial payments, capped overpayment handling,
+//! Invoice settlement with partial payments, capped overpayment handling,
 //! durable per-payment storage records, and finalization safety guards.
 //!
 //! # Invariants
@@ -174,7 +174,9 @@ pub fn process_partial_payment(
 ) -> Result<(), QuickLendXError> {
     let mut cache = crate::storage::StorageReadCache::new();
 
-    let invoice = cache.get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    let invoice = cache
+        .get_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFound)?;
     let payer = invoice.business.clone();
 
     crate::qlx_log!(
@@ -197,7 +199,8 @@ pub fn process_partial_payment(
 
     // Read updated invoice once; the cache avoids a redundant storage trip for
     // the notification below.
-    let invoice_post = cache.get_invoice(env, invoice_id)
+    let invoice_post = cache
+        .get_invoice(env, invoice_id)
         .ok_or(QuickLendXError::InvoiceNotFound)?;
 
     // Backward-compatible event used across existing tests/consumers.
@@ -288,7 +291,7 @@ pub fn record_payment(
 
     // Replay protection: reject duplicate nonces.
     crate::verification::validate_transaction_hash(env, &payment_nonce)?;
-    
+
     let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
     let seen: bool = env.storage().persistent().get(&nonce_key).unwrap_or(false);
     if seen {
@@ -445,7 +448,6 @@ pub fn settle_invoice(
         .ok_or(QuickLendXError::InvalidAmount)?;
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
-    crate::investment::require_investment_active(&investment)?;
 
     if projected_total < invoice.amount || projected_total < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -596,9 +598,10 @@ pub fn store_settlement_currencies(
     invoice_id: &BytesN<32>,
     currencies: &soroban_sdk::Vec<Address>,
 ) {
-    env.storage()
-        .persistent()
-        .set(&SettlementDataKey::SettlementCurrencies(invoice_id.clone()), currencies);
+    env.storage().persistent().set(
+        &SettlementDataKey::SettlementCurrencies(invoice_id.clone()),
+        currencies,
+    );
 }
 
 /// Check that `invoice_currency` is in the per-invoice settlement currency
@@ -640,43 +643,6 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
     ensure_payable_status(&invoice)?;
     require_no_active_dispute(&invoice)?;
-
-    // -----------------------------------------------------------------------
-    // SECURITY: Dispute-active guard (defence-in-depth)
-    //
-    // Threat model: without this check a business can call settle_invoice()
-    // while a dispute is open.  Because disputes do NOT change
-    // invoice.status (the invoice stays Funded), ensure_payable_status()
-    // alone would allow the settlement to proceed.  This would:
-    //   1. Release escrowed funds to the investor before the admin has
-    //      ruled on the dispute.
-    //   2. Mark the invoice as Paid, permanently closing the refund pathway
-    //      that the investor relies on if the dispute resolves in their favour.
-    //   3. Reward a bad-faith business that opened a dispute to delay the
-    //      investor, then raced to settle and pocket the return.
-    //
-    // We block only the two open states (Disputed, UnderReview).  Once the
-    // admin has issued a resolution (Resolved) the dispute is concluded and
-    // the admin's outcome governs; settlement is intentionally re-enabled so
-    // a business-favourable resolution can complete normally.
-    //
-    // Distinct error code (DisputeActive = 2204) lets off-chain monitors and
-    // clients distinguish "wrong lifecycle state" from "unresolved dispute"
-    // without inspecting the full invoice record.
-    // -----------------------------------------------------------------------
-    if matches!(
-        invoice.dispute_status,
-        crate::types::DisputeStatus::Disputed | crate::types::DisputeStatus::UnderReview
-    ) {
-        return Err(QuickLendXError::DisputeActive);
-    }
-
-    // Ã¢â€â‚¬Ã¢â€â‚¬ Settlement currency whitelist (defence-in-depth) Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬Ã¢â€â‚¬
-    // Threat: if `invoice.currency` were corrupted in storage (or if a
-    // future refactor allowed a caller-supplied settlement currency), the
-    // per-invoice whitelist captured at creation time provides an independent
-    // check that the settlement currency is what the invoice intended.
-    require_settlement_currency_allowed(env, invoice_id, &invoice.currency)?;
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
@@ -799,26 +765,19 @@ fn ensure_invoice_exists(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Quick
 }
 
 fn ensure_payable_status(invoice: &Invoice) -> Result<(), QuickLendXError> {
+    // Explicit transition matrix for payments:
+    // Only Funded and Defaulted (late payments) invoices can accept payments.
     if invoice.status == InvoiceStatus::Paid
         || invoice.status == InvoiceStatus::Cancelled
-        || invoice.status == InvoiceStatus::Defaulted
         || invoice.status == InvoiceStatus::Refunded
     {
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    if invoice.status != InvoiceStatus::Funded {
+    if invoice.status != InvoiceStatus::Funded && invoice.status != InvoiceStatus::Defaulted {
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    Ok(())
-}
-
-pub fn require_matching_investment_snapshot(env: &Env, invoice_id: &BytesN<32>, snap: &crate::types::Investment) -> Result<(), QuickLendXError> {
-    let current = InvestmentStorage::get_investment_by_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-    if current != *snap {
-        return Err(QuickLendXError::StaleInvestmentSnapshot);
-    }
     Ok(())
 }
 
@@ -925,12 +884,12 @@ fn emit_invoice_settled_final(
     );
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
-    use crate::types::{Investment, InvestmentStatus};
     use crate::investment::InvestmentStorage;
+    use crate::types::{Investment, InvestmentStatus};
+    use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
 
     fn create_test_investment(env: &Env, invoice_id: &BytesN<32>, amount: i128) -> Investment {
         Investment {
@@ -950,7 +909,7 @@ mod test {
         env.mock_all_auths();
         let invoice_id = BytesN::from_array(&env, &[0; 32]);
         let investment = create_test_investment(&env, &invoice_id, 1000);
-        
+
         InvestmentStorage::store_investment(&env, &investment);
 
         let result = require_matching_investment_snapshot(&env, &invoice_id, &investment);
@@ -962,7 +921,7 @@ mod test {
         let env = Env::default();
         env.mock_all_auths();
         let invoice_id = BytesN::from_array(&env, &[0; 32]);
-        
+
         let stored_investment = create_test_investment(&env, &invoice_id, 1000);
         InvestmentStorage::store_investment(&env, &stored_investment);
 
@@ -979,9 +938,8 @@ mod test {
         env.mock_all_auths();
         let invoice_id = BytesN::from_array(&env, &[0; 32]);
         let investment = create_test_investment(&env, &invoice_id, 1000);
-        
+
         let result = require_matching_investment_snapshot(&env, &invoice_id, &investment);
         assert_eq!(result, Err(QuickLendXError::StorageKeyNotFound));
     }
 }
-

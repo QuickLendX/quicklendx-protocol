@@ -20,17 +20,18 @@ fn make_invoice_with_amount(env: &Env, business: &Address, amount: i128) -> Invo
     let currency = Address::generate(env);
     let tags = Vec::new(env);
     Invoice::new(
-env,
-business.clone(),
-amount,
-currency,
-env.ledger().timestamp() + 86400,
-String::from_str(env, "Test invoice"),
-InvoiceCategory::Services,
-tags,
-        None, /* early_payment_discount_bps */
-        None
-)
+        env,
+        business.clone(),
+        amount,
+        currency,
+        env.ledger().timestamp() + 86400,
+        String::from_str(env, "Test invoice"),
+        InvoiceCategory::Services,
+        tags,
+        None,
+        None,
+        None,
+    )
     .unwrap()
 }
 

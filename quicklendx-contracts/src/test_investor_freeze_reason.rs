@@ -130,11 +130,7 @@ fn test_freeze_investor_suspicious_activity() {
     let (env, client, admin) = setup_env();
     let investor = setup_investor(&env, &client, 10_000);
 
-    client.freeze_investor(
-        &admin,
-        &investor,
-        &InvestorFreezeReason::SuspiciousActivity,
-    );
+    client.freeze_investor(&admin, &investor, &InvestorFreezeReason::SuspiciousActivity);
 
     let info = client.get_investor_freeze_info(&investor).unwrap();
     assert_eq!(info.reason, InvestorFreezeReason::SuspiciousActivity);
@@ -174,7 +170,10 @@ fn test_freeze_blocks_place_bid() {
         &BytesN::from_array(&env, &[0u8; 32]),
     );
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvestorFrozen);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvestorFrozen
+    );
 }
 
 #[test]
@@ -198,7 +197,10 @@ fn test_freeze_blocks_withdraw_bid() {
 
     let result = client.try_withdraw_bid(&bid_id);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvestorFrozen);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvestorFrozen
+    );
 }
 
 #[test]
@@ -223,7 +225,10 @@ fn test_freeze_blocks_accept_bid() {
 
     let result = client.try_accept_bid(&invoice_id, &bid_id);
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvestorFrozen);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvestorFrozen
+    );
 }
 
 // ============================================================================
@@ -265,11 +270,8 @@ fn test_freeze_investor_requires_admin() {
     let investor = setup_investor(&env, &client, 10_000);
 
     let non_admin = Address::generate(&env);
-    let result = client.try_freeze_investor(
-        &non_admin,
-        &investor,
-        &InvestorFreezeReason::AdminAction,
-    );
+    let result =
+        client.try_freeze_investor(&non_admin, &investor, &InvestorFreezeReason::AdminAction);
     assert!(result.is_err());
 }
 
@@ -282,16 +284,10 @@ fn test_freeze_nonexistent_investor() {
     let (env, client, admin) = setup_env();
     let fake_investor = Address::generate(&env);
 
-    let result = client.try_freeze_investor(
-        &admin,
-        &fake_investor,
-        &InvestorFreezeReason::AdminAction,
-    );
+    let result =
+        client.try_freeze_investor(&admin, &fake_investor, &InvestorFreezeReason::AdminAction);
     assert!(result.is_err());
-    assert_eq!(
-        result.unwrap_err().unwrap(),
-        QuickLendXError::KYCNotFound
-    );
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::KYCNotFound);
 }
 
 // ============================================================================
@@ -329,11 +325,7 @@ fn test_freeze_info_includes_timestamp() {
     let investor = setup_investor(&env, &client, 10_000);
     let now = env.ledger().timestamp();
 
-    client.freeze_investor(
-        &admin,
-        &investor,
-        &InvestorFreezeReason::SuspiciousActivity,
-    );
+    client.freeze_investor(&admin, &investor, &InvestorFreezeReason::SuspiciousActivity);
 
     let info = client.get_investor_freeze_info(&investor).unwrap();
     assert_eq!(info.frozen_by, admin);
@@ -354,11 +346,7 @@ fn test_freeze_investor_does_not_affect_others() {
     let frozen_investor = setup_investor(&env, &client, 10_000);
     let active_investor = setup_investor(&env, &client, 10_000);
 
-    client.freeze_investor(
-        &admin,
-        &frozen_investor,
-        &InvestorFreezeReason::KYCExpired,
-    );
+    client.freeze_investor(&admin, &frozen_investor, &InvestorFreezeReason::KYCExpired);
 
     client.verify_invoice(&invoice_id);
 
@@ -371,7 +359,10 @@ fn test_freeze_investor_does_not_affect_others() {
         &BytesN::from_array(&env, &[0u8; 32]),
     );
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvestorFrozen);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InvestorFrozen
+    );
 
     // Active investor can still bid
     let result = client.try_place_bid(

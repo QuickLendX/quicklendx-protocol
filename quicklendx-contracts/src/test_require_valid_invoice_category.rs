@@ -23,9 +23,9 @@
 
 #![cfg(test)]
 
-use crate::verification::require_valid_invoice_category;
 use crate::errors::QuickLendXError;
 use crate::types::InvoiceCategory;
+use crate::verification::require_valid_invoice_category;
 use soroban_sdk::Env;
 
 fn setup() -> Env {
@@ -40,14 +40,12 @@ fn setup() -> Env {
 
 #[test]
 fn require_valid_invoice_category_accepts_services() {
-    require_valid_invoice_category(&InvoiceCategory::Services)
-        .expect("Services must be accepted");
+    require_valid_invoice_category(&InvoiceCategory::Services).expect("Services must be accepted");
 }
 
 #[test]
 fn require_valid_invoice_category_accepts_goods() {
-    require_valid_invoice_category(&InvoiceCategory::Goods)
-        .expect("Goods must be accepted");
+    require_valid_invoice_category(&InvoiceCategory::Goods).expect("Goods must be accepted");
 }
 
 #[test]
@@ -64,8 +62,7 @@ fn require_valid_invoice_category_accepts_logistics() {
 
 #[test]
 fn require_valid_invoice_category_accepts_products() {
-    require_valid_invoice_category(&InvoiceCategory::Products)
-        .expect("Products must be accepted");
+    require_valid_invoice_category(&InvoiceCategory::Products).expect("Products must be accepted");
 }
 
 #[test]

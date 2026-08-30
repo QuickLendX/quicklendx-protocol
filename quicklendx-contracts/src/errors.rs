@@ -179,8 +179,6 @@ pub enum QuickLendXError {
     InvalidDisputeEvidence = 1906,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeActive = 1907,
-    /// BREAKING: Do not renumber this variant. public ABI consumption.
-    DisputeTimeLimitExceeded = 1908,
 
     // Notification (2000-2002)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -262,6 +260,24 @@ pub enum QuickLendXError {
     InvalidTransactionHash = 2217,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     BatchSizeExceeded = 2218,
+    /// A bid was rejected because it is stale: the bid has been cancelled,
+    /// expired, or otherwise transitioned out of `Placed` status between
+    /// when the caller read it and when the operation was submitted.
+    /// Client retry contract: re-read bid state, select a new best bid
+    /// if needed, and resubmit.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    BidStale = 2219,
+    /// Per-address mutation rate limit exceeded within the current rate-limit
+    /// window.  The caller exceeded the maximum number of state-mutating
+    /// transactions allowed per address per window.  Retry after the window
+    /// resets (next `RATE_LIMIT_WINDOW_SEQUENCES` ledger sequences).
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    MutationLimitExceeded = 2220,
+    /// An input field exceeds the hard size ceiling for the given resource.
+    /// This is an early-exit guard placed *before* expensive parsing, hashing,
+    /// or storage writes so that an oversized payload is rejected cheaply.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InputTooLarge = 2221,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -350,7 +366,6 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidDisputeReason => symbol_short!("DSP_RN"),
             QuickLendXError::InvalidDisputeEvidence => symbol_short!("DSP_EV"),
             QuickLendXError::DisputeActive => symbol_short!("DSP_ACT"),
-            QuickLendXError::DisputeTimeLimitExceeded => symbol_short!("DSP_TL"),
             // Notification
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
@@ -381,7 +396,9 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::BidBelowTierMinimum => symbol_short!("TIER_BID"),
             QuickLendXError::InvalidTransactionHash => symbol_short!("TX_HASH"),
             QuickLendXError::BatchSizeExceeded => symbol_short!("BATCH_SZ"),
+            QuickLendXError::BidStale => symbol_short!("BID_STL"),
+            QuickLendXError::MutationLimitExceeded => symbol_short!("MUT_LIM"),
+            QuickLendXError::InputTooLarge => symbol_short!("IN_TOO_L"),
         }
     }
 }
-

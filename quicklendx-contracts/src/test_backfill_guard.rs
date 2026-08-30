@@ -93,7 +93,7 @@ fn schedule_upgrade_releases_after_backfill_flag_cleared() {
 #[test]
 fn restore_from_backup_clears_pending_flag_after_success() {
     use crate::backup::{Backup, BackupStatus, BackupStorage};
-    use crate::types::{Dispute, Invoice, InvoiceCategory, InvoiceStatus, DisputeStatus};
+    use crate::types::{Dispute, DisputeStatus, Invoice, InvoiceCategory, InvoiceStatus};
     use soroban_sdk::{String as SdkString, Vec};
 
     let env = Env::default();

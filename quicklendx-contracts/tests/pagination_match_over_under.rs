@@ -1,11 +1,10 @@
 // Tests for pagination edge cases: match, over, under scenarios
 #[cfg(test)]
 mod pagination_match_over_under {
-    use super::super::*; // import pagination module
     use quicklendx_contracts::errors::QuickLendXError;
     use quicklendx_contracts::pagination::{
-        calculate_safe_bounds, cap_query_limit, paginate_slice, validate_pagination_params,
-        validate_query_params, MAX_QUERY_LIMIT,
+        calculate_safe_bounds, paginate_slice, validate_pagination_params, validate_query_params,
+        MAX_QUERY_LIMIT,
     };
 
     #[test]

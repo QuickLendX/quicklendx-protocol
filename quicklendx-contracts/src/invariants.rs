@@ -416,13 +416,14 @@ fn check_bid_withdrawal_refund_accounting(env: &Env) -> InvariantCheck {
                         break;
                     }
                 };
-                let investment = match InvestmentStorage::get_investment_by_invoice(env, &bid.invoice_id) {
-                    Some(investment) => investment,
-                    None => {
-                        passed = false;
-                        break;
-                    }
-                };
+                let investment =
+                    match InvestmentStorage::get_investment_by_invoice(env, &bid.invoice_id) {
+                        Some(investment) => investment,
+                        None => {
+                            passed = false;
+                            break;
+                        }
+                    };
 
                 let expected_escrow_status = match invoice.status {
                     InvoiceStatus::Funded | InvoiceStatus::Defaulted => EscrowStatus::Held,
@@ -465,13 +466,14 @@ fn check_bid_withdrawal_refund_accounting(env: &Env) -> InvariantCheck {
                         break;
                     }
                 };
-                let investment = match InvestmentStorage::get_investment_by_invoice(env, &bid.invoice_id) {
-                    Some(investment) => investment,
-                    None => {
-                        passed = false;
-                        break;
-                    }
-                };
+                let investment =
+                    match InvestmentStorage::get_investment_by_invoice(env, &bid.invoice_id) {
+                        Some(investment) => investment,
+                        None => {
+                            passed = false;
+                            break;
+                        }
+                    };
 
                 if invoice.funded_amount != 0
                     || invoice.funded_at.is_some()

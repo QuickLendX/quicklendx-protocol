@@ -917,8 +917,7 @@ mod tests {
         ];
         for (investment, payment) in cases {
             // Use pure function to avoid storage access outside contract context
-            let breakdown =
-                PlatformFee::calculate_breakdown_with_fee_bps(investment, payment, 200);
+            let breakdown = PlatformFee::calculate_breakdown_with_fee_bps(investment, payment, 200);
             // Verify investor profit + platform fee = gross profit
             assert_eq!(
                 breakdown.investor_profit + breakdown.platform_fee,

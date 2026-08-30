@@ -1,4 +1,4 @@
-﻿use super::*;
+use super::*;
 use crate::errors::QuickLendXError;
 use crate::payments::{EscrowStatus, EscrowStorage};
 use crate::storage::InvoiceStorage;
@@ -106,7 +106,8 @@ fn create_funded_invoice(
         &String::from_str(env, "Default matrix invoice"),
         &crate::invoice::InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
 
     let bid_id = client.place_bid(
@@ -350,7 +351,11 @@ fn prepare_case(
     case: MatrixCase,
 ) {
     if case.settlement_finalized {
-        client.settle_invoice(invoice_id, &amount, &client.get_investment(invoice_id).unwrap());
+        client.settle_invoice(
+            invoice_id,
+            &amount,
+            &client.get_investment(invoice_id).unwrap(),
+        );
     }
 
     set_invoice_status_for_case(
@@ -478,4 +483,3 @@ fn test_default_finality_matrix_preserves_duplicate_default_guard() {
         "double-default retry must be blocked by the transition guard to avoid duplicate finality side effects"
     );
 }
-

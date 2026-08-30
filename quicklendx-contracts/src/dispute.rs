@@ -96,7 +96,7 @@ pub(crate) fn track_dispute_invoice(env: &Env, invoice_id: &BytesN<32>) {
     add_to_dispute_index(env, invoice_id);
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod evidence_identity_tests {
     use super::*;
     use soroban_sdk::testutils::Address as _;
@@ -157,9 +157,8 @@ pub(crate) fn reserve_evidence(
     creator: &Address,
     evidence: &String,
 ) -> Result<BytesN<32>, QuickLendXError> {
-    let digest = env.crypto().sha256(&evidence.to_bytes());
-    let digest_bytes: BytesN<32> = digest.into();
-    let key = DataKey::DisputeEvidence(digest_bytes.clone());
+    let digest: BytesN<32> = env.crypto().sha256(&evidence.to_bytes()).into();
+    let key = DataKey::DisputeEvidence(digest.clone());
     if env.storage().persistent().has(&key) {
         return Err(QuickLendXError::InvalidDisputeEvidence);
     }

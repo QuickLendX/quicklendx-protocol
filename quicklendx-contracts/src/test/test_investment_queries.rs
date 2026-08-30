@@ -686,3 +686,302 @@ fn test_portfolio_summary_isolated_per_investor() {
     assert_eq!(s2.completed_count, 1);
     assert_eq!(s2.total_positions, 1);
 }
+
+// ============================================================================
+// get_investor_investments_paged_cursored (#2456)
+//
+// Exercises the cursor-stable pagination entrypoint at the actual contract
+// boundary (via `client`, not the bare `InvestmentQueries` impl functions),
+// covering every case the issue's "Required validation" list names: empty,
+// single-page, boundary, concurrent-insert, invalid-cursor, and
+// large-result.
+// ============================================================================
+
+#[test]
+fn test_cursored_investments_empty_investor_returns_generation_zero() {
+    let (env, client, _) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let page = client.get_investor_investments_paged_cursored(
+        &investor, &None, &0u32, &10u32, &None,
+    );
+
+    assert_eq!(page.items.len(), 0);
+    assert_eq!(page.total_count, 0);
+    assert!(!page.has_more);
+    assert_eq!(page.generation, 0);
+}
+
+#[test]
+fn test_cursored_investments_single_page_returns_all_and_no_more() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    for seed in 0u8..5 {
+        create_test_investment(
+            &env,
+            &contract_id,
+            &investor,
+            1_000,
+            InvestmentStatus::Active,
+            seed,
+        );
+    }
+
+    let page = client.get_investor_investments_paged_cursored(
+        &investor, &None, &0u32, &10u32, &None,
+    );
+
+    assert_eq!(page.items.len(), 5);
+    assert_eq!(page.total_count, 5);
+    assert!(!page.has_more);
+    assert_eq!(page.generation, 5); // one bump per newly-appended investment
+}
+
+#[test]
+fn test_cursored_investments_boundary_offset_at_and_past_total_count() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    for seed in 0u8..3 {
+        create_test_investment(
+            &env,
+            &contract_id,
+            &investor,
+            1_000,
+            InvestmentStatus::Active,
+            seed,
+        );
+    }
+
+    // offset == total_count: empty page, not an error, has_more is false.
+    let at_boundary = client.get_investor_investments_paged_cursored(
+        &investor, &None, &3u32, &10u32, &None,
+    );
+    assert_eq!(at_boundary.items.len(), 0);
+    assert!(!at_boundary.has_more);
+    assert_eq!(at_boundary.total_count, 3);
+
+    // offset > total_count: still empty, still not an error (saturating, no panic).
+    let past_boundary = client.get_investor_investments_paged_cursored(
+        &investor,
+        &None,
+        &u32::MAX,
+        &10u32,
+        &None,
+    );
+    assert_eq!(past_boundary.items.len(), 0);
+    assert!(!past_boundary.has_more);
+}
+
+#[test]
+fn test_cursored_investments_concurrent_insert_is_detected_as_unstable() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    for seed in 0u8..3 {
+        create_test_investment(
+            &env,
+            &contract_id,
+            &investor,
+            1_000,
+            InvestmentStatus::Active,
+            seed,
+        );
+    }
+
+    // Page 1: capture the generation the caller observed.
+    let page1 = client.get_investor_investments_paged_cursored(
+        &investor, &None, &0u32, &2u32, &None,
+    );
+    assert_eq!(page1.items.len(), 2);
+    assert!(page1.has_more);
+    let stale_generation = page1.generation;
+
+    // Simulate a concurrent insert: a new investment lands for this investor
+    // between the caller's page 1 and page 2 requests.
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        5_000,
+        InvestmentStatus::Active,
+        99,
+    );
+
+    // Page 2, using the now-stale generation from page 1, must fail closed
+    // rather than silently returning a page computed against the new,
+    // longer list (which could skip or duplicate relative to page 1).
+    let result = client.try_get_investor_investments_paged_cursored(
+        &investor,
+        &None,
+        &2u32,
+        &2u32,
+        &Some(stale_generation),
+    );
+    let err = result.err().expect("expected UnstableCursor error");
+    let contract_error = err.expect("expected contract error");
+    assert_eq!(contract_error, QuickLendXError::UnstableCursor);
+}
+
+#[test]
+fn test_cursored_investments_retry_with_fresh_generation_succeeds() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    for seed in 0u8..3 {
+        create_test_investment(
+            &env,
+            &contract_id,
+            &investor,
+            1_000,
+            InvestmentStatus::Active,
+            seed,
+        );
+    }
+
+    let page1 = client.get_investor_investments_paged_cursored(
+        &investor, &None, &0u32, &2u32, &None,
+    );
+    let stale_generation = page1.generation;
+
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        5_000,
+        InvestmentStatus::Active,
+        99,
+    );
+
+    // The stale generation is rejected...
+    let stale_result = client.try_get_investor_investments_paged_cursored(
+        &investor,
+        &None,
+        &2u32,
+        &2u32,
+        &Some(stale_generation),
+    );
+    assert!(stale_result.is_err());
+
+    // ...but restarting pagination from offset 0 with the *current*
+    // generation (from a fresh first-page call) succeeds and sees all 4
+    // investments, including the one inserted concurrently.
+    let restarted = client.get_investor_investments_paged_cursored(
+        &investor, &None, &0u32, &2u32, &None,
+    );
+    assert_eq!(restarted.total_count, 4);
+    assert_ne!(restarted.generation, stale_generation);
+
+    let page2 = client.get_investor_investments_paged_cursored(
+        &investor,
+        &None,
+        &2u32,
+        &2u32,
+        &Some(restarted.generation),
+    );
+    assert_eq!(page2.items.len(), 2);
+    assert!(!page2.has_more);
+}
+
+#[test]
+fn test_cursored_investments_invalid_cursor_generation_is_rejected() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    create_test_investment(
+        &env,
+        &contract_id,
+        &investor,
+        1_000,
+        InvestmentStatus::Active,
+        0,
+    );
+
+    // No investment was ever added after the first, so generation 1 (or any
+    // value other than the true current generation) is simply wrong — not
+    // just stale — and must be rejected the same way a stale one is.
+    let result = client.try_get_investor_investments_paged_cursored(
+        &investor,
+        &None,
+        &0u32,
+        &10u32,
+        &Some(999u64),
+    );
+    let err = result.err().expect("expected UnstableCursor error");
+    let contract_error = err.expect("expected contract error");
+    assert_eq!(contract_error, QuickLendXError::UnstableCursor);
+}
+
+#[test]
+fn test_cursored_investments_large_result_capped_to_max_query_limit() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    let count = crate::MAX_QUERY_LIMIT + 10;
+    for seed in 0u8..(count as u8) {
+        create_test_investment(
+            &env,
+            &contract_id,
+            &investor,
+            1_000,
+            InvestmentStatus::Active,
+            seed,
+        );
+    }
+
+    // Ask for far more than MAX_QUERY_LIMIT in one page.
+    let page = client.get_investor_investments_paged_cursored(
+        &investor,
+        &None,
+        &0u32,
+        &(count * 10),
+        &None,
+    );
+
+    assert_eq!(page.items.len() as u32, crate::MAX_QUERY_LIMIT);
+    assert_eq!(page.total_count, count);
+    assert!(page.has_more);
+}
+
+#[test]
+fn test_cursored_investments_repeated_identical_calls_are_idempotent() {
+    let (env, client, contract_id) = setup();
+    env.mock_all_auths();
+
+    let investor = Address::generate(&env);
+    for seed in 0u8..5 {
+        create_test_investment(
+            &env,
+            &contract_id,
+            &investor,
+            1_000,
+            InvestmentStatus::Active,
+            seed,
+        );
+    }
+
+    let first = client.get_investor_investments_paged_cursored(
+        &investor, &None, &1u32, &2u32, &None,
+    );
+    // Repeating the exact same read (same offset/limit/generation) must be a
+    // pure, side-effect-free operation: identical results every time, no
+    // drift, no partial state accumulated by the read itself.
+    for _ in 0..3 {
+        let repeat = client.get_investor_investments_paged_cursored(
+            &investor,
+            &None,
+            &1u32,
+            &2u32,
+            &Some(first.generation),
+        );
+        assert_eq!(repeat, first);
+    }
+}

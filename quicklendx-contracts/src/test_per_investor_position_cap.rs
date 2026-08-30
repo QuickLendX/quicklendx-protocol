@@ -87,8 +87,7 @@ fn bid_above_per_investor_position_cap_is_rejected() {
     let (env, client, admin) = build_env();
     let invoice_amount = 10_000i128;
     let cap = 3_000i128;
-    let (invoice_id, business) =
-        setup_verified_invoice(&env, &client, &admin, invoice_amount);
+    let (invoice_id, business) = setup_verified_invoice(&env, &client, &admin, invoice_amount);
     client.set_per_investor_position_cap(&business, &invoice_id, &Some(cap));
     assert_eq!(client.get_per_investor_position_cap(&invoice_id), Some(cap));
 
@@ -121,18 +120,11 @@ fn bid_at_per_investor_position_cap_is_accepted() {
     let (env, client, admin) = build_env();
     let invoice_amount = 10_000i128;
     let cap = 3_000i128;
-    let (invoice_id, business) =
-        setup_verified_invoice(&env, &client, &admin, invoice_amount);
+    let (invoice_id, business) = setup_verified_invoice(&env, &client, &admin, invoice_amount);
     client.set_per_investor_position_cap(&business, &invoice_id, &Some(cap));
     let investor = setup_verified_investor(&env, &client, 1_000_000);
 
-    let result = client.try_place_bid(
-        &investor,
-        &invoice_id,
-        &cap,
-        &(cap + 100),
-        &zero_salt(&env),
-    );
+    let result = client.try_place_bid(&investor, &invoice_id, &cap, &(cap + 100), &zero_salt(&env));
 
     assert!(
         result.is_ok(),
@@ -169,8 +161,7 @@ fn uncapped_invoice_allows_full_face_bid() {
 fn set_cap_above_amount_is_rejected() {
     let (env, client, admin) = build_env();
     let invoice_amount = 1_000i128;
-    let (invoice_id, business) =
-        setup_verified_invoice(&env, &client, &admin, invoice_amount);
+    let (invoice_id, business) = setup_verified_invoice(&env, &client, &admin, invoice_amount);
 
     let result =
         client.try_set_per_investor_position_cap(&business, &invoice_id, &Some(invoice_amount + 1));
