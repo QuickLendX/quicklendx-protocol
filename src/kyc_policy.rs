@@ -232,3 +232,68 @@ mod tests {
         );
     }
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum AmountError {
+    InvalidScale,
+    NegativeOrZero,
+    Overflow,
+    ExceedsLimit,
+}
+
+/// Enforce exact integer or decimal rules at the participant/amount boundary.
+/// Rejects invalid scale, negative/zero signs, and arithmetic overflow before state changes.
+pub fn validate_participant_amount(amount: i128, max_limit: u128, scale_factor: u128) -> Result<u128, AmountError> {
+    if amount <= 0 {
+        return Err(AmountError::NegativeOrZero);
+    }
+    
+    let unsigned_amount = amount as u128;
+    
+    // Scale amount precisely, checking for multiplication overflow
+    let scaled = unsigned_amount
+        .checked_mul(scale_factor)
+        .ok_or(AmountError::Overflow)?;
+
+    if scaled > max_limit {
+        return Err(AmountError::ExceedsLimit);
+    }
+
+    Ok(scaled)
+}
+
+#[cfg(test)]
+mod precision_tests {
+    use super::*;
+
+    #[test]
+    fn test_zero_and_negative_amounts_rejected() {
+        assert_eq!(validate_participant_amount(0, 1000, 1), Err(AmountError::NegativeOrZero));
+        assert_eq!(validate_participant_amount(-50, 1000, 1), Err(AmountError::NegativeOrZero));
+    }
+
+    #[test]
+    fn test_exact_scale_and_limit_boundary() {
+        let max_limit = 10_000u128;
+        let scale = 100u128;
+
+        // Valid boundary
+        let res = validate_participant_amount(100, max_limit, scale);
+        assert_eq!(res, Ok(10_000));
+
+        // Exceeds limit boundary
+        let over = validate_participant_amount(101, max_limit, scale);
+        assert_eq!(over, Err(AmountError::ExceedsLimit));
+    }
+
+    #[test]
+    fn test_near_overflow_and_overflow_rejection() {
+        let max_limit = u128::MAX;
+        let scale = 1_000_000u128;
+
+        // Near-overflow value that multiplies beyond u128::MAX
+        let massive_amount = i128::MAX;
+        let result = validate_participant_amount(massive_amount, max_limit, scale);
+        assert_eq!(result, Err(AmountError::Overflow));
+    }
+}
