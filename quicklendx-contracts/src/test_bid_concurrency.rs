@@ -146,7 +146,7 @@ fn place_bid(
 #[test]
 fn concurrent_placement_same_invoice() {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor_a = verified_investor(&env, &client, &admin, 500_000);
     let investor_b = verified_investor(&env, &client, &admin, 500_000);
@@ -199,7 +199,7 @@ fn concurrent_placement_same_invoice() {
 #[test]
 fn acceptance_rejects_stale_expired_bid() {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor = verified_investor(&env, &client, &admin, 500_000);
     let business = verified_business(&env, &client, &admin);
@@ -245,7 +245,7 @@ fn acceptance_rejects_stale_expired_bid() {
 #[test]
 fn acceptance_rejects_cancelled_bid() {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor = verified_investor(&env, &client, &admin, 500_000);
     let business = verified_business(&env, &client, &admin);
@@ -283,7 +283,7 @@ fn acceptance_rejects_cancelled_bid() {
 #[test]
 fn cancel_then_accept_returns_bid_stale() {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor = verified_investor(&env, &client, &admin, 500_000);
     let business = verified_business(&env, &client, &admin);
@@ -325,7 +325,7 @@ fn cancel_then_accept_returns_bid_stale() {
 #[test]
 fn accept_then_cancel_returns_bid_stale() {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor = verified_investor(&env, &client, &admin, 500_000);
     let business = verified_business(&env, &client, &admin);
@@ -392,7 +392,7 @@ fn cancel_bid_not_found() {
 #[test]
 fn retry_after_conflict_succeeds_with_fresh_bid() {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor_a = verified_investor(&env, &client, &admin, 500_000);
     let investor_b = verified_investor(&env, &client, &admin, 500_000);
@@ -445,7 +445,7 @@ fn retry_after_conflict_succeeds_with_fresh_bid() {
 #[test]
 fn no_partial_state_after_failed_accept() {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor_a = verified_investor(&env, &client, &admin, 500_000);
     let investor_b = verified_investor(&env, &client, &admin, 500_000);
@@ -511,7 +511,7 @@ fn ranking_deterministic_under_contention() {
     let investor_c = verified_investor(&env, &client, &admin, 500_000);
     let business = verified_business(&env, &client, &admin);
 
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
     let currency = setup_token(
         &env,
         &contract_id,
@@ -521,11 +521,24 @@ fn ranking_deterministic_under_contention() {
 
     let invoice_id = upload_and_verify_invoice(&env, &client, &business, &currency, 100_000);
 
-    // Place three bids with different economics
-    let bid_a = place_bid(&env, &client, &investor_a, &invoice_id, 90_000); // lowest amount → highest profit
-    let bid_b = place_bid(&env, &client, &investor_b, &invoice_id, 95_000);
-    let bid_c = place_bid(&env, &client, &investor_c, &invoice_id, 98_000); // highest amount → lowest profit
-
+    // Place three bids with different economics:
+    // A: 90k bid, 100k return -> 10k profit (highest)
+    // B: 95k bid, 100k return -> 5k profit (middle)
+    // C: 98k bid, 100k return -> 2k profit (lowest)
+    let bid_a = client.place_bid(
+        &investor_a,
+        &invoice_id,
+        &90_000i128,
+        &100_000i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+    let bid_b = client.place_bid(
+        &investor_b,
+        &invoice_id,
+        &95_000i128,
+        &100_000i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     // Initial ranking: A should be best (highest profit)
     let best = client.get_best_bid(&invoice_id);
     assert!(best.is_some(), "must have a best bid");
@@ -547,7 +560,21 @@ fn ranking_deterministic_under_contention() {
         "best must be bid B after A cancelled"
     );
 
-    // Advance time past bid B's expiration
+    // Advance time slightly and place bid C (which will expire later than B)
+    env.ledger().with_mut(|li| li.timestamp = 2_000);
+    let bid_c = client.place_bid(
+        &investor_c,
+        &invoice_id,
+        &98_000i128,
+        &100_000i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+
+    // B is still better than C (5k profit vs 2k profit)
+    let best = client.get_best_bid(&invoice_id);
+    assert_eq!(best.unwrap().bid_id, bid_b);
+
+    // Advance time past bid B's expiration (t = 1000 + 7d + 1, C expires at 2000 + 7d)
     let bid_b_record = client.get_bid(&bid_b).expect("bid B must exist");
     env.ledger()
         .with_mut(|li| li.timestamp = bid_b_record.expiration_timestamp + 1);
@@ -585,7 +612,7 @@ fn expiry_during_contention() {
     let investor_b = verified_investor(&env, &client, &admin, 500_000);
     let business = verified_business(&env, &client, &admin);
 
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
     let currency = setup_token(
         &env,
         &contract_id,
@@ -640,7 +667,9 @@ fn expiry_during_contention() {
 #[test]
 fn max_bids_per_invoice_enforced_under_contention() {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    env.budget().reset_unlimited();
+    let _ = env.host().set_invocation_resource_limits(None);
+    let contract_id = client.address.clone();
 
     let business = verified_business(&env, &client, &admin);
     let currency = setup_token(&env, &contract_id, &[&business], 200_000);
@@ -710,7 +739,7 @@ fn max_bids_per_invoice_enforced_under_contention() {
 #[test]
 fn stale_read_rejected_with_bid_stale() {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor_a = verified_investor(&env, &client, &admin, 500_000);
     let investor_b = verified_investor(&env, &client, &admin, 500_000);

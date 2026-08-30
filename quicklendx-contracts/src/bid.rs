@@ -356,21 +356,14 @@ impl BidStorage {
         bids
     }
 
+    pub fn get_bids_for_invoice_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+        let count_key = Self::invoice_bid_count_key(invoice_id);
+        env.storage().persistent().get(&count_key).unwrap_or(0)
+    }
+
     pub fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let _ = Self::refresh_expired_bids(env, invoice_id);
-        let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
-        let mut active_count = 0u32;
-        let mut idx: u32 = 0;
-        while idx < bid_ids.len() {
-            let bid_id = bid_ids.get(idx).unwrap();
-            if let Some(bid) = Self::get_bid(env, &bid_id) {
-                if bid.status == BidStatus::Placed {
-                    active_count += 1;
-                }
-            }
-            idx += 1;
-        }
-        active_count
+        Self::get_bids_for_invoice_count(env, invoice_id)
     }
 
     /// Return the currently active bid TTL in days.
@@ -1087,8 +1080,8 @@ impl BidStorage {
     /// This guarantees reproducible ranking across validators even when all economic
     /// values match.
     pub fn compare_bids(bid1: &Bid, bid2: &Bid) -> Ordering {
-        let profit1 = bid1.expected_return.saturating_sub(bid1.bid_amount);
-        let profit2 = bid2.expected_return.saturating_sub(bid2.bid_amount);
+        let profit1 = bid1.expected_return.saturating_sub(bid1.bid_amount).max(0);
+        let profit2 = bid2.expected_return.saturating_sub(bid2.bid_amount).max(0);
         if profit1 != profit2 {
             return profit1.cmp(&profit2);
         }

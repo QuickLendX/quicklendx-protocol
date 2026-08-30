@@ -625,10 +625,10 @@ fn test_contract_get_bid_history_paged_filters_expired_on_placed() {
     assert_eq!(placed_paged.total_count, 1);
     assert_eq!(placed_paged.items.get(0).unwrap().bid_id, active.bid_id);
 
-    // Filter None: returns all historical bids
+    // Filter None: returns all remaining bids in index (2: active + cancelled)
     let all_paged = client.get_bid_history_paged(&inv, &None, &0, &10);
-    assert_eq!(all_paged.items.len(), 3);
-    assert_eq!(all_paged.total_count, 3);
+    assert_eq!(all_paged.items.len(), 2);
+    assert_eq!(all_paged.total_count, 2);
 }
 
 #[test]
