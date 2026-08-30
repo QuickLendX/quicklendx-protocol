@@ -1,7 +1,6 @@
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec, Bytes, xdr::ToXdr};
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use crate::protocol_limits::MAX_INVOICE_AMOUNT;
 use crate::protocol_limits::{
     check_and_record_mutation, require_batch_size_bound, require_description_bound,
     require_kyc_data_bound, require_status_batch_bound, require_tags_bound,
@@ -148,9 +147,10 @@ impl QuickLendXContract {
         crate::verification::require_business_not_pending(&env, &business)?;
         crate::regulatory::require_regulatory_ok(&env, &business)?;
 
-        if amount <= 0 || amount > MAX_INVOICE_AMOUNT {
-            return Err(QuickLendXError::InvalidAmount);
-        }
+        // #2432 — exact sign/ceiling validation before any state is written.
+        // Semantically identical to the historical inline predicate
+        // (`amount <= 0 || amount > MAX_INVOICE_AMOUNT`); see `invoice_amount`.
+        crate::invoice_amount::validate_invoice_amount_ceiling(amount)?;
 
         ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
 
