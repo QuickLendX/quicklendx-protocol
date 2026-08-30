@@ -689,6 +689,37 @@ fn settle_invoice_internal(
     if disbursement_total != invoice.total_paid {
         return Err(QuickLendXError::InvalidAmount);
     }
+    // Defense-in-depth (#2464): re-verify the same identity through the
+    // crate's dedicated, independently-tested dust-check utility rather than
+    // trusting the arithmetic above alone -- matches the "explicit guard
+    // against future arithmetic changes" pattern already used elsewhere in
+    // this crate (see `Investment::calculate_premium`).
+    if !crate::profits::verify_no_dust(investor_return, platform_fee, invoice.total_paid) {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    // #2464: mark finalized now, before any fund movement or other
+    // externally observable effect below -- not after, as this function
+    // used to. Every accounting/authorization/lifecycle check for this
+    // settlement has passed by this point and nothing has happened yet, so
+    // this is the correct checks-effects-interactions boundary: the only
+    // way a caller can ever observe `is_finalized(invoice_id) == true` is
+    // once every precondition already held, matching the ordering
+    // `record_payment` and `handle_default`'s guard-setting already follow
+    // elsewhere in this crate. Soroban's own transaction atomicity already
+    // reverts every effect below if anything after this point fails or
+    // panics, so this change doesn't alter what a failed call leaves
+    // behind -- it exists so this function's own ordering matches that
+    // guarantee rather than relying on it silently.
+    mark_finalized(env, invoice_id);
+
+    // Auto-release escrow funds to business if they are still held in the contract.
+    // This ensures the business receives the original funded amount during the settlement transition.
+    if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
+        if escrow.status == crate::payments::EscrowStatus::Held {
+            crate::payments::release_escrow(env, invoice_id)?;
+        }
+    }
 
     let business_address = invoice.business.clone();
     transfer_funds(
@@ -708,9 +739,6 @@ fn settle_invoice_internal(
         )?;
         crate::events::emit_platform_fee_routed(env, invoice_id, &fee_recipient, platform_fee);
     }
-
-    // Mark finalized before status transition to prevent re-entry.
-    mark_finalized(env, invoice_id);
 
     let previous_status = invoice.status;
     let paid_at = env.ledger().timestamp();
