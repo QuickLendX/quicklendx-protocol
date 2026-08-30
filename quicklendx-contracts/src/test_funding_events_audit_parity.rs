@@ -109,7 +109,13 @@ fn test_funding_events_and_audit_parity_success_flow() {
         setup_test_env();
 
     let invoice_amount = 20_000i128;
-    let invoice_id = create_verified_invoice(&env, &client, &business, &token_client.address, invoice_amount);
+    let invoice_id = create_verified_invoice(
+        &env,
+        &client,
+        &business,
+        &token_client.address,
+        invoice_amount,
+    );
 
     token_admin_client.mint(&investor, &50_000i128);
 
@@ -185,18 +191,36 @@ fn test_investor_exposure_accounting_includes_active_investments() {
 
     // Create Invoice 1 for 20,000 and fund it
     let inv1 = create_verified_invoice(&env, &client, &business, &token_client.address, 20_000i128);
-    let bid1 = client.place_bid(&investor, &inv1, &20_000i128, &22_000i128, &BytesN::from_array(&env, &[1u8; 32]));
+    let bid1 = client.place_bid(
+        &investor,
+        &inv1,
+        &20_000i128,
+        &22_000i128,
+        &BytesN::from_array(&env, &[1u8; 32]),
+    );
     client.accept_bid_and_fund(&inv1, &bid1);
 
     // Now investor has 20,000 in Active investment.
     // Placing another bid of 15,000 should EXCEED limit (20,000 + 15,000 = 35,000 > 30,000)
     let inv2 = create_verified_invoice(&env, &client, &business, &token_client.address, 15_000i128);
-    let res = client.try_place_bid(&investor, &inv2, &15_000i128, &17_000i128, &BytesN::from_array(&env, &[2u8; 32]));
+    let res = client.try_place_bid(
+        &investor,
+        &inv2,
+        &15_000i128,
+        &17_000i128,
+        &BytesN::from_array(&env, &[2u8; 32]),
+    );
     assert!(res.is_err());
     assert_eq!(res.err().unwrap(), Ok(QuickLendXError::InvalidAmount));
 
     // Placing a bid of 10,000 should SUCCEED (20,000 + 10,000 = 30,000 <= 30,000)
-    let bid2 = client.place_bid(&investor, &inv2, &10_000i128, &11_000i128, &BytesN::from_array(&env, &[3u8; 32]));
+    let bid2 = client.place_bid(
+        &investor,
+        &inv2,
+        &10_000i128,
+        &11_000i128,
+        &BytesN::from_array(&env, &[3u8; 32]),
+    );
     assert_eq!(bid2.to_array().len(), 32);
 }
 
@@ -208,7 +232,13 @@ fn test_rejected_and_duplicate_operations_emit_no_partial_state_or_audit() {
     let inv = create_verified_invoice(&env, &client, &business, &token_client.address, 10_000i128);
     token_admin_client.mint(&investor, &20_000i128);
 
-    let bid_id = client.place_bid(&investor, &inv, &10_000i128, &11_000i128, &BytesN::from_array(&env, &[1u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &inv,
+        &10_000i128,
+        &11_000i128,
+        &BytesN::from_array(&env, &[1u8; 32]),
+    );
     client.accept_bid_and_fund(&inv, &bid_id);
 
     let audit_count_before = client.query_audit_logs(&AuditQueryFilter {
@@ -243,7 +273,13 @@ fn test_escrow_refund_events_and_audit_parity() {
     let inv = create_verified_invoice(&env, &client, &business, &token_client.address, 10_000i128);
     token_admin_client.mint(&investor, &20_000i128);
 
-    let bid_id = client.place_bid(&investor, &inv, &10_000i128, &11_000i128, &BytesN::from_array(&env, &[1u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &inv,
+        &10_000i128,
+        &11_000i128,
+        &BytesN::from_array(&env, &[1u8; 32]),
+    );
     client.accept_bid_and_fund(&inv, &bid_id);
 
     client.refund_escrow_funds(&inv, &investor);

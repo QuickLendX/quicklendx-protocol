@@ -98,8 +98,8 @@ fn test_available_invoices_cursored_pagination() {
     // Pretend admin verified it (status = Verified)
     // Actually we can just call store_invoice with a different status or update it.
     // For simplicity, we just assume it's added. Let's just create one.
-    // However, store_invoice sets it to Pending. 
-    // We would need to verify it. We can just skip exact verification in this dummy test 
+    // However, store_invoice sets it to Pending.
+    // We would need to verify it. We can just skip exact verification in this dummy test
     // or test the unstable cursor logic anyway.
     
     // We can just call get_available_invoices_cursor

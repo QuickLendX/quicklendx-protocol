@@ -38,13 +38,20 @@ pub fn store_idempotency(env: &Env, key: &BytesN<32>) {
     extend_persistent_ttl(env, &composite_key);
 }
 
-pub fn get_idempotency_result<T: soroban_sdk::TryFromVal<Env, soroban_sdk::Val>>(env: &Env, key: &BytesN<32>) -> Option<T> {
+pub fn get_idempotency_result<T: soroban_sdk::TryFromVal<Env, soroban_sdk::Val>>(
+    env: &Env,
+    key: &BytesN<32>,
+) -> Option<T> {
     env.storage()
         .persistent()
         .get(&(IDEMPOTENCY_MAP_KEY, key.clone()))
 }
 
-pub fn store_idempotency_result<T: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(env: &Env, key: &BytesN<32>, result: &T) {
+pub fn store_idempotency_result<T: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(
+    env: &Env,
+    key: &BytesN<32>,
+    result: &T,
+) {
     let composite_key = (IDEMPOTENCY_MAP_KEY, key.clone());
     env.storage().persistent().set(&composite_key, result);
     extend_persistent_ttl(env, &composite_key);
@@ -60,9 +67,12 @@ mod tests {
         let env = Env::default();
         let key = BytesN::from_array(&env, &[1; 32]);
         let result = BytesN::from_array(&env, &[2; 32]);
-        
+
         assert_eq!(get_idempotency_result::<BytesN<32>>(&env, &key), None);
         store_idempotency_result(&env, &key, &result);
-        assert_eq!(get_idempotency_result::<BytesN<32>>(&env, &key), Some(result));
+        assert_eq!(
+            get_idempotency_result::<BytesN<32>>(&env, &key),
+            Some(result)
+        );
     }
 }

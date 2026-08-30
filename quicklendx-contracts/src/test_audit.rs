@@ -41,7 +41,10 @@ fn test_audit_records_are_versioned_and_correlated() {
     );
     let trail = client.get_invoice_audit_trail(&invoice_id);
     let entry = client.get_audit_entry(&trail.get(0).unwrap());
-    assert_eq!(entry.schema_version, crate::observability::OBSERVABILITY_SCHEMA_VERSION);
+    assert_eq!(
+        entry.schema_version,
+        crate::observability::OBSERVABILITY_SCHEMA_VERSION
+    );
     assert_eq!(entry.operation_id, entry.audit_id);
     assert!(client.verify_audit_chain(&invoice_id));
 }

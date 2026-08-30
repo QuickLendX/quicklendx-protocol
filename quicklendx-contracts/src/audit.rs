@@ -492,8 +492,7 @@ impl AuditLogEntry {
 
     /// Validate audit log entry integrity
     pub fn validate_integrity(&self, env: &Env) -> Result<bool, QuickLendXError> {
-        if self.schema_version != OBSERVABILITY_SCHEMA_VERSION
-            || self.operation_id != self.audit_id
+        if self.schema_version != OBSERVABILITY_SCHEMA_VERSION || self.operation_id != self.audit_id
         {
             return Ok(false);
         }

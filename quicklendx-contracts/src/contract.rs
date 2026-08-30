@@ -310,6 +310,21 @@ impl QuickLendXContract {
         BidStorage::rank_bids(&env, &invoice_id)
     }
 
+    pub fn get_ranked_bids_paged(
+        env: Env,
+        invoice_id: BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> crate::types::PaginatedBids {
+        let (items, total_count, has_more) =
+            BidStorage::rank_bids_paged(&env, &invoice_id, offset, limit);
+        crate::types::PaginatedBids {
+            items,
+            total_count,
+            has_more,
+        }
+    }
+
     pub fn get_best_bid(env: Env, invoice_id: BytesN<32>) -> Option<Bid> {
         BidStorage::get_best_bid(&env, &invoice_id)
     }

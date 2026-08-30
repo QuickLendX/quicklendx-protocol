@@ -1057,12 +1057,13 @@ impl BidStorage {
     /// This helper is used by both `get_best_bid` and `rank_bids` so they
     /// cannot drift on tie handling. Any ordering change flows through one
     /// path, preserving the invariant that best bid == first ranked bid.
-    fn select_best_placed_bid(records: &Vec<Bid>) -> Option<Bid> {
+    /// Expired bids are excluded from selection.
+    fn select_best_placed_bid(records: &Vec<Bid>, current_timestamp: u64) -> Option<Bid> {
         let mut best: Option<Bid> = None;
         let mut idx: u32 = 0;
         while idx < records.len() {
             let candidate = records.get(idx).unwrap();
-            if candidate.status != BidStatus::Placed {
+            if candidate.status != BidStatus::Placed || candidate.is_expired(current_timestamp) {
                 idx += 1;
                 continue;
             }
@@ -1108,7 +1109,8 @@ impl BidStorage {
     /// as `rank_bids(...).get(0)`.
     pub fn get_best_bid(env: &Env, invoice_id: &BytesN<32>) -> Option<Bid> {
         let records = Self::get_bid_records_for_invoice(env, invoice_id);
-        Self::select_best_placed_bid(&records)
+        let current_timestamp = env.ledger().timestamp();
+        Self::select_best_placed_bid(&records, current_timestamp)
     }
 
     /// Return all placed bids sorted from best to worst.
@@ -1118,11 +1120,12 @@ impl BidStorage {
     /// value returned by `get_best_bid` for the same invoice and ledger state.
     pub fn rank_bids(env: &Env, invoice_id: &BytesN<32>) -> Vec<Bid> {
         let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        let current_timestamp = env.ledger().timestamp();
         let mut remaining = Vec::new(env);
         let mut idx: u32 = 0;
         while idx < records.len() {
             let bid = records.get(idx).unwrap();
-            if bid.status == BidStatus::Placed {
+            if bid.status == BidStatus::Placed && !bid.is_expired(current_timestamp) {
                 remaining.push_back(bid);
             }
             idx += 1;
@@ -1147,6 +1150,37 @@ impl BidStorage {
         }
 
         ranked
+    }
+
+    /// Return ranked placed bids for an invoice with pagination and boundary validation.
+    ///
+    /// # Returns
+    /// `(ranked_page, total_count, has_more)` where:
+    /// - `ranked_page`: Subsequence of ranked bids within `[offset, offset + limit)`
+    /// - `total_count`: Total number of active placed bids on the invoice
+    /// - `has_more`: `true` if additional ranked bids exist past the requested page
+    pub fn rank_bids_paged(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> (Vec<Bid>, u32, bool) {
+        if crate::pagination::validate_query_params(offset, limit).is_err() {
+            return (Vec::new(env), 0, false);
+        }
+        let ranked = Self::rank_bids(env, invoice_id);
+        let total_count = ranked.len();
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut result = Vec::new(env);
+        let mut idx = start;
+        while idx < end {
+            if let Some(bid) = ranked.get(idx) {
+                result.push_back(bid);
+            }
+            idx += 1;
+        }
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        (result, total_count, has_more)
     }
 
     /// Cancel a placed bid by bid_id. Only transitions Placed -> Cancelled.

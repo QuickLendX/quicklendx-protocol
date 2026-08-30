@@ -70,7 +70,10 @@ impl PauseControl {
             },
             admin.clone(),
             "pause",
-            Some(String::from_str(env, if !paused { "true" } else { "false" })),
+            Some(String::from_str(
+                env,
+                if !paused { "true" } else { "false" },
+            )),
             Some(String::from_str(env, if paused { "true" } else { "false" })),
         );
         if paused {

@@ -37,13 +37,9 @@ fn event_emitted(env: &Env, topic: &str) -> bool {
     use soroban_sdk::{Symbol, TryFromVal};
     let topic_sym = Symbol::new(env, topic);
     let topic_xdr = xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to xdr");
-    env.events()
-        .all()
-        .events()
-        .iter()
-        .any(|e| match &e.body {
-            xdr::ContractEventBody::V0(b) => b.topics.first() == Some(&topic_xdr),
-        })
+    env.events().all().events().iter().any(|e| match &e.body {
+        xdr::ContractEventBody::V0(b) => b.topics.first() == Some(&topic_xdr),
+    })
 }
 
 // --- Tests ---
@@ -70,7 +66,10 @@ fn test_begin_migration_happy_path() {
     let (env, admin) = setup();
     StorageMigration::begin_migration(&env, &admin, 0, 1).expect("begin_migration should succeed");
     assert!(StorageMigration::is_migration_in_progress(&env));
-    assert_eq!(StorageMigration::get_pending_migration_version(&env), Some(1));
+    assert_eq!(
+        StorageMigration::get_pending_migration_version(&env),
+        Some(1)
+    );
     assert_eq!(StorageMigration::get_migration_offset(&env), 0);
     assert_eq!(StorageMigration::get_migration_records_migrated(&env), 0);
     assert!(event_emitted(&env, "migration_started"));
@@ -127,7 +126,10 @@ fn test_begin_migration_rejects_wrong_schema_from() {
 fn test_begin_migration_rejects_downgrade() {
     let (env, admin) = setup();
     let err_same = StorageMigration::begin_migration(&env, &admin, 0, 0).unwrap_err();
-    assert_eq!(err_same, crate::errors::QuickLendXError::OperationNotAllowed);
+    assert_eq!(
+        err_same,
+        crate::errors::QuickLendXError::OperationNotAllowed
+    );
 }
 
 #[test]
@@ -195,7 +197,7 @@ fn test_migration_multi_page_advance() {
 fn test_legacy_data_survives_migration() {
     use crate::storage::InvoiceStorage;
     use crate::types::{
-        DisputeResolution, DisputeStatus, Dispute, Invoice, InvoiceCategory, InvoiceStatus,
+        Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceStatus,
     };
     use soroban_sdk::{BytesN, String, Vec};
 
@@ -262,7 +264,7 @@ fn test_legacy_data_survives_migration() {
 #[test]
 fn test_legacy_bid_survives_migration() {
     use crate::bid::{Bid, BidStatus, BidStorage};
-    use soroban_sdk::{BytesN, Address};
+    use soroban_sdk::{Address, BytesN};
 
     let (env, admin) = setup();
 
@@ -288,8 +290,8 @@ fn test_legacy_bid_survives_migration() {
     StorageMigration::advance_migration_page(&env, 1, 1);
     StorageMigration::commit_migration(&env, &admin).unwrap();
 
-    let retrieved = BidStorage::get_bid(&env, &bid_id)
-        .expect("legacy bid must still exist after migration");
+    let retrieved =
+        BidStorage::get_bid(&env, &bid_id).expect("legacy bid must still exist after migration");
     assert_eq!(retrieved.bid_amount, 1_000);
     assert_eq!(retrieved.status, BidStatus::Placed);
     assert_eq!(retrieved.investor, investor);

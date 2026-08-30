@@ -1295,9 +1295,7 @@ impl StorageMigration {
             .instance()
             .set(&MIGRATION_PENDING_VER_KEY, &schema_to);
         // Reset progress counters.
-        env.storage()
-            .persistent()
-            .set(&MIGRATION_OFFSET_KEY, &0u32);
+        env.storage().persistent().set(&MIGRATION_OFFSET_KEY, &0u32);
         env.storage()
             .persistent()
             .set(&MIGRATION_RECORDS_KEY, &0u32);
@@ -1310,11 +1308,7 @@ impl StorageMigration {
     /// Updates the offset cursor and cumulative record count.
     /// Does NOT commit the schema version — call [`commit_migration`] when all
     /// records have been processed.
-    pub fn advance_migration_page(
-        env: &Env,
-        new_offset: u32,
-        records_this_page: u32,
-    ) {
+    pub fn advance_migration_page(env: &Env, new_offset: u32, records_this_page: u32) {
         env.storage()
             .persistent()
             .set(&MIGRATION_OFFSET_KEY, &new_offset);
