@@ -89,7 +89,10 @@ mod test_admin_events_audit_parity {
             assert_eq!(entry.actor, admin);
 
             // Verify hash chain validity
-            assert!(AuditStorage::verify_audit_chain(&env, &sentinel_bytes(&env)));
+            assert!(AuditStorage::verify_audit_chain(
+                &env,
+                &sentinel_bytes(&env)
+            ));
         });
 
         // Re-initialization must fail and emit NO second event or audit entry
@@ -158,7 +161,10 @@ mod test_admin_events_audit_parity {
             assert_eq!(entries.len(), 1);
             let entry = entries.get(0).unwrap();
             assert_eq!(entry.actor, admin_1);
-            assert!(AuditStorage::verify_audit_chain(&env, &sentinel_bytes(&env)));
+            assert!(AuditStorage::verify_audit_chain(
+                &env,
+                &sentinel_bytes(&env)
+            ));
         });
     }
 
@@ -179,7 +185,10 @@ mod test_admin_events_audit_parity {
                 start_timestamp: None,
                 end_timestamp: None,
             };
-            assert_eq!(AuditStorage::query_audit_logs(&env, &filter_2st, 10).len(), 1);
+            assert_eq!(
+                AuditStorage::query_audit_logs(&env, &filter_2st, 10).len(),
+                1
+            );
 
             // Initiate two-step transfer
             AdminStorage::transfer_admin(&env, &admin_1, &admin_2).unwrap();
@@ -192,7 +201,10 @@ mod test_admin_events_audit_parity {
                 start_timestamp: None,
                 end_timestamp: None,
             };
-            assert_eq!(AuditStorage::query_audit_logs(&env, &filter_init, 10).len(), 1);
+            assert_eq!(
+                AuditStorage::query_audit_logs(&env, &filter_init, 10).len(),
+                1
+            );
 
             // Cancel two-step transfer
             AdminStorage::cancel_admin_transfer(&env, &admin_1).unwrap();
@@ -205,7 +217,10 @@ mod test_admin_events_audit_parity {
                 start_timestamp: None,
                 end_timestamp: None,
             };
-            assert_eq!(AuditStorage::query_audit_logs(&env, &filter_cnl, 10).len(), 1);
+            assert_eq!(
+                AuditStorage::query_audit_logs(&env, &filter_cnl, 10).len(),
+                1
+            );
 
             // Re-initiate and Accept
             AdminStorage::initiate_admin_transfer(&env, &admin_1, &admin_2).unwrap();
@@ -219,10 +234,16 @@ mod test_admin_events_audit_parity {
                 start_timestamp: None,
                 end_timestamp: None,
             };
-            assert_eq!(AuditStorage::query_audit_logs(&env, &filter_acc, 10).len(), 1);
+            assert_eq!(
+                AuditStorage::query_audit_logs(&env, &filter_acc, 10).len(),
+                1
+            );
 
             // Verify hash chain validity
-            assert!(AuditStorage::verify_audit_chain(&env, &sentinel_bytes(&env)));
+            assert!(AuditStorage::verify_audit_chain(
+                &env,
+                &sentinel_bytes(&env)
+            ));
         });
     }
 
@@ -283,9 +304,15 @@ mod test_admin_events_audit_parity {
                 start_timestamp: None,
                 end_timestamp: None,
             };
-            assert_eq!(AuditStorage::query_audit_logs(&env, &filter_unp, 10).len(), 1);
+            assert_eq!(
+                AuditStorage::query_audit_logs(&env, &filter_unp, 10).len(),
+                1
+            );
 
-            assert!(AuditStorage::verify_audit_chain(&env, &sentinel_bytes(&env)));
+            assert!(AuditStorage::verify_audit_chain(
+                &env,
+                &sentinel_bytes(&env)
+            ));
         });
     }
 
@@ -303,12 +330,15 @@ mod test_admin_events_audit_parity {
         // Unauthorized initiate: fails, no event, no audit
         let ev_start = env.events().all().events().len();
         env.as_contract(&contract_id, || {
-            let res = EmergencyWithdraw::initiate(&env, &attacker, token.clone(), 100, target.clone());
+            let res =
+                EmergencyWithdraw::initiate(&env, &attacker, token.clone(), 100, target.clone());
             assert_eq!(res, Err(QuickLendXError::NotAdmin));
 
             let filter = AuditQueryFilter {
                 invoice_id: Some(sentinel_bytes(&env)),
-                operation: AuditOperationFilter::Specific(AuditOperation::EmergencyWithdrawalInitiated),
+                operation: AuditOperationFilter::Specific(
+                    AuditOperation::EmergencyWithdrawalInitiated,
+                ),
                 actor: None,
                 start_timestamp: None,
                 end_timestamp: None,
@@ -323,7 +353,9 @@ mod test_admin_events_audit_parity {
 
             let filter = AuditQueryFilter {
                 invoice_id: Some(sentinel_bytes(&env)),
-                operation: AuditOperationFilter::Specific(AuditOperation::EmergencyWithdrawalInitiated),
+                operation: AuditOperationFilter::Specific(
+                    AuditOperation::EmergencyWithdrawalInitiated,
+                ),
                 actor: Some(admin.clone()),
                 start_timestamp: None,
                 end_timestamp: None,
@@ -338,21 +370,32 @@ mod test_admin_events_audit_parity {
 
             let filter_cnl = AuditQueryFilter {
                 invoice_id: Some(sentinel_bytes(&env)),
-                operation: AuditOperationFilter::Specific(AuditOperation::EmergencyWithdrawalCancelled),
+                operation: AuditOperationFilter::Specific(
+                    AuditOperation::EmergencyWithdrawalCancelled,
+                ),
                 actor: Some(admin.clone()),
                 start_timestamp: None,
                 end_timestamp: None,
             };
-            assert_eq!(AuditStorage::query_audit_logs(&env, &filter_cnl, 10).len(), 1);
+            assert_eq!(
+                AuditStorage::query_audit_logs(&env, &filter_cnl, 10).len(),
+                1
+            );
 
             // Re-cancel fails, emits no duplicate event or audit entry
             let ev_mid = env.events().all().events().len();
             let res = EmergencyWithdraw::cancel(&env, &admin);
             assert_eq!(res, Err(QuickLendXError::EmergencyWithdrawCancelled));
             assert_eq!(env.events().all().events().len(), ev_mid);
-            assert_eq!(AuditStorage::query_audit_logs(&env, &filter_cnl, 10).len(), 1);
+            assert_eq!(
+                AuditStorage::query_audit_logs(&env, &filter_cnl, 10).len(),
+                1
+            );
 
-            assert!(AuditStorage::verify_audit_chain(&env, &sentinel_bytes(&env)));
+            assert!(AuditStorage::verify_audit_chain(
+                &env,
+                &sentinel_bytes(&env)
+            ));
         });
     }
 }

@@ -5,7 +5,7 @@ use crate::payments::{create_escrow, refund_escrow, release_escrow};
 use crate::storage::InvoiceStorage;
 use crate::types::{Invoice, InvoiceStatus};
 use crate::QuickLendXContract;
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec, String};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 fn setup() -> (Env, Address) {
     let env = Env::default();
@@ -59,12 +59,26 @@ fn test_create_escrow_cross_tenant_rejected() {
         create_dummy_invoice(&env, &invoice_id, &actual_business, &currency, None);
 
         // Attempt to create escrow with a business address that doesn't own the invoice
-        let result = create_escrow(&env, &invoice_id, &investor, &forged_business, 100, &currency);
+        let result = create_escrow(
+            &env,
+            &invoice_id,
+            &investor,
+            &forged_business,
+            100,
+            &currency,
+        );
         assert_eq!(result, Err(QuickLendXError::Unauthorized));
 
         // Attempt to create escrow with wrong currency
         let wrong_currency = Address::generate(&env);
-        let result2 = create_escrow(&env, &invoice_id, &investor, &actual_business, 100, &wrong_currency);
+        let result2 = create_escrow(
+            &env,
+            &invoice_id,
+            &investor,
+            &actual_business,
+            100,
+            &wrong_currency,
+        );
         assert_eq!(result2, Err(QuickLendXError::InvalidCurrency));
     });
 }
@@ -114,7 +128,13 @@ fn test_refund_escrow_cross_tenant_rejected() {
 
     env.as_contract(&contract_id, || {
         // Invoice is funded by actual_investor
-        create_dummy_invoice(&env, &invoice_id, &business, &currency, Some(actual_investor.clone()));
+        create_dummy_invoice(
+            &env,
+            &invoice_id,
+            &business,
+            &currency,
+            Some(actual_investor.clone()),
+        );
 
         let escrow_id = BytesN::from_array(&env, &[2u8; 32]);
         let escrow = crate::payments::Escrow {
@@ -149,4 +169,3 @@ fn test_release_and_refund_escrow_missing_state_handled() {
         assert_eq!(result_refund, Err(QuickLendXError::StorageKeyNotFound));
     });
 }
-

@@ -86,7 +86,13 @@ fn test_funding_events_and_audit_parity_success_flow() {
         setup_test_env();
 
     let invoice_amount = 20_000i128;
-    let invoice_id = create_verified_invoice(&env, &client, &business, &token_client.address, invoice_amount);
+    let invoice_id = create_verified_invoice(
+        &env,
+        &client,
+        &business,
+        &token_client.address,
+        invoice_amount,
+    );
 
     token_admin_client.mint(&investor, &50_000i128);
 
@@ -98,7 +104,10 @@ fn test_funding_events_and_audit_parity_success_flow() {
 
     // Verify BidPlaced event & audit
     let events = env.events().all();
-    assert!(events.iter().any(|e| e.1.iter().any(|v| Symbol::try_from_val(&env, &v) == Ok(TOPIC_BID_PLACED))));
+    assert!(events.iter().any(|e| e
+        .1
+        .iter()
+        .any(|v| Symbol::try_from_val(&env, &v) == Ok(TOPIC_BID_PLACED))));
 
     let filter = AuditQueryFilter {
         invoice_id: Some(invoice_id.clone()),
@@ -116,36 +125,54 @@ fn test_funding_events_and_audit_parity_success_flow() {
 
     // Verify events: EscrowCreated, BidAccepted, InvoiceFunded
     let events = env.events().all();
-    assert!(events.iter().any(|e| e.1.iter().any(|v| Symbol::try_from_val(&env, &v) == Ok(TOPIC_ESCROW_CREATED))));
-    assert!(events.iter().any(|e| e.1.iter().any(|v| Symbol::try_from_val(&env, &v) == Ok(TOPIC_BID_ACCEPTED))));
-    assert!(events.iter().any(|e| e.1.iter().any(|v| Symbol::try_from_val(&env, &v) == Ok(TOPIC_INVOICE_FUNDED))));
+    assert!(events.iter().any(|e| e
+        .1
+        .iter()
+        .any(|v| Symbol::try_from_val(&env, &v) == Ok(TOPIC_ESCROW_CREATED))));
+    assert!(events.iter().any(|e| e
+        .1
+        .iter()
+        .any(|v| Symbol::try_from_val(&env, &v) == Ok(TOPIC_BID_ACCEPTED))));
+    assert!(events.iter().any(|e| e
+        .1
+        .iter()
+        .any(|v| Symbol::try_from_val(&env, &v) == Ok(TOPIC_INVOICE_FUNDED))));
 
     // Verify audit logs for funding transitions
-    let escrow_audit = client.query_audit_logs(&AuditQueryFilter {
-        invoice_id: Some(invoice_id.clone()),
-        operation: Some(AuditOperation::EscrowCreated),
-        actor: None,
-        start_time: None,
-        end_time: None,
-    }, &10);
+    let escrow_audit = client.query_audit_logs(
+        &AuditQueryFilter {
+            invoice_id: Some(invoice_id.clone()),
+            operation: Some(AuditOperation::EscrowCreated),
+            actor: None,
+            start_time: None,
+            end_time: None,
+        },
+        &10,
+    );
     assert_eq!(escrow_audit.len(), 1);
 
-    let accepted_audit = client.query_audit_logs(&AuditQueryFilter {
-        invoice_id: Some(invoice_id.clone()),
-        operation: Some(AuditOperation::BidAccepted),
-        actor: None,
-        start_time: None,
-        end_time: None,
-    }, &10);
+    let accepted_audit = client.query_audit_logs(
+        &AuditQueryFilter {
+            invoice_id: Some(invoice_id.clone()),
+            operation: Some(AuditOperation::BidAccepted),
+            actor: None,
+            start_time: None,
+            end_time: None,
+        },
+        &10,
+    );
     assert_eq!(accepted_audit.len(), 1);
 
-    let funded_audit = client.query_audit_logs(&AuditQueryFilter {
-        invoice_id: Some(invoice_id.clone()),
-        operation: Some(AuditOperation::InvoiceFunded),
-        actor: None,
-        start_time: None,
-        end_time: None,
-    }, &10);
+    let funded_audit = client.query_audit_logs(
+        &AuditQueryFilter {
+            invoice_id: Some(invoice_id.clone()),
+            operation: Some(AuditOperation::InvoiceFunded),
+            actor: None,
+            start_time: None,
+            end_time: None,
+        },
+        &10,
+    );
     assert_eq!(funded_audit.len(), 1);
 
     // Verify chain integrity
@@ -164,18 +191,36 @@ fn test_investor_exposure_accounting_includes_active_investments() {
 
     // Create Invoice 1 for 20,000 and fund it
     let inv1 = create_verified_invoice(&env, &client, &business, &token_client.address, 20_000i128);
-    let bid1 = client.place_bid(&investor, &inv1, &20_000i128, &22_000i128, &BytesN::from_array(&env, &[1u8; 32]));
+    let bid1 = client.place_bid(
+        &investor,
+        &inv1,
+        &20_000i128,
+        &22_000i128,
+        &BytesN::from_array(&env, &[1u8; 32]),
+    );
     client.accept_bid_and_fund(&inv1, &bid1);
 
     // Now investor has 20,000 in Active investment.
     // Placing another bid of 15,000 should EXCEED limit (20,000 + 15,000 = 35,000 > 30,000)
     let inv2 = create_verified_invoice(&env, &client, &business, &token_client.address, 15_000i128);
-    let res = client.try_place_bid(&investor, &inv2, &15_000i128, &17_000i128, &BytesN::from_array(&env, &[2u8; 32]));
+    let res = client.try_place_bid(
+        &investor,
+        &inv2,
+        &15_000i128,
+        &17_000i128,
+        &BytesN::from_array(&env, &[2u8; 32]),
+    );
     assert!(res.is_err());
     assert_eq!(res.err().unwrap(), Ok(QuickLendXError::InvalidAmount));
 
     // Placing a bid of 10,000 should SUCCEED (20,000 + 10,000 = 30,000 <= 30,000)
-    let bid2 = client.place_bid(&investor, &inv2, &10_000i128, &11_000i128, &BytesN::from_array(&env, &[3u8; 32]));
+    let bid2 = client.place_bid(
+        &investor,
+        &inv2,
+        &10_000i128,
+        &11_000i128,
+        &BytesN::from_array(&env, &[3u8; 32]),
+    );
     assert_eq!(bid2.to_array().len(), 32);
 }
 
@@ -187,28 +232,44 @@ fn test_rejected_and_duplicate_operations_emit_no_partial_state_or_audit() {
     let inv = create_verified_invoice(&env, &client, &business, &token_client.address, 10_000i128);
     token_admin_client.mint(&investor, &20_000i128);
 
-    let bid_id = client.place_bid(&investor, &inv, &10_000i128, &11_000i128, &BytesN::from_array(&env, &[1u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &inv,
+        &10_000i128,
+        &11_000i128,
+        &BytesN::from_array(&env, &[1u8; 32]),
+    );
     client.accept_bid_and_fund(&inv, &bid_id);
 
-    let audit_count_before = client.query_audit_logs(&AuditQueryFilter {
-        invoice_id: Some(inv.clone()),
-        operation: None,
-        actor: None,
-        start_time: None,
-        end_time: None,
-    }, &100).len();
+    let audit_count_before = client
+        .query_audit_logs(
+            &AuditQueryFilter {
+                invoice_id: Some(inv.clone()),
+                operation: None,
+                actor: None,
+                start_time: None,
+                end_time: None,
+            },
+            &100,
+        )
+        .len();
 
     // Duplicate funding attempt must fail
     let duplicate_res = client.try_accept_bid_and_fund(&inv, &bid_id);
     assert!(duplicate_res.is_err());
 
-    let audit_count_after = client.query_audit_logs(&AuditQueryFilter {
-        invoice_id: Some(inv.clone()),
-        operation: None,
-        actor: None,
-        start_time: None,
-        end_time: None,
-    }, &100).len();
+    let audit_count_after = client
+        .query_audit_logs(
+            &AuditQueryFilter {
+                invoice_id: Some(inv.clone()),
+                operation: None,
+                actor: None,
+                start_time: None,
+                end_time: None,
+            },
+            &100,
+        )
+        .len();
 
     // Must have logged ZERO new audit records for the failed attempt
     assert_eq!(audit_count_before, audit_count_after);
@@ -222,19 +283,28 @@ fn test_escrow_refund_events_and_audit_parity() {
     let inv = create_verified_invoice(&env, &client, &business, &token_client.address, 10_000i128);
     token_admin_client.mint(&investor, &20_000i128);
 
-    let bid_id = client.place_bid(&investor, &inv, &10_000i128, &11_000i128, &BytesN::from_array(&env, &[1u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &inv,
+        &10_000i128,
+        &11_000i128,
+        &BytesN::from_array(&env, &[1u8; 32]),
+    );
     client.accept_bid_and_fund(&inv, &bid_id);
 
     client.refund_escrow_funds(&inv);
 
     // Verify EscrowRefunded event and audit
-    let refund_audit = client.query_audit_logs(&AuditQueryFilter {
-        invoice_id: Some(inv.clone()),
-        operation: Some(AuditOperation::EscrowRefunded),
-        actor: None,
-        start_time: None,
-        end_time: None,
-    }, &10);
+    let refund_audit = client.query_audit_logs(
+        &AuditQueryFilter {
+            invoice_id: Some(inv.clone()),
+            operation: Some(AuditOperation::EscrowRefunded),
+            actor: None,
+            start_time: None,
+            end_time: None,
+        },
+        &10,
+    );
     assert_eq!(refund_audit.len(), 1);
     assert!(client.verify_audit_chain(&inv));
 }

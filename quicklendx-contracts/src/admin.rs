@@ -247,8 +247,14 @@ impl AdminStorage {
             AuditOperation::AdminTwoStepUpdated,
             admin.clone(),
             "two_step",
-            Some(String::from_str(env, if !enabled { "true" } else { "false" })),
-            Some(String::from_str(env, if enabled { "true" } else { "false" })),
+            Some(String::from_str(
+                env,
+                if !enabled { "true" } else { "false" },
+            )),
+            Some(String::from_str(
+                env,
+                if enabled { "true" } else { "false" },
+            )),
         );
 
         crate::events::emit_admin_two_step_updated(env, admin, enabled);

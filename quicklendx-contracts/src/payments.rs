@@ -201,7 +201,10 @@ pub fn get_investor_available_capacity(
 
     let exposure = get_investor_exposure(env, investor)?;
 
-    Ok(verification.investment_limit.checked_sub(exposure).unwrap_or(0))
+    Ok(verification
+        .investment_limit
+        .checked_sub(exposure)
+        .unwrap_or(0))
 }
 
 /// Validate that an investor has sufficient authorized capacity for a new funding commitment of `amount`.
@@ -233,7 +236,7 @@ pub enum EscrowStatus {
 
 impl EscrowStatus {
     /// Validates whether the state can legally transition to `next`.
-    /// 
+    ///
     /// Enforces the legal transition matrix for escrow lifecycle:
     /// - `Held` -> `Released`
     /// - `Held` -> `Refunded`

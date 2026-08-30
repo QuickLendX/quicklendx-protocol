@@ -60,7 +60,7 @@ impl PauseControl {
         if current == paused {
             return Ok(());
         }
-        Self::apply_paused(env, paused);
+        Self::apply_paused(env, paused, None);
         log_config_change(
             env,
             if paused {
@@ -70,7 +70,10 @@ impl PauseControl {
             },
             admin.clone(),
             "pause",
-            Some(String::from_str(env, if !paused { "true" } else { "false" })),
+            Some(String::from_str(
+                env,
+                if !paused { "true" } else { "false" },
+            )),
             Some(String::from_str(env, if paused { "true" } else { "false" })),
         );
         if paused {

@@ -8,8 +8,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 use crate::errors::QuickLendXError;
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvoiceStatus, PlatformFeeConfig,
-    PruneReport, RebuildReport,
+    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, InvestorFreezeInfo, Invoice,
+    InvoiceCategory, InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
@@ -1295,9 +1295,7 @@ impl StorageMigration {
             .instance()
             .set(&MIGRATION_PENDING_VER_KEY, &schema_to);
         // Reset progress counters.
-        env.storage()
-            .persistent()
-            .set(&MIGRATION_OFFSET_KEY, &0u32);
+        env.storage().persistent().set(&MIGRATION_OFFSET_KEY, &0u32);
         env.storage()
             .persistent()
             .set(&MIGRATION_RECORDS_KEY, &0u32);
@@ -1310,11 +1308,7 @@ impl StorageMigration {
     /// Updates the offset cursor and cumulative record count.
     /// Does NOT commit the schema version — call [`commit_migration`] when all
     /// records have been processed.
-    pub fn advance_migration_page(
-        env: &Env,
-        new_offset: u32,
-        records_this_page: u32,
-    ) {
+    pub fn advance_migration_page(env: &Env, new_offset: u32, records_this_page: u32) {
         env.storage()
             .persistent()
             .set(&MIGRATION_OFFSET_KEY, &new_offset);

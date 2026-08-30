@@ -316,7 +316,8 @@ fn pending_bid_and_active_investment_share_one_cap() {
             BidStorage::get_active_bid_amount_sum_for_investor(&env, &investor),
             5_000
         );
-        let active = InvestmentStorage::get_active_investment_amount_sum_for_investor(&env, &investor);
+        let active =
+            InvestmentStorage::get_active_investment_amount_sum_for_investor(&env, &investor);
         assert_eq!(active, 4_000);
         assert_eq!(active.saturating_add(5_000), 9_000);
         assert_eq!(

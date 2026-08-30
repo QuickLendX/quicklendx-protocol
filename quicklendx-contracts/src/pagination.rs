@@ -286,10 +286,22 @@ mod tests {
         assert_eq!(encoded, "42_7");
         assert_eq!(PageCursor::decode(&encoded), Ok(original));
 
-        assert_eq!(PageCursor::decode("42"), Err(QuickLendXError::InvalidAmount));
-        assert_eq!(PageCursor::decode("abc_7"), Err(QuickLendXError::InvalidAmount));
-        assert_eq!(PageCursor::decode("42_abc"), Err(QuickLendXError::InvalidAmount));
-        assert_eq!(PageCursor::decode("42_7_9"), Err(QuickLendXError::InvalidAmount));
+        assert_eq!(
+            PageCursor::decode("42"),
+            Err(QuickLendXError::InvalidAmount)
+        );
+        assert_eq!(
+            PageCursor::decode("abc_7"),
+            Err(QuickLendXError::InvalidAmount)
+        );
+        assert_eq!(
+            PageCursor::decode("42_abc"),
+            Err(QuickLendXError::InvalidAmount)
+        );
+        assert_eq!(
+            PageCursor::decode("42_7_9"),
+            Err(QuickLendXError::InvalidAmount)
+        );
     }
 
     #[test]

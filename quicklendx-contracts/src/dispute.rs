@@ -110,7 +110,10 @@ mod evidence_identity_tests {
         let digest = reserve_evidence(&env, &invoice, &creator, &evidence).unwrap();
         let expected: BytesN<32> = env.crypto().sha256(&evidence.to_bytes()).into();
         assert_eq!(digest, expected);
-        assert_eq!(reserve_evidence(&env, &invoice, &creator, &evidence), Err(QuickLendXError::InvalidDisputeEvidence));
+        assert_eq!(
+            reserve_evidence(&env, &invoice, &creator, &evidence),
+            Err(QuickLendXError::InvalidDisputeEvidence)
+        );
     }
 
     #[test]
@@ -166,9 +169,9 @@ pub(crate) fn reserve_evidence(
     crate::storage::extend_persistent_ttl(env, &key);
     env.events().publish(
         (symbol_short!("evidence"),),
-        (invoice_id.clone(), creator.clone(), digest_bytes.clone()),
+        (invoice_id.clone(), creator.clone(), digest.clone()),
     );
-    Ok(digest_bytes)
+    Ok(digest)
 }
 fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> {
     Ok(())

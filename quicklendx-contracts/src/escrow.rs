@@ -27,7 +27,8 @@ use crate::payments::{
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
 use crate::verification::{
-    require_business_active, require_business_not_pending, validate_investor_investment,
+    require_business_active, require_business_not_pending, require_investor_not_frozen,
+    require_investor_not_pending, validate_investor_investment,
 };
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
@@ -56,10 +57,7 @@ pub struct BidAcceptanceRecord {
 const BID_ACCEPTANCE_RECORD_KEY: Symbol = symbol_short!("bid_acc");
 
 /// Look up a durable bid-acceptance record by request key.
-fn get_bid_acceptance_record(
-    env: &Env,
-    request_key: &BytesN<32>,
-) -> Option<BidAcceptanceRecord> {
+fn get_bid_acceptance_record(env: &Env, request_key: &BytesN<32>) -> Option<BidAcceptanceRecord> {
     env.storage()
         .persistent()
         .get(&(BID_ACCEPTANCE_RECORD_KEY, request_key.clone()))
@@ -67,11 +65,7 @@ fn get_bid_acceptance_record(
 
 /// Persist a durable bid-acceptance record and extend its TTL so it does not
 /// expire while the escrow it references remains live.
-fn store_bid_acceptance_record(
-    env: &Env,
-    request_key: &BytesN<32>,
-    record: &BidAcceptanceRecord,
-) {
+fn store_bid_acceptance_record(env: &Env, request_key: &BytesN<32>, record: &BidAcceptanceRecord) {
     let key = (BID_ACCEPTANCE_RECORD_KEY, request_key.clone());
     env.storage().persistent().set(&key, record);
     crate::storage::extend_persistent_ttl(env, &key);
@@ -382,7 +376,7 @@ fn update_states_after_funding(
     // after escrow funding and state transitions complete successfully.
     let _ = crate::notifications::NotificationSystem::notify_bid_accepted(env, &invoice, &bid);
 
-    Ok(escrow_id)
+    Ok(())
 }
 
 /// Explicitly refund escrowed funds to the investor.

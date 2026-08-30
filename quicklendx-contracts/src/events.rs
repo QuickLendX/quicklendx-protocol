@@ -2146,12 +2146,7 @@ pub fn emit_schema_version_set(env: &Env, schema_version: u32, set_by: &Address)
 }
 
 /// Emit a [`MigrationStarted`] event.
-pub fn emit_migration_started(
-    env: &Env,
-    schema_from: u32,
-    schema_to: u32,
-    initiated_by: &Address,
-) {
+pub fn emit_migration_started(env: &Env, schema_from: u32, schema_to: u32, initiated_by: &Address) {
     MigrationStarted {
         schema_from,
         schema_to,

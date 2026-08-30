@@ -795,7 +795,13 @@ fn test_withdraw_and_cancel_are_different_terminal_states() {
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
     client.verify_investor(&admin, &investor_b, &10_000i128);
-    let bid_id_cancel = client.place_bid(&investor_b, &invoice_id, &800i128, &850i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id_cancel = client.place_bid(
+        &investor_b,
+        &invoice_id,
+        &800i128,
+        &850i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.cancel_bid(&bid_id_cancel).unwrap();
     let bid_cancelled = client.get_bid(&bid_id_cancel).unwrap();
     assert_eq!(bid_cancelled.status, BidStatus::Cancelled);
