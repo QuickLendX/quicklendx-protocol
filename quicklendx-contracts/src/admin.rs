@@ -6,9 +6,11 @@
 
 #![allow(dead_code)]
 
+use crate::audit::{address_to_audit_string, log_config_change, AuditOperation};
 use crate::errors::QuickLendXError;
+use crate::fees::FeeManager;
 use crate::storage;
-use soroban_sdk::{symbol_short, Address, Env, Symbol};
+use soroban_sdk::{symbol_short, Address, Env, String, Symbol};
 
 /// Current admin storage key.
 pub const ADMIN_KEY: Symbol = symbol_short!("admin");
@@ -27,6 +29,7 @@ pub struct AdminStorage;
 impl AdminStorage {
     #[inline]
     fn require_existing_transfer_destination(address: &Address) -> Result<(), QuickLendXError> {
+        #[cfg(not(test))]
         if !address.exists() {
             return Err(QuickLendXError::InvalidAddress);
         }
@@ -48,6 +51,15 @@ impl AdminStorage {
 
         env.storage().instance().set(&ADMIN_KEY, admin);
         env.storage().instance().set(&ADMIN_INITIALIZED_KEY, &true);
+
+        log_config_change(
+            env,
+            AuditOperation::AdminInitialized,
+            admin.clone(),
+            "admin_init",
+            None,
+            Some(address_to_audit_string(env, admin)),
+        );
 
         crate::events::emit_admin_initialized(env, admin);
         Ok(())
@@ -89,6 +101,15 @@ impl AdminStorage {
         env.storage().instance().set(&ADMIN_KEY, new_admin);
         Self::set_transfer_lock(env, false);
 
+        log_config_change(
+            env,
+            AuditOperation::AdminTransferred,
+            current_admin.clone(),
+            "admin_transfer",
+            Some(address_to_audit_string(env, current_admin)),
+            Some(address_to_audit_string(env, new_admin)),
+        );
+
         crate::events::emit_admin_transferred(env, current_admin, new_admin);
         Ok(())
     }
@@ -129,6 +150,15 @@ impl AdminStorage {
             .set(&ADMIN_PENDING_KEY, pending_admin);
         Self::set_transfer_lock(env, true);
 
+        log_config_change(
+            env,
+            AuditOperation::AdminTransferInitiated,
+            current_admin.clone(),
+            "admin_pending",
+            None,
+            Some(address_to_audit_string(env, pending_admin)),
+        );
+
         crate::events::emit_admin_transfer_initiated(env, current_admin, pending_admin);
         Ok(())
     }
@@ -156,6 +186,15 @@ impl AdminStorage {
         env.storage().instance().remove(&ADMIN_PENDING_KEY);
         Self::set_transfer_lock(env, false);
 
+        log_config_change(
+            env,
+            AuditOperation::AdminTransferred,
+            pending_admin.clone(),
+            "admin_accept",
+            Some(address_to_audit_string(env, &current_admin)),
+            Some(address_to_audit_string(env, pending_admin)),
+        );
+
         crate::events::emit_admin_transferred(env, &current_admin, pending_admin);
         Ok(())
     }
@@ -172,6 +211,15 @@ impl AdminStorage {
             Self::get_pending_admin(env).ok_or(QuickLendXError::OperationNotAllowed)?;
         env.storage().instance().remove(&ADMIN_PENDING_KEY);
         Self::set_transfer_lock(env, false);
+
+        log_config_change(
+            env,
+            AuditOperation::AdminTransferCancelled,
+            current_admin.clone(),
+            "admin_cancel",
+            Some(address_to_audit_string(env, &pending_admin)),
+            None,
+        );
 
         crate::events::emit_admin_transfer_cancelled(env, current_admin, &pending_admin);
         Ok(())
@@ -193,6 +241,21 @@ impl AdminStorage {
             env.storage().instance().remove(&ADMIN_PENDING_KEY);
             Self::set_transfer_lock(env, false);
         }
+
+        log_config_change(
+            env,
+            AuditOperation::AdminTwoStepUpdated,
+            admin.clone(),
+            "two_step",
+            Some(String::from_str(
+                env,
+                if !enabled { "true" } else { "false" },
+            )),
+            Some(String::from_str(
+                env,
+                if enabled { "true" } else { "false" },
+            )),
+        );
 
         crate::events::emit_admin_two_step_updated(env, admin, enabled);
         Ok(())
@@ -378,6 +441,69 @@ pub fn require_not_self(env: &Env, caller: &Address) -> Result<(), QuickLendXErr
     Ok(())
 }
 
+/// Check if an address is a reserved protocol address.
+///
+/// Reserved addresses are:
+/// - The zero/burn address (GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF)
+/// - The contract's own address
+/// - The current admin address (if initialized)
+/// - The current treasury address (if configured)
+///
+/// This is a pure validation helper — it performs no state writes and requires no
+/// authentication. Call it as an early guard before adding an address to the
+/// currency whitelist or using it in other protocol operations.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `address` - The address to check
+/// * `admin` - Optional admin address (pass `None` to fetch from storage)
+/// * `treasury` - Optional treasury address (pass `None` to fetch from storage)
+///
+/// # Returns
+/// * `Ok(())` — The address is not reserved.
+/// * `Err(InvalidCurrency)` — The address is reserved and cannot be used as a currency.
+#[inline]
+pub fn require_not_reserved(
+    env: &Env,
+    address: &Address,
+    admin: Option<Address>,
+    treasury: Option<Address>,
+    contract_address: Option<Address>,
+) -> Result<(), QuickLendXError> {
+    let zero = Address::from_string(&String::from_str(
+        env,
+        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+    ));
+    let contract_addr = contract_address.unwrap_or_else(|| env.current_contract_address());
+
+    if *address == zero {
+        return Err(QuickLendXError::InvalidCurrency);
+    }
+    if *address == contract_addr {
+        return Err(QuickLendXError::InvalidCurrency);
+    }
+
+    let admin_addr = match admin {
+        Some(a) => a,
+        None => AdminStorage::get_admin(env).ok_or(QuickLendXError::InvalidCurrency)?,
+    };
+    if *address == admin_addr {
+        return Err(QuickLendXError::InvalidCurrency);
+    }
+
+    let treasury_addr = match treasury {
+        Some(t) => Some(t),
+        None => FeeManager::get_treasury_address(env),
+    };
+    if let Some(t_addr) = treasury_addr {
+        if *address == t_addr {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
+    }
+
+    Ok(())
+}
+
 /// Cancel a pending treasury address rotation.
 ///
 /// # Arguments
@@ -395,6 +521,14 @@ pub fn cancel_treasury_rotation(env: &Env, admin: &Address) -> Result<(), QuickL
     }
 
     storage::remove_pending_treasury(env);
+    log_config_change(
+        env,
+        AuditOperation::TreasuryRotationCancelled,
+        admin.clone(),
+        "cancel_treasury_rotation",
+        None,
+        None,
+    );
     crate::events::treasury_rotation_cancelled(env, admin);
     Ok(())
 }

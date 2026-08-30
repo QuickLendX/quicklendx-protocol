@@ -5,7 +5,7 @@ edition = "2021"
 
 [lib]
 # rlib for tests/integration; cdylib for WASM contract builds.
-crate-type = ["cdylib", "rlib"]
+crate-type = ["rlib", "cdylib"]
 
 [dependencies]
 soroban-sdk = { version = "25.1.1", features = ["alloc"] }
@@ -16,8 +16,10 @@ proptest = "1.4"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"
+ed25519-dalek = "2"
 soroban-sdk = { version = "25.1.1", features = ["testutils"] }
 quicklendx-contracts = { path = ".", features = ["testutils"] }
+ed25519-dalek = "2.2"
 
 
 [features]

@@ -5,6 +5,7 @@
 //! AnalyticsCalculator::calculate_platform_metrics.
 
 #![cfg(test)]
+#![allow(unused_must_use)]
 
 extern crate alloc;
 
@@ -54,6 +55,7 @@ fn upload(
         &String::from_str(env, desc),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     )
 }
 
@@ -128,7 +130,7 @@ fn compute_independent_metrics(env: &Env, contract_id: &Address) -> IndependentM
 
         let total_invoices = all_invoices.len() as u32;
         let expected_total_volume: i128 = all_invoices.iter().map(|i| i.amount).sum();
-        let total_investments = (funded.len() + paid.len() + defaulted.len());
+        let total_investments = funded.len() + paid.len() + defaulted.len();
 
         let expected_average_invoice_amount = if total_invoices > 0 {
             // integer division truncates toward zero
@@ -165,7 +167,7 @@ fn compute_independent_metrics(env: &Env, contract_id: &Address) -> IndependentM
         } as i128;
 
         let expected_success_rate = if total_investments > 0 {
-            ((paid.len() as u32).saturating_mul(10_000)) / total_investments
+            (paid.len().saturating_mul(10_000)) / total_investments
         } else {
             0
         } as i128;

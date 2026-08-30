@@ -10,9 +10,10 @@
 //! - Nonce tracking: Each initiation increments a nonce to prevent stale request reuse.
 
 use crate::admin::AdminStorage;
+use crate::audit::{address_to_audit_string, log_operation, AuditOperation, CONFIG_AUDIT_SENTINEL};
 use crate::errors::QuickLendXError;
 use crate::payments::{transfer_funds, EscrowStorage};
-use soroban_sdk::{contracttype, symbol_short, token, Address, Env};
+use soroban_sdk::{contracttype, symbol_short, token, Address, BytesN, Env};
 
 /// Default timelock: 24 hours. Withdrawal can only be executed after this delay.
 pub const DEFAULT_EMERGENCY_TIMELOCK_SECS: u64 = 24 * 60 * 60;
@@ -173,6 +174,19 @@ impl EmergencyWithdraw {
         env.storage()
             .instance()
             .set(&PENDING_WITHDRAWAL_KEY, &pending);
+
+        let sentinel = BytesN::from_array(env, &CONFIG_AUDIT_SENTINEL);
+        log_operation(
+            env,
+            sentinel,
+            AuditOperation::EmergencyWithdrawalInitiated,
+            admin.clone(),
+            None,
+            Some(address_to_audit_string(env, &target)),
+            Some(amount),
+            Some(address_to_audit_string(env, &token)),
+        );
+
         crate::events::emit_emergency_withdrawal_initiated(
             env,
             token,
@@ -244,6 +258,19 @@ impl EmergencyWithdraw {
         )?;
 
         env.storage().instance().remove(&PENDING_WITHDRAWAL_KEY);
+
+        let sentinel = BytesN::from_array(env, &CONFIG_AUDIT_SENTINEL);
+        log_operation(
+            env,
+            sentinel,
+            AuditOperation::EmergencyWithdrawalExecuted,
+            admin.clone(),
+            None,
+            Some(address_to_audit_string(env, &pending.target)),
+            Some(pending.amount),
+            Some(address_to_audit_string(env, &pending.token)),
+        );
+
         crate::events::emit_emergency_withdrawal_executed(
             env,
             pending.token.clone(),
@@ -301,6 +328,18 @@ impl EmergencyWithdraw {
         env.storage()
             .instance()
             .set(&PENDING_WITHDRAWAL_KEY, &pending);
+
+        let sentinel = BytesN::from_array(env, &CONFIG_AUDIT_SENTINEL);
+        log_operation(
+            env,
+            sentinel,
+            AuditOperation::EmergencyWithdrawalCancelled,
+            admin.clone(),
+            None,
+            Some(address_to_audit_string(env, &pending.target)),
+            Some(pending.amount),
+            Some(address_to_audit_string(env, &pending.token)),
+        );
 
         crate::events::emit_emergency_withdrawal_cancelled(
             env,

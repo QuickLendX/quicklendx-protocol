@@ -51,6 +51,20 @@ pub struct InvestorPortfolioSummary {
 /// This constant ensures memory usage stays within reasonable bounds.
 pub const MAX_QUERY_LIMIT: u32 = crate::MAX_QUERY_LIMIT;
 
+/// Cursor-stable page of an investor's investment IDs, returned by
+/// [`InvestmentQueries::get_investor_investments_paginated_cursored`]
+/// (#2456). See that function's doc comment for the cursor protocol.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvestorInvestmentsPage {
+    pub items: Vec<BytesN<32>>,
+    pub total_count: u32,
+    pub has_more: bool,
+    /// The investor's investment-index generation this page was computed
+    /// against. Pass back as `cursor_generation` on the next call.
+    pub generation: u64,
+}
+
 /// Read-only investment query helpers with pagination support
 pub struct InvestmentQueries;
 
@@ -158,7 +172,7 @@ impl InvestmentQueries {
         status_filter: Option<InvestmentStatus>,
         offset: u32,
         limit: u32,
-    ) -> Vec<BytesN<32>> {
+    ) -> crate::types::PaginatedBytes32Vec {
         let all_investment_ids = InvestmentStorage::get_investments_by_investor(env, investor);
         let mut filtered = Vec::new(env);
 
@@ -176,9 +190,10 @@ impl InvestmentQueries {
             }
         }
 
+        let total_count = filtered.len();
+
         // Apply pagination with overflow-safe arithmetic
-        let collection_size = filtered.len();
-        let (start, end) = Self::calculate_safe_bounds(offset, limit, collection_size);
+        let (start, end) = Self::calculate_safe_bounds(offset, limit, total_count);
 
         let mut result = Vec::new(env);
         let mut idx = start;
@@ -190,7 +205,89 @@ impl InvestmentQueries {
             idx = idx.saturating_add(1);
         }
 
-        result
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        crate::types::PaginatedBytes32Vec {
+            items: result,
+            total_count,
+            has_more,
+        }
+    }
+
+    /// Cursor-stable variant of [`Self::get_investor_investments_paginated`]
+    /// (#2456).
+    ///
+    /// ## Why this exists alongside the older function
+    /// `get_investor_investments_paginated` computes its `(offset, limit)`
+    /// window against whatever `investor`'s investment list happens to be
+    /// *at call time*. If a new investment is recorded for `investor`
+    /// between two calls a caller makes to page through results, the later
+    /// page is computed against a longer list than the one the earlier page
+    /// was drawn from: a record can be skipped (it shifts from a later page
+    /// into a page the caller already fetched) or duplicated (it shifts
+    /// from an already-fetched page into a later one). That has always been
+    /// an inherent property of plain offset-pagination over a mutable
+    /// collection — not a regression in the older function — but nothing
+    /// previously let a caller detect it.
+    ///
+    /// This function makes that failure mode explicit and closes it: pass
+    /// `cursor_generation: None` for the first page. Every response
+    /// includes `generation` — the value of
+    /// [`crate::investment::InvestmentStorage::get_investor_generation`]
+    /// this page was computed against. Pass that value back as
+    /// `cursor_generation` on the next call for the same investor/filter.
+    /// If a new investment was recorded for this investor in between, the
+    /// generation no longer matches and this call fails closed with
+    /// `Err(QuickLendXError::UnstableCursor)` instead of returning a page
+    /// with a silent gap or duplicate. The caller can then restart
+    /// pagination from `offset: 0` with the new generation.
+    ///
+    /// Status changes on an *existing* investment (e.g. `Active` ->
+    /// `Completed`) do not move it in or out of the investor's raw
+    /// investment index, so they don't affect this generation — but they
+    /// can change which page a `status_filter`ed record appears on between
+    /// calls. Protecting that case as well would require tracking a
+    /// generation per (investor, status) pair; this pass covers the
+    /// concurrent-insert case, which is both the case this issue's required
+    /// test list names explicitly and the one that changes the *size* of
+    /// the underlying collection callers are paging over. See
+    /// `ISSUE_2456_IMPLEMENTATION.md` for the full design note, including
+    /// this as a documented, in-scope limitation rather than an oversight.
+    ///
+    /// ## Compatibility
+    /// Purely additive. [`Self::get_investor_investments_paginated`] and the
+    /// `get_investor_investments_paged` contract entrypoint built on it are
+    /// completely unchanged — this is a new function and a new contract
+    /// entrypoint (`get_investor_investments_cursor`), not a
+    /// modification of an existing one. No existing caller's request or
+    /// response shape changes.
+    ///
+    /// ## Errors
+    /// * [`QuickLendXError::UnstableCursor`] — `cursor_generation` was
+    ///   `Some(g)` and `g` no longer matches `investor`'s current
+    ///   generation.
+    pub fn get_investor_investments_paginated_cursored(
+        env: &Env,
+        investor: &Address,
+        status_filter: Option<InvestmentStatus>,
+        offset: u32,
+        limit: u32,
+        cursor_generation: Option<u64>,
+    ) -> Result<InvestorInvestmentsPage, QuickLendXError> {
+        let current_generation =
+            crate::investment::InvestmentStorage::get_investor_generation(env, investor);
+        if let Some(expected) = cursor_generation {
+            crate::pagination::require_stable_cursor(expected, current_generation)?;
+        }
+
+        let page =
+            Self::get_investor_investments_paginated(env, investor, status_filter, offset, limit);
+
+        Ok(InvestorInvestmentsPage {
+            items: page.items,
+            total_count: page.total_count,
+            has_more: page.has_more,
+            generation: current_generation,
+        })
     }
 
     /// Aggregate an investor's portfolio in a single bounded pass.

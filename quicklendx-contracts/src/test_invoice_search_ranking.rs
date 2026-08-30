@@ -85,9 +85,11 @@ mod test_invoice_search_ranking {
             total_ratings: 0,
             ratings: Vec::new(env),
             dispute_status: crate::types::DisputeStatus::None,
-            dispute,
             total_paid: 0,
             payment_history: Vec::new(env),
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
         }
     }
 
@@ -141,9 +143,11 @@ mod test_invoice_search_ranking {
             total_ratings: 0,
             ratings: Vec::new(&env),
             dispute_status: crate::types::DisputeStatus::None,
-            dispute,
             total_paid: 0,
             payment_history: Vec::new(&env),
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
         };
 
         // Invoice 2: Partial description match
@@ -262,9 +266,11 @@ mod test_invoice_search_ranking {
             total_ratings: 0,
             ratings: Vec::new(&env),
             dispute_status: crate::types::DisputeStatus::None,
-            dispute,
             total_paid: 0,
             payment_history: Vec::new(&env),
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
         };
 
         // Invoice with PartialMatch, created at 5000 (newer)

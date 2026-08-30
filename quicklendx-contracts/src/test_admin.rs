@@ -849,13 +849,13 @@ mod access_control_matrix {
 
         // Non-admin cannot set protocol config
         let result = env.as_contract(&contract_id, || {
-            ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400)
+            ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400, 100)
         });
         assert_eq!(result, Err(QuickLendXError::NotAdmin));
 
         // Admin can set protocol config
         let result = env.as_contract(&contract_id, || {
-            ProtocolInitializer::set_protocol_config(&env, &admin, 1000, 365, 86400)
+            ProtocolInitializer::set_protocol_config(&env, &admin, 1000, 365, 86400, 100)
         });
         assert_eq!(result, Ok(()));
     }
@@ -1250,7 +1250,15 @@ mod access_control_matrix {
         // Non-admin cannot set protocol limits
         let result = env.as_contract(&contract_id, || {
             ProtocolLimitsContract::set_protocol_limits(
-                &env, &non_admin, 1000, 10, 100, 365, 86400, 100,
+                &env,
+                &non_admin,
+                1000,
+                10,
+                100,
+                365,
+                86400,
+                100,
+                crate::verification::InvestorTier::Basic,
             )
         });
         assert_eq!(result, Err(QuickLendXError::NotAdmin));
@@ -1258,7 +1266,15 @@ mod access_control_matrix {
         // Admin can set protocol limits
         let result = env.as_contract(&contract_id, || {
             ProtocolLimitsContract::set_protocol_limits(
-                &env, &admin, 1000, 10, 100, 365, 86400, 100,
+                &env,
+                &admin,
+                1000,
+                10,
+                100,
+                365,
+                86400,
+                100,
+                crate::verification::InvestorTier::Basic,
             )
         });
         assert_eq!(result, Ok(()));
@@ -1401,11 +1417,11 @@ mod access_control_matrix {
         let client = crate::QuickLendXContractClient::new(&env, &contract_id);
 
         // Non-admin cannot set protocol config
-        let result = client.try_set_protocol_config(&non_admin, 1000, 365, 86400);
+        let result = client.try_set_protocol_config(&non_admin, 1000, 365, 86400, &100);
         assert!(result.is_err());
 
         // Admin can set protocol config
-        let result = client.set_protocol_config(&admin, 1000, 365, 86400);
+        let result = client.set_protocol_config(&admin, 1000, 365, 86400, &100);
         assert!(result.is_ok());
     }
 
@@ -1703,7 +1719,7 @@ mod access_control_matrix {
 
         // ProtocolInitializer methods - would fail admin check
         let result = env.as_contract(&contract_id, || {
-            ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400)
+            ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400, 100)
         });
         assert_eq!(result, Err(QuickLendXError::NotAdmin));
 
@@ -1762,7 +1778,7 @@ mod access_control_matrix {
                 AdminStorage::set_two_step_enabled(&env, &admin_1, true)
             }),
             env.as_contract(&contract_id, || {
-                ProtocolInitializer::set_protocol_config(&env, &admin_1, 1000, 365, 86400)
+                ProtocolInitializer::set_protocol_config(&env, &admin_1, 1000, 365, 86400, 100)
             }),
             env.as_contract(&contract_id, || {
                 ProtocolInitializer::set_fee_config(&env, &admin_1, 200)
@@ -1790,7 +1806,15 @@ mod access_control_matrix {
             }),
             env.as_contract(&contract_id, || {
                 ProtocolLimitsContract::set_protocol_limits(
-                    &env, &admin_1, 1000, 10, 100, 365, 86400, 100,
+                    &env,
+                    &admin_1,
+                    1000,
+                    10,
+                    100,
+                    365,
+                    86400,
+                    100,
+                    crate::verification::InvestorTier::Basic,
                 )
             }),
         ];
@@ -1808,7 +1832,7 @@ mod access_control_matrix {
         // admin_2 can perform all admin operations
         let results = vec![
             (
-                ProtocolInitializer::set_protocol_config(&env, &admin_2, 1000, 365, 86400),
+                ProtocolInitializer::set_protocol_config(&env, &admin_2, 1000, 365, 86400, 100),
                 "set_protocol_config",
             ),
             (
@@ -1861,7 +1885,9 @@ mod access_control_matrix {
                     AdminStorage::transfer_admin(&env, &non_admin, &Address::generate(&env))
                 }),
                 env.as_contract(&contract_id, || {
-                    ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400)
+                    ProtocolInitializer::set_protocol_config(
+                        &env, &non_admin, 1000, 365, 86400, 100,
+                    )
                 }),
                 env.as_contract(&contract_id, || {
                     PauseControl::set_paused(&env, &non_admin, true)
@@ -1948,7 +1974,7 @@ mod access_control_matrix {
             }),
             ("ProtocolInitializer::set_protocol_config", |env: &Env| {
                 env.as_contract(&contract_id, || {
-                    ProtocolInitializer::set_protocol_config(env, &non_admin, 1000, 365, 86400)
+                    ProtocolInitializer::set_protocol_config(env, &non_admin, 1000, 365, 86400, 100)
                 })
             }),
             ("PauseControl::set_paused", |env: &Env| {
@@ -2534,7 +2560,7 @@ mod access_control_matrix_extended {
         let admin_methods = vec![
             ("transfer_admin", || client.try_transfer_admin(&non_admin)),
             ("set_protocol_config", || {
-                client.try_set_protocol_config(&non_admin, 1000, 365, 86400)
+                client.try_set_protocol_config(&non_admin, 1000, 365, 86400, &100)
             }),
             ("set_fee_config", || {
                 client.try_set_fee_config(&non_admin, 200)
@@ -2692,6 +2718,7 @@ mod access_control_matrix_extended {
                         365,
                         86400,
                         100,
+                        crate::verification::InvestorTier::Basic,
                     )
                 })
             }),
@@ -2805,6 +2832,7 @@ mod dry_run_preview {
             max_due_date_days: 180,
             grace_period_seconds: 3 * 24 * 60 * 60, // 3 days
             fee_bps: 300,
+            backfill_max_batch_size: 100,
         }
     }
 
@@ -2909,6 +2937,7 @@ mod dry_run_preview {
             max_due_date_days: 365,
             grace_period_seconds: 0,
             fee_bps: 999,
+            backfill_max_batch_size: 100,
         };
         preview(&env, &contract_id, &admin, different).unwrap();
 
@@ -3063,6 +3092,7 @@ mod dry_run_preview {
             max_due_date_days: first.max_due_date_days + 10,
             grace_period_seconds: first.grace_period_seconds + 60,
             fee_bps: first.fee_bps + 50,
+            backfill_max_batch_size: 100,
         };
 
         let diff = preview(&env, &contract_id, &admin, second).unwrap();

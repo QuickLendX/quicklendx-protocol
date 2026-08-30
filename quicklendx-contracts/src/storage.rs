@@ -5,14 +5,57 @@
 
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
+use crate::errors::QuickLendXError;
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, InvestmentStatus, Invoice, InvoiceCategory, InvoiceStatus, PlatformFeeConfig,
+    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvestorFreezeInfo, InvoiceStatus, PlatformFeeConfig,
     PruneReport, RebuildReport,
 };
 
 /// Default TTL threshold for persistent storage (adjust the value as needed)
 pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
+
+/// Maximum time limit for invoice locks in seconds (30 days)
+pub const LOCK_TIME_LIMIT_SECONDS: u64 = 2_592_000;
+
+// ============================================================================
+// Storage Schema Version
+//
+// This is the authoritative version of the on-chain storage layout.  Every
+// deployed contract instance stores the version it was initialised with.  The
+// upgrade / migration path must:
+//   1. Increment STORAGE_SCHEMA_VERSION.
+//   2. Provide a migration function that brings old records to the new shape.
+//   3. Emit the appropriate migration events (started / completed / failed /
+//      rolled_back) so off-chain tooling can reconcile every committed action.
+//
+// Forward compatibility:  the contract can read records from any previous
+//   version by treating unknown fields as absent / default.
+// Backward compatibility:  new code must not write the new format until the
+//   migration is fully committed (schema version is bumped in storage).
+// ============================================================================
+
+/// The storage schema version understood by this build of the contract.
+/// Increment this constant whenever the on-chain data layout changes in a
+/// backward-incompatible way.
+pub const STORAGE_SCHEMA_VERSION: u32 = 1;
+
+/// Instance-storage key that records the committed schema version.
+/// **BREAKING**: renaming this key loses the version record on every deployed
+/// contract and forces a full re-migration.
+const SCHEMA_VERSION_KEY: Symbol = symbol_short!("sch_ver");
+
+/// Instance-storage key for the schema version currently being migrated to
+/// (set while a migration is in-progress, absent otherwise).
+const MIGRATION_PENDING_VER_KEY: Symbol = symbol_short!("mig_ver");
+
+/// Persistent-storage key for the migration progress cursor (records migrated
+/// so far in the current run).
+const MIGRATION_OFFSET_KEY: Symbol = symbol_short!("mig_off");
+
+/// Persistent-storage key for the cumulative record count migrated across all
+/// pages in the current run.
+const MIGRATION_RECORDS_KEY: Symbol = symbol_short!("mig_rec");
 
 pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
 where
@@ -32,7 +75,7 @@ where
 /// Storage key for the pending treasury address during a rotation.
 pub const PENDING_TREASURY_KEY: Symbol = symbol_short!("pnd_trs");
 /// Storage key for the pending treasury execution timestamp.
-pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("pnd_ts");
+pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("trs_ts");
 
 /// Counter and configuration keys for the contract.
 ///
@@ -57,6 +100,12 @@ pub enum DataKey {
     Bid(BytesN<32>),
     Investment(BytesN<32>),
     FrozenInvoice(BytesN<32>),
+    FreezeInfo(BytesN<32>),
+    EscrowExtension(BytesN<32>),
+    InvestorFreezeInfo(Address),
+    PerInvestorPositionCap(BytesN<32>),
+    /// Content-addressed dispute evidence bound to its owning invoice.
+    DisputeEvidence(BytesN<32>),
 }
 
 impl StorageKeys {
@@ -80,6 +129,11 @@ impl StorageKeys {
     pub fn investment_count() -> Symbol {
         symbol_short!("inv_cnt")
     }
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"biz_def_h"` resets the business default history counters.
+    pub fn business_default_history(business: &Address) -> (Symbol, Address) {
+        (symbol_short!("biz_def_h"), business.clone())
+    }
 }
 
 /// Secondary indexes for efficient querying.
@@ -97,6 +151,18 @@ impl StorageKeys {
 /// 3. Obtain admin/security-team review of the snapshot diff.
 /// 4. Document the migration in `docs/storage-key-stability.md`.
 pub struct Indexes;
+
+/// Selects one secondary invoice index for bounded integrity cleanup.
+#[derive(Clone)]
+#[contracttype]
+pub enum InvoiceIndex {
+    Business(Address),
+    Status(InvoiceStatus),
+    Customer(String),
+    TaxId(String),
+    Tag(String),
+    Category(InvoiceCategory),
+}
 
 impl Indexes {
     /// Returns the persistent storage key for the invoice list owned by a business.
@@ -245,6 +311,180 @@ impl Indexes {
 pub struct InvoiceStorage;
 
 impl InvoiceStorage {
+    fn business_generation_key(business: &Address) -> (Symbol, Address) {
+        (symbol_short!("biz_gen"), business.clone())
+    }
+
+    pub fn get_business_generation(env: &Env, business: &Address) -> u64 {
+        let key = Self::business_generation_key(business);
+        env.storage().persistent().get(&key).unwrap_or(0)
+    }
+
+    pub fn bump_business_generation(env: &Env, business: &Address) {
+        let key = Self::business_generation_key(business);
+        let next = Self::get_business_generation(env, business).saturating_add(1);
+        env.storage().persistent().set(&key, &next);
+        extend_persistent_ttl(env, &key);
+    }
+
+    fn status_generation_key(status: InvoiceStatus) -> (Symbol, Symbol) {
+        let status_symbol = match status {
+            InvoiceStatus::Pending => symbol_short!("g_pending"),
+            InvoiceStatus::Verified => symbol_short!("g_verif"),
+            InvoiceStatus::Funded => symbol_short!("g_funded"),
+            InvoiceStatus::Paid => symbol_short!("g_paid"),
+            InvoiceStatus::Defaulted => symbol_short!("g_default"),
+            InvoiceStatus::Cancelled => symbol_short!("g_cancel"),
+            InvoiceStatus::Refunded => symbol_short!("g_refund"),
+        };
+        (symbol_short!("st_gen"), status_symbol)
+    }
+
+    pub fn get_status_generation(env: &Env, status: InvoiceStatus) -> u64 {
+        let key = Self::status_generation_key(status);
+        env.storage().persistent().get(&key).unwrap_or(0)
+    }
+
+    pub fn bump_status_generation(env: &Env, status: InvoiceStatus) {
+        let key = Self::status_generation_key(status);
+        let next = Self::get_status_generation(env, status).saturating_add(1);
+        env.storage().persistent().set(&key, &next);
+        extend_persistent_ttl(env, &key);
+    }
+
+    fn raw_index_entries(env: &Env, index: &InvoiceIndex) -> Vec<BytesN<32>> {
+        match index {
+            InvoiceIndex::Business(business) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_business(business))
+                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::Status(status) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_status(*status))
+                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::Customer(name) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_customer(name))
+                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::TaxId(tax_id) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_tax_id(tax_id))
+                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::Tag(tag) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_tag(tag))
+                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::Category(category) => env
+                .storage()
+                .persistent()
+                .get(&Indexes::invoices_by_category(*category))
+                .unwrap_or(Vec::new(env)),
+        }
+    }
+
+    fn index_entries(env: &Env, index: &InvoiceIndex) -> Vec<BytesN<32>> {
+        let mut valid = Vec::new(env);
+        for id in Self::raw_index_entries(env, index).iter() {
+            if Self::entry_matches(env, index, &id) && !valid.contains(&id) {
+                valid.push_back(id);
+            }
+        }
+        valid
+    }
+
+    fn entry_matches(env: &Env, index: &InvoiceIndex, id: &BytesN<32>) -> bool {
+        let Some(invoice) = Self::get(env, id) else {
+            return false;
+        };
+        match index {
+            InvoiceIndex::Business(business) => invoice.business == *business,
+            InvoiceIndex::Status(status) => invoice.status == *status,
+            InvoiceIndex::Customer(name) => invoice.metadata_customer_name.as_ref() == Some(name),
+            InvoiceIndex::TaxId(tax_id) => invoice.metadata_tax_id.as_ref() == Some(tax_id),
+            InvoiceIndex::Tag(tag) => invoice.tags.iter().any(|candidate| candidate == *tag),
+            InvoiceIndex::Category(category) => invoice.category == *category,
+        }
+    }
+
+    /// Remove invalid entries from one secondary index in a bounded, replayable page.
+    pub fn cleanup_index_page(
+        env: &Env,
+        index: &InvoiceIndex,
+        offset: u32,
+        limit: u32,
+    ) -> crate::types::IndexCleanupReport {
+        const MAX_INDEX_CLEANUP_PAGE: u32 = 100;
+        let capped_limit = limit.min(MAX_INDEX_CLEANUP_PAGE);
+        let mut entries = Self::raw_index_entries(env, index);
+        let total = entries.len();
+        let start = offset.min(total);
+        let end = start.saturating_add(capped_limit).min(total);
+        let mut removed = 0u32;
+        let mut valid_seen = Vec::new(env);
+        let mut position = start;
+        let mut scanned = 0u32;
+        while scanned < end.saturating_sub(start) && position < entries.len() {
+            let id = entries.get(position).unwrap();
+            let valid = Self::entry_matches(env, index, &id) && !valid_seen.contains(&id);
+            if valid {
+                valid_seen.push_back(id);
+                position += 1;
+            } else {
+                entries.remove(position);
+                removed = removed.saturating_add(1);
+            }
+            scanned += 1;
+        }
+
+        if removed > 0 {
+            match index {
+                InvoiceIndex::Business(business) => {
+                    let key = Indexes::invoices_by_business(business);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                    Self::bump_business_generation(env, business);
+                }
+                InvoiceIndex::Status(status) => {
+                    let key = Indexes::invoices_by_status(*status);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                    Self::bump_status_generation(env, *status);
+                }
+                InvoiceIndex::Customer(name) => {
+                    let key = Indexes::invoices_by_customer(name);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::TaxId(tax_id) => {
+                    let key = Indexes::invoices_by_tax_id(tax_id);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::Tag(tag) => {
+                    let key = Indexes::invoices_by_tag(tag);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+                InvoiceIndex::Category(category) => {
+                    let key = Indexes::invoices_by_category(*category);
+                    env.storage().persistent().set(&key, &entries);
+                    extend_persistent_ttl(env, &key);
+                }
+            };
+        }
+
+        crate::types::IndexCleanupReport {
+            scanned,
+            removed,
+            next_offset: if removed > 0 { start } else { end },
+        }
+    }
+
     /// Store an invoice and update all its secondary indexes.
     pub fn store(env: &Env, invoice: &Invoice) {
         crate::assert_view_only!(env);
@@ -269,10 +509,17 @@ impl InvoiceStorage {
         Self::store(env, invoice)
     }
 
-    pub fn set_frozen(env: &Env, invoice_id: &BytesN<32>, frozen: bool) {
+    pub fn set_frozen(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        frozen: bool,
+        reason: Option<BusinessFreezeReason>,
+    ) {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
         if frozen {
-            env.storage().persistent().set(&key, &true);
+            // Store the typed reason; callers must supply one when freezing.
+            let r = reason.unwrap_or(BusinessFreezeReason::AdminAction);
+            env.storage().persistent().set(&key, &r);
             extend_persistent_ttl(env, &key);
         } else {
             env.storage().persistent().remove(&key);
@@ -281,20 +528,86 @@ impl InvoiceStorage {
 
     pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
-        if let Some(frozen) = env.storage().persistent().get::<_, bool>(&key) {
+        if let Some(lock) = env.storage().persistent().get::<_, InvoiceLock>(&key) {
             extend_persistent_ttl(env, &key);
-            frozen
+            lock.is_locked()
+        } else if env
+            .storage()
+            .persistent()
+            .get::<_, BusinessFreezeReason>(&key)
+            .is_some()
+        {
+            // Backward-compatible: a typed freeze reason also means frozen.
+            extend_persistent_ttl(env, &key);
+            true
         } else {
             false
         }
     }
 
-    pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_business(business);
-        env.storage()
+    /// Guard that rejects actions on locks older than the time limit.
+    ///
+    /// Returns `InvoiceLockExpired` if the invoice has been frozen for longer
+    /// than `LOCK_TIME_LIMIT_SECONDS` (30 days).
+    pub fn require_lock_within_time_limit(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        if let Some(freeze_info) = Self::get_freeze_info(env, invoice_id) {
+            let current_time = env.ledger().timestamp();
+            let lock_age = current_time.saturating_sub(freeze_info.frozen_at);
+            if lock_age > LOCK_TIME_LIMIT_SECONDS {
+                return Err(QuickLendXError::InvoiceLockExpired);
+            }
+        }
+        Ok(())
+    }
+
+    pub fn set_freeze_info(env: &Env, invoice_id: &BytesN<32>, info: &FreezeInfo) {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        env.storage().persistent().set(&key, info);
+        extend_persistent_ttl(env, &key);
+    }
+
+    pub fn get_freeze_info(env: &Env, invoice_id: &BytesN<32>) -> Option<FreezeInfo> {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        let result = env.storage().persistent().get::<_, FreezeInfo>(&key);
+        if result.is_some() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
+    }
+
+    pub fn remove_freeze_info(env: &Env, invoice_id: &BytesN<32>) {
+        let key = DataKey::FreezeInfo(invoice_id.clone());
+        env.storage().persistent().remove(&key);
+    }
+
+    pub fn set_investor_freeze_info(env: &Env, investor: &Address, info: &InvestorFreezeInfo) {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
+        env.storage().persistent().set(&key, info);
+        extend_persistent_ttl(env, &key);
+    }
+
+    pub fn get_investor_freeze_info(env: &Env, investor: &Address) -> Option<InvestorFreezeInfo> {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
+        let result = env
+            .storage()
             .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+            .get::<_, InvestorFreezeInfo>(&key);
+        if result.is_some() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
+    }
+
+    pub fn remove_investor_freeze_info(env: &Env, investor: &Address) {
+        let key = DataKey::InvestorFreezeInfo(investor.clone());
+        env.storage().persistent().remove(&key);
+    }
+
+    pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
+        Self::index_entries(env, &InvoiceIndex::Business(business.clone()))
     }
 
     pub fn get_business_invoices(env: &Env, business: &Address) -> Vec<BytesN<32>> {
@@ -316,11 +629,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_status(status);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Status(status))
     }
 
     pub fn get_invoices_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
@@ -338,6 +647,32 @@ impl InvoiceStorage {
 
     pub fn get_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
         Self::get(env, invoice_id)
+    }
+
+    /// Returns the optional absolute per-investor position cap for an invoice.
+    ///
+    /// `None` means the invoice is uncapped (only face value / protocol limits apply).
+    pub fn get_per_investor_position_cap(env: &Env, invoice_id: &BytesN<32>) -> Option<i128> {
+        let key = DataKey::PerInvestorPositionCap(invoice_id.clone());
+        env.storage().persistent().get(&key)
+    }
+
+    /// Sets or clears the absolute per-investor position cap for an invoice.
+    ///
+    /// Passing `None` removes the cap (uncapped). Callers must validate
+    /// `cap > 0 && cap <= invoice.amount` before storing `Some(cap)`.
+    pub fn set_per_investor_position_cap(env: &Env, invoice_id: &BytesN<32>, cap: Option<i128>) {
+        crate::assert_view_only!(env);
+        let key = DataKey::PerInvestorPositionCap(invoice_id.clone());
+        match cap {
+            Some(value) => {
+                env.storage().persistent().set(&key, &value);
+                extend_persistent_ttl(env, &key);
+            }
+            None => {
+                env.storage().persistent().remove(&key);
+            }
+        }
     }
 
     pub fn update(env: &Env, invoice: &Invoice) {
@@ -427,6 +762,7 @@ impl InvoiceStorage {
     }
 
     pub fn clear_all(env: &Env) {
+        crate::governance::require_no_open_governance_proposal(env).unwrap();
         let ids = Self::get_all_invoice_ids(env);
         for id in ids.iter() {
             Self::delete_invoice(env, &id);
@@ -501,6 +837,7 @@ impl InvoiceStorage {
             let key = Indexes::invoices_by_business(business);
             env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
+            Self::bump_business_generation(env, business);
         }
     }
 
@@ -511,6 +848,7 @@ impl InvoiceStorage {
             let key = Indexes::invoices_by_business(business);
             env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
+            Self::bump_business_generation(env, business);
         }
     }
 
@@ -521,6 +859,7 @@ impl InvoiceStorage {
             let key = Indexes::invoices_by_status(status);
             env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
+            Self::bump_status_generation(env, status);
         }
     }
 
@@ -531,6 +870,7 @@ impl InvoiceStorage {
             let key = Indexes::invoices_by_status(status);
             env.storage().persistent().set(&key, &invoices);
             extend_persistent_ttl(env, &key);
+            Self::bump_status_generation(env, status);
         }
     }
 
@@ -658,10 +998,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_invoices_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_customer(customer_name))
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Customer(customer_name.clone()))
     }
 
     pub fn get_by_customer(env: &Env, customer_name: &String) -> Vec<BytesN<32>> {
@@ -669,10 +1006,7 @@ impl InvoiceStorage {
     }
 
     pub fn get_invoices_by_tax_id(env: &Env, tax_id: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_tax_id(tax_id))
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::TaxId(tax_id.clone()))
     }
 
     pub fn get_by_tax_id(env: &Env, tax_id: &String) -> Vec<BytesN<32>> {
@@ -712,11 +1046,7 @@ impl InvoiceStorage {
         env: &Env,
         category: &InvoiceCategory,
     ) -> Vec<BytesN<32>> {
-        let key = Indexes::invoices_by_category(*category);
-        env.storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Category(*category))
     }
 
     /// Efficiently counts invoices for a category directly from the category index.
@@ -738,15 +1068,29 @@ impl InvoiceStorage {
     }
 
     pub fn get_invoices_by_tag(env: &Env, tag: &String) -> Vec<BytesN<32>> {
-        env.storage()
-            .persistent()
-            .get(&Indexes::invoices_by_tag(tag))
-            .unwrap_or(Vec::new(env))
+        Self::index_entries(env, &InvoiceIndex::Tag(tag.clone()))
     }
 
-    pub fn get_invoices_by_tags(env: &Env, tags: &Vec<String>) -> Vec<BytesN<32>> {
+    /// Look up invoices matching every tag in `tags` (AND logic).
+    ///
+    /// # Resource bound
+    /// `tags.len()` is rejected above [`crate::verification::MAX_INVOICE_TAG_COUNT`]
+    /// *before* any index work begins. No invoice can ever be stored with more
+    /// tags than that cap (enforced at creation by
+    /// [`crate::verification::validate_invoice_tags`]), so a query requesting
+    /// more tags than the cap can never match anything — it can only force the
+    /// contract to redo the tag-index scan below once per extra tag. Without
+    /// this check, an unauthenticated caller could pass an arbitrarily long
+    /// `tags` vector and multiply the cost of this call by its length.
+    pub fn get_invoices_by_tags(
+        env: &Env,
+        tags: &Vec<String>,
+    ) -> Result<Vec<BytesN<32>>, QuickLendXError> {
+        if tags.len() > crate::verification::MAX_INVOICE_TAG_COUNT {
+            return Err(QuickLendXError::TagLimitExceeded);
+        }
         if tags.is_empty() {
-            return Vec::new(env);
+            return Ok(Vec::new(env));
         }
         let mut result = Vec::new(env);
         let first_tag = tags.get(0).unwrap();
@@ -766,7 +1110,7 @@ impl InvoiceStorage {
                 result.push_back(id);
             }
         }
-        result
+        Ok(result)
     }
 
     pub fn get_invoice_count_by_tag(env: &Env, tag: &String) -> u32 {
@@ -818,6 +1162,7 @@ const VIEW_ONLY_KEY: Symbol = symbol_short!("view_onl");
 
 impl StorageManager {
     pub fn clear_all_mappings(env: &Env) {
+        crate::governance::require_no_open_governance_proposal(env).unwrap();
         env.storage()
             .persistent()
             .remove(&StorageKeys::invoice_count());
@@ -852,6 +1197,254 @@ impl StorageManager {
         let result = f();
         Self::set_view_only(env, previous);
         result
+    }
+}
+
+// ============================================================================
+// Storage Schema Version and Migration Control
+//
+// Design invariants:
+// • Only one migration may be in-progress at a time (guarded by the pending
+//   version key).
+// • A migration page is idempotent: rerunning it with the same offset
+//   produces the same storage state.
+// • A rollback clears all migration state and restores the committed schema
+//   version; partial new-schema writes must not be observable after rollback.
+// • Failed operations leave storage at the last checkpointed offset so the
+//   migration can be resumed without re-processing already-migrated records.
+// ============================================================================
+
+/// Schema version and migration lifecycle management.
+pub struct StorageMigration;
+
+impl StorageMigration {
+    // ── Read-only accessors ──────────────────────────────────────────────
+
+    /// Return the committed schema version stored in instance storage.
+    /// Returns `0` if no version has been set (fresh / pre-migration contract).
+    pub fn get_schema_version(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&SCHEMA_VERSION_KEY)
+            .unwrap_or(0u32)
+    }
+
+    /// Return the pending migration target version, if any.
+    /// `None` means no migration is currently in progress.
+    pub fn get_pending_migration_version(env: &Env) -> Option<u32> {
+        env.storage().instance().get(&MIGRATION_PENDING_VER_KEY)
+    }
+
+    /// Return `true` when a migration is in-progress (pending version is set).
+    pub fn is_migration_in_progress(env: &Env) -> bool {
+        env.storage().instance().has(&MIGRATION_PENDING_VER_KEY)
+    }
+
+    /// Return the migration progress cursor (next offset to process).
+    /// Returns `0` when no migration is in progress or on the first page.
+    pub fn get_migration_offset(env: &Env) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&MIGRATION_OFFSET_KEY)
+            .unwrap_or(0u32)
+    }
+
+    /// Return the cumulative number of records migrated so far.
+    pub fn get_migration_records_migrated(env: &Env) -> u32 {
+        env.storage()
+            .persistent()
+            .get(&MIGRATION_RECORDS_KEY)
+            .unwrap_or(0u32)
+    }
+
+    // ── Write operations ─────────────────────────────────────────────────
+
+    /// Set the committed schema version in instance storage.
+    ///
+    /// # Security
+    /// Callers must ensure the admin has authorised this change before calling.
+    pub fn set_schema_version(env: &Env, version: u32, admin: &soroban_sdk::Address) {
+        env.storage().instance().set(&SCHEMA_VERSION_KEY, &version);
+        crate::events::emit_schema_version_set(env, version, admin);
+    }
+
+    /// Begin a migration from `schema_from` to `schema_to`.
+    ///
+    /// # Errors
+    /// Returns `Err(QuickLendXError::OperationNotAllowed)` if:
+    /// - A migration is already in progress.
+    /// - `schema_from` does not match the committed schema version.
+    /// - `schema_to` is not greater than `schema_from`.
+    pub fn begin_migration(
+        env: &Env,
+        admin: &soroban_sdk::Address,
+        schema_from: u32,
+        schema_to: u32,
+    ) -> Result<(), crate::errors::QuickLendXError> {
+        if Self::is_migration_in_progress(env) {
+            return Err(crate::errors::QuickLendXError::OperationNotAllowed);
+        }
+        let committed = Self::get_schema_version(env);
+        if committed != schema_from {
+            return Err(crate::errors::QuickLendXError::OperationNotAllowed);
+        }
+        if schema_to <= schema_from {
+            return Err(crate::errors::QuickLendXError::OperationNotAllowed);
+        }
+        env.storage()
+            .instance()
+            .set(&MIGRATION_PENDING_VER_KEY, &schema_to);
+        // Reset progress counters.
+        env.storage().persistent().set(&MIGRATION_OFFSET_KEY, &0u32);
+        env.storage()
+            .persistent()
+            .set(&MIGRATION_RECORDS_KEY, &0u32);
+        crate::events::emit_migration_started(env, schema_from, schema_to, admin);
+        Ok(())
+    }
+
+    /// Record progress after processing one migration page.
+    ///
+    /// Updates the offset cursor and cumulative record count.
+    /// Does NOT commit the schema version — call [`commit_migration`] when all
+    /// records have been processed.
+    pub fn advance_migration_page(env: &Env, new_offset: u32, records_this_page: u32) {
+        env.storage()
+            .persistent()
+            .set(&MIGRATION_OFFSET_KEY, &new_offset);
+        let prior: u32 = env
+            .storage()
+            .persistent()
+            .get(&MIGRATION_RECORDS_KEY)
+            .unwrap_or(0);
+        let total = prior.saturating_add(records_this_page);
+        env.storage()
+            .persistent()
+            .set(&MIGRATION_RECORDS_KEY, &total);
+    }
+
+    /// Commit the migration: bump the schema version and clear migration state.
+    ///
+    /// # Errors
+    /// Returns `Err(QuickLendXError::OperationNotAllowed)` if no migration is
+    /// in progress.
+    pub fn commit_migration(
+        env: &Env,
+        admin: &soroban_sdk::Address,
+    ) -> Result<(), crate::errors::QuickLendXError> {
+        let schema_to = Self::get_pending_migration_version(env)
+            .ok_or(crate::errors::QuickLendXError::OperationNotAllowed)?;
+        let schema_from = Self::get_schema_version(env);
+        let records_migrated = Self::get_migration_records_migrated(env);
+        // Commit.
+        env.storage()
+            .instance()
+            .set(&SCHEMA_VERSION_KEY, &schema_to);
+        Self::clear_migration_state(env);
+        crate::events::emit_migration_completed(
+            env,
+            schema_from,
+            schema_to,
+            records_migrated,
+            admin,
+        );
+        Ok(())
+    }
+
+    /// Roll back an in-progress migration without modifying any record data.
+    ///
+    /// Clears migration state and emits `MigrationRolledBack`.  The caller is
+    /// responsible for reverting any partial writes made during migration pages
+    /// before calling this function.
+    ///
+    /// # Errors
+    /// Returns `Err(QuickLendXError::OperationNotAllowed)` if no migration is
+    /// in progress.
+    pub fn rollback_migration(
+        env: &Env,
+        admin: &soroban_sdk::Address,
+    ) -> Result<(), crate::errors::QuickLendXError> {
+        let schema_to = Self::get_pending_migration_version(env)
+            .ok_or(crate::errors::QuickLendXError::OperationNotAllowed)?;
+        let schema_from = Self::get_schema_version(env);
+        Self::clear_migration_state(env);
+        crate::events::emit_migration_rolled_back(env, schema_from, schema_to, admin);
+        Ok(())
+    }
+
+    /// Emit a failure event for the current page and update the progress cursor
+    /// so the migration is resumable.
+    ///
+    /// Storage is left at the last successfully checkpointed offset; partial
+    /// writes within the failed page are the caller's responsibility to avoid.
+    pub fn record_migration_failure(
+        env: &Env,
+        records_this_page: u32,
+        next_offset: u32,
+        reason: &str,
+    ) {
+        let schema_from = Self::get_schema_version(env);
+        let schema_to = Self::get_pending_migration_version(env).unwrap_or(schema_from);
+        Self::advance_migration_page(env, next_offset, records_this_page);
+        let total_migrated = Self::get_migration_records_migrated(env);
+        crate::events::emit_migration_failed(
+            env,
+            schema_from,
+            schema_to,
+            total_migrated,
+            next_offset,
+            reason,
+        );
+    }
+
+    // ── Internal helpers ─────────────────────────────────────────────────
+
+    fn clear_migration_state(env: &Env) {
+        env.storage().instance().remove(&MIGRATION_PENDING_VER_KEY);
+        env.storage().persistent().remove(&MIGRATION_OFFSET_KEY);
+        env.storage().persistent().remove(&MIGRATION_RECORDS_KEY);
+    }
+}
+
+/// Per-call cache for storage reads.
+///
+/// Caches a single `Invoice` lookup so that repeated reads of the same key
+/// within a contract invocation return the cached value and skip redundant
+/// host interface calls and duplicate TTL extensions.
+pub struct StorageReadCache {
+    cached_id: [u8; 32],
+    cached_invoice: Option<Invoice>,
+    has_cached: bool,
+}
+
+impl StorageReadCache {
+    pub fn new() -> Self {
+        Self {
+            cached_id: [0u8; 32],
+            cached_invoice: None,
+            has_cached: false,
+        }
+    }
+
+    /// Return a cached invoice if already fetched in this call, otherwise read
+    /// from persistent storage and cache the result.
+    pub fn get_invoice(&mut self, env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
+        if self.has_cached && invoice_id.to_array() == self.cached_id {
+            return self.cached_invoice.clone();
+        }
+        let invoice = InvoiceStorage::get_invoice(env, invoice_id);
+        self.cached_invoice = invoice.clone();
+        self.has_cached = true;
+        self.cached_id = invoice_id.to_array();
+        invoice
+    }
+
+    /// Invalidate the cache when the underlying storage has been updated so
+    /// that the next `get_invoice` performs a fresh read from storage.
+    pub fn invalidate_invoice(&mut self, invoice_id: &BytesN<32>) {
+        if self.has_cached && invoice_id.to_array() == self.cached_id {
+            self.has_cached = false;
+        }
     }
 }
 
@@ -1254,5 +1847,137 @@ impl InvoiceStorage {
             pruned,
             next_offset: end,
         }
+    }
+}
+
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_storage_read_cache {
+    use super::*;
+    use crate::types::{
+        Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceRating,
+        InvoiceStatus, PaymentRecord,
+    };
+    use soroban_sdk::{testutils::Address as _, Address, Env};
+
+    fn create_sample_invoice(env: &Env, id: &BytesN<32>, business: &Address) -> Invoice {
+        Invoice {
+            id: id.clone(),
+            business: business.clone(),
+            amount: 1000,
+            currency: Address::generate(env),
+            due_date: env.ledger().timestamp() + 86400,
+            status: InvoiceStatus::Funded,
+            created_at: env.ledger().timestamp(),
+            description: String::from_str(env, "test invoice"),
+            metadata_customer_name: None,
+            metadata_customer_address: None,
+            metadata_tax_id: None,
+            metadata_notes: None,
+            metadata_line_items: Vec::new(env),
+            category: InvoiceCategory::Services,
+            tags: Vec::new(env),
+            funded_amount: 1000,
+            funded_at: Some(env.ledger().timestamp()),
+            investor: Some(business.clone()),
+            settled_at: None,
+            average_rating: None,
+            total_ratings: 0,
+            ratings: Vec::new(env),
+            dispute_status: DisputeStatus::None,
+            dispute: Dispute {
+                created_by: Address::generate(env),
+                created_at: 0,
+                reason: String::from_str(env, ""),
+                evidence: String::from_str(env, ""),
+                resolution: String::from_str(env, ""),
+                resolved_by: Address::generate(env),
+                resolved_at: 0,
+                resolution_outcome: DisputeResolution::None,
+            },
+            total_paid: 0,
+            payment_history: Vec::new(env),
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
+        }
+    }
+
+    #[test]
+    fn test_cache_hit_returns_same_invoice() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        let invoice = create_sample_invoice(&env, &invoice_id, &business);
+
+        InvoiceStorage::store_invoice(&env, &invoice);
+
+        let mut cache = StorageReadCache::new();
+        let first = cache.get_invoice(&env, &invoice_id);
+        assert!(first.is_some());
+        assert_eq!(first.as_ref().unwrap().amount, 1000);
+
+        // Second read should hit the cache and return the same value
+        // without an additional storage call.
+        let second = cache.get_invoice(&env, &invoice_id);
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn test_cache_miss_after_invalidate() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let business = Address::generate(&env);
+        let invoice_id = BytesN::from_array(&env, &[1; 32]);
+        let mut invoice = create_sample_invoice(&env, &invoice_id, &business);
+
+        InvoiceStorage::store_invoice(&env, &invoice);
+
+        let mut cache = StorageReadCache::new();
+
+        // Seed cache
+        let cached = cache.get_invoice(&env, &invoice_id);
+        assert!(cached.is_some());
+
+        // Update the stored invoice
+        invoice.amount = 2000;
+        invoice.total_paid = 2000;
+        InvoiceStorage::update_invoice(&env, &invoice);
+
+        // Without invalidation the cache would return stale data (amount=1000).
+        // After invalidation it must do a fresh read.
+        cache.invalidate_invoice(&invoice_id);
+        let fresh = cache.get_invoice(&env, &invoice_id).unwrap();
+        assert_eq!(fresh.amount, 2000);
+    }
+
+    #[test]
+    fn test_cache_different_keys_independent() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let business = Address::generate(&env);
+
+        let id_a = BytesN::from_array(&env, &[1; 32]);
+        let id_b = BytesN::from_array(&env, &[2; 32]);
+        let inv_a = create_sample_invoice(&env, &id_a, &business);
+        let mut inv_b = create_sample_invoice(&env, &id_b, &business);
+        inv_b.amount = 500;
+
+        InvoiceStorage::store_invoice(&env, &inv_a);
+        InvoiceStorage::store_invoice(&env, &inv_b);
+
+        let mut cache = StorageReadCache::new();
+
+        let a1 = cache.get_invoice(&env, &id_a).unwrap();
+        assert_eq!(a1.amount, 1000);
+
+        let b1 = cache.get_invoice(&env, &id_b).unwrap();
+        assert_eq!(b1.amount, 500);
+
+        // Invalidate A — B should still be cached
+        cache.invalidate_invoice(&id_a);
+
+        let a2 = cache.get_invoice(&env, &id_a).unwrap();
+        assert_eq!(a2.amount, 1000); // fresh read, same value
     }
 }

@@ -56,7 +56,7 @@ proposal with `get_pending_admin()` and check `is_transfer_locked()` /
 
 The one privileged action that can move funds out of the contract — emergency
 recovery of mistakenly-sent tokens — is **timelocked** so the community has a
-window to react. It is a queue-then-execute flow:
+window to react. It is a queue-then-execute flow (see [Timelocked and Queued Operations Lifecycle](contracts/timelocked-operations.md) for contributor and technical details):
 
 ```text
 1. initiate_emergency_withdraw(...)   # admin queues the withdrawal, emits an event
@@ -107,6 +107,9 @@ not the pause flag, is the safety control for recovery.
 
 ## See also
 
+- [`docs/QLX_MULTISIG_ROTATION.md`](QLX_MULTISIG_ROTATION.md) — Step-by-step
+  operator guide for safely rotating signers on a multisig-controlled admin
+  account, with concrete Soroban CLI examples and timelock procedures.
 - [`docs/RUNBOOK_INCIDENT_RESPONSE.md`](RUNBOOK_INCIDENT_RESPONSE.md) — operator
   playbook for incident-mode recovery.
 - [`docs/UPGRADE_PATHS.md`](UPGRADE_PATHS.md) — contract upgrade procedures.

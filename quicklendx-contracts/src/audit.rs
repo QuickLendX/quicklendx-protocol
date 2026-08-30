@@ -34,6 +34,7 @@
 //! See `src/test_audit.rs` for comprehensive integrity tests.
 
 use crate::errors::QuickLendXError;
+use crate::observability::OBSERVABILITY_SCHEMA_VERSION;
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{
     contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Symbol, Vec,
@@ -69,6 +70,42 @@ pub enum AuditOperation {
     ConfigFeeStructureChanged,
     /// Admin reconfigured revenue-distribution shares.
     ConfigRevenueDistributionChanged,
+    /// Admin manually overrode an invoice's computed average rating.
+    RatingOverridden,
+    /// Admin subsystem initialized.
+    AdminInitialized,
+    /// Admin role transferred.
+    AdminTransferred,
+    /// Two-step admin transfer initiated.
+    AdminTransferInitiated,
+    /// Two-step admin transfer cancelled.
+    AdminTransferCancelled,
+    /// Two-step transfer mode updated.
+    AdminTwoStepUpdated,
+    /// Protocol contract paused.
+    ProtocolPaused,
+    /// Protocol contract unpaused.
+    ProtocolUnpaused,
+    /// Emergency withdrawal initiated.
+    EmergencyWithdrawalInitiated,
+    /// Emergency withdrawal executed.
+    EmergencyWithdrawalExecuted,
+    /// Emergency withdrawal cancelled.
+    EmergencyWithdrawalCancelled,
+    /// Pending treasury address rotation cancelled.
+    TreasuryRotationCancelled,
+    /// A business or investor submitted a KYC application (first time or resubmission).
+    KycSubmitted,
+    /// Admin verified (approved) a business or investor KYC record.
+    KycVerified,
+    /// Admin rejected a pending business or investor KYC record.
+    KycRejected,
+    /// Admin revoked a previously verified investor's KYC.
+    KycRevoked,
+    /// An investor was frozen (all investment actions blocked).
+    InvestorFrozen,
+    /// An investor was unfrozen (investment actions restored).
+    InvestorUnfrozen,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -100,6 +137,24 @@ pub enum OpType {
     ConfigTreasuryChanged,
     ConfigFeeStructureChanged,
     ConfigRevenueDistributionChanged,
+    RatingOverridden,
+    AdminInitialized,
+    AdminTransferred,
+    AdminTransferInitiated,
+    AdminTransferCancelled,
+    AdminTwoStepUpdated,
+    ProtocolPaused,
+    ProtocolUnpaused,
+    EmergencyWithdrawalInitiated,
+    EmergencyWithdrawalExecuted,
+    EmergencyWithdrawalCancelled,
+    TreasuryRotationCancelled,
+    KycSubmitted,
+    KycVerified,
+    KycRejected,
+    KycRevoked,
+    InvestorFrozen,
+    InvestorUnfrozen,
 }
 
 impl OpType {
@@ -127,6 +182,24 @@ impl OpType {
             OpType::ConfigTreasuryChanged => symbol_short!("cfg_trs"),
             OpType::ConfigFeeStructureChanged => symbol_short!("cfg_fstr"),
             OpType::ConfigRevenueDistributionChanged => symbol_short!("cfg_rev"),
+            OpType::RatingOverridden => symbol_short!("rt_over"),
+            OpType::AdminInitialized => symbol_short!("adm_init"),
+            OpType::AdminTransferred => symbol_short!("adm_trf"),
+            OpType::AdminTransferInitiated => symbol_short!("adm_req"),
+            OpType::AdminTransferCancelled => symbol_short!("adm_cnl"),
+            OpType::AdminTwoStepUpdated => symbol_short!("adm_2st"),
+            OpType::ProtocolPaused => symbol_short!("paused"),
+            OpType::ProtocolUnpaused => symbol_short!("unpaused"),
+            OpType::EmergencyWithdrawalInitiated => symbol_short!("emg_init"),
+            OpType::EmergencyWithdrawalExecuted => symbol_short!("emg_exec"),
+            OpType::EmergencyWithdrawalCancelled => symbol_short!("emg_cnl"),
+            OpType::TreasuryRotationCancelled => symbol_short!("tr_rot_cn"),
+            OpType::KycSubmitted => symbol_short!("kyc_sub"),
+            OpType::KycVerified => symbol_short!("kyc_ver"),
+            OpType::KycRejected => symbol_short!("kyc_rej"),
+            OpType::KycRevoked => symbol_short!("kyc_rev"),
+            OpType::InvestorFrozen => symbol_short!("inv_frz"),
+            OpType::InvestorUnfrozen => symbol_short!("inv_unf"),
         }
     }
 
@@ -154,6 +227,24 @@ impl OpType {
             OpType::ConfigTreasuryChanged => 18,
             OpType::ConfigFeeStructureChanged => 19,
             OpType::ConfigRevenueDistributionChanged => 20,
+            OpType::RatingOverridden => 21,
+            OpType::AdminInitialized => 22,
+            OpType::AdminTransferred => 23,
+            OpType::AdminTransferInitiated => 24,
+            OpType::AdminTransferCancelled => 25,
+            OpType::AdminTwoStepUpdated => 26,
+            OpType::ProtocolPaused => 27,
+            OpType::ProtocolUnpaused => 28,
+            OpType::EmergencyWithdrawalInitiated => 29,
+            OpType::EmergencyWithdrawalExecuted => 30,
+            OpType::EmergencyWithdrawalCancelled => 31,
+            OpType::TreasuryRotationCancelled => 32,
+            OpType::KycSubmitted => 33,
+            OpType::KycVerified => 34,
+            OpType::KycRejected => 35,
+            OpType::KycRevoked => 36,
+            OpType::InvestorFrozen => 37,
+            OpType::InvestorUnfrozen => 38,
         }
     }
 }
@@ -184,6 +275,24 @@ impl From<AuditOperation> for OpType {
             AuditOperation::ConfigRevenueDistributionChanged => {
                 OpType::ConfigRevenueDistributionChanged
             }
+            AuditOperation::RatingOverridden => OpType::RatingOverridden,
+            AuditOperation::AdminInitialized => OpType::AdminInitialized,
+            AuditOperation::AdminTransferred => OpType::AdminTransferred,
+            AuditOperation::AdminTransferInitiated => OpType::AdminTransferInitiated,
+            AuditOperation::AdminTransferCancelled => OpType::AdminTransferCancelled,
+            AuditOperation::AdminTwoStepUpdated => OpType::AdminTwoStepUpdated,
+            AuditOperation::ProtocolPaused => OpType::ProtocolPaused,
+            AuditOperation::ProtocolUnpaused => OpType::ProtocolUnpaused,
+            AuditOperation::EmergencyWithdrawalInitiated => OpType::EmergencyWithdrawalInitiated,
+            AuditOperation::EmergencyWithdrawalExecuted => OpType::EmergencyWithdrawalExecuted,
+            AuditOperation::EmergencyWithdrawalCancelled => OpType::EmergencyWithdrawalCancelled,
+            AuditOperation::TreasuryRotationCancelled => OpType::TreasuryRotationCancelled,
+            AuditOperation::KycSubmitted => OpType::KycSubmitted,
+            AuditOperation::KycVerified => OpType::KycVerified,
+            AuditOperation::KycRejected => OpType::KycRejected,
+            AuditOperation::KycRevoked => OpType::KycRevoked,
+            AuditOperation::InvestorFrozen => OpType::InvestorFrozen,
+            AuditOperation::InvestorUnfrozen => OpType::InvestorUnfrozen,
         }
     }
 }
@@ -202,6 +311,14 @@ pub const AUDIT_CHAIN_GENESIS: [u8; 32] = [0u8; 32];
 /// between the per-invoice genesis sentinel and the config trail key.
 pub const CONFIG_AUDIT_SENTINEL: [u8; 32] = [0xCFu8; 32];
 
+/// Fixed sentinel `invoice_id` for all KYC-related audit entries.
+///
+/// KYC operations (submit, verify, reject, revoke, freeze, unfreeze) are not
+/// scoped to any invoice. They share this virtual trail so every KYC audit
+/// entry chains with the same hash-link ordering guarantee as invoice-local
+/// and config-change trails.
+pub const KYC_AUDIT_SENTINEL: [u8; 32] = [0x4Bu8; 32]; // 'K' for KYC
+
 /// Audit log entry structure
 ///
 /// **IMMUTABLE**: Once created, this entry is never modified or overwritten.
@@ -209,6 +326,10 @@ pub const CONFIG_AUDIT_SENTINEL: [u8; 32] = [0xCFu8; 32];
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct AuditLogEntry {
+    /// Version of the event/audit schema used for this record.
+    pub schema_version: u32,
+    /// Correlation id shared with the committed protocol event.
+    pub operation_id: BytesN<32>,
     pub audit_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
     pub operation: AuditOperation,
@@ -287,14 +408,43 @@ impl AuditLogEntry {
         amount: Option<i128>,
         additional_data: Option<String>,
     ) -> Self {
-        let audit_id = Self::generate_audit_id(env);
+        let operation_id = crate::observability::allocate_operation_id(env);
+        Self::new_with_operation_id(
+            env,
+            invoice_id,
+            operation,
+            actor,
+            old_value,
+            new_value,
+            amount,
+            additional_data,
+            operation_id,
+        )
+    }
+
+    /// Create an audit entry that shares a caller-supplied correlation id.
+    ///
+    /// `operation_id` must already be unique. The audit storage key is the same
+    /// id so event and audit records can be reconciled 1:1.
+    pub fn new_with_operation_id(
+        env: &Env,
+        invoice_id: BytesN<32>,
+        operation: AuditOperation,
+        actor: Address,
+        old_value: Option<String>,
+        new_value: Option<String>,
+        amount: Option<i128>,
+        additional_data: Option<String>,
+        operation_id: BytesN<32>,
+    ) -> Self {
         let timestamp = env.ledger().timestamp();
         let block_height = env.ledger().sequence();
-
         let prev_hash = AuditStorage::last_entry_hash(env, &invoice_id);
 
         Self {
-            audit_id,
+            schema_version: OBSERVABILITY_SCHEMA_VERSION,
+            audit_id: operation_id.clone(),
+            operation_id,
             invoice_id,
             operation,
             actor,
@@ -309,7 +459,8 @@ impl AuditLogEntry {
         }
     }
 
-    /// Generate unique audit ID
+    /// Generate unique audit ID (legacy helper retained for source compatibility).
+    #[allow(dead_code)]
     fn generate_audit_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let sequence = env.ledger().sequence();
@@ -341,6 +492,11 @@ impl AuditLogEntry {
 
     /// Validate audit log entry integrity
     pub fn validate_integrity(&self, env: &Env) -> Result<bool, QuickLendXError> {
+        if self.schema_version != OBSERVABILITY_SCHEMA_VERSION || self.operation_id != self.audit_id
+        {
+            return Ok(false);
+        }
+
         // Check timestamp is not in future
         if self.timestamp > env.ledger().timestamp() {
             return Ok(false);
@@ -423,12 +579,32 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::ConfigTreasuryChanged => 18,
         AuditOperation::ConfigFeeStructureChanged => 19,
         AuditOperation::ConfigRevenueDistributionChanged => 20,
+        AuditOperation::RatingOverridden => 21,
+        AuditOperation::AdminInitialized => 22,
+        AuditOperation::AdminTransferred => 23,
+        AuditOperation::AdminTransferInitiated => 24,
+        AuditOperation::AdminTransferCancelled => 25,
+        AuditOperation::AdminTwoStepUpdated => 26,
+        AuditOperation::ProtocolPaused => 27,
+        AuditOperation::ProtocolUnpaused => 28,
+        AuditOperation::EmergencyWithdrawalInitiated => 29,
+        AuditOperation::EmergencyWithdrawalExecuted => 30,
+        AuditOperation::EmergencyWithdrawalCancelled => 31,
+        AuditOperation::TreasuryRotationCancelled => 32,
+        AuditOperation::KycSubmitted => 33,
+        AuditOperation::KycVerified => 34,
+        AuditOperation::KycRejected => 35,
+        AuditOperation::KycRevoked => 36,
+        AuditOperation::InvestorFrozen => 37,
+        AuditOperation::InvestorUnfrozen => 38,
     }
 }
 
 fn hash_audit_entry(env: &Env, entry: &AuditLogEntry) -> BytesN<32> {
     let mut preimage = Bytes::new(env);
     preimage.append(&Bytes::from_slice(env, AuditLogEntry::HASH_DOMAIN_TAG));
+    preimage.append(&Bytes::from_array(env, &entry.schema_version.to_be_bytes()));
+    preimage.append(&entry.operation_id.clone().to_xdr(env));
     preimage.append(&entry.prev_hash.clone().to_xdr(env));
     preimage.append(&entry.audit_id.clone().to_xdr(env));
     preimage.append(&entry.invoice_id.clone().to_xdr(env));
@@ -508,6 +684,12 @@ impl AuditStorage {
     /// The entry remains in storage unchanged and is only removed by explicit
     /// cleanup (never by this function or any query).
     pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) {
+        // A correlation id is the immutable key. Reject duplicate appends rather
+        // than overwriting an existing committed record.
+        if Self::get_audit_entry(env, &entry.operation_id).is_some() {
+            panic!("duplicate observability operation id");
+        }
+
         // Store individual entry
         env.storage().instance().set(&entry.audit_id, entry);
 
@@ -802,6 +984,32 @@ pub fn log_operation(
     AuditStorage::store_audit_entry(env, &entry);
 }
 
+/// Append an audit entry that reuses a committed event's correlation id.
+pub fn log_operation_with_id(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    amount: Option<i128>,
+    additional_data: Option<String>,
+    operation_id: BytesN<32>,
+) {
+    let entry = AuditLogEntry::new_with_operation_id(
+        env,
+        invoice_id,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        amount,
+        additional_data,
+        operation_id,
+    );
+    AuditStorage::store_audit_entry(env, &entry);
+}
+
 /// Convenience wrapper for log_operation (used by invoice helpers).
 pub fn log_invoice_operation(
     env: &Env,
@@ -896,6 +1104,28 @@ pub fn log_payment_processed(
     );
 }
 
+/// Log a committed payment using the same `operation_id` as the protocol event.
+pub fn log_payment_processed_with_id(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    additional_data: String,
+    operation_id: BytesN<32>,
+) {
+    log_operation_with_id(
+        env,
+        invoice_id,
+        AuditOperation::PaymentProcessed,
+        actor,
+        None,
+        Some(String::from_str(env, "Payment processed")),
+        Some(amount),
+        Some(additional_data),
+        operation_id,
+    );
+}
+
 /// Log invoice refund
 pub fn log_invoice_refunded(env: &Env, invoice_id: BytesN<32>, actor: Address) {
     log_operation(
@@ -952,13 +1182,35 @@ pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) 
     );
 }
 
+/// Human-readable correlation string that ties an audit entry to the bid that
+/// produced it, so downstream systems can match the emitted bid event
+/// (`BidPlaced`/`BidAccepted`/... which carry `bid_id`) to its audit record.
+fn bid_correlation(env: &Env, bid_id: &BytesN<32>) -> String {
+    let mut hex_bytes = alloc::vec::Vec::new();
+    for byte in bid_id.to_array().iter() {
+        let high = byte >> 4;
+        let low = byte & 0x0F;
+        hex_bytes.push(nibble_to_hex(high));
+        hex_bytes.push(nibble_to_hex(low));
+    }
+    String::from_str(env, &(core::str::from_utf8(&hex_bytes).unwrap_or("")))
+}
+
+fn nibble_to_hex(nibble: u8) -> u8 {
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + (nibble - 10)
+    }
+}
+
 /// Log bid placed.
 pub fn log_bid_placed(
     env: &Env,
     invoice_id: BytesN<32>,
     actor: Address,
     bid_amount: i128,
-    _bid_id: BytesN<32>,
+    bid_id: BytesN<32>,
 ) {
     log_operation(
         env,
@@ -968,12 +1220,18 @@ pub fn log_bid_placed(
         None,
         Some(String::from_str(env, "Bid placed")),
         Some(bid_amount),
-        None,
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
 /// Log bid accepted.
-pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+pub fn log_bid_accepted(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    bid_id: BytesN<32>,
+) {
     log_operation(
         env,
         invoice_id,
@@ -982,12 +1240,12 @@ pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amoun
         None,
         Some(String::from_str(env, "Bid accepted")),
         Some(amount),
-        None,
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
 /// Log bid withdrawn.
-pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid_id: BytesN<32>) {
+pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
     log_operation(
         env,
         invoice_id,
@@ -996,7 +1254,45 @@ pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid
         None,
         Some(String::from_str(env, "Bid withdrawn")),
         None,
+        Some(bid_correlation(env, &bid_id)),
+    );
+}
+
+/// Log bid cancelled (Placed -> Cancelled).
+pub fn log_bid_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidCancelled,
+        actor,
         None,
+        Some(String::from_str(env, "Bid cancelled")),
+        None,
+        Some(bid_correlation(env, &bid_id)),
+    );
+}
+
+/// Log bid expired (Placed -> Expired via TTL/grace cleanup).
+///
+/// The actor is the bid's investor: expiry is a self-triggered transition of
+/// that bid's lifecycle, and using a real address keeps the audit entry
+/// attributable without inventing a synthetic system address.
+pub fn log_bid_expired(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    bid_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidExpired,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid expired")),
+        Some(amount),
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
@@ -1015,6 +1311,46 @@ pub fn log_escrow_created(
         actor,
         None,
         Some(String::from_str(env, "Escrow created")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log escrow released.
+pub fn log_escrow_released(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowReleased,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow released")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log escrow refunded.
+pub fn log_escrow_refunded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowRefunded,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow refunded")),
         Some(amount),
         None,
     );
@@ -1139,5 +1475,36 @@ pub(crate) fn log_config_change(
         new_value,
         None,
         Some(String::from_str(env, param)),
+    );
+}
+
+/// Append a KYC-related audit entry to the shared `KYC_AUDIT_SENTINEL` trail.
+///
+/// Every KYC state transition (submit, verify, reject, revoke, freeze, unfreeze)
+/// calls this function so the append-only audit log captures the full
+/// participant-identity lifecycle on the same hash-chain infrastructure used
+/// for invoice and config trails.
+///
+/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
+/// guarantee the preceding storage write and this audit append both commit or
+/// both roll back — there is no partial-success scenario.
+pub(crate) fn log_kyc_operation(
+    env: &Env,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    additional_data: Option<String>,
+) {
+    let sentinel = BytesN::from_array(env, &KYC_AUDIT_SENTINEL);
+    log_operation(
+        env,
+        sentinel,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        None,
+        additional_data,
     );
 }

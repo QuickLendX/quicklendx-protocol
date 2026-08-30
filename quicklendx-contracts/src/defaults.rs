@@ -3,7 +3,7 @@ use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice
 use crate::init::ProtocolInitializer;
 use crate::payments::{EscrowStatus, EscrowStorage};
 use crate::storage::{InvestmentStorage, InvoiceStorage};
-use crate::types::{InvestmentStatus, InvoiceStatus};
+use crate::types::{InvestmentStatus, Invoice, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, Vec};
 
 /// Default grace period in seconds (7 days)
@@ -109,9 +109,15 @@ pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64,
             }
             Ok(value)
         }
-        None => Ok(ProtocolInitializer::get_protocol_config(env)
-            .map(|config| config.grace_period_seconds)
-            .unwrap_or(DEFAULT_GRACE_PERIOD)),
+        None => {
+            let value = ProtocolInitializer::get_protocol_config(env)
+                .map(|config| config.grace_period_seconds)
+                .unwrap_or(DEFAULT_GRACE_PERIOD);
+            if value > MAX_GRACE_PERIOD {
+                return Err(QuickLendXError::InvalidTimestamp);
+            }
+            Ok(value)
+        }
     }
 }
 
@@ -158,7 +164,7 @@ pub fn mark_invoice_defaulted(
 
     let current_timestamp = env.ledger().timestamp();
     let grace = resolve_grace_period(env, grace_period)?;
-    let grace_deadline = invoice.grace_deadline(grace);
+    let grace_deadline = invoice.checked_grace_deadline(grace)?;
 
     if current_timestamp <= grace_deadline {
         return Err(QuickLendXError::OperationNotAllowed);
@@ -212,6 +218,32 @@ fn resolve_scan_limit(limit: Option<u32>) -> u32 {
         .clamp(1, MAX_OVERDUE_SCAN_BATCH_LIMIT)
 }
 
+#[cfg(test)]
+mod scan_limit_tests {
+    use super::{resolve_scan_limit, MAX_OVERDUE_SCAN_BATCH_LIMIT};
+
+    #[test]
+    fn zero_scan_limit_is_clamped_to_one() {
+        assert_eq!(resolve_scan_limit(Some(0)), 1);
+    }
+
+    #[test]
+    fn maximum_scan_limit_is_accepted() {
+        assert_eq!(
+            resolve_scan_limit(Some(MAX_OVERDUE_SCAN_BATCH_LIMIT)),
+            MAX_OVERDUE_SCAN_BATCH_LIMIT
+        );
+    }
+
+    #[test]
+    fn scan_limit_above_maximum_is_clamped() {
+        assert_eq!(
+            resolve_scan_limit(Some(MAX_OVERDUE_SCAN_BATCH_LIMIT + 1)),
+            MAX_OVERDUE_SCAN_BATCH_LIMIT
+        );
+    }
+}
+
 /// @notice Scans funded invoices in a deterministic bounded window for overdue/default handling.
 /// @dev Uses a rotating cursor stored in instance storage so repeated calls eventually inspect
 ///      the full funded set without any single call walking every invoice. The function reads a
@@ -230,6 +262,7 @@ pub fn scan_funded_invoice_expirations(
     grace_period: u64,
     limit: Option<u32>,
 ) -> Result<OverdueScanResult, QuickLendXError> {
+    let grace_period = resolve_grace_period(env, Some(grace_period))?;
     let funded_invoices = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
     let total_funded = funded_invoices.len();
 
@@ -260,7 +293,7 @@ pub fn scan_funded_invoice_expirations(
                     );
                 }
 
-                if current_timestamp > invoice.grace_deadline(grace_period) {
+                if current_timestamp > invoice.checked_grace_deadline(grace_period)? {
                     let _ = invoice.check_and_handle_expiration(env, grace_period)?;
                 }
             }
@@ -310,6 +343,22 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     ensure_default_transition_open(env, invoice_id)?;
 
+    // #2464: look up the investment (if any) and run every failable check
+    // that depends on it now, before any state mutation below -- including
+    // before `check_and_set_default_guard`, extending that function's own
+    // documented rationale ("only after all finality checks pass") to this
+    // check too. Previously the active-insurance check ran after the
+    // invoice's status/history/event effects had already executed in this
+    // same call; a rejection there still left nothing durable (Soroban
+    // reverts the whole transaction on a returned Err), but the ordering
+    // meant this function's own checks-effects-interactions shape didn't
+    // match what actually happens on failure. Moving it here removes that
+    // gap between what the code visually does and what Soroban guarantees.
+    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id);
+    if investment.is_some() {
+        require_active_insurance_at_settlement(env, &invoice)?;
+    }
+
     // Atomically check and set the transition guard only after all finality checks pass.
     // This avoids poisoning future legitimate retries on invoices that were never eligible
     // for default because another terminal path already completed first.
@@ -322,9 +371,19 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Defaulted, invoice_id);
 
+    let history_key = crate::storage::StorageKeys::business_default_history(&invoice.business);
+    let history_count: u32 = env.storage().persistent().get(&history_key).unwrap_or(0);
+    env.storage()
+        .persistent()
+        .set(&history_key, &history_count.saturating_add(1));
+    crate::storage::bump_persistent(env, &history_key);
+
     emit_invoice_expired(env, &invoice);
 
-    if let Some(mut investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
+    // `investment` was already looked up above, and its only failable
+    // precondition (the active-insurance check) already ran there too --
+    // this reuses that same lookup rather than re-fetching and re-checking.
+    if let Some(mut investment) = investment {
         investment.status = InvestmentStatus::Defaulted;
 
         let claim_details = investment.process_all_insurance_claims(env);
@@ -384,4 +443,16 @@ pub fn get_dispute_details(
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
     Ok(None)
+}
+
+pub fn require_active_insurance_at_settlement(
+    env: &Env,
+    invoice: &Invoice,
+) -> Result<(), QuickLendXError> {
+    if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, &invoice.id) {
+        if !investment.insurance.is_empty() && !investment.has_active_insurance() {
+            return Err(QuickLendXError::InsuranceNotActive);
+        }
+    }
+    Ok(())
 }

@@ -73,6 +73,7 @@ fn setup_funded_investment(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
@@ -161,7 +162,11 @@ fn test_withdraw_after_settlement_rejected() {
         &env, &client, &admin, &business, &investor, &currency, 1000, 1000,
     );
 
-    client.settle_invoice(&invoice_id, &1000);
+    client.settle_invoice(
+        &invoice_id,
+        &1000,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
 
     let err = client
         .try_withdraw_investment(&invoice_id, &investor)
@@ -218,6 +223,8 @@ fn test_withdraw_after_escrow_released_rejected() {
         &env, &client, &admin, &business, &investor, &currency, 1000, 1000,
     );
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let err = client
@@ -384,6 +391,7 @@ fn test_investor_can_invest_again_after_withdrawal() {
         &String::from_str(&env, "Second invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice2_id);
 

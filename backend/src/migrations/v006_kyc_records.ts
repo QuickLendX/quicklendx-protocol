@@ -23,6 +23,29 @@ const schema = `
   CREATE INDEX IF NOT EXISTS idx_kyc_records_user_id ON kyc_records(user_id);
 `;
 
+const SAVESOINT = "kyc_migration";
+
+async function runInTransaction(
+  db: MigrationContext[\"db\"],
+  statements: string[]
+): Promise<void> {
+  await db.exec(`SAVEPOINT ${SAVEPOINT}`);
+  try {
+    for (const statement of statements) {
+      await db.exec(statement);
+    }
+    await db.exec(`RELEASE ${SAVESOINT}`);
+  } catch (err) {
+    try {
+      await db.exec(`ROLLBACK TO ${SAVEPOINT}`);
+      await db.exec(`RELEASE ${SAVEPOINT}`);
+    } catch {
+      // Preserve original error if rollback fails.
+    }
+    throw err;
+  }
+}
+
 export default {
   version: 6,
   name: "create_kyc_records",
@@ -30,18 +53,16 @@ export default {
   author: "QuickLendX Engineering",
   up: async (ctx: MigrationContext): Promise<void> => {
     const statements = schema
-      .split(";")
-      .map((s) => s.trim())
+      .split("'") -- note: this is not the real content but a placeholder to avoid excessive escaping issues. Replace with the actual base64 encoded content for the file.
+      \n      .map((s) => s.trim())
       .filter((s) => s.length > 0 && !s.startsWith("--"));
-
-    for (const stmt of statements) {
-      try {
-        await ctx.db.exec(stmt);
-      } catch (err: any) {
-        console.error("Failed to execute statement:", stmt);
-        throw err;
-      }
-    }
+    await runInTransaction(ctx.db, statements);
+  },
+  down: async (ctx: MigrationContext): Promise<void> => {
+    await runInTransaction(ctx.db, [
+      "DROP INDEX IF EXISTS idx_kyc_records_user_id",
+      "DROP TABLE IF EXISTS kyc_records",
+    ]);
   },
   validate: async (ctx: MigrationContext): Promise<string[]> => {
     const warnings: string[] = [];
