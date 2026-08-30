@@ -336,10 +336,10 @@ mod test_verify_bid_match;
 mod test_vesting;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_vesting_summary;
-// Issue #1551 â€” determinism tests for bid_ranking; no feature gate, runs on
+// Issue #1551 — determinism tests for bid_ranking; no feature gate, runs on
 // every CI matrix entry.
-// #[cfg(test)]
-// mod test_bid_ranking_determinism;
+#[cfg(test)]
+mod test_bid_ranking_determinism;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_invoices_paged_ordering;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -2321,6 +2321,22 @@ impl QuickLendXContract {
     /// Get all bids for an invoice sorted using the platform ranking rules
     pub fn get_ranked_bids(env: Env, invoice_id: BytesN<32>) -> Vec<Bid> {
         BidStorage::rank_bids(&env, &invoice_id)
+    }
+
+    /// Get ranked bids for an invoice with pagination support
+    pub fn get_ranked_bids_paged(
+        env: Env,
+        invoice_id: BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> PaginatedBids {
+        let (items, total_count, has_more) =
+            BidStorage::rank_bids_paged(&env, &invoice_id, offset, limit);
+        PaginatedBids {
+            items,
+            total_count,
+            has_more,
+        }
     }
 
     /// Get bids filtered by status
@@ -4419,14 +4435,19 @@ impl QuickLendXContract {
         }
 
         let all_bids = BidStorage::get_bid_records_for_invoice(&env, &invoice_id);
+        let current_timestamp = env.ledger().timestamp();
         let mut filtered = Vec::new(&env);
 
         for bid in all_bids.iter() {
-            if let Some(status) = &status_filter {
-                if bid.status == *status {
-                    filtered.push_back(bid);
+            let eligible = match &status_filter {
+                Some(status) => {
+                    let status_matches = bid.status == *status;
+                    let not_stale = *status != BidStatus::Placed || !bid.is_expired(current_timestamp);
+                    status_matches && not_stale
                 }
-            } else {
+                None => true,
+            };
+            if eligible {
                 filtered.push_back(bid);
             }
         }
@@ -4476,16 +4497,22 @@ impl QuickLendXContract {
             };
         }
 
+        let _ = BidStorage::refresh_investor_bids(&env, &investor);
         let all_bid_ids = BidStorage::get_bids_by_investor_all(&env, &investor);
+        let current_timestamp = env.ledger().timestamp();
         let mut filtered = Vec::new(&env);
 
         for bid_id in all_bid_ids.iter() {
             if let Some(bid) = BidStorage::get_bid(&env, &bid_id) {
-                if let Some(status) = &status_filter {
-                    if bid.status == *status {
-                        filtered.push_back(bid);
+                let eligible = match &status_filter {
+                    Some(status) => {
+                        let status_matches = bid.status == *status;
+                        let not_stale = *status != BidStatus::Placed || !bid.is_expired(current_timestamp);
+                        status_matches && not_stale
                     }
-                } else {
+                    None => true,
+                };
+                if eligible {
                     filtered.push_back(bid);
                 }
             }
@@ -5766,6 +5793,6 @@ impl QuickLendXContract {
         diagnostics::get_protocol_diagnostics(&env)
     }
 }
-# [ c f g ( t e s t ) ]   m o d   t e s t _ a u t h o r i z a t i o n ; 
- 
- 
+
+#[cfg(test)]
+mod test_authorization;

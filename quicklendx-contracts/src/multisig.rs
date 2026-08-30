@@ -22,9 +22,11 @@ pub struct OwnerSignature {
 const OWNERS_KEY: Symbol = symbol_short!("owners");
 const THRESHOLD_KEY: Symbol = symbol_short!("thresh");
 
+#[cfg(any(test, feature = "testutils"))]
 #[contract]
 pub struct MultisigContract;
 
+#[cfg(any(test, feature = "testutils"))]
 #[contractimpl]
 impl MultisigContract {
     pub fn initialize(

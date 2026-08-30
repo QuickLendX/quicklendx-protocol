@@ -91,6 +91,17 @@ impl PageCursor {
         Ok(Self::new(offset, generation))
     }
 
+    /// Calculate the next page cursor given limit and total record count.
+    /// Returns `None` if end-of-stream has been reached (`offset + limit >= total_count`).
+    pub fn next_cursor(&self, limit: u32, total_count: u32) -> Option<Self> {
+        let capped = cap_query_limit(limit);
+        let next_offset = self.offset.saturating_add(capped);
+        if next_offset < total_count {
+            Some(Self::new(next_offset, self.generation))
+        } else {
+            None
+        }
+    }
     /// Validate that this cursor's snapshot generation matches the current snapshot generation.
     ///
     /// # Returns
@@ -279,5 +290,18 @@ mod tests {
         assert_eq!(PageCursor::decode("abc_7"), Err(QuickLendXError::InvalidAmount));
         assert_eq!(PageCursor::decode("42_abc"), Err(QuickLendXError::InvalidAmount));
         assert_eq!(PageCursor::decode("42_7_9"), Err(QuickLendXError::InvalidAmount));
+    }
+
+    #[test]
+    fn test_page_cursor_next_cursor() {
+        let cursor = PageCursor::new(0, 100);
+        let next = cursor.next_cursor(10, 25);
+        assert_eq!(next, Some(PageCursor::new(10, 100)));
+
+        let next2 = next.unwrap().next_cursor(10, 25);
+        assert_eq!(next2, Some(PageCursor::new(20, 100)));
+
+        let next3 = next2.unwrap().next_cursor(10, 25);
+        assert_eq!(next3, None); // 20 + 10 = 30 >= 25 -> end of stream
     }
 }
