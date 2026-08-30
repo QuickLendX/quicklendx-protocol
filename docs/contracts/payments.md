@@ -190,3 +190,26 @@ All public items in `payments.rs` carry Rust doc comments that serve as NatSpec-
 - Doc comments use intra-doc links (e.g., `[`QuickLendXError::InsufficientFunds`]`) for cross-referencing.
 
 These comments are compiled into the contract metadata and can be extracted by documentation generators.
+
+## Investor Exposure, Capacity, and Atomic Rollback Invariants (Issue #2454)
+
+### 1. Exposure and Capacity Formulations
+The protocol maintains strict bounds on the principal an investor has committed or at risk:
+- **`active_exposure`**:
+  ```
+  active_exposure = Σ(Placed bid amounts, !expired) + Σ(Active investment amounts)
+  ```
+  *Note:* Lifetime historical volume (`total_invested`) is **intentionally excluded** from this formula. Since `total_invested` is a monotonically increasing tracker that never decreases on repayment, including it would permanently block active investors after sufficient cycles. Only current active risk counts against the cap.
+- **`available_capacity`**:
+  ```
+  available_capacity = max(0, investment_limit - active_exposure)
+  ```
+  If an investor is unverified or frozen, querying available capacity returns a typed error (e.g., `BusinessNotVerified` or `InvestorFrozen`) rather than `0`. This forces caller flows to fail closed.
+
+### 2. Preflight Validation and Fail-Closed Storage
+- **`validate_funding_commitment`**: This read-only entrypoint acts as a strict preflight check. It executes validation checks (bounds check, capacity check, and KYC/freeze check) before any mutations. If any check fails, it returns a typed error and leaves the system in its original state.
+- **`accept_bid` / `create_escrow`**: These operations are fully atomic. The token transfer (moving funds from the investor to the contract) is executed *before* any state changes (escrow record creation, active investment updates, or bid status transitions) are committed to storage. A failed transfer reverts the entire transaction, leaving zero side effects.
+
+### 3. Compatibility Change Note
+The cap check inside `validate_investor_investment` (called by `place_bid`) has been aligned with `get_investor_exposure`. It no longer includes the lifetime `total_invested` counter. Investors with high historical volume now correctly recover their capacity as their active bids expire or active investments are settled.
+
