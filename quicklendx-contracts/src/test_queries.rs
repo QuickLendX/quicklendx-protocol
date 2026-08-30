@@ -794,6 +794,8 @@ mod escrow_query_consistency {
             &InvoiceCategory::Services,
             &Vec::new(env),
             &None,
+            &None,
+            &None,
         );
         client.verify_invoice(&invoice_id);
 
@@ -968,6 +970,8 @@ mod escrow_query_consistency {
             &String::from_str(&env, "Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
+            &None,
+            &None,
             &None,
         );
         client.verify_invoice(&invoice_id);

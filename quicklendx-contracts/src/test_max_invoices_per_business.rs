@@ -184,6 +184,8 @@ fn create_invoice_at(
         &InvoiceCategory::Services,
         &Vec::new(env),
         &None,
+        &None,
+        &None,
     )
 }
 
@@ -220,6 +222,8 @@ fn test_store_invoice_respects_cap_at_boundary() {
         &String::from_str(&env, "One-over-cap invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
+        &None,
         &None,
     );
     assert_eq!(
@@ -260,6 +264,8 @@ fn test_store_invoice_one_above_cap_rejected() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
         &None,
+        &None,
+        &None,
     );
     assert_eq!(
         result,
@@ -295,6 +301,8 @@ fn test_zero_limit_allows_many_invoices() {
             &String::from_str(&env, "Unlimited cap invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
+            &None,
+            &None,
             &None,
         );
         // Read invoice back to confirm it was stored
@@ -364,6 +372,8 @@ fn test_after_settlement_frees_cap_slot() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
         &None,
+        &None,
+        &None,
     );
     assert_eq!(
         over_cap,
@@ -386,7 +396,16 @@ fn test_after_settlement_frees_cap_slot() {
     // Settle with full payment covering the invoice amount
     env.ledger()
         .set_timestamp(env.ledger().timestamp() + 172_800);
-    client.settle_invoice(&inv1, &1_000i128);
+    let dummy_investment = crate::types::Investment {
+        investment_id: BytesN::from_array(&env, &[0u8; 32]),
+        invoice_id: inv1.clone(),
+        investor: investor.clone(),
+        amount: 500i128,
+        funded_at: env.ledger().timestamp(),
+        status: crate::types::InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+    client.settle_invoice(&inv1, &1_000i128, &dummy_investment);
 
     // Now the invoice is Paid — a new invoice should succeed
     let new_invoice = create_invoice_at(&env, &client, &business, &currency);

@@ -839,7 +839,13 @@ pub fn create_escrow_record_only(
 ///   (should never happen in normal operation; indicates a critical invariant violation).
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the release can be safely retried.
-pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+pub fn release_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    business: &Address,
+) -> Result<(), QuickLendXError> {
+    business.require_auth();
+
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
@@ -914,7 +920,13 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 /// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount.
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the refund can be safely retried.
-pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+pub fn refund_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    caller: &Address,
+) -> Result<(), QuickLendXError> {
+    caller.require_auth();
+
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 

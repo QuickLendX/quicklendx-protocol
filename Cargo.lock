@@ -1078,6 +1078,7 @@ checksum = "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0"
 name = "quicklendx-contracts"
 version = "0.1.0"
 dependencies = [
+ "ed25519-dalek",
  "proptest",
  "quicklendx-contracts",
  "serde",

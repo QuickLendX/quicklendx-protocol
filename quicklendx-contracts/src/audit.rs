@@ -94,6 +94,18 @@ pub enum AuditOperation {
     EmergencyWithdrawalCancelled,
     /// Pending treasury address rotation cancelled.
     TreasuryRotationCancelled,
+    /// A business or investor submitted a KYC application (first time or resubmission).
+    KycSubmitted,
+    /// Admin verified (approved) a business or investor KYC record.
+    KycVerified,
+    /// Admin rejected a pending business or investor KYC record.
+    KycRejected,
+    /// Admin revoked a previously verified investor's KYC.
+    KycRevoked,
+    /// An investor was frozen (all investment actions blocked).
+    InvestorFrozen,
+    /// An investor was unfrozen (investment actions restored).
+    InvestorUnfrozen,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -137,6 +149,12 @@ pub enum OpType {
     EmergencyWithdrawalExecuted,
     EmergencyWithdrawalCancelled,
     TreasuryRotationCancelled,
+    KycSubmitted,
+    KycVerified,
+    KycRejected,
+    KycRevoked,
+    InvestorFrozen,
+    InvestorUnfrozen,
 }
 
 impl OpType {
@@ -176,6 +194,12 @@ impl OpType {
             OpType::EmergencyWithdrawalExecuted => symbol_short!("emg_exec"),
             OpType::EmergencyWithdrawalCancelled => symbol_short!("emg_cnl"),
             OpType::TreasuryRotationCancelled => symbol_short!("tr_rot_cn"),
+            OpType::KycSubmitted => symbol_short!("kyc_sub"),
+            OpType::KycVerified => symbol_short!("kyc_ver"),
+            OpType::KycRejected => symbol_short!("kyc_rej"),
+            OpType::KycRevoked => symbol_short!("kyc_rev"),
+            OpType::InvestorFrozen => symbol_short!("inv_frz"),
+            OpType::InvestorUnfrozen => symbol_short!("inv_unf"),
         }
     }
 
@@ -215,6 +239,12 @@ impl OpType {
             OpType::EmergencyWithdrawalExecuted => 30,
             OpType::EmergencyWithdrawalCancelled => 31,
             OpType::TreasuryRotationCancelled => 32,
+            OpType::KycSubmitted => 33,
+            OpType::KycVerified => 34,
+            OpType::KycRejected => 35,
+            OpType::KycRevoked => 36,
+            OpType::InvestorFrozen => 37,
+            OpType::InvestorUnfrozen => 38,
         }
     }
 }
@@ -257,6 +287,12 @@ impl From<AuditOperation> for OpType {
             AuditOperation::EmergencyWithdrawalExecuted => OpType::EmergencyWithdrawalExecuted,
             AuditOperation::EmergencyWithdrawalCancelled => OpType::EmergencyWithdrawalCancelled,
             AuditOperation::TreasuryRotationCancelled => OpType::TreasuryRotationCancelled,
+            AuditOperation::KycSubmitted => OpType::KycSubmitted,
+            AuditOperation::KycVerified => OpType::KycVerified,
+            AuditOperation::KycRejected => OpType::KycRejected,
+            AuditOperation::KycRevoked => OpType::KycRevoked,
+            AuditOperation::InvestorFrozen => OpType::InvestorFrozen,
+            AuditOperation::InvestorUnfrozen => OpType::InvestorUnfrozen,
         }
     }
 }
@@ -530,6 +566,12 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::EmergencyWithdrawalExecuted => 30,
         AuditOperation::EmergencyWithdrawalCancelled => 31,
         AuditOperation::TreasuryRotationCancelled => 32,
+        AuditOperation::KycSubmitted => 33,
+        AuditOperation::KycVerified => 34,
+        AuditOperation::KycRejected => 35,
+        AuditOperation::KycRevoked => 36,
+        AuditOperation::InvestorFrozen => 37,
+        AuditOperation::InvestorUnfrozen => 38,
     }
 }
 

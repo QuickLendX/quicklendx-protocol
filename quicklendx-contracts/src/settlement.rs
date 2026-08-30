@@ -223,7 +223,7 @@ pub fn process_partial_payment(
     );
 
     if progress.total_paid >= progress.total_due {
-        settle_invoice_internal(env, invoice_id)?;
+        settle_invoice_internal(env, invoice_id, &payer)?;
     }
 
     Ok(())
@@ -403,6 +403,7 @@ pub fn settle_invoice(
     invoice_id: &BytesN<32>,
     payment_amount: i128,
     snap: &crate::types::Investment,
+    business: &Address,
 ) -> Result<(), QuickLendXError> {
     if payment_amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
@@ -455,7 +456,7 @@ pub fn settle_invoice(
 
     let nonce = make_settlement_nonce(env);
     record_payment(env, invoice_id, &payer, payment_amount, nonce)?;
-    settle_invoice_internal(env, invoice_id)
+    settle_invoice_internal(env, invoice_id, business)
 }
 
 /// Returns aggregate payment progress for an invoice.
@@ -633,7 +634,11 @@ fn require_settlement_currency_allowed(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+fn settle_invoice_internal(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    business: &Address,
+) -> Result<(), QuickLendXError> {
     // Double-finalization guard: reject if already settled.
     if is_finalized(env, invoice_id) {
         return Err(QuickLendXError::InvalidStatus);
@@ -654,7 +659,7 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     // This ensures the business receives the original funded amount during the settlement transition.
     if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
         if escrow.status == crate::payments::EscrowStatus::Held {
-            crate::payments::release_escrow(env, invoice_id)?;
+            crate::payments::release_escrow(env, invoice_id, business)?;
         }
     }
 

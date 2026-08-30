@@ -16,6 +16,8 @@
 
 #![cfg(test)]
 
+use soroban_sdk::testutils::Ledger;
+use soroban_sdk::testutils::Events as EventsTrait;
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 use crate::storage::{StorageMigration, STORAGE_SCHEMA_VERSION};
