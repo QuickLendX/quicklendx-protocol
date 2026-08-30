@@ -9,41 +9,50 @@ use soroban_sdk::{
     Address, BytesN, Env, String, Vec,
 };
 
-fn setup() -> (Env, QuickLendXContractClient<'static>) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    // Needs some init if required
-    (env, client)
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+    (env, client, admin)
 }
 
 fn create_invoice_at(
     env: &Env,
     client: &QuickLendXContractClient,
     business: &Address,
+    currency: &Address,
     timestamp: u64,
 ) -> BytesN<32> {
     env.ledger().set_timestamp(timestamp);
     client.store_invoice(
         business,
         &1_000i128,
-        &Address::generate(env),
+        currency,
         &(timestamp + 86_400),
         &String::from_str(env, "invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
+        &None,
         &None,
     )
 }
 
 #[test]
 fn test_business_invoices_cursored_pagination() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
+    let currency = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
     let business = Address::generate(&env);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC"));
+    client.verify_business(&admin, &business);
 
-    let id1 = create_invoice_at(&env, &client, &business, 1_000);
-    let id2 = create_invoice_at(&env, &client, &business, 2_000);
+    let id1 = create_invoice_at(&env, &client, &business, &currency, 1_000);
+    let id2 = create_invoice_at(&env, &client, &business, &currency, 2_000);
 
     let page1 = client.get_business_invoices_cursored(
         &business,
@@ -71,7 +80,7 @@ fn test_business_invoices_cursored_pagination() {
     assert!(!page2.has_more);
 
     // Destabilized cursor
-    create_invoice_at(&env, &client, &business, 3_000);
+    create_invoice_at(&env, &client, &business, &currency, 3_000);
 
     let err = client
         .try_get_business_invoices_cursored(
@@ -88,19 +97,16 @@ fn test_business_invoices_cursored_pagination() {
 
 #[test]
 fn test_available_invoices_cursored_pagination() {
-    let (env, client) = setup();
+    let (env, client, admin) = setup();
+    let currency = env
+        .register_stellar_asset_contract_v2(Address::generate(&env))
+        .address();
     let business = Address::generate(&env);
+    client.submit_kyc_application(&business, &String::from_str(&env, "KYC"));
+    client.verify_business(&admin, &business);
 
-    // Create an invoice and verify it so it becomes available
-    let id1 = create_invoice_at(&env, &client, &business, 1_000);
-    // Pretend admin verified it (status = Verified)
-    // Actually we can just call store_invoice with a different status or update it.
-    // For simplicity, we just assume it's added. Let's just create one.
-    // However, store_invoice sets it to Pending.
-    // We would need to verify it. We can just skip exact verification in this dummy test
-    // or test the unstable cursor logic anyway.
+    let id1 = create_invoice_at(&env, &client, &business, &currency, 1_000);
 
-    // We can just call get_available_invoices_cursored
     let page1 = client.get_available_invoices_cursored(&None, &None, &None, &0u32, &1u32, &None);
     let gen = page1.generation;
 

@@ -137,7 +137,7 @@ pub(crate) fn load_accept_bid_context(
     }
 
     if bid.status != BidStatus::Placed {
-        return Err(QuickLendXError::InvalidStatus);
+        return Err(QuickLendXError::BidStale);
     }
 
     // KYC and freeze status are checked again at acceptance time. A bid can

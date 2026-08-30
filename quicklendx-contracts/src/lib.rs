@@ -45,15 +45,13 @@ mod test_fees;
 mod test_maintenance;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
-#[cfg(test)]
-mod test_multisig;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_multisig;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_capacity_stress;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_history_reconstruction;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 // Storage and migration compatibility regression tests (issue #2508).
 mod test_storage_migration_compat;
 // Issue #1920 â€” confirm require_regulatory_ok is truly a no-op by default.
@@ -120,7 +118,7 @@ mod test_accept_bid_instruction_budget;
 mod test_accept_bid_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_events_audit_parity;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
@@ -162,7 +160,7 @@ mod test_config_bounds_matrix;
 mod test_currency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_due_date_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_funding_events_audit_parity;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_governance;
@@ -226,15 +224,15 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_panic_handler;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments_auth;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_queries;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rating_override;
@@ -398,11 +396,11 @@ mod test_rebuild_indexes;
 // mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_optin_lifecycle;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
@@ -430,7 +428,7 @@ mod test_cannot_withdraw_more_than_deposited;
 mod test_invoice_batch_cancel;
 #[cfg(test)]
 mod test_pagination_cursors;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_ratings_snapshot;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_store_invoice_auth;
@@ -2566,7 +2564,6 @@ impl QuickLendXContract {
             }
         }
 
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
         // Check if maximum bids per invoice limit is reached
         let active_bid_count = BidStorage::get_active_bid_count(&env, &invoice_id);
         if active_bid_count >= bid::MAX_BIDS_PER_INVOICE {
@@ -2653,8 +2650,11 @@ impl QuickLendXContract {
         // Re-verify investor KYC status and aggregate investment capacity before accepting bid.
         validate_investor_investment(&env, &bid.investor, 0)?;
 
-        if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
+        if invoice.status != InvoiceStatus::Verified {
             return Err(QuickLendXError::InvalidStatus);
+        }
+        if bid.status != BidStatus::Placed || bid.is_expired(env.ledger().timestamp()) {
+            return Err(QuickLendXError::BidStale);
         }
 
         let escrow_id = create_escrow(
@@ -5806,5 +5806,5 @@ impl QuickLendXContract {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_authorization;

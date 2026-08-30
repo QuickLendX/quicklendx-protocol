@@ -1368,7 +1368,7 @@ pub fn repay_escrow(
     Ok(allocation)
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod payments_tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env};

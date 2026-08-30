@@ -35,6 +35,7 @@
 
 use crate::errors::QuickLendXError;
 use crate::observability::OBSERVABILITY_SCHEMA_VERSION;
+use crate::storage::{bump_persistent, extend_persistent_ttl};
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{
     contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Symbol, Vec,
@@ -659,7 +660,8 @@ impl AuditStorage {
         }
 
         // Store individual entry
-        env.storage().instance().set(&entry.audit_id, entry);
+        env.storage().persistent().set(&entry.audit_id, entry);
+        extend_persistent_ttl(env, &entry.audit_id);
 
         // Add to invoice audit trail
         Self::add_to_invoice_audit_trail(env, &entry.invoice_id, &entry.audit_id);
@@ -679,16 +681,25 @@ impl AuditStorage {
 
     /// Get audit entry by ID
     pub fn get_audit_entry(env: &Env, audit_id: &BytesN<32>) -> Option<AuditLogEntry> {
-        env.storage().instance().get(audit_id)
+        let entry = env.storage().persistent().get(audit_id);
+        if entry.is_some() {
+            extend_persistent_ttl(env, audit_id);
+        }
+        entry
     }
 
     /// Get audit trail for an invoice
     pub fn get_invoice_audit_trail(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
         let key = (symbol_short!("inv_aud"), invoice_id.clone());
-        env.storage()
-            .instance()
+        let result: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
             .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+            .unwrap_or_else(|| Vec::new(env));
+        if !result.is_empty() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
     }
 
     /// Get audit entries by operation type
@@ -697,19 +708,29 @@ impl AuditStorage {
         operation: &AuditOperation,
     ) -> Vec<BytesN<32>> {
         let key = (symbol_short!("op_aud"), operation.clone());
-        env.storage()
-            .instance()
+        let result: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
             .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+            .unwrap_or_else(|| Vec::new(env));
+        if !result.is_empty() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
     }
 
     /// Get audit entries by actor
     pub fn get_audit_entries_by_actor(env: &Env, actor: &Address) -> Vec<BytesN<32>> {
         let key = (symbol_short!("act_aud"), actor.clone());
-        env.storage()
-            .instance()
+        let result: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
             .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+            .unwrap_or_else(|| Vec::new(env));
+        if !result.is_empty() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
     }
 
     /// Query audit logs with filters
@@ -841,21 +862,24 @@ impl AuditStorage {
         let key = (symbol_short!("inv_aud"), invoice_id.clone());
         let mut trail = Self::get_invoice_audit_trail(env, invoice_id);
         trail.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &trail);
+        env.storage().persistent().set(&key, &trail);
+        extend_persistent_ttl(env, &key);
     }
 
     fn add_to_operation_index(env: &Env, operation: &AuditOperation, audit_id: &BytesN<32>) {
         let key = (symbol_short!("op_aud"), operation.clone());
         let mut entries = Self::get_audit_entries_by_operation(env, operation);
         entries.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &entries);
+        env.storage().persistent().set(&key, &entries);
+        extend_persistent_ttl(env, &key);
     }
 
     fn add_to_actor_index(env: &Env, actor: &Address, audit_id: &BytesN<32>) {
         let key = (symbol_short!("act_aud"), actor.clone());
         let mut entries = Self::get_audit_entries_by_actor(env, actor);
         entries.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &entries);
+        env.storage().persistent().set(&key, &entries);
+        extend_persistent_ttl(env, &key);
     }
 
     fn add_to_timestamp_index(env: &Env, timestamp: u64, audit_id: &BytesN<32>) {
@@ -863,30 +887,33 @@ impl AuditStorage {
         let key = (symbol_short!("ts_aud"), day_key);
         let mut entries: Vec<BytesN<32>> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&key)
             .unwrap_or_else(|| Vec::new(env));
         entries.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &entries);
+        env.storage().persistent().set(&key, &entries);
+        extend_persistent_ttl(env, &key);
     }
 
     fn add_to_all_audit_entries(env: &Env, audit_id: &BytesN<32>) {
         let key = symbol_short!("all_aud");
-        let mut all: Vec<BytesN<32>> = env
-            .storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env));
+        let mut all = Self::get_all_audit_entries(env);
         all.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &all);
+        env.storage().persistent().set(&key, &all);
+        extend_persistent_ttl(env, &key);
     }
 
     fn get_all_audit_entries(env: &Env) -> Vec<BytesN<32>> {
         let key = symbol_short!("all_aud");
-        env.storage()
-            .instance()
+        let result: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
             .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+            .unwrap_or_else(|| Vec::new(env));
+        if !result.is_empty() {
+            extend_persistent_ttl(env, &key);
+        }
+        result
     }
 
     fn matches_filter(entry: &AuditLogEntry, filter: &AuditQueryFilter) -> bool {
