@@ -1109,13 +1109,35 @@ pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) 
     );
 }
 
+/// Human-readable correlation string that ties an audit entry to the bid that
+/// produced it, so downstream systems can match the emitted bid event
+/// (`BidPlaced`/`BidAccepted`/... which carry `bid_id`) to its audit record.
+fn bid_correlation(env: &Env, bid_id: &BytesN<32>) -> String {
+    let mut hex_bytes = alloc::vec::Vec::new();
+    for byte in bid_id.to_array().iter() {
+        let high = byte >> 4;
+        let low = byte & 0x0F;
+        hex_bytes.push(nibble_to_hex(high));
+        hex_bytes.push(nibble_to_hex(low));
+    }
+    String::from_str(env, &(core::str::from_utf8(&hex_bytes).unwrap_or("")))
+}
+
+fn nibble_to_hex(nibble: u8) -> u8 {
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + (nibble - 10)
+    }
+}
+
 /// Log bid placed.
 pub fn log_bid_placed(
     env: &Env,
     invoice_id: BytesN<32>,
     actor: Address,
     bid_amount: i128,
-    _bid_id: BytesN<32>,
+    bid_id: BytesN<32>,
 ) {
     log_operation(
         env,
@@ -1125,12 +1147,18 @@ pub fn log_bid_placed(
         None,
         Some(String::from_str(env, "Bid placed")),
         Some(bid_amount),
-        None,
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
 /// Log bid accepted.
-pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+pub fn log_bid_accepted(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    bid_id: BytesN<32>,
+) {
     log_operation(
         env,
         invoice_id,
@@ -1139,12 +1167,12 @@ pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amoun
         None,
         Some(String::from_str(env, "Bid accepted")),
         Some(amount),
-        None,
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
 /// Log bid withdrawn.
-pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid_id: BytesN<32>) {
+pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
     log_operation(
         env,
         invoice_id,
@@ -1153,7 +1181,45 @@ pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid
         None,
         Some(String::from_str(env, "Bid withdrawn")),
         None,
+        Some(bid_correlation(env, &bid_id)),
+    );
+}
+
+/// Log bid cancelled (Placed -> Cancelled).
+pub fn log_bid_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidCancelled,
+        actor,
         None,
+        Some(String::from_str(env, "Bid cancelled")),
+        None,
+        Some(bid_correlation(env, &bid_id)),
+    );
+}
+
+/// Log bid expired (Placed -> Expired via TTL/grace cleanup).
+///
+/// The actor is the bid's investor: expiry is a self-triggered transition of
+/// that bid's lifecycle, and using a real address keeps the audit entry
+/// attributable without inventing a synthetic system address.
+pub fn log_bid_expired(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    bid_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidExpired,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid expired")),
+        Some(amount),
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 

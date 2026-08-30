@@ -617,6 +617,13 @@ impl BidStorage {
                         bid.status = BidStatus::Expired;
                         Self::update_bid(env, &bid);
                         emit_bid_expired(env, &bid);
+                        crate::audit::log_bid_expired(
+                            env,
+                            bid.invoice_id.clone(),
+                            bid.investor.clone(),
+                            bid.bid_amount,
+                            bid.bid_id.clone(),
+                        );
                         newly_expired = newly_expired.saturating_add(1);
                         // Do not push to active -> prunes this expired bid
                     } else {
@@ -738,6 +745,13 @@ impl BidStorage {
                             bid.status = BidStatus::Expired;
                             Self::update_bid(env, &bid);
                             emit_bid_expired(env, &bid);
+                            crate::audit::log_bid_expired(
+                                env,
+                                bid.invoice_id.clone(),
+                                bid.investor.clone(),
+                                bid.bid_amount,
+                                bid.bid_id.clone(),
+                            );
                             cleaned_count = cleaned_count.saturating_add(1);
                             false
                         } else if bid.status == BidStatus::Expired {
@@ -918,6 +932,13 @@ impl BidStorage {
                             bid.status = BidStatus::Expired;
                             Self::update_bid(env, &bid);
                             emit_bid_expired(env, &bid);
+                            crate::audit::log_bid_expired(
+                                env,
+                                bid.invoice_id.clone(),
+                                bid.investor.clone(),
+                                bid.bid_amount,
+                                bid.bid_id.clone(),
+                            );
                             cleaned_count = cleaned_count.saturating_add(1);
                             false
                         } else if bid.status == BidStatus::Expired {
