@@ -184,7 +184,11 @@ pub const fn validate_pagination_params(
     } else {
         capped_limit
     };
-    let has_more = safe_offset.saturating_add(effective_limit) < total_count;
+    let has_more = if effective_limit == 0 {
+        false
+    } else {
+        safe_offset.saturating_add(effective_limit) < total_count
+    };
     (safe_offset, effective_limit, has_more)
 }
 
