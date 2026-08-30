@@ -6,19 +6,19 @@ mod matrix {
     fn config(n: u8, enabled: bool, version: u32) -> TokenConfig { TokenConfig { token: token(n), enabled, version } }
 
     #[test] fn matrix_missing_is_rejected() { assert_eq!(authorize_token(None), Err(TokenPolicyError::Unsupported)); }
-    #[test] fn matrix_zero_address_is_not_a_valid_admin() { assert_eq!(apply_token_update([0; 32], ADMIN, None, token(1), true, 0), Err(TokenPolicyError::InvalidAdmin)); }
-    #[test] fn matrix_wrong_admin_is_not_authorized() { assert_eq!(apply_token_update(token(8), ADMIN, None, token(1), true, 0), Err(TokenPolicyError::Unauthorized)); }
-    #[test] fn matrix_first_enable_has_version_one() { assert_eq!(apply_token_update(ADMIN.address, ADMIN, None, token(1), true, 0).unwrap().0.version, 1); }
-    #[test] fn matrix_first_disable_has_version_one() { assert_eq!(apply_token_update(ADMIN.address, ADMIN, None, token(1), false, 0).unwrap().0.version, 1); }
-    #[test] fn matrix_enable_to_disable_is_monotonic() { let r = apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 5)), token(1), false, 5).unwrap(); assert_eq!(r.0.version, 6); }
-    #[test] fn matrix_disable_to_enable_is_monotonic() { let r = apply_token_update(ADMIN.address, ADMIN, Some(config(1, false, 5)), token(1), true, 5).unwrap(); assert_eq!(r.0.version, 6); }
-    #[test] fn matrix_wrong_expected_version_fails() { assert!(apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 5)), token(1), false, 4).is_err()); }
-    #[test] fn matrix_wrong_token_fails() { assert!(apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 5)), token(2), false, 5).is_err()); }
-    #[test] fn matrix_event_contains_disable() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 5)), token(1), false, 5).unwrap(); assert_eq!((e.old_enabled, e.new_enabled), (true, false)); }
-    #[test] fn matrix_event_contains_enable() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, Some(config(1, false, 5)), token(1), true, 5).unwrap(); assert_eq!((e.old_enabled, e.new_enabled), (false, true)); }
-    #[test] fn matrix_event_contains_old_version() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 12)), token(1), false, 12).unwrap(); assert_eq!(e.old_version, 12); }
-    #[test] fn matrix_event_contains_new_version() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 12)), token(1), false, 12).unwrap(); assert_eq!(e.new_version, 13); }
-    #[test] fn matrix_event_contains_address() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 1)), token(1), false, 1).unwrap(); assert_eq!(e.token, token(1)); }
+    #[test] fn matrix_zero_address_is_not_a_valid_admin() { assert_eq!(apply_token_update([0; 32], ADMIN, None, token(1), true, 0, [0; 32]), Err(TokenPolicyError::InvalidAdmin)); }
+    #[test] fn matrix_wrong_admin_is_not_authorized() { assert_eq!(apply_token_update(token(8), ADMIN, None, token(1), true, 0, [0; 32]), Err(TokenPolicyError::Unauthorized)); }
+    #[test] fn matrix_first_enable_has_version_one() { assert_eq!(apply_token_update(ADMIN.address, ADMIN, None, token(1), true, 0, [0; 32]).unwrap().0.version, 1); }
+    #[test] fn matrix_first_disable_has_version_one() { assert_eq!(apply_token_update(ADMIN.address, ADMIN, None, token(1), false, 0, [0; 32]).unwrap().0.version, 1); }
+    #[test] fn matrix_enable_to_disable_is_monotonic() { let r = apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 5)), token(1), false, 5, [0; 32]).unwrap(); assert_eq!(r.0.version, 6); }
+    #[test] fn matrix_disable_to_enable_is_monotonic() { let r = apply_token_update(ADMIN.address, ADMIN, Some(config(1, false, 5)), token(1), true, 5, [0; 32]).unwrap(); assert_eq!(r.0.version, 6); }
+    #[test] fn matrix_wrong_expected_version_fails() { assert!(apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 5)), token(1), false, 4, [0; 32]).is_err()); }
+    #[test] fn matrix_wrong_token_fails() { assert!(apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 5)), token(2), false, 5, [0; 32]).is_err()); }
+    #[test] fn matrix_event_contains_disable() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 5)), token(1), false, 5, [0; 32]).unwrap(); assert_eq!((e.old_enabled, e.new_enabled), (true, false)); }
+    #[test] fn matrix_event_contains_enable() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, Some(config(1, false, 5)), token(1), true, 5, [0; 32]).unwrap(); assert_eq!((e.old_enabled, e.new_enabled), (false, true)); }
+    #[test] fn matrix_event_contains_old_version() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 12)), token(1), false, 12, [0; 32]).unwrap(); assert_eq!(e.old_version, 12); }
+    #[test] fn matrix_event_contains_new_version() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 12)), token(1), false, 12, [0; 32]).unwrap(); assert_eq!(e.new_version, 13); }
+    #[test] fn matrix_event_contains_address() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, Some(config(1, true, 1)), token(1), false, 1, [0; 32]).unwrap(); assert_eq!(e.token, token(1)); }
     #[test] fn matrix_funded_enabled_succeeds() { assert!(authorize_payment(Some(config(1, true, 1)), true).is_ok()); }
     #[test] fn matrix_funded_disabled_succeeds() { assert!(authorize_payment(Some(config(1, false, 1)), true).is_ok()); }
     #[test] fn matrix_new_enabled_succeeds() { assert!(authorize_payment(Some(config(1, true, 1)), false).is_ok()); }

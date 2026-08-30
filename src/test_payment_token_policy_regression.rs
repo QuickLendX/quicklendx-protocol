@@ -62,14 +62,14 @@ mod tests {
     #[test]
     fn regression_batch_returns_snapshot() {
         let mut list = TokenAllowlist::empty();
-        let request = [TokenUpdateRequest { token: [10; 32], enabled: true, expected_version: 0 }];
+        let request = [TokenUpdateRequest { token: [10; 32], enabled: true, expected_version: 0, request_key: [0; 32] }];
         let result = apply_batch_updates(ADMIN.address, ADMIN, &mut list, &request).unwrap();
         assert_eq!(result, snapshot(&list));
     }
     #[test]
     fn regression_batch_does_not_accept_zero_asset() {
         let mut list = TokenAllowlist::empty();
-        let request = [TokenUpdateRequest { token: [0; 32], enabled: false, expected_version: 0 }];
+        let request = [TokenUpdateRequest { token: [0; 32], enabled: false, expected_version: 0, request_key: [0; 32] }];
         assert!(apply_batch_updates(ADMIN.address, ADMIN, &mut list, &request).is_err());
     }
     #[test]
