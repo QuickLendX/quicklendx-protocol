@@ -409,16 +409,42 @@ impl AuditLogEntry {
         additional_data: Option<String>,
     ) -> Self {
         let operation_id = crate::observability::allocate_operation_id(env);
-        let audit_id = operation_id.clone();
+        Self::new_with_operation_id(
+            env,
+            invoice_id,
+            operation,
+            actor,
+            old_value,
+            new_value,
+            amount,
+            additional_data,
+            operation_id,
+        )
+    }
+
+    /// Create an audit entry that shares a caller-supplied correlation id.
+    ///
+    /// `operation_id` must already be unique. The audit storage key is the same
+    /// id so event and audit records can be reconciled 1:1.
+    pub fn new_with_operation_id(
+        env: &Env,
+        invoice_id: BytesN<32>,
+        operation: AuditOperation,
+        actor: Address,
+        old_value: Option<String>,
+        new_value: Option<String>,
+        amount: Option<i128>,
+        additional_data: Option<String>,
+        operation_id: BytesN<32>,
+    ) -> Self {
         let timestamp = env.ledger().timestamp();
         let block_height = env.ledger().sequence();
-
         let prev_hash = AuditStorage::last_entry_hash(env, &invoice_id);
 
         Self {
             schema_version: OBSERVABILITY_SCHEMA_VERSION,
+            audit_id: operation_id.clone(),
             operation_id,
-            audit_id,
             invoice_id,
             operation,
             actor,
@@ -959,6 +985,32 @@ pub fn log_operation(
     AuditStorage::store_audit_entry(env, &entry);
 }
 
+/// Append an audit entry that reuses a committed event's correlation id.
+pub fn log_operation_with_id(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    amount: Option<i128>,
+    additional_data: Option<String>,
+    operation_id: BytesN<32>,
+) {
+    let entry = AuditLogEntry::new_with_operation_id(
+        env,
+        invoice_id,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        amount,
+        additional_data,
+        operation_id,
+    );
+    AuditStorage::store_audit_entry(env, &entry);
+}
+
 /// Convenience wrapper for log_operation (used by invoice helpers).
 pub fn log_invoice_operation(
     env: &Env,
@@ -1050,6 +1102,28 @@ pub fn log_payment_processed(
         Some(String::from_str(env, "Payment processed")),
         Some(amount),
         Some(payment_type),
+    );
+}
+
+/// Log a committed payment using the same `operation_id` as the protocol event.
+pub fn log_payment_processed_with_id(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    additional_data: String,
+    operation_id: BytesN<32>,
+) {
+    log_operation_with_id(
+        env,
+        invoice_id,
+        AuditOperation::PaymentProcessed,
+        actor,
+        None,
+        Some(String::from_str(env, "Payment processed")),
+        Some(amount),
+        Some(additional_data),
+        operation_id,
     );
 }
 

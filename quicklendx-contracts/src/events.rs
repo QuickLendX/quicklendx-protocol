@@ -2,6 +2,7 @@
 
 use crate::audit::OpType;
 use crate::fees::FeeType;
+use crate::observability::{TransitionPhase, OBSERVABILITY_SCHEMA_VERSION};
 use crate::payments::Escrow;
 use crate::types::Bid;
 use crate::types::{InvestorFreezeReason, Invoice, InvoiceMetadata, PlatformFeeConfig};
@@ -33,6 +34,8 @@ pub const TOPIC_INVOICE_EXPIRED: &str = "invoice_expired";
 pub const TOPIC_PARTIAL_PAYMENT: &str = "partial_payment";
 /// Topic for `PaymentRecorded` events.
 pub const TOPIC_PAYMENT_RECORDED: &str = "payment_recorded";
+/// Topic for versioned `RepaymentAllocated` events (additive; does not replace `pay_rec`).
+pub const TOPIC_REPAYMENT_ALLOCATED: &str = "repayment_allocated";
 /// Topic for `InvoiceSettledFinal` events.
 pub const TOPIC_INVOICE_SETTLED_FINAL: &str = "invoice_settled_final";
 /// Topic for `InvoiceFunded` events.
@@ -267,6 +270,34 @@ pub struct PaymentRecorded {
     pub amount: i128,
     pub transaction_id: String,
     pub timestamp: u64,
+}
+
+/// Additive versioned repayment allocation for a committed payment.
+///
+/// Topic: [`TOPIC_REPAYMENT_ALLOCATED`] (`"repayment_allocated"`)
+///
+/// Emitted only after storage commit. `operation_id` matches the
+/// `PaymentProcessed` audit entry. Legacy `PartialPayment` / `pay_rec`
+/// payloads are unchanged.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct RepaymentAllocated {
+    pub schema_version: u32,
+    pub operation_id: BytesN<32>,
+    pub phase: TransitionPhase,
+    pub invoice_id: BytesN<32>,
+    pub payer: Address,
+    pub applied_principal: i128,
+    pub applied_investor_profit: i128,
+    pub applied_platform_fee: i128,
+    pub applied_late_penalty: i128,
+    pub cumulative_principal: i128,
+    pub cumulative_investor_profit: i128,
+    pub cumulative_platform_fee: i128,
+    pub cumulative_late_penalty: i128,
+    pub total_paid: i128,
+    pub total_due: i128,
+    pub fee_bps: i128,
 }
 
 /// Emitted when an invoice reaches final settlement (all funds disbursed).
@@ -1177,6 +1208,46 @@ pub fn emit_payment_recorded(
         amount,
         transaction_id,
         timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emit a committed [`RepaymentAllocated`] record. Call only after payment
+/// storage has been written.
+pub fn emit_repayment_allocated(
+    env: &Env,
+    operation_id: BytesN<32>,
+    invoice_id: &BytesN<32>,
+    payer: &Address,
+    applied_principal: i128,
+    applied_investor_profit: i128,
+    applied_platform_fee: i128,
+    applied_late_penalty: i128,
+    cumulative_principal: i128,
+    cumulative_investor_profit: i128,
+    cumulative_platform_fee: i128,
+    cumulative_late_penalty: i128,
+    total_paid: i128,
+    total_due: i128,
+    fee_bps: i128,
+) {
+    RepaymentAllocated {
+        schema_version: OBSERVABILITY_SCHEMA_VERSION,
+        operation_id,
+        phase: TransitionPhase::Committed,
+        invoice_id: invoice_id.clone(),
+        payer: payer.clone(),
+        applied_principal,
+        applied_investor_profit,
+        applied_platform_fee,
+        applied_late_penalty,
+        cumulative_principal,
+        cumulative_investor_profit,
+        cumulative_platform_fee,
+        cumulative_late_penalty,
+        total_paid,
+        total_due,
+        fee_bps,
     }
     .publish(env);
 }

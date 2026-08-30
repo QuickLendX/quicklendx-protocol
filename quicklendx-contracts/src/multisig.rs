@@ -22,9 +22,11 @@ pub struct OwnerSignature {
 const OWNERS_KEY: Symbol = symbol_short!("owners");
 const THRESHOLD_KEY: Symbol = symbol_short!("thresh");
 
+#[cfg(not(target_arch = "wasm32"))]
 #[contract]
 pub struct MultisigContract;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[contractimpl]
 impl MultisigContract {
     pub fn initialize(
