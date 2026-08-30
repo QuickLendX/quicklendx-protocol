@@ -251,6 +251,20 @@ impl RepaymentRateLimiter {
 }
 
 /// Return the principal currently reserved by an investor across pending bids and active investments.
+///
+/// # Invariant — Issue #2454
+/// `exposure = Σ(Placed bid amounts, !expired) + Σ(Active investment amounts)`
+///
+/// Lifetime analytics (`total_invested`) are **not** included in this figure.
+/// They are a monotonically increasing counter that never decreases on repayment
+/// and must not be used as a cap input — doing so would permanently block an
+/// experienced investor regardless of their current active risk.
+///
+/// # Errors
+/// * [`QuickLendXError::ArithmeticOverflow`] — the sum overflows `i128`. This
+///   can only happen when one of the underlying sums already returned `i128::MAX`
+///   (the fail-closed sentinel from `get_active_investment_amount_sum_for_investor`).
+///   In that case the overflow propagates and the caller must reject the operation.
 pub fn get_investor_exposure(env: &Env, investor: &Address) -> Result<i128, QuickLendXError> {
     let bid_exposure =
         crate::storage::BidStorage::get_active_bid_amount_sum_for_investor(env, investor);
@@ -265,10 +279,20 @@ pub fn get_investor_exposure(env: &Env, investor: &Address) -> Result<i128, Quic
 
 /// Return the exact available funding capacity for an investor.
 ///
-/// # Invariants
-/// - An unverified or frozen investor has no available capacity.
-/// - Capacity = max(0, verification.investment_limit - active_exposure).
-/// - Fails closed on arithmetic overflow or missing verification record.
+/// # Invariants — Issue #2454
+/// * An unverified or frozen investor always returns an error (not 0). This
+///   prevents a caller from treating rejection as "zero capacity" and proceeding.
+/// * `capacity = max(0, verification.investment_limit - active_exposure)`
+///   where `active_exposure = get_investor_exposure(env, investor)?`.
+/// * Lifetime analytics (`total_invested`) are excluded from the cap, consistent
+///   with `get_investor_exposure` and `validate_investor_investment`.
+/// * Fails closed on arithmetic overflow, missing verification, or any non-Verified status.
+///
+/// # Errors
+/// * [`QuickLendXError::BusinessNotVerified`] — investor not in `Verified` status.
+/// * [`QuickLendXError::InvestorFrozen`] — investor is frozen.
+/// * [`QuickLendXError::KYCNotFound`] — no verification record exists.
+/// * [`QuickLendXError::ArithmeticOverflow`] — forwarded from `get_investor_exposure`.
 pub fn get_investor_available_capacity(
     env: &Env,
     investor: &Address,
@@ -294,6 +318,24 @@ pub fn get_investor_available_capacity(
 }
 
 /// Validate that an investor has sufficient authorized capacity for a new funding commitment of `amount`.
+///
+/// This is a **read-only preflight check**. It never writes to storage. A
+/// rejected or repeated call leaves escrow, investment, bid, and token
+/// balances exactly as they were — there is no partial state.
+///
+/// # Atomicity invariant — Issue #2454
+/// All three sources of rejection (amount bounds, capacity, KYC/freeze) are
+/// evaluated sequentially before any mutation. Because `validate_funding_commitment`
+/// itself performs no writes, any failure leaves the system in a consistent
+/// state; the caller can safely retry with corrected inputs using the same
+/// parameters.
+///
+/// # Errors
+/// * [`QuickLendXError::InvalidAmount`] — `amount` is ≤ 0, exceeds
+///   `MAX_INVOICE_AMOUNT`, or exceeds the investor's available capacity.
+/// * Errors forwarded from [`get_investor_available_capacity`]: `BusinessNotVerified`,
+///   `InvestorFrozen`, `KYCNotFound`, `ArithmeticOverflow`.
+/// * Errors forwarded from `validate_investor_investment`: `InsufficientKYCTier`.
 pub fn validate_funding_commitment(
     env: &Env,
     investor: &Address,

@@ -1805,15 +1805,33 @@ pub fn validate_investor_investment(
             return Err(QuickLendXError::BusinessNotVerified);
         }
 
-        // 2. Aggregate Limit Check
-        // Ensure that (new bid + existing active bids + active investments + total funded volume) fits within the limit
+        // 2. Aggregate Limit Check — active risk only
+        //
+        // The cap guards principal currently at risk (Placed bids + Active
+        // investments + the new amount being requested). Lifetime analytics
+        // (`total_invested`) are intentionally excluded: they are a monotonically
+        // increasing counter that never decreases on repayment, so including them
+        // would permanently block any investor after enough successful cycles —
+        // the opposite of the intended incentive structure.
+        //
+        // This is consistent with `payments::get_investor_exposure` and
+        // `payments::get_investor_available_capacity`, which also exclude
+        // lifetime volume from the cap.
+        //
+        // Overflow: `checked_add` propagates to `i128::MAX` on overflow;
+        // `i128::MAX > any limit` so the cap check correctly rejects the call,
+        // matching the fail-closed pattern in `get_active_investment_amount_sum_for_investor`.
+        //
+        // Compatibility: investors who previously had large `total_invested`
+        // may now have more available capacity. This is the correct behavior
+        // and is documented in docs/contracts/payments.md (Issue #2454).
         let active_bid_exposure = BidStorage::get_active_bid_amount_sum_for_investor(env, investor);
         let active_investment_exposure =
             InvestmentStorage::get_active_investment_amount_sum_for_investor(env, investor);
         let total_risk_exposure = active_bid_exposure
-            .saturating_add(active_investment_exposure)
-            .saturating_add(verification.total_invested)
-            .saturating_add(investment_amount);
+            .checked_add(active_investment_exposure)
+            .and_then(|s| s.checked_add(investment_amount))
+            .unwrap_or(i128::MAX);
 
         if total_risk_exposure > verification.investment_limit {
             return Err(QuickLendXError::InvalidAmount);
