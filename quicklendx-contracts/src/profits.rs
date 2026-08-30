@@ -559,10 +559,6 @@ pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i12
 /// * `rate_bps`      — Annual rate in basis points, e.g. 500 = 5 %
 /// * `duration_days` — Holding period in days
 ///
-/// # Monotonicity invariant
-/// For fixed `rate_bps` and `duration_days`, `yield` is non-decreasing in `amount`.
-/// For fixed `amount` and `duration_days`, `yield` is non-decreasing in `rate_bps`.
-/// For fixed `amount` and `rate_bps`, `yield` is non-decreasing in `duration_days`.
 /// Compute the expected return on a principal amount.
 ///
 /// # Returns
