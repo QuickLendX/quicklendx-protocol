@@ -12,19 +12,19 @@ mod tests {
     #[test] fn active_funded_payment_succeeds() { assert!(authorize_payment(active(A, 1), true).is_ok()); }
     #[test] fn removed_new_payment_fails() { assert_eq!(authorize_payment(removed(A, 1), false), Err(TokenPolicyError::Removed)); }
     #[test] fn removed_funded_payment_succeeds() { assert!(authorize_payment(removed(A, 1), true).is_ok()); }
-    #[test] fn add_event_contains_token() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, None, A, true, 0).unwrap(); assert_eq!(e.token, A); }
-    #[test] fn add_event_contains_versions() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, None, A, true, 0).unwrap(); assert_eq!((e.old_version, e.new_version), (0, 1)); }
-    #[test] fn disable_event_contains_versions() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, active(A, 7), A, false, 7).unwrap(); assert_eq!((e.old_version, e.new_version), (7, 8)); }
-    #[test] fn unauthorized_remove_cannot_change_state() { assert!(apply_token_update(B, ADMIN, active(A, 1), A, false, 1).is_err()); }
-    #[test] fn replayed_add_is_stale() { assert!(apply_token_update(ADMIN.address, ADMIN, active(A, 1), A, true, 0).is_err()); }
-    #[test] fn future_version_is_stale() { assert!(apply_token_update(ADMIN.address, ADMIN, active(A, 1), A, false, 2).is_err()); }
-    #[test] fn different_token_cannot_share_record() { assert!(apply_token_update(ADMIN.address, ADMIN, active(A, 1), B, true, 1).is_err()); }
-    #[test] fn stable_replay_preserves_enabled() { let c = TokenConfig { token: A, enabled: true, version: 2 }; assert!(replay_update_is_noop(Some(c), c, 2)); }
-    #[test] fn stable_replay_preserves_removed() { let c = TokenConfig { token: A, enabled: false, version: 2 }; assert!(replay_update_is_noop(Some(c), c, 2)); }
+    #[test] fn add_event_contains_token() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, None, A, true, 0, [0; 32]).unwrap(); assert_eq!(e.token, A); }
+    #[test] fn add_event_contains_versions() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, None, A, true, 0, [0; 32]).unwrap(); assert_eq!((e.old_version, e.new_version), (0, 1)); }
+    #[test] fn disable_event_contains_versions() { let (_, e) = apply_token_update(ADMIN.address, ADMIN, active(A, 7), A, false, 7, [0; 32]).unwrap(); assert_eq!((e.old_version, e.new_version), (7, 8)); }
+    #[test] fn unauthorized_remove_cannot_change_state() { assert!(apply_token_update(B, ADMIN, active(A, 1), A, false, 1, [0; 32]).is_err()); }
+    #[test] fn replayed_add_is_stale() { assert!(apply_token_update(ADMIN.address, ADMIN, active(A, 1), A, true, 0, [0; 32]).is_err()); }
+    #[test] fn future_version_is_stale() { assert!(apply_token_update(ADMIN.address, ADMIN, active(A, 1), A, false, 2, [0; 32]).is_err()); }
+    #[test] fn different_token_cannot_share_record() { assert!(apply_token_update(ADMIN.address, ADMIN, active(A, 1), B, true, 1, [0; 32]).is_err()); }
+    #[test] fn stable_replay_preserves_enabled() { let c = TokenConfig { token: A, enabled: true, version: 2, request_key: [0; 32], previous_enabled: false }; assert!(replay_update_is_noop(Some(c), c, 2)); }
+    #[test] fn stable_replay_preserves_removed() { let c = TokenConfig { token: A, enabled: false, version: 2, request_key: [0; 32], previous_enabled: false }; assert!(replay_update_is_noop(Some(c), c, 2)); }
     #[test] fn canonical_a_is_a() { assert_eq!(canonical_token(A), A); }
     #[test] fn canonical_b_is_b() { assert_eq!(canonical_token(B), B); }
     #[test] fn max_version_can_be_read() { assert!(authorize_payment(active(A, u32::MAX), true).is_ok()); }
-    #[test] fn max_version_update_fails() { assert_eq!(apply_token_update(ADMIN.address, ADMIN, active(A, u32::MAX), A, false, u32::MAX), Err(TokenPolicyError::InvalidVersion)); }
+    #[test] fn max_version_update_fails() { assert_eq!(apply_token_update(ADMIN.address, ADMIN, active(A, u32::MAX), A, false, u32::MAX, [0; 32]), Err(TokenPolicyError::InvalidVersion)); }
     #[test] fn funded_removed_record_keeps_version() { assert_eq!(authorize_payment(removed(A, 9), true).unwrap().version, 9); }
     #[test] fn disabled_token_never_authorizes_new_path() { for version in 0..5 { assert!(authorize_payment(removed(A, version), false).is_err()); } }
     #[test] fn enabled_token_authorizes_new_path() { for version in 0..5 { assert!(authorize_payment(active(A, version), false).is_ok()); } }
