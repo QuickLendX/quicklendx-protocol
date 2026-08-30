@@ -1,6 +1,7 @@
-use soroban_sdk::{symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, Symbol};
+extern crate alloc;
 
 use crate::storage::{bump_persistent, extend_persistent_ttl};
+use soroban_sdk::{symbol_short, Address, Bytes, BytesN, Env, Symbol, xdr::ToXdr};
 
 /// Storage key for the idempotency map.
 pub const IDEMPOTENCY_MAP_KEY: Symbol = symbol_short!("idem_map");

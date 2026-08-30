@@ -499,7 +499,11 @@ pub fn calculate_treasury_split_checked(
 ///
 /// # Returns
 /// `true` if calculation is dust-free, `false` otherwise
-#[allow(dead_code)]
+///
+/// Used as a defense-in-depth check in `settlement::settle_invoice_internal`
+/// (#2464), re-verifying the same `investor_return + platform_fee ==
+/// total_paid` identity that function's own `checked_add`-based check
+/// already asserts, through an independently-implemented path.
 pub fn verify_no_dust(investor_return: i128, platform_fee: i128, payment_amount: i128) -> bool {
     investor_return.saturating_add(platform_fee) == payment_amount
 }
@@ -555,10 +559,6 @@ pub fn compute_yield_u32(amount: i128, rate_bps: u32, duration_days: u32) -> i12
 /// * `rate_bps`      — Annual rate in basis points, e.g. 500 = 5 %
 /// * `duration_days` — Holding period in days
 ///
-/// # Monotonicity invariant
-/// For fixed `rate_bps` and `duration_days`, `yield` is non-decreasing in `amount`.
-/// For fixed `amount` and `duration_days`, `yield` is non-decreasing in `rate_bps`.
-/// For fixed `amount` and `rate_bps`, `yield` is non-decreasing in `duration_days`.
 /// Compute the expected return on a principal amount.
 ///
 /// # Returns

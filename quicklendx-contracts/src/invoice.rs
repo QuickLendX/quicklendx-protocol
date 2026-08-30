@@ -1,5 +1,5 @@
 use crate::errors::QuickLendXError;
-use crate::protocol_limits::{check_string_length, MAX_FEEDBACK_LENGTH, MAX_INVOICE_AMOUNT};
+use crate::protocol_limits::{check_string_length, MAX_FEEDBACK_LENGTH};
 use crate::storage::DataKey;
 use crate::verification::normalize_tag;
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
@@ -52,9 +52,10 @@ impl Invoice {
         late_payment_penalty_bps: Option<u32>,
         early_payment_discount_bps: Option<u32>,
     ) -> Result<Self, QuickLendXError> {
-        if amount <= 0 || amount > MAX_INVOICE_AMOUNT {
-            return Err(QuickLendXError::InvalidAmount);
-        }
+        // #2432 — exact sign/ceiling validation before any state is written.
+        // Semantically identical to the historical inline predicate
+        // (`amount <= 0 || amount > MAX_INVOICE_AMOUNT`); see `invoice_amount`.
+        crate::invoice_amount::validate_invoice_amount_ceiling(amount)?;
 
         if due_date <= env.ledger().timestamp() {
             return Err(QuickLendXError::InvoiceDueDateInvalid);

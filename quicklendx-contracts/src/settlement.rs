@@ -84,9 +84,10 @@
 //! **See**: `src/test_settlement_dispute_interaction.rs` for complete test matrix.
 
 use crate::errors::QuickLendXError;
-use crate::events::{emit_invoice_settled, emit_partial_payment};
+use crate::events::{emit_invoice_settled, emit_partial_payment, emit_repayment_allocated};
 use crate::investment::InvestmentStorage;
 use crate::payments::transfer_funds;
+use crate::profits::BPS_DENOMINATOR;
 use crate::storage::InvoiceStorage;
 use crate::types::InvestmentStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
@@ -121,6 +122,8 @@ enum SettlementDataKey {
     /// Per-invoice settlement currency whitelist (defence-in-depth).
     /// Stored at invoice creation; checked at settlement time.
     SettlementCurrencies(BytesN<32>),
+    /// Cumulative repayment allocation ledger for an invoice.
+    Allocation(BytesN<32>),
 }
 
 /// Durable payment record stored per invoice/payment-index.
@@ -145,6 +148,227 @@ pub struct Progress {
     pub progress_percent: u32,
     pub payment_count: u32,
     pub status: InvoiceStatus,
+}
+
+/// Durable cumulative repayment buckets for an invoice.
+///
+/// Additive storage: missing keys reconstruct from `invoice.total_paid` with
+/// `assessed_late = 0` (no retroactive late fee on upgrade).
+#[contracttype]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+pub struct RepaymentLedger {
+    pub principal: i128,
+    pub investor_profit: i128,
+    pub platform_fee: i128,
+    pub late_penalty: i128,
+    pub total_paid: i128,
+    pub assessed_late: i128,
+    pub late_assessed: bool,
+}
+
+/// Result of a committed `record_payment` call.
+pub struct RecordedPayment {
+    pub progress: Progress,
+    pub operation_id: BytesN<32>,
+    pub applied_amount: i128,
+    pub fee_bps: i128,
+    pub applied_principal: i128,
+    pub applied_investor_profit: i128,
+    pub applied_platform_fee: i128,
+    pub applied_late_penalty: i128,
+    pub ledger: RepaymentLedger,
+}
+
+/// Allocate cumulative repayment buckets for a given `total_paid`.
+///
+/// Waterfall: principal → contractual profit (platform fee split) → investor late penalty.
+///
+/// # Invariants
+/// `principal + investor_profit + platform_fee + late_penalty == total_paid`
+pub fn allocate_cumulative_repayment(
+    investment: i128,
+    face: i128,
+    total_paid: i128,
+    fee_bps: i128,
+    assessed_late: i128,
+) -> Result<RepaymentLedger, QuickLendXError> {
+    if investment < 0 || face <= 0 || total_paid < 0 || assessed_late < 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+    if investment > crate::protocol_limits::MAX_INVOICE_AMOUNT
+        || face > crate::protocol_limits::MAX_INVOICE_AMOUNT
+        || assessed_late > crate::protocol_limits::MAX_INVOICE_AMOUNT
+    {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let fee_bps = fee_bps.clamp(0, BPS_DENOMINATOR);
+
+    let principal = if total_paid < investment {
+        total_paid
+    } else {
+        investment
+    };
+    let after_principal = total_paid
+        .checked_sub(principal)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+
+    let profit_cap = if face > investment {
+        face.checked_sub(investment)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?
+    } else {
+        0
+    };
+    let profit_pool = if after_principal < profit_cap {
+        after_principal
+    } else {
+        profit_cap
+    };
+
+    let platform_fee = profit_pool
+        .checked_mul(fee_bps)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_div(BPS_DENOMINATOR)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    let investor_profit = profit_pool
+        .checked_sub(platform_fee)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+
+    let after_profit = after_principal
+        .checked_sub(profit_pool)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    let late_penalty = if after_profit < assessed_late {
+        after_profit
+    } else {
+        assessed_late
+    };
+    let leftover = after_profit
+        .checked_sub(late_penalty)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    if leftover != 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let recon = principal
+        .checked_add(investor_profit)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_add(platform_fee)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_add(late_penalty)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    if recon != total_paid {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    Ok(RepaymentLedger {
+        principal,
+        investor_profit,
+        platform_fee,
+        late_penalty,
+        total_paid,
+        assessed_late,
+        late_assessed: false,
+    })
+}
+
+fn empty_repayment_ledger() -> RepaymentLedger {
+    RepaymentLedger {
+        principal: 0,
+        investor_profit: 0,
+        platform_fee: 0,
+        late_penalty: 0,
+        total_paid: 0,
+        assessed_late: 0,
+        late_assessed: false,
+    }
+}
+
+/// Read the stored repayment ledger, if any.
+pub fn get_repayment_ledger(env: &Env, invoice_id: &BytesN<32>) -> Option<RepaymentLedger> {
+    env.storage()
+        .persistent()
+        .get(&SettlementDataKey::Allocation(invoice_id.clone()))
+}
+
+fn store_repayment_ledger(env: &Env, invoice_id: &BytesN<32>, ledger: &RepaymentLedger) {
+    env.storage()
+        .persistent()
+        .set(&SettlementDataKey::Allocation(invoice_id.clone()), ledger);
+}
+
+fn settlement_fee_bps(env: &Env) -> i128 {
+    if let Ok(config) = crate::fees::FeeManager::get_platform_fee_config(env) {
+        return (config.fee_bps as i128).clamp(0, BPS_DENOMINATOR);
+    }
+    crate::profits::PlatformFee::get_config(env).fee_bps as i128
+}
+
+fn investment_principal(env: &Env, invoice: &Invoice) -> i128 {
+    InvestmentStorage::get_investment_by_invoice(env, &invoice.id)
+        .map(|inv| inv.amount)
+        .unwrap_or(invoice.amount)
+}
+
+fn load_or_reconstruct_ledger(
+    env: &Env,
+    invoice: &Invoice,
+    fee_bps: i128,
+) -> Result<RepaymentLedger, QuickLendXError> {
+    if let Some(ledger) = get_repayment_ledger(env, &invoice.id) {
+        return Ok(ledger);
+    }
+    if invoice.total_paid == 0 {
+        return Ok(empty_repayment_ledger());
+    }
+    let mut ledger = allocate_cumulative_repayment(
+        investment_principal(env, invoice),
+        invoice.amount,
+        invoice.total_paid,
+        fee_bps,
+        0,
+    )?;
+    ledger.assessed_late = 0;
+    ledger.late_assessed = false;
+    Ok(ledger)
+}
+
+fn encode_allocation_audit(
+    env: &Env,
+    applied: i128,
+    principal: i128,
+    investor_profit: i128,
+    platform_fee: i128,
+    late_penalty: i128,
+) -> String {
+    let mut buf = [0u8; 192];
+    let mut n = 0usize;
+    let mut push = |label: &[u8], value: i128| {
+        if n > 0 && n < buf.len() {
+            buf[n] = b',';
+            n += 1;
+        }
+        for b in label {
+            if n < buf.len() {
+                buf[n] = *b;
+                n += 1;
+            }
+        }
+        let mut num = [0u8; 41];
+        let len = crate::audit::write_i128_to_buf(&mut num, value);
+        for i in 0..len {
+            if n < buf.len() {
+                buf[n] = num[i];
+                n += 1;
+            }
+        }
+    };
+    push(b"a=", applied);
+    push(b"p=", principal);
+    push(b"ip=", investor_profit);
+    push(b"pf=", platform_fee);
+    push(b"l=", late_penalty);
+    String::from_str(env, core::str::from_utf8(&buf[..n]).unwrap_or("alloc"))
 }
 
 /// Record a partial payment for an invoice.
@@ -186,7 +410,7 @@ pub fn process_partial_payment(
         payment_amount
     );
 
-    let progress = record_payment(
+    let recorded = record_payment(
         env,
         invoice_id,
         &payer,
@@ -207,23 +431,40 @@ pub fn process_partial_payment(
     emit_partial_payment(
         env,
         &invoice_post,
-        get_last_applied_amount(env, invoice_id)?,
-        progress.total_paid,
-        progress.progress_percent,
+        recorded.applied_amount,
+        recorded.progress.total_paid,
+        recorded.progress.progress_percent,
         transaction_id,
+    );
+
+    emit_repayment_allocated(
+        env,
+        recorded.operation_id.clone(),
+        invoice_id,
+        &payer,
+        recorded.applied_principal,
+        recorded.applied_investor_profit,
+        recorded.applied_platform_fee,
+        recorded.applied_late_penalty,
+        recorded.ledger.principal,
+        recorded.ledger.investor_profit,
+        recorded.ledger.platform_fee,
+        recorded.ledger.late_penalty,
+        recorded.progress.total_paid,
+        recorded.progress.total_due,
+        recorded.fee_bps,
     );
 
     // Lifecycle trigger: emits `NotificationType::PaymentReceived` for each
     // applied partial payment. Notification failures must not roll back funds.
-    let applied = get_last_applied_amount(env, invoice_id).unwrap_or(payment_amount);
     let _ = crate::notifications::NotificationSystem::notify_payment_received(
         env,
         &invoice_post,
-        applied,
+        recorded.applied_amount,
     );
 
     if progress.total_paid >= progress.total_due {
-        settle_invoice_internal(env, invoice_id)?;
+        settle_invoice_internal(env, invoice_id, &payer)?;
     }
 
     Ok(())
@@ -270,7 +511,7 @@ pub fn record_payment(
     payer: &Address,
     amount: i128,
     payment_nonce: String,
-) -> Result<Progress, QuickLendXError> {
+) -> Result<RecordedPayment, QuickLendXError> {
     if amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
     }
@@ -289,7 +530,6 @@ pub fn record_payment(
     }
     payer.require_auth();
 
-    // Replay protection: reject duplicate nonces.
     crate::verification::validate_transaction_hash(env, &payment_nonce)?;
 
     let nonce_key = SettlementDataKey::PaymentNonce(invoice_id.clone(), payment_nonce.clone());
@@ -299,13 +539,31 @@ pub fn record_payment(
     }
 
     let payment_count = get_payment_count_internal(env, invoice_id);
-
-    // Guard against unbounded payment record growth.
     if payment_count >= MAX_PAYMENT_COUNT {
         return Err(QuickLendXError::OperationNotAllowed);
     }
 
-    let remaining_due = compute_remaining_due(&invoice)?;
+    let fee_bps = settlement_fee_bps(env);
+    let mut ledger = load_or_reconstruct_ledger(env, &invoice, fee_bps)?;
+
+    if !ledger.late_assessed
+        && env.ledger().timestamp() > invoice.due_date
+        && invoice
+            .late_payment_penalty_bps
+            .map(|bps| bps > 0)
+            .unwrap_or(false)
+    {
+        let remaining_contractual = contractual_remaining(&invoice)?;
+        let bps = invoice.late_payment_penalty_bps.unwrap_or(0) as i128;
+        ledger.assessed_late = remaining_contractual
+            .checked_mul(bps)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?
+            .checked_div(BPS_DENOMINATOR)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
+        ledger.late_assessed = true;
+    }
+
+    let remaining_due = remaining_due_with_late(&invoice, ledger.assessed_late)?;
     if remaining_due <= 0 {
         return Err(QuickLendXError::InvalidStatus);
     }
@@ -315,7 +573,6 @@ pub fn record_payment(
     } else {
         amount
     };
-
     if applied_amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
     }
@@ -324,12 +581,50 @@ pub fn record_payment(
         .total_paid
         .checked_add(applied_amount)
         .ok_or(QuickLendXError::InvalidAmount)?;
-
-    // Hard invariant: total_paid must never exceed total_due.
-    if new_total_paid > invoice.amount {
+    let total_due = invoice
+        .amount
+        .checked_add(ledger.assessed_late)
+        .ok_or(QuickLendXError::InvalidAmount)?;
+    if new_total_paid > total_due {
         return Err(QuickLendXError::InvalidAmount);
     }
 
+    let previous = ledger.clone();
+    let mut next_ledger = allocate_cumulative_repayment(
+        investment_principal(env, &invoice),
+        invoice.amount,
+        new_total_paid,
+        fee_bps,
+        ledger.assessed_late,
+    )?;
+    next_ledger.assessed_late = ledger.assessed_late;
+    next_ledger.late_assessed = ledger.late_assessed;
+
+    let applied_principal = next_ledger
+        .principal
+        .checked_sub(previous.principal)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    let applied_investor_profit = next_ledger
+        .investor_profit
+        .checked_sub(previous.investor_profit)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    let applied_platform_fee = next_ledger
+        .platform_fee
+        .checked_sub(previous.platform_fee)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    let applied_late_penalty = next_ledger
+        .late_penalty
+        .checked_sub(previous.late_penalty)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    if applied_principal < 0
+        || applied_investor_profit < 0
+        || applied_platform_fee < 0
+        || applied_late_penalty < 0
+    {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let operation_id = crate::observability::allocate_operation_id(env);
     let timestamp = env.ledger().timestamp();
     let payment_record = SettlementPaymentRecord {
         payer: payer.clone(),
@@ -367,6 +662,7 @@ pub fn record_payment(
         payment_record.nonce,
     );
     InvoiceStorage::update_invoice(env, &invoice);
+    store_repayment_ledger(env, invoice_id, &next_ledger);
 
     crate::qlx_log!(
         env,
@@ -385,7 +681,34 @@ pub fn record_payment(
         &invoice.status,
     );
 
-    get_invoice_progress(env, invoice_id)
+    crate::audit::log_payment_processed_with_id(
+        env,
+        invoice_id.clone(),
+        payer.clone(),
+        applied_amount,
+        encode_allocation_audit(
+            env,
+            applied_amount,
+            applied_principal,
+            applied_investor_profit,
+            applied_platform_fee,
+            applied_late_penalty,
+        ),
+        operation_id.clone(),
+    );
+
+    let progress = get_invoice_progress(env, invoice_id)?;
+    Ok(RecordedPayment {
+        progress,
+        operation_id,
+        applied_amount,
+        fee_bps,
+        applied_principal,
+        applied_investor_profit,
+        applied_platform_fee,
+        applied_late_penalty,
+        ledger: next_ledger,
+    })
 }
 
 /// Settle an invoice by applying a final payment amount from the business.
@@ -403,6 +726,7 @@ pub fn settle_invoice(
     invoice_id: &BytesN<32>,
     payment_amount: i128,
     snap: &crate::types::Investment,
+    business: &Address,
 ) -> Result<(), QuickLendXError> {
     if payment_amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
@@ -431,7 +755,7 @@ pub fn settle_invoice(
     require_no_active_dispute(&invoice)?;
     let payer = invoice.business.clone();
 
-    let remaining_due = compute_remaining_due(&invoice)?;
+    let remaining_due = compute_remaining_due(env, &invoice)?;
     if payment_amount > remaining_due {
         return Err(QuickLendXError::InvalidAmount);
     }
@@ -449,13 +773,20 @@ pub fn settle_invoice(
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
-    if projected_total < invoice.amount || projected_total < investment.amount {
+    if projected_total < investment.amount {
+        return Err(QuickLendXError::PaymentTooLow);
+    }
+    let total_due = invoice
+        .amount
+        .checked_add(preview_assessed_late(env, &invoice)?)
+        .ok_or(QuickLendXError::InvalidAmount)?;
+    if projected_total < total_due {
         return Err(QuickLendXError::PaymentTooLow);
     }
 
     let nonce = make_settlement_nonce(env);
     record_payment(env, invoice_id, &payer, payment_amount, nonce)?;
-    settle_invoice_internal(env, invoice_id)
+    settle_invoice_internal(env, invoice_id, business)
 }
 
 /// Returns aggregate payment progress for an invoice.
@@ -469,9 +800,12 @@ pub fn get_invoice_progress(
 ) -> Result<Progress, QuickLendXError> {
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-    let total_due = invoice.amount;
+    let total_due = invoice
+        .amount
+        .checked_add(preview_assessed_late(env, &invoice)?)
+        .ok_or(QuickLendXError::InvalidAmount)?;
     let total_paid = invoice.total_paid;
-    let remaining_due = compute_remaining_due(&invoice)?;
+    let remaining_due = compute_remaining_due(env, &invoice)?;
 
     let progress_percent = if total_due <= 0 {
         0
@@ -633,7 +967,11 @@ fn require_settlement_currency_allowed(
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+fn settle_invoice_internal(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    business: &Address,
+) -> Result<(), QuickLendXError> {
     // Double-finalization guard: reject if already settled.
     if is_finalized(env, invoice_id) {
         return Err(QuickLendXError::InvalidStatus);
@@ -646,7 +984,7 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
 
     let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
 
-    if invoice.total_paid < invoice.amount || invoice.total_paid < investment.amount {
+    if compute_remaining_due(env, &invoice)? != 0 || invoice.total_paid < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
     }
 
@@ -654,7 +992,7 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
     // This ensures the business receives the original funded amount during the settlement transition.
     if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
         if escrow.status == crate::payments::EscrowStatus::Held {
-            crate::payments::release_escrow(env, invoice_id)?;
+            crate::payments::release_escrow(env, invoice_id, business)?;
         }
     }
 
@@ -663,18 +1001,15 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
         .clone()
         .ok_or(QuickLendXError::NotInvestor)?;
 
-    let (investor_return, platform_fee) = match crate::fees::FeeManager::calculate_platform_fee(
-        env,
-        investment.amount,
-        invoice.total_paid,
-    ) {
-        Ok(result) => result,
-        // Backward-compatible fallback for environments/tests without fee config.
-        Err(QuickLendXError::StorageKeyNotFound) => {
-            crate::profits::calculate_profit(env, investment.amount, invoice.total_paid)
-        }
-        Err(error) => return Err(error),
-    };
+    let fee_bps = settlement_fee_bps(env);
+    let ledger = load_or_reconstruct_ledger(env, &invoice, fee_bps)?;
+    let investor_return = ledger
+        .principal
+        .checked_add(ledger.investor_profit)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_add(ledger.late_penalty)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    let platform_fee = ledger.platform_fee;
 
     // Accounting invariant: disbursement must exactly equal total_paid.
     // This prevents any accounting drift from rounding or logic errors.
@@ -683,6 +1018,37 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
         .ok_or(QuickLendXError::InvalidAmount)?;
     if disbursement_total != invoice.total_paid {
         return Err(QuickLendXError::InvalidAmount);
+    }
+    // Defense-in-depth (#2464): re-verify the same identity through the
+    // crate's dedicated, independently-tested dust-check utility rather than
+    // trusting the arithmetic above alone -- matches the "explicit guard
+    // against future arithmetic changes" pattern already used elsewhere in
+    // this crate (see `Investment::calculate_premium`).
+    if !crate::profits::verify_no_dust(investor_return, platform_fee, invoice.total_paid) {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    // #2464: mark finalized now, before any fund movement or other
+    // externally observable effect below -- not after, as this function
+    // used to. Every accounting/authorization/lifecycle check for this
+    // settlement has passed by this point and nothing has happened yet, so
+    // this is the correct checks-effects-interactions boundary: the only
+    // way a caller can ever observe `is_finalized(invoice_id) == true` is
+    // once every precondition already held, matching the ordering
+    // `record_payment` and `handle_default`'s guard-setting already follow
+    // elsewhere in this crate. Soroban's own transaction atomicity already
+    // reverts every effect below if anything after this point fails or
+    // panics, so this change doesn't alter what a failed call leaves
+    // behind -- it exists so this function's own ordering matches that
+    // guarantee rather than relying on it silently.
+    mark_finalized(env, invoice_id);
+
+    // Auto-release escrow funds to business if they are still held in the contract.
+    // This ensures the business receives the original funded amount during the settlement transition.
+    if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
+        if escrow.status == crate::payments::EscrowStatus::Held {
+            crate::payments::release_escrow(env, invoice_id)?;
+        }
     }
 
     let business_address = invoice.business.clone();
@@ -703,9 +1069,6 @@ fn settle_invoice_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), Qui
         )?;
         crate::events::emit_platform_fee_routed(env, invoice_id, &fee_recipient, platform_fee);
     }
-
-    // Mark finalized before status transition to prevent re-entry.
-    mark_finalized(env, invoice_id);
 
     let previous_status = invoice.status;
     let paid_at = env.ledger().timestamp();
@@ -790,23 +1153,59 @@ fn require_no_active_dispute(invoice: &Invoice) -> Result<(), QuickLendXError> {
     Ok(())
 }
 
-fn compute_remaining_due(invoice: &Invoice) -> Result<i128, QuickLendXError> {
+fn contractual_remaining(invoice: &Invoice) -> Result<i128, QuickLendXError> {
     if invoice.amount <= 0 {
         return Err(QuickLendXError::InvoiceAmountInvalid);
     }
-
     if invoice.total_paid < 0 {
         return Err(QuickLendXError::InvalidAmount);
     }
-
     if invoice.total_paid >= invoice.amount {
         return Ok(0);
     }
-
     invoice
         .amount
         .checked_sub(invoice.total_paid)
         .ok_or(QuickLendXError::InvalidAmount)
+}
+
+fn remaining_due_with_late(
+    invoice: &Invoice,
+    assessed_late: i128,
+) -> Result<i128, QuickLendXError> {
+    let total_due = invoice
+        .amount
+        .checked_add(assessed_late)
+        .ok_or(QuickLendXError::InvalidAmount)?;
+    if invoice.total_paid >= total_due {
+        return Ok(0);
+    }
+    total_due
+        .checked_sub(invoice.total_paid)
+        .ok_or(QuickLendXError::InvalidAmount)
+}
+
+fn preview_assessed_late(env: &Env, invoice: &Invoice) -> Result<i128, QuickLendXError> {
+    if let Some(ledger) = get_repayment_ledger(env, &invoice.id) {
+        return Ok(ledger.assessed_late);
+    }
+    if env.ledger().timestamp() > invoice.due_date {
+        if let Some(bps) = invoice.late_payment_penalty_bps {
+            if bps > 0 {
+                let remaining = contractual_remaining(invoice)?;
+                return remaining
+                    .checked_mul(bps as i128)
+                    .ok_or(QuickLendXError::ArithmeticOverflow)?
+                    .checked_div(BPS_DENOMINATOR)
+                    .ok_or(QuickLendXError::ArithmeticOverflow);
+            }
+        }
+    }
+    Ok(0)
+}
+
+fn compute_remaining_due(env: &Env, invoice: &Invoice) -> Result<i128, QuickLendXError> {
+    remaining_due_with_late(invoice, preview_assessed_late(env, invoice)?)
 }
 
 fn update_inline_payment_history(

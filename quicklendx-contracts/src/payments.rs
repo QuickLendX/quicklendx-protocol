@@ -164,6 +164,92 @@ impl PaymentRateLimiter {
     }
 }
 
+/// Maximum number of repayment / profit-distribution operations
+/// (`repay_escrow`) allowed per rate-limit window per repaying account.
+#[cfg(not(test))]
+pub const MAX_REPAYMENTS_PER_WINDOW: u32 = 10;
+#[cfg(test)]
+pub const MAX_REPAYMENTS_PER_WINDOW: u32 = 3;
+
+/// Window duration for repayment distribution rate limiting (in seconds).
+pub const REPAYMENT_RATE_LIMIT_WINDOW_SECS: u64 = PAYMENT_RATE_LIMIT_WINDOW_SECS;
+
+const REPAYMENT_RATE_LIMIT_KEY: Symbol = symbol_short!("rep_rl");
+
+/// Bounded rate limiter for repayment / profit-distribution operations.
+///
+/// Distinct from [`PaymentRateLimiter`] (which guards escrow creation): this
+/// limiter guards the fee/principal/profit distribution path (`repay_escrow`)
+/// and reports the actionable [`QuickLendXError::MutationLimitExceeded`] on
+/// throttle so callers know the exact condition and retry window.
+pub struct RepaymentRateLimiter;
+
+impl RepaymentRateLimiter {
+    fn key(account: &Address) -> (Symbol, Address) {
+        (REPAYMENT_RATE_LIMIT_KEY, account.clone())
+    }
+
+    /// Check and advance the repayment rate limit for `account`.
+    ///
+    /// Running *before* any storage read, allocation, or token transfer, this
+    /// rejects with [`QuickLendXError::MutationLimitExceeded`] when `account`
+    /// exceeds the allowed repayment count in the active window. Rejection
+    /// mutates no escrow/invoice/token state.
+    pub fn check_and_record(env: &Env, account: &Address) -> Result<(), QuickLendXError> {
+        let key = Self::key(account);
+        let now = env.ledger().timestamp();
+        let mut record = env
+            .storage()
+            .persistent()
+            .get::<_, PaymentRateLimitRecord>(&key)
+            .unwrap_or(PaymentRateLimitRecord {
+                window_start: now,
+                count: 0,
+            });
+
+        if now
+            >= record
+                .window_start
+                .saturating_add(REPAYMENT_RATE_LIMIT_WINDOW_SECS)
+        {
+            record.window_start = now;
+            record.count = 1;
+        } else {
+            if record.count >= MAX_REPAYMENTS_PER_WINDOW {
+                return Err(QuickLendXError::MutationLimitExceeded);
+            }
+            record.count = record.count.saturating_add(1);
+        }
+
+        env.storage().persistent().set(&key, &record);
+        extend_persistent_ttl(env, &key);
+        Ok(())
+    }
+
+    /// Read the repayment rate limit record for `account` without mutating storage.
+    pub fn get_rate_limit(env: &Env, account: &Address) -> PaymentRateLimitRecord {
+        let key = Self::key(account);
+        let now = env.ledger().timestamp();
+        env.storage()
+            .persistent()
+            .get::<_, PaymentRateLimitRecord>(&key)
+            .map(|mut r| {
+                if now
+                    >= r.window_start
+                        .saturating_add(REPAYMENT_RATE_LIMIT_WINDOW_SECS)
+                {
+                    r.window_start = now;
+                    r.count = 0;
+                }
+                r
+            })
+            .unwrap_or(PaymentRateLimitRecord {
+                window_start: now,
+                count: 0,
+            })
+    }
+}
+
 /// Return the principal currently reserved by an investor across pending bids and active investments.
 pub fn get_investor_exposure(env: &Env, investor: &Address) -> Result<i128, QuickLendXError> {
     let bid_exposure =
@@ -842,7 +928,13 @@ pub fn create_escrow_record_only(
 ///   (should never happen in normal operation; indicates a critical invariant violation).
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the release can be safely retried.
-pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+pub fn release_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    business: &Address,
+) -> Result<(), QuickLendXError> {
+    business.require_auth();
+
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
@@ -917,7 +1009,13 @@ pub fn release_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 /// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount.
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the refund can be safely retried.
-pub fn refund_escrow(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+pub fn refund_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    caller: &Address,
+) -> Result<(), QuickLendXError> {
+    caller.require_auth();
+
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
@@ -1258,10 +1356,16 @@ pub fn allocate_repayment(
 /// * `late_fee_bps` — late-payment surcharge in basis points (0 disables).
 ///
 /// # Errors
+/// * [`QuickLendXError::MutationLimitExceeded`] — the repaying account exceeded
+///   the repayment rate limit for the active window.
+/// * [`QuickLendXError::InvalidAmount`] — `payment_amount` is negative or exceeds
+///   `MAX_INVOICE_AMOUNT`.
+/// * [`QuickLendXError::InvalidFeeBasisPoints`] — `late_fee_bps` is negative or
+///   exceeds `BPS_DENOMINATOR`.
 /// * [`QuickLendXError::StorageKeyNotFound`] — no escrow/invoice for `invoice_id`.
 /// * [`QuickLendXError::InvalidStatus`] — escrow is not `Held` (already repaid) or
 ///   a reserve repair is active.
-/// * [`QuickLendXError::InvalidAmount`] / [`QuickLendXError::ArithmeticOverflow`]
+/// * [`QuickLendXError::ArithmeticOverflow`]
 ///   — forwarded from [`allocate_repayment`] or the reserve update.
 /// * [`QuickLendXError::InsufficientFunds`] — the contract does not custody
 ///   `payment_amount` (the business repayment has not been received).
@@ -1273,10 +1377,23 @@ pub fn repay_escrow(
     payment_amount: i128,
     late_fee_bps: i128,
 ) -> Result<RepaymentAllocation, QuickLendXError> {
+    // Resource bounds are enforced *before* any storage read or token transfer:
+    // oversized or ill-formed repayment inputs are rejected cheaply and leave no
+    // partial state. `late_fee_bps` beyond the BPS denominator is rejected (not
+    // silently clamped) at this network boundary, unlike the pure
+    // `allocate_repayment` helper whose clamping is preserved for callers that
+    // pass pre-normalized BPS.
+    if payment_amount < 0 || payment_amount > crate::protocol_limits::MAX_INVOICE_AMOUNT {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+    if late_fee_bps < 0 || late_fee_bps > crate::profits::BPS_DENOMINATOR {
+        return Err(QuickLendXError::InvalidFeeBasisPoints);
+    }
+
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-    let invoice =
+    let _invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if escrow.status != EscrowStatus::Held {
@@ -1284,6 +1401,14 @@ pub fn repay_escrow(
     }
 
     EscrowStorage::require_no_active_reserve_repair(env, &escrow.currency)?;
+
+    // Repayment must be rate-bounded before allocation or any token transfer so
+    // that repeated repayment attempts cannot exhaust ledger/service resources.
+    // The business is the repaying party; only genuinely repayable (`Held`)
+    // escrows consume the caller's budget, so rejected stale/repeated calls
+    // leave no state change and do not penalize the caller.
+    let business = escrow.business.clone();
+    RepaymentRateLimiter::check_and_record(env, &business)?;
 
     let principal = escrow.amount;
     let currency = escrow.currency.clone();
@@ -1368,7 +1493,77 @@ pub fn repay_escrow(
     Ok(allocation)
 }
 
-#[cfg(all(test, feature = "legacy-tests"))]
+const REPAYMENT_RECORD_KEY: Symbol = symbol_short!("rep_rec");
+
+#[contracttype]
+#[derive(Clone)]
+pub struct RepaymentRecord {
+    pub invoice_id: BytesN<32>,
+    pub payment_amount: i128,
+    pub late_fee_bps: i128,
+    pub allocation: RepaymentAllocation,
+}
+
+fn get_repayment_record(env: &Env, request_key: &BytesN<32>) -> Option<RepaymentRecord> {
+    env.storage()
+        .persistent()
+        .get(&(REPAYMENT_RECORD_KEY, request_key.clone()))
+}
+
+fn store_repayment_record(env: &Env, request_key: &BytesN<32>, record: &RepaymentRecord) {
+    let key = (REPAYMENT_RECORD_KEY, request_key.clone());
+    env.storage().persistent().set(&key, record);
+    extend_persistent_ttl(env, &key);
+}
+
+/// Repay an escrow while binding the operation to a durable request key.
+///
+/// # Idempotency contract
+/// - A **safe retry** (same `request_key`, `invoice_id`, `payment_amount`, and
+///   `late_fee_bps`) returns the cached [`RepaymentAllocation`] without moving
+///   funds again.
+/// - **Conflicting reuse** of `request_key` with a different payload is rejected
+///   with [`QuickLendXError::DuplicateBid`] and leaves all state unchanged.
+/// - A **rejected or failed attempt never stores a record**, so a corrected
+///   retry with the same key remains available and no partial state lingers.
+///
+/// On a fresh attempt this defers to [`repay_escrow`], inheriting its
+/// no-partial-state guarantees, and only on success binds the request key to
+/// the repayment payload and allocation.
+pub fn repay_escrow_with_key(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    payment_amount: i128,
+    late_fee_bps: i128,
+    request_key: &BytesN<32>,
+) -> Result<RepaymentAllocation, QuickLendXError> {
+    if let Some(record) = get_repayment_record(env, request_key) {
+        if record.invoice_id == *invoice_id
+            && record.payment_amount == payment_amount
+            && record.late_fee_bps == late_fee_bps
+        {
+            return Ok(record.allocation);
+        }
+        return Err(QuickLendXError::DuplicateBid);
+    }
+
+    let allocation = repay_escrow(env, invoice_id, payment_amount, late_fee_bps)?;
+
+    store_repayment_record(
+        env,
+        request_key,
+        &RepaymentRecord {
+            invoice_id: invoice_id.clone(),
+            payment_amount,
+            late_fee_bps,
+            allocation: allocation.clone(),
+        },
+    );
+
+    Ok(allocation)
+}
+
+#[cfg(test)]
 mod payments_tests {
     use super::*;
     use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env};

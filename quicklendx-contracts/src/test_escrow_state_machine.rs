@@ -92,7 +92,7 @@ fn invariant_release_from_held_succeeds() {
         create_escrow(&env, &inv_id, &investor, &business, amount, &currency)
             .expect("create_escrow must succeed");
 
-        release_escrow(&env, &inv_id).expect("release_escrow must succeed from Held");
+        release_escrow(&env, &inv_id, &business).expect("release_escrow must succeed from Held");
 
         let escrow = EscrowStorage::get_escrow_by_invoice(&env, &inv_id)
             .expect("escrow record must exist");
@@ -121,7 +121,7 @@ fn invariant_refund_from_held_succeeds() {
         create_escrow(&env, &inv_id, &investor, &business, amount, &currency)
             .expect("create_escrow must succeed");
 
-        refund_escrow(&env, &inv_id).expect("refund_escrow must succeed from Held");
+        refund_escrow(&env, &inv_id, &investor).expect("refund_escrow must succeed from Held");
 
         let escrow = EscrowStorage::get_escrow_by_invoice(&env, &inv_id)
             .expect("escrow record must exist");
@@ -153,9 +153,9 @@ fn invariant_double_release_rejected() {
     env.as_contract(&contract_id, || {
         create_escrow(&env, &inv_id, &investor, &business, amount, &currency)
             .expect("create_escrow must succeed");
-        release_escrow(&env, &inv_id).expect("first release must succeed");
+        release_escrow(&env, &inv_id, &business).expect("first release must succeed");
 
-        let err = release_escrow(&env, &inv_id)
+        let err = release_escrow(&env, &inv_id, &business)
             .expect_err("double-release must be rejected");
         assert_eq!(
             err,
@@ -181,9 +181,9 @@ fn invariant_double_refund_rejected() {
     env.as_contract(&contract_id, || {
         create_escrow(&env, &inv_id, &investor, &business, amount, &currency)
             .expect("create_escrow must succeed");
-        refund_escrow(&env, &inv_id).expect("first refund must succeed");
+        refund_escrow(&env, &inv_id, &investor).expect("first refund must succeed");
 
-        let err = refund_escrow(&env, &inv_id)
+        let err = refund_escrow(&env, &inv_id, &investor)
             .expect_err("double-refund must be rejected");
         assert_eq!(
             err,
@@ -213,9 +213,9 @@ fn invariant_refund_after_release_rejected() {
     env.as_contract(&contract_id, || {
         create_escrow(&env, &inv_id, &investor, &business, amount, &currency)
             .expect("create_escrow must succeed");
-        release_escrow(&env, &inv_id).expect("release must succeed");
+        release_escrow(&env, &inv_id, &business).expect("release must succeed");
 
-        let err = refund_escrow(&env, &inv_id)
+        let err = refund_escrow(&env, &inv_id, &investor)
             .expect_err("refund after release must be rejected");
         assert_eq!(
             err,
@@ -241,9 +241,9 @@ fn invariant_release_after_refund_rejected() {
     env.as_contract(&contract_id, || {
         create_escrow(&env, &inv_id, &investor, &business, amount, &currency)
             .expect("create_escrow must succeed");
-        refund_escrow(&env, &inv_id).expect("refund must succeed");
+        refund_escrow(&env, &inv_id, &investor).expect("refund must succeed");
 
-        let err = release_escrow(&env, &inv_id)
+        let err = release_escrow(&env, &inv_id, &business)
             .expect_err("release after refund must be rejected");
         assert_eq!(
             err,
@@ -267,7 +267,7 @@ fn invariant_release_nonexistent_escrow_rejected() {
     let inv_id = invoice_id(&env, 0x07);
 
     env.as_contract(&contract_id, || {
-        let err = release_escrow(&env, &inv_id)
+        let err = release_escrow(&env, &inv_id, &business)
             .expect_err("release on missing escrow must fail");
         assert_eq!(
             err,
@@ -287,7 +287,7 @@ fn invariant_refund_nonexistent_escrow_rejected() {
     let inv_id = invoice_id(&env, 0x08);
 
     env.as_contract(&contract_id, || {
-        let err = refund_escrow(&env, &inv_id)
+        let err = refund_escrow(&env, &inv_id, &investor)
             .expect_err("refund on missing escrow must fail");
         assert_eq!(
             err,
@@ -419,7 +419,7 @@ fn invariant_release_transfers_funds_to_business() {
             "investor balance must decrease by escrow amount"
         );
 
-        release_escrow(&env, &inv_id).expect("release must succeed");
+        release_escrow(&env, &inv_id, &business).expect("release must succeed");
 
         // After release: contract balance back to 0, business received funds
         assert_eq!(
@@ -466,7 +466,7 @@ fn invariant_refund_returns_funds_to_investor() {
         assert_eq!(tok.balance(&contract_id), amount);
         assert_eq!(tok.balance(&investor), investor_before - amount);
 
-        refund_escrow(&env, &inv_id).expect("refund must succeed");
+        refund_escrow(&env, &inv_id, &investor).expect("refund must succeed");
 
         assert_eq!(
             tok.balance(&contract_id),

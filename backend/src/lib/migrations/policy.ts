@@ -47,11 +47,16 @@ export class MigrationPolicy {
     const errors: string[] = [];
     const warnings: string[] = [];
 
+    const seenVersions = new Set<string>();
     for (const mig of migrations) {
       const metaCheck = this.validateMetadata(mig);
       if (!metaCheck.valid) {
         errors.push(...metaCheck.errors.map((e) => `${mig.version}_${mig.name}: ${e}`));
       }
+      if (seenVersions.has(mig.version)) {
+        errors.push(`Duplicate migration version ${mig.version}`);
+      }
+      seenVersions.add(mig.version);
     }
 
     return { valid: errors.length === 0, errors, warnings };
@@ -95,7 +100,8 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
   }
 
   if (validateOnly) {
-    const result = await MigrationPolicy.dryRun([], { force: emergency });
+    const migrations = await loadMigrationsFromFS();
+    const result = await MigrationPolicy.dryRun(migrations, { force: emergency });
     if (!result.valid) {
       console.error("❌ Migration validation failed:");
       result.errors.forEach((e) => console.error(`   ${e}`));
@@ -171,7 +177,7 @@ export async function migrateDownCommand(args: Record<string, unknown>): Promise
   }
 
   try {
-    const result = await runMigrations({ dryRun, allowDown: true, verbose, skipChecksumVerify });
+    const result = await runMigrations({ dryRun, allowDown: true, verbose, skipChecksumVerify, to, all });
     console.log(`\n✅ Migration rollback complete in ${result.durationMs}ms`);
     console.log(`   Rolled back: ${result.applied.length}, Skipped: ${result.skipped}`);
 

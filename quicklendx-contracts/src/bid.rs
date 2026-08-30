@@ -186,6 +186,58 @@ impl Bid {
     }
 }
 
+impl BidStatus {
+    /// Validate that a bid status transition is legal.
+    ///
+    /// `Placed` is the only non-terminal state and the only state with
+    /// outgoing edges. Every other state is reached at most once and is
+    /// immutable afterwards, with the single exception that an `Accepted` bid
+    /// may be voided to `Cancelled` when its escrow is refunded or its
+    /// investment is withdrawn.
+    ///
+    /// This is the single source of truth for bid lifecycle legality. Every
+    /// callable entry point that moves a bid (`withdraw_bid`, `cancel_bid`, the
+    /// accept/funding path, and the expiry flows) must consult it, so no path
+    /// (current or future) can produce an impossible backward transition or a
+    /// double-actioned terminal bid.
+    ///
+    /// ### Legal transition matrix
+    ///
+    /// | From      | To                                    | Driving entrypoint                              |
+    /// |-----------|---------------------------------------|-------------------------------------------------|
+    /// | Placed    | Accepted, Withdrawn, Cancelled, Expired | accept_bid, withdraw_bid, cancel_bid, cleanup  |
+    /// | Accepted  | Cancelled                             | refund_escrow_funds / withdraw_investment       |
+    /// | Withdrawn | *(terminal — no further moves)*       | -                                               |
+    /// | Cancelled | *(terminal — no further moves)*       | -                                               |
+    /// | Expired   | *(terminal — no further moves)*       | -                                               |
+    ///
+    /// Self-transitions and every other `(from, to)` pair are rejected: a bid
+    /// cannot be withdrawn twice, cancelled twice, accepted from a terminal
+    /// state, resurrected, or re-placed in place.
+    ///
+    /// # Returns
+    /// * `Ok(())` if the transition is legal.
+    /// * `Err(QuickLendXError::InvalidStatus)` if the transition is invalid.
+    pub fn validate_transition(from: &BidStatus, to: &BidStatus) -> Result<(), QuickLendXError> {
+        let allowed = match from {
+            BidStatus::Placed => matches!(
+                to,
+                BidStatus::Accepted
+                    | BidStatus::Withdrawn
+                    | BidStatus::Cancelled
+                    | BidStatus::Expired
+            ),
+            BidStatus::Accepted => matches!(to, BidStatus::Cancelled),
+            _ => false,
+        };
+        if allowed {
+            Ok(())
+        } else {
+            Err(QuickLendXError::InvalidStatus)
+        }
+    }
+}
+
 pub struct BidStorage;
 
 const ALL_BIDS_KEY: Symbol = symbol_short!("all_bids");
@@ -610,6 +662,13 @@ impl BidStorage {
                         bid.status = BidStatus::Expired;
                         Self::update_bid(env, &bid);
                         emit_bid_expired(env, &bid);
+                        crate::audit::log_bid_expired(
+                            env,
+                            bid.invoice_id.clone(),
+                            bid.investor.clone(),
+                            bid.bid_amount,
+                            bid.bid_id.clone(),
+                        );
                         newly_expired = newly_expired.saturating_add(1);
                         // Do not push to active -> prunes this expired bid
                     } else {
@@ -624,10 +683,15 @@ impl BidStorage {
             }
         }
 
-        // Only update storage if the list actually shrank
+        // Only update storage if the list actually shrank. The investor index
+        // lives in the *persistent* storage domain (see `add_to_investor_bids`
+        // and `get_bids_by_investor_all`). Writing the pruned list to instance
+        // storage here would silently leave the raw persistent index untouched,
+        // so expired bids would never actually be pruned and every later sweep
+        // would re-scan them (violating the bounded-index invariant).
         if active.len() < bid_ids.len() {
             let key = Self::investor_bids_key(investor);
-            env.storage().instance().set(&key, &active);
+            env.storage().persistent().set(&key, &active);
         }
 
         newly_expired
@@ -731,6 +795,13 @@ impl BidStorage {
                             bid.status = BidStatus::Expired;
                             Self::update_bid(env, &bid);
                             emit_bid_expired(env, &bid);
+                            crate::audit::log_bid_expired(
+                                env,
+                                bid.invoice_id.clone(),
+                                bid.investor.clone(),
+                                bid.bid_amount,
+                                bid.bid_id.clone(),
+                            );
                             cleaned_count = cleaned_count.saturating_add(1);
                             false
                         } else if bid.status == BidStatus::Expired {
@@ -911,6 +982,13 @@ impl BidStorage {
                             bid.status = BidStatus::Expired;
                             Self::update_bid(env, &bid);
                             emit_bid_expired(env, &bid);
+                            crate::audit::log_bid_expired(
+                                env,
+                                bid.invoice_id.clone(),
+                                bid.investor.clone(),
+                                bid.bid_amount,
+                                bid.bid_id.clone(),
+                            );
                             cleaned_count = cleaned_count.saturating_add(1);
                             false
                         } else if bid.status == BidStatus::Expired {
@@ -1079,6 +1157,10 @@ impl BidStorage {
     /// # Invariant
     /// When `rank_bids` is non-empty, this method always returns the same bid
     /// as `rank_bids(...).get(0)`.
+    ///
+    /// Stale bids (past their raw expiry, even while a grace window delays
+    /// their `Placed -> Expired` storage transition) are excluded, matching
+    /// `accept_bid` and `get_bids_by_status`.
     pub fn get_best_bid(env: &Env, invoice_id: &BytesN<32>) -> Option<Bid> {
         let records = Self::get_bid_records_for_invoice(env, invoice_id);
         let current_timestamp = env.ledger().timestamp();
@@ -1090,6 +1172,10 @@ impl BidStorage {
     /// # Invariant
     /// If this function returns at least one bid, the first element equals the
     /// value returned by `get_best_bid` for the same invoice and ledger state.
+    ///
+    /// Stale bids (past their raw expiry, even while a grace window delays
+    /// their `Placed -> Expired` storage transition) are excluded, matching
+    /// `accept_bid` and `get_bids_by_status`.
     pub fn rank_bids(env: &Env, invoice_id: &BytesN<32>) -> Vec<Bid> {
         let records = Self::get_bid_records_for_invoice(env, invoice_id);
         let current_timestamp = env.ledger().timestamp();

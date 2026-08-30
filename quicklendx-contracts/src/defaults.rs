@@ -343,6 +343,22 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     ensure_default_transition_open(env, invoice_id)?;
 
+    // #2464: look up the investment (if any) and run every failable check
+    // that depends on it now, before any state mutation below -- including
+    // before `check_and_set_default_guard`, extending that function's own
+    // documented rationale ("only after all finality checks pass") to this
+    // check too. Previously the active-insurance check ran after the
+    // invoice's status/history/event effects had already executed in this
+    // same call; a rejection there still left nothing durable (Soroban
+    // reverts the whole transaction on a returned Err), but the ordering
+    // meant this function's own checks-effects-interactions shape didn't
+    // match what actually happens on failure. Moving it here removes that
+    // gap between what the code visually does and what Soroban guarantees.
+    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id);
+    if investment.is_some() {
+        require_active_insurance_at_settlement(env, &invoice)?;
+    }
+
     // Atomically check and set the transition guard only after all finality checks pass.
     // This avoids poisoning future legitimate retries on invoices that were never eligible
     // for default because another terminal path already completed first.
@@ -364,8 +380,10 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     emit_invoice_expired(env, &invoice);
 
-    if let Some(mut investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
-        require_active_insurance_at_settlement(env, &invoice)?;
+    // `investment` was already looked up above, and its only failable
+    // precondition (the active-insurance check) already ran there too --
+    // this reuses that same lookup rather than re-fetching and re-checking.
+    if let Some(mut investment) = investment {
         investment.status = InvestmentStatus::Defaulted;
 
         let claim_details = investment.process_all_insurance_claims(env);

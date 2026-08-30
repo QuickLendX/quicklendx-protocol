@@ -3,7 +3,7 @@
 use crate::errors::QuickLendXError;
 use crate::payments::{create_escrow, refund_escrow, release_escrow};
 use crate::storage::InvoiceStorage;
-use crate::types::{Invoice, InvoiceStatus};
+use crate::types::{Invoice, InvoiceCategory, InvoiceStatus};
 use crate::QuickLendXContract;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
@@ -21,28 +21,23 @@ fn create_dummy_invoice(
     currency: &Address,
     investor: Option<Address>,
 ) {
-    let invoice = Invoice {
-        invoice_id: invoice_id.clone(),
-        business: business.clone(),
-        amount: 1000,
-        due_date: 0,
-        status: InvoiceStatus::Verified,
-        currency: currency.clone(),
-        metadata_hash: String::from_str(env, "hash"),
-        created_at: 0,
-        funded_amount: 0,
-        funded_at: None,
-        investor: investor,
-        category: String::from_str(env, "cat"),
-        tags: Vec::new(env),
-        insurance_opt_in: false,
-        payment_history: Vec::new(env),
-        origination_fee_bps: None,
-        early_payment_discount_bps: None,
-        insurance_premium: 0,
-        escrow_id: None,
-        repayment_type: crate::types::RepaymentType::Full,
-    };
+    let mut invoice = Invoice::new(
+        env,
+        business.clone(),
+        1000,
+        currency.clone(),
+        env.ledger().timestamp() + 86_400,
+        String::from_str(env, "auth invoice"),
+        InvoiceCategory::Services,
+        Vec::new(env),
+        None,
+        None,
+        None,
+    )
+    .expect("dummy invoice");
+    invoice.id = invoice_id.clone();
+    invoice.status = InvoiceStatus::Verified;
+    invoice.investor = investor;
     InvoiceStorage::store_invoice(env, &invoice);
 }
 
@@ -112,7 +107,7 @@ fn test_release_escrow_cross_tenant_rejected() {
         crate::payments::EscrowStorage::store_escrow(&env, &escrow);
 
         // Releasing should fail because escrow.business != invoice.business
-        let result = release_escrow(&env, &invoice_id);
+        let result = release_escrow(&env, &invoice_id, &forged_business);
         assert_eq!(result, Err(QuickLendXError::Unauthorized));
     });
 }
@@ -150,7 +145,7 @@ fn test_refund_escrow_cross_tenant_rejected() {
         crate::payments::EscrowStorage::store_escrow(&env, &escrow);
 
         // Refunding should fail because escrow.investor != invoice.investor
-        let result = refund_escrow(&env, &invoice_id);
+        let result = refund_escrow(&env, &invoice_id, &forged_investor);
         assert_eq!(result, Err(QuickLendXError::Unauthorized));
     });
 }
@@ -162,10 +157,10 @@ fn test_release_and_refund_escrow_missing_state_handled() {
 
     env.as_contract(&contract_id, || {
         // Missing escrow gracefully errors out rather than panic/unwrap
-        let result_release = release_escrow(&env, &invoice_id);
+        let result_release = release_escrow(&env, &invoice_id, &business);
         assert_eq!(result_release, Err(QuickLendXError::StorageKeyNotFound));
 
-        let result_refund = refund_escrow(&env, &invoice_id);
+        let result_refund = refund_escrow(&env, &invoice_id, &actual_investor);
         assert_eq!(result_refund, Err(QuickLendXError::StorageKeyNotFound));
     });
 }

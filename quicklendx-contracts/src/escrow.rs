@@ -136,8 +136,11 @@ pub(crate) fn load_accept_bid_context(
         return Err(QuickLendXError::Unauthorized);
     }
 
-    if bid.status != BidStatus::Placed {
-        return Err(QuickLendXError::BidStale);
+    // Enforce the legal transition matrix at the accept entry point: only
+    // `Placed -> Accepted` is legal. Cancelled, Withdrawn, Expired, and
+    // already-Accepted bids are rejected without touching any state.
+    if BidStatus::validate_transition(&bid.status, &BidStatus::Accepted).is_err() {
+        return Err(QuickLendXError::InvalidStatus);
     }
 
     // KYC and freeze status are checked again at acceptance time. A bid can
@@ -235,6 +238,13 @@ pub fn accept_bid_and_fund(
             // 7. Events
             emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
             emit_bid_accepted(env, &bid, invoice_id, &invoice.business);
+            crate::audit::log_bid_accepted(
+                env,
+                invoice_id.clone(),
+                invoice.business.clone(),
+                bid.bid_amount,
+                bid.bid_id.clone(),
+            );
 
             // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
             let _ =
@@ -262,6 +272,13 @@ pub fn accept_bid_and_fund(
     // 7. Events
     emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
     emit_bid_accepted(env, &bid, invoice_id, &invoice.business);
+    crate::audit::log_bid_accepted(
+        env,
+        invoice_id.clone(),
+        invoice.business.clone(),
+        bid.bid_amount,
+        bid.bid_id.clone(),
+    );
 
     // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
     // after escrow funding and state transitions complete successfully.
@@ -424,7 +441,7 @@ pub fn refund_escrow_funds(
 
     // 5. Transfer funds and update escrow state
     // This calls payments::refund_escrow which handles the token transfer and status update
-    refund_escrow(env, invoice_id)?;
+    refund_escrow(env, invoice_id, caller)?;
 
     // 6. Update internal states
 
@@ -542,7 +559,7 @@ pub fn withdraw_investment(
     }
 
     // 5. Refund escrowed funds to the investor (token transfer + escrow status → Refunded)
-    refund_escrow(env, invoice_id)?;
+    refund_escrow(env, invoice_id, investor)?;
 
     // 6. Restore invoice to Verified state and clear funded fields
     let previous_status = invoice.status;

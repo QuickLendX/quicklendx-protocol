@@ -95,11 +95,17 @@ pub enum AuditOperation {
     EmergencyWithdrawalCancelled,
     /// Pending treasury address rotation cancelled.
     TreasuryRotationCancelled,
+    /// A business or investor submitted a KYC application (first time or resubmission).
     KycSubmitted,
+    /// Admin verified (approved) a business or investor KYC record.
     KycVerified,
+    /// Admin rejected a pending business or investor KYC record.
     KycRejected,
+    /// Admin revoked a previously verified investor's KYC.
     KycRevoked,
+    /// An investor was frozen (all investment actions blocked).
     InvestorFrozen,
+    /// An investor was unfrozen (investment actions restored).
     InvestorUnfrozen,
 }
 
@@ -194,7 +200,7 @@ impl OpType {
             OpType::KycRejected => symbol_short!("kyc_rej"),
             OpType::KycRevoked => symbol_short!("kyc_rev"),
             OpType::InvestorFrozen => symbol_short!("inv_frz"),
-            OpType::InvestorUnfrozen => symbol_short!("inv_unfr"),
+            OpType::InvestorUnfrozen => symbol_short!("inv_unf"),
         }
     }
 
@@ -404,16 +410,42 @@ impl AuditLogEntry {
         additional_data: Option<String>,
     ) -> Self {
         let operation_id = crate::observability::allocate_operation_id(env);
-        let audit_id = operation_id.clone();
+        Self::new_with_operation_id(
+            env,
+            invoice_id,
+            operation,
+            actor,
+            old_value,
+            new_value,
+            amount,
+            additional_data,
+            operation_id,
+        )
+    }
+
+    /// Create an audit entry that shares a caller-supplied correlation id.
+    ///
+    /// `operation_id` must already be unique. The audit storage key is the same
+    /// id so event and audit records can be reconciled 1:1.
+    pub fn new_with_operation_id(
+        env: &Env,
+        invoice_id: BytesN<32>,
+        operation: AuditOperation,
+        actor: Address,
+        old_value: Option<String>,
+        new_value: Option<String>,
+        amount: Option<i128>,
+        additional_data: Option<String>,
+        operation_id: BytesN<32>,
+    ) -> Self {
         let timestamp = env.ledger().timestamp();
         let block_height = env.ledger().sequence();
-
         let prev_hash = AuditStorage::last_entry_hash(env, &invoice_id);
 
         Self {
             schema_version: OBSERVABILITY_SCHEMA_VERSION,
+            audit_id: operation_id.clone(),
             operation_id,
-            audit_id,
             invoice_id,
             operation,
             actor,
@@ -979,6 +1011,32 @@ pub fn log_operation(
     AuditStorage::store_audit_entry(env, &entry);
 }
 
+/// Append an audit entry that reuses a committed event's correlation id.
+pub fn log_operation_with_id(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    amount: Option<i128>,
+    additional_data: Option<String>,
+    operation_id: BytesN<32>,
+) {
+    let entry = AuditLogEntry::new_with_operation_id(
+        env,
+        invoice_id,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        amount,
+        additional_data,
+        operation_id,
+    );
+    AuditStorage::store_audit_entry(env, &entry);
+}
+
 /// Convenience wrapper for log_operation (used by invoice helpers).
 pub fn log_invoice_operation(
     env: &Env,
@@ -1073,6 +1131,28 @@ pub fn log_payment_processed(
     );
 }
 
+/// Log a committed payment using the same `operation_id` as the protocol event.
+pub fn log_payment_processed_with_id(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    additional_data: String,
+    operation_id: BytesN<32>,
+) {
+    log_operation_with_id(
+        env,
+        invoice_id,
+        AuditOperation::PaymentProcessed,
+        actor,
+        None,
+        Some(String::from_str(env, "Payment processed")),
+        Some(amount),
+        Some(additional_data),
+        operation_id,
+    );
+}
+
 /// Log invoice refund
 pub fn log_invoice_refunded(env: &Env, invoice_id: BytesN<32>, actor: Address) {
     log_operation(
@@ -1129,13 +1209,35 @@ pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) 
     );
 }
 
+/// Human-readable correlation string that ties an audit entry to the bid that
+/// produced it, so downstream systems can match the emitted bid event
+/// (`BidPlaced`/`BidAccepted`/... which carry `bid_id`) to its audit record.
+fn bid_correlation(env: &Env, bid_id: &BytesN<32>) -> String {
+    let mut hex_bytes = alloc::vec::Vec::new();
+    for byte in bid_id.to_array().iter() {
+        let high = byte >> 4;
+        let low = byte & 0x0F;
+        hex_bytes.push(nibble_to_hex(high));
+        hex_bytes.push(nibble_to_hex(low));
+    }
+    String::from_str(env, &(core::str::from_utf8(&hex_bytes).unwrap_or("")))
+}
+
+fn nibble_to_hex(nibble: u8) -> u8 {
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + (nibble - 10)
+    }
+}
+
 /// Log bid placed.
 pub fn log_bid_placed(
     env: &Env,
     invoice_id: BytesN<32>,
     actor: Address,
     bid_amount: i128,
-    _bid_id: BytesN<32>,
+    bid_id: BytesN<32>,
 ) {
     log_operation(
         env,
@@ -1145,12 +1247,18 @@ pub fn log_bid_placed(
         None,
         Some(String::from_str(env, "Bid placed")),
         Some(bid_amount),
-        None,
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
 /// Log bid accepted.
-pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+pub fn log_bid_accepted(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    bid_id: BytesN<32>,
+) {
     log_operation(
         env,
         invoice_id,
@@ -1159,12 +1267,12 @@ pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amoun
         None,
         Some(String::from_str(env, "Bid accepted")),
         Some(amount),
-        None,
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
 /// Log bid withdrawn.
-pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid_id: BytesN<32>) {
+pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
     log_operation(
         env,
         invoice_id,
@@ -1173,7 +1281,45 @@ pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid
         None,
         Some(String::from_str(env, "Bid withdrawn")),
         None,
+        Some(bid_correlation(env, &bid_id)),
+    );
+}
+
+/// Log bid cancelled (Placed -> Cancelled).
+pub fn log_bid_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidCancelled,
+        actor,
         None,
+        Some(String::from_str(env, "Bid cancelled")),
+        None,
+        Some(bid_correlation(env, &bid_id)),
+    );
+}
+
+/// Log bid expired (Placed -> Expired via TTL/grace cleanup).
+///
+/// The actor is the bid's investor: expiry is a self-triggered transition of
+/// that bid's lifecycle, and using a real address keeps the audit entry
+/// attributable without inventing a synthetic system address.
+pub fn log_bid_expired(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    bid_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidExpired,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid expired")),
+        Some(amount),
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
