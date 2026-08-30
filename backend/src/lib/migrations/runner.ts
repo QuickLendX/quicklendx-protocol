@@ -126,6 +126,15 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
   ).all() || [];
   const applied = new Map<number, MigrationState>();
   appliedRows.forEach((r: any) => {
+    let meta: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(r.meta);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        meta = parsed as Record<string, unknown>;
+      }
+    } catch {
+      meta = {};
+    }
     applied.set(r.version, {
       version: r.version,
       name: r.name,
@@ -133,7 +142,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
       appliedAt: r.applied_at,
       durationMs: r.duration_ms,
       author: r.author,
-      meta: JSON.parse(r.meta),
+      meta,
     });
   });
 
@@ -171,32 +180,35 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
       }
 
       if (!dryRun) {
-        const migStart = Date.now();
         try {
+          const fileContent = await fs.readFile(path.join(MIGRATIONS_DIR, fileMig.file), "utf-8");
+          const checksum = computeChecksum(fileContent);
+          const meta = fileMig.content.meta || {};
+          const appliedAt = new Date().toISOString();
+          const migStart = Date.now();
+          let state!: MigrationState;
+
           db.transaction(() => {
             const txCtx = buildContext(db, isProd);
             const upFn = fileMig.content.up;
             if (!upFn) throw new Error(`Migration ${fileMig.file} missing up function`);
             upFn(txCtx);
+
+            const durationMs = Date.now() - migStart;
+            state = {
+              version,
+              name: fileMig.name,
+              checksum,
+              appliedAt,
+              durationMs,
+              author: fileMig.content.author,
+              meta,
+            };
+
+            db.prepare(
+              "INSERT INTO _migrations (version, name, checksum, applied_at, duration_ms, author, meta) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            ).run(state.version, state.name, state.checksum, state.appliedAt, state.durationMs, state.author, JSON.stringify(state.meta));
           });
-
-          const durationMs = Date.now() - migStart;
-          const fileContent = await fs.readFile(path.join(MIGRATIONS_DIR, fileMig.file), "utf-8");
-          const checksum = computeChecksum(fileContent);
-          const meta = fileMig.content.meta || {};
-          const state: MigrationState = {
-            version,
-            name: fileMig.name,
-            checksum,
-            appliedAt: new Date().toISOString(),
-            durationMs,
-            author: fileMig.content.author,
-            meta,
-          };
-
-          db.prepare(
-            "INSERT INTO _migrations (version, name, checksum, applied_at, duration_ms, author, meta) VALUES (?, ?, ?, ?, ?, ?, ?)"
-          ).run(state.version, state.name, state.checksum, state.appliedAt, state.durationMs, state.author, JSON.stringify(state.meta));
 
           appliedThisRun.push(state);
           if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${durationMs}ms)`);
@@ -243,15 +255,16 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
       if (!dryRun) {
         const migStart = Date.now();
         try {
+          let durationMs = 0;
           db.transaction(() => {
             const txCtx = buildContext(db, isProd);
             const downFn = fileMig.content.down;
             if (!downFn) throw new Error(`Migration ${fileMig.file} missing down function`);
             downFn(txCtx);
-          });
 
-          const durationMs = Date.now() - migStart;
-          db.prepare("DELETE FROM _migrations WHERE version = ?").run(version);
+            durationMs = Date.now() - migStart;
+            db.prepare("DELETE FROM _migrations WHERE version = ?").run(version);
+          });
 
           appliedThisRun.push({
             version,
