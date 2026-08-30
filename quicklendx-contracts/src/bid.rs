@@ -974,16 +974,24 @@ impl BidStorage {
 
     /// Cancel a placed bid by bid_id. Only transitions Placed -> Cancelled.
     /// Returns false if bid not found or already not Placed.
+    ///
+    /// # Race Safety
+    /// Re-reads the bid after `require_auth()` so that a concurrent expiry,
+    /// accept, or withdraw that ran between the first read and the auth
+    /// checkpoint is visible before we commit the status change.
     pub fn cancel_bid(env: &Env, bid_id: &BytesN<32>) -> bool {
-        if let Some(mut bid) = Self::get_bid(env, bid_id) {
+        if let Some(bid) = Self::get_bid(env, bid_id) {
             // SECURITY FIX: User must authorize their own bid cancellation
             bid.investor.require_auth();
 
-            if bid.status == BidStatus::Placed {
-                bid.status = BidStatus::Cancelled;
-                Self::update_bid(env, &bid);
-                crate::events::emit_bid_cancelled(env, &bid);
-                return true;
+            // Re-read after auth to guard against concurrent transitions.
+            if let Some(mut bid_fresh) = Self::get_bid(env, bid_id) {
+                if bid_fresh.status == BidStatus::Placed {
+                    bid_fresh.status = BidStatus::Cancelled;
+                    Self::update_bid(env, &bid_fresh);
+                    crate::events::emit_bid_cancelled(env, &bid_fresh);
+                    return true;
+                }
             }
         }
         false

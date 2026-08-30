@@ -137,6 +137,8 @@ mod test_backup_retention_enforcement;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_safety;
 #[cfg(test)]
+mod test_bid_atomic_rollback;
+#[cfg(test)]
 mod test_bid_cancel_accept_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_boundary;
@@ -1545,20 +1547,23 @@ impl QuickLendXContract {
     /// preventing double-action execution.
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        let mut bid =
+        let bid =
             BidStorage::get_bid(&env, &bid_id).unwrap();
         bid.investor.require_auth();
         require_investor_not_pending(&env, &bid.investor)?;
         // Re-read status after auth to guard against concurrent transitions.
-        let bid_fresh =
+        // We must mutate the fresh read, NOT the pre-auth copy, to avoid
+        // overwriting a concurrent status change (e.g. expiry, accept)
+        // with stale data.
+        let mut bid_fresh =
             BidStorage::get_bid(&env, &bid_id).unwrap();
         if bid_fresh.status != BidStatus::Placed {
             return Err(QuickLendXError::OperationNotAllowed);
         }
-        bid.status = BidStatus::Withdrawn;
-        BidStorage::update_bid(&env, &bid);
+        bid_fresh.status = BidStatus::Withdrawn;
+        BidStorage::update_bid(&env, &bid_fresh);
         crate::qlx_log!(&env, "bid", "Bid withdrawn");
-        emit_bid_withdrawn(&env, &bid);
+        emit_bid_withdrawn(&env, &bid_fresh);
         Ok(())
     }
 
@@ -1652,8 +1657,6 @@ impl QuickLendXContract {
         BidStorage::store_bid(&env, &bid);
         // Track bid for this invoice
         BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
-        // Store idempotency marker
-        store_idempotency(&env, &idem_key);
 
         crate::qlx_log!(
             &env,
@@ -1665,6 +1668,10 @@ impl QuickLendXContract {
 
         // Emit bid placed event
         emit_bid_placed(&env, &bid);
+
+        // Store idempotency marker LAST so that if any preceding write
+        // fails and the transaction rolls back, the marker is not orphaned.
+        store_idempotency(&env, &idem_key);
 
         Ok(bid_id)
     }
@@ -1687,23 +1694,29 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
+        // ── Phase 1: Cleanup expired bids (single pass) ──────────────────
         BidStorage::cleanup_expired_bids(&env, &invoice_id);
+
+        // ── Phase 2: Read all required state once ────────────────────────
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
-        let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
-        let invoice_id = bid.invoice_id.clone();
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
         let mut bid =
             BidStorage::get_bid(&env, &bid_id).unwrap();
-        invoice.business.require_auth();
 
-        // Enforce KYC: a pending business must not accept bids.
+        // ── Phase 3: Validate all preconditions before any mutation ───────
+        invoice.business.require_auth();
         require_business_not_pending(&env, &invoice.business)?;
+
+        // Bid must belong to this invoice.
+        if bid.invoice_id != invoice_id {
+            return Err(QuickLendXError::Unauthorized);
+        }
 
         if invoice.status != InvoiceStatus::Verified || bid.status != BidStatus::Placed {
             return Err(QuickLendXError::InvalidStatus);
         }
 
+        // ── Phase 4: Apply all mutations atomically ─────────────────────
         let escrow_id = create_escrow(
             &env,
             &invoice_id,
@@ -1712,8 +1725,10 @@ impl QuickLendXContract {
             bid.bid_amount,
             &invoice.currency,
         )?;
+
         bid.status = BidStatus::Accepted;
         BidStorage::update_bid(&env, &bid);
+
         // Remove from old status list before changing status
         InvoiceStorage::remove_from_status_invoices(&env, InvoiceStatus::Verified, &invoice_id);
 
@@ -1727,6 +1742,7 @@ impl QuickLendXContract {
 
         // Add to new status list after status change
         InvoiceStorage::add_to_status_invoices(&env, InvoiceStatus::Funded, &invoice_id);
+
         let investment_id = InvestmentStorage::generate_unique_investment_id(&env);
         let investment = Investment {
             investment_id: investment_id.clone(),
@@ -1739,6 +1755,7 @@ impl QuickLendXContract {
         };
         InvestmentStorage::store_investment(&env, &investment);
 
+        // ── Phase 5: Emit events after all mutations succeed ─────────────
         let escrow = EscrowStorage::get_escrow(&env, &escrow_id)
             .unwrap();
         emit_escrow_created(&env, &escrow);
