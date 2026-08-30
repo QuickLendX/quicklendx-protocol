@@ -103,7 +103,10 @@ pub(crate) fn load_accept_bid_context(
         return Err(QuickLendXError::Unauthorized);
     }
 
-    if bid.status != BidStatus::Placed {
+    // Enforce the legal transition matrix at the accept entry point: only
+    // `Placed -> Accepted` is legal. Cancelled, Withdrawn, Expired, and
+    // already-Accepted bids are rejected without touching any state.
+    if BidStatus::validate_transition(&bid.status, &BidStatus::Accepted).is_err() {
         return Err(QuickLendXError::InvalidStatus);
     }
 

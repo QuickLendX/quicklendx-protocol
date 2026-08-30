@@ -152,6 +152,8 @@ mod test_bid_expiry_boundary;
 mod test_bid_expiry_grace;
 #[cfg(test)]
 mod test_bid_audit_parity;
+#[cfg(test)]
+mod test_bid_transition_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(test)]
@@ -2360,7 +2362,13 @@ impl QuickLendXContract {
         require_investor_not_pending(&env, &bid.investor)?;
         // Re-read status after auth to guard against concurrent transitions.
         let bid_fresh = BidStorage::get_bid(&env, &bid_id).unwrap();
-        if bid_fresh.status != BidStatus::Placed {
+        // Enforce the legal transition matrix at the entry point: only
+        // `Placed -> Withdrawn` is legal. A stale or repeated withdrawal
+        // (already Withdrawn/Cancelled/Accepted/Expired) is rejected before
+        // any state is touched.
+        if bid::BidStatus::validate_transition(&bid_fresh.status, &bid::BidStatus::Withdrawn)
+            .is_err()
+        {
             return Err(QuickLendXError::OperationNotAllowed);
         }
         bid.status = BidStatus::Withdrawn;
