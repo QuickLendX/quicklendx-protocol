@@ -34,6 +34,8 @@ fn create_invoice_at(
         &InvoiceCategory::Services,
         &Vec::new(env),
         &None,
+        &None,
+        &None,
     )
 }
 
@@ -45,7 +47,7 @@ fn test_business_invoices_cursored_pagination() {
     let id1 = create_invoice_at(&env, &client, &business, 1_000);
     let id2 = create_invoice_at(&env, &client, &business, 2_000);
 
-    let page1 = client.get_business_invoices_paged_cursored(
+    let page1 = client.get_business_invoices_paged_cur(
         &business,
         &Option::<InvoiceStatus>::None,
         &0u32,
@@ -59,7 +61,7 @@ fn test_business_invoices_cursored_pagination() {
     let gen = page1.generation;
 
     // Stable cursor works
-    let page2 = client.get_business_invoices_paged_cursored(
+    let page2 = client.get_business_invoices_paged_cur(
         &business,
         &Option::<InvoiceStatus>::None,
         &1u32,
@@ -74,7 +76,7 @@ fn test_business_invoices_cursored_pagination() {
     create_invoice_at(&env, &client, &business, 3_000);
 
     let err = client
-        .try_get_business_invoices_paged_cursored(
+        .try_get_business_invoices_paged_cur(
             &business,
             &Option::<InvoiceStatus>::None,
             &1u32,
@@ -100,8 +102,8 @@ fn test_available_invoices_cursored_pagination() {
     // We would need to verify it. We can just skip exact verification in this dummy test 
     // or test the unstable cursor logic anyway.
     
-    // We can just call get_available_invoices_paged_cursored
-    let page1 = client.get_available_invoices_paged_cursored(
+    // We can just call get_avail_invoices_paged_cur
+    let page1 = client.get_avail_invoices_paged_cur(
         &None,
         &None,
         &None,
@@ -111,7 +113,7 @@ fn test_available_invoices_cursored_pagination() {
     );
     let gen = page1.generation;
 
-    let page2 = client.get_available_invoices_paged_cursored(
+    let page2 = client.get_avail_invoices_paged_cur(
         &None,
         &None,
         &None,

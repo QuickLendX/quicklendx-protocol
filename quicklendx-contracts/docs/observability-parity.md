@@ -19,6 +19,27 @@ should reconcile by `(schema_version, operation_id)` and then compare the
 payload with the final canonical state, rather than infer state from event
 arrival order across transactions.
 
+## Repayment records
+
+Each committed `process_partial_payment` writes a `RepaymentLedger` and emits
+an additive `repayment_allocated` event after legacy `pay_rec` and
+`partial_payment`. The event and the `PaymentProcessed` audit row share one
+`operation_id`. Event order in a successful payment transaction:
+
+1. `pay_rec`
+2. `partial_payment`
+3. `repayment_allocated`
+4. If the payment finalizes: escrow-release / `invoice_settled` / `inv_stlf`
+
+Rejected duplicate, freeze, pause, cap, invalid-status, and dispute-blocked
+finalization calls emit no `repayment_allocated` and append no
+`PaymentProcessed` entry. A completing payment while a dispute is active fails
+closed (`DisputeActive`) and rolls back the payment write.
+
+In-flight invoices without a ledger reconstruct buckets from `total_paid` with
+`assessed_late = 0`. Late fees are not applied retroactively until a new
+post-due payment after upgrade.
+
 ## Compatibility and migration
 
 The existing audit fields and query/index layout remain unchanged; the new

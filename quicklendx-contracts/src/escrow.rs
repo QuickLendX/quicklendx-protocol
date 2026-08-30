@@ -27,7 +27,8 @@ use crate::payments::{
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
 use crate::verification::{
-    require_business_active, require_business_not_pending, validate_investor_investment,
+    require_business_active, require_business_not_pending, require_investor_not_frozen,
+    require_investor_not_pending, validate_investor_investment,
 };
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
@@ -382,7 +383,7 @@ fn update_states_after_funding(
     // after escrow funding and state transitions complete successfully.
     let _ = crate::notifications::NotificationSystem::notify_bid_accepted(env, &invoice, &bid);
 
-    Ok(escrow_id)
+    Ok(())
 }
 
 /// Explicitly refund escrowed funds to the investor.

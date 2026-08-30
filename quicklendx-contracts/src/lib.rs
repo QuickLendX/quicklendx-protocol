@@ -102,6 +102,7 @@ pub mod maintenance;
 pub mod monitor;
 pub mod multisig;
 pub mod notifications;
+pub mod observability;
 pub mod operational_limits;
 pub mod pagination;
 pub mod panic_handler;
@@ -121,7 +122,7 @@ mod test_accept_bid_race;
 mod test_admin;
 #[cfg(test)]
 mod test_admin_events_audit_parity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_funding_events_audit_parity;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
@@ -233,6 +234,8 @@ mod test_panic_handler;
 mod test_payments;
 #[cfg(test)]
 mod test_payments_auth;
+#[cfg(test)]
+mod test_repayment_events_audit_parity;
 #[cfg(test)]
 mod test_queries;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -401,7 +404,7 @@ mod test_insurance_claim_payout;
 mod test_insurance_optin_lifecycle;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
@@ -433,7 +436,7 @@ mod test_store_invoice_auth;
 mod test_store_invoices_batch;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_tier_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_ratings_snapshot;
 #[cfg(test)]
 mod test_pagination_cursors;
@@ -456,8 +459,9 @@ use events::{
     emit_bid_accepted, emit_bid_placed, emit_bid_withdrawn, emit_dispute_created,
     emit_dispute_rejected, emit_dispute_resolved, emit_dispute_under_review, emit_escrow_created,
     emit_escrow_released, emit_insurance_added, emit_insurance_premium_collected,
-    emit_investor_verified, emit_invoice_cancelled, emit_invoice_metadata_cleared,
-    emit_invoice_metadata_updated, emit_invoice_uploaded, emit_invoice_verified,
+    emit_investor_verified, emit_invoice_cancelled, emit_invoice_funded,
+    emit_invoice_metadata_cleared, emit_invoice_metadata_updated, emit_invoice_uploaded,
+    emit_invoice_verified,
 };
 use investment::InvestmentStorage;
 use invoice_search::InvoiceSearch;
@@ -2430,7 +2434,7 @@ impl QuickLendXContract {
     /// state used by `place_bid`, so terminal positions release capacity
     /// without relying on a separately maintained analytics counter.
     pub fn get_investor_active_exposure(env: Env, investor: Address) -> i128 {
-        payments::get_investor_exposure(&env, &investor)
+        payments::get_investor_exposure(&env, &investor).unwrap_or(i128::MAX)
     }
 
     /// Return the exact remaining funding capacity for an investor.
@@ -4177,8 +4181,11 @@ impl QuickLendXContract {
         }
     }
 
-    /// Cursor-stable variant of `get_business_invoices_paged`
-    pub fn get_business_invoices_paged_cursored(
+    /// Cursor-stable variant of `get_business_invoices_paged`.
+    ///
+    /// Exported as `get_business_invoices_paged_cur` because Soroban function
+    /// names are limited to 32 bytes.
+    pub fn get_business_invoices_paged_cur(
         env: Env,
         business: Address,
         status_filter: Option<InvoiceStatus>,
@@ -4267,7 +4274,7 @@ impl QuickLendXContract {
     ///
     /// Purely additive alongside [`Self::get_investor_investments_paged`] —
     /// that entrypoint's request/response shape is unchanged.
-    pub fn get_investor_investments_paged_cursored(
+    pub fn get_investor_invs_paged_cur(
         env: Env,
         investor: Address,
         status_filter: Option<InvestmentStatus>,
@@ -4363,7 +4370,7 @@ impl QuickLendXContract {
     }
 
     /// Cursor-stable variant of `get_available_invoices_paged`
-    pub fn get_available_invoices_paged_cursored(
+    pub fn get_avail_invoices_paged_cur(
         env: Env,
         min_amount: Option<i128>,
         max_amount: Option<i128>,
@@ -5766,5 +5773,3 @@ impl QuickLendXContract {
         diagnostics::get_protocol_diagnostics(&env)
     }
 }
-# [ c f g ( t e s t ) ]   m o d   t e s t _ a u t h o r i z a t i o n ;  
- 

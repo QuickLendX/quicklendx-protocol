@@ -16,7 +16,7 @@
 
 #![cfg(test)]
 
-use soroban_sdk::{testutils::Address as _, Address, Env};
+use soroban_sdk::{testutils::{Address as _, Events, Ledger}, Address, Env};
 
 use crate::storage::{StorageMigration, STORAGE_SCHEMA_VERSION};
 

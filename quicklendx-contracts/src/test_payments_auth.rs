@@ -3,9 +3,9 @@
 use crate::errors::QuickLendXError;
 use crate::payments::{create_escrow, refund_escrow, release_escrow};
 use crate::storage::InvoiceStorage;
-use crate::types::{Invoice, InvoiceStatus};
+use crate::types::{Invoice, InvoiceCategory, InvoiceStatus};
 use crate::QuickLendXContract;
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec, String};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
 fn setup() -> (Env, Address) {
     let env = Env::default();
@@ -21,28 +21,23 @@ fn create_dummy_invoice(
     currency: &Address,
     investor: Option<Address>,
 ) {
-    let invoice = Invoice {
-        invoice_id: invoice_id.clone(),
-        business: business.clone(),
-        amount: 1000,
-        due_date: 0,
-        status: InvoiceStatus::Verified,
-        currency: currency.clone(),
-        metadata_hash: String::from_str(env, "hash"),
-        created_at: 0,
-        funded_amount: 0,
-        funded_at: None,
-        investor: investor,
-        category: String::from_str(env, "cat"),
-        tags: Vec::new(env),
-        insurance_opt_in: false,
-        payment_history: Vec::new(env),
-        origination_fee_bps: None,
-        early_payment_discount_bps: None,
-        insurance_premium: 0,
-        escrow_id: None,
-        repayment_type: crate::types::RepaymentType::Full,
-    };
+    let mut invoice = Invoice::new(
+        env,
+        business.clone(),
+        1000,
+        currency.clone(),
+        env.ledger().timestamp() + 86_400,
+        String::from_str(env, "auth invoice"),
+        InvoiceCategory::Services,
+        Vec::new(env),
+        None,
+        None,
+        None,
+    )
+    .expect("dummy invoice");
+    invoice.id = invoice_id.clone();
+    invoice.status = InvoiceStatus::Verified;
+    invoice.investor = investor;
     InvoiceStorage::store_invoice(env, &invoice);
 }
 
