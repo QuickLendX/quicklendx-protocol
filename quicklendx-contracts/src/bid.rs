@@ -1086,6 +1086,16 @@ impl BidStorage {
     /// (4) timestamp with newer bids first, (5) bid_id as final stable tiebreaker.
     /// This guarantees reproducible ranking across validators even when all economic
     /// values match.
+    ///
+    /// # Amount precision (QE-2026-08)
+    /// The profit key is `expected_return - bid_amount`. Every bid that reaches
+    /// ranking has passed `verify_bid_match` / `place_bid`, which route through
+    /// `crate::bid_amount::validate_bid`: both amounts are in
+    /// `(0, MAX_BID_AMOUNT]` and `expected_return >= bid_amount`, so the exact
+    /// subtraction is a non-negative value that never overflows `i128`. The
+    /// `saturating_sub` below therefore equals `bid_amount::checked_bid_profit`
+    /// for every in-contract input and only differs — by clamping instead of
+    /// erroring — on values the entrypoints already reject.
     pub fn compare_bids(bid1: &Bid, bid2: &Bid) -> Ordering {
         let profit1 = bid1.expected_return.saturating_sub(bid1.bid_amount);
         let profit2 = bid2.expected_return.saturating_sub(bid2.bid_amount);
@@ -1485,9 +1495,13 @@ pub fn verify_bid_match(
         return Err(QuickLendXError::BidStale);
     }
 
-    if bid.bid_amount <= 0 {
-        return Err(QuickLendXError::InvalidAmount);
-    }
+    // QE-2026-08 — exact sign / overflow-ceiling / invoice-ceiling / return-floor
+    // validation. Supersedes the historical inline `bid.bid_amount <= 0`
+    // predicate (same `InvalidAmount` error) and additionally enforces the
+    // "bid amount > invoice amount" rule this function's own doc table has
+    // always specified but never checked, plus the overflow ceiling and the
+    // `expected_return >= bid_amount` floor; see `crate::bid_amount`.
+    crate::bid_amount::validate_bid(bid.bid_amount, bid.expected_return, invoice.amount)?;
 
     Ok(())
 }
