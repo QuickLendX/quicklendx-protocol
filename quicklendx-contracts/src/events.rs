@@ -1977,6 +1977,19 @@ pub fn emit_admin_initialized(env: &Env, admin: &Address) {
         .publish((symbol_short!("adm_init"),), (admin.clone(),));
 }
 
+pub fn emit_token_policy_updated(env: &Env, config: &crate::payment_token_policy::PaymentTokenConfig) {
+    env.events().publish(
+        (symbol_short!("tok_upd"), config.token.clone()),
+        (config.decimals, config.min_amount, config.max_amount, config.is_active),
+    );
+}
+
+pub fn emit_token_policy_removed(env: &Env, token: &Address) {
+    env.events().publish(
+        (symbol_short!("tok_rem"), token.clone()),
+        (),
+    );
+}
 pub fn emit_treasury_rotation_initiated(
     env: &Env,
     admin: &Address,

@@ -33,6 +33,9 @@ pub fn idempotency_exists(env: &Env, key: &BytesN<32>) -> bool {
 /// placeholder (the value is opaque — only presence matters) and bumps the
 /// TTL so the marker does not expire mid-flight.
 pub fn store_idempotency(env: &Env, key: &BytesN<32>) {
+    let storage_key = (IDEMPOTENCY_MAP_KEY, key.clone());
+    env.storage().persistent().set(&storage_key, &true);
+    extend_persistent_ttl(env, &storage_key);
     let composite_key = (IDEMPOTENCY_MAP_KEY, key.clone());
     env.storage().persistent().set(&composite_key, &true);
     extend_persistent_ttl(env, &composite_key);

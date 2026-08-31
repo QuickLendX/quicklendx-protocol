@@ -104,6 +104,9 @@ fn no_additional_event_emitted_for_non_panicking_call_after_panicking_call() {
     let _: Result<(), _> = env.as_contract(&contract_id, || catch_panic(&env, || panic!("first")));
     assert_eq!(event_count(&env), 1);
 
+    // Second call succeeds → event count must be 0 for this invocation.
+    let result: Result<u32, _> =
+        env.as_contract(&contract_id, || catch_panic(&env, || 99u32));
     // Second call succeeds → event count must remain 1.
     let result: Result<u32, _> = env.as_contract(&contract_id, || catch_panic(&env, || 99u32));
     assert_eq!(result, Ok(99u32));

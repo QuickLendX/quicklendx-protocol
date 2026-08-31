@@ -382,6 +382,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
             QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
             QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
+            QuickLendXError::BackupVersionUnsupported => symbol_short!("BKP_VER"),
             QuickLendXError::BackfillInProgress => symbol_short!("BKF_IP"),
             QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LS"),
             QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),

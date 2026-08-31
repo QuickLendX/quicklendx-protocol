@@ -317,6 +317,7 @@ fn test_update_fee_structure_invalid_bps_produces_no_entry() {
 #[test]
 fn test_update_fee_structure_fee_type_label_in_additional_data() {
     let (env, client, admin) = setup_with_fees();
+    client.update_fee_structure(&admin, &FeeType::LatePayment, &500u32, &100i128, &5_000i128, &true);
     client.update_fee_structure(
         &admin,
         &FeeType::LatePayment,

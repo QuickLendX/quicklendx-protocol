@@ -265,6 +265,9 @@ mod test_address_summary {
         let contract_id = env.register(crate::QuickLendXContract, ());
         let (_investor, _business, unknown) = sample_addresses(&env);
 
+        let summary = env.as_contract(&contract_id, || {
+            summarize_address(&env, &unknown).unwrap()
+        });
         let summary = env
             .as_contract(&contract_id, || summarize_address(&env, &unknown))
             .unwrap();
@@ -277,6 +280,9 @@ mod test_address_summary {
         let contract_id = env.register(crate::QuickLendXContract, ());
         let (investor, _business, _bidder) = sample_addresses(&env);
 
+        let summary = env.as_contract(&contract_id, || {
+            InvestorStrategy::summarize(&env, &investor).unwrap()
+        });
         let summary = env
             .as_contract(&contract_id, || {
                 InvestorStrategy::summarize(&env, &investor)
