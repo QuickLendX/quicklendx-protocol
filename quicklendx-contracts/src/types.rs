@@ -94,7 +94,6 @@ impl DisputeResolution {
             Self::FavorInvestor => 2,
             Self::Split => 3,
             Self::Dismissed => 4,
-            DisputeResolution::None => todo!(),
         }
     }
 }

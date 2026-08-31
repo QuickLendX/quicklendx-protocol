@@ -78,7 +78,7 @@ impl AddressSummary {
     }
 
     fn with_investor(summary: &mut Self, s: investment_queries::InvestorPortfolioSummary) {
-        summary.is_investor = true;
+        summary.is_investor = s.total_positions > 0;
         summary.investor_active_principal = s.active_principal;
         summary.investor_completed_count = s.completed_count;
         summary.investor_completed_returns = s.completed_returns;
@@ -246,31 +246,33 @@ mod test_address_summary {
     use soroban_sdk::{testutils::Address as _, Address as SorobanAddress, Env, String, Vec};
 
     fn sample_addresses(env: &Env) -> (SorobanAddress, SorobanAddress, SorobanAddress) {
-        let investor = SorobanAddress::from_str(env, "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF");
-        let business = SorobanAddress::from_str(env, "GBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB");
-        let bidder = SorobanAddress::from_str(env, "GCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC");
+        let investor = SorobanAddress::generate(env);
+        let business = SorobanAddress::generate(env);
+        let bidder = SorobanAddress::generate(env);
         (investor, business, bidder)
     }
 
     #[test]
     fn empty_for_unknown_address() {
         let env = Env::default();
+        let contract_id = env.register(crate::QuickLendXContract, ());
         let (_investor, _business, unknown) = sample_addresses(&env);
 
-        let summary = summarize_address(&env, &unknown).unwrap();
+        let summary = env.as_contract(&contract_id, || {
+            summarize_address(&env, &unknown).unwrap()
+        });
         assert_eq!(summary, AddressSummary::empty());
     }
 
     #[test]
     fn investor_strategy_sets_investor_flag_only_when_data_exists() {
         let env = Env::default();
+        let contract_id = env.register(crate::QuickLendXContract, ());
         let (investor, _business, _bidder) = sample_addresses(&env);
 
-        let summary = InvestorStrategy::summarize(&env, &investor).unwrap();
-        // With an empty storage, investor_portfolio_summary will still iterate
-        // and return total_positions=0; we treat that as not having investor data.
-        // The strategy currently sets is_investor based on portfolio_summary always,
-        // so we only assert no panic + stable shape.
+        let summary = env.as_contract(&contract_id, || {
+            InvestorStrategy::summarize(&env, &investor).unwrap()
+        });
         assert_eq!(summary.investor_total_positions, 0);
     }
 }

@@ -205,7 +205,8 @@ impl Vesting {
 
         // Move tokens into contract custody.
         let contract = env.current_contract_address();
-        transfer_funds(env, &token, admin, &contract, total_amount)?;
+        let token_client = soroban_sdk::token::Client::new(env, &token);
+        token_client.transfer_from(&contract, admin, &contract, &total_amount);
 
         VestingStorage::store(env, &schedule);
         env.events().publish(
@@ -373,7 +374,8 @@ impl Vesting {
             return Ok(0);
         }
         let contract = env.current_contract_address();
-        transfer_funds(env, &schedule.token, &contract, beneficiary, releasable)?;
+        let token_client = soroban_sdk::token::Client::new(env, &schedule.token);
+        token_client.transfer(&contract, beneficiary, &releasable);
 
         schedule.released_amount = schedule
             .released_amount

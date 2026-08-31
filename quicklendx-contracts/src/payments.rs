@@ -425,7 +425,7 @@ mod payments_tests {
             create_escrow(&env, &invoice_id, &investor, &business, 0, &currency)
         });
         assert_eq!(result, Err(QuickLendXError::InvalidAmount));
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(env.as_contract(&contract_id, || EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)).is_none());
     }
 
     /// Negative amounts are rejected before any state changes.
@@ -444,7 +444,7 @@ mod payments_tests {
             create_escrow(&env, &invoice_id, &investor, &business, -1, &currency)
         });
         assert_eq!(result, Err(QuickLendXError::InvalidAmount));
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(env.as_contract(&contract_id, || EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)).is_none());
     }
 
     // -----------------------------------------------------------------------
@@ -475,7 +475,7 @@ mod payments_tests {
         });
         assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
         assert_eq!(tok.balance(&contract_id), 0);
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(env.as_contract(&contract_id, || EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)).is_none());
     }
 
     /// Amount strictly exceeding the investor's balance is rejected with
@@ -506,7 +506,7 @@ mod payments_tests {
         assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
         assert_eq!(tok.balance(&investor), investor_bal);
         assert_eq!(tok.balance(&contract_id), contract_bal);
-        assert!(EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none());
+        assert!(env.as_contract(&contract_id, || EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)).is_none());
     }
 
     // -----------------------------------------------------------------------
@@ -588,7 +588,7 @@ mod payments_tests {
         assert_eq!(real_tok.balance(&investor), investor_bal);
         assert_eq!(real_tok.balance(&contract_id), contract_bal);
         assert!(
-            EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).is_none(),
+            env.as_contract(&contract_id, || EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)).is_none(),
             "no escrow must be written on invalid token address"
         );
     }
@@ -849,6 +849,12 @@ pub fn transfer_funds(
         return Err(QuickLendXError::InvalidAmount);
     }
 
+    const MIN_TRANSFER: i128 = 10;
+
+    if amount < MIN_TRANSFER {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
     if from == to {
         return Err(QuickLendXError::SelfTransfer);
     }
@@ -856,22 +862,34 @@ pub fn transfer_funds(
     let token_client = token::Client::new(env, currency);
     let contract_address = env.current_contract_address();
 
-    // Ensure sufficient balance exists before attempting transfer
-    let available_balance = token_client.balance(from);
+    // Ensure token contract exists and balance is sufficient
+    let available_balance = match token_client.try_balance(from) {
+        Ok(Ok(bal)) => bal,
+        _ => return Err(QuickLendXError::TokenTransferFailed),
+    };
+
     if available_balance < amount {
         return Err(QuickLendXError::InsufficientFunds);
     }
 
     if from == &contract_address {
-        token_client.transfer(from, to, &amount);
-        return Ok(());
-    }
+        match token_client.try_transfer(from, to, &amount) {
+            Ok(Ok(())) => Ok(()),
+            _ => Err(QuickLendXError::TokenTransferFailed),
+        }
+    } else {
+        let allowance = match token_client.try_allowance(from, &contract_address) {
+            Ok(Ok(a)) => a,
+            _ => return Err(QuickLendXError::TokenTransferFailed),
+        };
 
-    let allowance = token_client.allowance(from, &contract_address);
-    if allowance < amount {
-        return Err(QuickLendXError::OperationNotAllowed);
-    }
+        if allowance < amount {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
 
-    token_client.transfer_from(&contract_address, from, to, &amount);
-    Ok(())
+        match token_client.try_transfer_from(&contract_address, from, to, &amount) {
+            Ok(Ok(())) => Ok(()),
+            _ => Err(QuickLendXError::TokenTransferFailed),
+        }
+    }
 }
