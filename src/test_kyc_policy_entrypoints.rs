@@ -4,11 +4,7 @@ mod entrypoint_tests {
     use crate::verification::VerificationStatus;
 
     fn valid() -> Option<KycRecord> {
-        Some(KycRecord {
-            status: VerificationStatus::Verified,
-            expires_at: 1_000,
-            version: 9,
-        })
+        Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Verified, expires_at: 1_000, version: 9 }))
     }
 
     #[test]
@@ -111,11 +107,7 @@ mod entrypoint_tests {
 
     #[test]
     fn pending_create_invoice_is_blocked() {
-        let record = Some(KycRecord {
-            status: VerificationStatus::Pending,
-            expires_at: 1_000,
-            version: 1,
-        });
+        let record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Pending, expires_at: 1_000, version: 1 }));
         assert_eq!(
             authorize_action(
                 record,
@@ -130,11 +122,7 @@ mod entrypoint_tests {
 
     #[test]
     fn pending_submit_bid_is_blocked() {
-        let record = Some(KycRecord {
-            status: VerificationStatus::Pending,
-            expires_at: 1_000,
-            version: 1,
-        });
+        let record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Pending, expires_at: 1_000, version: 1 }));
         assert_eq!(
             authorize_action(
                 record,
@@ -149,11 +137,7 @@ mod entrypoint_tests {
 
     #[test]
     fn pending_fund_invoice_is_blocked() {
-        let record = Some(KycRecord {
-            status: VerificationStatus::Pending,
-            expires_at: 1_000,
-            version: 1,
-        });
+        let record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Pending, expires_at: 1_000, version: 1 }));
         assert_eq!(
             authorize_action(
                 record,
@@ -168,11 +152,7 @@ mod entrypoint_tests {
 
     #[test]
     fn pending_settlement_is_blocked_before_side_effect() {
-        let record = Some(KycRecord {
-            status: VerificationStatus::Pending,
-            expires_at: 1_000,
-            version: 1,
-        });
+        let record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Pending, expires_at: 1_000, version: 1 }));
         assert_eq!(
             authorize_before_side_effect(
                 record,
@@ -188,11 +168,7 @@ mod entrypoint_tests {
 
     #[test]
     fn revoked_create_invoice_is_blocked() {
-        let record = Some(KycRecord {
-            status: VerificationStatus::Rejected,
-            expires_at: 1_000,
-            version: 1,
-        });
+        let record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Rejected, expires_at: 1_000, version: 1 }));
         assert_eq!(
             authorize_action(
                 record,
@@ -207,11 +183,7 @@ mod entrypoint_tests {
 
     #[test]
     fn revoked_submit_bid_is_blocked() {
-        let record = Some(KycRecord {
-            status: VerificationStatus::Rejected,
-            expires_at: 1_000,
-            version: 1,
-        });
+        let record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Rejected, expires_at: 1_000, version: 1 }));
         assert_eq!(
             authorize_action(
                 record,
@@ -226,11 +198,7 @@ mod entrypoint_tests {
 
     #[test]
     fn revoked_fund_invoice_is_blocked() {
-        let record = Some(KycRecord {
-            status: VerificationStatus::Rejected,
-            expires_at: 1_000,
-            version: 1,
-        });
+        let record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Rejected, expires_at: 1_000, version: 1 }));
         assert_eq!(
             authorize_action(
                 record,
@@ -245,11 +213,7 @@ mod entrypoint_tests {
 
     #[test]
     fn revoked_settlement_is_blocked_before_side_effect() {
-        let record = Some(KycRecord {
-            status: VerificationStatus::Rejected,
-            expires_at: 1_000,
-            version: 1,
-        });
+        let record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Rejected, expires_at: 1_000, version: 1 }));
         assert_eq!(
             authorize_before_side_effect(
                 record,
@@ -367,11 +331,7 @@ mod entrypoint_tests {
 
     #[test]
     fn action_error_precedes_actor_error() {
-        let record = Some(KycRecord {
-            status: VerificationStatus::Pending,
-            expires_at: 1_000,
-            version: 1,
-        });
+        let record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Pending, expires_at: 1_000, version: 1 }));
         assert_eq!(
             authorize_action(
                 record,
@@ -400,11 +360,7 @@ mod entrypoint_tests {
 
     #[test]
     fn invalid_expiry_precedes_status_error() {
-        let record = Some(KycRecord {
-            status: VerificationStatus::Pending,
-            expires_at: 0,
-            version: 1,
-        });
+        let record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Pending, expires_at: 0, version: 1 }));
         assert_eq!(
             require_eligible(record, 0, 0),
             Err(KycEligibilityError::InvalidExpiry)
@@ -513,11 +469,7 @@ mod entrypoint_tests {
     #[test]
     fn failed_eligibility_leaves_no_nonce_state() {
         crate::kyc_nonces::reset_nonces();
-        let pending_record = Some(KycRecord {
-            status: VerificationStatus::Pending,
-            expires_at: 1_000,
-            version: 5,
-        });
+        let pending_record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Pending, expires_at: 1_000, version: 5 }));
         let res1 = authorize_action(
             pending_record,
             KycActor::Business,
@@ -527,11 +479,7 @@ mod entrypoint_tests {
         );
         assert_eq!(res1, Err(KycEligibilityError::Pending));
 
-        let verified_record = Some(KycRecord {
-            status: VerificationStatus::Verified,
-            expires_at: 1_000,
-            version: 5,
-        });
+        let verified_record = Some(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Verified, expires_at: 1_000, version: 5 }));
         let res2 = authorize_action(
             verified_record,
             KycActor::Business,
