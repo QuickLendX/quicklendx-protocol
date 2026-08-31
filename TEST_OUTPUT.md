@@ -24,3 +24,4 @@ When validating limits, specifically boundaries, off-by-one errors frequently ha
 - **Invoice Amount**: Prevented an off-by-one vulnerability where `min_invoice_amount` check in `admin.rs` and `init.rs` only validated `cfg.min_invoice_amount == 0`. It was fixed to `cfg.min_invoice_amount <= 0` to properly reject negative invalid bounds.
 - **Due Date**: The `max_due_date_days` has been rigorously verified to allow exactly `730` but fail securely at `731`.
 - **Business Capacity**: Validated the `max_invoices_per_business` boundary. For a limit $N$, the protocol properly permits the $N^{th}$ creation and completely blocks the $(N+1)^{th}$ creation, preventing state exhaustion.
+
