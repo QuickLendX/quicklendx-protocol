@@ -160,11 +160,8 @@ mod tests {
                         1,
                         0
                     ),
-                    Ok(KycRecord {
-                        status: VerificationStatus::Pending,
-                        expires_at: 100,
-                        version: 1
-                    })
+                    Ok(KycRecord::V1(KycRecordV1 { status: VerificationStatus::Pending, expires_at: 100, version: 1
+                     }))
                 );
             }
         }

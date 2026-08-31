@@ -1,13 +1,22 @@
 //! One deterministic KYC eligibility predicate for every KYC-dependent action.
 use crate::verification::VerificationStatus;
+use soroban_sdk::contracttype;
 
+#[contracttype]
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum KycRecord {
+    V1(KycRecordV1),
+}
+
+#[contracttype]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct KycRecord {
+pub struct KycRecordV1 {
     pub status: VerificationStatus,
     pub expires_at: u64,
     pub version: u32,
 }
 
+#[contracttype]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KycEligibilityError {
     Missing,
@@ -18,12 +27,14 @@ pub enum KycEligibilityError {
     ReplayedNonce,
 }
 
+#[contracttype]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KycActor {
     Business,
     Investor,
 }
 
+#[contracttype]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum KycDependentAction {
     CreateInvoice,
@@ -32,18 +43,20 @@ pub enum KycDependentAction {
     SettleInvoice,
 }
 
-/// The shared predicate. Expiry is exclusive: `now == expires_at` is expired.
+/// The shared predicate. Expiry is exclusive: 
+ow == expires_at is expired.
 pub fn require_eligible(
     record: Option<KycRecord>,
     now: u64,
     nonce: u64,
 ) -> Result<KycRecord, KycEligibilityError> {
     let record = record.ok_or(KycEligibilityError::Missing)?;
-    if record.expires_at == 0 {
+    let KycRecord::V1(inner) = &record;
+    if inner.expires_at == 0 {
         return Err(KycEligibilityError::InvalidExpiry);
     }
-    let status_res = match record.status {
-        VerificationStatus::Verified if now < record.expires_at => Ok(record),
+    let status_res = match inner.status {
+        VerificationStatus::Verified if now < inner.expires_at => Ok(record.clone()),
         VerificationStatus::Verified => Err(KycEligibilityError::Expired),
         VerificationStatus::Pending => Err(KycEligibilityError::Pending),
         VerificationStatus::Rejected => Err(KycEligibilityError::Revoked),
@@ -52,7 +65,7 @@ pub fn require_eligible(
         return status_res;
     }
     if nonce > 0 {
-        match crate::kyc_nonces::check_and_record_nonce(record.version, nonce, None, None) {
+        match crate::kyc_nonces::check_and_record_nonce(inner.version, nonce, None, None) {
             crate::kyc_nonces::NonceCheckResult::New
             | crate::kyc_nonces::NonceCheckResult::SafeRetry => {}
             crate::kyc_nonces::NonceCheckResult::Conflict => {
@@ -72,7 +85,8 @@ pub fn authorize_action(
     nonce: u64,
 ) -> Result<KycRecord, KycEligibilityError> {
     let record = record.ok_or(KycEligibilityError::Missing)?;
-    if record.expires_at == 0 {
+    let KycRecord::V1(inner) = &record;
+    if inner.expires_at == 0 {
         return Err(KycEligibilityError::InvalidExpiry);
     }
     let actor_allowed = match action {
@@ -82,10 +96,10 @@ pub fn authorize_action(
         }
         KycDependentAction::SettleInvoice => true,
     };
-    let status_res = match record.status {
-        VerificationStatus::Verified if now < record.expires_at => {
+    let status_res = match inner.status {
+        VerificationStatus::Verified if now < inner.expires_at => {
             if actor_allowed {
-                Ok(record)
+                Ok(record.clone())
             } else {
                 Err(KycEligibilityError::Revoked)
             }
@@ -99,7 +113,7 @@ pub fn authorize_action(
     }
     if nonce > 0 {
         match crate::kyc_nonces::check_and_record_nonce(
-            record.version,
+            inner.version,
             nonce,
             Some(actor),
             Some(action),
@@ -124,11 +138,11 @@ pub fn authorize_before_side_effect(
     nonce: u64,
 ) -> Result<KycRecord, KycEligibilityError> {
     if terminal {
-        return Ok(record.unwrap_or(KycRecord {
+        return Ok(record.unwrap_or(KycRecord::V1(KycRecordV1 {
             status: VerificationStatus::Verified,
             expires_at: u64::MAX,
             version: 0,
-        }));
+        })));
     }
     let record = authorize_action(record, actor, action, now, nonce)?;
     Ok(record)
@@ -153,11 +167,11 @@ mod tests {
     use super::*;
 
     fn verified(expires_at: u64) -> Option<KycRecord> {
-        Some(KycRecord {
+        Some(KycRecord::V1(KycRecordV1 {
             status: VerificationStatus::Verified,
             expires_at,
             version: 1,
-        })
+        }))
     }
 
     #[test]
@@ -190,7 +204,7 @@ mod tests {
         crate::kyc_nonces::reset_nonces();
         let r = verified(100);
         assert!(authorize_action(
-            r,
+            r.clone(),
             KycActor::Business,
             KycDependentAction::CreateInvoice,
             50,
@@ -212,7 +226,7 @@ mod tests {
         crate::kyc_nonces::reset_nonces();
         let r = verified(100);
         assert!(authorize_action(
-            r,
+            r.clone(),
             KycActor::Business,
             KycDependentAction::CreateInvoice,
             50,
