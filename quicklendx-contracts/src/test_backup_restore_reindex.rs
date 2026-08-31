@@ -32,7 +32,7 @@ fn make_complex_invoice(
     customer_name: &str,
     tax_id: &str,
 ) -> Invoice {
-    use crate::types::{Dispute};
+    use crate::types::Dispute;
 
     let mut id_bytes = [0u8; 32];
     id_bytes[28..32].copy_from_slice(&idx.to_be_bytes());
@@ -74,6 +74,9 @@ fn make_complex_invoice(
         total_paid: 0,
         payment_history: Vec::new(env),
         created_at: env.ledger().timestamp(),
+        origination_fee_bps: None,
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     }
 }
 

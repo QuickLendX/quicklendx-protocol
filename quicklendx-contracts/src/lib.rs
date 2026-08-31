@@ -1,34 +1,6 @@
 #![no_std]
-#![allow(
-    dead_code,
-    unused_imports,
-    unused_variables,
-    unused_comparisons,
-    deprecated,
-    clippy::too_many_arguments,
-    clippy::doc_overindented_list_items,
-    clippy::absurd_extreme_comparisons,
-    clippy::needless_range_loop,
-    clippy::manual_checked_ops,
-    clippy::collapsible_match,
-    clippy::let_unit_value,
-    clippy::needless_borrow,
-    clippy::match_like_matches_macro,
-    clippy::needless_return
-)]
 
-//! QuickLendX contracts library - minimal surface.
-//!
-//! The historical contract implementation lives in the `src/*.rs` sibling
-//! modules but is not wired in yet because the legacy test suite is mid-
-//! migration (see the `# temporarily disabled` note in
-//! `.github/workflows/ci.yml`). Until the legacy modules are restored, this
-//! file exposes only the pure, self-contained utility layer plus a minimal
-//! placeholder contract.
-//!
-//! The placeholder `#[contract]` is required for the `wasm32v1-none` release
-//! build: Soroban's contract macros install the `#[panic_handler]` and wire
-//! the SDK's global allocator, both of which are mandatory on that target.
+use soroban_sdk::{contract, contractimpl, Env, Symbol, symbol_short};
 
 extern crate alloc;
 
@@ -341,8 +313,17 @@ use verification::{
     BusinessVerificationStorage, InvestorRiskLevel, InvestorTier, InvestorVerification,
     InvestorVerificationStorage,
 };
+pub mod errors;
+/// Invoice amount precision and overflow validation (Issue #2432).
+///
+/// See the module docs for the exact integer rules, invariants, compatibility
+/// impact, and security assumptions. The invoice lifecycle entrypoints
+/// (`contract.rs::store_invoice`, `invoice.rs::Invoice::new`) route their
+/// amount checks through this module.
+pub mod invoice_amount;
 
-use crate::storage::{BidStorage, InvoiceStorage};
+#[cfg(test)]
+mod test_invoice_amount_precision;
 
 #[contract]
 pub struct QuickLendXContract;
@@ -4125,19 +4106,7 @@ mod test_fuzz_accounting;
 #[cfg(feature = "diagnostics")]
 #[contractimpl]
 impl QuickLendXContract {
-    /// Return a rich internal diagnostic snapshot.
-    ///
-    /// Intended for operator tooling, support dashboards, and integration tests
-    /// that need per-status invoice counts, bid counters, and subsystem flags in
-    /// a single call without having to fan out across multiple read entry-points.
-    ///
-    /// # Returns
-    /// A [`diagnostics::ProtocolDiagnostics`] snapshot (see `diagnostics.rs`).
-    ///
-    /// # Security
-    /// - No authentication required (read-only, no PII).
-    /// - State is never mutated.
-    pub fn get_protocol_diagnostics(env: Env) -> diagnostics::ProtocolDiagnostics {
-        diagnostics::get_protocol_diagnostics(&env)
+    pub fn hello(env: Env) -> Symbol {
+        symbol_short!("A1")
     }
 }

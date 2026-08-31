@@ -89,6 +89,7 @@ fn place_bid(
             &String::from_str(env, "inv").into_bytes(),
             &InvoiceCategory::Services,
             &Vec::new(env),
+            &None,
         )
         .unwrap()
         .unwrap();
@@ -103,7 +104,13 @@ fn place_bid(
         .unwrap()
         .unwrap();
     let bid_id = client
-        .try_place_bid(&investor, &invoice_id, &900i128, &950i128)
+        .try_place_bid(
+            &investor,
+            &invoice_id,
+            &900i128,
+            &950i128,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        )
         .unwrap()
         .unwrap();
     (bid_id, investor, invoice_id)
@@ -180,7 +187,7 @@ fn test_withdraw_cancelled_bid_fails() {
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
 
     // Cancel the bid first
-    client.cancel_bid(&bid_id);
+    client.cancel_bid(&bid_id).unwrap();
 
     // Try to withdraw the cancelled bid
     let result = client.try_withdraw_bid(&bid_id);
@@ -443,7 +450,13 @@ fn test_withdrawn_bid_excluded_from_get_best_bid() {
         .try_verify_investor(&investor_b, &10_000i128)
         .unwrap()
         .unwrap();
-    let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &900i128);
+    let bid_id_b = client.place_bid(
+        &investor_b,
+        &invoice_id,
+        &800i128,
+        &900i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // Bid A has higher profit (950 - 900 = 50) than B (900 - 800 = 100)
     // Actually B has higher profit. Let me recalculate: A is (950-900)=50, B is (900-800)=100
@@ -487,7 +500,13 @@ fn test_withdrawn_bid_excluded_from_rank_bids() {
         .try_verify_investor(&investor_b, &10_000i128)
         .unwrap()
         .unwrap();
-    let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &900i128);
+    let bid_id_b = client.place_bid(
+        &investor_b,
+        &invoice_id,
+        &800i128,
+        &900i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     let investor_c = Address::generate(&env);
     client.submit_investor_kyc(&investor_c, &String::from_str(&env, "kyc"));
@@ -495,7 +514,13 @@ fn test_withdrawn_bid_excluded_from_rank_bids() {
         .try_verify_investor(&investor_c, &10_000i128)
         .unwrap()
         .unwrap();
-    let bid_id_c = client.place_bid(&investor_c, &invoice_id, &700i128, &850i128);
+    let bid_id_c = client.place_bid(
+        &investor_c,
+        &invoice_id,
+        &700i128,
+        &850i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // Get ranked bids before withdrawal
     let ranked_before = client.get_ranked_bids(&invoice_id);
@@ -554,7 +579,13 @@ fn test_all_withdrawn_bids_results_empty_ranking() {
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
     client.verify_investor(&admin, &investor_b, &10_000i128);
-    let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &900i128);
+    let bid_id_b = client.place_bid(
+        &investor_b,
+        &invoice_id,
+        &800i128,
+        &900i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // Withdraw all bids
     client.try_withdraw_bid(&bid_id_a).unwrap().unwrap();
@@ -649,7 +680,13 @@ fn test_withdraw_does_not_affect_other_bids_on_same_invoice() {
         .try_verify_investor(&investor_b, &10_000i128)
         .unwrap()
         .unwrap();
-    let bid_id_b = client.place_bid(&investor_b, &invoice_id, &800i128, &850i128);
+    let bid_id_b = client.place_bid(
+        &investor_b,
+        &invoice_id,
+        &800i128,
+        &850i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // Withdraw only bid A
     client.try_withdraw_bid(&bid_id_a).unwrap().unwrap();
@@ -703,7 +740,13 @@ fn test_withdraw_then_place_new_bid_from_same_investor() {
     assert_eq!(bid_1.status, BidStatus::Withdrawn);
 
     // Place a new bid from the same investor on the same invoice
-    let bid_id_2 = client.place_bid(&investor, &invoice_id, &850i128, &920i128);
+    let bid_id_2 = client.place_bid(
+        &investor,
+        &invoice_id,
+        &850i128,
+        &920i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // New bid should be Placed
     let bid_2 = client.get_bid(&bid_id_2).unwrap();
@@ -752,8 +795,14 @@ fn test_withdraw_and_cancel_are_different_terminal_states() {
     let investor_b = Address::generate(&env);
     client.submit_investor_kyc(&investor_b, &String::from_str(&env, "kyc"));
     client.verify_investor(&admin, &investor_b, &10_000i128);
-    let bid_id_cancel = client.place_bid(&investor_b, &invoice_id, &800i128, &850i128);
-    client.cancel_bid(&bid_id_cancel);
+    let bid_id_cancel = client.place_bid(
+        &investor_b,
+        &invoice_id,
+        &800i128,
+        &850i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+    client.cancel_bid(&bid_id_cancel).unwrap();
     let bid_cancelled = client.get_bid(&bid_id_cancel).unwrap();
     assert_eq!(bid_cancelled.status, BidStatus::Cancelled);
 

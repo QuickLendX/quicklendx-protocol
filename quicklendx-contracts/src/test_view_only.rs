@@ -3,11 +3,11 @@
 //! Verifies that `assert_view_only!` correctly panics when the view-only flag
 //! is set and permits operations when it is not.
 
-use crate::storage::{StorageManager, InvoiceStorage};
-use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus};
-use crate::types::{Bid, BidStatus};
 use crate::bid::BidStorage;
 use crate::investment::{Investment, InvestmentStatus, InvestmentStorage};
+use crate::invoice::{Invoice, InvoiceCategory, InvoiceStatus};
+use crate::storage::{InvoiceStorage, StorageManager};
+use crate::types::{Bid, BidStatus};
 use crate::QuickLendXContract;
 use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, String, Vec};
 
@@ -54,6 +54,9 @@ fn test_view_only_allows_writes_normally() {
         metadata_tax_id: None,
         metadata_notes: None,
         metadata_line_items: Vec::new(&env),
+        origination_fee_bps: None,
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     };
 
     // Should NOT panic
@@ -106,6 +109,9 @@ fn test_view_only_panics_on_invoice_store() {
         metadata_tax_id: None,
         metadata_notes: None,
         metadata_line_items: Vec::new(&env),
+        origination_fee_bps: None,
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     };
 
     env.as_contract(&contract_id, || {

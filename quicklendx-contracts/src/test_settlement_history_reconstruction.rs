@@ -80,6 +80,7 @@ mod tests {
             &String::from_str(env, "Invoice for settlement history reconstruction tests"),
             &InvoiceCategory::Services,
             &Vec::new(env),
+            &None,
         );
         client.verify_invoice(&invoice_id);
         client.submit_investor_kyc(&investor, &String::from_str(env, "investor-kyc"));
@@ -88,7 +89,8 @@ mod tests {
             &investor,
             &invoice_id,
             &invoice_amount,
-            &(invoice_amount + 100), &BytesN::from_array(&env, &[0u8; 32]),
+            &(invoice_amount + 100),
+            &BytesN::from_array(&env, &[0u8; 32]),
         );
         client.accept_bid(&invoice_id, &bid_id);
         (invoice_id, business, investor, currency)

@@ -96,7 +96,6 @@ impl AddressSummary {
     }
 }
 
-
 /// Strategy interface for role-specific summarization.
 pub trait SummaryStrategy {
     fn summarize(env: &Env, addr: &Address) -> Result<AddressSummary, QuickLendXError>;
@@ -177,10 +176,18 @@ impl SummaryStrategy for BidStrategy {
         for bid in bids.iter() {
             match bid.status {
                 BidStatus::Placed => out.bid_placed_count = out.bid_placed_count.saturating_add(1),
-                BidStatus::Accepted => out.bid_accepted_count = out.bid_accepted_count.saturating_add(1),
-                BidStatus::Withdrawn => out.bid_withdrawn_count = out.bid_withdrawn_count.saturating_add(1),
-                BidStatus::Expired => out.bid_expired_count = out.bid_expired_count.saturating_add(1),
-                BidStatus::Cancelled => out.bid_cancelled_count = out.bid_cancelled_count.saturating_add(1),
+                BidStatus::Accepted => {
+                    out.bid_accepted_count = out.bid_accepted_count.saturating_add(1)
+                }
+                BidStatus::Withdrawn => {
+                    out.bid_withdrawn_count = out.bid_withdrawn_count.saturating_add(1)
+                }
+                BidStatus::Expired => {
+                    out.bid_expired_count = out.bid_expired_count.saturating_add(1)
+                }
+                BidStatus::Cancelled => {
+                    out.bid_cancelled_count = out.bid_cancelled_count.saturating_add(1)
+                }
             }
         }
 
@@ -261,6 +268,9 @@ mod test_address_summary {
         let summary = env.as_contract(&contract_id, || {
             summarize_address(&env, &unknown).unwrap()
         });
+        let summary = env
+            .as_contract(&contract_id, || summarize_address(&env, &unknown))
+            .unwrap();
         assert_eq!(summary, AddressSummary::empty());
     }
 
@@ -273,7 +283,15 @@ mod test_address_summary {
         let summary = env.as_contract(&contract_id, || {
             InvestorStrategy::summarize(&env, &investor).unwrap()
         });
+        let summary = env
+            .as_contract(&contract_id, || {
+                InvestorStrategy::summarize(&env, &investor)
+            })
+            .unwrap();
+        // With an empty storage, investor_portfolio_summary will still iterate
+        // and return total_positions=0; we treat that as not having investor data.
+        // The strategy currently sets is_investor based on portfolio_summary always,
+        // so we only assert no panic + stable shape.
         assert_eq!(summary.investor_total_positions, 0);
     }
 }
-

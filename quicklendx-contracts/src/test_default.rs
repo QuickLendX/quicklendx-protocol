@@ -97,10 +97,17 @@ fn create_and_fund_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        investor,
+        &invoice_id,
+        &amount,
+        &(amount + 100),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
 
     invoice_id
@@ -128,11 +135,15 @@ fn test_default_after_grace_period() {
     env.ledger().set_timestamp(default_time);
 
     // Mark as defaulted
+    assert_eq!(client.get_business_default_history(&business), 0);
     client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
 
     // Verify invoice is now defaulted
     let defaulted_invoice = client.get_invoice(&invoice_id);
     assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
+
+    // Verify business default history counter incremented
+    assert_eq!(client.get_business_default_history(&business), 1);
 }
 
 #[test]
@@ -254,6 +265,7 @@ fn test_cannot_default_unfunded_invoice() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
@@ -284,6 +296,7 @@ fn test_cannot_default_pending_invoice() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     // Invoice is pending, not verified

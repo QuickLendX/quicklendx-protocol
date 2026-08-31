@@ -119,6 +119,7 @@ fn create_verified_invoice(
         &String::from_str(env, "Escrow event completeness invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
     invoice_id
@@ -133,7 +134,13 @@ fn test_escrow_event_completeness() {
     let currency = mint_test_currency(&env, &cid, &business, &investor);
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &EVENT_AMOUNT, &EVENT_RETURN);
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &EVENT_AMOUNT,
+        &EVENT_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // Escrow created path
     let events_before = env.events().all().events().len();
@@ -153,6 +160,8 @@ fn test_escrow_event_completeness() {
     assert_eq!(created_event.amount, escrow.amount);
 
     // Release path
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
     assert_eq!(
         client.get_escrow_status(&invoice_id),
@@ -195,7 +204,13 @@ fn test_escrow_event_completeness() {
 
     // Separate refund path on fresh invoice
     let invoice_id_2 = create_verified_invoice(&env, &client, &business, &currency);
-    let bid_id_2 = client.place_bid(&investor, &invoice_id_2, &EVENT_AMOUNT, &EVENT_RETURN);
+    let bid_id_2 = client.place_bid(
+        &investor,
+        &invoice_id_2,
+        &EVENT_AMOUNT,
+        &EVENT_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id_2, &bid_id_2);
     let escrow_2 = client.get_escrow_details(&invoice_id_2);
     assert_eq!(client.get_escrow_status(&invoice_id_2), EscrowStatus::Held);

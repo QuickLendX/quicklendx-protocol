@@ -354,8 +354,7 @@ impl Vesting {
     pub fn release(env: &Env, beneficiary: &Address, id: u64) -> Result<i128, QuickLendXError> {
         beneficiary.require_auth();
 
-        let mut schedule =
-            VestingStorage::get(env, id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut schedule = VestingStorage::get(env, id).unwrap();
 
         if &schedule.beneficiary != beneficiary {
             return Err(QuickLendXError::Unauthorized);

@@ -22,16 +22,17 @@
 //!     error (not `Ok`).
 //!
 //! ## Bid properties
-//! P8. `cancel_bid` on a Placed bid succeeds (returns `true`) and sets status
+//! P8. `cancel_bid` on a Placed bid succeeds (returns `Ok(())`) and sets status
 //!     == Cancelled.
-//! P9. `cancel_bid` on an already-Cancelled bid always returns `false`
-//!     (idempotent no-op) and status remains Cancelled.
+//! P9. `cancel_bid` on an already-Cancelled bid always returns
+//!     `Err(BidStale)` (idempotent no-op) and status remains Cancelled.
 //! P10. `withdraw_bid` on a Cancelled bid always returns `OperationNotAllowed`.
 //! P11. `accept_bid` on a Cancelled bid always returns an error.
 
 #![cfg(all(test, feature = "fuzz-tests"))]
 
 use crate::{
+    errors::QuickLendXError,
     invoice::{InvoiceCategory, InvoiceStatus},
     types::BidStatus,
     QuickLendXContract, QuickLendXContractClient,
@@ -127,6 +128,7 @@ fn upload_pending_invoice(
             &SorobanString::from_str(env, "Fuzz invoice"),
             &InvoiceCategory::Services,
             &SorobanVec::new(env),
+            &None,
         )
         .expect("upload_invoice must succeed during setup")
         .expect("contract must not error during setup")
@@ -141,7 +143,8 @@ fn upload_verified_invoice(
     amount: i128,
     due_date_offset: u64,
 ) -> BytesN<32> {
-    let invoice_id = upload_pending_invoice(env, client, business, currency, amount, due_date_offset);
+    let invoice_id =
+        upload_pending_invoice(env, client, business, currency, amount, due_date_offset);
     client
         .try_verify_invoice(&invoice_id)
         .expect("verify_invoice must succeed")
@@ -157,9 +160,17 @@ fn place_bid(
     invoice_id: &BytesN<32>,
     bid_amount: i128,
 ) -> BytesN<32> {
-    let expected_return = bid_amount.saturating_add(bid_amount / 10).max(bid_amount + 1);
+    let expected_return = bid_amount
+        .saturating_add(bid_amount / 10)
+        .max(bid_amount + 1);
     client
-        .try_place_bid(investor, invoice_id, &bid_amount, &expected_return)
+        .try_place_bid(
+            investor,
+            invoice_id,
+            &bid_amount,
+            &expected_return,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        )
         .expect("place_bid must succeed during setup")
         .expect("contract must not error during setup")
 }
@@ -261,7 +272,7 @@ proptest! {
 
         // P4
         let result = client
-            .try_place_bid(&investor, &invoice_id, &bid_amount, &expected_return)
+            .try_place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]))
             .expect("try_place_bid must not panic");
         assert!(result.is_err(), "P4: place_bid on Cancelled must return Err");
 
@@ -386,8 +397,8 @@ proptest! {
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(64))]
 
-    /// P8: cancel_bid on a Placed bid returns true and sets status == Cancelled.
-    /// P9: A second cancel_bid returns false (idempotent no-op).
+    /// P8: cancel_bid on a Placed bid returns Ok(()) and sets status == Cancelled.
+    /// P9: A second cancel_bid returns Err(BidStale) (idempotent no-op).
     #[test]
     fn fuzz_cancel_bid_is_terminal(
         amount in MIN_AMOUNT..MAX_AMOUNT,
@@ -403,7 +414,7 @@ proptest! {
 
         // P8 – first cancel must succeed.
         let first = client.cancel_bid(&bid_id);
-        assert!(first, "P8: first cancel_bid must return true");
+        assert!(first.is_ok(), "P8: first cancel_bid must return Ok(())");
 
         let bid = client
             .try_get_bid(&bid_id)
@@ -411,9 +422,9 @@ proptest! {
             .expect("bid must be Some (P8)");
         assert_eq!(bid.status, BidStatus::Cancelled, "P8: bid status must be Cancelled");
 
-        // P9 – second cancel is a no-op returning false.
+        // P9 – second cancel is a no-op returning Err(BidStale).
         let second = client.cancel_bid(&bid_id);
-        assert!(!second, "P9: second cancel_bid must return false");
+        assert_eq!(second, Err(QuickLendXError::BidStale), "P9: second cancel_bid must return Err(BidStale)");
 
         let bid_after = client
             .try_get_bid(&bid_id)
@@ -439,7 +450,7 @@ proptest! {
         );
         let bid_amount = (amount as u128 * bid_pct as u128 / 100).max(1) as i128;
         let bid_id = place_bid(&env, &client, &investor, &invoice_id, bid_amount);
-        client.cancel_bid(&bid_id);
+        client.cancel_bid(&bid_id).unwrap();
 
         // P10 – withdraw on Cancelled bid must error.
         let result = client
@@ -471,7 +482,7 @@ proptest! {
         );
         let bid_amount = (amount as u128 * bid_pct as u128 / 100).max(1) as i128;
         let bid_id = place_bid(&env, &client, &investor, &invoice_id, bid_amount);
-        client.cancel_bid(&bid_id);
+        client.cancel_bid(&bid_id).unwrap();
 
         // P11 – accept on Cancelled bid must error (invoice is still Verified).
         let result = client

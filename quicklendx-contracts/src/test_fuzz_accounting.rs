@@ -74,14 +74,9 @@ struct AccountingModel {
 #[derive(Clone, Debug)]
 enum Action {
     /// Create a new invoice and immediately fund it (accept_bid_and_fund).
-    Fund {
-        investor_idx: usize,
-        amount: i128,
-    },
+    Fund { investor_idx: usize, amount: i128 },
     /// Withdraw an active investment from an existing invoice.
-    Withdraw {
-        invoice_id: u32,
-    },
+    Withdraw { invoice_id: u32 },
     /// Attempt to double-fund an already-funded invoice (must be a no-op).
     DoubleFund {
         invoice_id: u32,
@@ -89,9 +84,7 @@ enum Action {
         amount: i128,
     },
     /// Withdraw from an invoice that has no active investment (must be a no-op).
-    WithdrawNonExistent {
-        invoice_id: u32,
-    },
+    WithdrawNonExistent { invoice_id: u32 },
 }
 
 impl AccountingModel {
@@ -124,8 +117,7 @@ impl AccountingModel {
             Action::Withdraw { invoice_id } => {
                 if let Some(inv) = self.active_investments.remove(invoice_id) {
                     // Atomically reduce the aggregate
-                    self.total_invested =
-                        self.total_invested.saturating_sub(inv.amount);
+                    self.total_invested = self.total_invested.saturating_sub(inv.amount);
                     self.available_invoices.insert(*invoice_id);
                 }
                 // Withdraw of a non-existent invoice is a no-op (already
@@ -161,11 +153,7 @@ impl AccountingModel {
 
     /// Invariant 1: `sum(active_investment_amounts) == total_invested`
     fn invariant_sum_equals_total(&self) -> bool {
-        let computed: i128 = self
-            .active_investments
-            .values()
-            .map(|inv| inv.amount)
-            .sum();
+        let computed: i128 = self.active_investments.values().map(|inv| inv.amount).sum();
         computed == self.total_invested
     }
 
@@ -189,17 +177,17 @@ impl AccountingModel {
     /// have been created (i.e., it must be in `all_invoice_ids`).
     fn invariant_no_ghost_investments(&self) -> bool {
         let id_set: BTreeSet<_> = self.all_invoice_ids.iter().copied().collect();
-        self.active_investments
-            .keys()
-            .all(|id| id_set.contains(id))
+        self.active_investments.keys().all(|id| id_set.contains(id))
     }
 }
 
 // ─── Strategy ────────────────────────────────────────────────────────────────
 
 fn arb_fund() -> impl Strategy<Value = Action> {
-    (0usize..5, 1i128..=1_000_000i128)
-        .prop_map(|(investor_idx, amount)| Action::Fund { investor_idx, amount })
+    (0usize..5, 1i128..=1_000_000i128).prop_map(|(investor_idx, amount)| Action::Fund {
+        investor_idx,
+        amount,
+    })
 }
 
 fn arb_withdraw(max_id: u32) -> impl Strategy<Value = Action> {
@@ -217,8 +205,7 @@ fn arb_double_fund(max_id: u32) -> impl Strategy<Value = Action> {
 }
 
 fn arb_withdraw_non_existent(max_id: u32) -> impl Strategy<Value = Action> {
-    (0u32..max_id.max(1))
-        .prop_map(|invoice_id| Action::WithdrawNonExistent { invoice_id })
+    (0u32..max_id.max(1)).prop_map(|invoice_id| Action::WithdrawNonExistent { invoice_id })
 }
 
 fn arb_action() -> impl Strategy<Value = Action> {
@@ -281,7 +268,11 @@ fn test_invariant_sum_investor_balances_equals_total_invested() {
                     "sum(investor_balances) != total_invested after {:?}: \
                      computed_sum={} total={}",
                     action,
-                    model.active_investments.values().map(|i| i.amount).sum::<i128>(),
+                    model
+                        .active_investments
+                        .values()
+                        .map(|i| i.amount)
+                        .sum::<i128>(),
                     model.total_invested
                 );
 
@@ -307,7 +298,11 @@ fn test_invariant_sum_investor_balances_equals_total_invested() {
                     "active investment references unknown invoice after {:?}: \
                      active_ids={:?} known_ids={:?}",
                     action,
-                    model.active_investments.keys().copied().collect::<Vec<u32>>(),
+                    model
+                        .active_investments
+                        .keys()
+                        .copied()
+                        .collect::<Vec<u32>>(),
                     model.all_invoice_ids
                 );
 
@@ -315,8 +310,7 @@ fn test_invariant_sum_investor_balances_equals_total_invested() {
                 // the investment's principal (no partial accounting).
                 if let Action::Withdraw { invoice_id } = action {
                     if let Some(removed) = before.active_investments.get(invoice_id) {
-                        let expected_total =
-                            before.total_invested.saturating_sub(removed.amount);
+                        let expected_total = before.total_invested.saturating_sub(removed.amount);
                         prop_assert_eq!(
                             model.total_invested,
                             expected_total,

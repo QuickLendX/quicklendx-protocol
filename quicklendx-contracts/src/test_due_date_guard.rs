@@ -55,6 +55,8 @@ fn invoice_new_rejects_due_date_in_past() {
             String::from_str(&env, "past-due invoice"),
             InvoiceCategory::Services,
             Vec::new(&env),
+            None, /* early_payment_discount_bps */
+            None,
         )
     });
 
@@ -79,6 +81,8 @@ fn invoice_new_rejects_due_date_equal_to_current_timestamp() {
             String::from_str(&env, "due-now invoice"),
             InvoiceCategory::Services,
             Vec::new(&env),
+            None, /* early_payment_discount_bps */
+            None,
         )
     });
 
@@ -103,10 +107,15 @@ fn invoice_new_accepts_due_date_strictly_in_future() {
             String::from_str(&env, "future invoice"),
             InvoiceCategory::Services,
             Vec::new(&env),
+            None, /* early_payment_discount_bps */
+            None,
         )
     });
 
-    assert!(result.is_ok(), "Invoice::new must accept a due_date strictly in the future");
+    assert!(
+        result.is_ok(),
+        "Invoice::new must accept a due_date strictly in the future"
+    );
 }
 
 // ---------------------------------------------------------------------------

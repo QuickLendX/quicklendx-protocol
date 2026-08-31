@@ -186,10 +186,17 @@ fn test_bid_placed_emits_diagnostic_log() {
         &String::from_str(&env, "Diagnostics test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
-    client.place_bid(&investor, &invoice_id, &5_000, &5_500, &BytesN::from_array(&env, &[0u8; 32]));
+    client.place_bid(
+        &investor,
+        &invoice_id,
+        &5_000,
+        &5_500,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     let logs = env.logs().all();
     assert!(
@@ -215,10 +222,17 @@ fn test_bid_withdrawn_emits_diagnostic_log() {
         &String::from_str(&env, "Withdraw diagnostics invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &5_500, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &5_000,
+        &5_500,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.withdraw_bid(&bid_id);
 
     let logs = env.logs().all();
@@ -245,9 +259,16 @@ fn test_escrow_lifecycle_emits_diagnostic_logs() {
         &String::from_str(&env, "Escrow diagnostics invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &10_000, &10_500, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &10_000,
+        &10_500,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // accept_bid_and_fund triggers escrow + payment logs
     client.accept_bid_and_fund(&invoice_id, &bid_id);
@@ -292,9 +313,16 @@ fn test_partial_payment_emits_diagnostic_log() {
         &String::from_str(&env, "Partial payment diagnostics"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &10_000, &10_500, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &10_000,
+        &10_500,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
     client.process_partial_payment(&invoice_id, &3_000i128, &String::from_str(&env, "txn-001"));
@@ -329,12 +357,23 @@ fn test_settlement_finalization_emits_diagnostic_log() {
         &String::from_str(&env, "Settlement diagnostics invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &5_500, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &5_000,
+        &5_500,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
-    client.settle_invoice(&invoice_id, &5_000i128);
+    client.settle_invoice(
+        &invoice_id,
+        &5_000i128,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
 
     let logs = env.logs().all();
     let log_str: alloc::string::String = logs.join("\n");
@@ -371,9 +410,16 @@ fn test_refund_escrow_emits_diagnostic_log() {
         &String::from_str(&env, "Refund diagnostics invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &10_000, &10_500, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &10_000,
+        &10_500,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
     client.refund_escrow_funds(&invoice_id, &business);
@@ -411,10 +457,12 @@ fn test_diagnostics_feature_gating_behavior() {
     #[cfg(not(feature = "diagnostics"))]
     {
         // Assert that the feature flag is disabled under cargo test without feature
-        assert!(
-            !cfg!(feature = "diagnostics"),
-            "Expected diagnostics feature to be disabled"
-        );
+        const {
+            assert!(
+                !cfg!(feature = "diagnostics"),
+                "Expected diagnostics feature to be disabled"
+            );
+        }
     }
 }
 
@@ -466,10 +514,17 @@ fn test_error_path_no_diagnostic() {
         &String::from_str(&env, "Diagnostics error path invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     // This should fail because the invoice is not verified
-    let result = client.try_place_bid(&investor, &invoice_id, &5_000, &5_500, &BytesN::from_array(&env, &[0u8; 32]));
+    let result = client.try_place_bid(
+        &investor,
+        &invoice_id,
+        &5_000,
+        &5_500,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     assert!(result.is_err());
 
     // Verify no [bid] diagnostics log was emitted since it failed on validation
@@ -521,6 +576,7 @@ fn test_get_protocol_diagnostics_basic() {
         &String::from_str(&env, "Diagnostics entry-point test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     let diag2 = client.get_protocol_diagnostics();
     assert_eq!(diag2.total_invoices, 1);

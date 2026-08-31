@@ -77,12 +77,23 @@ impl TestFixture {
             &String::from_str(&self.env, "Test invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
+            &None,
         );
         self.client.verify_invoice(&invoice_id);
-        let bid_id = self.client.place_bid(&self.investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&self.env, &[0u8; 32]));
+        let bid_id = self.client.place_bid(
+            &self.investor,
+            &invoice_id,
+            &amount,
+            &(amount + 100),
+            &BytesN::from_array(&self.env, &[0u8; 32]),
+        );
         self.client.accept_bid(&invoice_id, &bid_id);
         self.env.ledger().set_timestamp(timestamp + 10);
-        self.client.settle_invoice(&invoice_id, &amount);
+        self.client.settle_invoice(
+            &invoice_id,
+            &amount,
+            &self.client.get_investment(&invoice_id).unwrap(),
+        );
         let inv = self.client.get_invoice(&invoice_id);
         assert_eq!(inv.status, InvoiceStatus::Paid);
         invoice_id
@@ -107,9 +118,16 @@ impl TestFixture {
                     &String::from_str(&self.env, "Test invoice"),
                     &InvoiceCategory::Services,
                     &Vec::new(&self.env),
+                    &None,
                 );
                 self.client.verify_invoice(&invoice_id);
-                let bid_id = self.client.place_bid(&self.investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&self.env, &[0u8; 32]));
+                let bid_id = self.client.place_bid(
+                    &self.investor,
+                    &invoice_id,
+                    &amount,
+                    &(amount + 100),
+                    &BytesN::from_array(&self.env, &[0u8; 32]),
+                );
                 self.client.accept_bid(&invoice_id, &bid_id);
                 match status {
                     InvoiceStatus::Defaulted => {
@@ -142,6 +160,7 @@ impl TestFixture {
                     &String::from_str(&self.env, "Test invoice"),
                     &InvoiceCategory::Services,
                     &Vec::new(&self.env),
+                    &None,
                 );
                 if status == InvoiceStatus::Verified {
                     self.client.verify_invoice(&invoice_id);
@@ -162,12 +181,18 @@ impl TestFixture {
             &String::from_str(&self.env, "Test"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
+            &None,
         );
         self.client.verify_invoice(&invoice_id);
-        let bid_id = self.client.place_bid(&self.investor, &invoice_id, &1000, &1100, &BytesN::from_array(&self.env, &[0u8; 32]));
+        let bid_id = self.client.place_bid(
+            &self.investor,
+            &invoice_id,
+            &1000,
+            &1100,
+            &BytesN::from_array(&self.env, &[0u8; 32]),
+        );
         self.client.accept_bid(&invoice_id, &bid_id);
         invoice_id
-
     }
 }
 #[test]
@@ -255,7 +280,7 @@ fn test_pagination() {
     assert_eq!(r1.scanned, 2);
     assert!(r1.next_offset > 0);
 
-    // Page 2: resume at next_offset (total shrank to 1, offset past end → empty)
+    // Page 2: resume at next_offset (total shrank to 1, offset past end â†’ empty)
     let r2 = fx
         .client
         .prune_terminal_invoices(&fx.admin, &retention, &r1.next_offset, &2);

@@ -921,16 +921,44 @@ mod test_bid_ranking {
         //   equal_old_lower_id  (5_000 -> 6_000, profit 1_000, ts=20, id_suffix=0x02)
         //   equal_new_higher_id (5_000 -> 6_000, profit 1_000, ts=20, id_suffix=0x09)
         let high_profit = build_bid(
-            &env, &invoice_id, &investor, 5_000, 7_000, 10, BidStatus::Placed, 0x01,
+            &env,
+            &invoice_id,
+            &investor,
+            5_000,
+            7_000,
+            10,
+            BidStatus::Placed,
+            0x01,
         );
         let higher_amount = build_bid(
-            &env, &invoice_id, &investor, 5_300, 7_000, 20, BidStatus::Placed, 0x02,
+            &env,
+            &invoice_id,
+            &investor,
+            5_300,
+            7_000,
+            20,
+            BidStatus::Placed,
+            0x02,
         );
         let equal_old_lower_id = build_bid(
-            &env, &invoice_id, &investor, 5_000, 6_000, 20, BidStatus::Placed, 0x02,
+            &env,
+            &invoice_id,
+            &investor,
+            5_000,
+            6_000,
+            20,
+            BidStatus::Placed,
+            0x02,
         );
         let equal_new_higher_id = build_bid(
-            &env, &invoice_id, &investor, 5_000, 6_000, 20, BidStatus::Placed, 0x09,
+            &env,
+            &invoice_id,
+            &investor,
+            5_000,
+            6_000,
+            20,
+            BidStatus::Placed,
+            0x09,
         );
 
         for bid in [

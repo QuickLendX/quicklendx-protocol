@@ -1,6 +1,12 @@
 "use client";
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import {
+  trackWalletConnectAttempt,
+  trackWalletConnected,
+  trackWalletConnectFailed,
+  trackWalletDisconnected,
+} from "../lib/wallet-telemetry";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -69,14 +75,45 @@ const CopyButton: React.FC<{ value: string }> = ({ value }) => {
       >
         {copied ? (
           // Checkmark
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <path d="M3 8l4 4 6-6" stroke="#10B981" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M3 8l4 4 6-6"
+              stroke="#10B981"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
           </svg>
         ) : (
           // Copy icon
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-            <rect x="5" y="5" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1.5" />
-            <path d="M3 11V3h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <rect
+              x="5"
+              y="5"
+              width="8"
+              height="8"
+              rx="1"
+              stroke="currentColor"
+              strokeWidth="1.5"
+            />
+            <path
+              d="M3 11V3h8"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
           </svg>
         )}
       </button>
@@ -111,9 +148,26 @@ const AddressPill: React.FC<{
       className="text-neutral-500 hover:text-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
     >
       {/* External link icon */}
-      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
-        <path d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
-        <path d="M10 2h4v4M14 2l-6 6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 16 16"
+        fill="none"
+        aria-hidden="true"
+      >
+        <path
+          d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        />
+        <path
+          d="M10 2h4v4M14 2l-6 6"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
       </svg>
     </a>
   </button>
@@ -165,7 +219,11 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
         );
         const first = focusable[0];
         const last = focusable[focusable.length - 1];
-        if (e.shiftKey ? document.activeElement === first : document.activeElement === last) {
+        if (
+          e.shiftKey
+            ? document.activeElement === first
+            : document.activeElement === last
+        ) {
           e.preventDefault();
           (e.shiftKey ? last : first).focus();
         }
@@ -178,14 +236,16 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
   const handleConnect = useCallback(async () => {
     setState("CONNECTING");
     setErrorMessage("");
+    trackWalletConnectAttempt({ walletType: "freighter", network: expectedNetwork });
     try {
-      // TODO: replace with Freighter SDK call
+      // Replace with Freighter SDK call when ready
       // const { address } = await getAddress();
       // const { network } = await getNetwork();
       // if (network !== expectedNetwork) { setState("WRONG_NETWORK"); return; }
       // setAddress(address);
       // setState("CONNECTED");
       // setModalOpen(false);
+      // trackWalletConnected({ address, walletType: "freighter", network: expectedNetwork });
       // onConnect?.(address);
 
       // Placeholder: simulate async connection
@@ -193,30 +253,35 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
       throw new Error("SDK_NOT_INTEGRATED");
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "Unknown error";
+      trackWalletConnectFailed({
+        error: msg,
+        walletType: "freighter",
+        network: expectedNetwork,
+      });
       const userMessage =
         msg === "SDK_NOT_INTEGRATED"
           ? "Wallet SDK not yet integrated. See docs/ux/wallet-connect.md."
           : msg.includes("not installed")
-          ? "Freighter is not installed."
-          : msg.includes("rejected")
-          ? "Connection was declined. You can try again at any time."
-          : msg.includes("timeout")
-          ? "The request timed out. Please try again."
-          : "Something went wrong. Please try again.";
+            ? "Freighter is not installed."
+            : msg.includes("rejected")
+              ? "Connection was declined. You can try again at any time."
+              : msg.includes("timeout")
+                ? "The request timed out. Please try again."
+                : "Something went wrong. Please try again.";
       setErrorMessage(userMessage);
       setState("ERROR");
     }
-  }, []);
+  }, [expectedNetwork]);
 
   const handleDisconnect = useCallback(async () => {
     setState("DISCONNECTING");
     setAccountMenuOpen(false);
-    // TODO: clear Freighter session if SDK provides a method
+    trackWalletDisconnected({ address, network: expectedNetwork });
     await new Promise((r) => setTimeout(r, 300));
     setAddress("");
     setState("NOT_CONNECTED");
     onDisconnect?.();
-  }, [onDisconnect]);
+  }, [address, expectedNetwork, onDisconnect]);
 
   // -------------------------------------------------------------------------
   // Render helpers
@@ -347,8 +412,19 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
                 aria-label="Close wallet connect modal"
                 className="text-[#64748B] hover:text-[#0F172A] focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
               >
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-                  <path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 20 20"
+                  fill="none"
+                  aria-hidden="true"
+                >
+                  <path
+                    d="M5 5l10 10M15 5L5 15"
+                    stroke="currentColor"
+                    strokeWidth="1.75"
+                    strokeLinecap="round"
+                  />
                 </svg>
               </button>
             </div>
@@ -379,8 +455,19 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
                     role="status"
                     aria-label="Connecting…"
                   >
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z" />
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
+                    />
                   </svg>
                 )}
                 {isConnecting ? "Connecting…" : "Connect"}
@@ -399,8 +486,10 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
           <span aria-hidden="true">⚠️</span>
           <span>
             Wrong network detected. Switch to{" "}
-            <strong>{expectedNetwork === "public" ? "Mainnet" : "Testnet"}</strong> in
-            Freighter to continue.
+            <strong>
+              {expectedNetwork === "public" ? "Mainnet" : "Testnet"}
+            </strong>{" "}
+            in Freighter to continue.
           </span>
           <button
             type="button"

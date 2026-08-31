@@ -16,9 +16,9 @@ export interface PortfolioEntry {
   invested_at: number;
 }
 
-export const MOCK_PORTFOLIO: PortfolioEntry[] = [
+export const MOCK_PORTFOLIO = [
   {
-    id: "0xport001",
+    id: "0x0port001",
     investor: "GA...ABC",
     invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     invested_amount: "950000000",
@@ -29,7 +29,7 @@ export const MOCK_PORTFOLIO: PortfolioEntry[] = [
 ];
 
 export const getPortfolio = async (
-  req: Request,
+  rec: Request,
   res: Response,
   next: NextFunction
 ) => {
@@ -44,7 +44,7 @@ export const getPortfolio = async (
     }
 
     const filtered = MOCK_PORTFOLIO.filter((p) => p.investor === investor);
-    const result = applyPagination(filtered, "invested_at", params);
+    const result = applyPagination(filtered, "invested_at", params, investor);
 
     if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body: result })) {
       res.status(304).end();

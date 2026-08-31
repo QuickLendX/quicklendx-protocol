@@ -130,6 +130,7 @@ fn upload_verified_invoice(
         &String::from_str(env, description),
         &InvoiceCategory::Technology,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
     invoice_id
@@ -145,7 +146,13 @@ fn fund_invoice(
     description: &str,
 ) -> FundedEscrow {
     let invoice_id = upload_verified_invoice(env, client, business, currency, amount, description);
-    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        investor,
+        &invoice_id,
+        &amount,
+        &(amount + 100),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -793,7 +800,8 @@ fn incomplete_paginated_repair_keeps_emergency_withdraw_closed() {
         &investor_b,
         &blocked_invoice,
         &blocked_amount,
-        &(blocked_amount + 100), &BytesN::from_array(&env, &[0u8; 32]),
+        &(blocked_amount + 100),
+        &BytesN::from_array(&env, &[0u8; 32]),
     );
 
     let out_of_order = client.try_repair_held_escrow_reserve(&admin, &currency, &1u32, &1u32);
@@ -813,6 +821,8 @@ fn incomplete_paginated_repair_keeps_emergency_withdraw_closed() {
         QuickLendXError::EmergencyWithdrawInsufficientBalance
     );
 
+    client.approve_early_escrow_release(&escrow_a.invoice_id, &business);
+    client.approve_early_escrow_release(&escrow_a.invoice_id, &investor_a);
     let blocked_release = client.try_release_escrow_funds(&escrow_a.invoice_id);
     assert_contract_error!(blocked_release, QuickLendXError::InvalidStatus);
 
@@ -992,6 +1002,12 @@ fn release_still_works_after_same_token_surplus_withdrawal() {
     fixture.client.execute_emergency_withdraw(&fixture.admin);
 
     let business_before = token_client.balance(&fixture.escrow.business);
+    fixture
+        .client
+        .approve_early_escrow_release(&fixture.escrow.invoice_id, &fixture.escrow.business);
+    fixture
+        .client
+        .approve_early_escrow_release(&fixture.escrow.invoice_id, &fixture.escrow.investor);
     fixture
         .client
         .release_escrow_funds(&fixture.escrow.invoice_id);

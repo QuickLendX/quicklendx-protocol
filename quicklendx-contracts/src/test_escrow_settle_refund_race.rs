@@ -158,6 +158,7 @@ fn upload_and_verify_invoice(
         &String::from_str(env, "Settlement/refund race regression invoice"),
         &InvoiceCategory::Technology,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
     invoice_id
@@ -172,7 +173,8 @@ fn place_bid(
         investor,
         invoice_id,
         &INVOICE_AMOUNT,
-        &(INVOICE_AMOUNT + 100), &BytesN::from_array(&client.env, &[0u8; 32]),
+        &(INVOICE_AMOUNT + 100),
+        &BytesN::from_array(&client.env, &[0u8; 32]),
     )
 }
 
