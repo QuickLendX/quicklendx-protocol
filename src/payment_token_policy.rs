@@ -36,6 +36,7 @@ pub fn apply_token_update(admin: TokenAddress, expected_admin: TokenPolicyAdmin,
     Ok((next, event))
 }
 
+
 pub fn replay_update_is_noop(current: Option<TokenConfig>, desired: TokenConfig, expected_version: u32) -> bool { current == Some(desired) && desired.version == expected_version }
 pub fn canonical_token(token: TokenAddress) -> TokenAddress { token }
 
