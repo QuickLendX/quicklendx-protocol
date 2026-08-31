@@ -231,6 +231,14 @@ impl QuickLendXContract {
             InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
             return Err(QuickLendXError::InvoiceFrozen);
         }
+        // QE-2026-08 — exact bid amount precision / overflow validation before
+        // any state (idempotency marker, bid record) is written. Enforces sign,
+        // the `i128::MAX / 10_000` overflow ceiling, the documented
+        // "bid amount <= invoice amount" rule, and the return floor
+        // (`expected_return >= bid_amount`) so the auction-selection profit key
+        // is exact and non-negative; see `bid_amount`.
+        let invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        crate::bid_amount::validate_bid(bid_amount, expected_return, invoice.amount)?;
         // Store idempotency marker
         store_idempotency(&env, &idem_key);
         let bid_id = BidStorage::generate_unique_bid_id(&env);
