@@ -211,12 +211,24 @@ export class BidStore {
   /**
    * Get all bids for an investor across all invoices (with RBAC check).
    * Only accessible to the investor themselves or admins.
+   *
+   * Authorization boundary: the `actor` must be the investor being queried
+   * (self-service) or an admin (isAdmin=true). Any other caller is rejected
+   * before any data is read, preventing cross-tenant enumeration.
    */
   static async getBidsForInvestor(
     investor: string,
+    actor: string,
+    isAdmin: boolean = false,
     limit: number = 50,
     offset: number = 0
   ): Promise<{ bids: Bid[]; total: number }> {
+    if (!isAdmin && actor !== investor) {
+      throw new Error(
+        `Forbidden: actor ${actor} cannot query bids for investor ${investor}`
+      );
+    }
+
     const countResult = await pool.query(
       'SELECT COUNT(*) as count FROM bids WHERE investor = $1',
       [investor]
@@ -237,12 +249,31 @@ export class BidStore {
 
   /**
    * Update bid status (e.g., mark as Withdrawn, Expired, Cancelled).
+   *
+   * Authorization boundary: the `actor` must be the bid's owner (investor)
+   * or an admin (isAdmin=true). The bid is fetched first to verify ownership
+   * before any mutation occurs. If the actor is not authorized, no state is
+   * changed and an error is thrown.
    */
   static async updateBidStatus(
     bidId: string,
     newStatus: BidStatus,
-    updatedBy: string
+    updatedBy: string,
+    actor: string,
+    isAdmin: boolean = false
   ): Promise<Bid | null> {
+    // Fetch the bid first to verify ownership before any mutation.
+    const existing = await this.getBidById(bidId);
+    if (!existing) {
+      return null;
+    }
+
+    if (!isAdmin && existing.investor !== actor) {
+      throw new Error(
+        `Forbidden: actor ${actor} cannot update bid ${bidId} owned by ${existing.investor}`
+      );
+    }
+
     const result = await pool.query(
       `UPDATE bids
        SET status = $1, updated_at = CURRENT_TIMESTAMP

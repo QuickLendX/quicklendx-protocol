@@ -140,6 +140,32 @@ export const getBids = async (
     }
     assertInvoiceId(invoice_id as string);
 
+    // ── Authorization boundary ───────────────────────────────────────────
+    // The `investor` filter is a tenant-scoped query. A caller may only
+    // filter by their own investor identity (derived from the authenticated
+    // API key's `created_by`), unless the caller holds admin scopes. This
+    // prevents cross-tenant enumeration of another investor's bids.
+    if (investor) {
+      const caller = req.apiKey?.created_by;
+      const isAdmin = req.apiKey?.scopes?.includes("admin:*") ?? false;
+      if (!caller) {
+        return res.status(401).json({
+          error: {
+            message: "Authentication required to filter bids by investor",
+            code: "UNAUTHORIZED",
+          },
+        });
+      }
+      if (!isAdmin && caller !== investor) {
+        return res.status(403).json({
+          error: {
+            message: "Cannot query bids for another investor",
+            code: "FORBIDDEN",
+          },
+        });
+      }
+    }
+
     const filters = {
       investor: investor as string | undefined,
       status: status as BidStatus | undefined,
