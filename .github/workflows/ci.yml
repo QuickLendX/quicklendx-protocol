@@ -38,7 +38,7 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
-          rustup target add wasm32v1-none
+          rustup target add wasm32-unknown-unknown
       - name: Detect optional Stellar CLI
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
@@ -51,6 +51,7 @@ jobs:
       - name: Build Cargo project
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
+          source $HOME/.cargo/env
           cd quicklendx-contracts
           cargo build --verbose
 
