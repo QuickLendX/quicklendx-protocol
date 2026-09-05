@@ -99,6 +99,8 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
+          rustup component add llvm-tools-preview
+          cargo install cargo-llvm-cov --locked
           cd quicklendx-contracts
           # TODO: restore the original 95% gate after the legacy test suite is repaired.
           cargo llvm-cov --lib --fail-under-lines 50
