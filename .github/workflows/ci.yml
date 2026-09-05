@@ -14,12 +14,12 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Detect contract-impacting changes
         id: changes
         if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         with:
           filters: |
             contracts:
@@ -82,13 +82,6 @@ jobs:
           quicklendx-contracts/scripts/check-wasm-size.sh
 
       - name: Run WASM size budget regression tests
-        # Runs tests/wasm_build_size_budget.rs – a self-contained integration test
-        # that does NOT import contract types, so it compiles independently of the
-        # legacy test suite.  It enforces:
-        #   • hard budget  (256 KiB)
-        #   • warning zone (90 % of budget)
-        #   • regression limit (baseline + 5 % margin)
-        # plus ~30 fast unit tests for constants, classify_size, and helpers.
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
@@ -96,17 +89,19 @@ jobs:
           cargo test --test wasm_build_size_budget --verbose
 
       - name: Run Cargo tests
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
+          cd quicklendx-contracts
           cargo test --verbose
 
       - name: Test coverage (baseline + admin gate)
+        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
-          cargo install cargo-llvm-cov
+          cd quicklendx-contracts
           # TODO: restore the original 95% gate after the legacy test suite is repaired.
           cargo llvm-cov --lib --fail-under-lines 50
-          cd quicklendx-contracts
           cargo llvm-cov clean --workspace
           cargo llvm-cov --lib --lcov --output-path coverage/lcov.info
           bash scripts/check-admin-coverage.sh coverage/lcov.info
