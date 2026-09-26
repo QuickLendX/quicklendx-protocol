@@ -16,6 +16,22 @@ import {
 } from "../../services/exposureService";
 import crypto from "crypto";
 import { assertInvoiceId } from "../../lib/entityId";
+import { resolveBidReadIdentity } from "../../middleware/bid-authorization";
+
+/**
+ * Reject a bid read that failed the authorization boundary, using the
+ * status/code resolved by `resolveBidReadIdentity`.
+ */
+const rejectBidRead = (
+  res: Response,
+  identity: Extract<ReturnType<typeof resolveBidReadIdentity>, { ok: false }>
+) =>
+  res.status(identity.status).json({
+    error: {
+      message: identity.message,
+      code: identity.code,
+    },
+  });
 
 /**
  * Create a new bid.
@@ -120,6 +136,13 @@ export const createBid = async (
  * Get bids for an invoice with optional filtering and pagination.
  * Returns ranked bids (best first) by default.
  * Filters: invoice_id (required), investor (optional), status (optional)
+ *
+ * Authorization boundary: the route requires an authenticated key holding
+ * `read:bids`. On top of that, the optional `investor` filter is bound to the
+ * authenticated identity — see `resolveBidReadIdentity`. A non-privileged
+ * caller is always scoped to its own investor id, so the endpoint can no
+ * longer be used to dump another tenant's bid book (nor the whole book for an
+ * invoice by omitting the filter).
  */
 export const getBids = async (
   req: Request,
@@ -140,8 +163,16 @@ export const getBids = async (
     }
     assertInvoiceId(invoice_id as string);
 
+    const identity = resolveBidReadIdentity(
+      req.apiKey,
+      investor as string | undefined
+    );
+    if (!identity.ok) {
+      return rejectBidRead(res, identity);
+    }
+
     const filters = {
-      investor: investor as string | undefined,
+      investor: identity.investorFilter,
       status: status as BidStatus | undefined,
     };
 
@@ -167,6 +198,10 @@ export const getBids = async (
 /**
  * Get the best bid for an invoice.
  * Returns the highest-ranked Placed bid, or 404 if none exist.
+ *
+ * Authorization boundary: route-guarded with `read:bids`. The check below is
+ * defence in depth so that the auction-selection payload can never be served
+ * anonymously if the middleware wiring regresses.
  */
 export const getBestBid = async (
   req: Request,
@@ -174,6 +209,11 @@ export const getBestBid = async (
   next: NextFunction
 ) => {
   try {
+    const identity = resolveBidReadIdentity(req.apiKey);
+    if (!identity.ok) {
+      return rejectBidRead(res, identity);
+    }
+
     const { invoiceId } = req.params;
     assertInvoiceId(invoiceId as string);
     const bestBid = await bidStore.getBestBid(invoiceId as string);
@@ -189,6 +229,10 @@ export const getBestBid = async (
 /**
  * Get ranked bids for an invoice.
  * Returns all Placed bids sorted by contract ranking logic (best first).
+ *
+ * Authorization boundary: route-guarded with `read:bids`. As above, the
+ * in-handler check prevents an anonymous caller from reading the ranked
+ * auction book if the route middleware is ever removed.
  */
 export const getTopBids = async (
   req: Request,
@@ -196,6 +240,11 @@ export const getTopBids = async (
   next: NextFunction
 ) => {
   try {
+    const identity = resolveBidReadIdentity(req.apiKey);
+    if (!identity.ok) {
+      return rejectBidRead(res, identity);
+    }
+
     const { invoiceId } = req.params;
     assertInvoiceId(invoiceId as string);
     const topBids = await bidStore.getRankedBids(invoiceId as string, 100);
