@@ -212,6 +212,29 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    /// @notice Place a bid on a verified invoice.
+    ///
+    /// # Authorization
+    /// The investor named in the call must sign it; a caller cannot submit a
+    /// bid on another investor's behalf.
+    ///
+    /// # Preconditions (bid submission boundary, QE-2026-08)
+    /// The invoice must exist, be a live `Verified` auction, be unfrozen and
+    /// not past its due date, and the bid must satisfy the protocol's
+    /// placement rules (no self-bidding, protocol minimums, per-invoice and
+    /// investor capacity, invoice face-value ceiling).
+    ///
+    /// # Errors
+    /// * `InvoiceNotFound` - unknown invoice id.
+    /// * `InvoiceFrozen` / `InvoiceLockExpired` - the invoice is on hold.
+    /// * `InvalidStatus`, `Unauthorized`, `InvalidAmount`,
+    ///   `InvoiceAmountInvalid`, `OperationNotAllowed` - the bid or the
+    ///   auction is not eligible.
+    /// * `DuplicateBid` - the same investor already submitted this exact
+    ///   (invoice, salt) pair.
+    /// * `MutationLimitExceeded` - per-address rate limit.
+    ///
+    /// Every rejection returns before any storage write.
     pub fn place_bid(
         env: Env,
         investor: Address,
@@ -225,19 +248,35 @@ impl QuickLendXContract {
         if idempotency_exists(&env, &idem_key) {
             return Err(QuickLendXError::DuplicateBid);
         }
+
+        // Authorization and auction-state boundary (QE-2026-08). The investor
+        // named on the bid must sign it, the invoice must be a live auction
+        // that is neither frozen nor past due, and the bid must satisfy the
+        // protocol's placement rules. Every rejection returns before any
+        // storage write, so a denied call cannot leave partial state behind.
+        let invoice =
+            InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        crate::bid::require_bid_submission_allowed(
+            &env,
+            &investor,
+            &invoice,
+            bid_amount,
+            expected_return,
+        )?;
+
         // #2439 – per-address rate limit
         check_and_record_mutation(&env, &investor)?;
-        if InvoiceStorage::is_frozen(&env, &invoice_id) {
-            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
-            return Err(QuickLendXError::InvoiceFrozen);
-        }
-        // Store idempotency marker
+
+        // The idempotency marker is written only after every boundary check has
+        // passed, so a rejected submission cannot leave a marker behind that
+        // would block a later, corrected retry with the same salt.
         store_idempotency(&env, &idem_key);
+
         let bid_id = BidStorage::generate_unique_bid_id(&env);
         let bid = Bid {
             bid_id: bid_id.clone(),
-            invoice_id,
-            investor,
+            invoice_id: invoice_id.clone(),
+            investor: investor.clone(),
             bid_amount,
             expected_return,
             status: BidStatus::Placed,
@@ -245,24 +284,59 @@ impl QuickLendXContract {
             expiration_timestamp: env.ledger().timestamp() + 86400,
         };
         BidStorage::store_bid(&env, &bid);
+        // Register the bid in the invoice's bid index. Ranking and winner
+        // selection read the auction through this index, so a bid that is
+        // stored but never indexed is invisible to the auction it belongs to.
+        BidStorage::add_bid_to_invoice(&env, &invoice_id, &bid_id);
         Ok(bid_id)
     }
 
+    /// @notice Select the winning bid for an invoice and fund it.
+    ///
+    /// # Authorization (auction selection boundary, QE-2026-08)
+    /// Only the business recorded on the invoice may select a winner, and it
+    /// must sign. The identity comes from trusted invoice state, never from a
+    /// caller argument, so a foreign tenant is rejected before any state moves.
+    ///
+    /// # Preconditions
+    /// The invoice must be an open auction (`Verified`, unfrozen, not funded,
+    /// not past due) and the selected bid must belong to it, still be
+    /// `Placed`, not be stale, and not exceed the invoice face value.
+    ///
+    /// # Errors
+    /// * `InvoiceNotFound` - unknown invoice id.
+    /// * `StorageKeyNotFound` - unknown bid id (typed, not a panic).
+    /// * `Unauthorized` - the caller is not the invoice's business, or the bid
+    ///   belongs to a different invoice.
+    /// * `InvoiceFrozen` / `InvoiceLockExpired` - the invoice is on hold.
+    /// * `InvoiceAlreadyFunded`, `InvoiceNotAvailableForFunding`,
+    ///   `InvalidStatus`, `OperationNotAllowed` - the auction is closed.
+    /// * `BidStale`, `InvalidAmount`, `InvoiceAmountInvalid` - the bid is
+    ///   no longer a legal, in-range bid for this invoice.
+    ///
+    /// Every rejection returns before any storage write.
     pub fn accept_bid(env: Env, invoice_id: BytesN<32>, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        if InvoiceStorage::is_frozen(&env, &invoice_id) {
-            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
-            return Err(QuickLendXError::InvoiceFrozen);
-        }
-        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
-        
-        invoice.mark_as_funded(&env, bid.investor.clone(), bid.bid_amount, env.ledger().timestamp());
+        let mut invoice =
+            InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        let mut bid =
+            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        // Winner-selection boundary (QE-2026-08): invoice business ownership,
+        // its signature, a still-open auction, and a compatible bid - all
+        // checked before the first state change.
+        crate::bid::require_auction_selection_allowed(&env, &invoice.business, &invoice, &bid)?;
+
+        invoice.mark_as_funded(
+            &env,
+            bid.investor.clone(),
+            bid.bid_amount,
+            env.ledger().timestamp(),
+        );
         InvoiceStorage::update_invoice(&env, &invoice);
-        
-        let mut bid = bid;
+
         bid.status = BidStatus::Accepted;
-        BidStorage::store_bid(&env, &bid);
-        
+        BidStorage::update_bid(&env, &bid);
+
         let escrow_id = crate::payments::EscrowStorage::generate_unique_escrow_id(&env);
         let escrow = Escrow {
             escrow_id,
@@ -295,10 +369,28 @@ impl QuickLendXContract {
         bids
     }
 
+    /// @notice Withdraw a `Placed` bid.
+    ///
+    /// # Authorization (withdrawal boundary, QE-2026-08)
+    /// Only the investor recorded on the bid may withdraw it. The identity is
+    /// read from the stored bid, never from a caller argument, so no third
+    /// party - not the business, not the admin - can withdraw another
+    /// investor's bid.
+    ///
+    /// # Errors
+    /// * `StorageKeyNotFound` - unknown bid id (typed, not a panic).
+    /// * `BidStale` - the bid is no longer `Placed` (accepted, cancelled,
+    ///   withdrawn, or expired). Reported before any write.
     pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
+        let mut bid =
+            BidStorage::get_bid(&env, &bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+
+        // A bid can only move `Placed -> Withdrawn`, and only its owner may
+        // move it. A stale bid is rejected with `BidStale` and left untouched.
+        crate::bid::require_bid_withdrawal_allowed(&bid)?;
+
         bid.status = BidStatus::Withdrawn;
-        BidStorage::store_bid(&env, &bid);
+        BidStorage::update_bid(&env, &bid);
         Ok(())
     }
 

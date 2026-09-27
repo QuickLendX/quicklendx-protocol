@@ -116,7 +116,7 @@ let bid = Bid {
 ### 3. Storage
 ```rust
 BidStorage::store_bid(env, &bid);
-BidStorage::add_bid_to_invoice_index(env, &invoice_id, &bid_id);
+BidStorage::add_bid_to_invoice(env, &invoice_id, &bid_id);
 BidStorage::add_bid_to_investor_index(env, &investor, &bid_id);
 ```
 
@@ -153,6 +153,47 @@ pub fn compare_bids(bid1: &Bid, bid2: &Bid) -> Ordering {
 - **Investor Authorization**: `investor.require_auth()` for bid placement
 - **Business Authorization**: `business.require_auth()` for invoice operations
 - **Admin Authorization**: `AdminStorage::require_admin()` for protocol changes
+
+### Authorization Boundaries (QE-2026-08, issue #2440)
+
+Bid submission, winner selection, and bid withdrawal are the only entry points
+that mutate bid state on a participant's behalf. Each one is gated by a shared
+predicate in `src/bid.rs`, so no entry point - current or future - can write bid
+state without passing the same boundary.
+
+| Boundary | Identity that must sign | Trusted state that must hold | Rejection |
+|---|---|---|---|
+| `require_bid_submission_allowed` | the bid's investor | live `Verified` auction, unfrozen, in-window, and `validate_bid` passes | auth failure, `InvoiceFrozen`, `InvalidStatus`, `Unauthorized`, `InvalidAmount`, `InvoiceAmountInvalid` |
+| `require_auction_selection_allowed` | the invoice's business | caller owns the invoice, auction open, bid compatible | auth failure, `Unauthorized`, `InvoiceAlreadyFunded`, `InvoiceNotAvailableForFunding`, `InvalidStatus`, `OperationNotAllowed`, `BidStale`, `InvoiceAmountInvalid` |
+| `require_bid_withdrawal_allowed` | the bid's investor | the bid is still `Placed` | auth failure, `BidStale` |
+
+Entry-point mapping:
+
+| Entry point | Boundary applied |
+|---|---|
+| `place_bid` | `require_bid_submission_allowed`, then the per-address rate limit, then storage + `BidStorage::add_bid_to_invoice` |
+| `accept_bid` | `require_auction_selection_allowed` before any state moves |
+| `withdraw_bid` | `require_bid_withdrawal_allowed` before the status change |
+| `escrow::load_accept_bid_context` | `verify_bid_match`, shared with selection, so acceptance cannot drift from submission |
+
+* **Identity never comes from a caller argument.** Submission and withdrawal
+  read the investor from the stored bid; selection reads the business from the
+  stored invoice. Naming another address in the call grants nothing.
+* **Cross-tenant rejection precedes mutation.** Ownership is compared against
+  trusted invoice state *before* the signature is evaluated, so a foreign tenant
+  is rejected with `Unauthorized` and no state is written.
+* **No partial state on rejection.** Every guard returns before the first
+  storage write: a denied submission creates no bid and leaves no idempotency
+  marker, a denied selection funds nothing, and a denied withdrawal leaves the
+  bid exactly as it was.
+* **The face-value ceiling is enforced on both sides.** Submission rejects
+  `bid_amount > invoice.amount` with `InvoiceAmountInvalid`; `verify_bid_match`
+  enforces the same ceiling at acceptance, so a bid record written before the
+  ceiling existed still cannot over-fund an invoice.
+* **A missing bid is a typed error.** `accept_bid` reports
+  `StorageKeyNotFound` for an unknown `bid_id` instead of panicking.
+
+The rules above are locked in by `src/test_bid_authorization_boundaries.rs`.
 
 ### Input Validation
 - **Amount Bounds**: Prevents overflow and underflow

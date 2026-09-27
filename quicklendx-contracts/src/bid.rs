@@ -1448,16 +1448,19 @@ impl BidStorage {
 /// 2. The bid is in `Placed` status (not yet Accepted, Cancelled, etc.).
 /// 3. The bid has not expired (`bid.expiration_timestamp > now`).
 /// 4. The bid amount is positive (`bid.bid_amount > 0`).
-/// 5. The bid amount does not exceed the invoice amount.
+/// 5. The bid amount does not exceed the invoice face value
+///    (`bid.bid_amount <= invoice.amount`), the protocol's hard ceiling on a
+///    single financing.
 ///
 /// # Threat mitigated
 ///
 /// Without this explicit precondition check, a caller could attempt to match
-/// a bid that belongs to a different invoice, or one that has already expired
-/// or been cancelled, leading to state corruption or inconsistent accounting.
-/// Each guard returns a distinct typed error so the caller (and any audit
-/// monitor) can distinguish between a wrong-invoice call (`Unauthorized`),
-/// an expired bid (`InvalidStatus`), and a zero-amount bid (`InvalidAmount`).
+/// a bid that belongs to a different invoice, one that has already expired or
+/// been cancelled, or one that is larger than the invoice itself, leading to
+/// state corruption, inconsistent accounting, or an over-funded invoice. Each
+/// guard returns a distinct typed error so the caller (and any audit monitor)
+/// can distinguish a wrong-invoice call (`Unauthorized`) from a stale bid
+/// (`BidStale`) or an out-of-range amount.
 ///
 /// # Errors
 ///
@@ -1465,9 +1468,19 @@ impl BidStorage {
 /// |---|---|
 /// | bid does not reference this invoice | `Unauthorized` |
 /// | bid not in `Placed` state | `InvalidStatus` |
-/// | bid has expired | `InvalidStatus` |
+/// | bid has expired | `BidStale` |
 /// | bid amount ≤ 0 | `InvalidAmount` |
-/// | bid amount > invoice amount | `InvalidAmount` |
+/// | bid amount > invoice amount | `InvoiceAmountInvalid` |
+///
+/// # Compatibility
+///
+/// The `bid amount > invoice amount` row previously documented `InvalidAmount`
+/// while the implementation did not enforce that ceiling at all. The ceiling is
+/// now enforced with `InvoiceAmountInvalid` - the error
+/// `crate::verification::validate_bid` already returns for the same condition at
+/// the submission boundary - so submission and acceptance agree. No other error
+/// mapping changed, and no currently accepted bid becomes invalid: a bid above
+/// the invoice face value was never a valid bid.
 pub fn verify_bid_match(
     env: &Env,
     bid: &Bid,
@@ -1487,6 +1500,186 @@ pub fn verify_bid_match(
 
     if bid.bid_amount <= 0 {
         return Err(QuickLendXError::InvalidAmount);
+    }
+
+    // The invoice face value is the hard ceiling on a single financing.
+    // Without this guard an over-sized bid would pass the match check and fund
+    // the invoice beyond its face value.
+    if bid.bid_amount > invoice.amount {
+        return Err(QuickLendXError::InvoiceAmountInvalid);
+    }
+
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Authorization boundaries for bid submission and auction selection
+// (issue #2440 / QE-2026-08).
+// ---------------------------------------------------------------------------
+//
+// Bid submission, winner selection, and withdrawal are the entry points that
+// mutate bid state on a participant's behalf. Each one is gated here by a
+// shared predicate, so a future entry point cannot reintroduce an ungated write
+// without passing through the same boundary.
+//
+// ### Boundary matrix
+//
+// | Boundary                            | Identity that must sign    | Trusted state that must hold                                                      | Rejection                                                                                             |
+// |-------------------------------------|----------------------------|-----------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------|
+// | `require_bid_submission_allowed`    | the bid's investor         | live `Verified` auction, unfrozen, in-window, and `validate_bid` passes            | auth failure, `InvoiceFrozen`, `InvalidStatus`, `Unauthorized`, `InvalidAmount`, `InvoiceAmountInvalid` |
+// | `require_auction_selection_allowed` | the invoice's **business** | the caller owns the invoice, the auction is still open, the bid is compatible      | auth failure, `Unauthorized`, `InvoiceAlreadyFunded`, `InvoiceNotAvailableForFunding`, `InvalidStatus`, `OperationNotAllowed`, `BidStale`, `InvoiceAmountInvalid` |
+// | `require_bid_withdrawal_allowed`    | the bid's investor         | the bid is still `Placed`                                                          | auth failure, `BidStale`                                                                              |
+//
+// ### Security properties
+//
+// - **Identity is never taken from a caller-supplied argument.** Submission and
+//   withdrawal read the investor from trusted storage (`bid.investor`);
+//   selection reads the business from trusted storage (`invoice.business`). A
+//   caller that merely *names* another address cannot act for it.
+// - **Cross-tenant rejection precedes mutation.** Selection proves the caller
+//   owns the invoice (trusted state) before the signature is evaluated and
+//   before any write.
+// - **No partial state.** Every rejection returns before any storage write, so
+//   a denied or stale call cannot create a bid, fund an invoice, or move a bid
+//   into a terminal state.
+
+/// Authorization and auction-state precondition for bid submission.
+///
+/// # Identity
+///
+/// `investor` must sign. A forged submission - a caller submitting a bid in
+/// another investor's name - is rejected by the host before any state is
+/// touched.
+///
+/// # Trusted state
+///
+/// `invoice` is the record the entry point loaded from
+/// [`crate::storage::InvoiceStorage`]; this helper never trusts a
+/// caller-supplied status, owner, or amount.
+///
+/// # Failure behaviour
+///
+/// Every rejection path returns before any storage write, so a denied
+/// submission leaves the invoice, the per-invoice bid index, and the investor
+/// index untouched.
+pub fn require_bid_submission_allowed(
+    env: &Env,
+    investor: &Address,
+    invoice: &crate::types::Invoice,
+    bid_amount: i128,
+    expected_return: i128,
+) -> Result<(), QuickLendXError> {
+    // 1. Identity.
+    investor.require_auth();
+
+    // 2. A frozen invoice is not an auction, whatever its status field says.
+    require_invoice_not_frozen(env, invoice)?;
+
+    // 3. Economics, ownership, protocol limits, and investor eligibility are
+    //    the canonical submission validator's job. Running it here means the
+    //    placement path cannot diverge from the rules the rest of the protocol
+    //    already assumes it applies, and its rejections happen before any write.
+    crate::verification::validate_bid(env, invoice, bid_amount, expected_return, investor)
+}
+
+/// Reject a frozen invoice, distinguishing an aged admin hold.
+///
+/// A freeze that has outlived `LOCK_TIME_LIMIT_SECONDS` is reported as
+/// `InvoiceLockExpired`, so the caller can tell a live hold apart from a stale
+/// one that should be cleared. Both outcomes return before any mutation.
+fn require_invoice_not_frozen(
+    env: &Env,
+    invoice: &crate::types::Invoice,
+) -> Result<(), QuickLendXError> {
+    if crate::storage::InvoiceStorage::is_frozen(env, &invoice.id) {
+        crate::storage::InvoiceStorage::require_lock_within_time_limit(env, &invoice.id)?;
+        return Err(QuickLendXError::InvoiceFrozen);
+    }
+    Ok(())
+}
+
+/// Shared auction-state guard used by winner selection.
+///
+/// Rejects, in order:
+///
+/// 1. a frozen invoice (`InvoiceFrozen`, or `InvoiceLockExpired` once the hold
+///    has aged past its time limit),
+/// 2. an invoice that already carries funding (`InvoiceAlreadyFunded`),
+/// 3. any invoice that is not `Verified` - `Pending` is not yet an auction and
+///    the terminal states can no longer be funded,
+/// 4. an invoice that already carries funding metadata (`InvalidStatus`,
+///    defence in depth for records written before the status field was
+///    authoritative),
+/// 5. an invoice whose due date has passed (`OperationNotAllowed`), because a
+///    winner chosen after maturity could not be settled in time.
+fn require_invoice_open_for_bidding(
+    env: &Env,
+    invoice: &crate::types::Invoice,
+) -> Result<(), QuickLendXError> {
+    require_invoice_not_frozen(env, invoice)?;
+
+    if invoice.status == crate::types::InvoiceStatus::Funded {
+        return Err(QuickLendXError::InvoiceAlreadyFunded);
+    }
+
+    if invoice.status != crate::types::InvoiceStatus::Verified {
+        return Err(QuickLendXError::InvoiceNotAvailableForFunding);
+    }
+
+    if !invoice.is_available_for_funding() {
+        return Err(QuickLendXError::InvalidStatus);
+    }
+
+    if env.ledger().timestamp() > invoice.due_date {
+        return Err(QuickLendXError::OperationNotAllowed);
+    }
+
+    Ok(())
+}
+
+/// Authorization, tenancy, and state precondition for auction selection
+/// (accepting a winning bid).
+///
+/// # Identity and tenancy
+///
+/// The caller must be the business recorded on `invoice` **and** must sign.
+/// Ownership is compared against trusted invoice state before the signature is
+/// evaluated, so a caller that names another tenant's invoice fails with
+/// `Unauthorized` regardless of who signed the transaction.
+///
+/// # Failure behaviour
+///
+/// Returns before any mutation on every rejection, so a losing or forged
+/// selection cannot accept a bid, fund the invoice, or create an escrow.
+pub fn require_auction_selection_allowed(
+    env: &Env,
+    business: &Address,
+    invoice: &crate::types::Invoice,
+    bid: &Bid,
+) -> Result<(), QuickLendXError> {
+    // 1. Cross-tenant boundary, then identity.
+    crate::invoice::require_matching_business_invoice_ownership(env, business, invoice)?;
+    business.require_auth();
+
+    // 2. Stale-auction boundary.
+    require_invoice_open_for_bidding(env, invoice)?;
+
+    // 3. The winning bid must still be a legal, live bid for this invoice.
+    verify_bid_match(env, bid, invoice)
+}
+
+/// Authorization and lifecycle precondition for withdrawing a bid.
+///
+/// The identity is read from the stored bid, never from a caller argument, so
+/// no third party - not the invoice's business, not the admin - can withdraw,
+/// grief, or freeze another investor's bid.
+pub fn require_bid_withdrawal_allowed(bid: &Bid) -> Result<(), QuickLendXError> {
+    bid.investor.require_auth();
+
+    // Only `Placed -> Withdrawn` is legal. Terminal bids report `BidStale` so a
+    // retry can tell "already gone" apart from a fresh, retryable rejection.
+    if BidStatus::validate_transition(&bid.status, &BidStatus::Withdrawn).is_err() {
+        return Err(QuickLendXError::BidStale);
     }
 
     Ok(())

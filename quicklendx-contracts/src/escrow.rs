@@ -149,13 +149,15 @@ pub(crate) fn load_accept_bid_context(
     require_investor_not_frozen(env, &bid.investor)?;
     require_investor_not_pending(env, &bid.investor)?;
 
-    if bid.is_expired(env.ledger().timestamp()) {
-        return Err(QuickLendXError::BidStale);
-    }
-
-    if bid.bid_amount <= 0 {
-        return Err(QuickLendXError::InvalidAmount);
-    }
+    // Bid/invoice compatibility is re-verified from trusted state at the
+    // actual acceptance boundary (QE-2026-08). Routing this through the single
+    // shared helper keeps winner selection from drifting away from submission
+    // and ranking. Beyond the invoice reference checked above, it rejects
+    // without any state change: a bid that is no longer `Placed`
+    // (`InvalidStatus`), a stale bid (`BidStale`), a non-positive bid
+    // (`InvalidAmount`), and a bid above the invoice face value
+    // (`InvoiceAmountInvalid`).
+    crate::bid::verify_bid_match(env, &bid, &invoice)?;
 
     // Re-verify investor KYC status and aggregate investment capacity before accepting bid.
     validate_investor_investment(env, &bid.investor, 0)?;
