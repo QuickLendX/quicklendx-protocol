@@ -134,10 +134,15 @@ export function isNotModified(
   const ifNoneMatch = req.headers["if-none-match"];
   if (ifNoneMatch) {
     // Support comma-separated list of ETags and the wildcard "*".
+    //
+    // RFC 7232 §3.3 (and this module's policy doc, backend/docs/caching.md):
+    // If-None-Match takes precedence, and a recipient MUST ignore
+    // If-Modified-Since when the request contains If-None-Match. Returning the
+    // ETag verdict directly — instead of falling through to If-Modified-Since on
+    // a mismatch — is what makes that precedence hold for every combination of
+    // the two headers.
     const tags = ifNoneMatch.split(",").map((t) => t.trim());
-    if (tags.includes("*") || tags.includes(etag)) {
-      return true;
-    }
+    return tags.includes("*") || tags.includes(etag);
   }
 
   const ifModifiedSince = req.headers["if-modified-since"];
