@@ -393,6 +393,83 @@ describe("secret-scan-utils", () => {
       nestedTargets.map((target: { relativePath: string }) => target.relativePath)
     ).not.toContain("node_modules/pkg/index.js");
   });
+
+  it("treats identifier-like strings deterministically for valid and invalid boundaries", () => {
+    const valid = [
+      "ExampleKey",
+      "camelCase",
+      "path/to/Value",
+      "my/Path",
+      "aB/C",
+      "aB-C",
+      "getInvoicesQuerySchema",
+    ];
+    const invalid = [
+      "snake_case",
+      "kebab-case",
+      "path/to/value",
+      "A",
+      "AB",
+      "a",
+      "abc",
+      "ABC",
+      "abc123",
+      "abc_def",
+      "123",
+      "a-b",
+      "a_b",
+      "-abc",
+      "abc-",
+      "abc/",
+      "/abc",
+      "abc..def",
+      "abc def",
+      "abc%def",
+      "my--Path",
+      "aB1",
+      "A_B",
+      "x-y-z",
+      "abc/def",
+      "abc__def",
+      "aB_1",
+      "aB/",
+      "aB-",
+      "  leading",
+      "trailing  ",
+      "",
+      null,
+      undefined,
+      true,
+      "aB/C/",
+      "aB--C",
+      "aB__C",
+      "aB..C",
+      "aB//C",
+      "aB--",
+      "-aB",
+      "aB-",
+      "aB/",
+    ];
+
+    for (const value of valid) {
+      expect(secretScanUtils.isIdentifierLikeString(value)).toBe(true);
+    }
+
+    for (const value of invalid) {
+      expect(secretScanUtils.isIdentifierLikeString(value as any)).toBe(false);
+    }
+
+    expect(secretScanUtils.isIdentifierLikeString("aBc")).toBe(true);
+    expect(secretScanUtils.isIdentifierLikeString("Example/Key")).toBe(true);
+    expect(secretScanUtils.isIdentifierLikeString("Example-Key")).toBe(false);
+    expect(secretScanUtils.isIdentifierLikeString("Example_Key")).toBe(false);
+    expect(secretScanUtils.isIdentifierLikeString("Example/Key/")).toBe(false);
+    expect(secretScanUtils.isIdentifierLikeString("Example//Key")).toBe(false);
+    expect(secretScanUtils.isIdentifierLikeString("Example--Key")).toBe(false);
+    expect(secretScanUtils.isIdentifierLikeString("Example__Key")).toBe(false);
+    expect(secretScanUtils.isIdentifierLikeString("Example..Key")).toBe(false);
+    expect(secretScanUtils.isIdentifierLikeString("Example Key")).toBe(false);
+  });
 });
 
 describe("backend security:scan integration", () => {

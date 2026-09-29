@@ -74,12 +74,27 @@ function isHexString(value) {
 }
 
 function isIdentifierLikeString(value) {
-  return (
-    /^[A-Za-z][A-Za-z0-9_$/-]*$/.test(value) &&
-    /[a-z]/.test(value) &&
-    /[A-Z]/.test(value) &&
-    !/[0-9]/.test(value)
-  );
+  if (typeof value !== "string" || value.length === 0) {
+    return false;
+  }
+
+  if (value.trim() !== value) {
+    return false;
+  }
+
+  if (value.length < 2) {
+    return false;
+  }
+
+  if (!/[a-z]/.test(value) || !/[A-Z]/.test(value)) {
+    return false;
+  }
+
+  if (/^(?:[A-Za-z]+(?:\/[A-Za-z]+)*|[A-Za-z]+-[A-Z])$/.test(value)) {
+    return true;
+  }
+
+  return false;
 }
 
 function isObviousPlaceholder(value) {
