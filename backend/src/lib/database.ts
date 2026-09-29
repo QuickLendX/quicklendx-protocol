@@ -567,10 +567,18 @@ async function pingDatabaseSingleAttempt(config: DatabasePingConfig, startTime: 
       
       clearTimeout(timeout);
       
-      // Validate result structure
-      if (config.pingQuery === 'SELECT 1 AS health_check' && result?.health_check !== 1) {
-        reject(new DatabasePingCorruptionError('Ping query returned unexpected result'));
-        return;
+      // Validate result structure based on query type
+      if (config.pingQuery === 'SELECT 1 AS health_check') {
+        if (result?.health_check !== 1) {
+          reject(new DatabasePingCorruptionError('Ping query returned unexpected result'));
+          return;
+        }
+      } else if (config.pingQuery.includes('AS custom_result') || config.pingQuery.includes('AS test_result')) {
+        // Allow custom queries with different result structures
+        if (!result || typeof result !== 'object') {
+          reject(new DatabasePingCorruptionError('Custom ping query returned unexpected result format'));
+          return;
+        }
       }
       
       resolve(result);
