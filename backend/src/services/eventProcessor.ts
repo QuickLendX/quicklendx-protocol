@@ -4,7 +4,7 @@ import { getCorrelationId, withCorrelationId } from '../lib/requestContext';
 
 export class EventProcessor {
   private static instance: EventProcessor;
-  private processedEvents: Set<string>;
+  private processedEvents = new Set<string>();
 
   private eventLog: Array<{ seq: number; id: string; type: string; timestamp: number; correlationId?: string }> = [];
   private sequence: number = 0;
