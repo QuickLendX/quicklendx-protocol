@@ -1,1 +1,256 @@
-LyoqCiAqIFNjb3BlIFJlZ2lzdHJ5IC0gRGVmaW5lcyBhbGwgdmFsaWQgQVBJIGtleSBzY29wZXMKICovCgppbXBvcnQgeyBBZG1pblJvbGUgfSBmcm9tICIuLi90eXBlcy9yYmFjIjsKCmV4cG9ydCBpbnRlcmZhY2UgU2NvcGVEZWZpbml0aW9uIHsKICBzY29wZTogc3RyaW5nOwogIGRlc2NyaXB0aW9uOiBzdHJpbmc7CiAgY2F0ZWdvcnk6ICdyZWFkJyB8ICd3cml0ZScgfCAnYWRtaW4nIHwgJ3NlcnZpY2UnOwp9CgpleHBvcnQgY29uc3QgU0NPUEVfUkVHSVNUUlk6IFNjb3BlRGVmaW5pdGlvbltdID0gWwogIC8vIFJlYWQgc2NvcGVzCiAgewogICAgc2NvcGU6ICdyZWFkOionLAogICAgZGVzY3JpcHRpb246ICdSZWFkIGFjY2VzcyB0byBhbGwgcmVzb3VyY2VzJywKICAgIGNhdGVnb3J5OiAncmVhZCcsCiAgfSwKICB7CiAgICBzY29wZTogJ3JlYWQ6dXNlcnMnLAogICAgZGVzY3JpcHRpb246ICdSZWFkIHVzZXIgaW5mb3JtYXRpb24nLAogICAgY2F0ZWdvcnk6ICdyZWFkJywKICB9LAogIHsKICAgIHNjb3BlOiAncmVhZDpqb2JzJywKICAgIGRlc2NyaXB0aW9uOiAnUmVhZCBqb2IgZGF0YScsCiAgICBjYXRlZ29yeTogJ3JlYWQnLAogIH0sCiAgewogICAgc2NvcGU6ICdyZWFkOmludm9pY2VzJywKICAgIGRlc2NyaXB0aW9uOiAnUmVhZCBpbnZvaWNlIGRhdGEnLAogICAgY2F0ZWdvcnk6ICdyZWFkJywKICB9LAogIHsKICAgIHNjb3BlOiAncmVhZDpiaWRzJywKICAgIGRlc2NyaXB0aW9uOiAnUmVhZCBiaWQgaW5mb3JtYXRpb24nLAogICAgY2F0ZWdvcnk6ICdyZWFkJywKICB9LAogIHsKICAgIHNjb3BlOiAncmVhZDpzZXR0bGVtZW50cycsCiAgICBkZXNjcmlwdGlvbjogJ1JlYWQgc2V0dGxlbWVudCBkYXRhJywKICAgIGNhdGVnb3J5OiAncmVhZCcsCiAgfSwKCiAgLy8gV3JpdGUgc2NvcGVzCiAgewogICAgc2NvcGU6ICd3cml0ZToqJywKICAgIGRlc2NyaXB0aW9uOiAnV3JpdGUgYWNjZXNzIHRvIGFsbCByZXNvdXJjZXMnLAogICAgY2F0ZWdvcnk6ICd3cml0ZScsCiAgfSwKICB7CiAgICBzY29wZTogJ3dyaXRlOnVzZXJzJywKICAgIGRlc2NyaXB0aW9uOiAnQ3JlYXRlIGFuZCB1cGRhdGUgdXNlcnMnLAogICAgY2F0ZWdvcnk6ICd3cml0ZScsCiAgfSwKICB7CiAgICBzY29wZTogJ3dyaXRlOmpvYnMnLAogICAgZGVzY3JpcHRpb246ICdDcmVhdGUgYW5kIHVwZGF0ZSBqb2JzJywKICAgIGNhdGVnb3J5OiAnd3JpdGUnLAogIH0sCiAgewogICAgc2NvcGU6ICd3cml0ZTppbnZvaWNlcycsCiAgICBkZXNjcmlwdGlvbjogJ0NyZWF0ZSBhbmQgdXBkYXRlIGludm9pY2VzJywKICAgIGNhdGVnb3J5OiAnd3JpdGUnLAogIH0sCiAgewogICAgc2NvcGU6ICd3cml0ZTpiaWRzJywKICAgIGRlc2NyaXB0aW9uOiAnQ3JlYXRlIGFuZCB1cGRhdGUgYmlkcycsCiAgICBjYXRlZ29yeTogJ3dyaXRlJywKICB9LAogIHsKICAgIHNjb3BlOiAnd3JpdGU6c2V0dGxlbWVudHMnLAogICAgZGVzY3JpcHRpb246ICdDcmVhdGUgYW5kIHVwZGF0ZSBzZXR0bGVtZW50cycsCiAgICBjYXRlZ29yeTogJ3dyaXRlJywKICB9LAoKICAvLyBBZG1pbiBzY29wZXMKICB7CiAgICBzY29wZTogJ2FkbWluOmtleXMnLAogICAgZGVzY3JpcHRpb246ICdDcmVhdGUsIHJvdGF0ZSwgYW5kIHJldm9rZSBBUEkga2V5cycsCiAgICBjYXRlZ29yeTogJ2FkbWluJywKICB9LAogIHsKICAgIHNjb3BlOiAnYWRtaW46KicsCiAgICBkZXNjcmlwdGlvbjogJ0Z1bGwgYWRtaW5pc3RyYXRpdmUgYWNjZXNzJywKICAgIGNhdGVnb3J5OiAnYWRtaW4nLAogIH0sCgogIC8vIFNlcnZpY2Ugc2NvcGVzCiAgewogICAgc2NvcGU6ICdzZXJ2aWNlOmluZ2VzdCcsCiAgICBkZXNjcmlwdGlvbjogJ0RhdGEgaW5nZXN0aW9uIHNlcnZpY2UgYWNjZXNzJywKICAgIGNhdGVnb3J5OiAnc2VydmljZScsCiAgfSwKICB7CiAgICBzY29wZTogJ3NlcnZpY2U6ZXhwb3J0JywKICAgIGRlc2NyaXB0aW9uOiAnRGF0YSBleHBvcnQgc2VydmljZSBhY2Nlc3MnLAogICAgY2F0ZWdvcnk6ICdzZXJ2aWNlJywKICB9LAogIHsKICAgIHNjb3BlOiAnc2VydmljZTphbmFseXRpY3MnLAogICAgZGVzY3JpcHRpb246ICdBbmFseXRpY3Mgc2VydmljZSBhY2Nlc3MnLAogICAgY2F0ZWdvcnk6ICdzZXJ2aWNlJywKICB9LAogIHsKICAgIHNjb3BlOiAnc2VydmljZTpub3RpZmljYXRpb25zJywKICAgIGRlc2NyaXB0aW9uOiAnTm90aWZpY2F0aW9uIHNlcnZpY2UgYWNjZXNzJywKICAgIGNhdGVnb3J5OiAnc2VydmljZScsCiAgfSwKXTsKCi8qKgogKiBJbnZhcmlhbnRzIGVuZm9yY2VkIGJ5IHRoaXMgbW9kdWxlOgogKiAgMS4gU0NPUEVfUkVHSVNUUlkgY29udGFpbnMgb25seSBub24tZW1wdHksIHRyaW1tZWQgc2NvcGUgc3RyaW5ncy4KICogIDIuIFNjb3BlIG5hbWVzIGFyZSB1bmlxdWUgYWNyb3NzIHRoZSByZWdpc3RyeS4KICogIDMuIGdldFZhbGlkU2NvcGVzKCkgcmV0dXJucyBhIGRldGVybWluaXN0aWMsIGRlZmVuc2l2ZWx5LWNvcGllZCBhcnJheQogKiAgICAgd2hvc2Ugb3JkZXIgbWF0Y2hlcyBTQ09QRV9SRUdJU1RSWSBhbmQgd2hvc2UgbXV0YXRpb24gYnkgY2FsbGVycwogKiAgICAgY2Fubm90IGNvcnJ1cHQgdGhlIHVuZGVybHlpbmcgcmVnaXN0cnkgb3Igc3Vic2VxdWVudCBjYWxscy4KICogIDQuIEZhaWx1cmVzIGluIGdldFZhbGlkU2NvcGVzIGFyZSBzdXJmYWNlZCBhcyBhIHR5cGVkIFNjb3BlUmVnaXN0cnlFcnJvcgogKiAgICAgd2l0aCBhIHN0YWJsZSBjb2RlIGFuZCBhIG5vbi1zZW5zaXRpdmUgbWVzc2FnZTsgbm8gc2lsZW50IGRlZ3JhZGF0aW9uLgogKi8KCi eightLyoqCiAqIFN0YWJsZSBlcnJvciBjb2RlcyBmb3Igc2NvcGUgcmVnaXN0cnkgZmFpbHVyZXMuCiAqLwpleHBvcnQgdHlwZSBTY29wZVJlZ2lzdHJ5RXJyb3JDb2RlID0KICB8ICdSRUdJU1RSWV9OT1RfQVJSQVknCiAgfCAnUkVHSVNUUllfRU5UUllfTk9UX09CSkVDVCcKICB8ICdSRUdJU1RSWV9FTVBUWV9TQ09QRScKICB8ICdSRUdJU1RSWV9EVVBMSUNBVEVfU0NPUEUnCiAgfCAnUkVHSVNUUllfVU5UUkFNTUVEX1NDT1BFJzsKCi eightLyoqCiAqIFR5cGVkIGVycm9yIHRocm93biB3aGVuIHRoZSBzY29wZSByZWdpc3RyeSBpcyBpbiBhbiBpbnZhbGlkIHN0YXRlLgogKiBUaGUgbWVzc2FnZSBpcyBkZWxpYmVyYXRlbHkgZ2VuZXJpYyBhbmQgZG9lcyBub3QgZWNobyB1c2VyIGlucHV0LgogKi8KZXhwb3J0IGNsYXNzIFNjb3BlUmVnaXN0cnlFcnJvciBleHRlbmRzIEVycm9yIHsKICBwdWJsaWMgcmVhZG9ubHkgY29kZTogU2NvcGVSZWdpc3RyeUVycm9yQ29kZTsKCiAgY29uc3RydWN0b3IoY29kZTogU2NvcGVSZWdpc3RyeUVycm9yQ29kZSwgbWVzc2FnZTogc3RyaW5nKSB7CiAgICBzdXBlcihtZXNzYWdlKTsKICAgIHRoaXMubmFtZSA9ICdTY29wZVJlZ2lzdHJ5RXJyb3InOwogICAgdGhpcy5jb2RlID0gY29kZTsKICAgIC8vIEVuc3VyZSBwcm90b3R5cGUgY2hhaW4gaXMgY29ycmVjdCB3aGVuIHRyYW5zcGlsZWQgdG8gRVM1LgogICAgT2JqZWN0LnNldFByb3RvdHlwZU9mKHRoaXMsIFNjb3BlUmVnaXN0cnlFcnJvci5wcm90b3R5cGUpOwogIH0KfQoKZnVuY3Rpb24gaXNOb25FbXB0eVN0cmluZyh2YWx1ZTogdW5rbm93bik6IHZhbHVlIGlzIHN0cmluZyB7CiAgcmV0dXJuIHR5cGVvZiB2YWx1ZSA9PT0gJ3N0cmluZycgJiYgdmFsdWUudHJpbSgpLmxlbmd0aCA+IDA7Cn0KCi eightLyoqCiAqIFZhbGlkYXRlIHRoZSBzdGF0aWMgc2NvcGUgcmVnaXN0cnkgYW5kIHJldHVybiBhIGRlZmVuc2l2ZSBjb3B5IG9mIHRoZQogKiBub3JtYWxpemVkIHNjb3BlIG5hbWVzIGluIHJlZ2lzdHJ5IG9yZGVyLgogKgogKiBUaGlzIGZ1bmN0aW9uIGlzIHB1cmUgYW5kIGRldGVybWluaXN0aWM6IGZvciBhIGdpdmVuIFNDT1BFX1JFR0lTVFJZIGl0CiAqIGFsd2F5cyByZXR1cm5zIHRoZSBzYW1lIGFycmF5IGNvbnRlbnRzIGFuZCBvcmRlciwgYW5kIGl0IG5ldmVyIG11dGF0ZXMKICogdGhlIHJlZ2lzdHJ5IG9yIHRoZSBjYWxsZXIncyBpbnB1dHMuIEl0IGZhaWxzIGxvdWQgd2l0aCBhIHR5cGVkIGVycm9yCiAqIGlmIHRoZSByZWdpc3RyeSBpcyBjb3JydXB0ZWQgKG5vbi1hcnJheSwgbm9uLW9iamVjdCBlbnRyaWVzLCBlbXB0eSBvcgogKiB1bnRyaW1tZWQgc2NvcGUgbmFtZXMsIG9yIGR1cGxpY2F0ZXMpIHNvIHRoYXQgbWlzY29uZmlndXJhdGlvbiBjYW5ub3QKICogc2lsZW50bHkgd2Vha2VuIGF1dGhvcml6YXRpb24gY2hlY2tzLgogKi8KZXhwb3J0IGZ1bmN0aW9uIGdldFZhbGlkU2NvcGVzKCk6IHN0cmluZ1tdIHsKICBpZiAoIUFycmF5LmlzQXJyYXkoU0NPUEVfUkVHSVNUUlkpKSB7CiAgICB0aHJvdyBuZXcgU2NvcGVSZWdpc3RyeUVycm9yKAogICAgICAnUkVHSVNUUllfTk9UX0FSUkFZJywKICAgICAgJ1Njb3BlIHJlZ2lzdHJ5IGlzIG5vdCBhbiBhcnJheScsCiAgICApOwogIH0KCiAgY29uc3Qgc2VlbjogeyBba2V5OiBzdHJpbmddOiB0cnVlIH0gPSBPYmplY3QuY3JlYXRlKG51bGwpIGFzIHsgW2tleTogc3RyaW5nXTogdHJ1ZSB9OwogIGNvbnN0IHJlc3VsdDogc3RyaW5nW10gPSBbXTsKCiAgZm9yIChjb25zdCBlbnRyeSBvZiBTQ09QRV9SRUdJU1RSWSkgewogICAgaWYgKGVudHJ5ID09PSBudWxsIHx8IHR5cGVvZiBlbnRyeSAhPT0gJ29iamVjdCcpIHsKICAgICAgdGhyb3cgbmV3IFNjb3BlUmVnaXN0cnlFcnJvcigKICAgICAgICAnUkVHSVNUUllfRU5UUllfTk9UX09CSkVDVCcsCiAgICAgICAgJ1Njb3BlIHJlZ2lzdHJ5IGVudHJ5IGlzIG5vdCBhbiBvYmplY3QnLAogICAgICApOwogICAgfQoKICAgIGNvbnN0IHJhd1Njb3BlID0gKGVudHJ5IGFzIFNjb3BlRGVmaW5pdGlvbikuc2NvcGU7CiAgICBpZiAoIWlzTm9uRW1wdHlTdHJpbmcocmF3U2NvcGUpKSB7CiAgICAgIHRocm93IG5ldyBTY29wZVJlZ2lzdHJ5RXJyb3IoCiAgICAgICAgJ1JFR0lTVFJZX0VNUFRZX1NDT1BFJywKICAgICAgICAnU2NvcGUgcmVnaXN0cnkgY29udGFpbnMgYW4gZW1wdHkgc2NvcGUgbmFtZScsCiAgICAgICk7CiAgICB9CgogICAgY29uc3Qgbm9ybWFsaXplZCA9IHJhd1Njb3BlLnRyaW0oKTsKICAgIGlmIChub3JtYWxpemVkICE9PSByYXdTY29wZSkgewogICAgICB0aHJvdyBuZXcgU2NvcGVSZWdpc3RyeUVycm9yKAogICAgICAgICdSRUdJU1RSWV9VTlRSQU1NRURfU0NPUEUnLAogICAgICAgICdTY29wZSByZWdpc3RyeSBjb250YWlucyBhbiB1bnRyaW1tZWQgc2NvcGUgbmFtZScsCiAgICAgICk7CiAgICB9CgogICAgaWYgKHNlZW5bbm9ybWFsaXplZF0pIHsKICAgICAgdGhyb3cgbmV3IFNjb3BlUmVnaXN0cnlFcnJvcigKICAgICAgICAnUkVHSVNUUllfRFVQTElDQVRFX1NDT1BFJywKICAgICAgICAnU2NvcGUgcmVnaXN0cnkgY29udGFpbnMgZHVwbGljYXRlIHNjb3BlIG5hbWVzJywKICAgICAgKTsKICAgIH0KCiAgICBzZWVuW25vcm1hbGl6ZWRdID0gdHJ1ZTsKICAgIHJlc3VsdC5wdXNoKG5vcm1hbGl6ZWQpOwogIH0KCiAgcmV0dXJuIHJlc3VsdDsKfQoK eightLyoqCiAqIENoZWNrIGlmIGEgc2NvcGUgaXMgdmFsaWQKICovCmV4cG9ydCBmdW5jdGlvbiBpc1ZhbGlkU2NvcGUoc2NvcGU6IHN0cmluZyk6IGJvb2xlYW4gewogIGlmICh0eXBlb2Ygc2NvcGUgIT09ICdzdHJpbmcnKSByZXR1cm4gZmFsc2U7CiAgcmV0dXJuIFNDT1BFX1JFR0lTVFJZLnNvbWUocyA9PiBzLnNjb3BlID09PSBzY29wZSk7Cn0KCi eightLyoqCiAqIFZhbGlkYXRlIGFuIGFycmF5IG9mIHNjb3BlcwogKi8KZXhwb3J0IGZ1bmN0aW9uIHZhbGlkYXRlU2NvcGVzKHNjb3Blczogc3RyaW5nW10pOiB7IHZhbGlkOiBib29sZWFuOyBpbnZhbGlkOiBzdHJpbmdbXSB9IHsKICBpZiAoIUFycmF5LmlzQXJyYXkoc2NvcGVzKSkgewogICAgcmV0dXJuIHsgdmFsaWQ6IGZhbHNlLCBpbnZhbGlkOiBbXSB9OwogIH0KICBjb25zdCBpbnZhbGlkID0gc2NvcGVzLmZpbHRlcihzY29wZSA9PiAhaXNWYWxpZFNjb3BlKHNjb3BlKSk7CiAgcmV0dXJuIHsKICAgIHZhbGlkOiBpbnZhbGlkLmxlbmd0aCA9PT0gMCwKICAgIGludmFsaWQsCiAgfTsKfQoK eightLyoqCiAqIENoZWNrIGlmIGEgc2V0IG9mIGdyYW50ZWQgc2NvcGVzIHNhdGlzZmllcyByZXF1aXJlZCBzY29wZXMKICogU3VwcG9ydHMgd2lsZGNhcmQgbWF0Y2hpbmcgKGUuZy4sIHJlYWQ6KiBtYXRjaGVzIHJlYWQ6dXNlcnMpCiAqLwpleHBvcnQgZnVuY3Rpb24gaGFzUmVxdWlyZWRTY29wZXMoZ3JhbnRlZFNjb3Blczogc3RyaW5nW10sIHJlcXVpcmVkU2NvcGVzOiBzdHJpbmdbXSk6IGJvb2xlYW4gewogIC8vIENoZWNrIGZvciBhZG1pbjoqIHdoaWNoIGdyYW50cyBldmVyeXRoaW5nCiAgaWYgKGdyYW50ZWRTY29wZXMuaW5jbHVkZXMoJ2FkbWluOionKSkgewogICAgcmV0dXJuIHRydWU7CiAgfQoKICBmb3IgKGNvbnN0IHJlcXVpcmVkIG9mIHJlcXVpcmVkU2NvcGVzKSB7CiAgICBjb25zdCBbY2F0ZWdvcnldID0gcmVxdWlyZWQuc3BsaXQoJzonKTsKCiAgICAvLyBDaGVjayBmb3IgZXhhY3QgbWF0Y2gKICAgIGlmIChncmFudGVkU2NvcGVzLmluY2x1ZGVzKHJlcXVpcmVkKSkgewogICAgICBjb250aW51ZTsKICAgIH0KCiAgICAvLyBDaGVjayBmb3Igd2lsZGNhcmQgbWF0Y2ggKGUuZy4sIHJlYWQ6KiBjb3ZlcnMgcmVhZDp1c2VycykKICAgIGNvbnN0IHdpbGRjYXJkU2NvcGUgPSBgJHtjYXRlZ29yeX06KmA7CiAgICBpZiAoZ3JhbnRlZFNjb3Blcy5pbmNsdWRlcyh3aWxkY2FyZFNjb3BlKSkgewogICAgICBjb250aW51ZTsKICAgIH0KCiAgICAvLyBSZXF1aXJlZCBzY29wZSBub3QgZm91bmQKICAgIHJldHVybiBmYWxzZTsKICB9CgogIHJldHVybiB0cnVlOwp9CgpleHBvcnQgZnVuY3Rpb24gZ2V0U2NvcGVzQnlDYXRlZ29yeShjYXRlZ29yeTogU2NvcGVEZWZpbml0aW9uWydjYXRlZ29yeSddKTogU2NvcGVEZWZpbml0aW9uW10gewogIHJldHVybiBTQ09QRV9SRUdJU1RSWS5maWx0ZXIocyA9PiBzLmNhdGVnb3J5ID09PSBjYXRlZ29yeSk7Cn0KCi eightLyoqCiAqIE1hcCBhIHNldCBvZiBncmFudGVkIHNjb3BlcyB0byBhbiBhZG1pbmlzdHJhdGl2ZSByb2xlLgogKiBSZXR1cm5zIGFuIGBBZG1pblJvbGVgIHN0cmluZyB3aGVuIHRoZSBzY29wZXMgY29uZmVyIGFkbWluIHByaXZpbGVnZXMsCiAqIG9yIGBudWxsYCB3aGVuIG5vIGFkbWluaXN0cmF0aXZlIHJvbGUgaXMgaW1wbGllZC4KICovCmV4cG9ydCBmdW5jdGlvbiByb2xlRnJvbVNjb3BlcyhncmFudGVkU2NvcGVzOiBzdHJpbmdbXSk6IEFkbWluUm9sZSB8IG51bGwgewogIC8vIEZ1bGwgYWRtaW4gZ3JhbnRzIGhpZ2hlc3QgcHJpdmlsZWdlCiAgaWYgKGdyYW50ZWRTY29wZXMuaW5jbHVkZXMoJ2FkbWluOionKSkgcmV0dXJuICdzdXBlcl9hZG1pbic7CgogIC8vIE9wZXJhdGlvbnMtbGV2ZWwgcHJpdmlsZWdlczogbWFuYWdlbWVudCBzY29wZXMgb3Igd3JpdGU6KgogIGlmIChncmFudGVkU2NvcGVzLmluY2x1ZGVzKCd3cml0ZToqJykgfHwgZ3JhbnRlZFNjb3Blcy5pbmNsdWRlcygnYWRtaW46a2V5cycpKSB7CiAgICByZXR1cm4gJ29wZXJhdGlvbnNfYWRtaW4nOwogIH0KCiAgLy8gU3VwcG9ydC1sZXZlbCBwcml2aWxlZ2VzOiByZWFkIGFjY2VzcwogIGlmIChncmFudGVkU2NvcGVzLmluY2x1ZGVzKCdyZWFkOionKSkgcmV0dXJuICdzdXBwb3J0JzsKCiAgcmV0dXJuIG51bGw7Cn0K
+/**
+ * Scope Registry - Defines all valid API key scopes
+ */
+
+import { AdminRole } from "../types/rbac";
+
+export interface ScopeDefinition {
+  scope: string;
+  description: string;
+  category: 'read' | 'write' | 'admin' | 'service';
+}
+
+export const SCOPE_REGISTRY: ScopeDefinition[] = [
+  // Read scopes
+  {
+    scope: 'read:*',
+    description: 'Read access to all resources',
+    category: 'read',
+  },
+  {
+    scope: 'read:users',
+    description: 'Read user information',
+    category: 'read',
+  },
+  {
+    scope: 'read:jobs',
+    description: 'Read job data',
+    category: 'read',
+  },
+  {
+    scope: 'read:invoices',
+    description: 'Read invoice data',
+    category: 'read',
+  },
+  {
+    scope: 'read:bids',
+    description: 'Read bid information',
+    category: 'read',
+  },
+  {
+    scope: 'read:settlements',
+    description: 'Read settlement data',
+    category: 'read',
+  },
+
+  // Write scopes
+  {
+    scope: 'write:*',
+    description: 'Write access to all resources',
+    category: 'write',
+  },
+  {
+    scope: 'write:users',
+    description: 'Create and update users',
+    category: 'write',
+  },
+  {
+    scope: 'write:jobs',
+    description: 'Create and update jobs',
+    category: 'write',
+  },
+  {
+    scope: 'write:invoices',
+    description: 'Create and update invoices',
+    category: 'write',
+  },
+  {
+    scope: 'write:bids',
+    description: 'Create and update bids',
+    category: 'write',
+  },
+  {
+    scope: 'write:settlements',
+    description: 'Create and update settlements',
+    category: 'write',
+  },
+
+  // Admin scopes
+  {
+    scope: 'admin:keys',
+    description: 'Create, rotate, and revoke API keys',
+    category: 'admin',
+  },
+  {
+    scope: 'admin:*',
+    description: 'Full administrative access',
+    category: 'admin',
+  },
+
+  // Service scopes
+  {
+    scope: 'service:ingest',
+    description: 'Data ingestion service access',
+    category: 'service',
+  },
+  {
+    scope: 'service:export',
+    description: 'Data export service access',
+    category: 'service',
+  },
+  {
+    scope: 'service:analytics',
+    description: 'Analytics service access',
+    category: 'service',
+  },
+  {
+    scope: 'service:notifications',
+    description: 'Notification service access',
+    category: 'service',
+  },
+];
+
+/**
+ * Error thrown when the scope registry is invalid or corrupted.
+ * This is a fail-fast guard: a corrupt registry must never silently
+ * produce a partial or non-deterministic scope list.
+ */
+export class ScopeRegistryError extends Error {
+  readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'ScopeRegistryError';
+    this.code = code;
+  }
+}
+
+/**
+ * Invariants: the scope registry must be non-empty, contain only non-empty
+ * string scopes, and be free of duplicates. Violations are fail-fast.
+ */
+function assertRegistryInvariants(registry: readonly ScopeDefinition[]): void {
+  if (!Array.isArray(registry) || registry.length === 0) {
+    throw new ScopeRegistryError('EMPTY_REGISTRY', 'Scope registry is empty');
+  }
+
+  const seen = new Set<string>();
+  for (const entry of registry) {
+    if (!entry || typeof entry.scope !== 'string' || entry.scope.length === 0) {
+      throw new ScopeRegistryError('INVALID_SCOPE_ENTRY', 'Scope registry contains an invalid entry');
+    }
+    if (seen.has(entry.scope)) {
+      throw new ScopeRegistryError('DUPLICATE_SCOPE', `Duplicate scope definition: ${entry.scope}`);
+    }
+    seen.add(entry.scope);
+  }
+}
+
+/**
+ * Get all valid scope names.
+ *
+ * Deterministic contract:
+ * - Returns a new array in registry declaration order (stable across calls).
+ * - Returns a defensive copy so callers cannot mutate internal state.
+ * - Fails fast with `ScopeRegistryError` if the registry is corrupt.
+ * - Never returns a duplicate or empty string entry.
+ */
+export function getValidScopes(): string[] {
+  assertRegistryInvariants(SCOPE_REGISTRY);
+  return SCOPE_REGISTRY.map(s => s.scope);
+}
+
+/**
+ * Check if a scope is valid
+ */
+export function isValidScope(scope: string): boolean {
+  if (typeof scope !== 'string' || scope.length === 0) {
+    return false;
+  }
+  return SCOPE_REGISTRY.some(s => s.scope === scope);
+}
+
+/**
+ * Validate an array of scopes.
+ *
+ * Invariants:
+ * - Order of `invalid` mirrors input order (deterministic).
+ * - Duplicate invalid entries are de-duplicated in the reported list.
+ * - Non-array input is rejected as invalid rather than throwing.
+ */
+export function validateScopes(scopes: string[]): { valid: boolean; invalid: string[] } {
+  if (!Array.isArray(scopes)) {
+    return { valid: false, invalid: [] };
+  }
+
+  const invalidSet = new Set<string>();
+  const invalid: string[] = [];
+  for (const scope of scopes) {
+    if (!isValidScope(scope) && !invalidSet.has(Scope)) {
+      invalidSet.add(scope);
+      invalid.push(scope);
+    }
+  }
+
+  return {
+    valid: invalid.length === 0,
+    invalid,
+  };
+}
+
+/**
+ * Check if a set of granted scopes satisfies required scopes
+ * Supports wildcard matching (e.g., read:* matches read:users)
+ */
+export function hasRequiredScopes(grantedScopes: string[], requiredScopes: string[]): boolean {
+  // Check for admin:* which grants everything
+  if (grantedScopes.includes('admin:*')) {
+    return true;
+  }
+
+  for (const required of requiredScopes) {
+    const [category, resource] = required.split(':');
+    
+    // Check for exact match
+    if (grantedScopes.includes(required)) {
+      continue;
+    }
+
+    // Check for wildcard match (e.g., read:* covers read:users)
+    const wildcardScope = `${category}:*`;
+    if (grantedScopes.includes(wildcardScope)) {
+      continue;
+    }
+
+    // Required scope not found
+    return false;
+  }
+
+  return true;
+}
+
+/**
+ * Get scope definitions by category
+ */
+export function getScopesByCategory(category: ScopeDefinition['category']): ScopeDefinition[] {
+  return SCOPE_REGISTRY.filter(s => s.category === category);
+}
+
+/**
+ * Map a set of granted scopes to an administrative role.
+ * Returns an `AdminRole` string when the scopes confer admin privileges,
+ * or `null` when no administrative role is implied.
+ */
+export function roleFromScopes(grantedScopes: string[]): AdminRole | null {
+  // Full admin grants highest privilege
+  if (grantedScopes.includes('admin:*')) return 'super_admin';
+
+  // Operations-level privileges: management scopes or write:*
+  if (grantedScopes.includes('write:*') || grantedScopes.includes('admin:keys')) {
+    return 'operations_admin';
+  }
+
+  // Support-level privileges: read access
+  if (grantedScopes.includes('read:*')) return 'support';
+
+  return null;
+}
