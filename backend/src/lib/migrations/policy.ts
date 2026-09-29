@@ -63,6 +63,26 @@ export class MigrationPolicy {
   }
 }
 
+/**
+ * Structured logging helper. Emits a single JSON line to stderr with a stable
+ * shape so operators and tests can assert on failure boundaries without parsing
+ * free-text. Sensitive details (connection strings, paths) are not included.
+ */
+function logFailure(event: string, details: Record<string, unknown> = {}): void {
+  const payload = { level: "error", event, ...details };
+  console.error(JSON.stringify(payload));
+}
+
+function toErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (typeof err === "string") return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return "Unknown error";
+  }
+}
+
 export async function migrateCommand(args: Record<string, unknown>): Promise<{
   success: boolean;
   message: string;
@@ -80,35 +100,47 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
   } = args as MigrateArgs;
 
   if (check) {
-    const fileValid = await validateMigrationFiles();
-    const fileMigs = await loadMigrationsFromFS();
-    const appliedVersions = await getAppliedVersions();
-    const missing = fileMigs.filter((m) => !appliedVersions.includes(m.version));
-    const valid = fileValid.valid && missing.length === 0;
-    const errors = [
-      ...fileValid.errors,
-      ...missing.map((m) => `Migration ${m.version}_${m.name} is not applied`),
-    ];
+    try {
+      const fileValid = await validateMigrationFiles();
+      const fileMigs = await loa`MigrationsFromFS();
+      const appliedVersions = await getAppliedVersions();
+      const missing = fileMigs.filter((m) => !appliedVersions.includes(m.version));
+      const valid = fileValid.valid && missing.length === 0;
+      const errors = [
+        ...fileValid.errors,
+        ...missing.map((m) => `Migration ${m.version}_${m.name} is not applied`),
+      ];
 
-    if (!valid) {
-      console.error("❌ Migration check failed:");
-      errors.forEach((e) => console.error(`   ${e}`));
-      return { success: false, message: "Migrations out of sync or invalid" };
+      if (!valid) {
+        logFailure("migration_check_failed", { errorCount: errors.length });
+        errors.forEach((e) => console.error(`   ${e}`));
+        return { success: false, message: "Migrations out of sync or invalid" };
+      }
+      console.log("✅ Migrations are in sync");
+      return { success: true, message: "Migrations valid" };
+    } catch (err) {
+      const message = toErrorMessage(err);
+      logFailure("migration_check_error", { message });
+      return { success: false, message: `Migration check error: ${message}` };
     }
-    console.log("✅ Migrations are in sync");
-    return { success: true, message: "Migrations valid" };
   }
 
   if (validateOnly) {
-    const migrations = (await loadMigrationsFromFS()).map((m) => m.content);
-    const result = await MigrationPolicy.dryRun(migrations, { force: emergency });
-    if (!result.valid) {
-      console.error("❌ Migration validation failed:");
-      result.errors.forEach((e) => console.error(`   ${e}`));
-      return { success: false, message: "Validation errors" };
+    try {
+      const migrations = (await loadMigrationsFromFS()).map((m) => m.content);
+      const result = await MigrationPolicy.dryRun(migrations, { force: emergency });
+      if (!result.valid) {
+        logFailure("migration_validation_failed", { errorCount: result.errors.length });
+        result.errors.forEach((e) => console.error(`   ${e}`));
+        return { success: false, message: "Validation errors" };
+      }
+      console.log("✅ All migration files are valid");
+      return { success: true, message: "Validation passed" };
+    } catch (err) {
+      const message = toErrorMessage(err);
+      logFailure("migration_validation_error", { message });
+      return { success: false, message: `Validation error: ${message}` };
     }
-    console.log("✅ All migration files are valid");
-    return { success: true, message: "Validation passed" };
   }
 
   if (allowDown && !emergency) {
@@ -141,9 +173,10 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
       applied: result.applied.length,
       skipped: result.skipped,
     };
-  } catch (err: any) {
-    console.error("❌ Migration failed:", err.message);
-    return { success: false, message: `Migration error: ${err.message}` };
+  } catch (err) {
+    const message = toErrorMessage(err);
+    logFailure("migration_run_failed", { message, dryRun });
+    return { success: false, message: `Migration error: ${message}` };
   }
 }
 
@@ -192,8 +225,9 @@ export async function migrateDownCommand(args: Record<string, unknown>): Promise
       applied: result.applied.length,
       skipped: result.skipped,
     };
-  } catch (err: any) {
-    console.error("❌ Migration rollback failed:", err.message);
-    return { success: false, message: `Rollback error: ${err.message}` };
+  } catch (err) {
+    const message = toErrorMessage(err);
+    logFailure("migration_rollback_failed", { message, dryRun });
+    return { success: false, message: `Rollback error: ${message}` };
   }
 }
