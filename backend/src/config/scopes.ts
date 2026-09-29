@@ -165,9 +165,64 @@ export function hasRequiredScopes(grantedScopes: string[], requiredScopes: strin
 }
 
 /**
- * Get scope definitions by category
+ * The canonical set of scope categories. This is the single source of truth
+ * for what constitutes a valid category and is used at runtime to validate
+ * inputs to getScopesByCategory. It is derived from the ScopeDefinition
+ * type so the two cannot drift apart.
+ */
+export const SCOPE_CATEGORIES = ['read', 'write', 'admin', 'service'] as const satisfies ReadonlyArray<ScopeDefinition['category']>;
+
+export type ScopeCategory = (typeof SCOPE_CATEGORIES)[number];
+
+/**
+ * Error thrown when getScopesByCategory receives an unsupported category.
+ *
+ * This is a deterministic, typed failure boundary: callers can catch it
+ * and map it to a 400 response without exposing internal state. The error
+ * message is static and never echoes the raw input, so it cannot be
+ * used for log injection or to leak attacker-controlled data.
+ */
+export class InvalidScopeCategoryError extends Error {
+  readonly code = 'INVALID_SCOPE_CATEGORY' as const;
+  readonly category: unknown;
+
+  constructor(category: unknown) {
+    super(`Unknown scope category: ${SCOPE_CATEGORIES.join(', ')} are the only valid categories`);
+    this.name = 'InvalidScopeCategoryError';
+    this.category = category;
+    // Restore prototype chain for TS/Babel downlevel targets.
+    Object.setPrototypeOf(this, InvalidScopeCategoryError.prototype);
+  }
+}
+
+/**
+ * Runtime type guard for a valid scope category.
+ */
+export function isScopeCategory(value: unknown): value is ScopeCategory {
+  return (typeof value === 'string') && (SCOPE_CATEGORIES as readonly string[]).includes(value);
+}
+
+/**
+ * Get scope definitions by category.
+ *
+ * Invariants:
+*  - The returned array is always a fresh array (never a reference to
+ *    the internal SCOPE_REGISTRY), so callers cannot mutate registry state.
+ *  - Elements are the canonical ScopeDefinition objects; they are treated
+ *    as immutable by convention and the registry is not mutated at
+ *    runtime.
+ *  - Ordering matches SCOPE_REGISTRY declaration order, making the
+ *    result deterministic and reproducible across runs and processes.
+ *  - Invalid or unknown categories throw InvalidScopeCategoryError rather
+ *    than silently returning an empty array, which would hide caller bugs
+ *    and could lead to authorization decisions based on missing data.
  */
 export function getScopesByCategory(category: ScopeDefinition['category']): ScopeDefinition[] {
+  if (!isScopeCategory(category)) {
+    throw new InvalidScopeCategoryError(category);
+  }
+
+  // Always return a fresh array so callers cannot corrupt the registry.
   return SCOPE_REGISTRY.filter(s => s.category === category);
 }
 
