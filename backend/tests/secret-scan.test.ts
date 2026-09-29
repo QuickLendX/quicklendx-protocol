@@ -393,6 +393,84 @@ describe("secret-scan-utils", () => {
       nestedTargets.map((target: { relativePath: string }) => target.relativePath)
     ).not.toContain("node_modules/pkg/index.js");
   });
+
+  describe("failure boundaries in collectHighEntropyMatches", () => {
+    it("handles invalid inputs deterministically without throwing", () => {
+      // Validates graceful failure and input validation rules
+      expect(secretScanUtils.collectHighEntropyMatches(null)).toEqual([]);
+      expect(secretScanUtils.collectHighEntropyMatches(undefined)).toEqual([]);
+      expect(secretScanUtils.collectHighEntropyMatches(123)).toEqual([]);
+      expect(secretScanUtils.collectHighEntropyMatches({})).toEqual([]);
+      expect(secretScanUtils.collectHighEntropyMatches([])).toEqual([]);
+    });
+
+    it("survives unexpected inner failures from regex or validation (partial failure recovery)", () => {
+      const originalIsHighEntropyToken = secretScanUtils.isHighEntropyToken;
+      
+      try {
+        // Force a throw when evaluating one of the tokens
+        let calls = 0;
+        secretScanUtils.isHighEntropyToken = (val: string) => {
+          calls++;
+          if (calls === 1) throw new Error("Simulated transient failure");
+          return originalIsHighEntropyToken(val);
+        };
+
+        const secret1 = makeHighEntropySecret();
+        const secret2 = makeHighEntropySecret();
+        
+        // This line contains two high entropy secrets.
+        // The first will throw and be swallowed, the second will succeed.
+        const line = \`const a = "\${secret1}"; const b = "\${secret2}";\`;
+        
+        const matches = secretScanUtils.collectHighEntropyMatches(line);
+        expect(matches).toHaveLength(1);
+        expect(matches[0].match).toBe(secret2);
+      } finally {
+        secretScanUtils.isHighEntropyToken = originalIsHighEntropyToken;
+      }
+    });
+
+    it("survives top-level iterator failure (deterministic fallback)", () => {
+      const originalCollectQuoted = secretScanUtils.collectQuotedStringMatches;
+      try {
+        secretScanUtils.collectQuotedStringMatches = (line: string) => {
+          throw new Error("Simulated top-level regex failure");
+        };
+        const secret1 = makeHighEntropySecret();
+        const line = \`const a = "\${secret1}";\`;
+        const matches = secretScanUtils.collectHighEntropyMatches(line);
+        expect(matches).toEqual([]);
+      } finally {
+        secretScanUtils.collectQuotedStringMatches = originalCollectQuoted;
+      }
+    });
+  });
+
+  describe("failure boundaries in overlapsMatch", () => {
+    it("handles invalid inputs deterministically without throwing", () => {
+      const { overlapsMatch } = secretScanUtils;
+      expect(overlapsMatch(null, null)).toBe(false);
+      expect(overlapsMatch(undefined, {})).toBe(false);
+      expect(overlapsMatch(123, "string")).toBe(false);
+      expect(overlapsMatch({ match: "test" }, null)).toBe(false);
+      expect(overlapsMatch({ match: "test", column: 5 }, { match: "test" })).toBe(true);
+      expect(overlapsMatch({ match: "test", column: 5 }, { match: "test", column: 10 })).toBe(false);
+      expect(overlapsMatch({ match: "test", column: 5 }, { match: "test", column: 6 })).toBe(true);
+    });
+
+    it("survives unexpected property access failures (partial failure recovery)", () => {
+      const { overlapsMatch } = secretScanUtils;
+      
+      const explosiveLeft = {
+        get match() {
+          throw new Error("Simulated access failure");
+        }
+      };
+      
+      expect(overlapsMatch(explosiveLeft, { match: "test" })).toBe(false);
+    });
+  });
 });
 
 describe("backend security:scan integration", () => {
