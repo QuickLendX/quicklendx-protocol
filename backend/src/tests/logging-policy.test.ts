@@ -109,6 +109,23 @@ describe("classifyField", () => {
   });
 });
 
+describe("isSecret boundary cases", () => {
+  it.each([
+    "",
+    " ",
+    " password",
+    "PASSWORD",
+    "password ",
+    "totally_unknown_field_xyz",
+    "__proto__",
+    "constructor",
+    "toString",
+  ])("does not classify non-exact secret field name %j as secret", (field) => {
+    expect(isSecret(field)).toBe(false);
+    expect(isSecret(field)).toBe(false);
+  });
+});
+
 // ── 2. Value-level redaction ──────────────────────────────────────────────────
 
 describe("hashValue", () => {
