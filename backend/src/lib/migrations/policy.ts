@@ -102,6 +102,8 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
   if (validateOnly) {
     const migrations = await loadMigrationsFromFS();
     const result = await MigrationPolicy.dryRun(migrations as unknown as MigrationDefinition[], { force: emergency });
+    const migrations = (await loadMigrationsFromFS()).map((m) => m.content);
+    const result = await MigrationPolicy.dryRun(migrations, { force: emergency });
     if (!result.valid) {
       console.error("❌ Migration validation failed:");
       result.errors.forEach((e) => console.error(`   ${e}`));
