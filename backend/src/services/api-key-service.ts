@@ -332,7 +332,7 @@ export class ApiKeyService {
   /**
    * Revoke an API key
    */
-  async revokeApiKey(keyId: string, actor: string, ipAddress?: string): Promise<void> {
+  async reokeApiKey(keyId: string, actor: string, ipAddress?: string): Promise<void> {
     const key = db.getApiKeyById(keyId);
     if (!key) {
       throw new ApiKeyNotFoundError(keyId);
@@ -354,32 +354,6 @@ export class ApiKeyService {
   async getApiKeyById(keyId: string): Promise<ApiKey | null> {
     const dbKey = db.getApiKeyById(keyId);
     return dbKey ? this.dbKeyToApiKey(dbKey) : null;
-  }
-
-  /**
-   * Get an API key by ID and enforce failure-boundary invariants.
-   *
-   * This method is the deterministic entry point for reading a key by ID.
-   * It normalizes the input, validates the identifier, and throws typed
-   * errors for not-found and revoked states so callers can react
-   * deterministically without accessing internal state.
-   */
-  async getApiKey(keyId: string): Promise<ApiKey> {
-    if (typeof keyId !== 'string' || keyId.trim().length === 0) {
-      throw new Error('API key ID is required');
-    }
-
-    const normalizedId = keyId.trim();
-    const dbKey = db.getApiKeyById(normalizedId);
-    if (!dbKey) {
-      throw new ApiKeyNotFoundError(normalizedId);
-    }
-
-    if (dbKey.revoked === 1) {
-      throw new ApiKeyRevokedError(normalizedId);
-    }
-
-    return this.dbKeyToApiKey(dbKey);
   }
 
   /**

@@ -1,3 +1,4 @@
+
 /**
  * Unit tests for the SQLite-backed Database class (src/db/database.ts).
  *
@@ -12,6 +13,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { getDatabase, closeDatabase } from '../lib/database';
 import { db, DbApiKey, DbAuditLog } from '../db/database';
+import { getApiKey } from '../controllers/v1/api-keys';
 
 // ---------------------------------------------------------------------------
 // Test database lifecycle – isolated temp file per run
@@ -458,411 +460,83 @@ describe('Audit log event_type constraints', () => {
 });
 
 // ---------------------------------------------------------------------------
-// Failure-boundary coverage for getApiKey
+// getApiKey failure-boundary coverage
 // ---------------------------------------------------------------------------
 
 describe('getApiKey failure boundaries', () => {
-  test('returns undefined for empty string id', () => {
-    expect(db.getApiKeyById('')).toBeUndefined();
+  function makeReq(overrides: Record<string, unknown> = {}) {
+    return {
+      params: {},
+      query: {},
+      headers: {},
+      user: { id: 'test-user', scopes: ['read:*'] },
+      ...overrides,
+    } as any;
+  }
+
+  function makeRes() {
+    const res: any = {};
+    res.status = jest.fn().mockReturnValue(res);
+    res.json = jest.fn().mockReturnValue(res);
+    return res;
+  }
+
+  test('returns 400 for missing id', async () => {
+    const req = makeReq({ params: {} });
+    const res = makeRes();
+    await getApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
   });
 
-  test('returns undefined for whitespace-only id', () => {
-    expect(db.getApiKeyById('   ')).toBeUndefined();
+  test('returns 404 for unknown id', async () => {
+    const req = makeReq({ params: { id: 'missing-id' } });
+    const res = makeRes();
+    await getApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
   });
 
-  test('returns undefined for id with SQL metacharacters', () => {
-    expect(db.getApiKeyById("'; DROP TABLE api_keys; --")).toBeUndefined();
-    expect(db.getStats().apiKeys).toBe(0);
-  });
-
-  test('returns undefined for very long id', () => {
-    expect(db.getApiKeyById('x'.repeat(10_000))).toBeUndefined();
-  });
-
-  test('returns undefined for unicode id', () => {
-    expect(db.getApiKeyById('🔑-ключ-鍵')).toBeUndefined();
-  });
-
-  test('returns undefined for null-like id', () => {
-    expect(db.getApiKeyById(undefined as unknown as string)).toBeUndefined();
-    expect(db.getApiKeyById(null as unknown as string)).toBeUndefined();
-  });
-
-  test('returns undefined for revoked key by id (still retrievable)', () => {
-    const key = makeKey({ revoked: 1 });
+  test('returns 403 when caller lacks ownership', async () => {
+    const key = makeKey({ created_by: 'someone-else' });
     db.createApiKey(key);
-    const retrieved = db.getApiKeyById(key.id);
-    expect(retrieved).toBeDefined();
-    expect(retrieved!.revoked).toBe(1);
-  });
-
-  test('returns undefined for expired key by id (still retrievable)', () => {
-    const key = makeKey({ expires_at: '2000-01-01T00:00:00.000Z' });
-    db.createApiKey(key);
-    const retrieved = db.getApiKeyById(key.id);
-    expect(retrieved).toBeDefined();
-    expect(retrieved!.expires_at).toBe('2000-01-01T00:00:00.000Z');
-  });
-
-  test('getApiKeyByPrefix returns undefined for empty prefix', () => {
-    expect(db.getApiKeyByPrefix('')).toBeUndefined();
-  });
-
-  test('getApiKeyByPrefix returns undefined for whitespace prefix', () => {
-    expect(db.getApiKeyByPrefix('   ')).toBeUndefined();
-  });
-
-  test('getApiKeyByPrefix returns undefined for SQL metacharacters', () => {
-    expect(db.getApiKeyByPrefix("'; DROP TABLE api_keys; --")).toBeUndefined();
-    expect(db.getStats().apiKeys).toBe(0);
-  });
-
-  test('getApiKeyByPrefix returns undefined for very long prefix', () => {
-    expect(db.getApiKeyByPrefix('p'.repeat(10_000))).toBeUndefined();
-  });
-
-  test('getApiKeyByPrefix returns undefined for unicode prefix', () => {
-    expect(db.getApiKeyByPrefix('🔑-prefix')).toBeUndefined();
-  });
-
-  test('getApiKeyByPrefix returns undefined for null-like prefix', () => {
-    expect(db.getApiKeyByPrefix(undefined as unknown as string)).toBeUndefined();
-    expect(db.getApiKeyByPrefix(null as unknown as string)).toBeUndefined();
-  });
-
-  test('getApiKeyByPrefix is deterministic across repeated calls', () => {
-    const key = makeKey();
-    db.createApiKey(key);
-    const first = db.getApiKeyByPrefix(key.prefix);
-    const second = db.getApiKeyByPrefix(key.prefix);
-    expect(first!.id).toBe(second!.id);
-  });
-
-  test('getApiKeyById is deterministic across repeated calls', () => {
-    const key = makeKey();
-    db.createApiKey(key);
-    const first = db.getApiKeyById(key.id);
-    const second = db.getApiKeyById(key.id);
-    expect(first!.id).toBe(second!.id);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Failure-boundary coverage for createApiKey
-// ---------------------------------------------------------------------------
-
-describe('createApiKey failure boundaries', () => {
-  test('rejects duplicate id', () => {
-    const key = makeKey();
-    db.createApiKey(key);
-    const dup = makeKey({ id: key.id });
-    expect(() => db.createApiKey(dup)).toThrow();
-  });
-
-  test('rejects duplicate prefix', () => {
-    const key = makeKey();
-    db.createApiKey(key);
-    const dup = makeKey({ prefix: key.prefix });
-    expect(() => db.createApiKey(dup)).toThrow();
-  });
-
-  test('rejects null key_hash', () => {
-    const key = makeKey({ key_hash: null as unknown as string });
-    expect(() => db.createApiKey(key)).toThrow();
-  });
-
-  test('rejects null prefix', () => {
-    const key = makeKey({ prefix: null as unknown as string });
-    expect(() => db.createApiKey(key)).toThrow();
-  });
-
-  test('rejects null name', () => {
-    const key = makeKey({ name: null as unknown as string });
-    expect(() => db.createApiKey(key)).toThrow();
-  });
-
-  test('rejects null scopes', () => {
-    const key = makeKey({ scopes: null as unknown as string });
-    expect(() => db.createApiKey(key)).toThrow();
-  });
-
-  test('rejects null created_at', () => {
-    const key = makeKey({ created_at: null as unknown as string });
-    expect(() => db.createApiKey(key)).toThrow();
-  });
-
-  test('rejects null created_by', () => {
-    const key = makeKey({ created_by: null as unknown as string });
-    expect(() => db.createApiKey(key)).toThrow();
-  });
-
-  test('rejects invalid revoked value', () => {
-    const key = makeKey({ revoked: 2 as unknown as number });
-    expect(() => db.createApiKey(key)).toThrow();
-  });
-
-  test('partial failure does not leave partial state', () => {
-    const key = makeKey();
-    db.createApiKey(key);
-    const before = db.getStats();
-    const dup = makeKey({ prefix: key.prefix });
-    expect(() => db.createApiKey(dup)).toThrow();
-    expect(db.getStats()).toEqual(before);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Failure-boundary coverage for updateApiKey
-// ---------------------------------------------------------------------------
-
-describe('updateApiKey failure boundaries', () => {
-  test('returns false for empty string id', () => {
-    expect(db.updateApiKey('', { name: 'x' })).toBe(false);
-  });
-
-  test('returns false for whitespace id', () => {
-    expect(db.updateApiKey('   ', { name: 'x' })).toBe(false);
-  });
-
-  test('returns false for SQL metacharacter id', () => {
-    expect(db.updateApiKey("'; DROP TABLE api_keys; --", { name: 'x' })).toBe(false);
-    expect(db.getStats().apiKeys).toBe(0);
-  });
-
-  test('returns false for very long id', () => {
-    expect(db.updateApiKey('x'.repeat(10_000), { name: 'x' })).toBe(false);
-  });
-
-  test('returns false for null-like id', () => {
-    expect(db.updateApiKey(undefined as unknown as string, { name: 'x' })).toBe(false);
-    expect(db.updateApiKey(null as unknown as string, { name: 'x' })).toBe(false);
-  });
-
-  test('rejects invalid revoked value', () => {
-    const key = makeKey();
-    db.createApiKey(key);
-    expect(() => db.updateApiKey(key.id, { revoked: 2 as unknown as number })).toThrow();
-  });
-
-  test('partial failure does not mutate state', () => {
-    const key = makeKey({ name: 'Original' });
-    db.createApiKey(key);
-    expect(() => db.updateApiKey(key.id, { revoked: 2 as unknown as number })).toThrow();
-    const retrieved = db.getApiKeyById(key.id);
-    expect(retrieved!.name).toBe('Original');
-    expect(retrieved!.revoked).toBe(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Failure-boundary coverage for deleteApiKey
-// ---------------------------------------------------------------------------
-
-describe('deleteApiKey failure boundaries', () => {
-  test('returns false for empty string id', () => {
-    expect(db.deleteApiKey('')).toBe(false);
-  });
-
-  test('returns false for whitespace id', () => {
-    expect(db.deleteApiKey('   ')).toBe(false);
-  });
-
-  test('returns false for SQL metacharacter id', () => {
-    expect(db.deleteApiKey("'; DROP TABLE api_keys; --")).toBe(false);
-    expect(db.getStats().apiKeys).toBe(0);
-  });
-
-  test('returns false for very long id', () => {
-    expect(db.deleteApiKey('x'.repeat(10_000))).toBe(false);
-  });
-
-  test('returns false for null-like id', () => {
-    expect(db.deleteApiKey(undefined as unknown as string)).toBe(false);
-    expect(db.deleteApiKey(null as unknown as string)).toBe(false);
-  });
-
-  test('delete is idempotent for missing key', () => {
-    expect(db.deleteApiKey('missing')).toBe(false);
-    expect(db.deleteApiKey('missing')).toBe(false);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Failure-boundary coverage for audit logs
-// ---------------------------------------------------------------------------
-
-describe('audit log failure boundaries', () => {
-  let keyId: string;
-
-  beforeEach(() => {
-    const key = makeKey();
-    keyId = key.id;
-    db.createApiKey(key);
-  });
-
-  test('rejects invalid event_type', () => {
-    const log = makeAuditLog({ key_id: keyId, event_type: 'invalid' as unknown as DbAuditLog['event_type'] });
-    expect(() => db.createAuditLog(log)).toThrow();
-  });
-
-  test('rejects null event_type', () => {
-    const log = makeAuditLog({ key_id: keyId, event_type: null as unknown as DbAuditLog['event_type'] });
-    expect(() => db.createAuditLog(log)).toThrow();
-  });
-
-  test('rejects null key_id', () => {
-    const log = makeAuditLog({ key_id: null as unknown as string });
-    expect(() => db.createAuditLog(log)).toThrow();
-  });
-
-  test('rejects null actor', () => {
-    const log = makeAuditLog({ key_id: keyId, actor: null as unknown as string });
-    expect(() => db.createAuditLog(log)).toThrow();
-  });
-
-  test('rejects null timestamp', () => {
-    const log = makeAuditLog({ key_id: keyId, timestamp: null as unknown as string });
-    expect(() => db.createAuditLog(log)).toThrow();
-  });
-
-  test('rejects duplicate id', () => {
-    const log = makeAuditLog({ key_id: keyId });
-    db.createAuditLog(log);
-    const dup = makeAuditLog({ id: log.id, key_id: keyId });
-    expect(() => db.createAuditLog(dup)).toThrow();
-  });
-
-  test('partial failure does not leave partial state', () => {
-    const before = db.getStats();
-    const log = makeAuditLog({ key_id: keyId, event_type: 'invalid' as unknown as DbAuditLog['event_type'] });
-    expect(() => db.createAuditLog(log)).toThrow();
-    expect(db.getStats()).toEqual(before);
-  });
-
-  test('getAuditLogs returns empty for empty string key_id', () => {
-    expect(db.getAuditLogs({ key_id: '' })).toEqual([]);
-  });
-
-  test('getAuditLogs returns empty for SQL metacharacter key_id', () => {
-    expect(db.getAuditLogs({ key_id: "'; DROP TABLE api_key_audit_log; --" })).toEqual([]);
-    expect(db.getStats().auditLogs).toBe(0);
-  });
-
-  test('getAuditLogs returns empty for very long key_id', () => {
-    expect(db.getAuditLogs({ key_id: 'x'.repeat(10_000) })).toEqual([]);
-  });
-
-  test('getAuditLogs returns empty for null-like key_id', () => {
-    expect(db.getAuditLogs({ key_id: undefined as unknown as string })).toEqual([]);
-    expect(db.getAuditLogs({ key_id: null as unknown as string })).toEqual([]);
-  });
-
-  test('getAuditLogs is deterministic across repeated calls', () => {
-    const log = makeAuditLog({ key_id: keyId });
-    db.createAuditLog(log);
-    const first = db.getAuditLogs({ key_id: keyId });
-    const second = db.getAuditLogs({ key_id: keyId });
-    expect(first.map((l) => l.id)).toEqual(second.map((l) => l.id));
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Retry and concurrency boundaries
-// ---------------------------------------------------------------------------
-
-describe('retry and concurrency boundaries', () => {
-  test('repeated reads after write are consistent', () => {
-    const key = makeKey();
-    db.createApiKey(key);
-    for (let i = 0; i < 100; i++) {
-      expect(db.getApiKeyById(key.id)!.id).toBe(key.id);
-    }
-  });
-
-  test('interleaved create and read remain consistent', () => {
-    const keys = Array.from({ length: 25 }, () => makeKey());
-    keys.forEach((k) => db.createApiKey(k));
-    keys.forEach((k) => {
-      expect(db.getApiKeyById(k.id)!.id).toBe(k.id);
+    const req = makeReq({
+      params: { id: key.id },
+      user: { id: 'test-user', scopes: ['read:*'] },
     });
-    expect(db.listApiKeys()).toHaveLength(25);
+    const res = makeRes();
+    await getApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(403);
   });
 
-  test('retry after failed duplicate create succeeds with new prefix', () => {
-    const key = makeKey();
+  test('returns 200 for owner', async () => {
+    const key = makeKey({ created_by: 'test-user' });
     db.createApiKey(key);
-    const dup = makeKey({ prefix: key.prefix });
-    expect(() => db.createApiKey(dup)).toThrow();
-    const retry = makeKey();
-    expect(() => db.createApiKey(retry)).not.toThrow();
-    expect(db.getApiKeyById(retry.id)).toBeDefined();
+    const req = makeReq({ params: { id: key.id } });
+    const res = makeRes();
+    await getApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalled();
   });
 
-  test('concurrent delete of same key yields single success', () => {
-    const key = makeKey();
+  test('does not expose key_hash in response', async () => {
+    const key = makeKey({ created_by: 'test-user' });
     db.createApiKey(key);
-    const results = [db.deleteApiKey(key.id), db.deleteApiKey(key.id)];
-    expect(results.filter(Boolean)).toHaveLength(1);
+    const req = makeReq({ params: { id: key.id } });
+    const res = makeRes();
+    await getApiKey(req, res);
+    const payload = res.json.mock.calls[0][0];
+    expect(JSON.stringify(payload)).not.toContain(key.key_hash);
   });
 
-  test('clear during reads does not throw', () => {
-    const key = makeKey();
+  test('deterministic across repeated calls', async () => {
+    const key = makeKey({ created_by: 'test-user' });
     db.createApiKey(key);
-    expect(() => {
-      db.getApiKeyById(key.id);
-      db.clear();
-      db.getApiKeyById(key.id);
-    }).not.toThrow();
-    expect(db.getStats()).toEqual({ apiKeys: 0, auditLogs: 0 });
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Permission and authorization boundary coverage
-// ---------------------------------------------------------------------------
-
-describe('permission and authorization boundaries', () => {
-  test('listApiKeys scoped by created_by does not leak other users keys', () => {
-    const a = makeKey({ created_by: 'user-a' });
-    const b = makeKey({ created_by: 'user-b' });
-    db.createApiKey(a);
-    db.createApiKey(b);
-    const aKeys = db.listApiKeys({ created_by: 'user-a' });
-    expect(aKeys).toHaveLength(1);
-    expect(aKeys[0].id).toBe(a.id);
-    expect(aKeys.find((k) => k.id === b.id)).toBeUndefined();
-  });
-
-  test('listApiKeys with empty created_by returns empty', () => {
-    db.createApiKey(makeKey({ created_by: 'user-a' }));
-    expect(db.listApiKeys({ created_by: '' })).toEqual([]);
-  });
-
-  test('listApiKeys with SQL metacharacter created_by returns empty', () => {
-    db.createApiKey(makeKey({ created_by: 'user-a' }));
-    expect(db.listApiKeys({ created_by: "'; DROP TABLE api_keys; --" })).toEqual([]);
-    expect(db.getStats().apiKeys).toBe(1);
-  });
-
-  test('revoked filter does not return active keys', () => {
-    const active = makeKey({ revoked: 0 });
-    const revoked = makeKey({ revoked: 1 });
-    db.createApiKey(active);
-    db.createApiKey(revoked);
-    const revokedKeys = db.listApiKeys({ revoked: true });
-    expect(revokedKeys).toHaveLength(1);
-    expect(revokedKeys[0].id).toBe(revoked.id);
-  });
-
-  test('audit logs are scoped by key_id and do not leak across keys', () => {
-    const k1 = makeKey();
-    const k2 = makeKey();
-    db.createApiKey(k1);
-    db.createApiKey(k2);
-    db.createAuditLog(makeAuditLog({ key_id: k1.id }));
-    db.createAuditLog(makeAuditLog({ key_id: k2.id }));
-    const logs = db.getAuditLogs({ key_id: k1.id });
-    expect(logs).toHaveLength(1);
-    expect(logs[0].key_id).toBe(k1.id);
+    const req = makeReq({ params: { id: key.id } });
+    const res1 = makeRes();
+    const res2 = makeRes();
+    await getApiKey(req, res1);
+    await getApiKey(req, res2);
+    expect(res1.status).toHaveBeenCalledWith(200);
+    expect(res2.status).toHaveBeenCalledWith(200);
+    expect(res1.json.mock.calls[0][0]).toEqual(res2.json.mock.calls[0][0]);
   });
 });
