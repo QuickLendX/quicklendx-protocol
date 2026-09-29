@@ -254,40 +254,90 @@ export function sanitiseResponse(
  * Walk any serialisable value and return the first SECRET value found,
  * or `null` if the object is clean.
  *
+ * The detector is deterministic and cycle-safe: it follows a stable traversal
+ * order, tracks previously seen objects, and treats the literal "[REDACTED]"
+ * as a safe sentinel instead of a leak.
+ *
  * Useful in tests as a regression guard:
  * ```ts
  * expect(findSecretLeak(logOutput)).toBeNull();
  * ```
  */
+function looksLikeSecretLiteral(value: string): boolean {
+  const trimmed = value.trim();
+  if (!trimmed || trimmed === REDACTED_SENTINEL) return false;
+
+  const patterns = [
+    /(?:^|\s|[:=])(?:authorization|api[_-]?key|access[_-]?token|refresh[_-]?token|token|secret|password|cookie|session|jwt)\s*[:=]\s*.+/i,
+    /^(?:bearer|basic)\s+[A-Za-z0-9._~+/-]+=*$/i,
+    /^(?:sk|ghp|xox[baprs]-)[A-Za-z0-9._~+/=-]{8,}$/i,
+  ];
+
+  return patterns.some((pattern) => pattern.test(trimmed));
+}
+
 export function findSecretLeak(
   value: unknown,
-  _path = ""
+  _path = "",
+  seen = new WeakSet<object>()
 ): { path: string; value: unknown } | null {
   if (value === null || value === undefined) return null;
 
   if (typeof value === "string") {
-    // Treat the literal "[REDACTED]" as clean; anything else is suspicious
-    // only if it matches a known secret pattern — let callers do that check.
+    if (looksLikeSecretLiteral(value)) {
+      return { path: _path || "$root", value };
+    }
     return null;
   }
 
+  if (typeof value !== "object") return null;
+
+  if (seen.has(value)) return null;
+  seen.add(value);
+
   if (Array.isArray(value)) {
     for (let i = 0; i < value.length; i++) {
-      const found = findSecretLeak(value[i], `${_path}[${i}]`);
+      const found = findSecretLeak(value[i], `${_path}[${i}]`, seen);
       if (found) return found;
     }
     return null;
   }
 
-  if (typeof value === "object") {
+  if (value instanceof Map) {
+    let index = 0;
+    for (const [mapKey, mapValue] of value.entries()) {
+      const mapKeyPath = _path ? `${_path}.map[${index}]` : `map[${index}]`;
+      const keyLeak = findSecretLeak(mapKey, `${mapKeyPath}.key`, seen);
+      if (keyLeak) return keyLeak;
+      const valueLeak = findSecretLeak(mapValue, `${mapKeyPath}.value`, seen);
+      if (valueLeak) return valueLeak;
+      index += 1;
+    }
+    return null;
+  }
+
+  if (value instanceof Set) {
+    let index = 0;
+    for (const entry of value.values()) {
+      const setPath = _path ? `${_path}.set[${index}]` : `set[${index}]`;
+      const found = findSecretLeak(entry, setPath, seen);
+      if (found) return found;
+      index += 1;
+    }
+    return null;
+  }
+
+  try {
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       const fieldPath = _path ? `${_path}.${k}` : k;
       if (isSecret(k) && v !== REDACTED_SENTINEL) {
         return { path: fieldPath, value: v };
       }
-      const found = findSecretLeak(v, fieldPath);
+      const found = findSecretLeak(v, fieldPath, seen);
       if (found) return found;
     }
+  } catch {
+    return null;
   }
 
   return null;
