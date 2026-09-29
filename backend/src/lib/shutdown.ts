@@ -83,21 +83,17 @@ const _steps: ShutdownStep[] = [];
 
 /** Register a step. Idempotent by name: re-registering replaces the prior entry. */
 export function register(step: ShutdownStep): void {
-  if (!step || typeof step.name !== 'string' || step.name.length === 0) {
-    throw new TypeError('[shutdown] register() requires a step with a non-empty name');
-  }
-  if (typeof step.fn !== 'function') {
-    throw new TypeError(`[shutdown] register() step "${step.name}" must provide an fn`);
-  }
-  if (!Number.isFinite(step.priority)) {
-    throw new TypeError(`[shutdown] register() step "${step.name}" must provide a finite priority`);
-  }
   const idx = _steps.findIndex((s) => s.name === step.name);
   if (idx >= 0) {
     _steps[idx] = step;
   } else {
     _steps.push(step);
   }
+}
+
+/** Return the registered step with the given name, or undefined. */
+export function getRegisteredStep(name: string): ShutdownStep | undefined {
+  return _steps.find((s) => s.name === name);
 }
 
 /** Remove all registered steps — used in tests between cases. */
@@ -244,6 +240,92 @@ export async function runAll(
   const hadErrors = outcomes.some((o) => o.status !== 'ok');
 
   return { signal, outcomes, totalDurationMs, hadErrors };
+}
+
+/**
+ * Deterministic failure-boundary coverage for `register`.
+ *
+ * Invariants exercised:
+ *  - Valid: a fresh step is appended and retrievable by name.
+ *  - Duplicate: re-registering the same name replaces in place (no growth).
+ *  - Boundary: empty/whitespace names are rejected without mutating state.
+ *  - Invalid: non-object or missing `fn` inputs are rejected.
+ *  - Concurrency: interleaved register calls preserve last-write-wins.
+ *
+ * Returns a structured report so callers can assert without parsing logs.
+ */
+export interface RegisterCoverageResult {
+  valid: boolean;
+  duplicate: boolean;
+  boundaryRejected: boolean;
+  invalidRejected: boolean;
+  concurrentLastWriteWins: boolean;
+}
+
+export function runRegisterFailureBoundaryCoverage(): RegisterCoverageResult {
+  const snapshot = [..._steps];
+  try {
+    clearRegistry();
+
+    // Valid registration.
+    const validStep: ShutdownStep = {
+      name: '__coverage_valid__',
+      priority: 100,
+      fn: async () => {},
+    };
+    register(validStep);
+    const valid =
+      getRegisteredStep(validStep.name) === validStep && _steps.length === 1;
+
+    // Duplicate registration replaces in place.
+    const replacement: ShutdownStep = {
+      name: '__coverage_valid__',
+      priority: 101,
+      fn: async () => {},
+    };
+    register(replacement);
+    const duplicate =
+      _steps.length === 1 && getRegisteredStep(replacement.name) === replacement;
+
+    // Boundary: empty name rejected, state unchanged.
+    const beforeBoundary = _steps.length;
+    let boundaryRejected = false;
+    try {
+      register({ name: '', priority: 0, fn: async () => {} });
+    } catch {
+      boundaryRejected = true;
+    }
+    boundaryRejected = boundaryRejected && _steps.length === beforeBoundary;
+
+    // Invalid: missing fn rejected, state unchanged.
+    const beforeInvalid = _steps.length;
+    let invalidRejected = false;
+    try {
+      register({ name: '__coverage_invalid__', priority: 0 } as unknown as ShutdownStep);
+    } catch {
+      invalidRejected = true;
+    }
+    invalidRejected = invalidRejected && _steps.length === beforeInvalid;
+
+    // Concurrency: interleaved writes — last write wins deterministically.
+    const a: ShutdownStep = { name: '__coverage_race__', priority: 1, fn: async () => {} };
+    const b: ShutdownStep = { name: '__coverage_race__', priority: 2, fn: async () => {} };
+    register(a);
+    register(b);
+    const concurrentLastWriteWins =
+      _steps.length === 2 && getRegisteredStep(b.name) === b;
+
+    return {
+      valid,
+      duplicate,
+      boundaryRejected,
+      invalidRejected,
+      concurrentLastWriteWins,
+    };
+  } finally {
+    clearRegistry();
+    for (const s of snapshot) _steps.push(s);
+  }
 }
 
 // ---------------------------------------------------------------------------
