@@ -8,6 +8,7 @@
  *   • "No secrets in logs" regression guard
  *   • Request-logger middleware integration
  *   • Edge-cases: null, undefined, arrays, deeply nested objects
+ *   • Deterministic failure-boundary coverage for getPolicyFields
  */
 
 import { createHash } from "crypto";
@@ -26,6 +27,7 @@ import {
   sanitiseRequest,
   sanitiseResponse,
   findSecretLeak,
+  getPolicyFields,
 } from "../lib/logging/policy";
 
 import {
@@ -684,6 +686,209 @@ describe("createRequestLogger — error catch branch", () => {
     await supertest(app).get("/health").expect(200);
     expect(entries.length).toBe(1);
     expect(entries[0].path).toBe("/health");
+  });
+});
+
+// ── 10. getPolicyFields — deterministic failure-boundary coverage ────────────
+
+describe("getPolicyFields", () => {
+  describe("valid inputs — deterministic classification", () => {
+    it("returns an empty array for an empty input list", () => {
+      expect(getPolicyFields([])).toEqual([]);
+    });
+
+    it("classifies a single PUBLIC field deterministically", () => {
+      const out = getPolicyFields(["id"]);
+      expect(out).toEqual([{ field: "id", tier: FieldTier.PUBLIC }]);
+      // repeated calls must yield identical results
+      expect(getPolicyFields(["id"])).toEqual(out);
+    });
+
+    it("classifies a single PRIVATE field deterministically", () => {
+      const out = getPolicyFields(["amount"]);
+      expect(out).toEqual([{ field: "amount", tier: FieldTier.PRIVATE }]);
+      expect(getPolicyFields(["amount"])).toEqual(out);
+    });
+
+    it("classifies a single SECRET field deterministically", () => {
+      const out = getPolicyFields(["authorization"]);
+      expect(out).toEqual([
+        { field: "authorization", tier: FieldTier.SECRET },
+      ]);
+      expect(getPolicyFields(["authorization"])).toEqual(out);
+    });
+
+    it("preserves input order across mixed tiers", () => {
+      const out = getPolicyFields([
+        "id",
+        "amount",
+        "authorization",
+        "status",
+      ]);
+      expect(out.map((e) => e.field)).toEqual([
+        "id",
+        "amount",
+        "authorization",
+        "status",
+      ]);
+      expect(out.map((e) => e.tier)).toEqual([
+        FieldTier.PUBLIC,
+        FieldTier.PRIVATE,
+        FieldTier.SECRET,
+        FieldTier.PUBLIC,
+      ]);
+    });
+
+    it("defaults unknown fields to PRIVATE", () => {
+      const out = getPolicyFields(["totally_unknown_field_xyz"]);
+      expect(out).toEqual([
+        { field: "totally_unknown_field_xyz", tier: FieldTier.PRIVATE },
+      ]);
+    });
+  });
+
+  describe("invalid inputs — deterministic rejection", () => {
+    it("throws a TypeError when given null", () => {
+      expect(() => getPolicyFields(null as unknown as string[])).toThrow(
+        TypeError
+      );
+    });
+
+    it("throws a TypeError when given undefined", () => {
+      expect(() => getPolicyFields(undefined as unknown as string[])).toThrow(
+        TypeError
+      );
+    });
+
+    it("throws a TypeError when given a non-array value", () => {
+      expect(() =>
+        getPolicyFields("id" as unknown as string[])
+      ).toThrow(TypeError);
+    });
+
+    it("throws a TypeError when an element is not a string", () => {
+      expect(() =>
+        getPolicyFields(["id", 42 as unknown as string])
+      ).toThrow(TypeError);
+    });
+
+    it("throws a TypeError when an element is null", () => {
+      expect(() =>
+        getPolicyFields([null as unknown as string])
+      ).toThrow(TypeError);
+    });
+
+    it("rejects the whole batch atomically — no partial output on failure", () => {
+      // If any element is invalid, the call must throw rather than returning
+      // a partially-classified list. This guards against silent data loss.
+      let result: unknown = "sentinel";
+      try {
+        result = getPolicyFields(["id", 42 as unknown as string, "amount"]);
+      } catch (err) {
+        expect(err).toBeInstanceOf(TypeError);
+      }
+      expect(result).toBe("sentinel");
+    });
+  });
+
+  describe("duplicate and boundary inputs", () => {
+    it("preserves duplicate fields in order (no deduplication)", () => {
+      const out = getPolicyFields(["id", "id", "amount", "amount"]);
+      expect(out).toEqual([
+        { field: "id", tier: FieldTier.PUBLIC },
+        { field: "id", tier: FieldTier.PUBLIC },
+        { field: "amount", tier: FieldTier.PRIVATE },
+        { field: "amount", tier: FieldTier.PRIVATE },
+      ]);
+    });
+
+    it("classifies the empty-string field as PRIVATE (unknown default)", () => {
+      const out = getPolicyFields([""]);
+      expect(out).toEqual([{ field: "", tier: FieldTier.PRIVATE }]);
+    });
+
+    it("is case-sensitive — 'ID' is not the same as 'id'", () => {
+      const out = getPolicyFields(["ID", "id"]);
+      expect(out[0].tier).toBe(FieldTier.PRIVATE);
+      expect(out[1].tier).toBe(FieldTier.PUBLIC);
+    });
+
+    it("handles a large batch deterministically", () => {
+      const fields = new Array(500).fill("id");
+      const out = getPolicyFields(fields);
+      expect(out).toHaveLength(500);
+      expect(out.every((e) => e.tier === FieldTier.PUBLIC)).toBe(true);
+    });
+  });
+
+  describe("concurrency and retry safety", () => {
+    it("is pure — repeated concurrent calls yield identical results", async () => {
+      const fields = ["id", "amount", "authorization", "unknown_x"];
+      const runs = await Promise.all(
+        Array.from({ length: 25 }, () =>
+          Promise.resolve().then(() => getPolicyFields(fields))
+        )
+      );
+      const first = runs[0];
+      for (const r of runs) {
+        expect(r).toEqual(first);
+      }
+    });
+
+    it("does not mutate the input array", () => {
+      const input = ["id", "amount", "authorization"];
+      const copy = [...input];
+      getPolicyFields(input);
+      expect(input).toEqual(copy);
+    });
+
+    it("returns fresh objects on each call (no shared mutable state)", () => {
+      const a = getPolicyFields(["id"]);
+      const b = getPolicyFields(["id"]);
+      expect(a).not.toBe(b);
+      expect(a[0]).not.toBe(b[0]);
+      expect(a).toEqual(b);
+    });
+
+    it("retry after a rejected call succeeds with the same deterministic output", () => {
+      expect(() =>
+        getPolicyFields([1 as unknown as string])
+      ).toThrow(TypeError);
+      const out = getPolicyFields(["id", "amount"]);
+      expect(out).toEqual([
+        { field: "id", tier: FieldTier.PUBLIC },
+        { field: "amount", tier: FieldTier.PRIVATE },
+      ]);
+    });
+  });
+
+  describe("regression — classification matches classifyField", () => {
+    const sample = [
+      "id",
+      "status",
+      "amount",
+      "business",
+      "authorization",
+      "tax_id",
+      "email",
+      "totally_unknown_field_xyz",
+    ];
+
+    it("each entry's tier equals classifyField(field)", () => {
+      const out = getPolicyFields(sample);
+      for (const entry of out) {
+        expect(entry.tier).toBe(classifyField(entry.field));
+      }
+    });
+
+    it("never emits a SECRET field as PUBLIC or PRIVATE", () => {
+      const out = getPolicyFields(sample);
+      for (const entry of out) {
+        if (isSecret(entry.field)) {
+          expect(entry.tier).toBe(FieldTier.SECRET);
+        }
+      }
+    });
   });
 });
 

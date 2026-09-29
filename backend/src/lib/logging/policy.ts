@@ -49,6 +49,7 @@ type RedactionPolicy = z.infer<typeof RedactionPolicySchema>;
 
 let loadedPolicy: RedactionPolicy;
 let fieldTierMap: Record<string, FieldTier>;
+let policyLoadError: Error | null = null;
 
 function loadPolicy(): void {
   const policyPath = join(__dirname, "redaction-policy.json");
@@ -69,13 +70,61 @@ function loadPolicy(): void {
   }
 }
 
-// Initialize policy on module load
-loadPolicy();
+/**
+ * Initialize policy on module load.
+ *
+ * Invariant: after this call, `loadedPolicy` and `fieldTierMap` are always
+ * defined. If the on-disk policy cannot be read or fails schema validation,
+ * we fall back to a deny-by-default empty policy (every field classifies as
+ * PRIVATE) and record the failure so `getPolicyFields` can surface it
+ * deterministically instead of throwing at import time.
+ */
+function initialisePolicy(): void {
+  try {
+    loadPolicy();
+    policyLoadError = null;
+  } catch (err) {
+    policyLoadError = err instanceof Error ? err : new Error(String(err));
+    loadedPolicy = { public: [], private: [], secret: [] };
+    fieldTierMap = {};
+  }
+}
+
+initialisePolicy();
 
 // ── Expose policy for other modules ───────────────────────────────────────────
 
+/**
+ * Return the list of fields registered under the given tier.
+ *
+ * Behaviour is deterministic across all inputs:
+ *   - Valid tier with a loaded policy → the registered field list.
+ *   - Valid tier when the policy failed to load → an empty array (deny-by-
+ *     default). Callers must not assume a non-empty result.
+ *   - Unknown / invalid tier → an empty array. This is a boundary case and
+ *     never throws, so logging call sites cannot crash on bad input.
+ *
+ * The returned array is a defensive copy: mutating it cannot corrupt the
+ * cached policy state, and concurrent callers cannot observe each other's
+ * mutations.
+ */
 export function getPolicyFields(tier: FieldTier): string[] {
-  return loadedPolicy[tier];
+  if (tier !== FieldTier.PUBLIC && tier !== FieldTier.PRIVATE && tier !== FieldTier.SECRET) {
+    return [];
+  }
+  const fields = loadedPolicy[tier];
+  return Array.isArray(fields) ? fields.slice() : [];
+}
+
+/**
+ * Diagnostic accessor for the last policy-load failure, if any.
+ *
+ * Returns `null` when the policy loaded successfully. Exposed so callers
+ * (and tests) can distinguish "policy intentionally empty" from "policy
+ * failed to load" without inspecting the filesystem or throwing.
+ */
+export function getPolicyLoadError(): Error | null {
+  return policyLoadError;
 }
 
 // ── Field classification registry ─────────────────────────────────────────────
