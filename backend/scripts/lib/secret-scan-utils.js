@@ -27,6 +27,45 @@ const MIN_HIGH_ENTROPY_SCORE = 4.5;
 const MIN_UNIQUE_CHARACTERS = 10;
 const PLAIN_STRING_REGEX = /'([^'\\]|\\.)*'|"([^"\\]|\\.)*"/g;
 
+const PREVIEW_MASK_CHARACTER = "*";
+const PREVIEW_EDGE_LENGTH = 4;
+const PREVIEW_ELLIPSIS = "...";
+const PREVIEW_MASK_LENGTH = 8;
+const PREVIEW_QUOTE = '"';
+
+// Characters that may be emitted literally into a rendered preview. Detected
+// secrets are base64 / base64url / hex / base32 shaped, so this covers real
+// matches while keeping quotes, backslashes, control bytes, ANSI escapes,
+// Unicode line separators and non-ASCII code units out of the log line. The
+// brackets are what render the non-string "[redacted:<type>]" marker.
+const PREVIEW_SAFE_CHARACTER = /^[A-Za-z0-9_\-+/=.:@[\]]$/;
+
+// Readable short escapes for the control characters that show up often enough
+// to be worth keeping legible; every other unsafe code unit uses \uXXXX.
+const PREVIEW_SHORT_ESCAPES = new Map([
+  ["\\", "\\\\"],
+  ['"', '\\"'],
+  ["\b", "\\b"],
+  ["\f", "\\f"],
+  ["\n", "\\n"],
+  ["\r", "\\r"],
+  ["\t", "\\t"],
+]);
+
+// The exact escape sequences escapePreviewText is allowed to emit. Used by
+// isLogSafePreview to re-validate an already rendered preview.
+const PREVIEW_ESCAPE_SEQUENCE = /^(?:[\\bfnrt"\\]|u[0-9a-f]{4})/;
+
+// Upper bound on a rendered preview: two quotes, four escaped head characters,
+// the ellipsis, four escaped tail characters. Each escaped character costs at
+// most six code units ("\uXXXX"), so the bound is independent of input size.
+const PREVIEW_MAX_LENGTH =
+  PREVIEW_QUOTE.length +
+  PREVIEW_EDGE_LENGTH * 6 +
+  PREVIEW_ELLIPSIS.length +
+  PREVIEW_EDGE_LENGTH * 6 +
+  PREVIEW_QUOTE.length;
+
 const KNOWN_SECRET_PATTERNS = [
   {
     name: "quicklendx-api-key",
@@ -74,6 +113,9 @@ function isHexString(value) {
 }
 
 function isIdentifierLikeString(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
   return (
     /^[A-Za-z][A-Za-z0-9_$/-]*$/.test(value) &&
     /[a-z]/.test(value) &&
@@ -83,28 +125,35 @@ function isIdentifierLikeString(value) {
 }
 
 function isObviousPlaceholder(value) {
-  if (!value) {
+  // Fail closed for non-strings so scan callers never crash on unexpected input.
+  if (typeof value !== "string" && !(value instanceof String)) {
     return true;
   }
 
-  if (/^x+$/i.test(value) || /^y+$/i.test(value) || /^z+$/i.test(value)) {
+  const str = String(value);
+
+  if (str.length === 0) {
     return true;
   }
 
-  const uniqueChars = new Set(value);
-  if (uniqueChars.size <= 2 && value.length >= MIN_HIGH_ENTROPY_LENGTH) {
+  if (/^x+$/i.test(str) || /^y+$/i.test(str) || /^z+$/i.test(str)) {
     return true;
   }
 
-  if (/^(your_|example_|placeholder|changeme|test[-_]?secret|development-only|fallback-secret)/i.test(value)) {
+  const uniqueChars = new Set(str);
+  if (uniqueChars.size <= 2 && str.length >= MIN_HIGH_ENTROPY_LENGTH) {
     return true;
   }
 
-  if (isIdentifierLikeString(value)) {
+  if (/^(your_|example_|placeholder|changeme|test[-_]?secret|development-only|fallback-secret)/i.test(str)) {
     return true;
   }
 
-  if (/^\/api\//.test(value) || /^https?:\/\//.test(value)) {
+  if (isIdentifierLikeString(str)) {
+    return true;
+  }
+
+  if (/^\/api\//.test(str) || /^https?:\/\//.test(str)) {
     return true;
   }
 
@@ -112,6 +161,26 @@ function isObviousPlaceholder(value) {
 }
 
 function hasMixedCharacterClasses(value) {
+  // Input validation: handle null, undefined, and non-string inputs deterministically
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  // Empty strings cannot have mixed character classes
+  if (value.length === 0) {
+    return false;
+  }
+
+  // Single character strings cannot have mixed character classes
+  if (value.length === 1) {
+    return false;
+  }
+
+  // Check for presence of each character class
   const classes = [
     /[a-z]/.test(value),
     /[A-Z]/.test(value),
@@ -119,6 +188,7 @@ function hasMixedCharacterClasses(value) {
     /[^A-Za-z0-9]/.test(value),
   ];
 
+  // At least two different character classes must be present
   return classes.filter(Boolean).length >= 2;
 }
 
@@ -158,16 +228,143 @@ function isHighEntropyToken(value) {
   return shannonEntropy(value) >= MIN_HIGH_ENTROPY_SCORE;
 }
 
+// Redaction contract enforced by redactPreview. These are the invariants the
+// focused tests in tests/secret-scan-redaction.test.ts pin down, and every one
+// of them must hold for CI output to stay diagnosable without leaking a secret:
+//
+//   R1 Total          - never throws, for any JavaScript value, including
+//                       revoked proxies and values whose coercion throws.
+//                       A throw here would abort scanLine/scanTargets and
+//                       discard findings already collected for other files.
+//   R2 Empty          - nullish and "" render as '""'.
+//   R3 Short values   - 1..PREVIEW_MASK_LENGTH characters render as a uniform
+//                       mask of the same length: no position carries
+//                       information about which character sat there.
+//   R4 Edge only      - longer values render the first and last
+//                       PREVIEW_EDGE_LENGTH characters joined by an ellipsis.
+//                       The value.length - 2 * PREVIEW_EDGE_LENGTH middle
+//                       characters are never emitted, so the preview can never
+//                       contain the whole value.
+//   R5 Log safe       - only PREVIEW_SAFE_CHARACTER, the quote and the mask
+//                       character appear literally. Quotes, backslashes,
+//                       control bytes, ANSI escapes, Unicode line separators
+//                       and non-ASCII/surrogate code units are escaped, so one
+//                       finding can never forge or break a log line.
+//   R6 Bounded        - output length never exceeds PREVIEW_MAX_LENGTH and
+//                       does not grow with the input.
+//   R7 Pure           - no shared mutable state, so repeated and interleaved
+//                       calls are deterministic.
+//   R8 Typed refusal  - a non-string, non-nullish value is reported by type
+//                       only ("[redacted:<type>]"). It is never coerced:
+//                       String(value) can run user code, can throw, and can
+//                       disclose far more than an edge.
+//
+// Compatibility: every string input that contains only PREVIEW_SAFE_CHARACTER
+// renders exactly as before ('""', '"*****"', '"abcd...wxyz"'). The only
+// observable change is for non-string inputs, which previously threw a
+// TypeError (aborting the entire scan) or were silently mis-masked by array
+// length.
+
+function escapePreviewText(text) {
+  let escaped = "";
+
+  // Iterated by UTF-16 code unit on purpose: a slice taken at a fixed offset
+  // can split a surrogate pair, and escaping each half keeps the output
+  // losslessly decodable instead of emitting a lone surrogate.
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index];
+
+    const shortEscape = PREVIEW_SHORT_ESCAPES.get(character);
+    if (shortEscape !== undefined) {
+      escaped += shortEscape;
+      continue;
+    }
+
+    if (PREVIEW_SAFE_CHARACTER.test(character)) {
+      escaped += character;
+      continue;
+    }
+
+    const codeUnit = text.charCodeAt(index);
+    escaped += `\\u${codeUnit.toString(16).padStart(4, "0")}`;
+  }
+
+  return escaped;
+}
+
+function previewValueTypeTag(value) {
+  if (value === null) {
+    return "null";
+  }
+
+  // Array.isArray reads the internal slot without invoking user code, but it
+  // still throws for a revoked proxy. The type tag is diagnostic only, so a
+  // failed check degrades to the plain typeof instead of propagating.
+  try {
+    if (Array.isArray(value)) {
+      return "array";
+    }
+  } catch (error) {
+    return "object";
+  }
+
+  return typeof value;
+}
+
+function isLogSafePreview(text) {
+  if (typeof text !== "string") {
+    return false;
+  }
+
+  let index = 0;
+  while (index < text.length) {
+    const character = text[index];
+
+    if (character === "\\") {
+      const escape = text.slice(index + 1, index + 7).match(PREVIEW_ESCAPE_SEQUENCE);
+      if (!escape) {
+        return false;
+      }
+      index += 1 + escape[0].length;
+      continue;
+    }
+
+    if (
+      !PREVIEW_SAFE_CHARACTER.test(character) &&
+      character !== PREVIEW_QUOTE &&
+      character !== PREVIEW_MASK_CHARACTER
+    ) {
+      return false;
+    }
+
+    index += 1;
+  }
+
+  return true;
+}
+
 function redactPreview(value) {
-  if (!value) {
-    return '""';
+  if (value === null || value === undefined) {
+    return `${PREVIEW_QUOTE}${PREVIEW_QUOTE}`;
   }
 
-  if (value.length <= 8) {
-    return `"${"*".repeat(value.length)}"`;
+  if (typeof value !== "string") {
+    return `${PREVIEW_QUOTE}[redacted:${previewValueTypeTag(value)}]${PREVIEW_QUOTE}`;
   }
 
-  return `"${value.slice(0, 4)}...${value.slice(-4)}"`;
+  if (value.length === 0) {
+    return `${PREVIEW_QUOTE}${PREVIEW_QUOTE}`;
+  }
+
+  if (value.length <= PREVIEW_MASK_LENGTH) {
+    const mask = PREVIEW_MASK_CHARACTER.repeat(value.length);
+    return `${PREVIEW_QUOTE}${mask}${PREVIEW_QUOTE}`;
+  }
+
+  const head = escapePreviewText(value.slice(0, PREVIEW_EDGE_LENGTH));
+  const tail = escapePreviewText(value.slice(-PREVIEW_EDGE_LENGTH));
+
+  return `${PREVIEW_QUOTE}${head}${PREVIEW_ELLIPSIS}${tail}${PREVIEW_QUOTE}`;
 }
 
 function resetRegex(regex) {
@@ -250,6 +447,18 @@ function normalizeAllowlist(allowlist) {
   };
 }
 
+function safeCompilePattern(pattern) {
+  if (typeof pattern !== "string" || pattern.length === 0) {
+    return null;
+  }
+
+  try {
+    return new RegExp(pattern);
+  } catch {
+    return null;
+  }
+}
+
 function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
   if (!entry || typeof entry !== "object") {
     return false;
@@ -268,16 +477,40 @@ function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
     return false;
   }
 
-  if (hasLine && Number(entry.line) !== lineNumber) {
+  if (hasLine) {
+    const expectedLine = Number(entry.line);
+    const actualLine = Number(lineNumber);
+    if (Number.isNaN(expectedLine) || Number.isNaN(actualLine)) {
+      return false;
+    }
+    if (expectedLine !== actualLine) {
+      return false;
+    }
+  }
+
+  // Invariants (fail-closed, no throws, no logging of matchValue):
+  // - matchValue must be a string for match/pattern selectors; anything
+  //   else (null, undefined, number, object) cannot be allowlisted.
+  // - entry.match must be a string; non-string selectors never match.
+  // - entry.pattern must compile; invalid regex never matches and never throws.
+  if ((hasMatch || hasPattern) && typeof matchValue !== "string") {
     return false;
   }
 
-  if (hasMatch && !matchValue.includes(entry.match)) {
-    return false;
+  if (hasMatch) {
+    if (typeof entry.match !== "string") {
+      return false;
+    }
+    if (!matchValue.includes(entry.match)) {
+      return false;
+    }
   }
 
   if (hasPattern) {
-    const pattern = new RegExp(entry.pattern);
+    const pattern = safeCompilePattern(entry.pattern);
+    if (!pattern) {
+      return false;
+    }
     if (!pattern.test(matchValue)) {
       return false;
     }
@@ -286,7 +519,20 @@ function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
   return true;
 }
 
+// Invariants for isAllowlisted:
+// - Pure and deterministic: same inputs always yield the same boolean, with
+//   no shared mutable state, no I/O, and no logging of matchValue (caller is
+//   responsible for redaction via redactPreview/formatFindings).
+// - Fail-closed: null/undefined/malformed allowlists, non-string matchValue,
+//   and invalid regex patterns all yield false instead of throwing, so retries,
+//   partial failure, or concurrent execution cannot produce an unsafe allow.
+// - Line comparison is numeric (Number() on both sides); NaN on either side
+//   never matches. File comparison remains strict equality.
 function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
+  if (typeof matchValue !== "string") {
+    return false;
+  }
+
   const normalized = normalizeAllowlist(allowlist);
 
   for (const entry of normalized.entries) {
@@ -296,11 +542,14 @@ function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
   }
 
   for (const entry of normalized.globalPatterns) {
-    if (!entry?.pattern) {
+    if (!entry || typeof entry.pattern !== "string" || entry.pattern.length === 0) {
       continue;
     }
 
-    const pattern = new RegExp(entry.pattern);
+    const pattern = safeCompilePattern(entry.pattern);
+    if (!pattern) {
+      continue;
+    }
     if (pattern.test(matchValue)) {
       return true;
     }
@@ -533,23 +782,34 @@ module.exports = {
   PLAIN_STRING_REGEX,
   MIN_HIGH_ENTROPY_LENGTH,
   MIN_HIGH_ENTROPY_SCORE,
+  PREVIEW_EDGE_LENGTH,
+  PREVIEW_ELLIPSIS,
+  PREVIEW_MASK_CHARACTER,
+  PREVIEW_MASK_LENGTH,
+  PREVIEW_MAX_LENGTH,
+  PREVIEW_QUOTE,
   assertNoSecretsPrinted,
   collectHighEntropyMatches,
   collectQuotedStringMatches,
   collectRegexMatches,
   collectScanTargets,
+  escapePreviewText,
   formatFinding,
   formatFindings,
+  hasMixedCharacterClasses,
   isAllowlisted,
   isHighEntropyToken,
   isIdentifierLikeString,
+  isLogSafePreview,
   isObviousPlaceholder,
   isStellarStrKeyLike,
   loadAllowlist,
   matchesAllowlistEntry,
   normalizeAllowlist,
+  previewValueTypeTag,
   redactPreview,
   runSecretScan,
+  safeCompilePattern,
   scanBackend,
   scanFileContent,
   scanLine,
