@@ -130,6 +130,27 @@ describe("hashValue", () => {
     expect(h).toMatch(/^sha256:/);
     expect(h).toBe(hashValue({ nested: true }));
   });
+
+  it("is deterministic across repeated invocations for the same input", () => {
+    const first = hashValue("wallet_addr");
+    const second = hashValue("wallet_addr");
+    const third = hashValue("wallet_addr");
+    expect(first).toBe(second);
+    expect(second).toBe(third);
+  });
+
+  it("handles empty string deterministically", () => {
+    const h = hashValue("");
+    expect(h).toMatch(/^sha256:[0-9a-f]{8}$/);
+    expect(h).toBe(hashValue(""));
+  });
+
+  it("handles null and undefined without throwing", () => {
+    expect(() => hashValue(null)).not.toThrow();
+    expect(() => hashValue(undefined)).not.toThrow();
+    expect(hashValue(null)).toBe(hashValue(null));
+    expect(hashValue(undefined)).toBe(hashValue(undefined));
+  });
 });
 
 describe("redactByTier", () => {
@@ -153,6 +174,18 @@ describe("redactByTier", () => {
   it("PRIVATE tier — null / undefined pass through", () => {
     expect(redactByTier(null, FieldTier.PRIVATE)).toBeNull();
     expect(redactByTier(undefined, FieldTier.PRIVATE)).toBeUndefined();
+  });
+
+  it("PRIVATE tier — deterministic for duplicate inputs", () => {
+    const a = redactByTier("0xABCDEF", FieldTier.PRIVATE);
+    const b = redactByTier("0xABCDEF", FieldTier.PRIVATE);
+    expect(a).toBe(b);
+    expect(a).toBe(sha256Prefix("0xABCDEF"));
+  });
+
+  it("SECRET tier — deterministic regardless of value shape", () => {
+    expect(redactByTier({ nested: true }, FieldTier.SECRET)).toBe("[REDACTED]");
+    expect(redactByTier(["a", "b"], FieldTier.SECRET)).toBe("[REDACTED]");
   });
 });
 
