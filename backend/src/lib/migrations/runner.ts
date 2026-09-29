@@ -95,7 +95,7 @@ function buildContext(db: any, isProd: boolean): any {
   };
 }
 
-export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
+export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient; to?: string; all?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
   const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb } = options;
   const isProd = config.NODE_ENV === "production";
   const startTime = Date.now();
@@ -211,7 +211,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
           });
 
           appliedThisRun.push(state);
-          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${durationMs}ms)`);
+          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${state.durationMs}ms)`);
         } catch (err: any) {
           console.error(`❌ Migration ${version}_${fileMig.name} failed:`, err.message);
           throw err;

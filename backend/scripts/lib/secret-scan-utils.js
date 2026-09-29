@@ -74,6 +74,9 @@ function isHexString(value) {
 }
 
 function isIdentifierLikeString(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
   return (
     /^[A-Za-z][A-Za-z0-9_$/-]*$/.test(value) &&
     /[a-z]/.test(value) &&
@@ -83,28 +86,35 @@ function isIdentifierLikeString(value) {
 }
 
 function isObviousPlaceholder(value) {
-  if (!value) {
+  // Fail closed for non-strings so scan callers never crash on unexpected input.
+  if (typeof value !== "string" && !(value instanceof String)) {
     return true;
   }
 
-  if (/^x+$/i.test(value) || /^y+$/i.test(value) || /^z+$/i.test(value)) {
+  const str = String(value);
+
+  if (str.length === 0) {
     return true;
   }
 
-  const uniqueChars = new Set(value);
-  if (uniqueChars.size <= 2 && value.length >= MIN_HIGH_ENTROPY_LENGTH) {
+  if (/^x+$/i.test(str) || /^y+$/i.test(str) || /^z+$/i.test(str)) {
     return true;
   }
 
-  if (/^(your_|example_|placeholder|changeme|test[-_]?secret|development-only|fallback-secret)/i.test(value)) {
+  const uniqueChars = new Set(str);
+  if (uniqueChars.size <= 2 && str.length >= MIN_HIGH_ENTROPY_LENGTH) {
     return true;
   }
 
-  if (isIdentifierLikeString(value)) {
+  if (/^(your_|example_|placeholder|changeme|test[-_]?secret|development-only|fallback-secret)/i.test(str)) {
     return true;
   }
 
-  if (/^\/api\//.test(value) || /^https?:\/\//.test(value)) {
+  if (isIdentifierLikeString(str)) {
+    return true;
+  }
+
+  if (/^\/api\//.test(str) || /^https?:\/\//.test(str)) {
     return true;
   }
 

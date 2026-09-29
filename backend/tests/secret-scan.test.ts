@@ -393,6 +393,202 @@ describe("secret-scan-utils", () => {
       nestedTargets.map((target: { relativePath: string }) => target.relativePath)
     ).not.toContain("node_modules/pkg/index.js");
   });
+
+  describe("isObviousPlaceholder failure boundaries", () => {
+    it("never throws on non-string inputs and returns true deterministically", () => {
+      const nonStrings = [
+        null,
+        undefined,
+        0,
+        123,
+        -1,
+        NaN,
+        Infinity,
+        true,
+        false,
+        {},
+        { key: "val" },
+        [],
+        [1, 2, 3],
+        Symbol("sym"),
+        // eslint-disable-next-line no-new-wrappers
+        BigInt(12345678901234567890),
+        () => "secret",
+        /regex/g,
+        new Date(0),
+      ];
+
+      for (const value of nonStrings) {
+        let result1: boolean;
+        let result2: boolean;
+        expect(() => {
+          result1 = secretScanUtils.isObviousPlaceholder(value as unknown as string);
+          result2 = secretScanUtils.isObviousPlaceholder(value as unknown as string);
+        }).not.toThrow();
+        expect(result1!).toBe(true);
+        expect(result2!).toBe(true);
+        expect(result1!).toBe(result2!);
+      }
+    });
+
+    it("treats String objects identically to string primitives", () => {
+      const runtimeNonPlaceholder = ["prod", "token", "1A2b3C4d5E6f7G8h9I0j!?"].join("-");
+      // eslint-disable-next-line no-new-wrappers
+      const placeholderObj = new String("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+      // eslint-disable-next-line no-new-wrappers
+      const realObj = new String(runtimeNonPlaceholder);
+      const placeholderPrim = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+      const realPrim = runtimeNonPlaceholder;
+
+      expect(secretScanUtils.isObviousPlaceholder(placeholderObj as unknown as string)).toBe(
+        secretScanUtils.isObviousPlaceholder(placeholderPrim)
+      );
+      expect(secretScanUtils.isObviousPlaceholder(realObj as unknown as string)).toBe(
+        secretScanUtils.isObviousPlaceholder(realPrim)
+      );
+      expect(secretScanUtils.isObviousPlaceholder(placeholderObj as unknown as string)).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder(realObj as unknown as string)).toBe(false);
+    });
+
+    it("is deterministic across repeated calls with identical inputs", () => {
+      const runtimeQlx = ["qlx", "live", "abcdefghijklmnopqrstuvwxyz01"].join("_");
+      const runtimeStripeSuffix = ["abcdefghijklmnop", "qrstuvwxyz123456"].join("");
+      const runtimeStripe = ["sk", "live", runtimeStripeSuffix].join("_");
+      const cases = [
+        "",
+        "xxx",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        "your-api-key-here",
+        "example-secret-value",
+        "PLACEHOLDER_FOR_TEST",
+        "changeme-in-prod",
+        "test_secret_value",
+        "test-secret-123",
+        "development-only-token",
+        "fallback-secret-config",
+        "getInvoicesQuerySchema",
+        "/api/v1/invoices",
+        "https://quicklendx.example.com/callback",
+        runtimeQlx,
+        runtimeStripe,
+        "SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "abababababababababababababababab",
+        "   ",
+        "\n\t",
+      ];
+
+      for (const input of cases) {
+        const first = secretScanUtils.isObviousPlaceholder(input);
+        for (let i = 0; i < 50; i++) {
+          expect(secretScanUtils.isObviousPlaceholder(input)).toBe(first);
+        }
+      }
+    });
+
+    it("produces consistent results under concurrent interleaved calls", () => {
+      const runtimeQlx = ["qlx", "live", "abcdefghijklmnopqrstuvwxyz01"].join("_");
+      const runtimeStripeSuffix = ["abcdefghijklmnop", "qrstuvwxyz123456"].join("");
+      const runtimeStripe = ["sk", "live", runtimeStripeSuffix].join("_");
+      const inputs = [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        runtimeQlx,
+        "your-secret-key",
+        runtimeStripe,
+        "",
+      ];
+      const expected = inputs.map((input) => secretScanUtils.isObviousPlaceholder(input));
+
+      const permutations = inputs.map((_, offset) => [
+        ...inputs.slice(offset),
+        ...inputs.slice(0, offset),
+      ]);
+      for (const orderedInputs of permutations) {
+        for (const value of orderedInputs) {
+          const idx = inputs.indexOf(value);
+          expect(secretScanUtils.isObviousPlaceholder(value)).toBe(expected[idx]);
+        }
+      }
+    });
+
+    it("respects MIN_HIGH_ENTROPY_LENGTH boundary for low-unique-char strings", () => {
+      const threshold = secretScanUtils.MIN_HIGH_ENTROPY_LENGTH as number;
+
+      const below = "a".repeat(threshold - 1);
+      const at = "a".repeat(threshold);
+      const above = "a".repeat(threshold + 1);
+
+      expect(secretScanUtils.isObviousPlaceholder(below)).toBe(false);
+      expect(secretScanUtils.isObviousPlaceholder(at)).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder(above)).toBe(true);
+
+      const belowTwo = "ab".repeat(Math.floor((threshold - 1) / 2));
+      const atTwo = "ab".repeat(Math.floor(threshold / 2)).slice(0, threshold);
+      expect(new Set(belowTwo).size <= 2).toBe(true);
+      expect(new Set(atTwo).size <= 2).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder(belowTwo)).toBe(false);
+      expect(secretScanUtils.isObviousPlaceholder(atTwo)).toBe(true);
+
+      const threeChars = "abc".repeat(Math.ceil(threshold / 3)).slice(0, threshold);
+      expect(new Set(threeChars).size).toBeGreaterThan(2);
+      expect(secretScanUtils.isObviousPlaceholder(threeChars)).toBe(false);
+    });
+
+    it("returns false for clearly non-placeholder strings", () => {
+      const runtimeQlx = ["qlx", "live", "abcdefghijklmnopqrstuvwxyz01"].join("_");
+      const runtimeStripeSuffix = ["abcdefghijklmnop", "qrstuvwxyz123456"].join("");
+      const runtimeStripe = ["sk", "live", runtimeStripeSuffix].join("_");
+      const runtimeSlack = ["xoxb", "123456", "789012", "abcdefghijklmnop"].join("-");
+      const runtimeAws = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+      const nonPlaceholders = [
+        runtimeQlx,
+        runtimeStripe,
+        runtimeSlack,
+        runtimeAws,
+        "not-a-template-32-chars-of-entropy-!",
+        "mixedContent123!@#",
+      ];
+
+      for (const value of nonPlaceholders) {
+        expect(secretScanUtils.isObviousPlaceholder(value)).toBe(false);
+      }
+    });
+
+    it("prevents scan-line crashes when candidate.match is a non-string via direct path", () => {
+      const planted = makeHighEntropySecret();
+      const findingsBefore = secretScanUtils.scanLine(
+        `const token = "${planted}";`,
+        1,
+        "src/ok.ts",
+        { entries: [], globalPatterns: [] }
+      );
+      expect(findingsBefore).toHaveLength(1);
+      expect(findingsBefore[0].type).toBe("high-entropy");
+    });
+
+    it("matches prefix patterns case-insensitively and with boundaries", () => {
+      expect(secretScanUtils.isObviousPlaceholder("Your_Key_Here")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("EXAMPLE_SECRET_TOKEN")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("PlaceholderValue")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("CHANGEME_IN_PRODUCTION")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("TESTSECRET_XYZ")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("test_secret_xyz")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("Development-Only-Stub")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("Fallback-Secret-Standalone")).toBe(true);
+    });
+
+    it("handles single-char repeating strings just below threshold", () => {
+      const threshold = secretScanUtils.MIN_HIGH_ENTROPY_LENGTH as number;
+      const justBelow = "x".repeat(threshold - 1);
+      expect(secretScanUtils.isObviousPlaceholder(justBelow)).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("x")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("X")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("y")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("z")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("w")).toBe(false);
+    });
+  });
 });
 
 describe("backend security:scan integration", () => {
