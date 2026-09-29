@@ -24,6 +24,7 @@ const schema = `
 `;
 
 const SAVEPOINT_NAME = "kyc_migration";
+const SAVEPOINT = "kyc_migration";
 
 async function runInTransaction(
   db: MigrationContext["db"],
@@ -35,6 +36,7 @@ async function runInTransaction(
       await db.exec(statement);
     }
     await db.exec(`RELEASE ${SAVEPOINT_NAME}`);
+    await db.exec(`RELEASE ${SAVEPOINT}`);
   } catch (err) {
     try {
       await db.exec(`ROLLBACK TO SAVEPOINT ${SAVEPOINT_NAME}`);
@@ -57,6 +59,8 @@ export default {
       .map((statement) => statement.trim())
       .filter((statement) => statement.length > 0 && !statement.startsWith("--"));
 
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0 && !s.startsWith("--"));
     await runInTransaction(ctx.db, statements);
   },
   down: async (ctx: MigrationContext): Promise<void> => {
