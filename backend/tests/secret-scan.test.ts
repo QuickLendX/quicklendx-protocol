@@ -687,6 +687,168 @@ describe("hasMixedCharacterClasses", () => {
   });
 });
 
+describe("isAllowlisted failure boundaries (issue 2610)", () => {
+  const allowlistFor = (entries: unknown[] = [], globalPatterns: unknown[] = []) => ({
+    entries,
+    globalPatterns,
+  });
+
+  it("allows exact file+line+match, pattern entries, and global patterns", () => {
+    const entryAllowlist = allowlistFor([
+      { file: "src/a.ts", line: 8, match: "token-abc-123" },
+    ]);
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 8, "prefix-token-abc-123-suffix", entryAllowlist)).toBe(
+      true
+    );
+
+    const patternAllowlist = allowlistFor([{ file: "src/b.ts", pattern: "^sk_test_" }]);
+    expect(secretScanUtils.isAllowlisted("src/b.ts", 9, "sk_test_abcdefgh", patternAllowlist)).toBe(
+      true
+    );
+
+    const globalAllowlist = allowlistFor([], [{ pattern: "^global-allow$" }]);
+    expect(secretScanUtils.isAllowlisted("src/any.ts", 1, "global-allow", globalAllowlist)).toBe(true);
+  });
+
+  it("rejects mismatched file, line, match, and pattern without throwing", () => {
+    const allowlist = allowlistFor(
+      [
+        { file: "src/a.ts", line: 8, match: "token-abc-123" },
+        { file: "src/b.ts", pattern: "^sk_test_" },
+      ],
+      [{ pattern: "^global-allow$" }]
+    );
+
+    expect(secretScanUtils.isAllowlisted("src/other.ts", 8, "token-abc-123", allowlist)).toBe(false);
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 9, "token-abc-123", allowlist)).toBe(false);
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 8, "different-value", allowlist)).toBe(false);
+    expect(secretScanUtils.isAllowlisted("src/b.ts", 9, "sk_live_abcdefgh", allowlist)).toBe(false);
+    expect(secretScanUtils.isAllowlisted("src/any.ts", 1, "not-global", allowlist)).toBe(false);
+  });
+
+  it("fails closed on non-string matchValue without throwing", () => {
+    const allowlist = allowlistFor(
+      [{ file: "src/a.ts", line: 1, match: "value" }],
+      [{ pattern: ".*" }]
+    );
+    const badValues = [null, undefined, 123, 0, true, {}, [], Buffer.from("value")];
+
+    for (const bad of badValues) {
+      expect(() => secretScanUtils.isAllowlisted("src/a.ts", 1, bad, allowlist)).not.toThrow();
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, bad, allowlist)).toBe(false);
+      expect(() =>
+        secretScanUtils.matchesAllowlistEntry({ file: "src/a.ts", match: "value" }, "src/a.ts", 1, bad)
+      ).not.toThrow();
+    }
+  });
+
+  it("fails closed on malformed allowlists without throwing", () => {
+    const malformed = [null, undefined, "allow", 42, true, [], { entries: "bad", globalPatterns: 1 }];
+    for (const allowlist of malformed) {
+      expect(() => secretScanUtils.isAllowlisted("src/a.ts", 1, "value", allowlist)).not.toThrow();
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", allowlist)).toBe(false);
+    }
+
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", { entries: [null, {}, []], globalPatterns: [null, {}, { pattern: 123 }, { pattern: "" }] })).toBe(
+      false
+    );
+  });
+
+  it("never throws on invalid regex patterns and treats them as non-matches", () => {
+    const badPatterns = ["[unclosed(", "(?<>bad)", "*", "+", "(?", 123, null, {}, []];
+    for (const pattern of badPatterns) {
+      const entryAllowlist = allowlistFor([{ file: "src/a.ts", pattern }]);
+      expect(() => secretScanUtils.isAllowlisted("src/a.ts", 1, "value", entryAllowlist)).not.toThrow();
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", entryAllowlist)).toBe(false);
+
+      const globalAllowlist = allowlistFor([], [{ pattern }]);
+      expect(() => secretScanUtils.isAllowlisted("src/a.ts", 1, "value", globalAllowlist)).not.toThrow();
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", globalAllowlist)).toBe(false);
+    }
+
+    expect(secretScanUtils.safeCompilePattern("[unclosed(")).toBeNull();
+    expect(secretScanUtils.safeCompilePattern(123 as unknown as string)).toBeNull();
+    expect(secretScanUtils.safeCompilePattern("")).toBeNull();
+    expect(secretScanUtils.safeCompilePattern("^ok$")).toBeInstanceOf(RegExp);
+  });
+
+  it("never matches non-string entry.match selectors", () => {
+    const badMatches = [123, null, {}, [], true];
+    for (const match of badMatches) {
+      expect(
+        secretScanUtils.matchesAllowlistEntry({ file: "src/a.ts", match }, "src/a.ts", 1, "123")
+      ).toBe(false);
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "123", allowlistFor([{ file: "src/a.ts", match }]))).toBe(
+        false
+      );
+    }
+  });
+
+  it("handles line-number boundaries numerically and deterministically", () => {
+    const allowlist = allowlistFor([{ file: "src/a.ts", line: 8, match: "v" }]);
+    // Numeric-string line cooperates with numeric line (documented invariant).
+    expect(secretScanUtils.isAllowlisted("src/a.ts", "8" as unknown as number, "v", allowlist)).toBe(true);
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 8.0, "v", allowlist)).toBe(true);
+    // Non-numeric, NaN, Infinity, and missing lines never match and never throw.
+    for (const line of [NaN, Infinity, undefined, null, "not-a-line", {}, []] as unknown[]) {
+      expect(() =>
+        secretScanUtils.isAllowlisted("src/a.ts", line as number, "v", allowlist)
+      ).not.toThrow();
+      expect(secretScanUtils.isAllowlisted("src/a.ts", line as number, "v", allowlist)).toBe(false);
+    }
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 0, "v", allowlist)).toBe(false);
+    expect(secretScanUtils.isAllowlisted("src/a.ts", -1, "v", allowlist)).toBe(false);
+  });
+
+  it("is deterministic for duplicates, retries, and concurrent execution", () => {
+    const allowlist = allowlistFor(
+      [
+        { file: "src/a.ts", line: 1, match: "dup-value" },
+        { file: "src/a.ts", line: 1, match: "dup-value" },
+      ],
+      [{ pattern: "^dup-value$" }, { pattern: "^dup-value$" }]
+    );
+
+    const first = secretScanUtils.isAllowlisted("src/a.ts", 1, "dup-value", allowlist);
+    expect(first).toBe(true);
+    for (let i = 0; i < 50; i += 1) {
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "dup-value", allowlist)).toBe(first);
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "other", allowlist)).toBe(false);
+    }
+
+    return Promise.all(
+      Array.from({ length: 25 }, () =>
+        Promise.resolve(secretScanUtils.isAllowlisted("src/a.ts", 1, "dup-value", allowlist))
+      )
+    ).then((results) => {
+      expect(results.every((r: boolean) => r === true)).toBe(true);
+    });
+  });
+
+  it("keeps scanLine compatible when the allowlist contains invalid patterns", () => {
+    const poisoned = allowlistFor([{ file: "src/a.ts", pattern: "[unclosed(" }], [
+      { pattern: "[also-bad(" },
+    ]);
+    const awsKey = `AKIA${"IOSFODNN7EXAMPLE"}`;
+    const findings = secretScanUtils.scanLine(
+      `const key = "${awsKey}";`,
+      1,
+      "src/a.ts",
+      poisoned
+    );
+    expect(findings.map((f: { type: string }) => f.type)).toEqual(["aws-access-key"]);
+    expect(findings[0].preview).not.toContain(awsKey);
+  });
+
+  it("returns only booleans so failures stay diagnosable without leaking secrets", () => {
+    const secret = ["super", "secret", "allow", "value-1"].join("-");
+    const allowlist = allowlistFor([{ file: "src/a.ts", line: 1, match: secret }]);
+    const result = secretScanUtils.isAllowlisted("src/a.ts", 1, secret, allowlist);
+    expect(typeof result).toBe("boolean");
+    expect(String(result)).not.toContain(secret);
+  });
+});
+
 describe("backend security:scan integration", () => {
   const repoRoot = path.resolve(__dirname, "..");
 
