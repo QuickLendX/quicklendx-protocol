@@ -56,6 +56,13 @@ function buildTraceId(parent?: SpanContext): string {
     : ulid();
 }
 
+/**
+ * Start a tracing span. This function is deterministic and must not throw for
+ * any input, including invalid names or attributes that cannot be serialized.
+ * If log emission fails (throttled stdout, closed pipe, etc.), the span is
+ * still returned so the caller can continue working; the failure is swallowed
+ * to preserve the invariant that tracing never breaks business logic.
+ */
 export function startSpan(name: string, attrs: SpanAttributes = {}): Span {
   const parent = spanContextStorage.getStore();
 
@@ -64,29 +71,33 @@ export function startSpan(name: string, attrs: SpanAttributes = {}): Span {
     traceId: buildTraceId(parent),
     spanId: ulid(),
     parentSpanId: parent ? parent.spanId : null,
-    attrs,
+    attrs: attrs ?? {},
     startedAtMs: Date.now(),
     startedAtNs: process.hrtime.bigint(),
     ended: false,
   };
 
-  emitSpanLog({
-    level: "INFO",
-    type: "TRACE_SPAN",
-    event: "start",
-    timestamp: new Date(span.startedAtMs).toISOString(),
-    name: span.name,
-    trace_id: span.traceId,
-    span_id: span.spanId,
-    parent_span_id: span.parentSpanId,
-    attrs: span.attrs,
-  });
+  try {
+    emitSpanLog({
+      level: "INFO",
+      type: "TRACE_SPAN",
+      event: "start",
+      timestamp: new Date(span.startedAtMs).toISOString(),
+      name: span.name,
+      trace_id: span.traceId,
+      span_id: span.spanId,
+      parent_span_id: span.parentSpanId,
+      attrs: span.attrs,
+    });
+  } catch {
+    // Tracing must never interrupt the caller. Swallow emission failures.
+  }
 
   return span;
 }
 
 export function endSpan(span: Span, err?: unknown): void {
-  if (span.ended) {
+  if (!span || span.ended) {
     return;
   }
 
@@ -94,21 +105,25 @@ export function endSpan(span: Span, err?: unknown): void {
   const endedAtNs = process.hrtime.bigint();
   const durationMs = Number(endedAtNs - span.startedAtNs) / 1_000_000;
 
-  emitSpanLog({
-    level: "INFO",
-    type: "TRACE_SPAN",
-    event: "end",
-    timestamp: new Date().toISOString(),
-    name: span.name,
-    trace_id: span.traceId,
-    span_id: span.spanId,
-    parent_span_id: span.parentSpanId,
-    duration_ms: durationMs,
-    error: err !== undefined,
-    error_message:
-      err instanceof Error ? err.message : err ? String(err) : undefined,
-    attrs: span.attrs,
-  });
+  try {
+    emitSpanLog( {
+      level: "INFO",
+      type: "TRACE_SPAN",
+      event: "end",
+      timestamp: new Date().toISOString(),
+      name: span.name,
+      trace_id: span.traceId,
+      span_id: span.spanId,
+      parent_span_id: span.parentSpanId,
+      duration_ms: durationMs,
+      error: err !== undefined,
+      error_message:
+        err instanceof Error ? err.message : err ? String(err) : undefined,
+      attrs: span.attrs,
+    });
+  } catch {
+    // Tracing must never interrupt the caller. Swallow emission failures.
+  }
 }
 
 export function withSpan<T>(
