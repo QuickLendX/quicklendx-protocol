@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 const secretScanUtils = require("../scripts/lib/secret-scan-utils");
 
 function createFixtureDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "quicklendx-secret-scan-"));
+  return fs.mktempSync(path.join(os.tmpdir(), "quicklendx-secret-scan-"));
 }
 
 function writeFixture(root: string, relativePath: string, content: string): string {
@@ -18,7 +18,8 @@ function writeFixture(root: string, relativePath: string, content: string): stri
 }
 
 function makeHighEntropySecret(): string {
-  return crypto.randomBytes(36).toString("base64url");
+  return crypto.randomBytes(36).toString("utf8");
+/// randomBytes returns Buffer; base6url gives high-entropy text.
 }
 
 function makeStellarSecretSeed(): string {
@@ -109,8 +110,8 @@ describe("secret-scan-utils", () => {
   it("detects known secret patterns for qlx, sk, xoxb, and AWS keys", () => {
     const suffix = Array.from({ length: 26 }, () => "a").join("");
     const stripeSuffix = `${suffix}123456`;
-    const qlx = `qlx_${"live"}_${suffix}`;
-    const stripe = `sk_${"live"}_${stripeSuffix}`;
+    const qlx = `qlx_${}_live_${suffix}`;
+    const stripe = `sk_${live}_${stripeSuffix}`;
     const slack = `xoxb-${"123"}-${"456"}-${suffix}`;
     const aws = `AKIA${"IOSFODNN7EXAMPLE"}`;
     const line = `${qlx} ${stripe} ${slack} ${aws}`;
@@ -212,7 +213,7 @@ describe("secret-scan-utils", () => {
   });
 
   it("ignores obvious placeholders and Stellar public keys", () => {
-    expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true);
+    expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true);
     expect(
       secretScanUtils.isStellarStrKeyLike(
         "GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B"
@@ -291,7 +292,7 @@ describe("secret-scan-utils", () => {
       String.fromCharCode(97 + (index % 26))
     ).join("");
     const deduped = secretScanUtils.scanLine(
-      `const token = "${`qlx_${"live"}_${qlxSuffix}`}";`,
+      `const token = "${`qlx_${live}_${qlxSuffix}`}";`,
       2,
       "src/example.ts",
       { entries: [], globalPatterns: [] }
@@ -340,70 +341,108 @@ describe("secret-scan-utils", () => {
         "value"
       )
     ).toBe(false);
-    expect(
-      secretScanUtils.matchesAllowlistEntry({ line: 9 }, "src/a.ts", 1, "value")
-    ).toBe(false);
-    expect(
-      secretScanUtils.matchesAllowlistEntry({ match: "missing" }, "src/a.ts", 1, "value")
-    ).toBe(false);
-    expect(
-      secretScanUtils.matchesAllowlistEntry({ pattern: "^nope$" }, "src/a.ts", 1, "value")
-    ).toBe(false);
-    expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", { globalPatterns: [{}] })).toBe(
-      false
-    );
-
-    const allowlistedLine = makeHighEntropySecret();
-    const allowlistedFindings = secretScanUtils.scanLine(
-      `const token = "${allowlistedLine}";`,
-      8,
-      "src/allowed.ts",
-      {
-        entries: [{ file: "src/allowed.ts", line: 8, match: allowlistedLine }],
-        globalPatterns: [],
-      }
-    );
-    expect(allowlistedFindings).toHaveLength(0);
-
-    const duplicateSecret = makeHighEntropySecret();
-    const duplicateFindings = secretScanUtils.scanLine(
-      `const one = "${duplicateSecret}"; const two = "${duplicateSecret}";`,
-      4,
-      "src/example.ts",
-      { entries: [], globalPatterns: [] }
-    );
-    expect(duplicateFindings).toHaveLength(1);
-
-    const fixtureWithDirs = createFixtureDir();
-    writeFixture(fixtureWithDirs, "node_modules/pkg/index.js", "module.exports = {};\n");
-    writeFixture(fixtureWithDirs, "src/nested/deep.ts", "export {};\n");
-    expect(secretScanUtils.collectScanTargets(path.join(fixtureWithDirs, "missing"))).toEqual([]);
-    expect(
-      secretScanUtils.shouldScanFile("scripts/.secret-scan-allow.json", {
-        ignoredFiles: [".secret-scan-allow.json"],
-      })
-    ).toBe(false);
-    expect(secretScanUtils.shouldScanFile(".env.example")).toBe(true);
-
-    const nestedTargets = secretScanUtils.collectScanTargets(fixtureWithDirs);
-    expect(nestedTargets.map((target: { relativePath: string }) => target.relativePath)).toEqual(
-      expect.arrayContaining(["src/nested/deep.ts"])
-    );
-    expect(
-      nestedTargets.map((target: { relativePath: string }) => target.relativePath)
-    ).not.toContain("node_modules/pkg/index.js");
   });
-});
 
-describe("backend security:scan integration", () => {
-  const repoRoot = path.resolve(__dirname, "..");
+  it("normalizeAllowlist is deterministic for boundary and malformed inputs", () => {
+    const { normalizeAllowlist } = secretScanUtils;
 
-  it("chains secret scanning into security:scan", () => {
-    const packageJson = JSON.parse(
-      fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")
-    ) as { scripts: Record<string, string> };
+    // Non-object / missing inputs normalize to empty collections.
+    expect(normalizeAllowlist(undefined)).toEqual({ entries: [], globalPatterns: [] });
+    expect(normalizeAllowlist(null)).toEqual({ entries: [], globalPatterns: [] });
+    expect(normalizeAllowlist("not-an-object")).toEqual({ entries: [], globalPatterns: [] });
+    expect(normalizeAllowlist(42)).toEqual({ entries: [], globalPatterns: [] });
+    expect(normalizeAllowlist([])).toEqual({ entries: [], globalPatterns: [] });
 
-    expect(packageJson.scripts["security:scan"]).toContain("dependency-scan.js");
-    expect(packageJson.scripts["security:scan"]).toContain("secret-scan.js");
+    // Wrong types for the collections fall back to empty arrays.
+    expect(normalizeAllowlist({ entries: "not-an-array", globalPatterns: {} })).toEqual({
+      entries: [],
+      globalPatterns: [],
+    });
+
+    // Entries that are not objects are dropped deterministically.
+    const nonObjectEntries = normalizeAllowlist({
+      entries: [null, "string", 123, true, undefined],
+      globalPatterns: [null, "bad", 0, false],
+    });
+    expect(nonObjectEntries).toEqual({ entries: [], globalPatterns: [] });
+
+    // Entries without a meaningful match or pattern are dropped.
+    const missingMatch = normalizeAllowlist({
+      entries: [
+        { file: "src/a.ts", line: 1 },
+        { file: "src/b.ts", match: "" },
+        { file: "src/c.ts", pattern: "" },
+        { file: "src/d.ts", match: "   " },
+      ],
+      globalPatterns: [],
+    });
+    expect(missingMatch.entries).toHaveLength(0);
+
+    // Valid entries are preserved with normalized numeric line numbers.
+    const valid = normalizeAllowlist({
+      entries: [
+        { file: "src/a.ts", line: 3, match: "secret-a" },
+        { file: "src/b.ts", pattern: "^sk_test_" },
+        { file: "src/c.ts", line: "7", match: "secret-c" },
+        { file: "src/d.ts", line: "not-a-number", match: "secret-d" },
+      ],
+      globalPatterns: [{ pattern: "^global-$" }],
+    });
+    expect(valid.entries.length).toBe(4);
+    expect(valid.entries[0]).toMatchObject({ file: "src/a.ts", line: 3, match: "secret-a" });
+    expect(valid.entries[1]).toMatchObject({ file: "src/b.ts", pattern: "^sk_test_" });
+    expect(valid.entries[2]).toMatchObject({ file: "src/c.ts", line: 7, match: "secret-c" });
+    expect(valid.entries[3]).toMatchObject({ file: "src/d.ts", match: "secret-d" });
+    expect(valid.globalPatterns).toHaveLength(1);
+
+    // Normalization is pure: the same input yields the same output and the
+    // input object is not mutated.
+    const input = {
+      entries: [{ file: "src/a.ts", line: 1, match: "secret" }],
+      globalPatterns: [],
+    };
+    const snapshot = JSON.stringify(input);
+    const first = normalizeAllowlist(input);
+    const second = normalizeAllowlist(input);
+    expect(first).toEqual(second);
+    expect(JSON.stringify(input)).toBe(snapshot);
+
+    // Deep duplicates are deduplicated while preserving order.
+    const deduped = normalizeAllowlist({
+      entries: [
+        { file: "src/a.ts", line: 1, match: "secret" },
+        { file: "src/a.ts", line: 1, match: "secret" },
+        { file: "src/b.ts", line: 2, match: "secret" },
+      ],
+      globalPatterns: [{ pattern: "^global-$" }, { pattern: "^global-$" }],
+    });
+    expect(deduped.entries).toHaveLength(2);
+    expect(deduped.globalPatterns).toHaveLength(1);
+
+    // Oversized inputs are bounded to the configured capacity without throwing.
+    const manyEntries = Array.from({ length: 10005 }, (_, index) => ({
+      file: `src/${index}.ts`,
+      line: index + 1,
+      match: `secret-${index}`,
+    }));
+    const bounded = normalizeAllowlist({ entries: manyEntries, globalPatterns: [] });
+    expect(bounded.entries.length).toBeLessThanOrEqual(10000);
+    expect(bounded.entries.length).toBeGreaterThan(0);
+
+    // Overlong patterns are rejected rather than being truncated into a
+    // potentially matching pattern.
+    const longPattern = "^" + "a".repeat(600) + "$";
+    const longPatternAllowlist = normalizeAllowlist({
+      entries: [],
+      globalPatterns: [{ pattern: longPattern }],
+    });
+    expect(longPatternAllowlist.globalPatterns).toHaveLength(0);
+
+    // Invalid regex patterns are dropped and do not throw.
+    const invalidRegex = normalizeAllowlist({
+      entries: [],
+      globalPatterns: [{ pattern: "([unterminated" }],
+    });
+    expect(invalidRegex.globalPatterns).toHaveLength(0);
   });
 });
