@@ -34,9 +34,6 @@ describe('failure boundaries', () => {
       .mockImplementation(() => ({
         reader: true,
         get: () => ({}) as any,
-        run: () => ({}) as any,
-      }));
-
     jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
       prepare: mockPrepare,
     } as any));
