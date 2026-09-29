@@ -393,6 +393,27 @@ describe("secret-scan-utils", () => {
       nestedTargets.map((target: { relativePath: string }) => target.relativePath)
     ).not.toContain("node_modules/pkg/index.js");
   });
+
+  it("provides deterministic failure-boundary coverage for matchesAllowlistEntry", () => {
+    // 1. Invalid function arguments
+    expect(secretScanUtils.matchesAllowlistEntry(null, "src/a.ts", 1, "value")).toBe(false);
+    expect(secretScanUtils.matchesAllowlistEntry({}, "src/a.ts", 1, "value")).toBe(false);
+    expect(secretScanUtils.matchesAllowlistEntry({ file: "src/a.ts" }, null as any, 1, "value")).toBe(false);
+    expect(secretScanUtils.matchesAllowlistEntry({ line: 1 }, "src/a.ts", "1" as any, "value")).toBe(false);
+    expect(secretScanUtils.matchesAllowlistEntry({ match: "val" }, "src/a.ts", 1, null as any)).toBe(false);
+
+    // 2. Invalid property types inside entry
+    expect(secretScanUtils.matchesAllowlistEntry({ match: 123 as any }, "src/a.ts", 1, "123")).toBe(false);
+    expect(secretScanUtils.matchesAllowlistEntry({ pattern: 123 as any }, "src/a.ts", 1, "123")).toBe(false);
+
+    // 3. Invalid Regex syntax (should not throw, should return false)
+    expect(secretScanUtils.matchesAllowlistEntry({ pattern: "[" }, "src/a.ts", 1, "value")).toBe(false);
+    expect(secretScanUtils.matchesAllowlistEntry({ pattern: "(?unclosed" }, "src/a.ts", 1, "value")).toBe(false);
+
+    // 4. Valid cases
+    expect(secretScanUtils.matchesAllowlistEntry({ file: "src/a.ts", line: 1, match: "value" }, "src/a.ts", 1, "value")).toBe(true);
+    expect(secretScanUtils.matchesAllowlistEntry({ pattern: "^val" }, "src/a.ts", 1, "value")).toBe(true);
+  });
 });
 
 describe("backend security:scan integration", () => {

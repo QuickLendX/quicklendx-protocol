@@ -255,6 +255,14 @@ function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
     return false;
   }
 
+  if (
+    typeof relativePath !== "string" ||
+    typeof lineNumber !== "number" ||
+    typeof matchValue !== "string"
+  ) {
+    return false;
+  }
+
   const hasFile = entry.file !== undefined;
   const hasLine = entry.line !== undefined;
   const hasMatch = entry.match !== undefined;
@@ -272,13 +280,25 @@ function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
     return false;
   }
 
-  if (hasMatch && !matchValue.includes(entry.match)) {
-    return false;
+  if (hasMatch) {
+    if (typeof entry.match !== "string") {
+      return false;
+    }
+    if (!matchValue.includes(entry.match)) {
+      return false;
+    }
   }
 
   if (hasPattern) {
-    const pattern = new RegExp(entry.pattern);
-    if (!pattern.test(matchValue)) {
+    if (typeof entry.pattern !== "string") {
+      return false;
+    }
+    try {
+      const pattern = new RegExp(entry.pattern);
+      if (!pattern.test(matchValue)) {
+        return false;
+      }
+    } catch (error) {
       return false;
     }
   }
