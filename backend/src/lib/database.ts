@@ -1,6 +1,7 @@
 // Updated implementation with deterministic failure‑boundary handling for prepared statements.
 
 import Database from 'better-sqlite3';
+import { rowToDbApiKey } from '../db/database';
 
 
 // ----- Type Declarations -----
@@ -172,58 +173,6 @@ export function getStatementCacheStats() {
 }
 
 /**
- * Convert a raw database row into a DbApiKey domain object.
- *
- * Deterministic failure boundaries:
- * - Missing/null row -> returns null (no throw, no partial object).
- * - Missing required fields -> throws DatabaseError with a stable message.
- * - Invalid types -> throws DatabaseError (never coerces silently).
- * - Unknown extra fields are ignored to preserve forward compatibility.
- *
- * Invariants:
- * - Returned object always has non-empty `id`, `keyHash`, and `userId`.
- * - `createdAt` is always a valid Date when present.
- * - No sensitive material (raw key) is ever read from the row.
- */
-export function rowToDbApiKey(row: any): {
-  id: string;
-  keyHash: string;
-  userId: string;
-  createdAt: Date;
-  revokedAt: Date | null;
-} | null {
-  if (row === null || row === undefined) {
-    return null;
-  }
-  if (typeof row !== 'object') {
-    throw new DatabaseError('rowToDbApiKey: row must be an object');
-  }
-  const { id, key_hash, user_id, created_at, revoked_at } = row;
-  if (typeof id !== 'string' || id.length === 0) {
-    throw new DatabaseError('rowToDbApiKey: missing or invalid id');
-  }
-  if (typeof key_hash !== 'string' || key_hash.length === 0) {
-    throw new DatabaseError('rowToDbApiKey: missing or invalid key_hash');
-  }
-  if (typeof user_id !== 'string' || user_id.length === 0) {
-    throw new DatabaseError('rowToDbApiKey: missing or invalid user_id');
-  }
-  const createdAt = created_at instanceof Date ? created_at : new Date(created_at);
-  if (Number.isNaN(createdAt.getTime())) {
-    throw new DatabaseError('rowToDbApiKey: invalid created_at');
-  }
-  let revokedAt: Date | null = null;
-  if (revoked_at !== null && revoked_at !== undefined) {
-    const parsed = revoked_at instanceof Date ? revoked_at : new Date(revoked_at);
-    if (Number.isNaN(parsed.getTime())) {
-      throw new DatabaseError('rowToDbApiKey: invalid revoked_at');
-    }
-    revokedAt = parsed;
-  }
-  return { id, keyHash: key_hash, userId: user_id, createdAt, revokedAt };
-}
-
-/**
  * Simple health probe – deterministic, never throws.
  */
 export function pingDatabase(): boolean {
@@ -245,4 +194,132 @@ export function closeDatabase() {
     dbInstance.close();
     dbInstance = null;
   }
+}
+
+// ----- Deterministic failure-boundary coverage for rowToDbApiKey -----
+
+/**
+ * Shape of a raw database row that may be converted into a DbApiKey.
+ * All fields are optional to model malformed / partial rows deterministically.
+ */
+export interface DbApiKeyRow {
+  id?: unknown;
+  key_hash?: unknown;
+  user_id?: unknown;
+  name?: unknown;
+  scopes?: unknown;
+  created_at?: unknown;
+  expires_at?: unknown;
+  revoked_at?: unknown;
+  last_used_at?: unknown;
+}
+
+/**
+ * Canonical DbApiKey domain object produced by rowToDbApiKey.
+ */
+export interface DbApiKey {
+  id: string;
+  keyHash: string;
+  userId: string;
+  name: string;
+  scopes: string[];
+  createdAt: Date;
+  expiresAt: Date | null;
+  revokedAt: Date | null;
+  lastUsedAt: Date | null;
+}
+
+/**
+ * Deterministic error raised when a row cannot be safely converted.
+ * Never includes raw row contents to avoid leaking sensitive data.
+ */
+export class DbApiKeyRowError extends DatabaseError {
+  constructor(reason: string) {
+    super(`Invalid DbApiKey row: ${reason}`);
+    this.name = 'DbApiKeyRowError';
+  }
+}
+
+function parseDate(value: unknown, field: string, nullable: boolean): Date | null {
+  if (value === null || value === undefined) {
+    if (nullable) return null;
+    throw new DbApiKeyRowError(`missing required field '${field}'`);
+  }
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) {
+      throw new DbApiKeyRowError(`invalid date in field '${field}'`);
+    }
+    return value;
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const d = new Date(value);
+    if (Number.isNaN(d.getTime())) {
+      throw new DbApiKeyRowError(`invalid date in field '${field}'`);
+    }
+    return d;
+  }
+  throw new DbApiKeyRowError(`invalid type for field '${field}'`);
+}
+
+function parseScopes(value: unknown): string[] {
+  if (value === null || value === undefined) return [];
+  if (Array.isArray(value)) {
+    return value.map((s) => {
+      if (typeof s !== 'string') {
+        throw new DbApiKeyRowError('scopes must contain only strings');
+      }
+      return s;
+    });
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '') return [];
+    return trimmed.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
+  }
+  throw new DbApiKeyRowError('scopes must be an array or comma-separated string');
+}
+
+function requireString(value: unknown, field: string): string {
+  if (typeof value !== 'string' || value.length === 0) {
+    throw new DbApiKeyRowError(`missing or invalid required field '${field}'`);
+  }
+  return value;
+}
+
+/**
+ * Deterministically convert a raw database row into a DbApiKey.
+ *
+ * Invariants:
+ * - Throws DbApiKeyRowError for any malformed input; never returns partial data.
+ * - Never mutates the input row.
+ * - Nullable timestamps (expiresAt, revokedAt, lastUsedAt) map to null.
+ * - Required string fields (id, keyHash, userId, name) must be non-empty strings.
+ * - scopes defaults to [] when absent and is normalized to string[].
+ */
+export function rowToDbApiKey(row: DbApiKeyRow | null | undefined): DbApiKey {
+  if (row === null || row === undefined || typeof row !== 'object') {
+    throw new DbApiKeyRowError('row is null or not an object');
+  }
+
+  const id = requireString(row.id, 'id');
+  const keyHash = requireString(row.key_hash, 'key_hash');
+  const userId = requireString(row.user_id, 'user_id');
+  const name = requireString(row.name, 'name');
+  const scopes = parseScopes(row.scopes);
+  const createdAt = parseDate(row.created_at, 'created_at', false) as Date;
+  const expiresAt = parseDate(row.expires_at, 'expires_at', true);
+  const revokedAt = parseDate(row.revoked_at, 'revoked_at', true);
+  const lastUsedAt = parseDate(row.last_used_at, 'last_used_at', true);
+
+  return {
+    id,
+    keyHash,
+    userId,
+    name,
+    scopes,
+    createdAt,
+    expiresAt,
+    revokedAt,
+    lastUsedAt,
+  };
 }

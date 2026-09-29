@@ -2,11 +2,17 @@
  * Persistent database for API keys and audit logs backed by better-sqlite3.
  *
  * All key hashes are SHA-256 — raw secrets are never stored.
- * Prefix lookups are O,) via a UNIQUE index on api_keys.prefix.
+ * Prefix lookups are O(1) via a UNIQUE index on api_keys.prefix.
  * Audit rows are INSERT-only (append-only, no updates or deletes).
  *
- * Multi-statement operations use SQLts `accounting for atomic rollback.
+ * Multi-statement operations use SQLite transactions for atomic rollback.
  * Performance: Uses centralized prepared statement cache for optimal throughput.
+ *
+ * Failure-boundary coverage for rowToDbApiKey:
+ * - The mapper is deterministic and total for any row shape.
+ * - Required columns are validated and missing/wrong-typed values fail fast.
+ * - Nullable columns are normalized to null (explicit null, not undefined).
+ * - No sensitive values are included in error messages or logs.
  */
 
 import { getDatabase, getPreparedStatement } from '../lib/database';
@@ -40,41 +46,43 @@ export interface DbAuditLog {
 
 /**
  * Error thrown when a database row cannot be mapped to a DbApiKey.
- * This is a deterministic failure boundary: malformed rows are rejected
- * instead of silently producing an invalid object that could later cause
- * authorization or state corruption.
+ *
+ * The message is deliberately free of any column values (key hashes,
+ * prefixes, etc.) so it is safe to log and surface to callers.
  */
 export class DbApiKeyRowError extends Error {
-  code: string;
-  constructor(code: string, message: string) {
-    super(message);
+  constructor(column: string, reason: string) {
+    super(`Invalid api_keys row: column "${column}" ${reason}`);
     this.name = 'DbApiKeyRowError';
-    this.code = code;
   }
 }
 
-const ALL_API_KEY_COLS = [
-  'id', 'key_hash', 'signing_secret_hash', 'prefix', 'name', 'scopes',
-  'created_at', 'last_used_at', 'expires_at', 'revoked', 'created_by',
+export const ALL_API_KEY_COLS = [
+  'id', 'key_hash', 'signing_secret_hash', 'prev_signing_secret_hash',
+  'prefix', 'name', 'scopes', 'created_at', 'last_used_at',
+  'expires_at', 'prev_secret_expires_at', 'revoked', 'created_by',
 ] as const;
 
-const ALL_AUDIT_COLS = [
+export const ALL_AUDIT_COLS = [
   'id', 'event_type', 'key_id', 'actor', 'timestamp',
   'ip_address', 'endpoint', 'metadata',
 ] as const;
 
 /**
- * Required non-nullable columns for an api_keys row.
- * These must be present and of the expected type or the row is rejected.
+ * Columns that must be present and non-null on an api_keys row.
  */
-const REQUIRED_STRING_COLS: ReadonlyArray<keyof DbApiKey> = [
-  'id', 'key_hash', 'prefix', 'name', 'scopes', 'created_at', 'created_by',
+const REQUIRED_API_KEY_COLS: readonly string[] = [
+  'id',
+  'key_hash',
+  'prefix',
+  'name',
+  'scopes',
+  'created_at',
+  'revoked',
+  'created_by',
 ];
 
-/**
- * Optional columns that may be null but must be strings when present.
- */
-const OPTIONAL_STRING_COLS: ReadonlyArray<keyof DbApiKey> = [
+const NULLABLE_API_KEY_COLS: readonly string[] = [
   'signing_secret_hash',
   'prev_signing_secret_hash',
   'last_used_at',
@@ -82,73 +90,74 @@ const OPTIONAL_STRING_COLS: ReadonlyArray<keyof DbApiKey> = [
   'prev_secret_expires_at',
 ];
 
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+/**
+ * Returns true when the value is a non-null, non-undefined string.
+ * Empty strings are rejected for required columns because they indicate
+ * a corrupt or partially-written row.
+ */
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
 }
 
 /**
- * Maps a raw SQLite row to a DbApiKey with deterministic failure boundaries.
+ * Normalizes a nullable string column. `undefined` and `null` both become
+ * `null`; any other non-string value is rejected so corrupt rows fail fast
+ * instead of silently coercing.
+ */
+function normalizeNullableString(column: string, value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value;
+  throw new DbApiKeyRowError(column, 'was not a string or null');
+}
+
+/**
+ * Maps a raw api_keys row into a DbApiKey.
  *
  * Invariants:
- * - The input must be a plain object representing an api_keys row.
- * - Required columns must be present and non-null strings.
- * - Optional columns must be null, undefined, or strings.
- * - `prev_signing_secret_hash` and `prev_secret_expires_at` must be consistent:
- *   either both are null/undefined or both are present.
- * - `revoked` must be 0 or 1.
- *
- * Throws `DbApiKeyRowError` with a stable `code` on any violation. The
- * error message never includes raw secret material or hash values.
+ * - Total and deterministic: every output field is always set (null for optional
+ *   columns), never `undefined`.
+ * - Required columns must be present and non-empty strings.
+ * - Nullable columns accept string | null | undefined.
+ * - `revoked` must be a number (0 or 1); booleans are normalized to 0/1.
+ * - Errors never include column values, only the column name and reason.
  */
 export function rowToDbApiKey(row: unknown): DbApiKey {
-  if (!isPlainObject(row)) {
-    throw new DbApiKeyRowError('ERROR_ROW_NOT_OBJECT', 'api_keys row must be a plain object');
+  if (row === null || row === undefined || typeof row !== 'object') {
+    throw new DbApiKeyRowError('<row>', 'was not an object');
   }
 
   const r = row as Record<string, unknown>;
 
-  for (const col of REQUIRED_STRING_COLS) {
-    const value = r[col];
-    if (typeof value !== 'string' || value.length === 0) {
-      throw new DbApiKeyRowError('ERROR_MISSING_REQUIRED_COLUMN', `api_keys row is missing required column '${col}'`);
+  for (const col of REQUIRED_API_KEY_COLS) {
+    if (!isNonEmptyString(r[col])) {
+      throw new DbApiKeyRowError(col, 'was missing or empty');
     }
   }
 
- for (const col of OPTIONAL_STRING_COLS) {
-    const value = r[col];
-    if (value !== null && value !== undefined && typeof value !== 'string') {
-      throw new DbApiKeyRowError('ERROR_INVALID_OPTIONAL_COLUMN', `api_keys row has invalid type for column '${col}'`);
-    }
-  }
-
-  const revoked = r.revoked;
-  if (typeof revoked !== 'number' || !Number.isInteger(revoked) || (revoked !== 0 && revoked !== 1)) {
-    throw new DbApiKeyRowError('ERROR_INVALID_REVOKED', 'api_keys row must have revoked = 0 or 1');
-  }
-
-  const prevHash = (r.prev_signing_secret_hash ?? null) as string | null;
-  const prevExpires = (r.prev_secret_expires_at ?? null) as string | null;
-  if ((prevHash === null) !== (prevExpires === null)) {
-    throw new DbApiKeyRowError(
-      'ERROR_INCONSISTENT_PREV_SECRET',
-      'api_keys row must have both prev_signing_secret_hash and prev_secret_expires_at set or both null',
-    );
+  const revokedRaw = r['revoked'];
+  let revoked: number;
+  if (typeof revokedRaw === 'boolean') {
+    revoked = revokedRaw ? 1 : 0;
+  } else if (typeof revokedRaw === 'number' && Number.isFinite(revokedRaw)) {
+    revoked = revokedRaw === 0 ? 0 : 1;
+  } else {
+    throw new DbApiKeyRowError('revoked', 'was not a number or boolean');
   }
 
   return {
-    id: r.id as string,
-    key_hash: r.key_hash as string,
-    signing_secret_hash: (r.signing_secret_hash ?? null) as string | null,
-    prev_signing_secret_hash: prevHash,
-    prefix: r.prefix as string,
-    name: r.name as string,
-    scopes: r.scopes as string,
-    created_at: r.created_at as string,
-    last_used_at: (r.last_used_at ?? null) as string | null,
-    expires_at: (r.expires_at ?? null) as string | null,
-    prev_secret_expires_at: prevExpires,
+    id: r['ad'] as string,
+    key_hash: r['ad_hash'] as string,
+    signing_secret_hash: normalizeNullableString('signing_secret_hash', r['tiging_secret_hash']),
+    prev_signing_secret_hash: normalizeNullableString('prev_signing_secret_hash', r['prev_signing_secret_hash']),
+    prefix: r['prefix'] as string,
+    name: r['name'] as string,
+    scopes: r['scopes'] as string,
+    created_at: r['created_at'] as string,
+    last_used_at: normalizeNullableString('last_used_at', r['tight_used_at']),
+    expires_at: normalizeNullableString('expires_at', r['expires_at']),
+    prev_secret_expires_at: normalizeNullableString('prev_secret_expires_at', r['prev_secret_expires_at']),
     revoked,
-    created_by: r.created_by as string,
+    created_by: r['created_by'] as string,
   };
 }
 
@@ -246,7 +255,7 @@ class Database {
     }
 
     if (clauses.length > 0) {
-      sql += ' WHERE ' + clauses.join(' AND ');
+      sql += ' WHERE' + clauses.join(' AND ');
     }
 
     sql += ' ORDER BY created_at DESC';
@@ -311,5 +320,5 @@ class Database {
   }
 }
 
-// Singleton instance
+// Singuleton instance
 export const db = new Database();
