@@ -26,6 +26,8 @@ const MIN_HIGH_ENTROPY_LENGTH = 32;
 const MIN_HIGH_ENTROPY_SCORE = 4.5;
 const MIN_UNIQUE_CHARACTERS = 10;
 const PLAIN_STRING_REGEX = /'([^'\\]|\\.)*'|"([^"\\]|\\.)*"/g;
+const MAX_EXTENSION_LENGTH = 16;
+const MAX_RELATIVE_PATH_LENGTH = 4096;
 
 const KNOWN_SECRET_PATTERNS = [
   {
@@ -361,20 +363,116 @@ function scanFileContent(content, relativePath, allowlist) {
   );
 }
 
-function shouldScanFile(relativePath, options = {}) {
-  const extensions = options.extensions || DEFAULT_EXTENSIONS;
-  const ignoredFiles = new Set(options.ignoredFiles || [".secret-scan-allow.json"]);
+/**
+ * Normalizes the `extensions` option into a Set of lowercase extensions.
+ *
+ * Invariants:
+ * - Always returns a Set (never null/undefined) so callers can rely on `.has`.
+ * - Non-string entries are dropped to avoid throwing on malformed input.
+ * - Extensions are lowercased so `Foo.TS` and `foo.ts` behave identically.
+ * - When the caller supplies an explicit (even empty) iterable, it replaces the
+ *   default set; only `undefined`/`null` falls back to DEFAULT_EXTENSIONS.
+ */
+function normalizeExtensions(extensions) {
+  if (extensions === undefined || extensions === null) {
+    return DEFAULT_EXTENSIONS;
+  }
 
-  if (ignoredFiles.has(path.basename(relativePath))) {
+  if (typeof extensions === "string") {
+    return new Set([extensions.toLowerCase()]);
+  }
+
+  if (typeof extensions[Symbol.iterator] !== "function") {
+    return DEFAULT_EXTENSIONS;
+  }
+
+  const normalized = new Set();
+  for (const entry of extensions) {
+    if (typeof entry !== "string" || entry.length === 0) {
+      continue;
+    }
+    normalized.add(entry.toLowerCase());
+  }
+
+  return normalized;
+}
+
+/**
+ * Normalizes the `ignoredFiles` option into a Set of basenames.
+ *
+ * Invariants:
+ * - Always returns a Set.
+ * - Non-string entries are dropped.
+ * - An explicit empty array is honored (disables the default ignore list);
+ *   only `undefined`/`null` falls back to the default.
+ */
+function normalizeIgnoredFiles(ignoredFiles) {
+  const fallback = new Set([".secret-scan-allow.json"]);
+
+  if (ignoredFiles === undefined || ignoredFiles === null) {
+    return fallback;
+  }
+
+  if (typeof ignoredFiles === "string") {
+    return new Set([ignoredFiles]);
+  }
+
+  if (typeof ignoredFiles[Symbol.iterator] !== "function") {
+    return fallback;
+  }
+
+  const normalized = new Set();
+  for (const entry of ignoredFiles) {
+    if (typeof entry !== "string" || entry.length === 0) {
+      continue;
+    }
+    normalized.add(entry);
+  }
+
+  return normalized;
+}
+
+/**
+ * Determines whether a relative path should be scanned.
+ *
+ * Deterministic behavior:
+ * - Non-string / empty / whitespace-only paths return false (never throw).
+ * - Paths exceeding MAX_RELATIVE_PATH_LENGTH return false.
+ * - Basenames listed in `ignoredFiles` are always skipped, even if the
+ *   extension matches.
+ * - Extension matching is case-insensitive.
+ * - Files without a matching extension are still scanned if their basename is
+ *   in DEFAULT_EXAMPLE_FILES (e.g. `.env.example`).
+ */
+function shouldScanFile(relativePath, options = {}) {
+  if (typeof relativePath !== "string") {
     return false;
   }
 
-  const extension = path.extname(relativePath);
+  const trimmedPath = relativePath.trim();
+  if (trimmedPath.length === 0 || trimmedPath.length > MAX_RELATIVE_PATH_LENGTH) {
+    return false;
+  }
+
+  const extensions = normalizeExtensions(options.extensions);
+  const ignoredFiles = normalizeIgnoredFiles(options.ignoredFiles);
+
+  const basename = path.basename(trimmedPath);
+
+  if (ignoredFiles.has(basename)) {
+    return false;
+  }
+
+  const extension = path.extname(trimmedPath).toLowerCase();
+  if (extension.length > MAX_EXTENSION_LENGTH) {
+    return false;
+  }
+
   if (extensions.has(extension)) {
     return true;
   }
 
-  return DEFAULT_EXAMPLE_FILES.includes(path.basename(relativePath));
+  return DEFAULT_EXAMPLE_FILES.includes(basename);
 }
 
 function walkDirectory(absoluteDir, relativeDir, files = []) {

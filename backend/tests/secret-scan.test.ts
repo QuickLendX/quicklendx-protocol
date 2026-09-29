@@ -1,3 +1,4 @@
+import { describe, expect, it } from "@jest/globals";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +9,12 @@ const secretScanUtils = require("../scripts/lib/secret-scan-utils");
 
 function createFixtureDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "quicklendx-secret-scan-"));
+}
+
+function createFixtureDirWithMode(mode: number): string {
+  const dir = createFixtureDir();
+  fs.chmodSync(dir, mode);
+  return dir;
 }
 
 function writeFixture(root: string, relativePath: string, content: string): string {
@@ -31,6 +38,10 @@ function makeStellarSecretSeed(): string {
     seed += alphabet[crypto.randomInt(0, alphabet.length)];
   }
   return seed;
+}
+
+function isRootUser(): boolean {
+  return typeof process.getuid === "function" && process.getuid() === 0;
 }
 
 describe("secret-scan-utils", () => {
@@ -392,6 +403,212 @@ describe("secret-scan-utils", () => {
     expect(
       nestedTargets.map((target: { relativePath: string }) => target.relativePath)
     ).not.toContain("node_modules/pkg/index.js");
+  });
+
+  describe("shouldScanFile failure boundaries", () => {
+    it("is deterministic for identical inputs across repeated calls", () => {
+      const inputs: Array<[string, unknown]> = [
+        ["src/a.ts", undefined],
+        ["src/a.ts", { ignoredFiles: [] }],
+        ["src/a.ts", { ignoredFiles: [".secret-scan-allow.json"] }],
+        ["scripts/.secret-scan-allow.json", { ignoredFiles: [".secret-scan-allow.json"] }],
+        [".env.example", undefined],
+        ["", undefined],
+        ["src/a.ts", null],
+        ["src/a.ts", {}],
+      ];
+
+      for (const [relativePath, options] of inputs) {
+        const first = secretScanUtils.shouldScanFile(relativePath, options as never);
+        for (let i = 0; i < 5; i += 1) {
+          expect(secretScanUtils.shouldScanFile(relativePath, options as never)).toBe(first);
+        }
+      }
+    });
+
+    it("returns a boolean for every boundary input without throwing", () => {
+      const boundaryInputs: Array<[unknown, unknown]> = [
+        ["", undefined],
+        [".", undefined],
+        ["..", undefined],
+        ["/", undefined],
+        ["src/", undefined],
+        ["src//a.ts", undefined],
+        ["src/a.ts", undefined],
+        ["src/a.ts", null],
+        ["src/a.ts", {}],
+        ["src/a.ts", { ignoredFiles: null }],
+        ["src/a.ts", { ignoredFiles: [] }],
+        ["src/a.ts", { ignoredFiles: ["a.ts"] }],
+        ["src/a.ts", { ignoredFiles: [""] }],
+        ["src/a.ts", { ignoredFiles: [null] }],
+        ["src/a.ts", { ignoredFiles: [undefined] }],
+        ["src/a.ts", { ignoredFiles: [42] }],
+        ["src/a.ts", { ignoredFiles: ["src/a.ts"] }],
+        ["src/a.ts", { ignoredFiles: ["a.ts", "b.ts"] }],
+        ["src/a.ts", { ignoredFiles: ["*.ts"] }],
+        ["src/a.ts", { ignoredFiles: ["src/*"] }],
+        ["src/a.ts", { ignoredFiles: ["/src/a.ts"] }],
+        ["src/a.ts", { ignoredFiles: ["src/a.ts", "src/a.ts"] }],
+        ["src/a.ts", { ignoredFiles: ["SRC/A.TS"] }],
+        ["src/a.ts", { ignoredFiles: ["src/a.ts"], extra: true }],
+        ["src/a.ts", { ignoredFiles: ["src/a.ts"], ignoredDirs: ["src"] }],
+      ];
+
+      for (const [relativePath, options] of boundaryInputs) {
+        const result = secretScanUtils.shouldScanFile(relativePath as never, options as never);
+        expect(typeof result).toBe("boolean");
+      }
+    });
+
+    it("does not mutate the options object across calls", () => {
+      const options = { ignoredFiles: ["a.ts", "b.ts"] };
+      const snapshot = JSON.stringify(options);
+
+      secretScanUtils.shouldScanFile("src/a.ts", options);
+      secretScanUtils.shouldScanFile("src/b.ts", options);
+      secretScanUtils.shouldScanFile("src/c.ts", options);
+
+      expect(JSON.stringify(options)).toBe(snapshot);
+      expect(options.ignoredFiles).toEqual(["a.ts", "b.ts"]);
+    });
+
+    it("is stable under concurrent invocation", async () => {
+      const cases: Array<[string, unknown, boolean]> = [
+        ["src/a.ts", undefined, true],
+        ["src/a.ts", { ignoredFiles: ["a.ts"] }, false],
+        ["scripts/.secret-scan-allow.json", { ignoredFiles: [".secret-scan-allow.json"] }, false],
+        [".env.example", undefined, true],
+      ];
+
+      const results = await Promise.all(
+        Array.from({ length: 200 }, (_, index) => {
+          const [relativePath, options, expected] = cases[index % cases.length];
+          return Promise.resolve().then(() => {
+            const actual = secretScanUtils.shouldScanFile(relativePath, options as never);
+            return actual === expected;
+          });
+        })
+      );
+
+      expect(results.every(Boolean)).toBe(true);
+    });
+
+    it("treats missing or malformed options as the default policy", () => {
+      const baseline = secretScanUtils.shouldScanFile("src/a.ts");
+      expect(secretScanUtils.shouldScanFile("src/a.ts", undefined)).toBe(baseline);
+      expect(secretScanUtils.shouldScanFile("src/a.ts", null)).toBe(baseline);
+      expect(secretScanUtils.shouldScanFile("src/a.ts", {})).toBe(baseline);
+      expect(secretScanUtils.shouldScanFile("src/a.ts", { ignoredFiles: null })).toBe(baseline);
+      expect(secretScanUtils.shouldScanFile("src/a.ts", { ignoredFiles: "a.ts" })).toBe(baseline);
+      expect(secretScanUtils.shouldScanFile("src/a.ts", { ignoredFiles: 42 })).toBe(baseline);
+    });
+
+    it("ignores non-string entries in ignoredFiles without crashing", () => {
+      const options = {
+        ignoredFiles: [null, undefined, 42, {}, [], "a.ts"],
+      };
+      expect(secretScanUtils.shouldScanFile("src/a.ts", options)).toBe(false);
+      expect(secretScanUtils.shouldScanFile("src/b.ts", options)).toBe(true);
+    });
+
+    it("matches ignoredFiles deterministically regardless of order or duplicates", () => {
+      const a = secretScanUtils.shouldScanFile("src/a.ts", {
+        ignoredFiles: ["a.ts", "b.ts"],
+      });
+      const b = secretScanUtils.shouldScanFile("src/a.ts", {
+        ignoredFiles: ["b.ts", "a.ts"],
+      });
+      const c = secretScanUtils.shouldScanFile("src/a.ts", {
+        ignoredFiles: ["a.ts", "a.ts", "b.ts"],
+      });
+      expect(a).toBe(b);
+      expect(b).toBe(c);
+    });
+
+    it("fails closed for traversal-like inputs without throwing", () => {
+      const traversalInputs = [
+        "../etc/passwd",
+        "../../secret",
+        "src/../../etc/passwd",
+        "..\\windows\\system32",
+        "src/./a.ts",
+      ];
+      for (const relativePath of traversalInputs) {
+        const result = secretScanUtils.shouldScanFile(relativePath);
+        expect(typeof result).toBe("boolean");
+      }
+    });
+
+    it("handles unreadable directories without throwing during collection", () => {
+      if (isRootUser()) {
+        return;
+      }
+      const fixtureRoot = createFixtureDirWithMode(0o000);
+      try {
+        expect(secretScanUtils.collectScanTargets(fixtureRoot)).toEqual([]);
+      } finally {
+        fs.chmodSync(fixtureRoot, 0o700);
+      }
+    });
+
+    it("handles unreadable files without throwing during collection", () => {
+      if (isRootUser()) {
+        return;
+      }
+      const fixtureRoot = createFixtureDir();
+      const filePath = writeFixture(fixtureRoot, "src/locked.ts", "export {};\n");
+      fs.chmodSync(filePath, 0o000);
+      try {
+        const targets = secretScanUtils.collectScanTargets(fixtureRoot);
+        const relativePaths = targets.map((target: { relativePath: string }) => target.relativePath);
+        expect(relativePaths).not.toContain("src/locked.ts");
+      } finally {
+        fs.chmodSync(filePath, 0o600);
+      }
+    });
+
+    it("returns an empty target list for a missing root without throwing", () => {
+      const fixtureRoot = createFixtureDir();
+      const missing = path.join(fixtureRoot, "does-not-exist");
+      expect(secretScanUtils.collectScanTargets(missing)).toEqual([]);
+    });
+
+    it("does not leak secret values through error messages on failure", () => {
+      const planted = makeHighEntropySecret();
+      const fixtureRoot = createFixtureDir();
+      writeFixture(fixtureRoot, "src/leak.ts", `const value = "${planted}";\n`);
+
+      const result = secretScanUtils.runSecretScan({
+        backendRoot: fixtureRoot,
+        allowlist: { entries: [], globalPatterns: [] },
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.exitCode).toBe(1);
+      expect(result.message).not.toContain(planted);
+      secretScanUtils.assertNoSecretsPrinted(result.message, result.findings);
+    });
+
+    it("recovers deterministically after a failing scan", () => {
+      const fixtureRoot = createFixtureDir();
+      const planted = makeHighEntropySecret();
+      writeFixture(fixtureRoot, "src/leak.ts", `const value = "${planted}";\n`);
+
+      const first = secretScanUtils.runSecretScan({
+        backendRoot: fixtureRoot,
+        allowlist: { entries: [], globalPatterns: [] },
+      });
+      const second = secretScanUtils.runSecretScan({
+        backendRoot: fixtureRoot,
+        allowlist: { entries: [], globalPatterns: [] },
+      });
+
+      expect(first.ok).toBe(false);
+      expect(second.ok).toBe(false);
+      expect(first.exitCode).toBe(second.exitCode);
+      expect(first.findings.length).toBe(second.findings.length);
+    });
   });
 });
 
