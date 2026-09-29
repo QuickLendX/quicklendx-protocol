@@ -8,7 +8,12 @@ import type { MigrationDefinition, MigrationState, ParsedMigration } from "./typ
 export interface DatabaseClient {
   exec: (sql: string) => void;
   prepare: (sql: string) => { all: (params?: unknown[]) => unknown[]; get: (params?: unknown[]) => unknown; run: (params?: unknown[]) => unknown };
-  transaction: (fn: () => void) => void;
+  /**
+   * Returns a transaction-wrapped function (better-sqlite3 semantics). The
+   * caller must invoke the returned function; calling `db.transaction(fn)`
+   * alone does NOT execute `fn`.
+   */
+  transaction: (fn: () => void) => () => void;
 }
 
 const MIGRATIONS_TABLE = `
@@ -140,10 +145,13 @@ export async function isHotfixApproved(migration: ParsedMigration): Promise<bool
 function buildContext(db: any, isProd: boolean): any {
   return {
     db: {
-      exec: (sql: string, params?: unknown[]) => db.all(sql, params),
-      get: (sql: string, params?: unknown[]) => db.get(sql, params),
-      run: (sql: string, params?: unknown[]) => db.run(sql, params),
-      transaction: (fn: (db: any) => void) => db.transaction(() => fn(db)),
+      exec: (sql: string, params?: unknown[]) => db.exec(sql),
+      get: (sql: string, params?: unknown[]) => db.prepare(sql).get(...(params || [])),
+      run: (sql: string, params?: unknown[]) => db.prepare(sql).run(...(params || [])),
+      transaction: (fn: (db: any) => void) => {
+        const wrapped = db.transaction(() => fn(db));
+        return wrapped();
+      },
     },
     env: process.env,
     isProduction: isProd,
@@ -243,14 +251,27 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
           const appliedAt = new Date().toISOString();
           const migStart = Date.now();
           let state!: MigrationState;
+          let durationMs = 0;
 
-          db.transaction(() => {
+          let concurrentlyApplied = false;
+          const applyTx = db.transaction(() => {
             const txCtx = buildContext(db, isProd);
             const upFn = fileMig.content.up;
             if (!upFn) throw new Error(`Migration ${fileMig.file} missing up function`);
+            // Re-check inside the transaction: a concurrent run may have applied
+            // this version after our initial snapshot. better-sqlite3 executes
+            // statements synchronously on one connection, so this select-then-apply
+            // sequence is atomic per worker. INSERT OR IGNORE is a backstop so a
+            // duplicate version is treated as "already applied" (skipped) instead of
+            // aborting the whole run with a UNIQUE constraint error.
+            const alreadyAppliedRow = db.prepare("SELECT 1 AS present FROM _migrations WHERE version = ?").get(version);
+            if (alreadyAppliedRow) {
+              concurrentlyApplied = true;
+              return;
+            }
             upFn(txCtx);
 
-            const durationMs = Date.now() - migStart;
+            durationMs = Date.now() - migStart;
             state = {
               version,
               name: fileMig.name,
@@ -261,10 +282,17 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
               meta,
             };
 
-            db.prepare(
-              "INSERT INTO _migrations (version, name, checksum, applied_at, duration_ms, author, meta) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            const inserted = db.prepare(
+              "INSERT OR IGNORE INTO _migrations (version, name, checksum, applied_at, duration_ms, author, meta) VALUES (?, ?, ?, ?, ?, ?, ?)"
             ).run(state.version, state.name, state.checksum, state.appliedAt, state.durationMs, state.author, JSON.stringify(state.meta));
+            if ((inserted as any).changes === 0) concurrentlyApplied = true;
           });
+          applyTx();
+
+          if (concurrentlyApplied) {
+            skipped++;
+            continue;
+          }
 
           appliedThisRun.push(state);
           if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${state.durationMs}ms)`);
@@ -312,7 +340,15 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
         const migStart = Date.now();
         try {
           let durationMs = 0;
-          db.transaction(() => {
+          let concurrentlyApplied = false;
+          const rollbackTx = db.transaction(() => {
+            // Re-check inside the transaction: a concurrent run may have already
+            // rolled this version back after our initial snapshot.
+            const existingRow = db.prepare("SELECT 1 AS present FROM _migrations WHERE version = ?").get(version);
+            if (!existingRow) {
+              concurrentlyApplied = true;
+              return;
+            }
             const txCtx = buildContext(db, isProd);
             const downFn = fileMig.content.down;
             if (!downFn) throw new Error(`Migration ${fileMig.file} missing down function`);
@@ -321,6 +357,12 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             durationMs = Date.now() - migStart;
             db.prepare("DELETE FROM _migrations WHERE version = ?").run(version);
           });
+          rollbackTx();
+
+          if (concurrentlyApplied) {
+            skipped++;
+            continue;
+          }
 
           appliedThisRun.push({
             version,
@@ -397,7 +439,12 @@ export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ val
   ).all() || [];
   
   const fileMigrations = await loadMigrationsFromFS();
-  const fileMigrationMap = new Map(fileMigrations.map((m) => [m.version, m]));
+  // First-match semantics (matching loadMigrationsFromFS ordering) so duplicate
+  // version numbers resolve deterministically the same way the runner applies them.
+  const fileMigrationMap = new Map<number, ParsedMigration>();
+  for (const m of fileMigrations) {
+    if (!fileMigrationMap.has(m.version)) fileMigrationMap.set(m.version, m);
+  }
   
   for (const row of appliedRows) {
     const fileMig = fileMigrationMap.get(row.version);
