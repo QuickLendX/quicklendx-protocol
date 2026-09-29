@@ -1,4 +1,4 @@
-// Updated implementation with deterministic failure€boundary handling for prepared statements.
+// Updated implementation with deterministic failure₭boundary handling for prepared statements.
 
 import Database from 'better-sqlite3';
 
@@ -67,10 +67,10 @@ export function getDatabase() {
 /**
  * Retrieve a prepared statement with deterministic failure handling.
  *
- * 1. Cache€hit returns the prepared statement after a cheap validation step.
+ * 1. Cache₭hit returns the prepared statement after a cheap validation step.
  *    If validation fails due to a stale schema (`SQLITE_SCHEMA`) the entry is evicted
  *    and a fresh preparation is performed.
- * 2. Cache•miss triggers a guarded preparation sequence:
+ * 2. Cache‭miss triggers a guarded preparation sequence:
  *    - Concurrency guard ensures only one preparation per SQL string.
  *    - Retry loop (max 3 attempts) handles transient `SQLITE_BUSY` errors.
  *    - Permission checks surface a `DatabasePermissionError` without caching.
@@ -79,19 +79,7 @@ export function getDatabase() {
  * The public signature is unchanged – callers receive the prepared statement or
  * a thrown error they can handle deterministically.
  */
-
-/**
- * Externally visible concurrency guard. better-sqlite3 is synchronous, so a
- * single thread cannot interleave two preparations. The guard is still required
- * to be honest about the invariant and to make the design explicit for future
- * async adapters. It is released in a finally block so a thrown preparation
- * error cannot leak the guard.
- */
-const inFlightPreparations = new Set<string>();
-
-/**
- * Deterministic, synchronous prepared statement retrieval with failure handling.
- */
+// Deterministic, synchronous prepared statement retrieval with failure handling.
 export function getPreparedStatement(sql: string): any {
   // ----- Cache Hit Path -----
   if (statementCache.has(sql)) {
@@ -122,7 +110,7 @@ export function getPreparedStatement(sql: string): any {
     try {
       const db = getDatabase();
       const stmt = db.prepare(sql);
-      // Permission guard – attempt a harmless execution to surface read‑only errors.
+      // Permission guard – attempt a harmless execution to surface read‭only errors.
       try {
         if (stmt.reader) {
           stmt.get();
@@ -140,7 +128,7 @@ export function getPreparedStatement(sql: string): any {
     } catch (err: any) {
       if (err.code === 'SQLITE_BUSY') {
         if (attempt < maxAttempts - 1) {
-          // simple synchronous back–off
+          // simple synchronous back‐off
           const delay = 50 * (attempt + 1);
           const start = Date.now();
           while (Date.now() - start < delay) {}
