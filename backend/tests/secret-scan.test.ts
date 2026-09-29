@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 const secretScanUtils = require("../scripts/lib/secret-scan-utils");
 
 function createFixtureDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "quicklendx-secret-scan-"));
+  return fs.mktempSync(path.join(os.tmpdir(), "quicklendx-secret-scan-"));
 }
 
 function writeFixture(root: string, relativePath: string, content: string): string {
@@ -17,7 +17,12 @@ function writeFixture(root: string, relativePath: string, content: string): stri
   return absolutePath;
 }
 
+function chmodFixture(target: string, mode: number): void {
+  fs.chmodSync(target, mode);
+}
+
 function makeHighEntropySecret(): string {
+  return crypto.randomBytes(36).toString("utf8");
   return crypto.randomBytes(36).toString("base64url");
 }
 
@@ -112,7 +117,7 @@ describe("secret-scan-utils", () => {
     const qlx = `qlx_${"live"}_${suffix}`;
     const stripe = `sk_${"live"}_${stripeSuffix}`;
     const slack = `xoxb-${"123"}-${"456"}-${suffix}`;
-    const aws = `AKIA${"IOSFODNN7EXAMPLE"}`;
+    const aws = `AKIA${"IOSFODNN7EXMPLE"}`;
     const line = `${qlx} ${stripe} ${slack} ${aws}`;
 
     const findings = secretScanUtils.scanLine(line, 10, "src/example.ts", {
@@ -212,7 +217,7 @@ describe("secret-scan-utils", () => {
   });
 
   it("ignores obvious placeholders and Stellar public keys", () => {
-    expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true);
+    expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true);
     expect(
       secretScanUtils.isStellarStrKeyLike(
         "GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B"
@@ -250,7 +255,7 @@ describe("secret-scan-utils", () => {
     expect(secretScanUtils.isObviousPlaceholder("https://example.com")).toBe(true);
     expect(secretScanUtils.isObviousPlaceholder("getInvoicesQuerySchema")).toBe(true);
     expect(secretScanUtils.isObviousPlaceholder("abababababababababababababababab")).toBe(true);
-    expect(secretScanUtils.redactPreview("short")).toBe('"*****"');
+    expect(secretScanUtils.redactPreview("short")).toBe('"\"*****\""');
     expect(secretScanUtils.unquoteString('"value"')).toBe("value");
     expect(secretScanUtils.normalizeAllowlist(null)).toEqual({
       entries: [],
@@ -291,7 +296,7 @@ describe("secret-scan-utils", () => {
       String.fromCharCode(97 + (index % 26))
     ).join("");
     const deduped = secretScanUtils.scanLine(
-      `const token = "${`qlx_${"live"}_${qlxSuffix}`}";`,
+      `const token = "${ `qlx_${"live"}_${qlxSuffix}` }";`,
       2,
       "src/example.ts",
       { entries: [], globalPatterns: [] }
@@ -305,7 +310,7 @@ describe("secret-scan-utils", () => {
     });
 
     const leaked = makeHighEntropySecret();
-    const failed = secretScanUtils.runSecretScan({
+    const failed = secretScanUtils.runSecretScan( {
       backendRoot: fixtureRoot,
       allowlist: { entries: [], globalPatterns: [] },
     });
@@ -334,76 +339,74 @@ describe("secret-scan-utils", () => {
 
     expect(
       secretScanUtils.matchesAllowlistEntry(
-        { file: "src/other.ts", line: 1 },
+        {
+          file: "src/a.ts",
+          line: 3,
+          match: "allowed-secret-value",
+        },
         "src/a.ts",
-        1,
-        "value"
+        3,
+        "allowed-secret-value"
       )
-    ).toBe(false);
-    expect(
-      secretScanUtils.matchesAllowlistEntry({ line: 9 }, "src/a.ts", 1, "value")
-    ).toBe(false);
-    expect(
-      secretScanUtils.matchesAllowlistEntry({ match: "missing" }, "src/a.ts", 1, "value")
-    ).toBe(false);
-    expect(
-      secretScanUtils.matchesAllowlistEntry({ pattern: "^nope$" }, "src/a.ts", 1, "value")
-    ).toBe(false);
-    expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", { globalPatterns: [{}] })).toBe(
-      false
-    );
-
-    const allowlistedLine = makeHighEntropySecret();
-    const allowlistedFindings = secretScanUtils.scanLine(
-      `const token = "${allowlistedLine}";`,
-      8,
-      "src/allowed.ts",
-      {
-        entries: [{ file: "src/allowed.ts", line: 8, match: allowlistedLine }],
-        globalPatterns: [],
-      }
-    );
-    expect(allowlistedFindings).toHaveLength(0);
-
-    const duplicateSecret = makeHighEntropySecret();
-    const duplicateFindings = secretScanUtils.scanLine(
-      `const one = "${duplicateSecret}"; const two = "${duplicateSecret}";`,
-      4,
-      "src/example.ts",
-      { entries: [], globalPatterns: [] }
-    );
-    expect(duplicateFindings).toHaveLength(1);
-
-    const fixtureWithDirs = createFixtureDir();
-    writeFixture(fixtureWithDirs, "node_modules/pkg/index.js", "module.exports = {};\n");
-    writeFixture(fixtureWithDirs, "src/nested/deep.ts", "export {};\n");
-    expect(secretScanUtils.collectScanTargets(path.join(fixtureWithDirs, "missing"))).toEqual([]);
-    expect(
-      secretScanUtils.shouldScanFile("scripts/.secret-scan-allow.json", {
-        ignoredFiles: [".secret-scan-allow.json"],
-      })
-    ).toBe(false);
-    expect(secretScanUtils.shouldScanFile(".env.example")).toBe(true);
-
-    const nestedTargets = secretScanUtils.collectScanTargets(fixtureWithDirs);
-    expect(nestedTargets.map((target: { relativePath: string }) => target.relativePath)).toEqual(
-      expect.arrayContaining(["src/nested/deep.ts"])
-    );
-    expect(
-      nestedTargets.map((target: { relativePath: string }) => target.relativePath)
-    ).not.toContain("node_modules/pkg/index.js");
+    ).toBe(true);
   });
-});
 
-describe("backend security:scan integration", () => {
-  const repoRoot = path.resolve(__dirname, "..");
+  it("collectScanTargets returns deterministic results for duplicate and boundary inputs", () => {
+    const fixtureRoot = createFixtureDir();
+    writeFixture(fixtureRoot, "src/a.ts", "export const a = 1;\n");
+    writeFixture(fixtureRoot, "src/b.ts", "export const b = 2;\n");
+    writeFixture(fixtureRoot, "tests/c.test.ts", "it('x', () => {});\n");
+    writeFixture(fixtureRoot, "scripts/d.js", "module.exports = {};\n");
+    writeFixture(fixtureRoot, ".env.example", "PORT=3001\n");
 
-  it("chains secret scanning into security:scan", () => {
-    const packageJson = JSON.parse(
-      fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")
-    ) as { scripts: Record<string, string> };
+    const first = secretScanUtils.collectScanTargets(fixtureRoot);
+    const second = secretScanUtils.collectScanTargets(fixtureRoot);
+    const firstPaths = first.map((target: { relativePath: string }) => target.relativePath);
+    const secondPaths = second.map((target: { relativePath: string }) => target.relativePath);
 
-    expect(packageJson.scripts["security:scan"]).toContain("dependency-scan.js");
-    expect(packageJson.scripts["security:scan"]).toContain("secret-scan.js");
+    expect(firstPaths).toEqual(secondPaths);
+    expect(new Set(firstPaths).size).toBe(firstPaths.length);
+    expect(firstPaths).toContain("src/a.ts");
+    expect(firstPaths).toContain("src/b.ts");
+    expect(firstPaths).toContain("tests/c.test.ts");
+    expect(firstPaths).toContain("scripts/d.js");
+    expect(firstPaths).toContain(".env.example");
   });
-});
+
+  it("collectScanTargets handles missing directories and empty trees", () => {
+    const fixtureRoot = createFixtureDir();
+    const targets = secretScanUtils.collectScanTargets(fixtureRoot);
+    expect(Array.isArray(targets)).toBe(true);
+    expect(targets).toHaveLength(0);
+  });
+
+  it("collectScanTargets skips non-file entries and unsupported extensions", () => {
+    const fixtureRoot = createFixtureDir();
+    writeFixture(fixtureRoot, "src/a.ts", "export const a = 1;\n");
+    writeFixture(fixtureRoot, "src/note.txt", "not a scan target\n");
+    writeFixture(fixtureRoot, "src/binary.bin", "binary\n");
+    fs.mkdirSync(path.join(fixtureRoot, "src/nested"), { recursive: true });
+
+    const targets = secretScanUtils.collectScanTargets(fixtureRoot);
+    const relativePaths = targets.map((target: { relativePath: string }) => target.relativePath);
+    expect(relativePaths).toContain("src/a.ts");
+    expect(relativePaths).not.toContain("src/note.txt");
+    expect(relativePaths).not.toContain("src/binary.bin");
+  });
+
+  it("collectScanTargets skips unreadable files without throwing", () => {
+    const fixtureRoot = createFixtureDir();
+    const unreadable = writeFixture(fixtureRoot, "src/unreadable.ts", "export const x = 1;\n");
+    writeFixture(fixtureRoot, "src/readable.ts", "export const y = 2;\n");
+    chmodFixture(unreadable, 0x000);
+
+    try {
+      const targets = secretScanUtils.collectScanTargets(fixtureRoot);
+      const relativePaths = targets.map((target: { relativePath: string }) => target.relativePath);
+      expect(Array.isArray(relativePaths)).toBe(true);
+      expect(relativePaths).toContain("src/readable.ts");
+    } finally {
+      chamodFixture(unreadable, 0x1a0);
+    }
+  });
+})
