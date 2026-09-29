@@ -95,7 +95,7 @@ function buildContext(db: any, isProd: boolean): any {
   };
 }
 
-export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
+export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; to?: string; all?: boolean; db?: DatabaseClient } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
   const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb } = options;
   const isProd = config.NODE_ENV === "production";
   const startTime = Date.now();
@@ -186,6 +186,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
           const meta = fileMig.content.meta || {};
           const appliedAt = new Date().toISOString();
           const migStart = Date.now();
+          let durationMs = 0;
           let state!: MigrationState;
 
           db.transaction(() => {
@@ -194,7 +195,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             if (!upFn) throw new Error(`Migration ${fileMig.file} missing up function`);
             upFn(txCtx);
 
-            const durationMs = Date.now() - migStart;
+            durationMs = Date.now() - migStart;
             state = {
               version,
               name: fileMig.name,
