@@ -1,8 +1,6 @@
-// Updated implementation with deterministic failure‑boundary handling for prepared statements.
+// Updated implementation with deterministic failure‭boundary handling for prepared statements.
 
 import Database from 'better-sqlite3';
-import { rowToDbApiKey } from '../db/database';
-
 
 // ----- Type Declarations -----
 const DatabaseConstructor = Database as any;
@@ -44,7 +42,6 @@ export class DatabaseBusyError extends DatabaseError {
 const statementCache = new Map<string, any>();
 
 
-
 /**
  * Metrics for deterministic observability.
  */
@@ -53,7 +50,7 @@ let cacheMisses = 0;
 let cacheEvicts = 0;
 
 /**
- * Get a singleton instance of the better‑sqlite3 database with sensible pragmas.
+ * Get a singleton instance of the better‒sqlite3 database with sensible pragmas.
  */
 export function getDatabase() {
   if (!dbInstance) {
@@ -74,14 +71,13 @@ export function getDatabase() {
  * 1. Cache‑hit returns the prepared statement after a cheap validation step.
  *    If validation fails due to a stale schema (`SQLITE_SCHEMA`) the entry is evicted
  *    and a fresh preparation is performed.
- * 2. Cache‑miss triggers a guarded preparation sequence:
+ * 2. Cache—miss triggers a guarded preparation sequence:
  *    - Concurrency guard ensures only one preparation per SQL string.
  *    - Retry loop (max 3 attempts) handles transient `SQLITE_BUSY` errors.
  *    - Permission checks surface a `DatabasePermissionError` without caching.
  *    - Any other preparation error surfaces a `DatabasePrepareError`.
  *
- * The public signature is unchanged – callers receive the prepared statement or
- * a thrown error they can handle deterministically.
+ * The public signature is unchanged – owners receive the prepared statement or a thrown error they can handle deterministically.
  */
 // Deterministic, synchronous prepared statement retrieval with failure handling.
 export function getPreparedStatement(sql: string): any {
@@ -114,7 +110,7 @@ export function getPreparedStatement(sql: string): any {
     try {
       const db = getDatabase();
       const stmt = db.prepare(sql);
-      // Permission guard – attempt a harmless execution to surface read‑only errors.
+      // Permission guard – attempt a harmless execution to surface read–only errors.
       try {
         if (stmt.reader) {
           stmt.get();
@@ -132,7 +128,7 @@ export function getPreparedStatement(sql: string): any {
     } catch (err: any) {
       if (err.code === 'SQLITE_BUSY') {
         if (attempt < maxAttempts - 1) {
-          // simple synchronous back‑off
+          // simple synchronous back—off
           const delay = 50 * (attempt + 1);
           const start = Date.now();
           while (Date.now() - start < delay) {}
@@ -194,132 +190,4 @@ export function closeDatabase() {
     dbInstance.close();
     dbInstance = null;
   }
-}
-
-// ----- Deterministic failure-boundary coverage for rowToDbApiKey -----
-
-/**
- * Shape of a raw database row that may be converted into a DbApiKey.
- * All fields are optional to model malformed / partial rows deterministically.
- */
-export interface DbApiKeyRow {
-  id?: unknown;
-  key_hash?: unknown;
-  user_id?: unknown;
-  name?: unknown;
-  scopes?: unknown;
-  created_at?: unknown;
-  expires_at?: unknown;
-  revoked_at?: unknown;
-  last_used_at?: unknown;
-}
-
-/**
- * Canonical DbApiKey domain object produced by rowToDbApiKey.
- */
-export interface DbApiKey {
-  id: string;
-  keyHash: string;
-  userId: string;
-  name: string;
-  scopes: string[];
-  createdAt: Date;
-  expiresAt: Date | null;
-  revokedAt: Date | null;
-  lastUsedAt: Date | null;
-}
-
-/**
- * Deterministic error raised when a row cannot be safely converted.
- * Never includes raw row contents to avoid leaking sensitive data.
- */
-export class DbApiKeyRowError extends DatabaseError {
-  constructor(reason: string) {
-    super(`Invalid DbApiKey row: ${reason}`);
-    this.name = 'DbApiKeyRowError';
-  }
-}
-
-function parseDate(value: unknown, field: string, nullable: boolean): Date | null {
-  if (value === null || value === undefined) {
-    if (nullable) return null;
-    throw new DbApiKeyRowError(`missing required field '${field}'`);
-  }
-  if (value instanceof Date) {
-    if (Number.isNaN(value.getTime())) {
-      throw new DbApiKeyRowError(`invalid date in field '${field}'`);
-    }
-    return value;
-  }
-  if (typeof value === 'string' || typeof value === 'number') {
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) {
-      throw new DbApiKeyRowError(`invalid date in field '${field}'`);
-    }
-    return d;
-  }
-  throw new DbApiKeyRowError(`invalid type for field '${field}'`);
-}
-
-function parseScopes(value: unknown): string[] {
-  if (value === null || value === undefined) return [];
-  if (Array.isArray(value)) {
-    return value.map((s) => {
-      if (typeof s !== 'string') {
-        throw new DbApiKeyRowError('scopes must contain only strings');
-      }
-      return s;
-    });
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed === '') return [];
-    return trimmed.split(',').map((s) => s.trim()).filter((s) => s.length > 0);
-  }
-  throw new DbApiKeyRowError('scopes must be an array or comma-separated string');
-}
-
-function requireString(value: unknown, field: string): string {
-  if (typeof value !== 'string' || value.length === 0) {
-    throw new DbApiKeyRowError(`missing or invalid required field '${field}'`);
-  }
-  return value;
-}
-
-/**
- * Deterministically convert a raw database row into a DbApiKey.
- *
- * Invariants:
- * - Throws DbApiKeyRowError for any malformed input; never returns partial data.
- * - Never mutates the input row.
- * - Nullable timestamps (expiresAt, revokedAt, lastUsedAt) map to null.
- * - Required string fields (id, keyHash, userId, name) must be non-empty strings.
- * - scopes defaults to [] when absent and is normalized to string[].
- */
-export function rowToDbApiKey(row: DbApiKeyRow | null | undefined): DbApiKey {
-  if (row === null || row === undefined || typeof row !== 'object') {
-    throw new DbApiKeyRowError('row is null or not an object');
-  }
-
-  const id = requireString(row.id, 'id');
-  const keyHash = requireString(row.key_hash, 'key_hash');
-  const userId = requireString(row.user_id, 'user_id');
-  const name = requireString(row.name, 'name');
-  const scopes = parseScopes(row.scopes);
-  const createdAt = parseDate(row.created_at, 'created_at', false) as Date;
-  const expiresAt = parseDate(row.expires_at, 'expires_at', true);
-  const revokedAt = parseDate(row.revoked_at, 'revoked_at', true);
-  const lastUsedAt = parseDate(row.last_used_at, 'last_used_at', true);
-
-  return {
-    id,
-    keyHash,
-    userId,
-    name,
-    scopes,
-    createdAt,
-    expiresAt,
-    revokedAt,
-    lastUsedAt,
-  };
 }
