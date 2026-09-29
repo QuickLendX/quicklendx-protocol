@@ -1,1 +1,471 @@
-aW1wb3J0ICogYXMgZnMgZnJvbSAiZnMvcHJvbWlzZXMiOwppbXBvcnQgKiBhcyBwYXRoIGZyb20gInBhdGgiOwppbXBvcnQgeyBjcmVhdGVIYXNoIH0gZnJvbSAiY3J5cHRvIjsKaW1wb3J0IHsgZ2V0RGF0YWJhc2UgfSBmcm9tICIuLi9kYXRhYmFzZSI7CmltcG9ydCB7IGNvbmZpZyB9IGZyb20gIi4uLy4uL2NvbmZpZyI7CmltcG9ydCB0eXBlIHsgTWlncmF0aW9uRGVmaW5pdGlvbiwgTWlncmF0aW9uU3RhdGUsIFBhcnNlZE1pZ3JhdGlvbiB9IGZyb20gIi4vdHlwZXMiOwoKZXhwb3J0IGludGVyZmFjZSBEYXRhYmFzZUNsaWVudCB7CiAgZXhlYzogKHNxbDogc3RyaW5nKSA9PiB2b2lkOwogIHByZXBhcmU6IChzcWw6IHN0cmluZykgPT4geyBhbGw6IChwYXJhbXM/OiB1bmtub3duW10pID0+IHVua25vd25bXTsgZ2V0OiAocGFyYW1zPzogdW5rbm93bltdKSA9PiB1bmtub3duOyBydW46IChwYXJhbXM/OiB1bmtub3duW10pID0+IHVua25vd24gfTsKICAvKioKICAgKiBSZXR1cm5zIGEgdHJhbnNhY3Rpb24td3JhcHBlZCBmdW5jdGlvbiAoYmV0dGVyLXNxbGl0ZTMgc2VtYW50aWNzKS4gVGhlCiAgICogY2FsbGVyIG11c3QgaW52b2tlIHRoZSByZXR1cm5lZCBmdW5jdGlvbjsgY2FsbGluZyBgZGIudHJhbnNhY3Rpb24oZm4pYAogICAqIGFsb25lIGRvZXMgTk9UIGV4ZWN1dGUgYGZuYC4KICAgKi8KICB0cmFuc2FjdGlvbjogKGZuOiAoKSA9PiB2b2lkKSA9PiAoKSA9PiB2b2lkOwp9Cgpjb25zdCBNSUdSQVRJT05TX1RBQkxFID0gYAogIENSRUFURSBUQUJMRSBJRiBOT1QgRVhJU1RTIF9taWdyYXRpb25zICgKICAgIHZlcnNpb24gSU5URUdFUiBQUklNQVJZIEtFWSwKICAgIG5hbWUgVEVYVCBOT1QgTlVMTCwKICAgIGNoZWNrc3VtIFRFWFQgTk9UIE5VTEwsCiAgICBhcHBsaWVkX2F0IFRFWFQgTk9UIE5VTEwsCiAgICBkdXJhdGlvbl9tcyBJTlRFR0VSIE5PVCBOVUxMLAogICAgYXV0aG9yIFRFWFQgTk9UIE5VTEwsCiAgICBtZXRhIFRFWFQgREVGQVVMVCAndHt9JywKICAgIFVOSVFVRSh2ZXJzaW9uKQogICkKYDsKCmNvbnN0IE1JR1JBVElPTlNfRElSID0gcGF0aC5yZXNvbHZlKHByb2Nlc3MuY3dkKCksICJzcmMiLCAibWlncmF0aW9ucyIpOwpjb25zdCBIT1RGSVhfQVBQUk9WQUxTX0RJUl9OQU1FID0gIi5ob3RmaXgtYXBwcm92YWxzIjsKY29uc3QgSE9URklYX0FQUFJPVkFMU19ESVIgPSBwYXRoLnJlc29sdmUocHJvY2Vzcy5jd2QoKSwgSE9URklYX0FQUFJPVkFMU19ESVJfTkFNRSk7CgovLyBUaGUgb25seSBzaGFwZSBhIG1pZ3JhdGlvbiBuYW1lIGNhbiBsZWdpdGltYXRlbHkgaGF2ZSwgcGVyCi8vIHBhcnNlTWlncmF0aW9uRmlsZW5hbWUuIEVuZm9yY2VkIGFnYWluIHdoZW4gYnVpbGRpbmcgYW4gYXBwcm92YWwgcGF0aCBzbyBhCi8vIFBhcnNlZE1pZ3JhdGlvbiBhc3NlbWJsZWQgYnkgYW55IG90aGVyIGNhbGxlciBjYW5ub3QgcG9pbnQgdGhlIGFwcHJvdmFsCi8vIGNoZWNrIG91dHNpZGUgSE9URklYX0FQUFJPVkFMU19ESVIgdmlhICIuLi8iIG9yIGFuIGFic29sdXRlIHBhdGguCmNvbnN0IEFQUFJPVkFMX05BTUVfUEFUVEVSTiA9IC9eW2EtejAtOV9dKyQvOwoKZXhwb3J0IGZ1bmN0aW9uIGNvbXB1dGVDaGVja3N1bShjb250ZW50OiBzdHJpbmcpOiBzdHJpbmcgewogIHJldHVybiBjcmVhdGVIYXNoKCJzaGEyNTYiKS51cGRhdGUoY29udGVudCkuZGlnZXN0KCJoZXgiKTsKfQoKZXhwb3J0IGZ1bmN0aW9uIHBhcnNlTWlncmF0aW9uRmlsZW5hbWUoZmlsZW5hbWU6IHN0cmluZyk6IHsgdmVyc2lvbjogbnVtYmVyOyBuYW1lOiBzdHJpbmcgfSB8IG51bGwgewogIGNvbnN0IG1hdGNoID0gZmlsZW5hbWUubWF0Y2goL152PyhcZHs zfSlfKFthLXowLTlfXSspXC50cyQvKTsKICBpZiAoIW1hdGNoKSByZXR1cm4gbnVsbDsKICByZXR1cm4geyB2ZXJzaW9uOiBwYXJzZUludChtYXRjaFsxXSwgMTApLCBuYW1lOiBtYXRjaFsyXSB9Owp9CgpleHBvcnQgYXN5bmMgZnVuY3Rpb24gbG9hZE1pZ3JhdGlvbnNGcm9tRlMoKTogUHJvbWlzZTxQYXJzZWRIaWdyYXRpb25bXT4gewogIHRyeSB7CiAgICBjb25zdCBmaWxlcyA9IGF3YWl0IGZzLnJlYWRkaXIoTUlHUkFUSU9OU19ESVIpOwogICAgY29uc3QgbWlncmF0aW9uczogUGFyc2VkTWlncmF0aW9uW10gPSBbXTsKCiAgICBmb3IgKGNvbnN0IGZpbGUgb2YgZmlsZXMpIHsKICAgICAgY29uc3QgcGFyc2VkID0gcGFyc2VNaWdyYXRpb25GaWxlbmFtZShmaWxlKTsKICAgICAgaWYgKCFwYXJzZWQpIGNvbnRpbnVlOwoKICAgICAgY29uc3QgZmlsZVBhdGggPSBwYXRoLmpvaW4oTUlHUkFUSU9OU19ESVIsIGZpbGUpOwogICAgICBjb25zdCBjb250ZW50ID0gYXdhaXQgZnMucmVhZEZpbGUoZmlsZVBhdGgsICJ1dGYtOCIpOwoKICAgICAgbGV0IGRlZjogTWlncmF0aW9uRGVmaW5pdGlvbjsKICAgICAgdHJ5IHsKICAgICAgICBkZWYgPSByZXF1aXJlKGZpbGVQYXRoKS5kZWZhdWx0IGFzIE1pZ3JhdGlvbkRlZmluaXRpb247CiAgICAgIH0gY2F0Y2ggKGVycjogYW55KSB7CiAgICAgICAgdGhyb3cgbmV3IEVycm9yKGBGYWlsZWQgdG8gbG9hZCBtaWdyYXRpb24gJHtmaWxlfTogJHtlcnIubWVzc2FnZX1gKTsKICAgICAgfQoKICAgICAgaWYgKGRlZi52ZXJzaW9uICE9PSBwYXJzZWQudmVyc2lvbikgewogICAgICAgIHRocm93IG5ldyBFcnJvcihgVmVyc2lvbiBtaXNtYXRjaCBpbiAke2ZpbGV9OiBmaWxlbmFtZSAke3BhcnNlZC52ZXJzaW9ufSBidXQgZXhwb3J0ICR7ZGVmLnZlcnNpb259YCk7CiAgICAgIH0KCiAgICAgIG1pZ3JhdGlvbnMucHVzaCh7IGZpbGUsIHZlcnNpb246IHBhcnNlZC52ZXJzaW9uLCBuYW1lOiBwYXJzZWQubmFtZSwgY29udGVudDogZGVmIH0pOwogICAgfQoKICAgIHJldHVybiBtaWdyYXRpb25zLnNvcnQoKGEsIGIpID0+IGEudmVyc2lvbiAtIGIudmVyc2lvbik7CiAgfSBjYXRjaCAoZXJyOiBhbnkpIHsKICAgIGlmIChlcnIuY29kZSA9PT0gIkVOT0VOVCIpIHJldHVybiBbXTsKICAgIHRocm93IGVycjsKICB9Cn0KCi8vIEhvdGZpeCBhcHByb3ZhbCBjb250cmFjdC4gRXZlcnkgYnJhbmNoIGZhaWxzIGNsb3NlZDogdGhlIGZ1bmN0aW9uIG9ubHkgZXZlcgovLyByZXR1cm5zIHRydWUgZm9yIGEgdmVyaWZpZWQgYXBwcm92YWwgYXJ0aWZhY3QsIGFuZCBhbnl0aGluZyBpdCBjYW5ub3QKLy8gZGVjaWRlIGl0IHJlcG9ydHMgcmF0aGVyIHRoYW4gZ3Vlc3NpbmcuIFBpbm5lZCBieQovLyBzcmMvdGVzdHMvbWlncmF0aW9uLXJ1bm5lci1ob3RmaXgudGVzdC50cy4KLy8KLy8gICBIMSBBIE1pZ3JhdGlvbiB0aGF0IGlzIG5vdCBhIGhvdGZpeCBuZXZlciBuZWVkcyBhcHByb3ZhbC4KLy8gICBIMiBBIGhvdGZpeCBpcyBhcHByb3ZlZCBvbmx5IHdoZW4gPHZlcnNpb24+XzxuYW1lPi5hcHByb3ZhbCBleGlzdHMgQU5EIGlzCi8vICAgICAgYSByZWd1bGFyIGZpbGUuIEEgZGlyZWN0b3J5IG9yIGFueSBvdGhlciBub2RlIHR5cGUgaXMgYSBicm9rZW4KLy8gICAgICBkZXBsb3ltZW50LCBub3QgYW4gYXBwcm92YWwsIGFuZCBpcyByZXBvcnRlZCBhcyBzdWNoLgovLyAgIEgzICJObyBhcHByb3ZhbCBhcnRpZmFjdCIgKEVOT0VOVCwgRU5PRElSKSBpcyBhbiBleHBlY3RlZCBvdXRjb21lIGFuZAovLyAgICAgIHJldHVybnMgZmFsc2U7IHRoZSBjYWxsZXIgdHVybnMgdGhhdCBpbnRvIHRoZSB1c2VyLWZhY2luZyBlcnJvci4KLy8gICBINCBBbnkgb3RoZXIgZmlsZXN5c3RlbSBmYWlsdXJlIChFQUNDRVMsIEVQRVJNLCBFTE9PUCwgLi4uKSBpcyBhbgovLyAgICAgIG9wZXJhdGlvbmFsIGZhdWx0LCBub3QgYSB2ZXJkaWN0LiBJdCB0aHJvd3MgY2FycnlpbmcgdGhlIGVycm5vIHNvIGFuCi8vICAgICAgb3BlcmF0b3IgaXMgbm90IHNlbnQgaHVudGluZyBmb3IgYSBtaXNzaW5nIGFwcHJvdmFsIGZpbGUgdGhhdCBpcwovLyAgICAgIGFjdHVhbGx5IHByZXNlbnQgYnV0IHVucmVhZGFibGUuCi8vICAgSDUgVGhlIGFwcHJvdmFsIHBhdGggaXMgYnVpbHQgZnJvbSB0aGUgZmlsZW5hbWUtcGFyc2VkIHZlcnNpb24gYW5kIG5hbWUsCi8vICAgICAgbmV2ZXIgZnJvbSBjb250ZW50Lm5hbWUsIGFuZCB0aGUgbmFtZSBpcyByZS12YWxpZGF0ZWQsIHNvIGEgY3JhZnRlZAovLyAgICAgIG1pZ3JhdGlvbiBuYW1lIGNhbm5vdCByZWRpcmVjdCB0aGUgY2hlY2sgb3V0c2lkZSB0aGUgYXBwcm92YWxzIGRpci4KLy8gICBINiBBcHByb3ZhbCBpcyBhIHJlYWQtb25seSBjaGVjazogbm8gc2hhcmVkIHN0YXRlLCBzbyByZXBlYXRlZCBhbmQKLy8gICAgICBjb25jdXJyZW50IGNhbGxzIGFncmVlLgpleHBvcnQgYXN5bmMgZnVuY3Rpb24gaXNIb3RmaXhBcHByb3ZlZChtaWdyYXRpb246IFBhcnNlZE1pZ3JhdGlvbik6IFByb21pc2U8Ym9vbGVhbj4gewogIGlmICghbWlncmF0aW9uLmNvbnRlbnQubWV0YT8uaG90Zml4KSByZXR1cm4gdHJ1ZTsKCiAgY29uc3QgbGFiZWwgPSBgJHttaWdyYXRpb24udmVyc2lvbn1fJHttaWdyYXRpb24ubmFtZX1gOwoKICBpZiAoIUFQUFJPVkFMX05BTUVfUEFUVEVSTi50ZXN0KG1pZ3JhdGlvbi5uYW1lKSkgewogICAgdGhyb3cgbmV3IEVycm9yKAogICAgICBgUmVmdXNpbmcgdG8gZXZhbHVhdGUgaG90Zml4IGFwcHJvdmFsIGZvciAke2xhYmVsfTogbWlncmF0aW9uIG5hbWUgaXMgbm90IGEgdmFsaWQgaWRlbnRpZmllci5gCiAgICApOwogIH0KCiAgLy8gT25seSB0aGUgYXJ0aWZhY3QncyBmaWxlIG5hbWUgaXMgcmVwb3J0ZWQgaW4gZXJyb3JzLCBuZXZlciB0aGUgYWJzb2x1dGUKICAvLyBwYXRoLCBzbyBkZXBsb3ltZW50IGxheW91dCBpcyBub3QgZWNob2VkIGludG8gQ0kgbG9ncy4KICBjb25zdCBhcHByb3ZhbEZpbGVOYW1lID0gYCR7bGFiZWx9LmFwcHJvdmFsYDsKCiAgbGV0IHN0YXRzOiBBd2FpdGVkPFJldHVyblR5cGU8dHlwZW9mIGZzLnN0YXQ+PjsKICB0cnkgewogICAgc3RhdHMgPSBhd2FpdCBmcy5zdGF0KHBhdGguam9pbihIT1RGSVhfQVBQUk9WQUxTX0RJUiwgYXBwcm92YWxGaWxlTmFtZSkpOwogIH0gY2F0Y2ggKGVycm9yOiBhbnkpIHsKICAgIGlmIChlcnJvcj8uY29kZSA9PT0gIkVOT0VOVCIgfHwgZXJyb3I/LmNvZGUgPT09ICJFTk9URElSIikgewogICAgICByZXR1cm4gZmFsc2U7CiAgICB9CgogICAgdGhyb3cgbmV3IEVycm9yKAogICAgICBgVW5hYmxlIHRvIGV2YWx1YXRlIGhvdGZpeCBhcHByb3ZhbCBmb3IgJHtsYWJlbH06IGAgKwogICAgICBgJHtlcnJvcj8uY29kZSB8fCBlcnJvcj8ubWVzc2FnZSB8fCAidW5rbm93biBlcnJvciJ9IHJlYWRpbmcgJHthcHByb3ZhbEZpbGVOYW1lfS4gYCArCiAgICAgIGBWZXJpZnkgdGhlICR7SE9URklYX0FQUFJPVkFMU19ESVJfTkFNRX0gZGlyZWN0b3J5IGV4aXN0cyBhbmQgaXMgcmVhZGFibGUuYAogICAgKTsKICB9CgogIGlmICghc3RhdHMuaXNGaWxlKCkpIHsKICAgIHRocm93IG5ldyBFcnJvcigKICAgICAgYEhvdGZpeCBhcHByb3ZhbCAke2FwcHJvdmFsRmlsZU5hbWV9IGZvciAke2xhYmVsfSBpcyBub3QgYSByZWd1bGFyIGZpbGUuIGAgKwogICAgICBgUmVtb3ZlIHRoZSBlbnRyeSBhbmQgY3JlYXRlIGl0IGFzIGEgZmlsZS5gCiAgICApOwogIH0KCiAgcmV0dXJuIHRydWU7Cn0KCmZ1bmN0aW9uIGJ1aWxkQ29udGV4dChkYjogYW55LCBpc1Byb2Q6IGJvb2xlYW4pOiBhbnkgewogIHJldHVybiB7CiAgICBkYjogewogICAgICBleGVjOiAoc3FsOiBzdHJpbmcsIHBhcmFtcz86IHVua25vd25bXSkgPT4gZGIuZXhlYyhzcWwpLAogICAgICBnZXQ6IChzcWw6IHN0cmluZywgcGFyYW1zPzogdW5rbm93bltdKSA9PiBkYi5wcmVwYXJlKHNxbCkuZ2V0KC4uLihwYXJhbXMgfHwgW10pKSwKICAgICAgcnVuOiAoc3FsOiBzdHJpbmcsIHBhcmFtcz86IHVua25vd25bXSkgPT4gZGIucHJlcGFyZShzcWwpLnJ1biguLi4ocGFyYW1zIHx8IFtdKSksCiAgICAgIHRyYW5zYWN0aW9uOiAoZm46IChkYjogYW55KSA9PiB2b2lkKSA9PiB7CiAgICAgICAgY29uc3Qgd3JhcHBlZCA9IGRiLnRyYW5zYWN0aW9uKCgpID0+IGZuKGRiKSk7CiAgICAgICAgcmV0dXJuIHdyYXBwZWQoKTsKICAgICAgfSwKICAgIH0sCiAgICBlbnY6IHByb2Nlc3MuZW52LAogICAgaXNQcm9kdWN0aW9uOiBpc1Byb2QsCiAgICBpc1Rlc3Q6IGNvbmZpZy5OT0RFX0VOViA9PT0gInRlc3QiLAogIH07Cn0KCmV4cG9ydCBhc3luYyBmdW5jdGlvbiB2ZXJpZnlBcHBsaWVkQ2hlY2tzdW1zKGRiOiBEYXRhYmFzZUNsaWVudCk6IFByb21pc2U8eyB2YWxpZDogYm9vbGVhbjsgZXJyb3JzOiBzdHJpbmdbXSB9PiB7CiAgY29uc3QgZXJyb3JzOiBzdHJpbmdbXSA9IFtdOwogIGNvbnN0IHJvd3MgPSAoZGIucHJlcGFyZSgiU0VMRUNUIHZlcnNpb24sIG5hbWUsIGNoZWNrc3VtIEZST00gX21pZ3JhdGlvbnMgT1JERVIgQlkgdmVyc2lvbiBBU0MiKS5hbGwoKSB8fCBbXSkgYXMgYW55W107CiAgY29uc3QgZmlsZU1pZ3JhdGlvbnMgPSBhd2FpdCBsb2FkTWlncmF0aW9uc0Zyb21GUygpOwogIGNvbnN0IGJ5VmVyc2lvbiA9IG5ldyBNYXA8bnVtYmVyLCBQYXJzZWRIaWdyYXRpb24+KCk7CiAgZm9yIChjb25zdCBtIG9mIGZpbGVNaWdyYXRpb25zKSBieVZlcnNpb24uc2V0KG0udmVyc2lvbiwgbSk7CgogIGZvciAoY29uc3Qgcm93IG9mIHJvd3MpIHsKICAgIGNvbnN0IGZpbGVNaWcgPSBieVZlcnNpb24uZ2V0KHJvdy52ZXJzaW9uKTsKICAgIGlmICghZmlsZU1pZykgewogICAgICBlcnJvcnMucHVzaChgTWlncmF0aW9uICR7cm93LnZlcnNpb259XyR7cm93Lm5hbWV9IGlzIGFwcGxpZWQgYnV0IG5vIG1hdGNoaW5nIGZpbGUgZXhpc3RzLmApOwogICAgICBjb250aW51ZTsKICAgIH0KICAgIGNvbnN0IGZpbGVDb250ZW50ID0gYXdhaXQgZnMucmVhZEZpbGUocGF0aC5qb2luKE1JR1JBVElPTlNfRElSLCBmaWxlTWlnLmZpbGUpLCAidXRmLTgiKTsKICAgIGNvbnN0IGFjdHVhbCA9IGNvbXB1dGVDaGVja3N1bShmaWxlQ29udGVudCk7CiAgICBpZiAoYWN0dWFsICE9PSByb3cuY2hlY2tzdW0pIHsKICAgICAgZXJyb3JzLnB1c2goCiAgICAgICAgYE1pZ3JhdGlvbiAke3Jvdy52ZXJzaW9ufV8ke3Jvdy5uYW1lfSBjaGVja3N1bSBtaXNtYXRjaDogYCArCiAgICAgICAgYGV4cGVjdGVkICR7cm93LmNoZWNrc3VtfSwgZ290ICR7YWN0dWFsfWAKICAgICAgKTsKICAgIH0KICB9CgogIHJldHVybiB7IHZhbGlkOiBlcnJvcnMubGVuZ3RoID09PSAwLCBlcnJvcnMgfTsKfQoKZXhwb3J0IGFzeW5jIGZ1bmN0aW9uIHJ1bk1pZ3JhdGlvbnMob3B0aW9uczogeyBkcnlSdW4/OiBib29sZWFuOyBhbGxvd0Rvd24/OiBib29sZWFuOyB2ZXJib3NlPzogYm9vbGVhbjsgc2tpcENoZWNrc3VtVmVyaWZ5PzogYm9vbGVhbjsgZGI/OiBEYXRhYmFzZUNsaWVudDsgdG8/OiBzdHJpbmc7IGFsbD86IGJvb2xlYW4gfSA9IHt9KTogUHJvbWlzZTx7IGFwcGxpZWQ6IE1pZ3JhdGlvblN0YXRlW107IHNraXBwZWQ6IG51bWJlcjsgZHVyYXRpb25NczogbnVtYmVyIH0+IHsKICBjb25zdCB7IGRyeVJ1biA9IGZhbHNlLCBhbGxvd0Rvd24gPSBmYWxzZSwgdmVyYm9zZSA9IGZhbHNlLCBza2lwQ2hlY2tzdW1WZXJpZnkgPSBmYWxzZSwgZGI6IHByb3ZpZGVkRGIgfSA9IG9wdGlvbnM7CiAgY29uc3QgaXNQcm9kID0gY29uZmlnLk5PREVfRU5WID09PSAicHJvZHVjdGlvbiI7CiAgY29uc3Qgc3RhcnRUaW1lID0gRGF0ZS5ub3coKTsKCiAgY29uc3QgZGIgPSBwcm92aWRlZERiIHx8IGdldERhdGFiYXNlKCk7CiAgZGIuZXhlYyhNSUdSQVRJT05TX1RBQkxFKTsKCiAgLy8gVmVyaWZ5IGNoZWNrc3VtcyBvZiBhcHBsaWVkIG1pZ3JhdGlvbnMgb24gc3RhcnR1cAogIC8vIEluIHByb2R1Y3Rpb24sIGNoZWNrc3VtIHZlcmlmaWNhdGlvbiBjYW5ub3QgYmUgYnlwYXNzZWQKICBpZiAoc2tpcENoZWNrc3VtVmVyaWZ5ICYmIGlzUHJvZCkgewogICAgdGhyb3cgbmV3IEVycm9yKCJDaGVja3N1bSB2ZXJpZmljYXRpb24gY2Fubm90IGJlIGJ5cGFzc2VkIGluIHByb2R1Y3Rpb24gZW52aXJvbm1lbnQuIik7CiAgfQoKICBpZiAoIXNraXBDaGVja3N1bVZlcmlmeSAmJiAhZHJ5UnVuKSB7CiAgICBjb25zdCBjaGVja3N1bUNoZWNrID0gYXdhaXQgdmVyaWZ5QXBwbGllZENoZWNrc3VtcyhkYik7CiAgICBpZiAoIWNoZWNrc3VtQ2hlY2sudmFsaWQpIHsKICAgICAgdGhyb3cgbmV3IEVycm9yKAogICAgICAgIGBNaWdyYXRpb24gY2hlY2tzdW0gdmVyaWZpY2F0aW9uIGZhaWxlZDpcbiR7Y2hlY2tzdW1DaGVjay5lcnJvcnMubWFwKChlKSA9PiBgICAtICR7ZX1gKS5qb2luKCJcbiIpfVxuYCArCiAgICAgICAgIlRoaXMgaW5kaWNhdGVzIG1pZ3JhdGlvbiBmaWxlcyBoYXZlIGJlZW4gbW9kaWZpZWQgYWZ0ZXIgYXBwbGljYXRpb24uICIgKwogICAgICAgICJVc2UgLS1za2lwLWNoZWNrc3VtLXZlcmlmeSB0byBieXBhc3MgaW4gdGVzdCBlbnZpcm9ubWVudHMgb25seS4iCiAgICAgICk7CiAgICB9CiAgICBpZiAodmVyYm9zZSkgY29uc29sZS5sb2coIuKchSBDaGVja3N1bSB2ZXJpZmljYXRpb24gcGFzc2VkIGZvciBhbGwgYXBwbGllZCBtaWdyYXRpb25zIik7CiAgfQoKICBjb25zdCBhcHBsaWVkUm93cyA9IGRiLnByZXBhcmUoCiAgICAiU0VMRUNUIHZlcnNpb24sIG5hbWUsIGNoZWNrc3VtLCBhcHBsaWVkX2F0LCBkdXJhdGlvbl9tcywgYXV0aG9yLCBtZXRhIEZST00gX21pZ3JhdGlvbnMgT1JERVIgQlkgdmVyc2lvbiBBU0MiCiAgKS5hbGwoKSB8fCBbXTsKICBjb25zdCBhcHBsaWVkID0gbmV3IE1hcDxudW1iZXIsIE1pZ3JhdGlvblN0YXRlPigpOwogIGFwcGxpZWRSb3dzLmZvckVhY2goKHI6IGFueSkgPT4gewogICAgbGV0IG1ldGE6IFJlY29yZDxzdHJpbmcsIHVua25vd24+ID0ge307CiAgICB0cnkgewogICAgICBjb25zdCBwYXJzZWQgPSBKU09OLnBhcnNlKHIubWV0YSk7CiAgICAgIGlmIChwYXJzZWQgJiYgdHlwZW9mIHBhcnNlZCA9PT0gIm9iamVjdCIgJiYgIUFycmF5LmlzQXJyYXkocGFyc2VkKSkgewogICAgICAgIG1ldGEgPSBwYXJzZWQgYXMgUmVjb3JkPHN0cmluZywgdW5rbm93bj47CiAgICAgIH0KICAgIH0gY2F0Y2ggewogICAgICBtZXRhID0ge307CiAgICB9CiAgICBhcHBsaWVkLnNldChyLnZlcnNpb24sIHsKICAgICAgdmVyc2lvbjogci52ZXJzaW9uLAogICAgICBuYW1lOiByLm5hbWUsCiAgICAgIGNoZWNrc3VtOiByLmNoZWNrc3VtLAogICAgICBhcHBsaWVkQXQ6IHIuYXBwbGllZF9hdCwKICAgICAgZHVyYXRpb25Nczogci5kdXJhdGlvbl9tcywKICAgICAgYXV0aG9yOiByLmF1dGhvciwKICAgICAgbWV0YSwKICAgIH0pOwogIH0pOwoKICBjb25zdCBmaWxlTWlncmF0aW9ucyA9IGF3YWl0IGxvYWRIaWdyYXRpb25zRnJvbUZTKCk7CiAgY29uc3QgZGlyZWN0aW9uID0gYWxsb3dEb3duID8gImRvd24iIDogInVwIjsKICBjb25zdCB0YXJnZXRWZXJzaW9ucyA9IGRpcmVjdGlvbiA9PT0gInVwIgogICAgPyBmaWxlTWlncmF0aW9ucy5maWx0ZXIoKG0pID0+ICFhcHBsaWVkLmhhcyhtLnZlcnNpb24pKS5tYXAoKG0pID0+IG0udmVyc2lvbikKICAgIDogZmlsZU1pZ3JhdGlvbnMuZmlsdGVyKChtKSA9PiBhcHBsaWVkLmhhcyhtLnZlcnNpb24pKS5tYXAoKG0pID0+IG0udmVyc2lvbikuc29ydCgoYSwgYikgPT4gYiAtIGEpOwoKICBsZXQgYXBwbGllZFRoaXNSdW46IE1pZ3JhdGlvblN0YXRlW10gPSBbXTsKICBsZXQgc2tpcHBlZCA9IDA7CiAgY29uc3QgY3R4ID0gYnVpbGRDb250ZXh0KGRiLCBpc1Byb2QpOwoKICBmb3IgKGNvbnN0IHZlcnNpb24gb2YgdGFyZ2V0VmVyc2lvbnMpIHsKICAgIGNvbnN0IGZpbGVNaWcgPSBmaWxlTWlncmF0aW9ucy5maW5kKChtKSA9PiBtLnZlcnNpb24gPT09IHZlcnNpb24pITsKICAgIGNvbnN0IGV4aXN0aW5nID0gYXBwbGllZC5nZXQodmVyc2lvbik7CgogICAgaWYgKGRpcmVjdGlvbiA9PT0gInVwIikgewogICAgICBpZiAoZXhpc3RpbmcpIHsKICAgICAgICBpZiAodmVyYm9zZSkgY29uc29sZS5sb2coYOKPqSAgTWlncmF0aW9uICR7dmVyc2lvbn1fJHtmaWxlTWlnLm5hbWV9IGFscmVhZHkgYXBwbGllZCwgc2tpcHBpbmdgKTsKICAgICAgICBza2lwcGVkKys7CiAgICAgICAgY29udGludWU7CiAgICAgIH0KCiAgICAgIGlmIChpc1Byb2QgJiYgIShhd2FpdCBpc0hvdGZpeEFwcHJvdmVkKGZpbGVNaWcpKSkgewogICAgICAgIHRocm93IG5ldyBFcnJvcihgSG90Zml4IG1pZ3JhdGlvbiAke3ZlcnNpb259XyR7ZmlsZU1pZy5uYW1lfSBsYWNrcyBwcm9kdWN0aW9uIGFwcHJvdmFsLmApOwogICAgICB9CgogICAgICBpZiAoZmlsZU1pZy5jb250ZW50LnZhbGlkYXRlKSB7CiAgICAgICAgY29uc3Qgd2FybmluZ3MgPSBhd2FpdCBmaWxlTWlnLmNvbnRlbnQudmFsaWRhdGUoY3R4KTsKICAgICAgICBpZiAod2FybmluZ3MubGVuZ3RoID4gMCAmJiB2ZXJib3NlKSB7CiAgICAgICAgICBjb25zb2xlLndhcm4oYOKaoO+4jyAgTWlncmF0aW9uICR7dmVyc2lvbn1fJHtmaWxlTWlnLm5hbWV9IHZhbGlkYXRpb24gd2FybmluZ3M6YCk7CiAgICAgICAgICB3YXJuaW5ncy5mb3JFYWNoKCh3KSA9PiBjb25zb2xlLndhcm4oYCAgIC0gJHt3fWApKTsKICAgICAgICB9CiAgICAgIH0KCiAgICAgIGlmICghZHJ5UnVuKSB7CiAgICAgICAgdHJ5IHsKICAgICAgICAgIGNvbnN0IGZpbGVDb250ZW50ID0gYXdhaXQgZnMucmVhZEZpbGUocGF0aC5qb2luKE1JR1JBVElPTlNfRElSLCBmaWxlTWlnLmZpbGUpLCAidXRmLTgiKTsKICAgICAgICAgIGNvbnN0IGNoZWNrc3VtID0gY29tcHV0ZUNoZWNrc3VtKGZpbGVDb250ZW50KTsKICAgICAgICAgIGNvbnN0IG1ldGEgPSBmaWxlTWlnLmNvbnRlbnQubWV0YSB8fCB7fTsKICAgICAgICAgIGNvbnN0IGFwcGxpZWRBdCA9IG5ldyBEYXRlKCkudG9JU09TdHJpbmcoKTsKICAgICAgICAgIGNvbnN0IG1pZ1N0YXJ0ID0gRGF0ZS5ub3coKTsKICAgICAgICAgIGxldCBzdGF0ZSE6IE1pZ3JhdGlvblN0YXRlOwogICAgICAgICAgbGV0IGR1cmF0aW9uTXMgPSAwOwoKICAgICAgICAgIGxldCBjb25jdXJyZW50bHlBcHBsaWVkID0gZmFsc2U7CiAgICAgICAgICBjb25zdCBhcHBseVR4ID0gZGIudHJhbnNhY3Rpb24oKCkgPT4gewogICAgICAgICAgICBjb25zdCB0eEN0eCA9IGJ1aWxkQ29udGV4dChkYiwgaXNQcm9kKTsKICAgICAgICAgICAgY29uc3QgdXBGbiA9IGZpbGVNaWcuY29udGVudC51cDsKICAgICAgICAgICAgaWYgKCF1cEZuKSB0aHJvdyBuZXcgRXJyb3IoYE1pZ3JhdGlvbiAke2ZpbGVNaWcuZmlsZX0gbWlzc2luZyB1cCBmdW5jdGlvbmApOwogICAgICAgICAgICAvLyBSZS1jaGVjayBpbnNpZGUgdGhlIHRyYW5zYWN0aW9uOiBhIGNvbmN1cnJlbnQgcnVuIG1heSBoYXZlIGFwcGxpZWQKICAgICAgICAgICAgLy8gdGhpcyB2ZXJzaW9uIGFmdGVyIG91ciBpbml0aWFsIHNuYXBzaG90LiBiZXR0ZXItc3FsaXRlMyBleGVjdXRlcwogICAgICAgICAgICAvLyBzdGF0ZW1lbnRzIHN5bmNocm9ub3VzbHkgb24gb25lIGNvbm5lY3Rpb24sIHNvIHRoaXMgc2VsZWN0LXRoZW4tYXBwbHkKICAgICAgICAgICAgLy8gc2VxdWVuY2UgaXMgYXRvbWljIHBlciB3b3JrZXIuIElOU0VSVCBPUiBJR05PUkUgaXMgYSBiYWNrc3RvcCBzbyBhCiAgICAgICAgICAgIC8vIGR1cGxpY2F0ZSB2ZXJzaW9uIGlzIHRyZWF0ZWQgYXMgImFscmVhZHkgYXBwbGllZCIgKHNraXBwZWQpIGluc3RlYWQgb2YKICAgICAgICAgICAgLy8gYWJvcnRpbmcgdGhlIHdob2xlIHJ1biB3aXRoIGEgVU5JUVVFIGNvbnN0cmFpbnQgZXJyb3IuCiAgICAgICAgICAgIGNvbnN0IGFscmVhZHlBcHBsaWVkUm93ID0gZGIucHJlcGFyZSgiU0VMRUNUIDEgQVMgcHJlc2VudCBGUk9NIF9taWdyYXRpb25zIFdIRVJFIHZlcnNpb24gPSA/IikuZ2V0KHZlcnNpb24pOwogICAgICAgICAgICBpZiAoYWxyZWFkeUFwcGxpZWRSb3cpIHsKICAgICAgICAgICAgICBjb25jdXJyZW50bHlBcHBsaWVkID0gdHJ1ZTsKICAgICAgICAgICAgICByZXR1cm47CiAgICAgICAgICAgIH0KICAgICAgICAgICAgdXBGbih0eEN0eCk7CgogICAgICAgICAgICBkdXJhdGlvbk1zID0gRGF0ZS5ub3coKSAtIG1pZ1N0YXJ0OwogICAgICAgICAgICBzdGF0ZSA9IHsKICAgICAgICAgICAgICB2ZXJzaW9uLAogICAgICAgICAgICAgIG5hbWU6IGZpbGVNaWcubmFtZSwKICAgICAgICAgICAgICBjaGVja3N1bSwKICAgICAgICAgICAgICBhcHBsaWVkQXQsCiAgICAgICAgICAgICAgZHVyYXRpb25NcywKICAgICAgICAgICAgICBhdXRob3I6IGZpbGVNaWcuY29udGVudC5hdXRob3IsCiAgICAgICAgICAgICAgbWV0YSwKICAgICAgICAgICAgfTsKCiAgICAgICAgICAgIGNvbnN0IGluc2VydGVkID0gZGIucHJlcGFyZSgKICAgICAgICAgICAgICAiSU5TRVJUIE9SIElHTk9SRSBJTlRPIF9taWdyYXRpb25zICh2ZXJzaW9uLCBuYW1lLCBjaGVja3N1bSwgYXBwbGllZF9hdCwgZHVyYXRpb25fbXMsIGF1dGhvciwgbWV0YSkgVkFMVUVTICg/LCA/LCA/LCA/LCA/LCA/LCA/KSIKICAgICAgICAgICAgKS5ydW4oc3RhdGUudmVyc2lvbiwgc3RhdGUubmFtZSwgc3RhdGUuY2hlY2tzdW0sIHN0YXRlLmFwcGxpZWRBdCwgc3RhdGUuZHVyYXRpb25Ncywgc3RhdGUuYXV0aG9yLCBKU09OLnN0cmluZ2lmeShzdGF0ZS5tZXRhKSk7CiAgICAgICAgICAgIGlmICgoaW5zZXJ0ZWQgYXMgYW55KS5jaGFuZ2VzID09PSAwKSBjb25jdXJyZW50bHlBcHBsaWVkID0gdHJ1ZTsKICAgICAgICAgIH0pOwogICAgICAgICAgYXBwbHlUeCgpOwoKICAgICAgICAgIGlmIChjb25jdXJyZW50bHlBcHBsaWVkKSB7CiAgICAgICAgICAgIHNraXBwZWQrKzsKICAgICAgICAgICAgY29udGludWU7CiAgICAgICAgICB9CgogICAgICAgICAgYXBwbGllZFRoaXNSdW4ucHVzaChzdGF0ZSk7CiAgICAgICAgICBpZiAodmVyYm9zZSkgY29uc29sZS5sb2coYOKchSBBcHBsaWVkIG1pZ3JhdGlvbiAke3ZlcnNpb259XyR7ZmlsZU1pZy5uYW1lfSAoJHtzdGF0ZS5kdXJhdGlvbk1zfW1zKWApOwogICAgICAgIH0gY2F0Y2ggKGVycjogYW55KSB7CiAgICAgICAgICBjb25zb2xlLmVycm9yKGDinYwgTWlncmF0aW9uICR7dmVyc2lvbn1fJHtmaWxlTWlnLm5hbWV9IGZhaWxlZDpgLCBlcnIubWVzc2FnZSk7CiAgICAgICAgICB0aHJvdyBlcnI7CiAgICAgICAgfQogICAgICB9IGVsc2UgewogICAgICAgIGlmICh2ZXJib3NlKSBjb25zb2xlLmxvZyhg8J+UjSBEcnktcnVuOiB3b3VsZCBhcHBseSAke3ZlcnNpb259XyR7ZmlsZU1pZy5uYW1lfWApOwogICAgICAgIGFwcGxpZWRUaGlzUnVuLnB1c2goewogICAgICAgICAgdmVyc2lvbjogZmlsZU1pZy52ZXJzaW9uLAogICAgICAgICAgbmFtZTogZmlsZU1pZy5uYW1lLAogICAgICAgICAgY2hlY2tzdW06ICIiLAogICAgICAgICAgYXBwbGllZEF0OiAiIiwKICAgICAgICAgIGR1cmF0aW9uTXM6IDAsCiAgICAgICAgICBhdXRob3I6IGZpbGVNaWcuY29udGVudC5hdXRob3IsCiAgICAgICAgICBtZXRhOiBmaWxlTWlnLmNvbnRlbnQubWV0YSB8fCB7fSwKICAgICAgICB9KTsKICAgICAgfQogICAgfSBlbHNlIHsKICAgICAgLy8gZG93biBkaXJlY3Rpb24KICAgICAgaWYgKCFleGlzdGluZykgewogICAgICAgIHNraXBwZWQrKzsKICAgICAgICBjb250aW51ZTsKICAgICAgfQoKICAgICAgaWYgKCFhbGxvd0Rvd24pIHsKICAgICAgICB0aHJvdyBuZXcgRXJyb3IoYFJlZnVzaW5nIHRvIHJ1biBkb3duIG1pZ3JhdGlvbiAke3ZlcnNpb259XyR7ZmlsZU1pZy5uYW1lfSB3aXRob3V0IGFsbG93RG93bi5gKTsKICAgICAgfQoKICAgICAgaWYgKCFkcnlSdW4pIHsKICAgICAgICB0cnkgewogICAgICAgICAgY29uc3QgZG93bkZuID0gZmlsZU1pZy5jb250ZW50LmRvd247CiAgICAgICAgICBpZiAoIWRvd25GbikgewogICAgICAgICAgICB0aHJvdyBuZXcgRXJyb3IoYE1pZ3JhdGlvbiAke2ZpbGVNaWcuZmlsZX0gbWlzc2luZyBkb3duIGZ1bmN0aW9uYCk7CiAgICAgICAgICB9CiAgICAgICAgICBjb25zdCBtaWdTdGFydCA9IERhdGUubm93KCk7CiAgICAgICAgICBjb25zdCBkb3duVHggPSBkYi50cmFuc2FjdGlvbigoKSA9PiB7CiAgICAgICAgICAgIGNvbnN0IHR4Q3R4ID0gYnVpbGRDb250ZXh0KGRiLCBpc1Byb2QpOwogICAgICAgICAgICBkb3duRm4odHhDdHgpOwogICAgICAgICAgICBkYi5wcmVwYXJlKCJERUxFVEUgRlJPTSBfbWlncmF0aW9ucyBXSEVSRSB2ZXJzaW9uID0gPyIpLnJ1bih2ZXJzaW9uKTsKICAgICAgICAgIH0pOwogICAgICAgICAgZG93blR4KCk7CiAgICAgICAgICBjb25zdCBkdXJhdGlvbk1zID0gRGF0ZS5ub3coKSAtIG1pZ1N0YXJ0OwogICAgICAgICAgYXBwbGllZFRoaXNSdW4ucHVzaCh7CiAgICAgICAgICAgIHZlcnNpb24sCiAgICAgICAgICAgIG5hbWU6IGZpbGVNaWcubmFtZSwKICAgICAgICAgICAgY2hlY2tzdW06IGV4aXN0aW5nLmNoZWNrc3VtLAogICAgICAgICAgICBhcHBsaWVkQXQ6IGV4aXN0aW5nLmFwcGxpZWRBdCwKICAgICAgICAgICAgZHVyYXRpb25NcywKICAgICAgICAgICAgYXV0aG9yOiBleGlzdGluZy5hdXRob3IsCiAgICAgICAgICAgIG1ldGE6IGV4aXN0aW5nLm1ldGEsCiAgICAgICAgICB9KTsKICAgICAgICAgIGlmICh2ZXJib3NlKSBjb25zb2xlLmxvZyhg4oasIFJldmVydGVkIG1pZ3JhdGlvbiAke3ZlcnNpb259XyR7ZmlsZU1pZy5uYW1lfSAoJHtkdXJhdGlvbk1zfW1zKWApOwogICAgICAgIH0gY2F0Y2ggKGVycjogYW55KSB7CiAgICAgICAgICBjb25zb2xlLmVycm9yKGDinYwgRG93biBtaWdyYXRpb24gJHt2ZXJzaW9ufV8ke2ZpbGVNaWcubmFtZX0gZmFpbGVkOmAsIGVyci5tZXNzYWdlKTsKICAgICAgICAgIHRocm93IGVycjsKICAgICAgICB9CiAgICAgIH0gZWxzZSB7CiAgICAgICAgaWYgKHZlcmJvc2UpIGNvbnNvbGUubG9nKGDwn5SNIERyeS1ydW46IHdvdWxkIHJldmVydCAke3ZlcnNpb259XyR7ZmlsZU1pZy5uYW1lfWApOwogICAgICAgIGFwcGxpZWRUaGlzUnVuLnB1c2goZXhpc3RpbmcpOwogICAgICB9CiAgICB9CiAgfQoKICByZXR1cm4geyBhcHBsaWVkOiBhcHBsaWVkVGhpc1J1biwgc2tpcHBlZCwgZHVyYXRpb25NczogRGF0ZS5ub3coKSAtIHN0YXJ0VGltZSB9Owp9Cg==
+import { pathToFileURL } from "url";
+import * as fs from "fs/promises";
+import * as path from "path";
+import { createHash } from "crypto";
+import { getDatabase } from "../database";
+import { config } from "../../config";
+import type { MigrationDefinition, MigrationState, ParsedMigration } from "./types";
+
+export interface DatabaseClient {
+  exec: (sql: string) => void;
+  prepare: (sql: string) => { all: (params?: unknown[]) => unknown[]; get: (params?: unknown[]) => unknown; run: (params?: unknown[]) => unknown };
+  /**
+   * Returns a transaction-wrapped function (better-sqlite3 semantics). The
+   * caller must invoke the returned function; calling `db.transaction(fn)`
+   * alone does NOT execute `fn`.
+   */
+  transaction: (fn: () => void) => () => void;
+}
+
+const MIGRATIONS_TABLE = `
+  CREATE TABLE IF NOT EXISTS _migrations (
+    version INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    checksum TEXT NOT NULL,
+    applied_at TEXT NOT NULL,
+    duration_ms INTEGER NOT NULL,
+    author TEXT NOT NULL,
+    meta TEXT DEFAULT '{}',
+    UNIQUE(version)
+  )
+`;
+
+const MIGRATIONS_DIR = path.resolve(process.cwd(), "src", "migrations");
+const HOTFIX_APPROVALS_DIR_NAME = ".hotfix-approvals";
+const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), HOTFIX_APPROVALS_DIR_NAME);
+
+// The only shape a migration name can legitimately have, per
+// parseMigrationFilename. Enforced again when building an approval path so a
+// ParsedMigration assembled by any other caller cannot point the approval
+// check outside HOTFIX_APPROVALS_DIR via "../" or an absolute path.
+const APPROVAL_NAME_PATTERN = /^[a-z0-9_]+$/;
+
+export function computeChecksum(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+export function parseMigrationFilename(filename: string): { version: number; name: string } | null {
+  const match = filename.match(/^v?(\d{3})_([a-z0-9_]+)\.ts$/);
+  if (!match) return null;
+  return { version: parseInt(match[1], 10), name: match[2] };
+}
+
+export async function loadMigrationsFromFS(): Promise<ParsedMigration[]> {
+  try {
+    const files = await fs.readdir(MIGRATIONS_DIR);
+    const migrations: ParsedMigration[] = [];
+
+    for (const file of files) {
+      const parsed = parseMigrationFilename(file);
+      if (!parsed) continue;
+
+      const filePath = path.join(MIGRATIONS_DIR, file);
+      const content = await fs.readFile(filePath, "utf-8");
+
+      let def: MigrationDefinition;
+      try {
+        def = (await import(pathToFileURL(filePath).href)).default as MigrationDefinition;
+      } catch (err: any) {
+        throw new Error(`Failed to load migration ${file}: ${err.message}`);
+      }
+
+      if (def.version !== parsed.version) {
+        throw new Error(`Version mismatch in ${file}: filename ${parsed.version} but export ${def.version}`);
+      }
+
+      migrations.push({ file, version: parsed.version, name: parsed.name, content: def });
+    }
+
+    return migrations.sort((a, b) => a.version - b.version);
+  } catch (err: any) {
+    if (err.code === "ENOENT") return [];
+    throw err;
+  }
+}
+
+// Hotfix approval contract. Every branch fails closed: the function only ever
+// returns true for a verified approval artifact, and anything it cannot
+// decide it reports rather than guessing. Pinned by
+// src/tests/migration-runner-hotfix.test.ts.
+//
+//   H1 A migration that is not a hotfix never needs approval.
+//   H2 A hotfix is approved only when <version>_<name>.approval exists AND is
+//      a regular file. A directory or any other node type is a broken
+//      deployment, not an approval, and is reported as such.
+//   H3 "No approval artifact" (ENOENT, ENOTDIR) is an expected outcome and
+//      returns false; the caller turns that into the user-facing error.
+//   H4 Any other filesystem failure (EACCES, EPERM, ELOOP, ...) is an
+//      operational fault, not a verdict. It throws carrying the errno so an
+//      operator is not sent hunting for a missing approval file that is
+//      actually present but unreadable.
+//   H5 The approval path is built from the filename-parsed version and name,
+//      never from content.name, and the name is re-validated, so a crafted
+//      migration name cannot redirect the check outside the approvals dir.
+//   H6 Approval is a read-only check: no shared state, so repeated and
+//      concurrent calls agree.
+export async function isHotfixApproved(migration: ParsedMigration): Promise<boolean> {
+  if (!migration.content.meta?.hotfix) return true;
+
+  const label = `${migration.version}_${migration.name}`;
+
+  if (!APPROVAL_NAME_PATTERN.test(migration.name)) {
+    throw new Error(
+      `Refusing to evaluate hotfix approval for ${label}: migration name is not a valid identifier.`
+    );
+  }
+
+  // Only the artifact's file name is reported in errors, never the absolute
+  // path, so deployment layout is not echoed into CI logs.
+  const approvalFileName = `${label}.approval`;
+
+  let stats: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stats = await fs.stat(path.join(HOTFIX_APPROVALS_DIR, approvalFileName));
+  } catch (error: any) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+      return false;
+    }
+
+    throw new Error(
+      `Unable to evaluate hotfix approval for ${label}: ` +
+      `${error?.code || error?.message || "unknown error"} reading ${approvalFileName}. ` +
+      `Verify the ${HOTFIX_APPROVALS_DIR_NAME} directory exists and is readable.`
+    );
+  }
+
+  if (!stats.isFile()) {
+    throw new Error(
+      `Hotfix approval ${approvalFileName} for ${label} is not a regular file. ` +
+      `Remove the entry and create it as a file.`
+    );
+  }
+
+  return true;
+}
+
+function buildContext(db: any, isProd: boolean): any {
+  return {
+    db: {
+      exec: (sql: string, params?: unknown[]) => db.exec(sql),
+      get: (sql: string, params?: unknown[]) => db.prepare(sql).get(...(params || [])),
+      run: (sql: string, params?: unknown[]) => db.prepare(sql).run(...(params || [])),
+      transaction: (fn: (db: any) => void) => {
+        const wrapped = db.transaction(() => fn(db));
+        return wrapped();
+      },
+    },
+    env: process.env,
+    isProduction: isProd,
+    isTest: config.NODE_ENV === "test",
+  };
+}
+
+export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient; to?: string; all?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
+  const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb } = options;
+  const isProd = config.NODE_ENV === "production";
+  const startTime = Date.now();
+
+  const db = providedDb || getDatabase();
+  db.exec(MIGRATIONS_TABLE);
+
+  // Verify checksums of applied migrations on startup
+  // In production, checksum verification cannot be bypassed
+  if (skipChecksumVerify && isProd) {
+    throw new Error("Checksum verification cannot be bypassed in production environment.");
+  }
+
+  if (!skipChecksumVerify && !dryRun) {
+    const checksumCheck = await verifyAppliedChecksums(db);
+    if (!checksumCheck.valid) {
+      throw new Error(
+        `Migration checksum verification failed:\n${checksumCheck.errors.map((e) => `  - ${e}`).join("\n")}\n` +
+        "This indicates migration files have been modified after application. " +
+        "Use --skip-checksum-verify to bypass in test environments only."
+      );
+    }
+    if (verbose) console.log("✅ Checksum verification passed for all applied migrations");
+  }
+
+  const appliedRows = db.prepare(
+    "SELECT version, name, checksum, applied_at, duration_ms, author, meta FROM _migrations ORDER BY version ASC"
+  ).all() || [];
+  const applied = new Map<number, MigrationState>();
+  appliedRows.forEach((r: any) => {
+    let meta: Record<string, unknown> = {};
+    try {
+      const parsed = JSON.parse(r.meta);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        meta = parsed as Record<string, unknown>;
+      }
+    } catch {
+      meta = {};
+    }
+    applied.set(r.version, {
+      version: r.version,
+      name: r.name,
+      checksum: r.checksum,
+      appliedAt: r.applied_at,
+      durationMs: r.duration_ms,
+      author: r.author,
+      meta,
+    });
+  });
+
+  const fileMigrations = await loadMigrationsFromFS();
+  const direction = allowDown ? "down" : "up";
+  const targetVersions = direction === "up"
+    ? fileMigrations.filter((m) => !applied.has(m.version)).map((m) => m.version)
+    : fileMigrations.filter((m) => applied.has(m.version)).map((m) => m.version).sort((a, b) => b - a);
+
+  let appliedThisRun: MigrationState[] = [];
+  let skipped = 0;
+  const ctx = buildContext(db, isProd);
+
+  for (const version of targetVersions) {
+    const fileMig = fileMigrations.find((m) => m.version === version)!;
+    const existing = applied.get(version);
+
+    if (direction === "up") {
+      if (existing) {
+        if (verbose) console.log(`⏭  Migration ${version}_${fileMig.name} already applied, skipping`);
+        skipped++;
+        continue;
+      }
+
+      if (isProd && !(await isHotfixApproved(fileMig))) {
+        throw new Error(`Hotfix migration ${version}_${fileMig.name} lacks production approval.`);
+      }
+
+      if (fileMig.content.validate) {
+        const warnings = await fileMig.content.validate(ctx);
+        if (warnings.length > 0 && verbose) {
+          console.warn(`⚠️  Migration ${version}_${fileMig.name} validation warnings:`);
+          warnings.forEach((w) => console.warn(`   - ${w}`));
+        }
+      }
+
+      if (!dryRun) {
+        try {
+          const fileContent = await fs.readFile(path.join(MIGRATIONS_DIR, fileMig.file), "utf-8");
+          const checksum = computeChecksum(fileContent);
+          const meta = fileMig.content.meta || {};
+          const appliedAt = new Date().toISOString();
+          const migStart = Date.now();
+          let state!: MigrationState;
+          let durationMs = 0;
+
+          let concurrentlyApplied = false;
+          const applyTx = db.transaction(() => {
+            const txCtx = buildContext(db, isProd);
+            const upFn = fileMig.content.up;
+            if (!upFn) throw new Error(`Migration ${fileMig.file} missing up function`);
+            // Re-check inside the transaction: a concurrent run may have applied
+            // this version after our initial snapshot. better-sqlite3 executes
+            // statements synchronously on one connection, so this select-then-apply
+            // sequence is atomic per worker. INSERT OR IGNORE is a backstop so a
+            // duplicate version is treated as "already applied" (skipped) instead of
+            // aborting the whole run with a UNIQUE constraint error.
+            const alreadyAppliedRow = db.prepare("SELECT 1 AS present FROM _migrations WHERE version = ?").get(version);
+            if (alreadyAppliedRow) {
+              concurrentlyApplied = true;
+              return;
+            }
+            upFn(txCtx);
+
+            durationMs = Date.now() - migStart;
+            state = {
+              version,
+              name: fileMig.name,
+              checksum,
+              appliedAt,
+              durationMs,
+              author: fileMig.content.author,
+              meta,
+            };
+
+            const inserted = db.prepare(
+              "INSERT OR IGNORE INTO _migrations (version, name, checksum, applied_at, duration_ms, author, meta) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            ).run(state.version, state.name, state.checksum, state.appliedAt, state.durationMs, state.author, JSON.stringify(state.meta));
+            if ((inserted as any).changes === 0) concurrentlyApplied = true;
+          });
+          applyTx();
+
+          if (concurrentlyApplied) {
+            skipped++;
+            continue;
+          }
+
+          appliedThisRun.push(state);
+          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${state.durationMs}ms)`);
+        } catch (err: any) {
+          console.error(`❌ Migration ${version}_${fileMig.name} failed:`, err.message);
+          throw err;
+        }
+      } else {
+        if (verbose) console.log(`[DRY-RUN] Would apply migration ${version}_${fileMig.name}`);
+        appliedThisRun.push({
+          version,
+          name: fileMig.name,
+          checksum: "(dry-run)",
+          appliedAt: new Date().toISOString(),
+          durationMs: 0,
+          author: fileMig.content.author,
+          meta: fileMig.content.meta,
+        });
+      }
+    } else {
+      if (!allowDown) {
+        throw new Error(`Down migrations are disabled. Use --allow-down flag to enable.`);
+      }
+
+      if (!existing) {
+        if (verbose) console.log(`⏭  Migration ${version}_${fileMig.name} not applied, cannot rollback`);
+        skipped++;
+        continue;
+      }
+
+      if (!fileMig.content.down) {
+        throw new Error(`Migration ${version}_${fileMig.name} has no down function.`);
+      }
+
+      if (isProd) {
+        const approvalFile = path.join(HOTFIX_APPROVALS_DIR, `rollback_${version}_${fileMig.name}.approval`);
+        try {
+          await fs.access(approvalFile);
+        } catch {
+          throw new Error(`Rollback of ${version}_${fileMig.name} requires production approval.`);
+        }
+      }
+
+      if (!dryRun) {
+        const migStart = Date.now();
+        try {
+          let durationMs = 0;
+          let concurrentlyApplied = false;
+          const rollbackTx = db.transaction(() => {
+            // Re-check inside the transaction: a concurrent run may have already
+            // rolled this version back after our initial snapshot.
+            const existingRow = db.prepare("SELECT 1 AS present FROM _migrations WHERE version = ?").get(version);
+            if (!existingRow) {
+              concurrentlyApplied = true;
+              return;
+            }
+            const txCtx = buildContext(db, isProd);
+            const downFn = fileMig.content.down;
+            if (!downFn) throw new Error(`Migration ${fileMig.file} missing down function`);
+            downFn(txCtx);
+
+            durationMs = Date.now() - migStart;
+            db.prepare("DELETE FROM _migrations WHERE version = ?").run(version);
+          });
+          rollbackTx();
+
+          if (concurrentlyApplied) {
+            skipped++;
+            continue;
+          }
+
+          appliedThisRun.push({
+            version,
+            name: fileMig.name,
+            checksum: existing.checksum,
+            appliedAt: new Date().toISOString(),
+            durationMs,
+            author: fileMig.content.author,
+            meta: fileMig.content.meta,
+          });
+
+          if (verbose) console.log(`⏪ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms)`);
+        } catch (err: any) {
+          console.error(`❌ Rollback of ${version}_${fileMig.name} failed:`, err.message);
+          throw err;
+        }
+      } else {
+        if (verbose) console.log(`[DRY-RUN] Would rollback migration ${version}_${fileMig.name}`);
+        appliedThisRun.push({
+          version,
+          name: fileMig.name,
+          checksum: existing.checksum,
+          appliedAt: new Date().toISOString(),
+          durationMs: 0,
+          author: fileMig.content.author,
+          meta: fileMig.content.meta,
+        });
+      }
+    }
+  }
+
+  return { applied: appliedThisRun, skipped, durationMs: Date.now() - startTime };
+}
+
+export async function getAppliedVersions(db?: DatabaseClient): Promise<number[]> {
+  const database = db || getDatabase();
+  const rows = database.prepare("SELECT version FROM _migrations ORDER BY version ASC").all() || [];
+  return rows.map((r: any) => r.version);
+}
+
+export async function isDatabaseInitialized(db?: DatabaseClient): Promise<boolean> {
+  const applied = await getAppliedVersions(db);
+  return applied.length > 0;
+}
+
+export async function validateMigrationFiles(): Promise<{ valid: boolean; errors: string[] }> {
+  const errors: string[] = [];
+  const migrations = await loadMigrationsFromFS();
+
+  const versions = migrations.map((m) => m.version).sort((a, b) => a - b);
+  for (let i = 0; i < versions.length; i++) {
+    if (i > 0 && versions[i] !== versions[i - 1] + 1) {
+      errors.push(`Gap detected: migration ${versions[i - 1] + 1} is missing`);
+    }
+  }
+
+  const uniqueVersions = new Set(versions);
+  if (uniqueVersions.size !== versions.length) {
+    errors.push("Duplicate version numbers detected");
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
+export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ valid: boolean; errors: string[] }> {
+  const errors: string[] = [];
+  const database = db || getDatabase();
+  
+  // Ensure migrations table exists
+  database.exec(MIGRATIONS_TABLE);
+  
+  const appliedRows = database.prepare(
+    "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
+  ).all() || [];
+  
+  const fileMigrations = await loadMigrationsFromFS();
+  // First-match semantics (matching loadMigrationsFromFS ordering) so duplicate
+  // version numbers resolve deterministically the same way the runner applies them.
+  const fileMigrationMap = new Map<number, ParsedMigration>();
+  for (const m of fileMigrations) {
+    if (!fileMigrationMap.has(m.version)) fileMigrationMap.set(m.version, m);
+  }
+  
+  for (const row of appliedRows) {
+    const fileMig = fileMigrationMap.get(row.version);
+    if (!fileMig) {
+      errors.push(`Applied migration ${row.version}_${row.name} not found in filesystem`);
+      continue;
+    }
+    
+    const filePath = path.join(MIGRATIONS_DIR, fileMig.file);
+    const fileContent = await fs.readFile(filePath, "utf-8");
+    const currentChecksum = computeChecksum(fileContent);
+    
+    if (currentChecksum !== row.checksum) {
+      errors.push(
+        `Checksum mismatch for migration ${row.version}_${row.name}: ` +
+        `expected ${row.checksum}, got ${currentChecksum}. ` +
+        `Migration file may have been modified after application.`
+      );
+    }
+  }
+  
+  return { valid: errors.length === 0, errors };
+}

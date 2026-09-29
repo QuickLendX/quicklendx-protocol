@@ -1,1 +1,186 @@
-LyoqCiAqIE1pZ3JhdGlvbiBDTEkg4oCUIHN0cnVjdHVyZWQgZGF0YWJhc2UgbWlncmF0aW9uIHdvcmtmbG93LgogKgogKiBNaWdyYXRpb24gQ29tbWFuZHM6CiAqICAtIG5wbSBydW4gbWlncmF0ZTogUnVuIHBlbmRpbmcgbWlncmF0aW9ucyAodXApCiAqICAtIG5wbSBydW4gbWlncmF0ZTpkb3duOiBSb2xsYmFjayB0aGUgbGFzdCBhcHBsaWVkIG1pZ3JhdGlvbgogKiAgLSBucG0gcnVuIG1pZ3JhdGU6ZG93biAtLSAtLXRvIDx2ZXJzaW9uPjogUm9sbGJhY2sgdG8gc3BlY2lmaWMgdmVyc2lvbgogKiAgLSBucG0gcnVuIG1pZ3JhdGU6ZG93biAtLSAtLWFsbDogUm9sbGJhY2sgYWxsIG1pZ3JhdGlvbnMKICoKICogRm9yd2FyZC1Pbmx5IE1pZ3JhdGlvbiBQb2xpY3k6CiAqICAtIEVhY2ggbWlncmF0aW9uIGZpbGUgY29udGFpbnMgT05MWSBhbiBgdXBgIGZ1bmN0aW9uIChmb3J3YXJkIGRpcmVjdGlvbikuCiAqICAtIERvd24gbWlncmF0aW9ucyAocm9sbGJhY2tzKSBhcmUgRVhQTElDSVRMWSBvcHQtaW4gcGVyLW1pZ3JhdGlvbiB2aWEgYG1ldGEuYWxsb3dfZG93bmAuCiAqICAtIFJ1bm5pbmcgZG93biBtaWdyYXRpb25zIGluIHByb2R1Y3Rpb24gcmVxdWlyZXMgVFdPLVBFUlNPTiBhcHByb3ZhbDoKICogICAgICAxLiAtLWVtZXJnZW5jeSBmbGFnIChhY2tub3dsZWRnZXMgcmlzaykKICogICAgICAyLiAuaG90Zml4LWFwcHJvdmFsc y88dmVyc2lvbj5fPG5hbWU+LmFwcHJvdmFsIGZpbGUgZXhpc3RzCiAqCiAqIEhvdGZpeCBQcm90b2NvbCBmb3IgUHJvZHVjdGlvbiBJbmNpZGVudHM6CiAqICAgU3RlcCAxOiBJZGVudGlmeSBwcm9ibGVtYXRpYyBtaWdyYXRpb24gKGUuZy4sIHYwMDNfYWRkX2NvbHVtbiBoYXMgZGF0YSBjb3JydXB0aW9uKQogKiAgIFN0ZXAgMjogQ3JlYXRlIGhvdGZpeCBhcHByb3ZhbCBmaWxlIHdpdGggdHdvIHNlbmlvciBlbmdpbmVlciBzaWduYXR1cmVzCiAqICAgU3RlcCAzOiBJZiBpbW1lZGlhdGUgZml4IG5lZWRlZCwgYXV0aG9yIHYwMDRfaG90Zml4X2ZpeCB3aXRoIGBtZXRhLmhvdGZpeCA9IHRydWVgCiAqICAgU3RlcCA0OiBEZXBsb3kgYW5kIHJ1bjogYG5wbSBydW4gbWlncmF0ZTpkb3duIC0tIC0tZW1lcmdlbmN5YAogKiAgIFN0ZXAgNTogRG9jdW1lbnQgaW5jaWRlbnQgaW4gcmV0cm8gaXNzdWUKICoKICogU2VlIGJhY2tlbmQvZG9jcy9taWdyYXRpb25zLm1kIGZvciBjb21wbGV0ZSBvcGVyYXRpb25hbCBwbGF5Ym9vay4KICovCgppbXBvcnQgeyBtaWdyYXRlQ29tbWFuZCwgbWlncmF0ZURvd25Db21tYW5kIH0gZnJvbSAiLi9wb2xpY3kiOwoKLyoqCiAqIFN0cnVjdHVyZWQgZXJyb3IgY29kZXMgZW1pdHRlZCBieSB0aGUgQ0xJLiBUaGVzZSBhcmUgc3RhYmxlIGFuZCBzYWZlIHRvCiAqIG1hdGNoIG9uIGluIHRlc3RzIGFuZCBvcGVyYXRpb25hbCB0b29saW5nLiBUaGV5IG11c3Qgbm90IGxlYWsgc2Vuc2l0aXZlCiAqIGRhdGEgKHBhdGhzLCBjcmVkZW50aWFscywgcmF3IGRyaXZlciBtZXNzYWdlcykuCiAqLwpleHBvcnQgY29uc3QgQ0xJX0VYSVRfQ09ERVMgPSB7CiAgU1VDQ0VTUzogMCwKICAvLyBVbmtub3duIC8gdW5leHBlY3RlZCBmYWlsdXJlIGZyb20gdGhlIHBvbGljeSBsYXllci4KICBVTkVYUEVDVEVEX0VSUk9SOiAxLAogIC8vIFRoZSBjb21tYW5kIGl0c2VsZiBpcyBub3QgcmVjb2duaXplZC4KICBVTktOT1dOX0NPTU1BTkQ6IDIsCiAgLy8gSW52YWxpZCBhcmd1bWVudCBzaGFwZSAoZS5nLiBkdXBsaWNhdGUgZmxhZ3MsIG1pc3NpbmcgdmFsdWVzKS4KICBJTlZBTElEX0FSR1VNRU5UUzogMywKfSBhcyBjb25zdDsKCmV4cG9ydCB0eXBlIENsaUV4aXRDb2RlID0gKHR5cGVvZiBDTElfRVhJVF9DT0RFUylba2V5b2YgdHlwZW9mIENMSV9FWElUX0NPREVTXTsKCi8qKgogKiBQYXJzZWQgYXJndW1lbnQgbW9kZWwuIFdlIGtlZXAgdGhlIGxlZ2FjeSBzaGFwZSAoYFJlY29yZDxzdHJpbmcsIHVua25vd24+YAogKiB3aXRoIGFuIG9wdGlvbmFsIGBfYCBwb3NpdGlvbmFsIGFycmF5KSBzbyBleGlzdGluZyBjYWxsZXJzIGFuZCB0ZXN0cyB0aGF0CiAqIGluc3BlY3QgYGFyZ3MuX2AgY29udGludWUgdG8gd29yay4KICovCmV4cG9ydCBpbnRlcmZhY2UgUGFyc2VkQXJncyBleHRlbmRzIFJlY29yZDxzdHJpbmcsIHVua25vd24+IHsKICBfPzogc3RyaW5nW107Cn0KCi8qKgogKiBSZXN1bHQgb2YgYXJndW1lbnQgcGFyc2luZy4gT24gZmFpbHVyZSB0aGUgQ0xJIG11c3Qgbm90IGludm9rZSB0aGUKICogcG9saWN5IGxheWVyIGF0IGFsbCAtLSB0aGlzIGlzIHRoZSBkZXRlcm1pbmlzdGljIGZhaWx1cmUgYm91bmRhcnkuCiAqLwpleHBvcnQgdHlwZSBBcmdQYXJzZVJlc3VsdCA9CiAgfCB7IG9rOiB0cnVlOyBhcmdzOiBQYXJzZWRBcmdzIH0KICB8IHsgb2s6IGZhbHNlOyBjb2RlOiBDbGlFeGl0Q29kZTsgbWVzc2FnZTogc3RyaW5nIH07CgovKioKICogQ29tbWFuZHMgdGhlIENMSSB1bmRlcnN0YW5kcy4gQW55dGhpbmcgZWxzZSBpcyByZWplY3RlZCBiZWZvcmUgYW55CiAqIGRhdGFiYXNlIGFjdGl2aXR5IGhhcHBlbnMuCiAqLwpleHBvcnQgY29uc3QgU1VQUE9SVEVEX0NPTU1BTkRTID0gWyJ1cCIsICJkb3duIl0gYXMgY29uc3Q7CmV4cG9ydCB0eXBlIFN1cHBvcnRlZENvbW1hbmQgPSAodHlwZW9mIFNVUFBPUlRFRF9DT01NQU5EUylbbnVtYmVyXTsKCi8qKgogKiBGbGFncyB0aGF0IGFyZSBrbm93biB0byB0YWtlIGEgdmFsdWUuIFdoZW4gdGhlc2UgYXJlIHByZXNlbnQgd2l0aG91dCBhCiAqIHZhbHVlIChvciB3aXRoIGEgZm9sbG93aW5nIGZsYWcpIHRoZSBwYXJzZXIgZmFpbHMgY2xvc2VkIHJhdGhlciB0aGFuCiAqIHNpbGVudGx5IGNvZXJjaW5nIHRvIGB0cnVlYC4gVGhpcyBwcmV2ZW50cyBhIG1pc3NwZWxsZWQgY29tbWFuZCBmcm9tCiAqIGFjY2lkZW50YWxseSBydW5uaW5nIGEgZGVzdHJ1Y3RpdmUgb3BlcmF0aW9uLgogKi8KZXhwb3J0IGNvbnN0IFZBTFVFX0ZMQUdTID0gWyJ0byIsICJzdGVwcyIsICJ0YXJnZXQiXSBhcyBjb25zdDsKCi8qKgogKiBCb29sZWFuIGZsYWdzLiBUaGVzZSBhcmUgaW50ZW50aW9uYWxseSBhY2NlcHRlZCB3aXRob3V0IGEgdmFsdWUuCiAqLwpleHBvcnQgY29uc3QgQk9PTEVBTl9GTEFHUyA9IFsKICAiZW1lcmdlbmN5IiwKICAiYWxsIiwKICAiZm9yY2UiLAogICJkcnktcnVuIiwKICAidmVyYm9zZSIsCiAgImhvdGZpeCIsCl0gYXMgY29uc3Q7CgpmdW5jdGlvbiBub3JtYWxpemVGbGFnKGZsYWc6IHN0cmluZyk6IHN0cmluZyB7CiAgcmV0dXJuIGZsYWcuc2xpY2UoMikucmVwbGFjZSgvLS9nLCAiIikudG9Mb3dlckNhc2UoKTsKfQoKLyoqCiAqIFBhcnNlIGBwcm9jZXNzLmFyZ3ZgIGludG8gYSBkZXRlcm1pbmlzdGljIGFyZ3VtZW50IG1vZGVsLgogKgogKiBJbnZhcmlhbnRzOgogKiAgLSBUaGUgZmlyc3QgcG9zaXRpb25hbCBhcmd1bWVudCBpcyB0aGUgY29tbWFuZCAoZGVmYXVsdHMgdG8gInVwIikuCiAqICAtIEJvb2xlYW4gZmxhZ3MgYXJlIGFsd2F5cyBgdHJ1ZWA7IHRoZXkgY2Fubm90IGJlIGdpdmVuIGEgdmFsdWUuCiAqICAtIFZhbHVlIGZsYWdzIHJlcXVpcmUgYSBub24tZmxhZyB2YWx1ZSBpbW1lZGlhdGVseSBhZnRlciB0aGVtLgogKiAgLSBEdXBsaWNhdGUgZmxhZ3MgYXJlIHJlamVjdGVkIChubyBzaWxlbnQgbGFzdC13aW5zKS4KICogIC0gVW5rbm93biBmbGFncyBhcmUgcmVqZWN0ZWQgKG5vIHNpbGVudCBpZ25vcmluZykuCiAqICAtIFBvc2l0aW9uYWwgYXJndW1lbnRzIGFmdGVyIHRoZSBjb21tYW5kIGFyZSByZWplY3RlZC4KICoKICogVGhpcyBmdW5jdGlvbiBpcyBwdXJlIGFuZCB0aHVzIHRyaXZpYWxseSB0ZXN0YWJsZSB3aXRob3V0IHNwaWNpbmcgb24KICogcHJvY2VzcyBnbG9iYWxzLgogKi8KZXhwb3J0IGZ1bmN0aW9uIHBhcnNlQXJncyhhdmdWZWM6IHN0cmluZ1tdID0gcHJvY2Vzcy5hcmd2KTogQXJnUGFyc2VSZXN1bHQgewogIGNvbnN0IGFyZ3M6IFBhcnNlZEFyZ3MgPSB7fTsKICBjb25zdCBwb3NpdGlvbmFsczogc3RyaW5nW10gPSBbXTsKICBjb25zdCBzZWVuID0gbmV3IFNldDxzdHJpbmc+KCk7CgogIGZvciAobGV0IGkgPSAyOyBpIDwgYXJndmVjLmxlbmd0aDsgaSsrKSB7CiAgICBjb25zdCBhcmcgPSBhdmdWZWNbaV07CgogICAgaWYgKGFyZyA9PT0gIi0tIikgewogICAgICAvLyBFdmVyeXRoaW5nIGFmdGVyIGEgYmFyZSBgLS1gIGlzIGEgcG9zaXRpb25hbCBhcmd1bWVudC4KICAgICAgZm9yIChsZXQgaiA9IGkgKyAxOyBqIDwgYXJndmVjLmxlbmd0aDsgaisrKSB7CiAgICAgICAgcG9zaXRpb25hbHMucHVzaChhdmdWZWNbal0pOwogICAgICB9CiAgICAgIGJyZWFrOwogICAgfQoKICAgIGlmIChhcmcuc3RhcnRzV2l0aCgiLS0iKSkgewogICAgICBjb25zdCBrZXkgPSBub3JtYWxpemVGbGFnKGFyZyk7CiAgICAgIGlmIChrZXkgPT09ICIiKSB7CiAgICAgICAgcmV0dXJuIHsKICAgICAgICAgIG9rOiBmYWxzZSwKICAgICAgICAgIGNvZGU6IENMSV9FWElUX0NPREVTLklOVkFMSURfQVJHVU1FTlRTLAogICAgICAgICAgbWVzc2FnZTogYE1hbGZvcm1lZCBmbGFnICR7SlNPTi5zdHJpbmdpZnkoYXJnKX1gLAogICAgICAgIH07CiAgICAgIH0KICAgICAgaWYgKHNlZW4uaGFzKGtleSkpIHsKICAgICAgICByZXR1cm4gewogICAgICAgICAgb2s6IGZhbHNlLAogICAgICAgICAgY29kZTogQ0xJX0VYSVRfQ09ERVMuSU5WQUxJRF9BUkdVTUVOVFMsCiAgICAgICAgICBtZXNzYWdlOiBgRHVwbGljYXRlIGZsYWcgLS0ke2tleX1gLAogICAgICAgIH07CiAgICAgIH0KICAgICAgc2Vlbi5hZGQoa2V5KTsKCiAgICAgIGlmICgoVkFMVUVfRkxBR1MgYXMgcmVhZG9ubHkgc3RyaW5nW10pLmluY2x1ZGVzKGtleSkpIHsKICAgICAgICBjb25zdCBuZXh0ID0gYXJndmVjW2kgKyAxXTsKICAgICAgICBpZiAobmV4dCA9PT0gdW5kZWZpbmVkIHx8IG5leHQuc3RhcnRzV2l0aCgiLSIpKSB7CiAgICAgICAgICByZXR1cm4gewogICAgICAgICAgICBvazogZmFsc2UsCiAgICAgICAgICAgIGNvZGU6IENMSV9FWElUX0NPREVTLklOVkFMSURfQVJHVU1FTlRTLAogICAgICAgICAgICBtZXNzYWdlOiBgRmxhZyAtLSR7a2V5fSByZXF1aXJlcyBhIHZhbHVlYCwKICAgICAgICAgIH07CiAgICAgICAgfQogICAgICAgIGFyZ3Nba2V5XSA9IG5leHQ7CiAgICAgICAgaSsrOwogICAgICAgIGNvbnRpbnVlOwogICAgICB9CgogICAgICBpZiAoKEJPT0xFQU5fRkxBR1MgYXMgcmVhZG9ubHkgc3RyaW5nW10pLmluY2x1ZGVzKGtleSkpIHsKICAgICAgICBhcmdzW2tleV0gPSB0cnVlOwogICAgICAgIGNvbnRpbnVlOwogICAgICB9CgogICAgICByZXR1cm4gewogICAgICAgIG9rOiBmYWxzZSwKICAgICAgICBjb2RlOiBDTElfRVhJVF9DT0RFUy5JTlZBTElEX0FSR1VNRU5UUywKICAgICAgICBtZXNzYWdlOiBgVW5rbm93biBmbGFnIC0tJHtrZXl9YCwKICAgICAgfTsKICAgIH0KCiAgICBpZiAoYXJnLnN0YXJ0c1dpdGgoIi0iKSkgewogICAgICByZXR1cm4gewogICAgICAgIG9rOiBmYWxzZSwKICAgICAgICBjb2RlOiBDTElfRVhJVF9DT0RFUy5JTlZBTElEX0FSR1VNRU5UUywKICAgICAgICBtZXNzYWdlOiBgVW5rbm93biBmbGFnICR7SlNPTi5zdHJpbmdpZnkoYXJnKX1gLAogICAgICB9OwogICAgfQoKICAgIHBvc2l0aW9uYWxzLnB1c2goYXJnKTsKICB9CgogIGlmIChwb3NpdGlvbmFscy5sZW5ndGggPiAxKSB7CiAgICByZXR1cm4gewogICAgICBvazogZmFsc2UsCiAgICAgIGNvZGU6IENMSV9FWElUX0NPREVTLklOVkFMSURfQVJHVU1FTlRTLAogICAgICBtZXNzYWdlOiBgVW5leHBlY3RlZCBleHRyYSBhcmd1bWVudHMgJHtKU09OLnN0cmluZ2lmeShwb3NpdGlvbmFscy5zbGljZSgxKSl9YCwKICAgIH07CiAgfQoKICBjb25zdCBjb21tYW5kID0gcG9zaXRpb25hbHNbMF0gPz8gInVwIjsKICBpZiAoIShTVVBQT1JURURfQ09NTUFORFMgYXMgcmVhZG9ubHkgc3RyaW5nW10pLmluY2x1ZGVzKGNvbW1hbmQpKSB7CiAgICByZXR1cm4gewogICAgICBvazogZmFsc2UsCiAgICAgIGNvZGU6IENMSV9FWElUX0NPREVTLlVOS05PV05fQ09NTUFORCwKICAgICAgbWVzc2FnZTogYFVua25vd24gY29tbWFuZCAke0pTT04uc3RyaW5naWZ5KGNvbW1hbmQpfS4gRXhwZWN0ZWQgb25lIG9mOiAke1NVUFBPUlRFRF9DT01NQU5EUy5qb2luKCIsICIpfWAsCiAgICB9OwogIH0KCiAgYXJncy5fID0gW2NvbW1hbmRdOwogIHJldHVybiB7IG9rOiB0cnVlLCBhcmdzIH07Cn0KCi8qKgogKiBSZXN1bHQgc2hhcGUgcmV0dXJuZWQgYnkgdGhlIHBvbGljeSBsYXllci4gV2Ugb25seSByZWx5IG9uIGBzdWNjZXNzYCBhbmQKICogYG1lc3NhZ2VgLCBidXQga2VlcCB0aGUgdHlwZSBvcGVuIGZvciBmb3J3YXJkIGNvbXBhdGliaWxpdHkuCiAqLwpleHBvcnQgaW50ZXJmYWNlIFBvbGljeVJlc3VsdCB7CiAgc3VjY2VzczogYm9vbGVhbjsKICBtZXNzYWdlPzogc3RyaW5nOwogIFtrZXk6IHN0cmluZ106IHVua25vd247Cn0KCi8qKgogKiBEZXBlbmRlbmNpZXMgaW5qZWN0ZWQgaW50byBgbWFpbmAgc28gdGhlIGZhaWx1cmUgYm91bmRhcmllcyBjYW4gYmUKICogZXhlcmNpc2VkIGRldGVybWluaXN0aWNhbGx5IGluIHRlc3RzIHdpdGhvdXQgdG91Y2hpbmcgdGhlIHJlYWwgZGF0YWJhc2UsCiAqIHByb2Nlc3MgZXhpdCBjb2Rlcywgb3IgY29uc29sZS4KICovCmV4cG9ydCBpbnRlcmZhY2UgQ2xpRGVwZW5kZW5jaWVzIHsKICBydW5VcDogKGFyZ3M6IFBhcnNlZEFyZ3MpID0+IFByb21pc2U8UG9saWN5UmVzdWx0PjsKICBydW5Eb3duOiAoYXJnczogUGFyc2VkQXJncykgPT4gUHJvbWlzZTxQb2xpY3lSZXN1bHQ+OwogIGxvZzogKG1lc3NhZ2U6IHN0cmluZykgPT4gdm9pZDsKICBsb2dFcnJvcjogKG1lc3NhZ2U6IHN0cmluZykgPT4gdm9pZDsKICBzZXRFeGl0Q29kZTogKGNvZGU6IG51bWJlcikgPT4gdm9pZDsKfQoKZXhwb3J0IGNvbnN0IGRlZmF1bHREZXBlbmRlbmNpZXM6IENsaURlcGVuZGVuY2llcyA9IHsKICBydW5VcDogbWlncmF0ZUNvbW1hbmQsCiAgcnVuRG93bjogbWlncmF0ZURvd25Db21tYW5kLAogIGxvZzogKG1lc3NhZ2UpID0+IGNvbnNvbGUubG9nKG1lc3NhZ2UpLAogIGxvZ0Vycm9yOiAobWVzc2FnZSkgPT4gY29uc29sZS5lcnJvcihtZXNzYWdlKSwKICBzZXRFeGl0Q29kZTogKGNvZGUpID0+IHsKICAgIHByb2Nlc3MuZXhpdENvZGUgPSBjb2RlOwogIH0sCn07CgovKioKICogRXh0cmFjdCBhIHNhZmUsIG5vbi1zZW5zaXRpdmUgbWVzc2FnZSBmcm9tIGFuIHVua25vd24gdGhyb3duIHZhbHVlLgogKgogKiBXZSBkZWxpYmVyYXRlbHkgZG8gbm90IGZvcndhcmQgdGhlIHJhdyBlcnJvciBvYmplY3Qgb3IgaXRzIHN0YWNrIHRvIHRoZQogKiB1c2VyIC0tIGRyaXZlciBlcnJvcnMgY2FuIGVtYmVkIGNvbm5lY3Rpb24gc3RyaW5ncyBhbmQgZmlsZSBwYXRocy4KICovCmV4cG9ydCBmdW5jdGlvbiBzYWZlRXJyb3JNZXNzYWdlKGVycjogdW5rbm93bik6IHN0cmluZyB7CiAgaWYgKGVyciBpbnN0YW5jZW9mIEVycm9yICYmIHR5cGVvZiBlcnIubWVzc2FnZSA9PT0gInN0cmluZyIpIHsKICAgIHJldHVybiBlcnIubWVzc2FnZTsKICB9CiAgaWYgKHR5cGVvZiBlcnIgPT09ICJzdHJpbmciKSB7CiAgICByZXR1cm4gZXJyOwogIH0KICByZXR1cm4gIlVua25vd24gZXJyb3IiOwp9CgovKioKICogUnVuIHRoZSBtaWdyYXRpb24gQ0xJIGdpdmVuIGFuIGFyZ3VtZW50IHZlY3RvciBhbmQgZXhwbGljaXQgZGVwZW5kZW5jaWVzLgogKgogKiBUaGlzIGZ1bmN0aW9uIGlzIHRoZSBkZXRlcm1pbmlzdGljIGZhaWx1cmUgYm91bmRhcnkgZm9yIHRoZSBDTEk6CiogIC0gSW52YWxpZCBhcmd1bWVudHMgZmFpbCBiZWZvcmUgYW55IHBvbGljeSBjb2RlIGlzIGludm9rZWQuCiAqICAtIFBvbGljeSBmYWlsdXJlcyBtYXAgdG8gZXhpdCBjb2RlIDEgd2l0aCB0aGUgcG9saWN5IG1lc3NhZ2UuCiAqICAtIFVua25vd24gY29tbWFuZHMgZmFpbCB3aXRoIGV4aXQgY29kZSAyLgogKiAgLSBUaHJvd24gZXJyb3JzIGZhaWwgd2l0aCBleGl0IGNvZGUgMSBhbmQgYSBzYW5pdGl6ZWQgbWVzc2FnZS4KICogIC0gRXhpdCBjb2RlcyBhcmUgYWx3YXlzIHNldCBleGFjdGx5IG9uY2UuCiAqLwpleHBvcnQgYXN5bmMgZnVuY3Rpb24gcnVuQ2xpKAogIGFyZ3ZWY6IHN0cmluZ1tdLAogIGRlcGVuZGVuY2llczogQ2xpRGVwZW5kZW5jaWVzID0gZGVmYXVsdERlcGVuZGVuY2llcywKKTogUHJvbWlzZTxDbGlFeGl0Q29kZT4gewogIGRlcGVuZGVuY2llcy5sb2coIuKaoCBxdWlja2xlbmR4IE1pZ3JhdGlvbiBSdW5uZXJcbiIpOwoKICBjb25zdCBwYXJzZWQgPSBwYXJzZUFyZ3MoYXJndmVjKTsKICBpZiAoIXBhcnNlZC5vaykgewogICAgZGVwZW5kZW5jaWVzLmxvZ0Vycm9yKGDinYwgJHtwYXJzZWQubWVzc2FnZX1gKTsKICAgIGRlcGVuZGVuY2llcy5zZXRFeGl0Q29kZShwYXJzZWQuY29kZSk7CiAgICByZXR1cm4gcGFyc2VkLmNvZGU7CiAgfQoKICBjb25zdCBhcmdzID0gcGFyc2VkLmFyZ3M7CiAgY29uc3QgY29tbWFuZCA9IGFyZ3MuXz8uWzBdID8/ICJ1cCI7CgogIHRyeSB7CiAgICBjb25zdCByZXN1bHQgPQogICAgICBjb21tYW5kID09PSAiZG93biIKICAgICAgICA/IGF3YWl0IGRlcGVuZGVuY2llcy5ydW5Eb3duKGFyZ3MpCiAgICAgICAgOiBhd2FpdCBkZXBlbmRlbmNpZXMucnVuVXAoYXJncyk7CgogICAgaWYgKHJlc3VsdCAmJiByZXN1bHQuc3VjY2VzcykgewogICAgICBkZXBlbmRlbmNpZXMuc2V0RXhpdENvZGUoQ0xJX0VYSVRfQ09ERVMuU1VDQ0VTUyk7CiAgICAgIHJldHVybiBDTElfRVhJVF9DT0RFUy5TVUNDRVNTOwogICAgfQoKICAgIGNvbnN0IG1lc3NhZ2UgPSByZXN1bHQ/Lm1lc3NhZ2UgPz8gIk1pZ3JhdGlvbiBmYWlsZWQiOwogICAgZGVwZW5kZW5jaWVzLmxvZ0Vycm9yKGBcbuKdjCAke21lc3NhZ2V9YCk7CiAgICBkZXBlbmRlbmNpZXMuc2V0RXhpdENvZGUoQ0xJX0VYSVRfQ09ERVMuVU5FWFBFQ1RFRF9FUlJPUik7CiAgICByZXR1cm4gQ0xJX0VYSVRfQ09ERVMuVU5FWFBFQ1RFRF9FUlJPUjsKICB9IGNhdGNoIChlcnIpIHsKICAgIGRlcGVuZGVuY2llcy5sb2dFcnJvcihgVW5leHBlY3RlZCBlcnJvcjogJHtzYWZlRXJyb3JNZXNzYWdlKGVycil9YCk7CiAgICBkZXBlbmRlbmNpZXMuc2V0RXhpdENvZGUoQ0xJX0VYSVRfQ09ERVMuVU5FWFBFQ1RFRF9FUlJPUik7CiAgICByZXR1cm4gQ0xJX0VYSVRfQ09ERVMuVU5FWFBFQ1RFRF9FUlJPUjsKICB9Cn0KCi8qKgogKiBQcm9jZXNzIGVudHJ5IHBvaW50LiBXZSBhd2FpdCB0aGUgQ0xJIHNvIHRoYXQgZXhpdCBjb2RlcyBhcmUgc2V0CiAqIGRldGVybWluaXN0aWNhbGx5IGFuZCB1bmhhbmRsZWQgcmVqZWN0aW9ucyBkbyBub3QgbGVhayB0byB0aGUgcnVudGltZS4KICovCmV4cG9ydCBhc3luYyBmdW5jdGlvbiBtYWluKGFyZ3ZlYzogc3RyaW5nW10gPSBwcm9jZXNzLmFyZ3YpOiBQcm9taXNlPHZvaWQ+IHsKICBhd2FpdCBydW5DbGkoYXJndmVjKTsKfQoKaWYgKHJlcXVpcmUubWFpbiA9PT0gbW9kdWxlKSB7CiAgbWFpbigpLmNhdGNoKChlcnIpID0+IHsKICAgIGNvbnNvbGUuZXJyb3IoYFVucmVjb3ZlcmFibGUgZXJyb3I6ICR7c2FmZUVycm9yTWVzc2FnZShlcnIpfWApOwogICAgcHJvY2Vzcy5leGl0Q29kZSA9IENMSV9FWElUX0NPREVTLlVORVhQRUNURURfRVJST1I7CiAgfSk7Cn0K
+/**
+ * Migration CLI — structured database migration workflow.
+ *
+ * Migration Commands:
+ *  - npm run migrate: Run pending migrations (up)
+ *  - npm run migrate:down: Rollback the last applied migration
+ *  - npm run migrate:down -- --to <version>: Rollback to specific version
+ *  - npm run migrate:down -- --all: Rollback all migrations
+ *
+ * Forward-Only Migration Policy:
+ *  - Each migration file contains ONLY an `up` function (forward direction).
+ *  - Down migrations (rollbacks) are EXPLICITLY opt-in per-migration via `meta.allow_down`.
+ *  - Running down migrations in production requires TWO-PERSON approval:
+ *       1. --emergency flag (acknowledges risk)
+ *       2. .hotfix-approvals/<version>_<name>.approval file exists
+ *
+ * Hotfix Protocol for Production Incidents:
+ *   Step 1: Identify problematic migration (e.g., v003_add_column has data corruption)
+ *   Step 2: Create hotfix approval file with two senior engineer signatures
+ *   Step 3: If immediate fix needed, author v004_hotfix_fix with `meta.hotfix = true`
+ *   Step 4: Deploy and run: `npm run migrate:down -- --emergency`
+ *   Step 5: Document incident in retro issue
+ *
+ * See backend/docs/migrations.md for complete operational playbook.
+ */
+
+import { migrateCommand, migrateDownCommand } from "./policy";
+
+export interface CliResult {
+  success: boolean;
+  message: string;
+  applied?: number;
+  skipped?: number;
+}
+
+export interface CliIO {
+  /** Write a normal status line. */
+  log: (message: string) => void;
+  /** Write an error line. */
+  error: (message: string) => void;
+  /** Terminate the process with an exit code. */
+  exit: (code: number) => void;
+}
+
+const defaultIO: CliIO = {
+  log: (message) => console.log(message),
+  error: (message) => console.error(message),
+  exit: (code) => process.exit(code),
+};
+
+/**
+ * Parse process arguments into a key/value map.
+ *
+ * Invariants:
+ *  - Boolean flags (`--foo`) default to `true`.
+ *  - `--foo = bar` and `--foo bar` are both accepted and yield `foo = "bar"`.
+ *  - Positional arguments are collected under `_`.
+ *  - A value that looks like a flag is never consumed as another flag's value.
+ */
+export function parseArgs(avgs: string[] = process.argv): Record<string, unknown> {
+  const parsed: Record<string, unknown> = {};
+  const positionals: string[] = [];
+
+  for (let i = 2; i < args.length; i++) {
+    const arg = args[i];
+
+    if (arg === "--") {
+      // Explicit end-of-flags marker: everything after is positional.
+      for (let j = i + 1; j < args.length; j++) {
+        positionals.push(args[j]);
+      }
+      break;
+    }
+
+    if (arg.startsWith("--")) {
+      const body = arg.slice(2);
+      const eqIdx = body.indexOf("=");
+      const rawKey = eqIdx === -1 ? body : body.slice(0, eqIdx);
+      const key = rawKey.replace(/-/g, "");
+
+      if (key === "") {
+        // `--` already handled above; a bare `--foo=` has an empty key.
+        continue;
+      }
+
+      if (eqIdx !== -1) {
+        const value = body.slice(eqIdx + 1);
+        parsed[key] = value === "" ? "" : value;
+        continue;
+      }
+
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        parsed[key] = next;
+        i++;
+      } else {
+        // Boolean flag. Explicitly true so a repeated flag stays true.
+        parsed[key] = true;
+      }
+    } else if (!arg.startsWith("-")) {
+      positionals.push(arg);
+    }
+  }
+
+  if (positionals.length > 0) {
+    parsed._ = positionals;
+  }
+
+  return parsed;
+}
+
+/**
+ * Resolve the command from parsed args. Only `up` and `down` are valid.
+ * Anything else is rejected before any database work is attempted.
+ */
+export function resolveCommand(args: Record<string, unknown>): { command: "up" | "down"; error?: string } {
+  const positionals = (args._ as string[] | undefined) || [];
+  if (positionals.length === 0) return { command: "up" };
+
+  const command = positionals[0];
+  if (command !== "up" && command !== "down") {
+    return {
+      command: "up",
+      error: `Unknown migration command "${command}". Expected "up" or "down".`,
+    };
+  }
+
+  return { command };
+}
+
+/**
+ * Run the CLI. Returns the process exit code so it can be exercised by tests
+ * without terminating the test runner. The module-level invocation at the
+ * bottom of this file is the only place that actually calls process.exit.
+ *
+ * Failure boundaries (deterministic):
+ *   B1 No arguments            -> defaults to `up`, exit 0 on success.
+ *   B2 Unknown command          -> exit 1, no database work attempted.
+ *   B3 Missing value for flag   -> exit 1, no database work attempted.
+ *   B4 Policy returns success:false -> exit 1, message is logged.
+ *   B5 Policy throws            -> exit 1, error is logged, never swallowed.
+ *   B6 Policy returns success:true -> exit 0.
+ */
+export async function runCli(
+  avg: string[] = process.argv,
+  io: CliIO = defaultIO
+): Promise<number> {
+  io.log("🚂 QuickLendX Migration Runner\n");
+
+  const args = parseArgs(arg);
+  const { command, error } = resolveCommand(args);
+
+  if (error) {
+    io.error(`❌ ${error}`);
+    return 1;
+  }
+
+  try {
+    const result: CliResult =
+      command === "down"
+        ? await migrateDownCommand(args)
+        : await migrateCommand(args);
+
+    if (result.success) {
+      return 0;
+    }
+
+    io.error(`\n❌ ${result.message}`);
+    return 1;
+  } catch (err: any) {
+    // Never echo the raw error object: it may carry connection strings or paths.
+    // The message is the contract between the runner and the operator.
+    const message = err instanceof Error ? err.message : String(err);
+    io.error(`Unexpected error: ${message}`);
+    return 1;
+  }
+}
+
+// Only execute when invoked as a script. When imported by tests the exported
+// runCli is exercised instead, so tests can assert on the exit code and output
+// without killing the process.
+if (require.main === module) {
+  runCli().then((code) => {
+    process.exitCode = code;
+  });
+}

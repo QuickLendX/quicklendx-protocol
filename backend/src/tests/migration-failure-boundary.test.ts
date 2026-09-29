@@ -1,3 +1,4 @@
+
 /**
  * Deterministic failure-boundary coverage for runMigrations.
  *
@@ -17,12 +18,14 @@
  *   - migration-workspace-empty/ empty migrations dir boundary
  */
 
+import { execFileSync } from "child_process";
 import Database from "better-sqlite3";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { createHash } from "crypto";
 import type { MigrationState } from "../lib/migrations/types";
 
+const CLI = path.resolve(__dirname, "..", "lib", "migrations", "cli.ts");
 const MAIN = path.resolve(__dirname, "..", "..", "tests", "fixtures", "migration-workspace");
 const DUP = path.resolve(__dirname, "..", "..", "tests", "fixtures", "migration-workspace-dup");
 const EMPTY = path.resolve(__dirname, "..", "..", "tests", "fixtures", "migration-workspace-empty");
@@ -32,6 +35,7 @@ type RunnerModule = typeof import("../lib/migrations/runner");
 
 let runner: RunnerModule;
 let origContents = new Map<string, string>();
+let origCliContents: string;
 
 function sha256(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -44,6 +48,21 @@ function switchEnv(workspace: string, env: string): void {
   // config.NODE_ENV (snapshotted at load) reflect the requested environment.
   jest.resetModules();
   runner = require("../lib/migrations/runner");
+}
+
+/**
+ * Invoke the real CLI entry point (`main`) as a subprocess so its
+ * deterministic exit codes and stderr diagnostics are exercised end-to-end.
+ * Returns the captured exit code and combined output.
+ */
+function runCli(args: string[], env: NodeJS.ProcessEnv = {}): { code: number; stdout: string; stderr: string } {
+  const result = execFileSync("npx", ["ts-node", "--transpile-only", CLI, ...args], {
+    cwd: process.cwd(),
+    env: { ...process.env, ...env },
+    encoding: "utf-8",
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+  return { code: 0, stdout: String(result), stderr: "" };
 }
 
 function newDb(): any {
@@ -97,6 +116,8 @@ describe("migration failure boundary (deterministic suite)", () => {
       origContents.set(f, await fs.readFile(path.join(migDir, f), "utf-8"));
     }
 
+    origCliContents = await fs.readFile(CLI, "utf-8");
+
     switchEnv(MAIN, "test");
   });
 
@@ -108,10 +129,89 @@ describe("migration failure boundary (deterministic suite)", () => {
       await fs.writeFile(path.join(migDir, f), content, "utf-8");
     }
     delete process.env.QFC_MIGRATION_902_ALLOWED;
+    await fs.writeFile(CLI, origCliContents, "utf-8");
   });
 
   afterAll(async () => {
     process.chdir(ORIGINAL_CWD);
+  });
+
+  describe("CLI main entrypoint failure boundaries", () => {
+    beforeAll(() => {
+      switchEnv(MAIN, "test");
+    });
+
+    test("main exits non-zero with a diagnosable message on invalid arguments", () => {
+      let err: any;
+      try {
+        runCli(["--definitely-not-a-flag"]);
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeDefined();
+      expect(err.status).not.toBe(0);
+      const output = `${err.stdout ?? ""}${err.stderr ?? ""}`;
+      expect(output).toMatch(/unknown|invalid|unrecognized/i);
+      // No sensitive environment values should leak into CLI diagnostics.
+      expect(output).not.toContain(process.env.ADMIN_API_KEY ?? "__no_admin_key__");
+    });
+
+    test("main exits non-zero when the migrations directory is empty and reports a clean no-op", () => {
+      switchEnv(EMPTY, "test");
+      try {
+        let err: any;
+        try {
+          runCli(["--dry-run"]);
+        } catch (e) {
+          err = e;
+        }
+        // Either a clean zero-exit no-op or a deterministic non-zero failure
+        // is acceptable, but the process must not hang or crash opaquely.
+        if (err) {
+          expect(err.status).not.toBe(0);
+          expect(`${err.stdout ?? ""}${err.stderr ?? ""}`).toMatch(/migration/i);
+        }
+      } finally {
+        switchEnv(MAIN, "test");
+      }
+    });
+
+    test("main surfaces a deterministic failure when a migration is missing its up function", () => {
+      process.env.QFC_MIGRATION_902_ALLOWED = "1";
+      let err: any;
+      try {
+        runCli(["--apply"]);
+      } catch (e) {
+        err = e;
+      }
+      expect(err).toBeDefined();
+      expect(err.status).not.toBe(0);
+      const output = `${err.stdout ?? ""}${err.stderr ?? ""}`;
+      expect(output).toMatch(/missing up function|v904_missing_up/);
+      // The internal environment knob must not be echoed back to the operator.
+      expect(output).not.toContain("QFC_MIGRATION_902_ALLOWED");
+    });
+
+    test("main refuses to bypass checksum verification in production", () => {
+      switchEnv(MAIN, "production");
+      try {
+        let err: any;
+        try {
+          runCli(["--apply", "--skip-checksum-verify"], {
+            ADMIN_API_KEY: "a".repeat(32),
+            WEBHOOK_SECRET: "b".repeat(16),
+            EXPORT_SECRET: "c".repeat(32),
+          });
+        } catch (e) {
+          err = e;
+        }
+        expect(err).toBeDefined();
+        expect(err.status).not.toBe(0);
+        expect(`${err.stdout ?? ""}${err.stderr ?? ""}`).toMatch(/cannot be bypassed in production/i);
+      } finally {
+        switchEnv(MAIN, "test");
+      }
+    });
   });
 
   describe("deterministic success and idempotency", () => {

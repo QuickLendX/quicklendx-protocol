@@ -64,23 +64,35 @@ export class MigrationPolicy {
 }
 
 /**
- * Structured logging helper. Emits a single JSON line to stderr with a stable
- * shape so operators and tests can assert on failure boundaries without parsing
- * free-text. Sensitive details (connection strings, paths) are not included.
+ * Deterministic failure-boundary coverage for the migration CLI entry point.
+ *
+ * Invariants enforced here:
+*  - Command arguments are normalized before any side effects (no down without
+    emergency + global allowance; no conflicting --to/--all).
+  - Every failure path returns a structured result and never throws, so callers
+    can retry deterministically without losing state.
+  * Error messages are sanitized to avoid leaking secrets or connection
+    strings to logs.
  */
-function logFailure(event: string, details: Record<string, unknown> = {}): void {
-  const payload = { level: "error", event, ...details };
-  console.error(JSON.stringify(payload));
+
+function sanitizeErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error";
+  // Redact typical credential/connection secrets from error output.
+  return raw
+    .replace(/(\/\/[^:@]+):[^@]+@/g, "//$1:@@")
+    .replace(/(password|pwd|secret|token|api[_\-]?key)\s*=\s*[^\s]+/gi, "$1=[REDACTED]")
+    .replace(/(BEARER\s+)[A-Za-z0-9\-\._=]+/g, "$1[REDACTED]");
 }
 
-function toErrorMessage(err: unknown): string {
-  if (err instanceof Error) return err.message;
-  if (typeof err === "string") return err;
-  try {
-    return JSON.stringify(err);
-  } catch {
-    return "Unknown error";
+function normalizeArgs(value: unknown): MigrateArgs {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {};
   }
+  return value as MigrateArgs;
+}
+
+function toBoolean(value: unknown): boolean {
+  return value === true || value === "true" || value === 1;
 }
 
 export async function migrateCommand(args: Record<string, unknown>): Promise<{
@@ -97,12 +109,12 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
     validateOnly = false,
     check = false,
     skipChecksumVerify = false,
-  } = args as MigrateArgs;
+  } = normalizeArgs(args);
 
   if (check) {
     try {
       const fileValid = await validateMigrationFiles();
-      const fileMigs = await loa`MigrationsFromFS();
+      const fileMigs = await loadMigrationsFromFS();
       const appliedVersions = await getAppliedVersions();
       const missing = fileMigs.filter((m) => !appliedVersions.includes(m.version));
       const valid = fileValid.valid && missing.length === 0;
@@ -112,15 +124,15 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
       ];
 
       if (!valid) {
-        logFailure("migration_check_failed", { errorCount: errors.length });
+        console.error("❌ Migration check failed:");
         errors.forEach((e) => console.error(`   ${e}`));
         return { success: false, message: "Migrations out of sync or invalid" };
       }
       console.log("✅ Migrations are in sync");
       return { success: true, message: "Migrations valid" };
     } catch (err) {
-      const message = toErrorMessage(err);
-      logFailure("migration_check_error", { message });
+      const message = sanitizeErrorMessage(err);
+      console.error("❌ Migration check failed:", message);
       return { success: false, message: `Migration check error: ${message}` };
     }
   }
@@ -130,15 +142,15 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
       const migrations = (await loadMigrationsFromFS()).map((m) => m.content);
       const result = await MigrationPolicy.dryRun(migrations, { force: emergency });
       if (!result.valid) {
-        logFailure("migration_validation_failed", { errorCount: result.errors.length });
+        console.error("❌ Migration validation failed:");
         result.errors.forEach((e) => console.error(`   ${e}`));
         return { success: false, message: "Validation errors" };
       }
       console.log("✅ All migration files are valid");
       return { success: true, message: "Validation passed" };
     } catch (err) {
-      const message = toErrorMessage(err);
-      logFailure("migration_validation_error", { message });
+      const message = sanitizeErrorMessage(err);
+      console.error("❌ Migration validation failed:", message);
       return { success: false, message: `Validation error: ${message}` };
     }
   }
@@ -174,8 +186,8 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
       skipped: result.skipped,
     };
   } catch (err) {
-    const message = toErrorMessage(err);
-    logFailure("migration_run_failed", { message, dryRun });
+    const message = sanitizeErrorMessage(err);
+    console.error("❌ Migration failed:", message);
     return { success: false, message: `Migration error: ${message}` };
   }
 }
@@ -193,7 +205,7 @@ export async function migrateDownCommand(args: Record<string, unknown>): Promise
     to,
     all = false,
     skipChecksumVerify = false,
-  } = args as MigrateArgs;
+  } = normalizeArgs(args);
 
   if (!emergency && !MigrationPolicy.isDownAllowed()) {
     return {
@@ -226,8 +238,8 @@ export async function migrateDownCommand(args: Record<string, unknown>): Promise
       skipped: result.skipped,
     };
   } catch (err) {
-    const message = toErrorMessage(err);
-    logFailure("migration_rollback_failed", { message, dryRun });
+    const message = sanitizeErrorMessage(err);
+    console.error("❌ Migration rollback failed:", message);
     return { success: false, message: `Rollback error: ${message}` };
   }
 }

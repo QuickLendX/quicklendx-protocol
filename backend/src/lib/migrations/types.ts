@@ -86,7 +86,7 @@ export type HotfixFlag = (typeof HotfixFlags)[keyof typeof HotfixFlags];
 
 /** Migration error codes. */
 export const MigrationErrorCodes = {
-  MIGRATION_ALREADY_APPLIED: "MIGRATION_ALREADY_APPLIED",
+  MIGRATION_AlreADY_APPLIED: "MIGRATION_ALREADY_APPLIED",
   MIGRATION_MISSING: "MIGRATION_MISSING",
   DOWN_MIGRATION_NOT_ALLOWED: "DOWN_MIGRATION_NOT_ALLOWGED",
   MIGRATION_VALIDATION_FAILED: "MIGRATION_VALIDATION_FAILED",
@@ -94,71 +94,36 @@ export const MigrationErrorCodes = {
   CHECKSUM_MISMATCH: "CHECKSUM_MISMATCH",
   HOTFIX_REQUIRES_APPROVAL: "HOTFIX_REQUIRES_APPROVAL",
   UNSUPPORTED_IN_PRODUCTION: "UNSUPPORTED_IN_PRODUCTION",
-  /** The runner attempted to execute a migration while another runner held the application lock. */
-  MIGRATION_LOCK_HELD: "MIGRATION_LOCK_HELD",
-  /** The application lock could not be acquired within the configured timeout. */
-  MIGRATION_LOCK_TIMEOUT: "MIGRATION_LOCK_TIMEOUT",
-  /** The application lock was lost mid-migration (e.g. lease expired or connection dropped). */
-  MIGRATION_LOCK_LOST: "MIGRATION_LOCK_LOST",
-  /** A migration failed and the rollback attempt also failed. */
-  MIGRATION_ROLLBACK_FAILED: "MIGRATION_ROLLBACK_FAILED",
-  /** The cli invocation was invalid (bad arguments, missing command, etc.); no database work was attempted. */
-  INVALID_INVOCATION: "INVALID_INVOCATION",
 } as const;
 
-export type MigrationErrorCode = (typeof MigrationErrorCodes)[keyof typeof MigrationErrorCodes];
-
 /**
- * Structured error thrown by the migration runner and CLI.
+ * Constructor for a typed migration error that carries a stable error code.
  *
- * Every failure path in the migration system must surface a deterministic
- * code so that the CLI can map it to a stable exit code and a non-sensitive
- * message. The code is the contract; the message is for humans.
+ * The cli entry point must be able to distinguish between a known failure boundary
+ * (e.g. checksum mismatch, missing migration, unapproved hotfix) and an
+ * unexpected internal error. This keeps exit codes and log output deterministic
+ * and avoids exposing raw driver messages to users.
  */
-export interface MigrationErrorOptions {
-  /** Machine-readable error code from MigrationErrorCodes. */
-  code: MigrationErrorCode;
-  /** Optional migration version associated with the failure. */
-  version?: number;
-  /** Optional migration name associated with the failure. */
-  name?: string;
-  /** Whether the failure is considered retryable by the CLI. */
-  retryable?: boolean;
-  /** Underlying cause, preserved for diagnostics but never included in user-facing output. */
-  cause?: unknown;
-}
-
 export class MigrationError extends Error {
-  public readonly code: MigrationErrorCode;
-  public readonly version?: number;
-  public readonly name?: string;
-  public readonly retryable: boolean;
+  public readonly code: string;
+  public readonly cause?: unknown;
 
-  constructor(message: string, options: MigrationErrorOptions) {
+  constructor(code: string, message: string, options?: { cause?: unknown }) {
     super(message);
     this.name = "MigrationError";
-    this.code = options.code;
-    this.version = options.version;
-    this.name = options.name;
-    this.retryable = options.retryable ?? false;
-    if (options.cause !== undefined) {
-      // Preserve the cause for stack tracing without exposing it in CLI output.
-      (this as Error & { cause?: unknown }).cause = options.cause;
-    }
+    this.code = code;
+    this.cause = options?.cause;
   }
 }
 
 /**
- * Result of a CLI invocation. Returned by `main` so the process entry
- * point can map it to an exit code without relying on process globals.
+ * Result of a single migration attempt (success or failure).
+ * Used by the cli to render deterministic summaries and exit codes.
  */
-export interface CliResult {
-  /** Process exit code the CLI should use. */
-  exitCode: number;
-  /** Human-readable summary suitable for stderr/stdout. */
-  message: string;
-  /** Machine-readable error code when the invocation failed. */
-  errorCode?: MigrationErrorCode;
-  /** Whether the failure is safe to retry without operator intervention. */
-  retryable?: boolean;
+export interface MigrationResult {
+  version: number;
+  name: string;
+  status: "applied" | "skipped" | "failed";
+  durationMs: number;
+  error?: { code: string; message: string };
 }
