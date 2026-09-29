@@ -83,6 +83,15 @@ const _steps: ShutdownStep[] = [];
 
 /** Register a step. Idempotent by name: re-registering replaces the prior entry. */
 export function register(step: ShutdownStep): void {
+  if (!step || typeof step.name !== 'string' || step.name.length === 0) {
+    throw new TypeError('[shutdown] register() requires a step with a non-empty name');
+  }
+  if (typeof step.fn !== 'function') {
+    throw new TypeError(`[shutdown] register() step "${step.name}" must provide an fn`);
+  }
+  if (!Number.isFinite(step.priority)) {
+    throw new TypeError(`[shutdown] register() step "${step.name}" must provide a finite priority`);
+  }
   const idx = _steps.findIndex((s) => s.name === step.name);
   if (idx >= 0) {
     _steps[idx] = step;

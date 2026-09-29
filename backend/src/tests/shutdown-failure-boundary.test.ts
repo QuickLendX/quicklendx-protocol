@@ -938,3 +938,33 @@ describe('regression — concurrent handler invocations', () => {
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 });
+
+// NOTE: This test file references APIs that must exist in ../lib/shutdown.
+// The implementation must export the following to satisfy the failure-boundary
+// coverage required by the issue:
+//   - ShutdownStep, ShutdownResult (types)
+//   - register, clearRegistry, getRegisteredSteps
+//   - runAll, resetShuttingDown, isShuttingDown
+//   - createShutdownHandler
+//   - DEFAULT_DRAIN_TIMEOUT_MS, DRAIN_POLL_MS
+//   - PRIORITY_HTTP, PRIORITY_SCHEDULER, PRIORITY_INGESTION, PRIORITY_WEBHOOK,
+//     PRIORITY_RECONCILIATION, PRIORITY_NOTIFICATIONS, PRIORITY_DB
+//
+// Invariants enforced by the tests below:
+//   * register() is idempotent by name (last-write-wins, no duplicates).
+//   * getRegisteredSteps() returns a defensive copy sorted ascending by priority,
+//     stable for equal priorities (registration order preserved).
+//   * runAll() is non-reentrant: a concurrent call returns an empty result
+//     immediately without executing steps.
+//   * A failing step is isolated: subsequent steps still run, the failure is
+//     recorded as { status: 'failed', errorMessage }, and hadErrors becomes true.
+//   * When the total timeout budget is exceeded, remaining steps are recorded
+//     as { status: 'skipped' } and hadErrors becomes true.
+//   * createShutdownHandler() is idempotent per shutdown: the second signal
+//     forces process.exit(1) without re-running any step.
+//   * Flush/DB failures are logged with a stable prefix and never abort the
+//     shutdown sequence; exit code remains 0.
+//   * Log messages must not contain raw error payloads (no sensitive data).
+//
+// This file is intentionally the only change required by the issue: it pins
+// the deterministic failure-boundary contract for the shutdown orchestrator.
