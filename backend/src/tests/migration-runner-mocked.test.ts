@@ -551,6 +551,7 @@ describe("Migration Runner with Mocked Database", () => {
 
   test("getAppliedVersions with mocked database", async () => {
     const mockDb: any = {
+      exec: jest.fn(),
       prepare: jest.fn(() => ({
         all: jest.fn(() => [{ version: 1 }, { version: 2 }]),
       })),
@@ -563,6 +564,7 @@ describe("Migration Runner with Mocked Database", () => {
 
   test("isDatabaseInitialized with mocked database - initialized", async () => {
     const mockDb: any = {
+      exec: jest.fn(),
       prepare: jest.fn(() => ({
         all: jest.fn(() => [{ version: 1 }]),
       })),
@@ -574,6 +576,7 @@ describe("Migration Runner with Mocked Database", () => {
 
   test("isDatabaseInitialized with mocked database - not initialized", async () => {
     const mockDb: any = {
+      exec: jest.fn(),
       prepare: jest.fn(() => ({
         all: jest.fn(() => []),
       })),
