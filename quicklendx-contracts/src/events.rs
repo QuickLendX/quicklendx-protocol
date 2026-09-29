@@ -1,265 +1,1181 @@
-use crate::bid::Bid;
-use crate::fees::{FeeType, FeeStructure};
-use crate::invoice::{Invoice, InvoiceMetadata};
+#![allow(deprecated)]
+
+use crate::audit::OpType;
+use crate::fees::FeeType;
+use crate::observability::{TransitionPhase, OBSERVABILITY_SCHEMA_VERSION};
 use crate::payments::Escrow;
-use crate::profits::PlatformFeeConfig;
-use crate::verification::InvestorVerification;
-use soroban_sdk::{symbol_short, Address, BytesN, Env, String, Symbol};
+use crate::types::Bid;
+use crate::types::{InvestorFreezeReason, Invoice, InvoiceMetadata, PlatformFeeConfig};
+use crate::verification::{InvestorRiskLevel, InvestorTier, InvestorVerification};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 // ============================================================================
-// Canonical Event Topics
+// Topic Constants
 //
-// These compile-time constants define the **immutable** set of event topics
-// emitted by the QuickLendX protocol.  Off-chain indexers and analytics tools
-// MUST use these exact values when filtering Soroban event streams.
-//
-// Stability guarantee:
-//   Once the contract is deployed to a network, no existing topic string will
-//   be changed or removed.  New events may be added in future upgrades.
-//   Payload fields follow append-only ordering: existing field positions are
-//   frozen; new fields are appended at the end.
-//
-// All topics are at most 9 bytes to satisfy the `symbol_short!` constraint.
+// These compile-time constants pin the exact Symbol used as the first topic
+// for every event. Off-chain indexers import these to avoid hard-coding
+// string literals. Any rename here is a breaking schema change.
 // ============================================================================
 
-/// Emitted when a business uploads a new invoice.
-/// Payload: (invoice_id, business, amount, currency, due_date, timestamp)
-pub const TOPIC_INVOICE_UPLOADED: Symbol = symbol_short!("inv_up");
+/// Topic for `InvoiceUploaded` / `InvoiceCreated` events.
+/// The `#[contractevent]` macro uses the snake_case struct name as the topic.
+pub const TOPIC_INVOICE_UPLOADED: &str = "invoice_uploaded";
+/// Topic for `InvoiceVerified` events.
+pub const TOPIC_INVOICE_VERIFIED: &str = "invoice_verified";
+/// Topic for `InvoiceCancelled` events.
+pub const TOPIC_INVOICE_CANCELLED: &str = "invoice_cancelled";
+/// Topic for `InvoiceSettled` / `LoanSettled` events.
+pub const TOPIC_INVOICE_SETTLED: &str = "invoice_settled";
+/// Topic for `InvoiceDefaulted` events.
+pub const TOPIC_INVOICE_DEFAULTED: &str = "invoice_defaulted";
+/// Topic for `InvoiceExpired` events.
+pub const TOPIC_INVOICE_EXPIRED: &str = "invoice_expired";
+/// Topic for `PartialPayment` events.
+pub const TOPIC_PARTIAL_PAYMENT: &str = "partial_payment";
+/// Topic for `PaymentRecorded` events.
+pub const TOPIC_PAYMENT_RECORDED: &str = "payment_recorded";
+/// Topic for versioned `RepaymentAllocated` events (additive; does not replace `pay_rec`).
+pub const TOPIC_REPAYMENT_ALLOCATED: &str = "repayment_allocated";
+/// Topic for `InvoiceSettledFinal` events.
+pub const TOPIC_INVOICE_SETTLED_FINAL: &str = "invoice_settled_final";
+/// Topic for `InvoiceFunded` events.
+pub const TOPIC_INVOICE_FUNDED: &str = "invoice_funded";
+/// Topic for `BidPlaced` events.
+pub const TOPIC_BID_PLACED: &str = "bid_placed";
+/// Topic for `BidAccepted` events.
+pub const TOPIC_BID_ACCEPTED: &str = "bid_accepted";
+/// Topic for `BidWithdrawn` events.
+pub const TOPIC_BID_WITHDRAWN: &str = "bid_withdrawn";
+/// Topic for `BidCancelled` events.
+pub const TOPIC_BID_CANCELLED: &str = "bid_cancelled";
+/// Topic for `BidExpired` events.
+pub const TOPIC_BID_EXPIRED: &str = "bid_expired";
+/// Topic for `EscrowCreated` / `FundsLocked` events.
+pub const TOPIC_ESCROW_CREATED: &str = "escrow_created";
+/// Topic for `EscrowReleased` events.
+pub const TOPIC_ESCROW_RELEASED: &str = "escrow_released";
+/// Topic for `EscrowRefunded` events.
+pub const TOPIC_ESCROW_REFUNDED: &str = "escrow_refunded";
+/// Topic for `InvestmentWithdrawn` events.
+pub const TOPIC_INVESTMENT_WITHDRAWN: &str = "investment_withdrawn";
+/// Topic for `DisputeCreated` / `DisputeOpened` events.
+pub const TOPIC_DISPUTE_CREATED: &str = "dispute_created";
+/// Topic for `DisputeUnderReview` events.
+pub const TOPIC_DISPUTE_UNDER_REVIEW: &str = "dispute_under_review";
+/// Topic for `DisputeResolved` events.
+pub const TOPIC_DISPUTE_RESOLVED: &str = "dispute_resolved";
+/// Topic for `DisputeRejected` events.
+pub const TOPIC_DISPUTE_REJECTED: &str = "dispute_rejected";
+/// Topic for `TreasuryRotationInitiated` events.
+pub const TOPIC_TREASURY_ROTATION_INITIATED: &str = "treasury_rotation_initiated";
+/// Topic for `TreasuryRotationConfirmed` events.
+pub const TOPIC_TREASURY_ROTATION_CONFIRMED: &str = "treasury_rotation_confirmed";
+/// Topic for `TreasuryRotationCancelled` events.
+pub const TOPIC_TREASURY_ROTATION_CANCELLED: &str = "treasury_rotation_cancelled";
+/// Topic for `InvoiceFrozen` events.
+///
+/// Emitted when an admin applies a freeze to an invoice via `freeze_invoice`.
+/// The payload includes a `freeze_appeal_channel` field that points consumers
+/// to the appeals process documented in `docs/APPEALS.md`.
+pub const TOPIC_INVOICE_FROZEN: &str = "invoice_frozen";
 
-/// Emitted when an admin verifies an invoice.
-/// Payload: (invoice_id, business, timestamp)
-pub const TOPIC_INVOICE_VERIFIED: Symbol = symbol_short!("inv_ver");
+// ============================================================================
+// Storage-schema version and migration topic constants
+//
+// These pin the exact event topics used by the migration lifecycle machinery.
+// Off-chain reconciliation tools must subscribe to these topics to track
+// schema upgrades and ensure no committed protocol action is lost.
+// Any rename here is a BREAKING schema change.
+// ============================================================================
 
-/// Emitted when a business cancels a Pending or Verified invoice.
-/// Payload: (invoice_id, business, timestamp)
-pub const TOPIC_INVOICE_CANCELLED: Symbol = symbol_short!("inv_canc");
+/// Topic emitted when a storage schema migration is started.
+///
+/// Subscribers can use `schema_from` and `schema_to` to determine which
+/// migration is in progress and whether a rollback is needed.
+pub const TOPIC_MIGRATION_STARTED: &str = "migration_started";
 
-/// Emitted when an invoice is fully settled via `settle_invoice`.
-/// Payload: (invoice_id, business, investor, investor_return, platform_fee, timestamp)
-pub const TOPIC_INVOICE_SETTLED: Symbol = symbol_short!("inv_set");
+/// Topic emitted when a storage schema migration completes successfully.
+///
+/// The `records_migrated` field allows off-chain tools to verify record counts
+/// against their own state.
+pub const TOPIC_MIGRATION_COMPLETED: &str = "migration_completed";
 
-/// Emitted when `handle_default` marks an invoice as Defaulted.
-/// Payload: (invoice_id, business, investor, timestamp)
-pub const TOPIC_INVOICE_DEFAULTED: Symbol = symbol_short!("inv_def");
+/// Topic emitted when a storage schema migration is rolled back.
+///
+/// A rollback leaves storage at `schema_from` with no partial state.
+pub const TOPIC_MIGRATION_ROLLED_BACK: &str = "migration_rolled_back";
 
-/// Emitted when an invoice's bidding window expires without funding.
-/// Payload: (invoice_id, business, due_date)
-pub const TOPIC_INVOICE_EXPIRED: Symbol = symbol_short!("inv_exp");
+/// Topic emitted when a storage schema migration fails partway through.
+///
+/// The `records_migrated` field indicates how many records were processed
+/// before the failure.  The migration is resumable from `next_offset`.
+pub const TOPIC_MIGRATION_FAILED: &str = "migration_failed";
 
-/// Emitted for every partial payment recorded against a Funded invoice.
-/// Payload: (invoice_id, business, payment_amount, total_paid, progress_bps, transaction_id)
-pub const TOPIC_PARTIAL_PAYMENT: Symbol = symbol_short!("inv_pp");
+/// Topic emitted when the storage schema version is recorded or updated.
+pub const TOPIC_SCHEMA_VERSION_SET: &str = "schema_version_set";
 
-/// Emitted when a single atomic payment record is stored.
-/// Payload: (invoice_id, payer, amount, transaction_id, timestamp)
-pub const TOPIC_PAYMENT_RECORDED: Symbol = symbol_short!("pay_rec");
+/// Topic constants for upgrade lifecycle events.
+pub const TOPIC_UPGRADE_SCHEDULED: &str = "upg_sch";
+pub const TOPIC_UPGRADE_CANCELLED: &str = "upg_can";
+pub const TOPIC_UPGRADE_EXECUTED: &str = "upg_exe";
 
-/// Emitted after all payments are recorded and the invoice transitions to Settled.
-/// Payload: (invoice_id, business, investor, total_paid, timestamp)
-pub const TOPIC_INVOICE_SETTLED_FINAL: Symbol = symbol_short!("inv_stlf");
+// ============================================================================
+// Protocol-level semantic aliases
+//
+// The task specification uses domain-level names. These type aliases map them
+// to the canonical event types so both names compile and refer to the same
+// schema. Off-chain indexers should subscribe to the TOPIC_* constants above.
+// ============================================================================
 
-/// Emitted when an investor places a bid on a Verified invoice.
-/// Payload: (bid_id, invoice_id, investor, bid_amount, expected_return, timestamp, expiration_timestamp)
-pub const TOPIC_BID_PLACED: Symbol = symbol_short!("bid_plc");
+/// Semantic alias: `InvoiceCreated` == `InvoiceUploaded`.
+/// Both refer to the same event schema; use `TOPIC_INVOICE_UPLOADED` as the topic.
+pub type InvoiceCreated = InvoiceUploaded;
 
-/// Emitted when a business accepts a bid, moving the invoice to Funded.
-/// Payload: (bid_id, invoice_id, investor, business, bid_amount, expected_return, timestamp)
-pub const TOPIC_BID_ACCEPTED: Symbol = symbol_short!("bid_acc");
+/// Semantic alias: `FundsLocked` == `EscrowCreated`.
+/// Emitted when investor funds are locked in escrow upon bid acceptance.
+/// Use `TOPIC_ESCROW_CREATED` as the topic.
+pub type FundsLocked = EscrowCreated;
 
-/// Emitted when an investor withdraws their active bid.
-/// Payload: (bid_id, invoice_id, investor, bid_amount, timestamp)
-pub const TOPIC_BID_WITHDRAWN: Symbol = symbol_short!("bid_wdr");
+/// Semantic alias: `LoanSettled` == `InvoiceSettled`.
+/// Emitted when a loan (invoice) is fully settled.
+/// Use `TOPIC_INVOICE_SETTLED` as the topic.
+pub type LoanSettled = InvoiceSettled;
 
-/// Emitted when `clean_expired_bids` removes a bid past its TTL.
-/// Payload: (bid_id, invoice_id, investor, bid_amount, expiration_timestamp)
-pub const TOPIC_BID_EXPIRED: Symbol = symbol_short!("bid_exp");
+/// Semantic alias: `DisputeOpened` == `DisputeCreated`.
+/// Use `TOPIC_DISPUTE_CREATED` as the topic.
+pub type DisputeOpened = DisputeCreated;
 
-/// Emitted when an escrow account is created upon bid acceptance.
-/// Payload: (escrow_id, invoice_id, investor, business, amount)
-pub const TOPIC_ESCROW_CREATED: Symbol = symbol_short!("esc_cr");
+// ============================================================================
+// Structured Event Types
+// ============================================================================
 
-/// Emitted when escrow funds are released to the business after settlement.
-/// Payload: (escrow_id, invoice_id, business, amount)
-pub const TOPIC_ESCROW_RELEASED: Symbol = symbol_short!("esc_rel");
+/// Emitted when a new invoice is uploaded / created by a business.
+///
+/// Topic: [`TOPIC_INVOICE_UPLOADED`] (`"inv_up"`)
+///
+/// # Fields
+/// - `invoice_id` – Unique 32-byte invoice identifier.
+/// - `business` – Address of the business that owns the invoice.
+/// - `amount` – Invoice face value in the smallest currency unit.
+/// - `currency` – Token contract address for the invoice currency.
+/// - `due_date` – Unix timestamp when the invoice is due.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[contractevent]
+pub struct InvoiceUploaded {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub amount: i128,
+    pub currency: Address,
+    pub due_date: u64,
+    pub timestamp: u64,
+}
 
-/// Emitted when escrow funds are returned to the investor (cancellation / default).
-/// Payload: (escrow_id, invoice_id, investor, amount)
-pub const TOPIC_ESCROW_REFUNDED: Symbol = symbol_short!("esc_ref");
+/// Emitted when an invoice is verified by an admin.
+///
+/// Topic: [`TOPIC_INVOICE_VERIFIED`] (`"inv_ver"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceVerified {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when an invoice is cancelled by the business owner.
+///
+/// Topic: [`TOPIC_INVOICE_CANCELLED`] (`"inv_canc"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceCancelled {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when an invoice is fully settled (loan repaid).
+///
+/// Topic: [`TOPIC_INVOICE_SETTLED`] (`"inv_set"`)
+///
+/// # Fields
+/// - `invoice_id` – Unique 32-byte invoice identifier.
+/// - `amount` – Total amount settled (sum of all payments applied to this invoice).
+/// - `ledger` – Ledger sequence number at the time of settlement.
+/// - `business` – Address of the business that owns the invoice.
+/// - `investor` – Address of the investor who funded the invoice.
+/// - `investor_return` – Amount returned to the investor after fees.
+/// - `platform_fee` – Fee taken by the platform.
+/// - `timestamp` – Ledger timestamp at emission time.
+///
+/// # Security
+/// No PII is included. `investor_return` and `platform_fee` are derived
+/// from validated contract state only.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceSettled {
+    pub invoice_id: BytesN<32>,
+    pub amount: i128,
+    pub ledger: u32,
+    pub business: Address,
+    pub investor: Address,
+    pub investor_return: i128,
+    pub platform_fee: i128,
+    pub timestamp: u64,
+}
+
+/// Emitted when an invoice is marked as defaulted.
+///
+/// Topic: [`TOPIC_INVOICE_DEFAULTED`] (`"inv_def"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceDefaulted {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub investor: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when an invoice expires past its due date without payment.
+///
+/// Topic: [`TOPIC_INVOICE_EXPIRED`] (`"inv_exp"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceExpired {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub due_date: u64,
+}
+
+/// Emitted on each partial payment towards an invoice.
+///
+/// Topic: [`TOPIC_PARTIAL_PAYMENT`] (`"inv_pp"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct PartialPayment {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub payment_amount: i128,
+    pub total_paid: i128,
+    pub progress: u32,
+    pub transaction_id: String,
+}
+
+/// Emitted when a payment record is durably stored.
+///
+/// Topic: [`TOPIC_PAYMENT_RECORDED`] (`"pay_rec"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct PaymentRecorded {
+    pub invoice_id: BytesN<32>,
+    pub payer: Address,
+    pub amount: i128,
+    pub transaction_id: String,
+    pub timestamp: u64,
+}
+
+/// Additive versioned repayment allocation for a committed payment.
+///
+/// Topic: [`TOPIC_REPAYMENT_ALLOCATED`] (`"repayment_allocated"`)
+///
+/// Emitted only after storage commit. `operation_id` matches the
+/// `PaymentProcessed` audit entry. Legacy `PartialPayment` / `pay_rec`
+/// payloads are unchanged.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct RepaymentAllocated {
+    pub schema_version: u32,
+    pub operation_id: BytesN<32>,
+    pub phase: TransitionPhase,
+    pub invoice_id: BytesN<32>,
+    pub payer: Address,
+    pub applied_principal: i128,
+    pub applied_investor_profit: i128,
+    pub applied_platform_fee: i128,
+    pub applied_late_penalty: i128,
+    pub cumulative_principal: i128,
+    pub cumulative_investor_profit: i128,
+    pub cumulative_platform_fee: i128,
+    pub cumulative_late_penalty: i128,
+    pub total_paid: i128,
+    pub total_due: i128,
+    pub fee_bps: i128,
+}
+
+/// Emitted when an invoice reaches final settlement (all funds disbursed).
+///
+/// Topic: [`TOPIC_INVOICE_SETTLED_FINAL`] (`"inv_stlf"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceSettledFinal {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub investor: Address,
+    pub total_paid: i128,
+    pub timestamp: u64,
+}
+
+/// Emitted when a bid is placed on an invoice.
+///
+/// Topic: [`TOPIC_BID_PLACED`] (`"bid_plc"`)
+///
+/// # Fields
+/// - `bid_id` – Unique bid identifier.
+/// - `invoice_id` – The invoice being bid on (auction_id in protocol terms).
+/// - `investor` – Address of the bidder.
+/// - `bid_amount` – Amount offered by the investor.
+/// - `expected_return` – Total expected repayment amount.
+/// - `timestamp` – Ledger timestamp when bid was placed.
+/// - `expiration_timestamp` – Timestamp after which the bid expires.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct BidPlaced {
+    pub bid_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub bid_amount: i128,
+    pub expected_return: i128,
+    pub timestamp: u64,
+    pub expiration_timestamp: u64,
+}
+
+/// Emitted when a bid is accepted by the business owner.
+///
+/// Topic: [`TOPIC_BID_ACCEPTED`] (`"bid_acc"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct BidAccepted {
+    pub bid_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub business: Address,
+    pub bid_amount: i128,
+    pub expected_return: i128,
+    pub timestamp: u64,
+}
+
+/// Emitted when an investor withdraws their bid.
+///
+/// Topic: [`TOPIC_BID_WITHDRAWN`] (`"bid_wdr"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct BidWithdrawn {
+    pub bid_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub bid_amount: i128,
+    pub timestamp: u64,
+}
+
+/// Emitted when a bid is cancelled by its investor.
+///
+/// Topic: [`TOPIC_BID_CANCELLED`] (`"bid_cancelled"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct BidCancelled {
+    pub bid_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub bid_amount: i128,
+    pub timestamp: u64,
+}
+
+/// Emitted when a bid expires past its TTL.
+///
+/// Topic: [`TOPIC_BID_EXPIRED`] (`"bid_exp"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct BidExpired {
+    pub bid_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub bid_amount: i128,
+    pub expiration_timestamp: u64,
+}
+
+/// Emitted when investor funds are locked in escrow (bid accepted).
+///
+/// Topic: [`TOPIC_ESCROW_CREATED`] (`"esc_cr"`)
+///
+/// # Fields
+/// - `escrow_id` – Unique escrow identifier.
+/// - `invoice_id` – The invoice being funded.
+/// - `investor` – Address of the investor whose funds are locked.
+/// - `business` – Address of the business receiving the funds.
+/// - `amount` – Amount locked in escrow.
+///
+/// # Security
+/// Funds are locked atomically with bid acceptance. No PII included.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct EscrowCreated {
+    pub escrow_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub business: Address,
+    pub amount: i128,
+}
+
+/// Emitted when escrow funds are released to the business.
+///
+/// Topic: [`TOPIC_ESCROW_RELEASED`] (`"esc_rel"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct EscrowReleased {
+    pub escrow_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub amount: i128,
+}
+
+/// Emitted when escrow funds are refunded to the investor.
+///
+/// Topic: [`TOPIC_ESCROW_REFUNDED`] (`"esc_ref"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct EscrowRefunded {
+    pub escrow_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub amount: i128,
+}
+
+/// Emitted when an investor withdraws their investment before settlement.
+///
+/// Topic: [`TOPIC_INVESTMENT_WITHDRAWN`] (`"inv_wd"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvestmentWithdrawn {
+    pub investment_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub amount: i128,
+}
+
+/// Emitted when invoice metadata is updated.
+///
+/// Topic: `"invoice_metadata_updated"`
+///
+/// # Security
+/// **NO PII**: This event does NOT include customer_name or tax_id to prevent
+/// PII leakage. Only aggregate statistics (line_item_count, total_value) are included.
+#[contractevent]
+pub struct InvoiceMetadataUpdated {
+    pub invoice_id: BytesN<32>,
+    pub line_item_count: u32,
+    pub total_value: i128,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct InvoiceMetadataCleared {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+}
+
+/// Emitted when an investor is verified by an admin.
+///
+/// Topic: [`TOPIC_INVESTOR_VERIFIED`] (if defined) or the struct topic.
+///
+/// # Fields
+/// - `investor` – Address of the verified investor.
+/// - `investment_limit` – Computed investment limit for this investor.
+/// - `verified_at` – Ledger timestamp when verification occurred.
+/// - `verified_by` – Address of the admin who performed the verification.
+/// - `tier` – Investor tier (serialized as u32: 0=Basic, 1=Silver, 2=Gold, 3=Platinum, 4=VIP).
+/// - `risk_level` – Risk level (serialized as u32: 0=Low, 1=Medium, 2=High, 3=VeryHigh).
+/// - `risk_score` – Numeric risk score (0–100).
+#[contractevent]
+pub struct InvestorVerified {
+    pub investor: Address,
+    pub investment_limit: i128,
+    pub verified_at: u64,
+    pub verified_by: Address,
+    pub tier: u32,
+    pub risk_level: u32,
+    pub risk_score: u32,
+}
+
+/// Emitted when a business or investor submits a KYC application.
+///
+/// Topic: [`TOPIC_KYC_SUBMITTED`] (`"kyc_submitted"`)
+///
+/// # Fields
+/// - `subject` – Address of the business or investor submitting KYC.
+/// - `is_resubmit` – `true` if this is a resubmission after a prior rejection.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycSubmitted {
+    pub subject: Address,
+    pub is_resubmit: bool,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin verifies (approves) a business or investor KYC record.
+///
+/// Topic: [`TOPIC_KYC_VERIFIED`] (`"kyc_verified"`)
+///
+/// # Fields
+/// - `subject` – Address of the verified business or investor.
+/// - `admin` – Address of the admin who performed the verification.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycVerified {
+    pub subject: Address,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin rejects a pending business or investor KYC record.
+///
+/// Topic: [`TOPIC_KYC_REJECTED`] (`"kyc_rejected"`)
+///
+/// # Fields
+/// - `subject` – Address of the rejected business or investor.
+/// - `admin` – Address of the admin who performed the rejection.
+/// - `reason` – Auditable rejection reason.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycRejected {
+    pub subject: Address,
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin revokes a previously-verified investor's KYC.
+///
+/// Topic: [`TOPIC_KYC_REVOKED`] (`"kyc_revoked"`)
+///
+/// # Fields
+/// - `investor` – Address of the investor whose KYC was revoked.
+/// - `admin` – Address of the admin who performed the revocation.
+/// - `reason` – Auditable revocation reason.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct KycRevoked {
+    pub investor: Address,
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin freezes an investor, blocking all investment actions.
+///
+/// Topic: [`TOPIC_INVESTOR_FROZEN`] (`"investor_frozen"`)
+///
+/// # Fields
+/// - `investor` – Address of the frozen investor.
+/// - `admin` – Address of the admin who performed the freeze.
+/// - `reason` – The freeze reason (serialized as string).
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvestorFrozen {
+    pub investor: Address,
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when an admin unfreezes an investor, restoring investment actions.
+///
+/// Topic: [`TOPIC_INVESTOR_UNFROZEN`] (`"investor_unfrozen"`)
+///
+/// # Fields
+/// - `investor` – Address of the unfrozen investor.
+/// - `admin` – Address of the admin who performed the unfreeze.
+/// - `timestamp` – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvestorUnfrozen {
+    pub investor: Address,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceFunded {
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub amount: i128,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct InsuranceAdded {
+    pub investment_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub investor: Address,
+    pub provider: Address,
+    pub coverage_percentage: u32,
+    pub coverage_amount: i128,
+    pub premium_amount: i128,
+}
+
+#[contractevent]
+pub struct InsurancePremiumCollected {
+    pub investment_id: BytesN<32>,
+    pub provider: Address,
+    pub premium_amount: i128,
+}
+
+#[contractevent]
+pub struct InsuranceClaimed {
+    pub investment_id: BytesN<32>,
+    pub invoice_id: BytesN<32>,
+    pub provider: Address,
+    pub coverage_amount: i128,
+}
+
+#[contractevent]
+pub struct PlatformFeeUpdated {
+    pub fee_bps: u32,
+    pub updated_at: u64,
+    pub updated_by: Address,
+}
+
+#[contractevent]
+pub struct FeeStructureUpdated {
+    pub fee_type: FeeType,
+    pub old_fee_bps: u32,
+    pub new_fee_bps: u32,
+    pub updated_by: Address,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct PlatformFeeRouted {
+    pub invoice_id: BytesN<32>,
+    pub recipient: Address,
+    pub fee_amount: i128,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct PlatformFeeConfigUpdated {
+    pub old_fee_bps: u32,
+    pub new_fee_bps: u32,
+    pub updated_by: Address,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct TreasuryConfigured {
+    pub treasury_address: Address,
+    pub configured_by: Address,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct TreasuryRotationInitiated {
+    pub new_address: Address,
+    pub initiated_by: Address,
+    pub confirmation_deadline: u64,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct TreasuryRotationConfirmed {
+    pub old_address: Address,
+    pub new_address: Address,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct BackupCreated {
+    pub backup_id: BytesN<32>,
+    pub invoice_count: u32,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct BackupRestored {
+    pub backup_id: BytesN<32>,
+    pub invoice_count: u32,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct BackupValidated {
+    pub backup_id: BytesN<32>,
+    pub success: bool,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct BackupArchived {
+    pub backup_id: BytesN<32>,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct RetentionPolicyUpdated {
+    pub max_backups: u32,
+    pub max_age_seconds: u64,
+    pub auto_cleanup_enabled: bool,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct BackupsCleaned {
+    pub removed_count: u32,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct AuditValidation {
+    pub invoice_id: BytesN<32>,
+    pub is_valid: bool,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct AuditQuery {
+    pub query_type: OpType,
+    pub result_count: u32,
+}
+
+#[contractevent]
+pub struct InvoiceCategoryUpdated {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub old_category: crate::types::InvoiceCategory,
+    pub new_category: crate::types::InvoiceCategory,
+}
+
+#[contractevent]
+pub struct InvoiceTagAdded {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub tag: String,
+}
+
+#[contractevent]
+pub struct InvoiceTagRemoved {
+    pub invoice_id: BytesN<32>,
+    pub business: Address,
+    pub tag: String,
+}
+
+/// Emitted when a dispute is opened on an invoice.
+///
+/// Topic: [`TOPIC_DISPUTE_CREATED`] (`"dsp_cr"`)
+///
+/// # Fields
+/// - `invoice_id` – The disputed invoice.
+/// - `created_by` – Address of the dispute initiator (business or investor).
+/// - `reason` – Human-readable reason string (no PII, max 1000 chars).
+/// - `timestamp` – Ledger timestamp at emission time.
+///
+/// # Security
+/// Only the business owner or investor on the invoice may open a dispute.
+/// The `reason` field must not contain PII; it is a reason code or short description.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct DisputeCreated {
+    pub invoice_id: BytesN<32>,
+    pub created_by: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when a dispute is moved to admin review.
+///
+/// Topic: [`TOPIC_DISPUTE_UNDER_REVIEW`] (`"dsp_ur"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct DisputeUnderReview {
+    pub invoice_id: BytesN<32>,
+    pub reviewed_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when a dispute is resolved by an admin.
+///
+/// Topic: [`TOPIC_DISPUTE_RESOLVED`] (`"dsp_rs"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct DisputeResolved {
+    pub invoice_id: BytesN<32>,
+    pub resolved_by: Address,
+    pub resolution: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when a dispute is rejected (dismissed) by an admin.
+///
+/// Topic: [`TOPIC_DISPUTE_REJECTED`] (`"dsp_rj"`)
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct DisputeRejected {
+    pub invoice_id: BytesN<32>,
+    pub rejected_by: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct ProfitFeeBreakdown {
+    pub invoice_id: BytesN<32>,
+    pub investment_amount: i128,
+    pub payment_amount: i128,
+    pub gross_profit: i128,
+    pub platform_fee: i128,
+    pub investor_return: i128,
+    pub fee_bps_applied: i128,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct TtlExtended {
+    pub kind: String,
+    pub count: u32,
+}
+
+#[contractevent]
+pub struct BidTtlUpdated {
+    pub old_days: u64,
+    pub new_days: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+#[contractevent]
+pub struct BidExpiryGraceUpdated {
+    pub old_seconds: u64,
+    pub new_seconds: u64,
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+pub fn emit_ttl_extended(env: &Env, kind: &String, count: u32) {
+    TtlExtended {
+        kind: kind.clone(),
+        count,
+    }
+    .publish(env);
+}
+
+#[contractevent]
+pub struct RevenueDistributed {
+    pub period: u64,
+    pub treasury_amount: i128,
+    pub developer_amount: i128,
+    pub platform_amount: i128,
+}
+
+#[contractevent]
+pub struct InvoiceStatusUpdated {
+    pub invoice_id: BytesN<32>,
+    pub status: crate::types::InvoiceStatus,
+}
+
+#[contractevent]
+pub struct AdminInitialized {
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct ProtocolInitialized {
+    pub admin: Address,
+    pub treasury: Address,
+    pub fee_bps: u32,
+    pub min_invoice_amount: i128,
+    pub max_due_date_days: u64,
+    pub grace_period_seconds: u64,
+    pub backfill_max_batch_size: u32,
+    pub corridors: Vec<Address>,
+    pub timestamp: u64,
+}
+
+// ============================================================================
+// Pause Control Events
+
+#[contractevent]
+pub struct Paused {
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct Unpaused {
+    pub admin: Address,
+}
+
+pub fn emit_paused(env: &Env, admin: &Address) {
+    Paused {
+        admin: admin.clone(),
+    }
+    .publish(env);
+}
+
+pub fn emit_unpaused(env: &Env, admin: &Address) {
+    Unpaused {
+        admin: admin.clone(),
+    }
+    .publish(env);
+}
+
+// ============================================================================
+// Freeze / Unfreeze Events
+// ============================================================================
+
+/// Emitted when an admin applies a freeze to an invoice via `freeze_invoice`.
+///
+/// Topic: [`TOPIC_INVOICE_FROZEN`] (`"invoice_frozen"`)
+///
+/// # Fields
+/// - `invoice_id` – The frozen invoice.
+/// - `frozen_by` – Address of the admin who applied the freeze.
+/// - `reason` – Machine-readable label for the [`crate::types::BusinessFreezeReason`]
+///   variant (e.g. `"admin_action"`, `"compliance_violation"`, `"fraud_suspected"`).
+/// - `freeze_appeal_channel` – A short pointer to the off-chain appeals process.
+///   Set to `"docs/APPEALS.md"` by the emitter.  Downstream consumers (dashboards,
+///   notification pipelines) can surface this string directly to the affected
+///   business so they know where to file an appeal without paging an engineer.
+///   This field contains **no PII** — it is a static URL/path.
+/// - `timestamp` – Ledger timestamp at emission time.
+///
+/// # Backwards compatibility
+/// This event is **additive**.  Indexers that do not recognise the
+/// `freeze_appeal_channel` field can safely ignore it.
+///
+/// # Security
+/// No PII is included.  The `reason` field is the string label returned by
+/// `BusinessFreezeReason::label()`, not a free-text admin comment.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct InvoiceFrozen {
+    pub invoice_id: BytesN<32>,
+    pub frozen_by: Address,
+    pub reason: String,
+    pub freeze_appeal_channel: String,
+    pub timestamp: u64,
+}
+
+/// Emit an [`InvoiceFrozen`] event.
+///
+/// `reason_label` should come from [`crate::types::BusinessFreezeReason::label()`].
+/// `freeze_appeal_channel` is always `"docs/APPEALS.md"` — a static pointer
+/// to the operator-facing appeals runbook so that any off-chain consumer of
+/// this event knows immediately where to direct the frozen business.
+pub fn emit_invoice_frozen(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    frozen_by: &Address,
+    reason_label: &str,
+) {
+    InvoiceFrozen {
+        invoice_id: invoice_id.clone(),
+        frozen_by: frozen_by.clone(),
+        reason: String::from_str(env, reason_label),
+        freeze_appeal_channel: String::from_str(env, "docs/APPEALS.md"),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
 
 // ============================================================================
 // Invoice Event Emitters
 // ============================================================================
 
-/// Emit an `inv_up` event when a business uploads a new invoice.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id`  | `BytesN<32>` | SHA-256 derived unique identifier |
-/// | 1 | `business`    | `Address`    | Uploading business account        |
-/// | 2 | `amount`      | `i128`       | Invoice face value (in stroops)   |
-/// | 3 | `currency`    | `Address`    | Token contract address            |
-/// | 4 | `due_date`    | `u64`        | Unix timestamp of payment due date|
-/// | 5 | `timestamp`   | `u64`        | Ledger time of upload             |
-///
-/// # Security
-/// `business` is the caller authenticated via `require_auth()` in `upload_invoice`.
 pub fn emit_invoice_uploaded(env: &Env, invoice: &Invoice) {
-    env.events().publish(
-        (TOPIC_INVOICE_UPLOADED,),
-        (
-            invoice.id.clone(),
-            invoice.business.clone(),
-            invoice.amount,
-            invoice.currency.clone(),
-            invoice.due_date,
-            env.ledger().timestamp(),
-        ),
-    );
+    InvoiceUploaded {
+        invoice_id: invoice.id.clone(),
+        business: invoice.business.clone(),
+        amount: invoice.amount,
+        currency: invoice.currency.clone(),
+        due_date: invoice.due_date,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit an `inv_ver` event when an admin verifies an invoice.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Unique invoice identifier |
-/// | 1 | `business`   | `Address`    | Invoice owner             |
-/// | 2 | `timestamp`  | `u64`        | Ledger time of verification |
-///
-/// # Security
-/// Only the stored admin can call `verify_invoice`; auth checked upstream.
 pub fn emit_invoice_verified(env: &Env, invoice: &Invoice) {
-    env.events().publish(
-        (TOPIC_INVOICE_VERIFIED,),
-        (
-            invoice.id.clone(),
-            invoice.business.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    InvoiceVerified {
+        invoice_id: invoice.id.clone(),
+        business: invoice.business.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit an `inv_canc` event when a business cancels an invoice.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Unique invoice identifier |
-/// | 1 | `business`   | `Address`    | Invoice owner             |
-/// | 2 | `timestamp`  | `u64`        | Ledger time of cancellation |
-///
-/// # Security
-/// Only the invoice's `business` can cancel (auth checked in `cancel_invoice`).
 pub fn emit_invoice_cancelled(env: &Env, invoice: &Invoice) {
-    env.events().publish(
-        (TOPIC_INVOICE_CANCELLED,),
-        (
-            invoice.id.clone(),
-            invoice.business.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    InvoiceCancelled {
+        invoice_id: invoice.id.clone(),
+        business: invoice.business.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit an `inv_meta` event when invoice metadata is updated.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id`      | `BytesN<32>` | Unique invoice identifier      |
-/// | 1 | `customer_name`   | `String`     | Client name from metadata      |
-/// | 2 | `tax_id`          | `String`     | Tax identifier from metadata   |
-/// | 3 | `line_items_count`| `u32`        | Number of line items           |
-/// | 4 | `total`           | `i128`       | Sum of line item amounts       |
 pub fn emit_invoice_metadata_updated(env: &Env, invoice: &Invoice, metadata: &InvoiceMetadata) {
     let mut total = 0i128;
     for record in metadata.line_items.iter() {
         total = total.saturating_add(record.3);
     }
 
-    env.events().publish(
-        (symbol_short!("inv_meta"),),
-        (
-            invoice.id.clone(),
-            metadata.customer_name.clone(),
-            metadata.tax_id.clone(),
-            metadata.line_items.len() as u32,
-            total,
-        ),
-    );
+    InvoiceMetadataUpdated {
+        invoice_id: invoice.id.clone(),
+        line_item_count: metadata.line_items.len(),
+        total_value: total,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit an `inv_mclr` event when invoice metadata is cleared.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Unique invoice identifier |
-/// | 1 | `business`   | `Address`    | Invoice owner             |
 pub fn emit_invoice_metadata_cleared(env: &Env, invoice: &Invoice) {
-    env.events().publish(
-        (symbol_short!("inv_mclr"),),
-        (invoice.id.clone(), invoice.business.clone()),
-    );
+    InvoiceMetadataCleared {
+        invoice_id: invoice.id.clone(),
+        business: invoice.business.clone(),
+    }
+    .publish(env);
 }
 
-/// Emit an `inv_veri` event when an investor is KYC-verified.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `investor`         | `Address` | Verified investor account      |
-/// | 1 | `investment_limit` | `i128`    | Maximum allowed investment     |
-/// | 2 | `verified_at`      | `u64`     | Ledger timestamp of approval   |
-///
-/// # Security
-/// Only the stored admin can verify investors; auth checked upstream.
 pub fn emit_investor_verified(env: &Env, verification: &InvestorVerification) {
-    env.events().publish(
-        (symbol_short!("inv_veri"),),
-        (
-            verification.investor.clone(),
-            verification.investment_limit,
-            verification.verified_at,
-        ),
-    );
-}
-
-/// Emit an `inv_set` event when an invoice is fully settled.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id`     | `BytesN<32>` | Unique invoice identifier            |
-/// | 1 | `business`       | `Address`    | Invoice owner                        |
-/// | 2 | `investor`       | `Address`    | Funding investor (zero addr if none) |
-/// | 3 | `investor_return`| `i128`       | Net amount returned to investor      |
-/// | 4 | `platform_fee`   | `i128`       | Fee collected by the platform        |
-/// | 5 | `timestamp`      | `u64`        | Ledger time of settlement            |
-///
-/// # Security
-/// `investor_return + platform_fee <= payment_amount` enforced in profits module.
-pub fn emit_invoice_settled(
-    env: &Env,
-    invoice: &crate::invoice::Invoice,
-    investor_return: i128,
-    platform_fee: i128,
-) {
-    env.events().publish(
-        (TOPIC_INVOICE_SETTLED,),
-        (
-            invoice.id.clone(),
-            invoice.business.clone(),
-            invoice.investor.clone().unwrap_or(Address::from_str(
+    let tier_num = match verification.tier {
+        InvestorTier::Basic => 0u32,
+        InvestorTier::Silver => 1,
+        InvestorTier::Gold => 2,
+        InvestorTier::Platinum => 3,
+        InvestorTier::VIP => 4,
+    };
+    let risk_num = match verification.risk_level {
+        InvestorRiskLevel::Low => 0u32,
+        InvestorRiskLevel::Medium => 1,
+        InvestorRiskLevel::High => 2,
+        InvestorRiskLevel::VeryHigh => 3,
+    };
+    InvestorVerified {
+        investor: verification.investor.clone(),
+        investment_limit: verification.investment_limit,
+        verified_at: verification.verified_at.unwrap_or(0),
+        verified_by: verification
+            .verified_by
+            .clone()
+            .unwrap_or(Address::from_str(
                 env,
                 "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
             )),
-            investor_return,
-            platform_fee,
-            env.ledger().timestamp(),
-        ),
-    );
+        tier: tier_num,
+        risk_level: risk_num,
+        risk_score: verification.risk_score,
+    }
+    .publish(env);
 }
 
-/// Emit an `inv_pp` event for each partial payment on a Funded invoice.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id`     | `BytesN<32>` | Unique invoice identifier       |
-/// | 1 | `business`       | `Address`    | Invoice owner                   |
-/// | 2 | `payment_amount` | `i128`       | Amount paid in this instalment  |
-/// | 3 | `total_paid`     | `i128`       | Cumulative paid so far          |
-/// | 4 | `progress`       | `u32`        | Progress in basis points (0-10000) |
-/// | 5 | `transaction_id` | `String`     | Off-chain transaction reference |
-///
-/// # Security
-/// `payment_amount > 0` enforced in `make_payment`; `total_paid` is monotonic.
+// ============================================================================
+// KYC / Participant-Identity Event Emitters
+//
+// These replace the private raw-symbol emitters previously scattered in
+// verification.rs. Every KYC lifecycle transition now emits a structured
+// #[contractevent] with a pinned TOPIC_* constant for indexer stability.
+// ============================================================================
+
+/// Emitted when a business or investor submits a KYC application.
+pub fn emit_kyc_submitted(env: &Env, subject: &Address, is_resubmit: bool) {
+    KycSubmitted {
+        subject: subject.clone(),
+        is_resubmit,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin verifies (approves) a business or investor KYC record.
+pub fn emit_kyc_verified(env: &Env, subject: &Address, admin: &Address) {
+    KycVerified {
+        subject: subject.clone(),
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin rejects a pending business or investor KYC record.
+pub fn emit_kyc_rejected(env: &Env, subject: &Address, admin: &Address, reason: &String) {
+    KycRejected {
+        subject: subject.clone(),
+        admin: admin.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin revokes a previously-verified investor's KYC.
+pub fn emit_kyc_revoked(env: &Env, investor: &Address, admin: &Address, reason: &String) {
+    KycRevoked {
+        investor: investor.clone(),
+        admin: admin.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin freezes an investor, blocking all investment actions.
+pub fn emit_investor_frozen(
+    env: &Env,
+    investor: &Address,
+    admin: &Address,
+    reason: &InvestorFreezeReason,
+) {
+    let reason_str = match reason {
+        crate::types::InvestorFreezeReason::AdminAction => String::from_str(env, "AdminAction"),
+        crate::types::InvestorFreezeReason::KYCExpired => String::from_str(env, "KYCExpired"),
+        crate::types::InvestorFreezeReason::ComplianceViolation => {
+            String::from_str(env, "ComplianceViolation")
+        }
+        crate::types::InvestorFreezeReason::SuspiciousActivity => {
+            String::from_str(env, "SuspiciousActivity")
+        }
+        crate::types::InvestorFreezeReason::LegalHold => String::from_str(env, "LegalHold"),
+    };
+    InvestorFrozen {
+        investor: investor.clone(),
+        admin: admin.clone(),
+        reason: reason_str,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emitted when an admin unfreezes an investor, restoring investment actions.
+pub fn emit_investor_unfrozen(env: &Env, investor: &Address, admin: &Address) {
+    InvestorUnfrozen {
+        investor: investor.clone(),
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_invoice_settled(
+    env: &Env,
+    invoice: &crate::types::Invoice,
+    investor_return: i128,
+    platform_fee: i128,
+) {
+    InvoiceSettled {
+        invoice_id: invoice.id.clone(),
+        amount: invoice.total_paid,
+        ledger: env.ledger().sequence(),
+        business: invoice.business.clone(),
+        investor: invoice.investor.clone().unwrap_or(Address::from_str(
+            env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        )),
+        investor_return,
+        platform_fee,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
 pub fn emit_partial_payment(
     env: &Env,
     invoice: &Invoice,
@@ -268,27 +1184,17 @@ pub fn emit_partial_payment(
     progress: u32,
     transaction_id: String,
 ) {
-    env.events().publish(
-        (TOPIC_PARTIAL_PAYMENT,),
-        (
-            invoice.id.clone(),
-            invoice.business.clone(),
-            payment_amount,
-            total_paid,
-            progress,
-            transaction_id,
-        ),
-    );
+    PartialPayment {
+        invoice_id: invoice.id.clone(),
+        business: invoice.business.clone(),
+        payment_amount,
+        total_paid,
+        progress,
+        transaction_id,
+    }
+    .publish(env);
 }
 
-/// Emit a `pay_rec` event when a single payment record is persisted.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id`    | `BytesN<32>` | Unique invoice identifier       |
-/// | 1 | `payer`         | `Address`    | Account that sent the payment   |
-/// | 2 | `amount`        | `i128`       | Payment amount                  |
-/// | 3 | `transaction_id`| `String`     | Off-chain transaction reference |
-/// | 4 | `timestamp`     | `u64`        | Ledger time of recording        |
 pub fn emit_payment_recorded(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -296,29 +1202,56 @@ pub fn emit_payment_recorded(
     amount: i128,
     transaction_id: String,
 ) {
-    env.events().publish(
-        (TOPIC_PAYMENT_RECORDED,),
-        (
-            invoice_id.clone(),
-            payer.clone(),
-            amount,
-            transaction_id,
-            env.ledger().timestamp(),
-        ),
-    );
+    PaymentRecorded {
+        invoice_id: invoice_id.clone(),
+        payer: payer.clone(),
+        amount,
+        transaction_id,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit an `inv_stlf` event after all payments complete and the invoice is Settled.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Unique invoice identifier       |
-/// | 1 | `business`   | `Address`    | Invoice owner                   |
-/// | 2 | `investor`   | `Address`    | Funding investor                |
-/// | 3 | `total_paid` | `i128`       | Total amount paid               |
-/// | 4 | `timestamp`  | `u64`        | Ledger time of final settlement |
-///
-/// # Security
-/// Emitted only once per invoice when status transitions to Settled.
+/// Emit a committed [`RepaymentAllocated`] record. Call only after payment
+/// storage has been written.
+pub fn emit_repayment_allocated(
+    env: &Env,
+    operation_id: BytesN<32>,
+    invoice_id: &BytesN<32>,
+    payer: &Address,
+    applied_principal: i128,
+    applied_investor_profit: i128,
+    applied_platform_fee: i128,
+    applied_late_penalty: i128,
+    cumulative_principal: i128,
+    cumulative_investor_profit: i128,
+    cumulative_platform_fee: i128,
+    cumulative_late_penalty: i128,
+    total_paid: i128,
+    total_due: i128,
+    fee_bps: i128,
+) {
+    RepaymentAllocated {
+        schema_version: OBSERVABILITY_SCHEMA_VERSION,
+        operation_id,
+        phase: TransitionPhase::Committed,
+        invoice_id: invoice_id.clone(),
+        payer: payer.clone(),
+        applied_principal,
+        applied_investor_profit,
+        applied_platform_fee,
+        applied_late_penalty,
+        cumulative_principal,
+        cumulative_investor_profit,
+        cumulative_platform_fee,
+        cumulative_late_penalty,
+        total_paid,
+        total_due,
+        fee_bps,
+    }
+    .publish(env);
+}
+
 pub fn emit_invoice_settled_final(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -326,93 +1259,52 @@ pub fn emit_invoice_settled_final(
     investor: &Address,
     total_paid: i128,
 ) {
-    env.events().publish(
-        (TOPIC_INVOICE_SETTLED_FINAL,),
-        (
-            invoice_id.clone(),
-            business.clone(),
-            investor.clone(),
-            total_paid,
-            env.ledger().timestamp(),
-        ),
-    );
+    InvoiceSettledFinal {
+        invoice_id: invoice_id.clone(),
+        business: business.clone(),
+        investor: investor.clone(),
+        total_paid,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit an `inv_exp` event when an invoice's bidding window expires.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Unique invoice identifier |
-/// | 1 | `business`   | `Address`    | Invoice owner             |
-/// | 2 | `due_date`   | `u64`        | Original due date         |
-pub fn emit_invoice_expired(env: &Env, invoice: &crate::invoice::Invoice) {
-    env.events().publish(
-        (TOPIC_INVOICE_EXPIRED,),
-        (
-            invoice.id.clone(),
-            invoice.business.clone(),
-            invoice.due_date,
-        ),
-    );
+pub fn emit_invoice_expired(env: &Env, invoice: &crate::types::Invoice) {
+    InvoiceExpired {
+        invoice_id: invoice.id.clone(),
+        business: invoice.business.clone(),
+        due_date: invoice.due_date,
+    }
+    .publish(env);
 }
 
-/// Emit an `inv_def` event when an invoice is marked as Defaulted.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Unique invoice identifier            |
-/// | 1 | `business`   | `Address`    | Invoice owner                        |
-/// | 2 | `investor`   | `Address`    | Funding investor (zero addr if none) |
-/// | 3 | `timestamp`  | `u64`        | Ledger time of default               |
-///
-/// # Security
-/// Only callable after `due_date` has passed (grace period enforced upstream).
-pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::invoice::Invoice) {
-    env.events().publish(
-        (TOPIC_INVOICE_DEFAULTED,),
-        (
-            invoice.id.clone(),
-            invoice.business.clone(),
-            invoice.investor.clone().unwrap_or(Address::from_str(
-                env,
-                "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-            )),
-            env.ledger().timestamp(),
-        ),
-    );
+pub fn emit_invoice_defaulted(env: &Env, invoice: &crate::types::Invoice) {
+    InvoiceDefaulted {
+        invoice_id: invoice.id.clone(),
+        business: invoice.business.clone(),
+        investor: invoice.investor.clone().unwrap_or(Address::from_str(
+            env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        )),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit an `inv_fnd` event when an invoice transitions to Funded.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Unique invoice identifier |
-/// | 1 | `investor`   | `Address`    | Funding investor          |
-/// | 2 | `amount`     | `i128`       | Funded amount             |
-/// | 3 | `timestamp`  | `u64`        | Ledger time of funding    |
 pub fn emit_invoice_funded(env: &Env, invoice_id: &BytesN<32>, investor: &Address, amount: i128) {
-    env.events().publish(
-        (symbol_short!("inv_fnd"),),
-        (
-            invoice_id.clone(),
-            investor.clone(),
-            amount,
-            env.ledger().timestamp(),
-        ),
-    );
+    InvoiceFunded {
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        amount,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 // ============================================================================
 // Insurance Event Emitters
 // ============================================================================
 
-/// Emit an `ins_add` event when investment insurance is attached.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `investment_id`      | `BytesN<32>` | Investment identifier    |
-/// | 1 | `invoice_id`         | `BytesN<32>` | Invoice identifier       |
-/// | 2 | `investor`           | `Address`    | Insured investor         |
-/// | 3 | `provider`           | `Address`    | Insurance provider       |
-/// | 4 | `coverage_percentage`| `u32`        | Coverage % (0-100)       |
-/// | 5 | `coverage_amount`    | `i128`       | Max payout               |
-/// | 6 | `premium_amount`     | `i128`       | Premium paid             |
 pub fn emit_insurance_added(
     env: &Env,
     investment_id: &BytesN<32>,
@@ -423,45 +1315,32 @@ pub fn emit_insurance_added(
     coverage_amount: i128,
     premium_amount: i128,
 ) {
-    env.events().publish(
-        (symbol_short!("ins_add"),),
-        (
-            investment_id.clone(),
-            invoice_id.clone(),
-            investor.clone(),
-            provider.clone(),
-            coverage_percentage,
-            coverage_amount,
-            premium_amount,
-        ),
-    );
+    InsuranceAdded {
+        investment_id: investment_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        provider: provider.clone(),
+        coverage_percentage,
+        coverage_amount,
+        premium_amount,
+    }
+    .publish(env);
 }
 
-/// Emit an `ins_prm` event when an insurance premium is collected.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `investment_id` | `BytesN<32>` | Investment identifier |
-/// | 1 | `provider`      | `Address`    | Insurance provider    |
-/// | 2 | `premium_amount`| `i128`       | Premium collected     |
 pub fn emit_insurance_premium_collected(
     env: &Env,
     investment_id: &BytesN<32>,
     provider: &Address,
     premium_amount: i128,
 ) {
-    env.events().publish(
-        (symbol_short!("ins_prm"),),
-        (investment_id.clone(), provider.clone(), premium_amount),
-    );
+    InsurancePremiumCollected {
+        investment_id: investment_id.clone(),
+        provider: provider.clone(),
+        premium_amount,
+    }
+    .publish(env);
 }
 
-/// Emit an `ins_clm` event when an insurance claim is paid out.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `investment_id` | `BytesN<32>` | Investment identifier |
-/// | 1 | `invoice_id`    | `BytesN<32>` | Invoice identifier    |
-/// | 2 | `provider`      | `Address`    | Insurance provider    |
-/// | 3 | `coverage_amount`| `i128`      | Amount paid out       |
 pub fn emit_insurance_claimed(
     env: &Env,
     investment_id: &BytesN<32>,
@@ -469,49 +1348,28 @@ pub fn emit_insurance_claimed(
     provider: &Address,
     coverage_amount: i128,
 ) {
-    env.events().publish(
-        (symbol_short!("ins_clm"),),
-        (
-            investment_id.clone(),
-            invoice_id.clone(),
-            provider.clone(),
-            coverage_amount,
-        ),
-    );
+    InsuranceClaimed {
+        investment_id: investment_id.clone(),
+        invoice_id: invoice_id.clone(),
+        provider: provider.clone(),
+        coverage_amount,
+    }
+    .publish(env);
 }
 
 // ============================================================================
 // Platform Fee Event Emitters
 // ============================================================================
 
-/// Emit a `fee_upd` event when the platform fee configuration changes.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `fee_bps`    | `u32`    | New fee in basis points  |
-/// | 1 | `updated_at` | `u64`    | Ledger time of update    |
-/// | 2 | `updated_by` | `Address`| Admin who made the change|
-///
-/// # Security
-/// Only the stored admin can update the fee; auth checked upstream.
 pub fn emit_platform_fee_updated(env: &Env, config: &PlatformFeeConfig) {
-    env.events().publish(
-        (symbol_short!("fee_upd"),),
-        (
-            config.fee_bps,
-            config.updated_at,
-            config.updated_by.clone(),
-        ),
-    );
+    PlatformFeeUpdated {
+        fee_bps: config.fee_bps,
+        updated_at: config.updated_at,
+        updated_by: config.updated_by.clone(),
+    }
+    .publish(env);
 }
 
-/// Emit a `fee_str` event when an individual fee structure changes.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `fee_type`    | `FeeType` | Fee category being updated |
-/// | 1 | `old_fee_bps` | `u32`     | Previous fee in bps        |
-/// | 2 | `new_fee_bps` | `u32`     | New fee in bps             |
-/// | 3 | `updated_by`  | `Address` | Admin who changed it       |
-/// | 4 | `timestamp`   | `u64`     | Ledger time of update      |
 pub fn emit_fee_structure_updated(
     env: &Env,
     fee_type: &FeeType,
@@ -519,122 +1377,70 @@ pub fn emit_fee_structure_updated(
     new_fee_bps: u32,
     updated_by: &Address,
 ) {
-    env.events().publish(
-        (symbol_short!("fee_str"),),
-        (
-            fee_type.clone(),
-            old_fee_bps,
-            new_fee_bps,
-            updated_by.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    FeeStructureUpdated {
+        fee_type: fee_type.clone(),
+        old_fee_bps,
+        new_fee_bps,
+        updated_by: updated_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `fee_rout` event when platform fees are routed to the treasury.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Source invoice              |
-/// | 1 | `recipient`  | `Address`    | Treasury address            |
-/// | 2 | `fee_amount` | `i128`       | Fee amount routed           |
-/// | 3 | `timestamp`  | `u64`        | Ledger time of routing      |
 pub fn emit_platform_fee_routed(
     env: &Env,
     invoice_id: &BytesN<32>,
     recipient: &Address,
     fee_amount: i128,
 ) {
-    env.events().publish(
-        (symbol_short!("fee_rout"),),
-        (
-            invoice_id.clone(),
-            recipient.clone(),
-            fee_amount,
-            env.ledger().timestamp(),
-        ),
-    );
+    PlatformFeeRouted {
+        invoice_id: invoice_id.clone(),
+        recipient: recipient.clone(),
+        fee_amount,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `fee_cfg` event when the platform fee bps is reconfigured.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `old_fee_bps` | `u32`    | Previous fee in bps      |
-/// | 1 | `new_fee_bps` | `u32`    | New fee in bps           |
-/// | 2 | `updated_by`  | `Address`| Admin who changed it     |
-/// | 3 | `timestamp`   | `u64`    | Ledger time of update    |
 pub fn emit_platform_fee_config_updated(
     env: &Env,
     old_fee_bps: u32,
     new_fee_bps: u32,
     updated_by: &Address,
 ) {
-    env.events().publish(
-        (symbol_short!("fee_cfg"),),
-        (
-            old_fee_bps,
-            new_fee_bps,
-            updated_by.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    PlatformFeeConfigUpdated {
+        old_fee_bps,
+        new_fee_bps,
+        updated_by: updated_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `trs_cfg` event when the treasury address is configured.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `treasury_address` | `Address` | New treasury account    |
-/// | 1 | `configured_by`    | `Address` | Admin who set it        |
-/// | 2 | `timestamp`        | `u64`     | Ledger time of config   |
 pub fn emit_treasury_configured(env: &Env, treasury_address: &Address, configured_by: &Address) {
-    env.events().publish(
-        (symbol_short!("trs_cfg"),),
-        (
-            treasury_address.clone(),
-            configured_by.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    TreasuryConfigured {
+        treasury_address: treasury_address.clone(),
+        configured_by: configured_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 // ============================================================================
 // Escrow Event Emitters
 // ============================================================================
 
-/// Emit an `esc_cr` event when an escrow account is created for a bid.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `escrow_id`  | `BytesN<32>` | Unique escrow identifier |
-/// | 1 | `invoice_id` | `BytesN<32>` | Associated invoice       |
-/// | 2 | `investor`   | `Address`    | Funding investor         |
-/// | 3 | `business`   | `Address`    | Invoice owner            |
-/// | 4 | `amount`     | `i128`       | Escrowed amount          |
-///
-/// # Security
-/// Funds are locked in the contract; only released via `release_escrow_funds`
-/// or refunded via `refund_escrow`.
 pub fn emit_escrow_created(env: &Env, escrow: &Escrow) {
-    env.events().publish(
-        (symbol_short!("esc_cr"),),
-        (
-            escrow.escrow_id.clone(),
-            escrow.invoice_id.clone(),
-            escrow.investor.clone(),
-            escrow.business.clone(),
-            escrow.amount,
-        ),
-    );
+    EscrowCreated {
+        escrow_id: escrow.escrow_id.clone(),
+        invoice_id: escrow.invoice_id.clone(),
+        investor: escrow.investor.clone(),
+        business: escrow.business.clone(),
+        amount: escrow.amount,
+    }
+    .publish(env);
 }
 
-/// Emit an `esc_rel` event when escrow funds are released to the business.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `escrow_id`  | `BytesN<32>` | Unique escrow identifier |
-/// | 1 | `invoice_id` | `BytesN<32>` | Associated invoice       |
-/// | 2 | `business`   | `Address`    | Recipient                |
-/// | 3 | `amount`     | `i128`       | Released amount          |
-///
-/// # Security
-/// Callable only after invoice is in Settled status; admin or authorized caller.
 pub fn emit_escrow_released(
     env: &Env,
     escrow_id: &BytesN<32>,
@@ -642,27 +1448,15 @@ pub fn emit_escrow_released(
     business: &Address,
     amount: i128,
 ) {
-    env.events().publish(
-        (symbol_short!("esc_rel"),),
-        (
-            escrow_id.clone(),
-            invoice_id.clone(),
-            business.clone(),
-            amount,
-        ),
-    );
+    EscrowReleased {
+        escrow_id: escrow_id.clone(),
+        invoice_id: invoice_id.clone(),
+        business: business.clone(),
+        amount,
+    }
+    .publish(env);
 }
 
-/// Emit an `esc_ref` event when escrow funds are refunded to the investor.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `escrow_id`  | `BytesN<32>` | Unique escrow identifier |
-/// | 1 | `invoice_id` | `BytesN<32>` | Associated invoice       |
-/// | 2 | `investor`   | `Address`    | Recipient                |
-/// | 3 | `amount`     | `i128`       | Refunded amount          |
-///
-/// # Security
-/// Triggered on invoice cancellation or confirmed default path.
 pub fn emit_escrow_refunded(
     env: &Env,
     escrow_id: &BytesN<32>,
@@ -670,398 +1464,287 @@ pub fn emit_escrow_refunded(
     investor: &Address,
     amount: i128,
 ) {
-    env.events().publish(
-        (symbol_short!("esc_ref"),),
-        (
-            escrow_id.clone(),
-            invoice_id.clone(),
-            investor.clone(),
-            amount,
-        ),
-    );
+    EscrowRefunded {
+        escrow_id: escrow_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        amount,
+    }
+    .publish(env);
+}
+
+pub fn emit_investment_withdrawn(
+    env: &Env,
+    investment_id: &BytesN<32>,
+    invoice_id: &BytesN<32>,
+    investor: &Address,
+    amount: i128,
+) {
+    InvestmentWithdrawn {
+        investment_id: investment_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: investor.clone(),
+        amount,
+    }
+    .publish(env);
 }
 
 // ============================================================================
 // Bid Event Emitters
 // ============================================================================
 
-/// Emit a `bid_plc` event when an investor places a bid.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `bid_id`               | `BytesN<32>` | Unique bid identifier          |
-/// | 1 | `invoice_id`           | `BytesN<32>` | Target invoice                 |
-/// | 2 | `investor`             | `Address`    | Bidding investor               |
-/// | 3 | `bid_amount`           | `i128`       | Offered principal              |
-/// | 4 | `expected_return`      | `i128`       | Expected repayment amount      |
-/// | 5 | `timestamp`            | `u64`        | Ledger time of bid             |
-/// | 6 | `expiration_timestamp` | `u64`        | When the bid lapses            |
-///
-/// # Security
-/// `investor` is authenticated via `require_auth()` in `place_bid`.
 pub fn emit_bid_placed(env: &Env, bid: &Bid) {
-    env.events().publish(
-        (symbol_short!("bid_plc"),),
-        (
-            bid.bid_id.clone(),
-            bid.invoice_id.clone(),
-            bid.investor.clone(),
-            bid.bid_amount,
-            bid.expected_return,
-            bid.timestamp,
-            bid.expiration_timestamp,
-        ),
-    );
+    BidPlaced {
+        bid_id: bid.bid_id.clone(),
+        invoice_id: bid.invoice_id.clone(),
+        investor: bid.investor.clone(),
+        bid_amount: bid.bid_amount,
+        expected_return: bid.expected_return,
+        timestamp: bid.timestamp,
+        expiration_timestamp: bid.expiration_timestamp,
+    }
+    .publish(env);
 }
 
-/// Emit a `bid_wdr` event when an investor withdraws their bid.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `bid_id`     | `BytesN<32>` | Unique bid identifier |
-/// | 1 | `invoice_id` | `BytesN<32>` | Target invoice        |
-/// | 2 | `investor`   | `Address`    | Withdrawing investor  |
-/// | 3 | `bid_amount` | `i128`       | Returned principal    |
-/// | 4 | `timestamp`  | `u64`        | Ledger time of withdrawal |
-///
-/// # Security
-/// Only the bid's `investor` can withdraw; auth checked via `require_auth()`.
 pub fn emit_bid_withdrawn(env: &Env, bid: &Bid) {
-    env.events().publish(
-        (symbol_short!("bid_wdr"),),
-        (
-            bid.bid_id.clone(),
-            bid.invoice_id.clone(),
-            bid.investor.clone(),
-            bid.bid_amount,
-            env.ledger().timestamp(),
-        ),
-    );
+    BidWithdrawn {
+        bid_id: bid.bid_id.clone(),
+        invoice_id: bid.invoice_id.clone(),
+        investor: bid.investor.clone(),
+        bid_amount: bid.bid_amount,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `bid_acc` event when a business accepts a bid.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `bid_id`          | `BytesN<32>` | Unique bid identifier     |
-/// | 1 | `invoice_id`      | `BytesN<32>` | Target invoice            |
-/// | 2 | `investor`        | `Address`    | Funding investor          |
-/// | 3 | `business`        | `Address`    | Invoice owner             |
-/// | 4 | `bid_amount`      | `i128`       | Funded principal          |
-/// | 5 | `expected_return` | `i128`       | Agreed repayment amount   |
-/// | 6 | `timestamp`       | `u64`        | Ledger time of acceptance |
-///
-/// # Security
-/// Only the invoice's `business` can accept bids; auth checked upstream.
+pub fn emit_bid_cancelled(env: &Env, bid: &Bid) {
+    BidCancelled {
+        bid_id: bid.bid_id.clone(),
+        invoice_id: bid.invoice_id.clone(),
+        investor: bid.investor.clone(),
+        bid_amount: bid.bid_amount,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
 pub fn emit_bid_accepted(env: &Env, bid: &Bid, invoice_id: &BytesN<32>, business: &Address) {
-    env.events().publish(
-        (symbol_short!("bid_acc"),),
-        (
-            bid.bid_id.clone(),
-            invoice_id.clone(),
-            bid.investor.clone(),
-            business.clone(),
-            bid.bid_amount,
-            bid.expected_return,
-            env.ledger().timestamp(),
-        ),
-    );
+    BidAccepted {
+        bid_id: bid.bid_id.clone(),
+        invoice_id: invoice_id.clone(),
+        investor: bid.investor.clone(),
+        business: business.clone(),
+        bid_amount: bid.bid_amount,
+        expected_return: bid.expected_return,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `bid_exp` event when an expired bid is cleaned up.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `bid_id`               | `BytesN<32>` | Unique bid identifier  |
-/// | 1 | `invoice_id`           | `BytesN<32>` | Target invoice         |
-/// | 2 | `investor`             | `Address`    | Investor who placed it |
-/// | 3 | `bid_amount`           | `i128`       | Original bid amount    |
-/// | 4 | `expiration_timestamp` | `u64`        | TTL timestamp          |
 pub fn emit_bid_expired(env: &Env, bid: &Bid) {
-    env.events().publish(
-        (symbol_short!("bid_exp"),),
-        (
-            bid.bid_id.clone(),
-            bid.invoice_id.clone(),
-            bid.investor.clone(),
-            bid.bid_amount,
-            bid.expiration_timestamp,
-        ),
-    );
+    BidExpired {
+        bid_id: bid.bid_id.clone(),
+        invoice_id: bid.invoice_id.clone(),
+        investor: bid.investor.clone(),
+        bid_amount: bid.bid_amount,
+        expiration_timestamp: bid.expiration_timestamp,
+    }
+    .publish(env);
 }
 
 // ============================================================================
 // Backup Event Emitters
 // ============================================================================
 
-/// Emit a `bkup_crt` event when a manual backup is created.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `backup_id`     | `BytesN<32>` | Unique backup identifier |
-/// | 1 | `invoice_count` | `u32`        | Number of invoices saved |
-/// | 2 | `timestamp`     | `u64`        | Ledger time of backup    |
 pub fn emit_backup_created(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
-    env.events().publish(
-        (symbol_short!("bkup_crt"),),
-        (backup_id.clone(), invoice_count, env.ledger().timestamp()),
-    );
+    BackupCreated {
+        backup_id: backup_id.clone(),
+        invoice_count,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `bkup_rstr` event when a backup is restored.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `backup_id`     | `BytesN<32>` | Restored backup identifier |
-/// | 1 | `invoice_count` | `u32`        | Number of invoices restored|
-/// | 2 | `timestamp`     | `u64`        | Ledger time of restore     |
 pub fn emit_backup_restored(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
-    env.events().publish(
-        (symbol_short!("bkup_rstr"),),
-        (backup_id.clone(), invoice_count, env.ledger().timestamp()),
-    );
+    BackupRestored {
+        backup_id: backup_id.clone(),
+        invoice_count,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `bkup_vd` event when a backup is validated.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `backup_id` | `BytesN<32>` | Validated backup identifier |
-/// | 1 | `success`   | `bool`       | Whether validation passed   |
-/// | 2 | `timestamp` | `u64`        | Ledger time of validation   |
 pub fn emit_backup_validated(env: &Env, backup_id: &BytesN<32>, success: bool) {
-    env.events().publish(
-        (symbol_short!("bkup_vd"),),
-        (backup_id.clone(), success, env.ledger().timestamp()),
-    );
+    BackupValidated {
+        backup_id: backup_id.clone(),
+        success,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `bkup_ar` event when a backup is archived.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `backup_id` | `BytesN<32>` | Archived backup identifier |
-/// | 1 | `timestamp` | `u64`        | Ledger time of archival    |
 pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
-    env.events().publish(
-        (symbol_short!("bkup_ar"),),
-        (backup_id.clone(), env.ledger().timestamp()),
-    );
+    BackupArchived {
+        backup_id: backup_id.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `ret_pol` event when the backup retention policy is updated.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `max_backups`        | `u32`  | Maximum retained backups    |
-/// | 1 | `max_age_seconds`    | `u64`  | Maximum backup age          |
-/// | 2 | `auto_cleanup_enabled`| `bool`| Whether auto-cleanup is on |
-/// | 3 | `timestamp`          | `u64`  | Ledger time of update       |
 pub fn emit_retention_policy_updated(
     env: &Env,
     max_backups: u32,
     max_age_seconds: u64,
     auto_cleanup_enabled: bool,
 ) {
-    env.events().publish(
-        (symbol_short!("ret_pol"),),
-        (
-            max_backups,
-            max_age_seconds,
-            auto_cleanup_enabled,
-            env.ledger().timestamp(),
-        ),
-    );
+    RetentionPolicyUpdated {
+        max_backups,
+        max_age_seconds,
+        auto_cleanup_enabled,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `bkup_cln` event when expired backups are cleaned up.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `removed_count` | `u32` | Number of backups removed |
-/// | 1 | `timestamp`     | `u64` | Ledger time of cleanup    |
 pub fn emit_backups_cleaned(env: &Env, removed_count: u32) {
-    env.events().publish(
-        (symbol_short!("bkup_cln"),),
-        (removed_count, env.ledger().timestamp()),
-    );
+    BackupsCleaned {
+        removed_count,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 // ============================================================================
 // Audit Event Emitters
 // ============================================================================
 
-/// Emit an `aud_val` event when invoice audit integrity is validated.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Validated invoice identifier |
-/// | 1 | `is_valid`   | `bool`       | Whether the audit passed     |
-/// | 2 | `timestamp`  | `u64`        | Ledger time of validation    |
 pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
-    env.events().publish(
-        (symbol_short!("aud_val"),),
-        (invoice_id.clone(), is_valid, env.ledger().timestamp()),
-    );
+    AuditValidation {
+        invoice_id: invoice_id.clone(),
+        is_valid,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit an `aud_qry` event when audit logs are queried.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `query_type`   | `String` | Type identifier for the query |
-/// | 1 | `result_count` | `u32`    | Number of records returned    |
-pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
-    env.events()
-        .publish((symbol_short!("aud_qry"),), (query_type, result_count));
+pub fn emit_audit_query(env: &Env, query_type: OpType, result_count: u32) {
+    AuditQuery {
+        query_type,
+        result_count,
+    }
+    .publish(env);
 }
 
 // ============================================================================
 // Invoice Category / Tag Event Emitters
 // ============================================================================
 
-/// Emit a `cat_upd` event when an invoice's category is changed.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id`   | `BytesN<32>`    | Unique invoice identifier |
-/// | 1 | `business`     | `Address`       | Invoice owner             |
-/// | 2 | `old_category` | `InvoiceCategory`| Previous category        |
-/// | 3 | `new_category` | `InvoiceCategory`| Updated category         |
 pub fn emit_invoice_category_updated(
     env: &Env,
     invoice_id: &BytesN<32>,
     business: &Address,
-    old_category: &crate::invoice::InvoiceCategory,
-    new_category: &crate::invoice::InvoiceCategory,
+    old_category: &crate::types::InvoiceCategory,
+    new_category: &crate::types::InvoiceCategory,
 ) {
-    env.events().publish(
-        (symbol_short!("cat_upd"),),
-        (
-            invoice_id.clone(),
-            business.clone(),
-            old_category.clone(),
-            new_category.clone(),
-        ),
-    );
+    InvoiceCategoryUpdated {
+        invoice_id: invoice_id.clone(),
+        business: business.clone(),
+        old_category: *old_category,
+        new_category: *new_category,
+    }
+    .publish(env);
 }
 
-/// Emit a `tag_add` event when a tag is added to an invoice.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Unique invoice identifier |
-/// | 1 | `business`   | `Address`    | Invoice owner             |
-/// | 2 | `tag`        | `String`     | Tag value                 |
 pub fn emit_invoice_tag_added(
     env: &Env,
     invoice_id: &BytesN<32>,
     business: &Address,
     tag: &String,
 ) {
-    env.events().publish(
-        (symbol_short!("tag_add"),),
-        (invoice_id.clone(), business.clone(), tag.clone()),
-    );
+    InvoiceTagAdded {
+        invoice_id: invoice_id.clone(),
+        business: business.clone(),
+        tag: tag.clone(),
+    }
+    .publish(env);
 }
 
-/// Emit a `tag_rm` event when a tag is removed from an invoice.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id` | `BytesN<32>` | Unique invoice identifier |
-/// | 1 | `business`   | `Address`    | Invoice owner             |
-/// | 2 | `tag`        | `String`     | Tag value removed         |
 pub fn emit_invoice_tag_removed(
     env: &Env,
     invoice_id: &BytesN<32>,
     business: &Address,
     tag: &String,
 ) {
-    env.events().publish(
-        (symbol_short!("tag_rm"),),
-        (invoice_id.clone(), business.clone(), tag.clone()),
-    );
+    InvoiceTagRemoved {
+        invoice_id: invoice_id.clone(),
+        business: business.clone(),
+        tag: tag.clone(),
+    }
+    .publish(env);
 }
 
 // ============================================================================
 // Dispute Event Emitters
 // ============================================================================
 
-/// Emit a `dsp_cr` event when a dispute is opened.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id`  | `BytesN<32>` | Disputed invoice         |
-/// | 1 | `created_by`  | `Address`    | Dispute initiator        |
-/// | 2 | `reason`      | `String`     | Short reason string      |
-/// | 3 | `timestamp`   | `u64`        | Ledger time of creation  |
-///
-/// # Security
-/// Only the invoice `business` or the funding `investor` may open a dispute.
 pub fn emit_dispute_created(
     env: &Env,
     invoice_id: &BytesN<32>,
     created_by: &Address,
     reason: &String,
 ) {
-    env.events().publish(
-        (symbol_short!("dsp_cr"),),
-        (
-            invoice_id.clone(),
-            created_by.clone(),
-            reason.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    DisputeCreated {
+        invoice_id: invoice_id.clone(),
+        created_by: created_by.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `dsp_ur` event when a dispute is escalated to UnderReview.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id`  | `BytesN<32>` | Disputed invoice         |
-/// | 1 | `reviewed_by` | `Address`    | Admin handling review    |
-/// | 2 | `timestamp`   | `u64`        | Ledger time of escalation|
 pub fn emit_dispute_under_review(env: &Env, invoice_id: &BytesN<32>, reviewed_by: &Address) {
-    env.events().publish(
-        (symbol_short!("dsp_ur"),),
-        (
-            invoice_id.clone(),
-            reviewed_by.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    DisputeUnderReview {
+        invoice_id: invoice_id.clone(),
+        reviewed_by: reviewed_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
-/// Emit a `dsp_rs` event when a dispute is resolved.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id`  | `BytesN<32>` | Disputed invoice         |
-/// | 1 | `resolved_by` | `Address`    | Admin who resolved it    |
-/// | 2 | `resolution`  | `String`     | Resolution summary       |
-/// | 3 | `timestamp`   | `u64`        | Ledger time of resolution|
-///
-/// # Security
-/// Only the stored admin can resolve disputes.
 pub fn emit_dispute_resolved(
     env: &Env,
     invoice_id: &BytesN<32>,
     resolved_by: &Address,
     resolution: &String,
 ) {
-    env.events().publish(
-        (symbol_short!("dsp_rs"),),
-        (
-            invoice_id.clone(),
-            resolved_by.clone(),
-            resolution.clone(),
-            env.ledger().timestamp(),
-        ),
-    );
+    DisputeResolved {
+        invoice_id: invoice_id.clone(),
+        resolved_by: resolved_by.clone(),
+        resolution: resolution.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_dispute_rejected(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    rejected_by: &Address,
+    reason: &String,
+) {
+    DisputeRejected {
+        invoice_id: invoice_id.clone(),
+        rejected_by: rejected_by.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }
 
 // ============================================================================
 // Profit / Fee Breakdown Event Emitter
 // ============================================================================
 
-/// Emit a `pf_brk` event with full settlement calculation details.
-///
-/// # Payload (positional, frozen)
-/// | 0 | `invoice_id`       | `BytesN<32>` | Source invoice                |
-/// | 1 | `investment_amount`| `i128`       | Original principal invested   |
-/// | 2 | `payment_amount`   | `i128`       | Total payment received        |
-/// | 3 | `gross_profit`     | `i128`       | Profit before fees            |
-/// | 4 | `platform_fee`     | `i128`       | Fee charged by platform       |
-/// | 5 | `investor_return`  | `i128`       | Net returned to investor      |
-/// | 6 | `fee_bps_applied`  | `i128`       | Fee rate used (basis points)  |
-/// | 7 | `timestamp`        | `u64`        | Ledger time of settlement     |
-///
-/// # Security
-/// `investor_return = payment_amount - platform_fee`; verified in profits module.
 #[allow(dead_code)]
 pub fn emit_profit_fee_breakdown(
     env: &Env,
@@ -1073,31 +1756,527 @@ pub fn emit_profit_fee_breakdown(
     investor_return: i128,
     fee_bps_applied: i128,
 ) {
+    ProfitFeeBreakdown {
+        invoice_id: invoice_id.clone(),
+        investment_amount,
+        payment_amount,
+        gross_profit,
+        platform_fee,
+        investor_return,
+        fee_bps_applied,
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Address) {
+    BidTtlUpdated {
+        old_days,
+        new_days,
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_bid_expiry_grace_updated(
+    env: &Env,
+    old_seconds: u64,
+    new_seconds: u64,
+    admin: &Address,
+) {
+    BidExpiryGraceUpdated {
+        old_seconds,
+        new_seconds,
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalInitiated {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub unlock_at: u64,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalExecuted {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct EmergencyWithdrawalCancelled {
+    pub token: Address,
+    pub amount: i128,
+    pub target: Address,
+    pub admin: Address,
+}
+
+#[contractevent]
+pub struct AdminSet {
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+pub fn emit_emergency_withdrawal_initiated(
+    env: &Env,
+    token: Address,
+    amount: i128,
+    target: Address,
+    unlock_at: u64,
+    admin: Address,
+) {
+    EmergencyWithdrawalInitiated {
+        token,
+        amount,
+        target,
+        unlock_at,
+        admin,
+    }
+    .publish(env);
+}
+
+pub fn emit_emergency_withdrawal_executed(
+    env: &Env,
+    token: Address,
+    amount: i128,
+    target: Address,
+    admin: Address,
+) {
+    EmergencyWithdrawalExecuted {
+        token,
+        amount,
+        target,
+        admin,
+    }
+    .publish(env);
+}
+
+pub fn emit_emergency_withdrawal_cancelled(
+    env: &Env,
+    token: Address,
+    amount: i128,
+    target: Address,
+    admin: Address,
+) {
+    EmergencyWithdrawalCancelled {
+        token,
+        amount,
+        target,
+        admin,
+    }
+    .publish(env);
+}
+
+pub fn emit_admin_set(env: &Env, admin: &Address) {
+    AdminSet {
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_admin_transferred(env: &Env, old_admin: &Address, new_admin: &Address) {
     env.events().publish(
-        (symbol_short!("pf_brk"),),
+        (symbol_short!("adm_trf"),),
         (
-            invoice_id.clone(),
-            investment_amount,
-            payment_amount,
-            gross_profit,
-            platform_fee,
-            investor_return,
-            fee_bps_applied,
+            old_admin.clone(),
+            new_admin.clone(),
             env.ledger().timestamp(),
         ),
     );
 }
 
-/// Emit event when the admin updates the bid TTL configuration.
-///
-/// ### Fields
-/// - `old_days`: previous TTL value in days (0 = was using compile-time default)
-/// - `new_days`: newly configured TTL value in days
-/// - `admin`: address of the admin who made the change
-/// - `timestamp`: ledger timestamp of the change
-pub fn emit_bid_ttl_updated(env: &Env, old_days: u64, new_days: u64, admin: &Address) {
+pub fn emit_admin_transfer_initiated(env: &Env, current_admin: &Address, pending_admin: &Address) {
     env.events().publish(
-        (symbol_short!("ttl_upd"),),
-        (old_days, new_days, admin.clone(), env.ledger().timestamp()),
+        (symbol_short!("adm_req"),),
+        (
+            current_admin.clone(),
+            pending_admin.clone(),
+            env.ledger().timestamp(),
+        ),
     );
+}
+
+pub fn emit_admin_transfer_cancelled(env: &Env, current_admin: &Address, pending_admin: &Address) {
+    env.events().publish(
+        (symbol_short!("adm_cnl"),),
+        (
+            current_admin.clone(),
+            pending_admin.clone(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+pub fn emit_admin_two_step_updated(env: &Env, admin: &Address, enabled: bool) {
+    env.events().publish(
+        (symbol_short!("adm_2st"),),
+        (admin.clone(), enabled, env.ledger().timestamp()),
+    );
+}
+
+pub fn emit_revenue_distributed(
+    env: &Env,
+    period: u64,
+    treasury_amount: i128,
+    developer_amount: i128,
+    platform_amount: i128,
+) {
+    RevenueDistributed {
+        period,
+        treasury_amount,
+        developer_amount,
+        platform_amount,
+    }
+    .publish(env);
+}
+
+pub fn emit_invoice_status_updated(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    status: crate::types::InvoiceStatus,
+) {
+    InvoiceStatusUpdated { invoice_id, status }.publish(env);
+}
+
+pub fn emit_protocol_initialized(
+    env: &Env,
+    admin: &Address,
+    treasury: &Address,
+    fee_bps: u32,
+    min_invoice_amount: i128,
+    max_due_date_days: u64,
+    grace_period_seconds: u64,
+    backfill_max_batch_size: u32,
+    corridors: &Vec<Address>,
+) {
+    ProtocolInitialized {
+        admin: admin.clone(),
+        treasury: treasury.clone(),
+        fee_bps,
+        min_invoice_amount,
+        max_due_date_days,
+        grace_period_seconds,
+        backfill_max_batch_size,
+        corridors: corridors.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_admin_initialized(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("adm_init"),), (admin.clone(),));
+}
+
+pub fn emit_treasury_rotation_initiated(
+    env: &Env,
+    admin: &Address,
+    new_address: &Address,
+    deadline: u64,
+) {
+    env.events().publish(
+        (symbol_short!("tr_rot_i"), admin.clone()),
+        (new_address.clone(), deadline),
+    );
+}
+
+pub fn emit_treasury_rotation_confirmed(env: &Env, admin: &Address, new_address: &Address) {
+    env.events().publish(
+        (symbol_short!("tr_rot_f"), admin.clone()),
+        (new_address.clone(), env.ledger().timestamp()),
+    );
+}
+
+pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
+    env.events()
+        .publish((symbol_short!("tr_rot_cn"), admin.clone()), ());
+}
+
+// ── Upgrade events ──────────────────────────────────────────────────────────
+
+/// Emitted when an admin schedules a WASM contract upgrade.
+pub fn emit_upgrade_scheduled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_sch"),),
+        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp()),
+    );
+}
+
+/// Emitted when an admin cancels a pending WASM upgrade.
+pub fn emit_upgrade_cancelled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_can"),),
+        (admin.clone(), wasm_hash.clone()),
+    );
+}
+
+/// Emitted when a pending WASM upgrade is executed (contract code replaced).
+pub fn emit_upgrade_executed(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+    env.events().publish(
+        (symbol_short!("upg_exe"),),
+        (admin.clone(), wasm_hash.clone()),
+    );
+}
+
+// ── Incident mode events ─────────────────────────────────────────────────────
+
+/// Emitted when the admin enters coordinated incident mode (pause + maintenance).
+#[contractevent]
+pub struct IncidentModeEntered {
+    pub admin: Address,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+/// Emitted when the admin exits coordinated incident mode (unpause + disable maintenance).
+#[contractevent]
+pub struct IncidentModeExited {
+    pub admin: Address,
+    pub timestamp: u64,
+}
+
+pub fn emit_incident_mode_entered(env: &Env, admin: &Address, reason: &String) {
+    IncidentModeEntered {
+        admin: admin.clone(),
+        reason: reason.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+pub fn emit_incident_mode_exited(env: &Env, admin: &Address) {
+    IncidentModeExited {
+        admin: admin.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+// ── Arbiter (dispute-resolution) events ──────────────────────────────────────
+
+/// Emitted when an admin registers a new dispute arbiter.
+pub fn arbiter_registered(env: &Env, admin: &Address, arbiter: &Address) {
+    env.events().publish(
+        (symbol_short!("arb_reg"),),
+        (admin.clone(), arbiter.clone(), env.ledger().timestamp()),
+    );
+}
+
+/// Emitted when an admin revokes a previously registered dispute arbiter.
+pub fn arbiter_revoked(env: &Env, admin: &Address, arbiter: &Address) {
+    env.events().publish(
+        (symbol_short!("arb_rvk"),),
+        (admin.clone(), arbiter.clone(), env.ledger().timestamp()),
+    );
+}
+
+// ── Backfill lifecycle events ────────────────────────────────────────────────
+
+/// Emitted when a destructive backfill (e.g. `restore_from_backup`) begins.
+/// While this flag is set, the contract refuses to schedule a WASM upgrade.
+pub fn backfill_started(env: &Env, actor: &Address) {
+    env.events().publish(
+        (symbol_short!("bkf_sta"),),
+        (actor.clone(), env.ledger().timestamp()),
+    );
+}
+
+/// Emitted when a backfill finishes — flag is cleared and contracts are free
+/// to migrate again.
+pub fn backfill_finished(env: &Env, actor: &Address, restored_count: u32) {
+    env.events().publish(
+        (symbol_short!("bkf_end"),),
+        (actor.clone(), restored_count, env.ledger().timestamp()),
+    );
+}
+
+// ============================================================================
+// Storage schema version and migration lifecycle events
+// ============================================================================
+
+/// Emitted when the contract records a new storage schema version.
+///
+/// # Fields
+/// - `schema_version` – The new schema version number.
+/// - `set_by`         – The admin who triggered the version bump.
+/// - `timestamp`      – Ledger timestamp at emission time.
+///
+/// # Compatibility
+/// This event is additive.  Indexers that only understand earlier versions
+/// can safely ignore the `schema_version` payload.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct SchemaVersionSet {
+    pub schema_version: u32,
+    pub set_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when a paginated schema migration begins (first page of a run).
+///
+/// # Fields
+/// - `schema_from`    – Version being migrated away from.
+/// - `schema_to`      – Version being migrated to.
+/// - `initiated_by`   – Admin who started the migration.
+/// - `timestamp`      – Ledger timestamp at emission time.
+///
+/// # Design invariant
+/// Only one migration may be in progress at a time.  If a `MigrationStarted`
+/// event is observed without a subsequent `MigrationCompleted` or
+/// `MigrationRolledBack`, the migration is considered "in progress" and
+/// writes to migrated entities must be rejected until it finishes.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct MigrationStarted {
+    pub schema_from: u32,
+    pub schema_to: u32,
+    pub initiated_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when every record has been migrated and the schema version is
+/// committed to the new value.
+///
+/// # Fields
+/// - `schema_from`      – The old schema version.
+/// - `schema_to`        – The new, committed schema version.
+/// - `records_migrated` – Total number of records processed.
+/// - `completed_by`     – Admin who committed the final page.
+/// - `timestamp`        – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct MigrationCompleted {
+    pub schema_from: u32,
+    pub schema_to: u32,
+    pub records_migrated: u32,
+    pub completed_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when an in-progress migration is explicitly rolled back.
+///
+/// After this event the schema version is restored to `schema_from` and
+/// storage is guaranteed to contain no partial new-schema records.
+///
+/// # Fields
+/// - `schema_from`      – The version rolled back to.
+/// - `schema_to`        – The version that was being migrated to.
+/// - `rolled_back_by`   – Admin who performed the rollback.
+/// - `timestamp`        – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct MigrationRolledBack {
+    pub schema_from: u32,
+    pub schema_to: u32,
+    pub rolled_back_by: Address,
+    pub timestamp: u64,
+}
+
+/// Emitted when a migration page fails partway through.
+///
+/// The migration is resumable: pass `next_offset` as the starting offset
+/// for the next invocation.
+///
+/// # Fields
+/// - `schema_from`      – Version being migrated from.
+/// - `schema_to`        – Version being migrated to.
+/// - `records_migrated` – Number of records successfully migrated so far.
+/// - `next_offset`      – Offset to resume from on the next call.
+/// - `reason`           – Machine-readable failure label (no PII).
+/// - `timestamp`        – Ledger timestamp at emission time.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct MigrationFailed {
+    pub schema_from: u32,
+    pub schema_to: u32,
+    pub records_migrated: u32,
+    pub next_offset: u32,
+    pub reason: String,
+    pub timestamp: u64,
+}
+
+// ── Emitter helpers ──────────────────────────────────────────────────────────
+
+/// Emit a [`SchemaVersionSet`] event.
+pub fn emit_schema_version_set(env: &Env, schema_version: u32, set_by: &Address) {
+    SchemaVersionSet {
+        schema_version,
+        set_by: set_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emit a [`MigrationStarted`] event.
+pub fn emit_migration_started(env: &Env, schema_from: u32, schema_to: u32, initiated_by: &Address) {
+    MigrationStarted {
+        schema_from,
+        schema_to,
+        initiated_by: initiated_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emit a [`MigrationCompleted`] event.
+pub fn emit_migration_completed(
+    env: &Env,
+    schema_from: u32,
+    schema_to: u32,
+    records_migrated: u32,
+    completed_by: &Address,
+) {
+    MigrationCompleted {
+        schema_from,
+        schema_to,
+        records_migrated,
+        completed_by: completed_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emit a [`MigrationRolledBack`] event.
+pub fn emit_migration_rolled_back(
+    env: &Env,
+    schema_from: u32,
+    schema_to: u32,
+    rolled_back_by: &Address,
+) {
+    MigrationRolledBack {
+        schema_from,
+        schema_to,
+        rolled_back_by: rolled_back_by.clone(),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emit a [`MigrationFailed`] event.
+pub fn emit_migration_failed(
+    env: &Env,
+    schema_from: u32,
+    schema_to: u32,
+    records_migrated: u32,
+    next_offset: u32,
+    reason: &str,
+) {
+    MigrationFailed {
+        schema_from,
+        schema_to,
+        records_migrated,
+        next_offset,
+        reason: String::from_str(env, reason),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
 }

@@ -1,0 +1,1181 @@
+﻿cargo : 
+src\events.rs:2:19: 
+warning: unused import: 
+`FeeStructure`
+At line:1 char:1
++ cargo check --tests 
+--message-format=short 
+> build_errors_6.txt 
+2>&1
++ ~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo      
+        : NotSpecified  
+  : (src\events.rs:2.   
+ .. `FeeStructure`:S    
+tring) [], RemoteEx    
+ception
+    + FullyQualifiedErr 
+   orId : NativeComman  
+  dError
+ 
+src\invoice.rs:7:40: 
+warning: unused import: 
+`MAX_TAG_LENGTH`
+src\admin.rs:168:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\admin.rs:176:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\emergency.rs:66:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\emergency.rs:108:22:
+ warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\emergency.rs:143:22:
+ warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:106:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:129:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:149:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:173:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:191:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:207:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:235:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:271:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:299:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:329:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:348:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:369:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:391:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:426:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:452:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:472:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:497:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:518:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:543:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:567:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:585:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:612:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:641:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:669:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:698:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:724:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:750:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:773:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:796:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:809:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:822:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:834:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:853:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:870:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:887:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:900:10: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:921:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:944:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:962:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:988:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:1006:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:1032:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:1072:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\events.rs:1095:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\fees.rs:559:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\fees.rs:685:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\init.rs:302:18: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\notifications.rs:264
+:22: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\notifications.rs:311
+:22: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\notifications.rs:348
+:14: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\settlement.rs:498:18
+: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\settlement.rs:516:18
+: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\verification.rs:869:
+18: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\verification.rs:880:
+18: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\verification.rs:892:
+18: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\verification.rs:904:
+18: warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\vesting.rs:134:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\vesting.rs:215:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\lib.rs:333:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\lib.rs:605:22: 
+warning: use of 
+deprecated method `sorob
+an_sdk::events::Events::
+publish`: use the 
+#[contractevent] macro 
+on a contract event type
+src\verification.rs:636:
+9: warning: unused 
+variable: `limits`: 
+help: if this is 
+intentional, prefix it 
+with an underscore: 
+`_limits`
+src\analytics.rs:178:8: 
+warning: multiple 
+associated functions 
+are never used
+src\analytics.rs:1049:12
+: warning: associated 
+functions `calculate_inv
+estor_analytics` and `ca
+lc_investor_perf_metrics
+` are never used
+src\audit.rs:191:12: 
+warning: associated 
+functions 
+`get_audit_entry`, 
+`query_audit_logs`, 
+`get_audit_stats`, `vali
+date_invoice_audit_integ
+rity`, `get_all_audit_en
+tries`, and 
+`matches_filter` are 
+never used
+src\audit.rs:514:8: 
+warning: function 
+`log_payment_processed` 
+is never used
+src\audit.rs:548:8: 
+warning: function 
+`log_invoice_uploaded` 
+is never used
+src\audit.rs:562:8: 
+warning: function 
+`log_invoice_verified` 
+is never used
+src\audit.rs:576:8: 
+warning: function 
+`log_invoice_cancelled` 
+is never used
+src\audit.rs:590:8: 
+warning: function 
+`log_bid_placed` is 
+never used
+src\audit.rs:610:8: 
+warning: function 
+`log_bid_accepted` is 
+never used
+src\audit.rs:624:8: 
+warning: function 
+`log_bid_withdrawn` is 
+never used
+src\audit.rs:638:8: 
+warning: function 
+`log_escrow_created` is 
+never used
+src\audit.rs:658:8: 
+warning: function `log_s
+ettlement_completed` is 
+never used
+src\backup.rs:5:7: 
+warning: constant 
+`RETENTION_POLICY_KEY` 
+is never used
+src\backup.rs:6:7: 
+warning: constant 
+`BACKUP_COUNTER_KEY` is 
+never used
+src\backup.rs:7:7: 
+warning: constant 
+`BACKUP_LIST_KEY` is 
+never used
+src\backup.rs:8:7: 
+warning: constant 
+`BACKUP_DATA_KEY` is 
+never used
+src\backup.rs:9:7: 
+warning: constant `MAX_B
+ACKUP_DESCRIPTION_LENGTH
+` is never used
+src\backup.rs:51:12: 
+warning: struct 
+`BackupStorage` is 
+never constructed
+src\backup.rs:55:8: 
+warning: multiple 
+associated functions 
+are never used
+src\bid.rs:172:12: 
+warning: associated 
+functions 
+`get_bid_ttl_config`, `r
+eset_bid_ttl_to_default`
+, `set_max_active_bids_p
+er_investor`, `count_act
+ive_bids_by_investor`, `
+assert_bid_invariants`, 
+and 
+`count_bids_by_status` 
+are never used
+src\events.rs:55:11: 
+warning: constant `TOPIC
+_PAYMENT_RECORDED` is 
+never used
+src\events.rs:59:11: 
+warning: constant `TOPIC
+_INVOICE_SETTLED_FINAL` 
+is never used
+src\events.rs:63:11: 
+warning: constant 
+`TOPIC_BID_PLACED` is 
+never used
+src\events.rs:67:11: 
+warning: constant 
+`TOPIC_BID_ACCEPTED` is 
+never used
+src\events.rs:71:11: 
+warning: constant 
+`TOPIC_BID_WITHDRAWN` 
+is never used
+src\events.rs:75:11: 
+warning: constant 
+`TOPIC_BID_EXPIRED` is 
+never used
+src\events.rs:79:11: 
+warning: constant 
+`TOPIC_ESCROW_CREATED` 
+is never used
+src\events.rs:83:11: 
+warning: constant 
+`TOPIC_ESCROW_RELEASED` 
+is never used
+src\events.rs:87:11: 
+warning: constant 
+`TOPIC_ESCROW_REFUNDED` 
+is never used
+src\events.rs:292:8: 
+warning: function 
+`emit_payment_recorded` 
+is never used
+src\events.rs:322:8: 
+warning: function `emit_
+invoice_settled_final` 
+is never used
+src\events.rs:795:8: 
+warning: function 
+`emit_backup_created` 
+is never used
+src\events.rs:808:8: 
+warning: function 
+`emit_backup_restored` 
+is never used
+src\events.rs:821:8: 
+warning: function 
+`emit_backup_validated` 
+is never used
+src\events.rs:833:8: 
+warning: function 
+`emit_backup_archived` 
+is never used
+src\events.rs:847:8: 
+warning: function `emit_
+retention_policy_updated
+` is never used
+src\events.rs:869:8: 
+warning: function 
+`emit_backups_cleaned` 
+is never used
+src\events.rs:886:8: 
+warning: function 
+`emit_audit_validation` 
+is never used
+src\events.rs:898:8: 
+warning: function 
+`emit_audit_query` is 
+never used
+src\events.rs:982:8: 
+warning: function 
+`emit_dispute_created` 
+is never used
+src\events.rs:1005:8: 
+warning: function `emit_
+dispute_under_review` 
+is never used
+src\events.rs:1026:8: 
+warning: function 
+`emit_dispute_resolved` 
+is never used
+src\fees.rs:12:7: 
+warning: constant 
+`ROTATION_TTL_SECONDS` 
+is never used
+src\fees.rs:21:7: 
+warning: constant 
+`ROTATION_KEY` is never 
+used
+src\fees.rs:770:12: 
+warning: associated 
+functions `initiate_trea
+sury_rotation`, `confirm
+_treasury_rotation`, `ca
+ncel_treasury_rotation`,
+ and 
+`get_pending_rotation` 
+are never used
+src\init.rs:49:7: 
+warning: constant `DEFAU
+LT_MIN_INVOICE_AMOUNT` 
+is never used
+src\init.rs:52:7: 
+warning: constant `DEFAU
+LT_MAX_DUE_DATE_DAYS` 
+is never used
+src\init.rs:53:7: 
+warning: constant `DEFAU
+LT_GRACE_PERIOD_SECONDS`
+ is never used
+src\init.rs:54:7: 
+warning: constant 
+`DEFAULT_FEE_BPS` is 
+never used
+src\investment.rs:412:12
+: warning: associated 
+functions `get_active_in
+vestment_ids` and `valid
+ate_no_orphan_investment
+s` are never used
+src\invoice.rs:1047:12: 
+warning: associated 
+functions `get_invoices_
+with_rating_above`, `get
+_business_invoices_with_
+rating_above`, `get_invo
+ice_rating_stats`, 
+`delete_invoice`, and `g
+et_total_invoice_count` 
+are never used
+src\notifications.rs:284
+:12: warning: 
+associated functions 
+`get_notification`, `upd
+ate_notification_status`
+, `update_user_preferenc
+es`, and `get_user_notif
+ication_stats` are 
+never used
+src\notifications.rs:404
+:12: warning: multiple 
+associated functions 
+are never used
+src\protocol_limits.rs:4
+5:11: warning: constant 
+`MAX_TAG_LENGTH` is 
+never used
+src\protocol_limits.rs:2
+06:8: warning: function 
+`compute_min_bid_amount`
+ is never used
+src\settlement.rs:311:8:
+ warning: function 
+`get_payment_count` is 
+never used
+src\settlement.rs:317:8:
+ warning: function 
+`get_payment_records` 
+is never used
+src\verification.rs:242:
+12: warning: associated 
+function 
+`is_business_verified` 
+is never used
+src\verification.rs:787:
+8: warning: function `re
+quire_business_verificat
+ion` is never used
+src\verification.rs:1186
+:4: warning: function `r
+ecover_base_limit_from_c
+urrent_limit` is never 
+used
+src\verification.rs:1207
+:8: warning: function `u
+pdate_investor_analytics
+` is never used
+src\verification.rs:1260
+:8: warning: function `g
+et_investor_analytics` 
+is never used
+warning: 
+`quicklendx-contracts` 
+(lib) generated 130 
+warnings (run `cargo 
+fix --lib -p 
+quicklendx-contracts` 
+to apply 3 suggestions)
+    Checking 
+quicklendx-contracts 
+v0.1.0 (C:\Users\ADMIN\D
+esktop\mide-drips\quickl
+endx-protocol\quicklendx
+-contracts)
+tests\backup_retention_v
+alidation.rs:1:28: 
+error[E0432]: 
+unresolved import `quick
+lendx_contracts::Invoice
+Category`: no 
+`InvoiceCategory` in 
+the root
+tests\invoice_id_collisi
+on_regression.rs:3:28: 
+error[E0432]: 
+unresolved import `quick
+lendx_contracts::Invoice
+Category`: no 
+`InvoiceCategory` in 
+the root
+tests\backup_retention_v
+alidation.rs:44:20: 
+error[E0599]: no method 
+named 
+`try_create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+error: could not 
+compile 
+`quicklendx-contracts` 
+(test "invoice_id_collis
+ion_regression") due to 
+1 previous error
+warning: build failed, 
+waiting for other jobs 
+to finish...
+tests\backup_retention_v
+alidation.rs:46:28: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:47:25: 
+error[E0599]: no method 
+named 
+`get_backup_details` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope
+tests\backup_retention_v
+alidation.rs:50:20: 
+error[E0599]: no method 
+named `validate_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:58:22: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:59:22: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:60:22: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:66:26: 
+error[E0599]: no method 
+named `get_backups` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:78:12: 
+error[E0599]: no method 
+named `set_backup_retent
+ion_policy` found for 
+struct `QuickLendXContra
+ctClient<'a>` in the 
+current scope: method 
+not found in `QuickLendX
+ContractClient<'_>`
+tests\backup_retention_v
+alidation.rs:80:22: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:82:22: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:84:22: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:86:25: 
+error[E0599]: no method 
+named `get_backups` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:91:20: 
+error[E0599]: no method 
+named 
+`get_backup_details` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope
+tests\backup_retention_v
+alidation.rs:92:21: 
+error[E0599]: no method 
+named `validate_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:100:30: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:101:12: 
+error[E0599]: no method 
+named `archive_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:103:12: 
+error[E0599]: no method 
+named `set_backup_retent
+ion_policy` found for 
+struct `QuickLendXContra
+ctClient<'a>` in the 
+current scope: method 
+not found in `QuickLendX
+ContractClient<'_>`
+tests\backup_retention_v
+alidation.rs:104:12: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:106:32: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:108:25: 
+error[E0599]: no method 
+named `get_backups` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:111:20: 
+error[E0599]: no method 
+named 
+`get_backup_details` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope
+tests\backup_retention_v
+alidation.rs:112:20: 
+error[E0599]: no method 
+named `validate_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:119:28: 
+error[E0599]: no method 
+named `create_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+tests\backup_retention_v
+alidation.rs:124:12: 
+error[E0599]: no method 
+named `restore_backup` 
+found for struct `QuickL
+endXContractClient<'a>` 
+in the current scope: 
+method not found in `Qui
+ckLendXContractClient<'_
+>`
+error: could not 
+compile 
+`quicklendx-contracts` 
+(test "backup_retention_
+validation") due to 26 
+previous errors
+src\test_init.rs:6:33: 
+warning: unused import: 
+`IntoVal`
+src\storage.rs:281:13: 
+warning: variable does 
+not need to be mutable
+src\storage.rs:310:13: 
+warning: variable does 
+not need to be mutable
+src\test_init.rs:192:10:
+ warning: unused 
+variable: `env`: help: 
+if this is intentional, 
+prefix it with an 
+underscore: `_env`
+src\test_init.rs:275:10:
+ warning: unused 
+variable: `env`: help: 
+if this is intentional, 
+prefix it with an 
+underscore: `_env`
+src\test_init.rs:316:9: 
+warning: unused 
+variable: 
+`current_admin`: help: 
+if this is intentional, 
+prefix it with an 
+underscore: 
+`_current_admin`
+src\init.rs:51:7: 
+warning: constant `DEFAU
+LT_MIN_INVOICE_AMOUNT` 
+is never used
+src\profits.rs:514:8: 
+warning: function 
+`make_breakdown` is 
+never used
+src\storage.rs:38:12: 
+warning: struct 
+`StorageKeys` is never 
+constructed
+src\storage.rs:62:12: 
+warning: associated 
+functions 
+`platform_fees`, 
+`invoice_count`, 
+`bid_count`, and 
+`investment_count` are 
+never used
+src\storage.rs:83:12: 
+warning: struct 
+`Indexes` is never 
+constructed
+src\storage.rs:87:12: 
+warning: multiple 
+associated functions 
+are never used
+src\storage.rs:163:12: 
+warning: struct 
+`InvoiceStorage` is 
+never constructed
+src\storage.rs:167:12: 
+warning: multiple 
+associated functions 
+are never used
+src\storage.rs:340:12: 
+warning: struct 
+`BidStorage` is never 
+constructed
+src\storage.rs:344:12: 
+warning: multiple 
+associated functions 
+are never used
+src\storage.rs:461:12: 
+warning: struct 
+`InvestmentStorage` is 
+never constructed
+src\storage.rs:465:12: 
+warning: multiple 
+associated functions 
+are never used
+src\storage.rs:592:12: 
+warning: struct 
+`ConfigStorage` is 
+never constructed
+src\storage.rs:596:12: 
+warning: associated 
+functions 
+`set_platform_fees` and 
+`get_platform_fees` are 
+never used
+src\test_partial_payment
+s.rs:402:8: warning: 
+function `setup_env` is 
+never used
+src\test_partial_payment
+s.rs:473:8: warning: 
+function `create_verifie
+d_business` is never 
+used
+src\test_partial_payment
+s.rs:483:8: warning: 
+function `create_verifie
+d_investor` is never 
+used
+src\verification.rs:373:
+11: warning: associated 
+constants 
+`INVESTOR_HISTORY_KEY` 
+and `INVESTOR_ANALYTICS_
+KEY` are never used
+warning: 
+`quicklendx-contracts` 
+(lib test) generated 
+151 warnings (127 
+duplicates) (run `cargo 
+fix --lib -p 
+quicklendx-contracts 
+--tests` to apply 6 
+suggestions)

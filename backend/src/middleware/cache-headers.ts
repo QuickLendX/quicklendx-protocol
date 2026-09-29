@@ -1,0 +1,375 @@
+/**
+ * HTTP caching middleware for QuickLendX backend.
+ *
+ * Provides:
+ *   - ETag generation (SHA-1 of the serialised response body)
+ *   - Last-Modified header derived from the newest record in the payload
+ *   - Cache-Control policies per endpoint category
+ *   - Conditional-request handling (If-None-Match / If-Modified-Since → 304)
+ *
+ * Correctness policy
+ * ------------------
+ * Different endpoints have different staleness tolerances:
+ *
+ *   CACHEABLE_SHORT  (invoices list / single invoice)
+ *     Cache-Control: public, max-age=10, stale-while-revalidate=30
+ *     Rationale: invoice status (Pending → Verified → Funded → Paid) changes
+ *     infrequently but must not be stale for more than ~10 s so that a newly
+ *     funded invoice is visible quickly.
+ *
+ *   CACHEABLE_LONG   (settlements list / single settlement)
+ *     Cache-Control: public, max-age=60, stale-while-revalidate=120
+ *     Rationale: a Paid settlement record is immutable on-chain; 60 s is safe.
+ *
+ *   NO_STORE         (bids list, disputes)
+ *     Cache-Control: no-store
+ *     Rationale:
+ *       - Bids: the best-bid amount changes every time a new bid is placed.
+ *         Serving a stale bid list could mislead an investor into placing a
+ *         sub-optimal bid or believing they are the best bidder when they are
+ *         not.  Freshness is critical for financial correctness.
+ *       - Disputes: dispute status has legal / compliance implications.
+ *         A cached "UnderReview" response when the dispute is already
+ *         "Resolved" could cause incorrect UI decisions.
+ *
+ * ETag / conditional-request flow
+ * --------------------------------
+ *   1. Handler builds the response body.
+ *   2. `applyCacheHeaders` computes ETag = `"<sha1-hex>"`.
+ *   3. If the request carries `If-None-Match` matching the ETag → 304.
+ *   4. If the request carries `If-Modified-Since` and the resource has not
+ *      changed since that date → 304.
+ *   5. Otherwise the full 200 response is sent with ETag + Last-Modified.
+ *
+ * Cache-poisoning mitigations
+ * ---------------------------
+ *   - ETags are computed server-side from the actual response body; they
+ *     cannot be influenced by request headers.
+ *   - `Vary: Accept-Encoding` is set so that compressed and uncompressed
+ *     variants are stored separately by shared caches.
+ *   - No-store responses carry `Cache-Control: no-store` which prevents
+ *     any intermediate cache from storing the response.
+ *   - ETags are never derived from user-supplied input.
+ */
+
+import { createHash } from "crypto";
+import { Request, Response } from "express";
+
+// ---------------------------------------------------------------------------
+// Cache-Control policy constants
+// ---------------------------------------------------------------------------
+
+/** Short-lived public cache: invoice lists and single invoices. */
+export const CC_SHORT = "public, max-age=10, stale-while-revalidate=30";
+
+/** Long-lived public cache: settlement records (immutable once Paid). */
+export const CC_LONG = "public, max-age=60, stale-while-revalidate=120";
+
+/**
+ * No caching: bids (best-bid freshness) and disputes (legal sensitivity).
+ * Also used for all error responses.
+ */
+export const CC_NO_STORE = "no-store";
+
+// ---------------------------------------------------------------------------
+// ETag helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Computes a strong ETag for a serialised response body.
+ * Format: `"<sha1-hex>"` (quoted per RFC 7232 §2.3).
+ */
+export function computeETag(body: string): string {
+  const hash = createHash("sha1").update(body).digest("hex");
+  return `"${hash}"`;
+}
+
+/**
+ * Extracts the most recent timestamp (seconds since epoch) from an array of
+ * records that may carry `updated_at`, `timestamp`, or `created_at` fields.
+ * Returns `null` when no timestamp can be found.
+ */
+export function extractLastModified(
+  data: unknown
+): Date | null {
+  let records = Array.isArray(data) ? data : [data];
+
+  if (data && typeof data === "object" && !Array.isArray(data) && "data" in data) {
+    const inner = (data as Record<string, unknown>).data;
+    records = Array.isArray(inner) ? inner : [inner];
+  }
+
+  let maxTs = 0;
+
+  for (const record of records) {
+    if (record === null || typeof record !== "object") continue;
+    const r = record as Record<string, unknown>;
+    for (const field of ["updated_at", "timestamp", "created_at", "invested_at"] as const) {
+      const v = r[field];
+      if (typeof v === "number" && v > maxTs) {
+        maxTs = v;
+      }
+    }
+  }
+
+  return maxTs > 0 ? new Date(maxTs * 1000) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Conditional-request evaluation
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns `true` when the response can be short-circuited with 304.
+ *
+ * Checks (in order):
+ *   1. `If-None-Match` — compared against the computed ETag.
+ *   2. `If-Modified-Since` — compared against `lastModified` when present.
+ */
+export function isNotModified(
+  req: Request,
+  etag: string,
+  lastModified: Date | null
+): boolean {
+  const ifNoneMatch = req.headers["if-none-match"];
+  if (ifNoneMatch) {
+    // Support comma-separated list of ETags and the wildcard "*".
+    //
+    // RFC 7232 §3.3 (and this module's policy doc, backend/docs/caching.md):
+    // If-None-Match takes precedence, and a recipient MUST ignore
+    // If-Modified-Since when the request contains If-None-Match. Returning the
+    // ETag verdict directly — instead of falling through to If-Modified-Since on
+    // a mismatch — is what makes that precedence hold for every combination of
+    // the two headers.
+    const tags = ifNoneMatch.split(",").map((t) => t.trim());
+    return tags.includes("*") || tags.includes(etag);
+  }
+
+  const ifModifiedSince = req.headers["if-modified-since"];
+  if (ifModifiedSince && lastModified) {
+    const since = new Date(ifModifiedSince);
+    if (!isNaN(since.getTime()) && lastModified <= since) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Main helper: apply cache headers and handle conditional requests
+// ---------------------------------------------------------------------------
+
+export interface CacheOptions {
+  /** Cache-Control directive string (use the CC_* constants). */
+  cacheControl: string;
+  /** The response body that will be sent (used to compute ETag). */
+  body: unknown;
+}
+
+/**
+ * Applies caching headers to `res` and returns `true` when the caller
+ * should send a 304 Not Modified response instead of the full body.
+ *
+ * Usage in a controller:
+ * ```ts
+ * const body = buildResponseData();
+ * if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body })) {
+ *   res.status(304).end();
+ *   return;
+ * }
+ * res.json(body);
+ * ```
+ */
+export function applyCacheHeaders(
+  req: Request,
+  res: Response,
+  options: CacheOptions
+): boolean {
+  const { cacheControl, body } = options;
+
+  res.setHeader("Cache-Control", cacheControl);
+  res.setHeader("Vary", "Accept-Encoding");
+
+  // No-store responses skip ETag / Last-Modified — there is nothing to
+  // revalidate because the client must always fetch fresh data.
+  // We also remove conditional-request headers from the request object so
+  // that Express's built-in freshness check (req.fresh) does not
+  // short-circuit the response with a 304.  Serving a 304 on a no-store
+  // endpoint would allow a client to use a cached copy of bid or dispute
+  // data, which violates the correctness policy for those endpoints.
+  if (cacheControl === CC_NO_STORE) {
+    delete (req.headers as Record<string, unknown>)["if-none-match"];
+    delete (req.headers as Record<string, unknown>)["if-modified-since"];
+    return false;
+  }
+
+  const serialised = JSON.stringify(body);
+  const etag = computeETag(serialised);
+  const lastModified = extractLastModified(body);
+
+  res.setHeader("ETag", etag);
+  if (lastModified) {
+    res.setHeader("Last-Modified", lastModified.toUTCString());
+  }
+
+  return isNotModified(req, etag, lastModified);
+}
+
+// ---------------------------------------------------------------------------
+// Conditional-write precondition support (If-Match / If-Unmodified-Since)
+// ---------------------------------------------------------------------------
+
+export interface ConditionalWriteOptions {
+  /** When true, a missing If-Match header is rejected with 400. Default false. */
+  required?: boolean;
+  /** Resource last-modified date for If-Unmodified-Since comparison. */
+  lastModified?: Date | null;
+}
+
+/**
+ * Normalizes an ETag string by stripping weak indicator (W/) and surrounding double quotes,
+ * and trimming whitespace.
+ */
+function normalizeETag(etag: string): string {
+  let cleaned = etag.trim();
+  if (cleaned.startsWith("W/")) {
+    cleaned = cleaned.substring(2).trim();
+  }
+  if (cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2) {
+    cleaned = cleaned.substring(1, cleaned.length - 1);
+  }
+  return cleaned;
+}
+
+/**
+ * Checks if a specific raw If-Match tag matches the given server etag.
+ * Per RFC 7232 §3.1: If-Match MUST use strong comparison function for state-changing calls.
+ * Weak ETags (prefixed with W/) cannot satisfy If-Match strong comparison.
+ */
+function matchesIfMatchTag(rawTag: string, serverETag: string): boolean {
+  const trimmed = rawTag.trim();
+  if (trimmed === "*") return true;
+  if (trimmed.startsWith("W/")) return false;
+
+  const tagVal = normalizeETag(trimmed);
+  const serverVal = normalizeETag(serverETag);
+  return tagVal === serverVal;
+}
+
+/**
+ * Evaluates If-Match / If-Unmodified-Since preconditions for write requests.
+ *
+ * Returns `true` when the response has already been sent (caller must stop).
+ * Returns `false` when the caller should proceed with the write.
+ *
+ * Must be called BEFORE any state mutation so that a failed precondition
+ * does not produce a side-effect.
+ */
+export function assertConditionalWrite(
+  req: Request,
+  res: Response,
+  etag: string | null,
+  options?: ConditionalWriteOptions
+): boolean {
+  try {
+    const rawIfMatch = req?.headers?.["if-match"];
+    const ifMatch = Array.isArray(rawIfMatch) ? rawIfMatch.join(",") : rawIfMatch;
+
+    if (ifMatch !== undefined) {
+      const trimmedIfMatch = ifMatch.trim();
+      if (trimmedIfMatch === "") {
+        if (options?.required) {
+          res.setHeader("Cache-Control", CC_NO_STORE);
+          res.status(400).json({
+            error: {
+              message: "If-Match header is required",
+              code: "PRECONDITION_REQUIRED",
+            },
+          });
+          return true;
+        }
+        res.setHeader("Cache-Control", CC_NO_STORE);
+        res.status(412).json({
+          error: {
+            message: "Precondition Failed: resource has been modified",
+            code: "PRECONDITION_FAILED",
+          },
+        });
+        return true;
+      }
+
+      if (etag === null || etag === undefined) {
+        res.setHeader("Cache-Control", CC_NO_STORE);
+        res.status(412).json({
+          error: {
+            message: "Precondition Failed: resource has been modified",
+            code: "PRECONDITION_FAILED",
+          },
+        });
+        return true;
+      }
+
+      const tags = trimmedIfMatch.split(",").map((t) => t.trim()).filter(Boolean);
+      const isWildcard = tags.includes("*");
+
+      const hasMatch = isWildcard || tags.some((tag) => matchesIfMatchTag(tag, etag));
+
+      if (!hasMatch) {
+        res.setHeader("Cache-Control", CC_NO_STORE);
+        res.status(412).json({
+          error: {
+            message: "Precondition Failed: resource has been modified",
+            code: "PRECONDITION_FAILED",
+          },
+        });
+        return true;
+      }
+
+      // RFC 7232 §3.4: MUST ignore If-Unmodified-Since if If-Match is present.
+      return false;
+    }
+
+    if (options?.required) {
+      res.setHeader("Cache-Control", CC_NO_STORE);
+      res.status(400).json({
+        error: {
+          message: "If-Match header is required",
+          code: "PRECONDITION_REQUIRED",
+        },
+      });
+      return true;
+    }
+
+    const rawIfUnmodifiedSince = req?.headers?.["if-unmodified-since"];
+    const ifUnmodifiedSince = Array.isArray(rawIfUnmodifiedSince) ? rawIfUnmodifiedSince[0] : rawIfUnmodifiedSince;
+
+    if (ifUnmodifiedSince && options?.lastModified) {
+      const lm = options.lastModified;
+      if (lm instanceof Date && !isNaN(lm.getTime())) {
+        const since = new Date(ifUnmodifiedSince);
+        if (!isNaN(since.getTime()) && lm > since) {
+          res.setHeader("Cache-Control", CC_NO_STORE);
+          res.status(412).json({
+            error: {
+              message: "Precondition Failed: resource has been modified",
+              code: "PRECONDITION_FAILED",
+            },
+          });
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch (err) {
+    res.setHeader("Cache-Control", CC_NO_STORE);
+    res.status(400).json({
+      error: {
+        message: "Invalid conditional write request headers",
+        code: "INVALID_PRECONDITION_HEADER",
+      },
+    });
+    return true;
+  }
+}

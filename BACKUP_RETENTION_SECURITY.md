@@ -80,10 +80,10 @@ Backups are validated before critical operations:
 ```rust
 pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let backup = Self::get_backup(env, backup_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        .unwrap();
     
     let data = Self::get_backup_data(env, backup_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        .unwrap();
     
     // Check count matches
     if data.len() as u32 != backup.invoice_count {

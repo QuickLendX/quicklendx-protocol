@@ -8,89 +8,276 @@ use soroban_sdk::{contracterror, symbol_short, Symbol};
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
 pub enum QuickLendXError {
-    // Invoice lifecycle (1000–1006)
+    // Invoice lifecycle (1000-1006)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceNotFound = 1000,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceNotAvailableForFunding = 1001,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceAlreadyFunded = 1002,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceAmountInvalid = 1003,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceDueDateInvalid = 1004,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceNotFunded = 1005,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvoiceAlreadyDefaulted = 1006,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvoiceFrozen = 1007,
+    /// Caller is a registered admin but is **not** a registered dispute
+    /// arbiter. Resolving, reviewing, or driving dispute lifecycle actions
+    /// requires explicit arbiter registration on top of admin authority —
+    /// this separates "who can configure the protocol" from "who can
+    /// adjudicate a dispute".
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidFreezeReason = 1008,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvoiceLockExpired = 1009,
+    NotArbiter = 1010,
 
-    // Authorization (1100–1103)
+    // Authorization (1100-1104)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     Unauthorized = 1100,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotBusinessOwner = 1101,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotInvestor = 1102,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotAdmin = 1103,
+    /// Caller address equals the contract's own address (confused-deputy prevention).
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    SelfCallNotAllowed = 1104,
 
-    // Input validation (1200–1204)
+    // Input validation (1200-1205)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidAmount = 1200,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidAddress = 1201,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidCurrency = 1202,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidTimestamp = 1203,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDescription = 1204,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    SelfTransfer = 1205,
 
-    // Storage (1300–1301)
+    // Storage (1300-1301)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     StorageError = 1300,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     StorageKeyNotFound = 1301,
 
-    // Business logic (1400–1405)
+    // Business logic (1400-1405)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InsufficientFunds = 1400,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidStatus = 1401,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     OperationNotAllowed = 1402,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     PaymentTooLow = 1403,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     PlatformAccountNotConfigured = 1404,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidCoveragePercentage = 1405,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     MaxBidsPerInvoiceExceeded = 1406,
-    MaxInvoicesPerBusinessExceeded = 1407,
-    /// Bid TTL value is outside the allowed bounds (1..=30 days) or is zero.
-    InvalidBidTtl = 1408,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    MaxActiveBidsPerInvestorExceeded = 1407,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    MaxInvoicesPerBusinessExceeded = 1408,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidBidTtl = 1409,
+    /// Insurance opt-in was rejected because the invoice due date has already
+    /// passed. Adding coverage after an invoice is overdue would allow an
+    /// attacker to insure a known-defaulting position and immediately collect
+    /// the payout — an adverse-selection exploit. The claim window closes at
+    /// the invoice `due_date`.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InsuranceClaimWindowClosed = 1410,
 
-    // Rating (1500–1503)
+    // Rating (1500-1503)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidRating = 1500,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotFunded = 1501,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     AlreadyRated = 1502,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotRater = 1503,
+    /// Admin rating override was requested without a non-empty, bounded-length audit reason.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidRatingOverrideReason = 1504,
 
-    // KYC / verification (1600–1604)
+    // KYC / verification (1600-1604)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     BusinessNotVerified = 1600,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     KYCAlreadyPending = 1601,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     KYCAlreadyVerified = 1602,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     KYCNotFound = 1603,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidKYCStatus = 1604,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvestorNotVerified = 1605,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvestorFrozen = 1610,
+    BusinessDeleted = 1660,
 
-    // Audit (1700–1702)
+    // Audit (1700-1702)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     AuditLogNotFound = 1700,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     AuditIntegrityError = 1701,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     AuditQueryError = 1702,
 
-    // Category / tag (1800–1801)
+    // Category / tag (1800-1801)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidTag = 1800,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     TagLimitExceeded = 1801,
 
-    // Fee configuration (1850–1855)
+    // Fee configuration (1850-1855)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidFeeConfiguration = 1850,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     TreasuryNotConfigured = 1851,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidFeeBasisPoints = 1852,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    ArithmeticOverflow = 1856,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     RotationAlreadyPending = 1853,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     RotationNotFound = 1854,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     RotationExpired = 1855,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    RotationTimelockNotElapsed = 1857,
+    /// A treasury rotation was cancelled but no rotation was pending.
+    NoPendingTreasuryRotation = 1858,
 
-    // Dispute (1900–1906)
+    // Dispute (1900-1906)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeNotFound = 1900,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeAlreadyExists = 1901,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeNotAuthorized = 1902,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeAlreadyResolved = 1903,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeNotUnderReview = 1904,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDisputeReason = 1905,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDisputeEvidence = 1906,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    DisputeActive = 1907,
 
-    // Notification (2000–2001)
+    // Notification (2000-2002)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotificationNotFound = 2000,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     NotificationBlocked = 2001,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    NotificationDuplicate = 2002,
 
-    // Emergency (2100)
+    // Emergency withdraw (2100-2106)
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     ContractPaused = 2100,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    EmergencyWithdrawNotFound = 2101,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    EmergencyWithdrawTimelockNotElapsed = 2102,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    EmergencyWithdrawExpired = 2103,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    EmergencyWithdrawCancelled = 2104,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    EmergencyWithdrawAlreadyExists = 2105,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    EmergencyWithdrawInsufficientBalance = 2106,
+
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    TokenTransferFailed = 2200,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    MaintenanceModeActive = 2201,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    DuplicateDefaultTransition = 2202,
+    /// A destructive contract migration (e.g. `schedule_upgrade`) was
+    /// attempted while an in-progress backfill (e.g. `restore_from_backup`)
+    /// has not yet cleared its pending flag. Letting a migration race a
+    /// backfill leaves the new contract code interpreting partially
+    /// restored state, with no signal either side has to detect it.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    BackfillInProgress = 2203,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    DuplicateBid = 2204,
+    /// Settlement attempted while a dispute is open on the invoice.
+    ///
+    /// Threat: a business could otherwise race to finalize settlement and
+    /// release escrowed funds before an admin resolves a pending dispute,
+    /// removing the investor's ability to recover their principal.
+    ///
+    /// Distinct from `InvalidStatus` (1401) so callers and monitors can tell
+    /// "wrong lifecycle state" apart from "dispute must be resolved first".
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidLedgerSequence = 2205,
+    /// Insurance coverage is not active at the time of default/settlement.
+    InsuranceNotActive = 2206,
+    /// A report/analytics-snapshot was requested while an invoice has an
+    /// unresolved (`Disputed` or `UnderReview`) dispute.
+    ActiveDisputeExists = 2207,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    StaleInvestmentSnapshot = 2208,
+    /// A payment was submitted with a nonce that has already been recorded for
+    /// this invoice.  Duplicate nonces are rejected at the boundary to keep the
+    /// settlement ledger strictly auditable.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    DuplicateNonce = 2209,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InsufficientKYCTier = 2210,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    PendingGovernanceProposal = 2211,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    UnstableCursor = 2212,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    SettlementCurrencyNotAllowed = 2213,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    UpgradePending = 2214,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    PerInvestorPositionCapExceeded = 2215,
+    /// The investor's KYC tier is too low for the requested operation.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    BidBelowTierMinimum = 2216,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidTransactionHash = 2217,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    BatchSizeExceeded = 2218,
+    /// A bid was rejected because it is stale: the bid has been cancelled,
+    /// expired, or otherwise transitioned out of `Placed` status between
+    /// when the caller read it and when the operation was submitted.
+    /// Client retry contract: re-read bid state, select a new best bid
+    /// if needed, and resubmit.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    BidStale = 2219,
+    /// Per-address mutation rate limit exceeded within the current rate-limit
+    /// window.  The caller exceeded the maximum number of state-mutating
+    /// transactions allowed per address per window.  Retry after the window
+    /// resets (next `RATE_LIMIT_WINDOW_SEQUENCES` ledger sequences).
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    MutationLimitExceeded = 2220,
+    /// An input field exceeds the hard size ceiling for the given resource.
+    /// This is an early-exit guard placed *before* expensive parsing, hashing,
+    /// or storage writes so that an oversized payload is rejected cheaply.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InputTooLarge = 2221,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -104,11 +291,18 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvoiceDueDateInvalid => symbol_short!("INV_DI"),
             QuickLendXError::InvoiceNotFunded => symbol_short!("INV_NFD"),
             QuickLendXError::InvoiceAlreadyDefaulted => symbol_short!("INV_AD"),
+            QuickLendXError::InvoiceFrozen => symbol_short!("INV_FRZ"),
+            QuickLendXError::InvalidFreezeReason => symbol_short!("FRZ_RSN"),
+            QuickLendXError::NotArbiter => symbol_short!("NOT_ARB"),
             // Authorization
             QuickLendXError::Unauthorized => symbol_short!("UNAUTH"),
             QuickLendXError::NotBusinessOwner => symbol_short!("NOT_OWN"),
             QuickLendXError::NotInvestor => symbol_short!("NOT_INV"),
+            QuickLendXError::InvoiceLockExpired => symbol_short!("LK_EXP"),
+            QuickLendXError::SelfTransfer => symbol_short!("SLF_XFR"),
+            QuickLendXError::DuplicateBid => symbol_short!("DUP_BID"),
             QuickLendXError::NotAdmin => symbol_short!("NOT_ADM"),
+            QuickLendXError::SelfCallNotAllowed => symbol_short!("SELF_NA"),
             // Input validation
             QuickLendXError::InvalidAmount => symbol_short!("INV_AMT"),
             QuickLendXError::InvalidAddress => symbol_short!("INV_ADR"),
@@ -125,17 +319,27 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::PaymentTooLow => symbol_short!("PAY_LOW"),
             QuickLendXError::PlatformAccountNotConfigured => symbol_short!("PLT_NC"),
             QuickLendXError::InvalidCoveragePercentage => symbol_short!("INS_CV"),
+            QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
+            QuickLendXError::MaxActiveBidsPerInvestorExceeded => symbol_short!("MAX_ACT"),
+            QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
+            QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
+            QuickLendXError::InsuranceClaimWindowClosed => symbol_short!("INS_WIN"),
+            QuickLendXError::InsufficientKYCTier => symbol_short!("TIER_LOW"),
             // Rating
             QuickLendXError::InvalidRating => symbol_short!("INV_RT"),
             QuickLendXError::NotFunded => symbol_short!("NOT_FD"),
             QuickLendXError::AlreadyRated => symbol_short!("ALR_RT"),
             QuickLendXError::NotRater => symbol_short!("NOT_RT"),
+            QuickLendXError::InvalidRatingOverrideReason => symbol_short!("RT_OV_RSN"),
             // KYC / verification
             QuickLendXError::BusinessNotVerified => symbol_short!("BUS_NV"),
             QuickLendXError::KYCAlreadyPending => symbol_short!("KYC_PD"),
             QuickLendXError::KYCAlreadyVerified => symbol_short!("KYC_VF"),
             QuickLendXError::KYCNotFound => symbol_short!("KYC_NF"),
             QuickLendXError::InvalidKYCStatus => symbol_short!("KYC_IS"),
+            QuickLendXError::InvestorNotVerified => symbol_short!("INV_NV"),
+            QuickLendXError::InvestorFrozen => symbol_short!("INV_FRZ"),
+            QuickLendXError::BusinessDeleted => symbol_short!("BUS_DEL"),
             // Audit
             QuickLendXError::AuditLogNotFound => symbol_short!("AUD_NF"),
             QuickLendXError::AuditIntegrityError => symbol_short!("AUD_IE"),
@@ -147,9 +351,12 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidFeeConfiguration => symbol_short!("FEE_CFG"),
             QuickLendXError::TreasuryNotConfigured => symbol_short!("TRS_NC"),
             QuickLendXError::InvalidFeeBasisPoints => symbol_short!("FEE_BPS"),
+            QuickLendXError::ArithmeticOverflow => symbol_short!("ARITH_OF"),
             QuickLendXError::RotationAlreadyPending => symbol_short!("ROT_PND"),
             QuickLendXError::RotationNotFound => symbol_short!("ROT_NF"),
             QuickLendXError::RotationExpired => symbol_short!("ROT_EXP"),
+            QuickLendXError::RotationTimelockNotElapsed => symbol_short!("ROT_TLK"),
+            QuickLendXError::NoPendingTreasuryRotation => symbol_short!("ROT_NOPND"),
             // Dispute
             QuickLendXError::DisputeNotFound => symbol_short!("DSP_NF"),
             QuickLendXError::DisputeAlreadyExists => symbol_short!("DSP_EX"),
@@ -158,13 +365,40 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::DisputeNotUnderReview => symbol_short!("DSP_UR"),
             QuickLendXError::InvalidDisputeReason => symbol_short!("DSP_RN"),
             QuickLendXError::InvalidDisputeEvidence => symbol_short!("DSP_EV"),
+            QuickLendXError::DisputeActive => symbol_short!("DSP_ACT"),
             // Notification
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
-            QuickLendXError::MaxBidsPerInvoiceExceeded => symbol_short!("MAX_BIDS"),
-            QuickLendXError::MaxInvoicesPerBusinessExceeded => symbol_short!("MAX_INV"),
-            QuickLendXError::InvalidBidTtl => symbol_short!("INV_TTL"),
+            QuickLendXError::NotificationDuplicate => symbol_short!("NOT_DUP"),
+            // Emergency / pause
             QuickLendXError::ContractPaused => symbol_short!("PAUSED"),
+            QuickLendXError::EmergencyWithdrawNotFound => symbol_short!("EMG_NF"),
+            QuickLendXError::EmergencyWithdrawTimelockNotElapsed => symbol_short!("EMG_TLK"),
+            QuickLendXError::EmergencyWithdrawExpired => symbol_short!("EMG_EXP"),
+            QuickLendXError::EmergencyWithdrawCancelled => symbol_short!("EMG_CNL"),
+            QuickLendXError::EmergencyWithdrawAlreadyExists => symbol_short!("EMG_EX"),
+            QuickLendXError::EmergencyWithdrawInsufficientBalance => symbol_short!("EMG_BAL"),
+            // Misc
+            QuickLendXError::TokenTransferFailed => symbol_short!("TKN_FAIL"),
+            QuickLendXError::MaintenanceModeActive => symbol_short!("MAINT"),
+            QuickLendXError::DuplicateDefaultTransition => symbol_short!("DEF_DUP"),
+            QuickLendXError::BackfillInProgress => symbol_short!("BKF_IP"),
+            QuickLendXError::InvalidLedgerSequence => symbol_short!("INV_LS"),
+            QuickLendXError::InsuranceNotActive => symbol_short!("INS_NACT"),
+            QuickLendXError::ActiveDisputeExists => symbol_short!("DSP_ACT"),
+            QuickLendXError::StaleInvestmentSnapshot => symbol_short!("STL_INV"),
+            QuickLendXError::DuplicateNonce => symbol_short!("DUP_NONCE"),
+            QuickLendXError::PendingGovernanceProposal => symbol_short!("GOV_PROP"),
+            QuickLendXError::UnstableCursor => symbol_short!("UNSTABLE"),
+            QuickLendXError::SettlementCurrencyNotAllowed => symbol_short!("SETL_CR"),
+            QuickLendXError::UpgradePending => symbol_short!("UPG_PEND"),
+            QuickLendXError::PerInvestorPositionCapExceeded => symbol_short!("POS_CAP"),
+            QuickLendXError::BidBelowTierMinimum => symbol_short!("TIER_BID"),
+            QuickLendXError::InvalidTransactionHash => symbol_short!("TX_HASH"),
+            QuickLendXError::BatchSizeExceeded => symbol_short!("BATCH_SZ"),
+            QuickLendXError::BidStale => symbol_short!("BID_STL"),
+            QuickLendXError::MutationLimitExceeded => symbol_short!("MUT_LIM"),
+            QuickLendXError::InputTooLarge => symbol_short!("IN_TOO_L"),
         }
     }
 }

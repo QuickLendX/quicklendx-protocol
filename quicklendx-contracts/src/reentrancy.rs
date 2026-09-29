@@ -1,11 +1,17 @@
 //! Reentrancy guard for payment and escrow flows.
 //!
-//! Prevents intermediate re-entry into payment/escrow operations that could
-//! lead to double-spend or state corruption. Uses a single process-wide lock
-//! in instance storage.
+//! Soroban does not currently support EVM-style fallback hooks during token
+//! transfers, but nested contract execution is still worth defending against as
+//! a protocol invariant. This module owns the single lock used by the guarded
+//! payment entry points and exposes a small helper for regression tests to
+//! verify lock cleanup after rejected nested calls.
 
 use crate::errors::QuickLendXError;
-use soroban_sdk::{symbol_short, Env};
+use soroban_sdk::{symbol_short, Env, Symbol};
+
+fn payment_guard_key() -> Symbol {
+    symbol_short!("pay_lock")
+}
 
 /// Runs a closure with the payment/escrow reentrancy guard held.
 ///
@@ -19,7 +25,7 @@ pub fn with_payment_guard<F, R>(env: &Env, f: F) -> Result<R, QuickLendXError>
 where
     F: FnOnce() -> Result<R, QuickLendXError>,
 {
-    let key = symbol_short!("pay_lock");
+    let key = payment_guard_key();
     if env.storage().instance().get(&key).unwrap_or(false) {
         return Err(QuickLendXError::OperationNotAllowed);
     }
@@ -27,4 +33,12 @@ where
     let result = f();
     env.storage().instance().set(&key, &false);
     result
+}
+
+/// Returns whether the payment-path guard is currently locked.
+pub(crate) fn is_payment_guard_locked(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&payment_guard_key())
+        .unwrap_or(false)
 }

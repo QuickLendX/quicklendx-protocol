@@ -1,3 +1,11 @@
+use crate::fees::{
+    default_penalty, early_repayment_fee, origination_fee, servicing_fee, total_fees, MAX_AMOUNT,
+    MAX_DEFAULT_PENALTY_BPS, MAX_EARLY_REPAYMENT_BPS, MAX_ORIGINATION_BPS, MAX_SERVICING_BPS,
+};
+use crate::profits::{
+    aggregate_platform_revenue, gross_profit, investor_revenue_share, net_profit,
+    return_on_investment_bps, MAX_INVESTMENT,
+};
 /// # Arithmetic Fuzz Tests — QuickLendX Protocol
 ///
 /// This module implements fuzz-style tests for all critical arithmetic in the
@@ -19,19 +27,9 @@
 /// 4. Fee caps are enforced: rate > max → `None`.
 /// 5. Zero inputs are rejected where specified.
 /// 6. ROI is non-negative iff net_profit is non-negative.
-
 use crate::settlement::{
-    compute_settlement, verify_conservation, BPS_DENOMINATOR as S_BPS,
-    MAX_FACE_VALUE, MAX_PENALTY_BPS,
-};
-use crate::fees::{
-    default_penalty, early_repayment_fee, origination_fee, servicing_fee, total_fees,
-    MAX_AMOUNT, MAX_DEFAULT_PENALTY_BPS, MAX_EARLY_REPAYMENT_BPS,
-    MAX_ORIGINATION_BPS, MAX_SERVICING_BPS,
-};
-use crate::profits::{
-    aggregate_platform_revenue, gross_profit, investor_revenue_share, net_profit,
-    return_on_investment_bps, MAX_INVESTMENT,
+    compute_settlement, verify_conservation, BPS_DENOMINATOR as S_BPS, MAX_FACE_VALUE,
+    MAX_PENALTY_BPS,
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -259,10 +257,7 @@ fn fuzz_fees_never_exceed_principal() {
             }
             // early_repayment
             if let Some(fee) = early_repayment_fee(amount, rate) {
-                assert!(
-                    fee <= amount,
-                    "early_repayment_fee {fee} > amount {amount}"
-                );
+                assert!(fee <= amount, "early_repayment_fee {fee} > amount {amount}");
             }
         }
     }
@@ -422,10 +417,10 @@ fn fuzz_net_profit_le_gross_profit() {
 #[test]
 fn fuzz_roi_sign_matches_net_profit() {
     let cases = [
-        (1_100_000u128, 1_000_000u128, 0u128),   // profit
-        (1_000_000, 1_000_000, 0),                 // break-even
-        (1_100_000, 1_000_000, 100_000),           // break-even after fees
-        (1_200_000, 1_000_000, 50_000),            // profit after fees
+        (1_100_000u128, 1_000_000u128, 0u128), // profit
+        (1_000_000, 1_000_000, 0),             // break-even
+        (1_100_000, 1_000_000, 100_000),       // break-even after fees
+        (1_200_000, 1_000_000, 50_000),        // profit after fees
     ];
 
     for (payout, funded, fees) in cases {
@@ -481,7 +476,11 @@ fn fuzz_revenue_share_full_ownership() {
 
     for (pool, revenue) in pool_and_revenue {
         let share = investor_revenue_share(pool, pool, revenue);
-        assert_eq!(share, Some(revenue), "Full owner should receive full revenue");
+        assert_eq!(
+            share,
+            Some(revenue),
+            "Full owner should receive full revenue"
+        );
     }
 }
 

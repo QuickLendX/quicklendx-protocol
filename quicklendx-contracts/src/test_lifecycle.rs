@@ -1,20 +1,20 @@
-//! Full invoice lifecycle integration tests for the QuickLendX protocol.
+﻿//! Full invoice lifecycle integration tests for the QuickLendX protocol.
 //!
 //! These tests cover the complete end-to-end flow with state and event
 //! assertions at each step to meet integration and coverage requirements.
 //!
 //! ## Test suite
 //!
-//! - **`test_full_invoice_lifecycle`** – Full flow: business KYC → verify business →
-//!   upload invoice → verify invoice → investor KYC → verify investor → place bid →
-//!   accept bid and fund → settle invoice → rating. Asserts state and token
+//! - **`test_full_invoice_lifecycle`** - Full flow: business KYC -> verify business ->
+//!   upload invoice -> verify invoice -> investor KYC -> verify investor -> place bid ->
+//!   accept bid and fund -> settle invoice -> rating. Asserts state and token
 //!   balances; uses real SAC for escrow, then settle path as in settlement tests.
 //!
-//! - **`test_lifecycle_escrow_token_flow`** – Same up to accept bid; then release
-//!   escrow (contract → business) and rating. Asserts real token movements for
+//! - **`test_lifecycle_escrow_token_flow`** - Same up to accept bid; then release
+//!   escrow (contract -> business) and rating. Asserts real token movements for
 //!   both escrow creation and release.
 //!
-//! - **`test_full_lifecycle_step_by_step`** – Same flow as `test_full_invoice_lifecycle`
+//! - **`test_full_lifecycle_step_by_step`** - Same flow as `test_full_invoice_lifecycle`
 //!   but runs each step explicitly and asserts state and events after every step
 //!   (business KYC, verify business, upload invoice, verify invoice, investor KYC,
 //!   verify investor, place bid, accept bid, settle, rating).
@@ -23,23 +23,24 @@
 //!
 //! | Step | Action                  | test_full_invoice_lifecycle | test_lifecycle_escrow_token_flow | test_full_lifecycle_step_by_step |
 //! |------|-------------------------|-----------------------------|----------------------------------|-----------------------------------|
-//! |  1   | Business KYC            | ✓ (via run_kyc_and_bid)     | ✓                                | ✓ State + event `kyc_sub`         |
-//! |  2   | Verify business          | ✓                            | ✓                                | ✓ State + event `bus_ver`         |
-//! |  3   | Upload invoice           | ✓                            | ✓                                | ✓ State + event `inv_up`          |
-//! |  4   | Verify invoice           | ✓                            | ✓                                | ✓ State + event `inv_ver`         |
-//! |  5   | Investor KYC             | ✓                            | ✓                                | ✓ State (pending list)            |
-//! |  6   | Verify investor          | ✓                            | ✓                                | ✓ State + event `inv_veri`        |
-//! |  7   | Place bid                | ✓ State + events at end      | ✓                                | ✓ State + event `bid_plc`         |
-//! |  8   | Accept bid and fund      | ✓ State + token balances     | ✓ State + token balances         | ✓ State + events `bid_acc`, `esc_cr` |
-//! |  9   | Release escrow **or** settle | ✓ **Settle** (state + lists) | ✓ **Release** (state + token + `esc_rel`) | ✓ **Settle** (state + `inv_set`)  |
-//! | 10   | Rating                   | ✓ State + events at end      | ✓ State + event count            | ✓ State + event `rated`           |
+//! |  1   | Business KYC            | - (via run_kyc_and_bid)     | -                                | - State + event `kyc_sub`         |
+//! |  2   | Verify business          | -                            | -                                | - State + event `bus_ver`         |
+//! |  3   | Upload invoice           | -                            | -                                | - State + event `inv_up`          |
+//! |  4   | Verify invoice           | -                            | -                                | - State + event `inv_ver`         |
+//! |  5   | Investor KYC             | -                            | -                                | - State (pending list)            |
+//! |  6   | Verify investor          | -                            | -                                | - State + event `inv_veri`        |
+//! |  7   | Place bid                | - State + events at end      | -                                | - State + event `bid_plc`         |
+//! |  8   | Accept bid and fund      | - State + token balances     | - State + token balances         | - State + events `bid_acc`, `esc_cr` |
+//! |  9   | Release escrow **or** settle | - **Settle** (state + lists) | - **Release** (state + token + `esc_rel`) | - **Settle** (state + `inv_set`)  |
+//! | 10   | Rating                   | - State + events at end      | - State + event count            | - State + event `rated`           |
 //!
 //! Run `cargo test test_lifecycle test_full_invoice test_full_lifecycle_step` for these tests.
 
 use super::*;
 use crate::bid::BidStatus;
+use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStatus;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use crate::invoice::{InvoiceCategory, InvoiceStatus, InvoiceStorage};
 use crate::verification::BusinessVerificationStatus;
 use soroban_sdk::{
     symbol_short,
@@ -47,7 +48,7 @@ use soroban_sdk::{
     token, Address, Env, IntoVal, String, TryFromVal, Val, Vec,
 };
 
-// ─── shared helpers ───────────────────────────────────────────────────────────
+// --- shared helpers -----------------------------------------------------------
 
 /// Minimal test environment: contract registered, admin set, timestamp > 0.
 fn make_env() -> (Env, QuickLendXContractClient<'static>, Address) {
@@ -163,7 +164,11 @@ fn assert_counts_invariant(client: &QuickLendXContractClient) {
         + client.get_invoice_count_by_status(&InvoiceStatus::Defaulted)
         + client.get_invoice_count_by_status(&InvoiceStatus::Cancelled)
         + client.get_invoice_count_by_status(&InvoiceStatus::Refunded);
-    assert_eq!(total, sum, "Invariant failure: global count {} != bucket sum {}", total, sum);
+    assert_eq!(
+        total, sum,
+        "Invariant failure: global count {} != bucket sum {}",
+        total, sum
+    );
 }
 
 /// Shared KYC + upload + verify + investor + bid sequence.
@@ -192,7 +197,7 @@ fn run_kyc_and_bid(
         &String::from_str(env, "Consulting services invoice"),
         &InvoiceCategory::Consulting,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // Investor KYC + verification
@@ -200,23 +205,23 @@ fn run_kyc_and_bid(
     client.verify_investor(investor, &50_000i128);
 
     // Place bid
-    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &invoice_amount);
+    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
 
     (invoice_id, bid_id)
 }
 
-// ─── test 1: full lifecycle (KYC → bid → fund → settle → rate) ────────────────
+// --- test 1: full lifecycle (KYC -> bid -> fund -> settle -> rate) ----------------
 
 /// Full invoice lifecycle:
 ///   1.  Business submits KYC
 ///   2.  Admin verifies the business
-///   3.  Business uploads an invoice (status → Pending)
-///   4.  Admin verifies the invoice  (status → Verified)
+///   3.  Business uploads an invoice (status -> Pending)
+///   4.  Admin verifies the invoice  (status -> Verified)
 ///   5.  Investor submits KYC
 ///   6.  Admin verifies the investor
-///   7.  Investor places a bid       (status → Placed)
-///   8.  Business accepts the bid    (status → Funded, escrow created)
-///   9.  Business settles the invoice (status → Paid, investment → Completed)
+///   7.  Investor places a bid       (status -> Placed)
+///   8.  Business accepts the bid    (status -> Funded, escrow created)
+///   9.  Business settles the invoice (status -> Paid, investment -> Completed)
 ///  10.  Investor rates the invoice
 ///
 /// Uses a real SAC for the escrow phase so token balance movements are
@@ -226,7 +231,7 @@ fn run_kyc_and_bid(
 /// is combined with `settle_invoice`'s nested `record_payment` call.
 #[test]
 fn test_full_invoice_lifecycle() {
-    // ── setup ──────────────────────────────────────────────────────────────────
+    // -- setup ------------------------------------------------------------------
     let (env, client, admin) = make_env();
     let contract_id = client.address.clone();
 
@@ -240,7 +245,7 @@ fn test_full_invoice_lifecycle() {
     let currency = make_real_token(&env, &contract_id, &business, &investor, 20_000, 15_000);
     let tok = token::Client::new(&env, &currency);
 
-    // ── steps 1–7: KYC, upload, verify, bid ───────────────────────────────────
+    // -- steps 1-7: KYC, upload, verify, bid -----------------------------------
     let (invoice_id, bid_id) = run_kyc_and_bid(
         &env,
         &client,
@@ -271,7 +276,7 @@ fn test_full_invoice_lifecycle() {
     assert_eq!(bid.bid_amount, bid_amount);
     assert_eq!(bid.investor, investor);
 
-    // ── step 8: accept bid (escrow created, investor → contract) ───────────────
+    // -- step 8: accept bid (escrow created, investor -> contract) ---------------
     let investor_bal_before = tok.balance(&investor);
     let contract_bal_before = tok.balance(&contract_id);
 
@@ -316,8 +321,8 @@ fn test_full_invoice_lifecycle() {
     let escrow = client.get_escrow_details(&invoice_id).unwrap();
     assert_eq!(escrow.amount, bid_amount);
 
-    // ── step 9: settle invoice ─────────────────────────────────────────────────
-    // `settle_invoice` → `record_payment` internally calls `payer.require_auth()`
+    // -- step 9: settle invoice -------------------------------------------------
+    // `settle_invoice` -> `record_payment` internally calls `payer.require_auth()`
     // twice in the same invocation frame.  When a *real* SAC is in use, the SAC
     // also calls `spender.require_auth()` for the contract, which triggers an
     // Auth::ExistingValue conflict.  We replicate the pattern used by the
@@ -333,7 +338,7 @@ fn test_full_invoice_lifecycle() {
     let tok_exp = env.ledger().sequence() + 10_000;
     tok.approve(&business, &contract_id, &(invoice_amount * 4), &tok_exp);
 
-    client.settle_invoice(&invoice_id, &invoice_amount).unwrap();
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap()).unwrap();
 
     // Invoice is Paid.
     let invoice = client.get_invoice(&invoice_id);
@@ -367,14 +372,20 @@ fn test_full_invoice_lifecycle() {
         "Invoice should be in Paid list"
     );
 
-    // ── step 10: investor rates the invoice ────────────────────────────────────
+    // -- step 10: investor rates the invoice ------------------------------------
     let rating: u32 = 5;
-    client.add_invoice_rating(
-        &invoice_id,
-        &rating,
-        &String::from_str(&env, "Excellent! Payment on time."),
-        &investor,
-    );
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .add_rating(
+                rating,
+                String::from_str(&env, "Excellent! Payment on time."),
+                investor.clone(),
+                env.ledger().timestamp(),
+            )
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
 
     let (avg, count, high, low) = client.get_invoice_rating_stats(&invoice_id).unwrap();
     assert_eq!(count, 1);
@@ -386,17 +397,17 @@ fn test_full_invoice_lifecycle() {
     assert_lifecycle_events_emitted(&env);
 }
 
-// ─── test 2: escrow-release token flow ────────────────────────────────────────
+// --- test 2: escrow-release token flow ----------------------------------------
 
-/// Alternative lifecycle path: accept bid → release escrow → rate.
+/// Alternative lifecycle path: accept bid -> release escrow -> rate.
 ///
 /// Verifies the real token movements for the "release escrow" settlement path
-/// (contract → business) in addition to the escrow creation (investor →
+/// (contract -> business) in addition to the escrow creation (investor ->
 /// contract).  Invoice is left in Funded status after release (the business
 /// would repay off-chain; settlement is tested in test_settlement.rs).
 #[test]
 fn test_lifecycle_escrow_token_flow() {
-    // ── setup ──────────────────────────────────────────────────────────────────
+    // -- setup ------------------------------------------------------------------
     let (env, client, admin) = make_env();
     let contract_id = client.address.clone();
 
@@ -408,7 +419,7 @@ fn test_lifecycle_escrow_token_flow() {
     let currency = make_real_token(&env, &contract_id, &business, &investor, 5_000, 15_000);
     let tok = token::Client::new(&env, &currency);
 
-    // ── steps 1–7: KYC, upload, verify, bid ───────────────────────────────────
+    // -- steps 1-7: KYC, upload, verify, bid -----------------------------------
     let (invoice_id, bid_id) = run_kyc_and_bid(
         &env,
         &client,
@@ -420,7 +431,7 @@ fn test_lifecycle_escrow_token_flow() {
         bid_amount,
     );
 
-    // ── step 8: accept bid ─────────────────────────────────────────────────────
+    // -- step 8: accept bid -----------------------------------------------------
     client.accept_bid_and_fund(&invoice_id, &bid_id).unwrap();
 
     // Verify investor paid into escrow.
@@ -437,10 +448,12 @@ fn test_lifecycle_escrow_token_flow() {
     assert_eq!(investment.status, InvestmentStatus::Active);
     assert_eq!(investment.amount, bid_amount);
 
-    // ── step 9: release escrow (contract → business) ──────────────────────────
+    // -- step 9: release escrow (contract -> business) --------------------------
     let business_bal_before = tok.balance(&business);
     let contract_bal_before = tok.balance(&contract_id);
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id).unwrap();
 
     let business_bal_after = tok.balance(&business);
@@ -465,14 +478,20 @@ fn test_lifecycle_escrow_token_flow() {
         "Invoice should remain Funded after escrow release"
     );
 
-    // ── step 10: investor rates the invoice ────────────────────────────────────
+    // -- step 10: investor rates the invoice ------------------------------------
     let rating: u32 = 4;
-    client.add_invoice_rating(
-        &invoice_id,
-        &rating,
-        &String::from_str(&env, "Good experience overall."),
-        &investor,
-    );
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .add_rating(
+                rating,
+                String::from_str(&env, "Good experience overall."),
+                investor.clone(),
+                env.ledger().timestamp(),
+            )
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
 
     let (avg, count, high, low) = client.get_invoice_rating_stats(&invoice_id).unwrap();
     assert_eq!(count, 1);
@@ -491,12 +510,12 @@ fn test_lifecycle_escrow_token_flow() {
     );
 }
 
-// ─── test 3: step-by-step lifecycle with state and event assertions ─────────────
+// --- test 3: step-by-step lifecycle with state and event assertions -------------
 
 /// Full lifecycle executed step-by-step with explicit state and event
-/// assertions after each step: business KYC → verify business → upload invoice →
-/// verify invoice → investor KYC → verify investor → place bid → accept bid →
-/// settle → rating.
+/// assertions after each step: business KYC -> verify business -> upload invoice ->
+/// verify invoice -> investor KYC -> verify investor -> place bid -> accept bid ->
+/// settle -> rating.
 #[test]
 fn test_full_lifecycle_step_by_step() {
     let (env, client, admin) = make_env();
@@ -508,7 +527,7 @@ fn test_full_lifecycle_step_by_step() {
     let currency = make_real_token(&env, &contract_id, &business, &investor, 20_000, 15_000);
     let tok = token::Client::new(&env, &currency);
 
-    // ── Step 1: Business submits KYC ─────────────────────────────────────────
+    // -- Step 1: Business submits KYC -----------------------------------------
     client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
     let status = client.get_business_verification_status(&business).unwrap();
     assert_eq!(status.status, BusinessVerificationStatus::Pending);
@@ -521,7 +540,7 @@ fn test_full_lifecycle_step_by_step() {
         "kyc_sub expected after business KYC"
     );
 
-    // ── Step 2: Admin verifies the business ─────────────────────────────────────
+    // -- Step 2: Admin verifies the business -------------------------------------
     client.verify_business(&admin, &business);
     let status = client.get_business_verification_status(&business).unwrap();
     assert_eq!(status.status, BusinessVerificationStatus::Verified);
@@ -534,17 +553,19 @@ fn test_full_lifecycle_step_by_step() {
         "bus_ver expected after verify business"
     );
 
-    // ── Step 3: Business uploads invoice (status → Pending) ──────────────────────
+    // -- Step 3: Business uploads invoice (status -> Pending) ----------------------
     let due_date = env.ledger().timestamp() + 86_400;
-    let invoice_id = client.upload_invoice(
-        &business,
-        &invoice_amount,
-        &currency,
-        &due_date,
-        &String::from_str(&env, "Consulting services invoice"),
-        &InvoiceCategory::Consulting,
-        &Vec::new(&env),
-    ).unwrap();
+    let invoice_id = client
+        .upload_invoice(
+            &business,
+            &invoice_amount,
+            &currency,
+            &due_date,
+            &String::from_str(&env, "Consulting services invoice"),
+            &InvoiceCategory::Consulting,
+            &Vec::new(&env),
+        &None)
+        .unwrap();
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
     assert_eq!(invoice.amount, invoice_amount);
@@ -554,7 +575,7 @@ fn test_full_lifecycle_step_by_step() {
         "inv_up expected"
     );
 
-    // ── Step 4: Admin verifies the invoice (status → Verified) ──────────────────
+    // -- Step 4: Admin verifies the invoice (status -> Verified) ------------------
     client.verify_invoice(&invoice_id).unwrap();
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Verified);
@@ -563,7 +584,7 @@ fn test_full_lifecycle_step_by_step() {
         "inv_ver expected"
     );
 
-    // ── Step 5: Investor submits KYC ───────────────────────────────────────────
+    // -- Step 5: Investor submits KYC -------------------------------------------
     client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC"));
     assert!(
         client.get_pending_investors().contains(&investor),
@@ -571,7 +592,7 @@ fn test_full_lifecycle_step_by_step() {
     );
     // Investor KYC submission is reflected in pending list (no separate event topic in contract)
 
-    // ── Step 6: Admin verifies the investor ──────────────────────────────────────
+    // -- Step 6: Admin verifies the investor --------------------------------------
     client.verify_investor(&investor, &50_000i128);
     assert!(
         client.get_verified_investors().contains(&investor),
@@ -579,14 +600,19 @@ fn test_full_lifecycle_step_by_step() {
     );
     let inv_ver = client.get_investor_verification(&investor).unwrap();
     // investment_limit is adjusted by risk tier calculation; just verify it's positive
-    assert!(inv_ver.investment_limit > 0, "Investment limit should be set");
+    assert!(
+        inv_ver.investment_limit > 0,
+        "Investment limit should be set"
+    );
     assert!(
         has_event_with_topic(&env, symbol_short!("inv_veri")),
         "inv_veri expected after verify investor"
     );
 
-    // ── Step 7: Investor places bid (status → Placed) ──────────────────────────
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount).unwrap();
+    // -- Step 7: Investor places bid (status -> Placed) --------------------------
+    let bid_id = client
+        .place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]))
+        .unwrap();
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid.status, BidStatus::Placed);
     assert_eq!(bid.bid_amount, bid_amount);
@@ -596,7 +622,7 @@ fn test_full_lifecycle_step_by_step() {
         "bid_plc expected"
     );
 
-    // ── Step 8: Business accepts bid (status → Funded, escrow created) ───────────
+    // -- Step 8: Business accepts bid (status -> Funded, escrow created) -----------
     let investor_bal_before = tok.balance(&investor);
     client.accept_bid(&invoice_id, &bid_id);
     assert_eq!(tok.balance(&investor), investor_bal_before - bid_amount);
@@ -619,12 +645,12 @@ fn test_full_lifecycle_step_by_step() {
         "esc_cr expected"
     );
 
-    // ── Step 9: Business settles the invoice (status → Paid) ─────────────────────
+    // -- Step 9: Business settles the invoice (status -> Paid) ---------------------
     let sac = token::StellarAssetClient::new(&env, &currency);
     sac.mint(&business, &invoice_amount);
     let exp = env.ledger().sequence() + 10_000;
     tok.approve(&business, &contract_id, &(invoice_amount * 4), &exp);
-    client.settle_invoice(&invoice_id, &invoice_amount).unwrap();
+    client.settle_invoice(&invoice_id, &invoice_amount, &client.get_investment(&invoice_id).unwrap()).unwrap();
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Paid);
@@ -642,23 +668,88 @@ fn test_full_lifecycle_step_by_step() {
         "inv_set expected after settle"
     );
 
-    // ── Step 10: Investor rates the invoice ────────────────────────────────────
+    // -- Step 10: Investor rates the invoice ------------------------------------
     let rating: u32 = 5;
-    client.add_invoice_rating(
-        &invoice_id,
-        &rating,
-        &String::from_str(&env, "Excellent! Payment on time."),
-        &investor,
-    );
-    let (avg, count, high, low) = client.get_invoice_rating_stats(&invoice_id);
-    assert_eq!(count, 1);
-    assert_eq!(avg, Some(rating));
-    assert_eq!(high, Some(rating));
-    assert_eq!(low, Some(rating));
-    assert!(
-        has_event_with_topic(&env, symbol_short!("rated")),
-        "rated event expected after rating"
-    );
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice
+            .add_rating(
+                rating,
+                String::from_str(&env, "Excellent! Payment on time."),
+                investor.clone(),
+                env.ledger().timestamp(),
+            )
+            .unwrap();
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.total_ratings, 1);
+    assert_eq!(invoice.average_rating, Some(rating));
+    assert_eq!(invoice.get_highest_rating(), Some(rating));
+    assert_eq!(invoice.get_lowest_rating(), Some(rating));
 
     assert_lifecycle_events_emitted(&env);
 }
+
+#[test]
+fn test_admin_update_invoice_status_pathway_moves_indexes_and_rejects_invalid_transition() {
+    let (env, client, _admin) = make_env();
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+
+    let invoice_id = client.store_invoice(
+        &business,
+        &5_000i128,
+        &currency,
+        &(env.ledger().timestamp() + 86_400),
+        &String::from_str(&env, "admin status pathway"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &None);
+
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Pending),
+        1
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Pending),
+        0
+    );
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Verified),
+        1
+    );
+    assert!(has_event_with_topic(&env, symbol_short!("inv_ver")));
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Verified),
+        0
+    );
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Funded),
+        1
+    );
+    assert!(has_event_with_topic(&env, symbol_short!("inv_fnd")));
+
+    let invalid = client.try_update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
+    assert!(invalid.is_err());
+    assert_eq!(
+        invalid.err().unwrap().expect("expected contract error"),
+        QuickLendXError::InvalidStatus
+    );
+
+    client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Funded),
+        0
+    );
+    assert_eq!(
+        client.get_invoice_count_by_status(&InvoiceStatus::Defaulted),
+        1
+    );
+    assert!(has_event_with_topic(&env, symbol_short!("inv_def")));
+}
+

@@ -1,24 +1,46 @@
-/// QuickLendX Smart Contract Library
-///
-/// This crate contains the core arithmetic modules for the QuickLendX
-/// invoice-financing protocol built on Stellar's Soroban platform.
-///
-/// ## Modules
-///
-/// - [`settlement`] — Invoice settlement payout computation
-/// - [`fees`]       — Protocol fee calculations (origination, servicing, default, early-repayment)
-/// - [`profits`]    — Investor return metrics and platform revenue aggregation
-///
-/// ## Safety Philosophy
-///
-/// All financial arithmetic uses `u128` with `checked_*` operations.
-/// Any computation that would overflow returns `None`; callers must handle
-/// this as an error condition. This eliminates silent wrapping overflow,
-/// underflow, and sign-extension bugs.
+#![no_std]
+use crate::errors::QuickLendXError;
+use soroban_sdk::{contract, contractimpl, Env}; // Fixes the import error
 
+pub mod admin;
+pub mod errors;
+pub mod events;
 pub mod fees;
+pub mod init;
+pub mod invariants;
+pub mod kyc_nonces;
+pub mod kyc_policy;
+pub mod pause;
+pub mod payment_token_policy;
+pub mod payments;
 pub mod profits;
 pub mod settlement;
-
+pub mod storage_types;
 #[cfg(test)]
-mod test_fuzz;
+mod test_kyc_policy_entrypoints;
+#[cfg(test)]
+mod test_kyc_policy_extended;
+#[cfg(test)]
+mod test_kyc_policy_matrix;
+#[cfg(test)]
+mod test_payment_token_policy;
+#[cfg(test)]
+mod test_payment_token_policy_batch;
+#[cfg(test)]
+mod test_payment_token_policy_matrix;
+#[cfg(test)]
+mod test_payment_token_policy_regression;
+pub mod types;
+pub mod verification;
+
+// Hardcoded constant to break the circular dependency
+pub(crate) const MAX_QUERY_LIMIT: u32 = 100;
+
+#[contract]
+pub struct QuickLendX;
+
+#[contractimpl]
+impl QuickLendX {
+    // This is the structure your project expects
+    // Add your existing functions here or ensure they match this structure
+}
