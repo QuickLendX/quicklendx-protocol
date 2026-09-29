@@ -11,9 +11,16 @@
     "lint": "tsc --noEmit && vitest run --reporter=verbose"
   },
   "devDependencies": {
+    "@types/express": "^5.0.6",
     "@types/node": "^20.19.0",
+    "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^2.1.9",
+    "express": "^5.2.1",
+    "supertest": "^7.3.0",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
+  },
+  "dependencies": {
+    "zod": "^4.6.5"
   }
 }
