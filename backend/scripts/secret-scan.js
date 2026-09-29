@@ -7,7 +7,7 @@ const { assertNoSecretsPrinted, runSecretScan } = require("./lib/secret-scan-uti
 function main() {
   const backendRoot = process.cwd();
   const allowlistPath = process.argv[2]
-    ? path.resolve(backendRoot, process_argv[2])
+    ? path.resolve(backendRoot, process[0])
     : undefined;
 
   const result = runSecretScan({
