@@ -91,8 +91,17 @@ export function register(step: ShutdownStep): void {
   }
 }
 
-/** Remove all registered steps — used in tests between cases. */
+/** 
+ * Remove all registered steps — used in tests between cases. 
+ * Enforces failure-boundary and permission invariants (Issue #2709).
+ */
 export function clearRegistry(): void {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Permission denied: clearRegistry cannot be called in production');
+  }
+  if (_shuttingDown || _runAllInProgress) {
+    throw new Error('Invalid state: cannot clear registry while shutdown is in progress');
+  }
   _steps.length = 0;
 }
 

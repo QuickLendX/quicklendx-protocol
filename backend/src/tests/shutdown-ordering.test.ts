@@ -91,8 +91,8 @@ function makeStep(
 // ---------------------------------------------------------------------------
 describe('registry API', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('getRegisteredSteps returns steps sorted by priority ascending', () => {
@@ -126,8 +126,8 @@ describe('registry API', () => {
 // ---------------------------------------------------------------------------
 describe('runAll — priority ordering', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('executes steps in ascending priority order regardless of registration order', async () => {
@@ -166,8 +166,8 @@ describe('runAll — priority ordering', () => {
 // ---------------------------------------------------------------------------
 describe('runAll — errors in one step do not block later steps', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('continues to subsequent steps when an earlier step throws', async () => {
@@ -214,8 +214,8 @@ describe('runAll — errors in one step do not block later steps', () => {
 // ---------------------------------------------------------------------------
 describe('runAll — total timeout honored', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('skips remaining steps when the total timeout is exceeded', async () => {
@@ -251,8 +251,8 @@ describe('createShutdownHandler — second signal', () => {
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -297,8 +297,8 @@ describe('createShutdownHandler — second signal', () => {
 // ---------------------------------------------------------------------------
 describe('isShuttingDown guard', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -344,8 +344,8 @@ describe('createShutdownHandler — canonical step sequence', () => {
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -470,8 +470,8 @@ describe('shutdown constants', () => {
 // ---------------------------------------------------------------------------
 describe('resetShuttingDown — failure boundaries', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
