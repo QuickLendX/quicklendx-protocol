@@ -306,8 +306,24 @@ export async function getAppliedVersions(db?: DatabaseClient): Promise<number[]>
 }
 
 export async function isDatabaseInitialized(db?: DatabaseClient): Promise<boolean> {
-  const applied = await getAppliedVersions(db);
-  return applied.length > 0;
+  try {
+    const applied = await getAppliedVersions(db);
+    if (!Array.isArray(applied)) {
+      return false;
+    }
+
+    // A database is considered initialized only when the migration ledger exists and
+    // contains at least one valid version. Missing tables, permission failures, and
+    // malformed query payloads are treated as an uninitialized state instead of a
+    // crash so startup and retry logic remain deterministic.
+    return applied.some((version) => Number.isInteger(version) && version >= 0);
+  } catch (error) {
+    console.warn(
+      "[migrations] Database initialization check failed; treating as uninitialized.",
+      error instanceof Error ? error.message : String(error)
+    );
+    return false;
+  }
 }
 
 export async function validateMigrationFiles(): Promise<{ valid: boolean; errors: string[] }> {
