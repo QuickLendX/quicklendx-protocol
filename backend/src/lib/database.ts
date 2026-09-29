@@ -101,7 +101,8 @@ export function getPreparedStatement(sql: string): any {
         cacheEvicts++;
         // fall through to preparation
       } else {
-        throw e;
+        // Other execution errors (like missing params) are expected; return the cached statement
+        return cached;
       }
     }
   }
@@ -111,7 +112,7 @@ export function getPreparedStatement(sql: string): any {
   const maxAttempts = 3;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const db = getDatabase();
+      const db = exports.getDatabase();
       const stmt = db.prepare(sql);
       // Permission guard – attempt a harmless execution to surface read‑only errors.
       try {
@@ -176,7 +177,7 @@ export function getStatementCacheStats() {
  */
 export function pingDatabase(): boolean {
   try {
-    const db = getDatabase();
+    const db = exports.getDatabase();
     const row = db.prepare('SELECT 1 AS ok').get();
     return row?.ok === 1;
   } catch {
