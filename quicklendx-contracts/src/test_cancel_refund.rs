@@ -9,10 +9,11 @@
 //! - Edge cases and error handling
 
 use super::*;
+use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::payments::EscrowStatus;
 use soroban_sdk::{
-    testutils::{Address as _, Events},
+    testutils::{Address as _, Events, Ledger as _},
     token, Address, Env, String, Vec,
 };
 
@@ -94,7 +95,7 @@ fn test_cancel_invoice_pending_status() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
@@ -122,7 +123,7 @@ fn test_cancel_invoice_pending_emits_event() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Cancel and check events
     client.cancel_invoice(&invoice_id);
@@ -148,7 +149,7 @@ fn test_cancel_invoice_pending_business_owner_only() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Note: With mock_all_auths(), authorization is bypassed
     // This test documents that cancel_invoice succeeds when auth is mocked
@@ -179,7 +180,7 @@ fn test_cancel_invoice_verified_status() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
 
@@ -209,7 +210,7 @@ fn test_cancel_invoice_verified_emits_event() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
     client.cancel_invoice(&invoice_id);
@@ -243,12 +244,12 @@ fn test_cancel_invoice_funded_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
 
     // Place and accept bid (invoice becomes Funded)
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -276,12 +277,12 @@ fn test_cancel_invoice_funded_returns_error() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
 
     // Place and accept bid
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Try to cancel - should return error
@@ -309,7 +310,7 @@ fn test_cancel_invoice_paid_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Manually set status to Paid
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Paid);
@@ -334,7 +335,7 @@ fn test_cancel_invoice_defaulted_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Manually set status to Defaulted
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Defaulted);
@@ -359,7 +360,7 @@ fn test_cancel_invoice_already_cancelled_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Cancel once
     client.cancel_invoice(&invoice_id);
@@ -391,12 +392,12 @@ fn test_refund_escrow_after_funding() {
         &String::from_str(&env, "Refund test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
 
     // Place and accept bid
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Verify escrow is held
@@ -441,10 +442,10 @@ fn test_refund_emits_event() {
         &String::from_str(&env, "Refund test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Refund and check events
@@ -475,10 +476,10 @@ fn test_refund_idempotency() {
         &String::from_str(&env, "Refund idempotency test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // First refund should succeed
@@ -510,16 +511,18 @@ fn test_refund_prevents_release() {
         &String::from_str(&env, "Refund prevents release test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Refund escrow
     client.refund_escrow_funds(&invoice_id, &business);
 
     // Try to release after refund - should fail
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
     assert!(result.is_err(), "Release should fail after refund");
 }
@@ -543,7 +546,7 @@ fn test_cancel_invoice_non_owner_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Note: With mock_all_auths(), authorization checks are bypassed
     // This test documents that in production, only the business owner can cancel
@@ -568,7 +571,7 @@ fn test_cancel_invoice_admin_cannot_cancel() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Admin should not be able to cancel (only business owner can)
     let result = client.try_cancel_invoice(&invoice_id);
@@ -604,7 +607,7 @@ fn test_cancel_invoice_multiple_times_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // First cancel should succeed
     client.cancel_invoice(&invoice_id);
@@ -632,7 +635,7 @@ fn test_cancel_invoice_updates_status_list() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Cancel invoice
     client.cancel_invoice(&invoice_id);
@@ -667,7 +670,7 @@ fn test_refund_without_escrow_fails() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Try to refund without creating escrow - should fail
     let result = client.try_refund_escrow_funds(&invoice_id, &business);
@@ -694,7 +697,7 @@ fn test_complete_lifecycle_with_cancellation() {
         &String::from_str(&env, "Lifecycle test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.status, InvoiceStatus::Pending);
@@ -737,13 +740,13 @@ fn test_complete_lifecycle_with_refund() {
         &String::from_str(&env, "Refund lifecycle test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Step 2: Verify invoice
     client.verify_invoice(&invoice_id);
 
     // Step 3: Place and accept bid
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -768,35 +771,292 @@ fn test_complete_lifecycle_with_refund() {
 // This test module provides comprehensive coverage for:
 //
 // 1. CANCEL INVOICE FUNCTIONALITY:
-//    ✓ Cancel invoice in Pending status
-//    ✓ Cancel invoice in Verified status
-//    ✓ Cannot cancel invoice in Funded status
-//    ✓ Cannot cancel invoice in other statuses (Paid, Defaulted, Cancelled)
-//    ✓ Event emission on cancellation
-//    ✓ Authorization checks (business owner only)
-//    ✓ Status list updates
+//    - Cancel invoice in Pending status
+//    - Cancel invoice in Verified status
+//    - Cannot cancel invoice in Funded status
+//    - Cannot cancel invoice in other statuses (Paid, Defaulted, Cancelled)
+//    - Event emission on cancellation
+//    - Authorization checks (business owner only)
+//    - Status list updates
 //
 // 2. REFUND PATH FUNCTIONALITY:
-//    ✓ Refund escrow after funding
-//    ✓ Refund updates invoice status to Refunded
-//    ✓ Refund returns funds to investor
-//    ✓ Refund emits events
-//    ✓ Refund idempotency (cannot refund twice)
-//    ✓ Refund prevents subsequent release
-//    ✓ Cannot refund without escrow
+//    - Refund escrow after funding
+//    - Refund updates invoice status to Refunded
+//    - Refund returns funds to investor
+//    - Refund emits events
+//    - Refund idempotency (cannot refund twice)
+//    - Refund prevents subsequent release
+//    - Cannot refund without escrow
 //
 // 3. AUTHORIZATION AND SECURITY:
-//    ✓ Only business owner can cancel
-//    ✓ Non-owner cancel fails
-//    ✓ Admin cannot cancel (business owner only)
+//    - Only business owner can cancel
+//    - Non-owner cancel fails
+//    - Admin cannot cancel (business owner only)
 //
 // 4. EDGE CASES:
-//    ✓ Cancel non-existent invoice fails
-//    ✓ Cancel already cancelled invoice fails
-//    ✓ Multiple cancellation attempts fail
+//    - Cancel non-existent invoice fails
+//    - Cancel already cancelled invoice fails
+//    - Multiple cancellation attempts fail
 //
 // 5. INTEGRATION TESTS:
-//    ✓ Complete lifecycle with cancellation
-//    ✓ Complete lifecycle with refund
+//    - Complete lifecycle with cancellation
+//    - Complete lifecycle with refund
 //
 // ESTIMATED COVERAGE: 95%+
+
+// ============================================================================
+// RACE CONDITION TESTS - bid cancellation and withdrawal
+// ============================================================================
+
+/// cancel_bid on a Withdrawn bid returns Err(BidStale) (terminal state is immutable).
+#[test]
+fn test_cancel_bid_after_withdraw_is_noop() {
+    let (env, client, admin) = setup_env();
+    let investor = create_verified_investor(&env, &client, 100_000);
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "race test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &None);
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
+
+    // Withdraw first
+    client.withdraw_bid(&bid_id);
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Withdrawn
+    );
+
+    // Concurrent cancel must be a no-op
+    assert_eq!(
+        client.cancel_bid(&bid_id),
+        Err(QuickLendXError::BidStale),
+        "cancel after withdraw must return Err(BidStale)"
+    );
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Withdrawn,
+        "status must remain Withdrawn"
+    );
+}
+
+/// withdraw_bid on a Cancelled bid returns OperationNotAllowed.
+#[test]
+fn test_withdraw_bid_after_cancel_fails() {
+    let (env, client, admin) = setup_env();
+    let investor = create_verified_investor(&env, &client, 100_000);
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "race test 2"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &None);
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
+
+    // Cancel first
+    client.cancel_bid(&bid_id);
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Cancelled
+    );
+
+    // Concurrent withdraw must fail
+    let result = client.try_withdraw_bid(&bid_id);
+    assert!(result.is_err(), "withdraw after cancel must fail");
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Cancelled,
+        "status must remain Cancelled"
+    );
+}
+
+/// Double cancel returns Err(BidStale) on the second call - idempotent terminal state.
+#[test]
+fn test_double_cancel_second_is_noop() {
+    let (env, client, admin) = setup_env();
+    let investor = create_verified_investor(&env, &client, 100_000);
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "double cancel"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &None);
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
+
+    assert!(client.cancel_bid(&bid_id).is_ok(), "first cancel must succeed");
+    assert_eq!(
+        client.cancel_bid(&bid_id),
+        Err(QuickLendXError::BidStale),
+        "second cancel must return Err(BidStale)"
+    );
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Cancelled
+    );
+}
+
+/// Double withdraw returns error on the second call.
+#[test]
+fn test_double_withdraw_second_fails() {
+    let (env, client, admin) = setup_env();
+    let investor = create_verified_investor(&env, &client, 100_000);
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "double withdraw"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &None);
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
+
+    client.withdraw_bid(&bid_id);
+    let result = client.try_withdraw_bid(&bid_id);
+    assert!(result.is_err(), "second withdraw must fail");
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Withdrawn
+    );
+}
+
+/// cancel_bid on an Accepted bid returns Err(BidStale) - accepted is a terminal state.
+#[test]
+fn test_cancel_bid_after_accept_is_noop() {
+    let (env, client, admin) = setup_env();
+    let contract_id = client.address.clone();
+    let investor = create_verified_investor(&env, &client, 10_000);
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 1_000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "accept race"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &None);
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
+    client.accept_bid(&invoice_id, &bid_id);
+
+    assert_eq!(
+        client.cancel_bid(&bid_id),
+        Err(QuickLendXError::BidStale),
+        "cancel after accept must return Err(BidStale)"
+    );
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Accepted,
+        "Accepted status must be immutable"
+    );
+}
+
+/// withdraw_bid on an Accepted bid returns OperationNotAllowed.
+#[test]
+fn test_withdraw_bid_after_accept_fails() {
+    let (env, client, admin) = setup_env();
+    let contract_id = client.address.clone();
+    let investor = create_verified_investor(&env, &client, 10_000);
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = setup_token(&env, &business, &investor, &contract_id);
+
+    let amount = 1_000i128;
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.upload_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "withdraw race"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &None);
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
+    client.accept_bid(&invoice_id, &bid_id);
+
+    let result = client.try_withdraw_bid(&bid_id);
+    assert!(result.is_err(), "withdraw after accept must fail");
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Accepted,
+        "Accepted status must be immutable"
+    );
+}
+
+/// cancel_bid on an Expired bid returns Err(BidStale) - expired is a terminal state.
+#[test]
+fn test_cancel_bid_after_expiry_is_noop() {
+    let (env, client, admin) = setup_env();
+    let investor = create_verified_investor(&env, &client, 100_000);
+    let business = create_verified_business(&env, &client, &admin);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400 * 30;
+
+    let invoice_id = client.upload_invoice(
+        &business,
+        &10_000,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "expire race"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &None);
+    client.verify_invoice(&invoice_id);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &6_000, &BytesN::from_array(&env, &[0u8; 32]));
+
+    // Advance past TTL
+    let new_ts = env.ledger().timestamp() + 7 * 86400 + 1;
+    env.ledger().with_mut(|l| l.timestamp = new_ts);
+    client.cleanup_expired_bids(&invoice_id);
+
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Expired
+    );
+    assert_eq!(
+        client.cancel_bid(&bid_id),
+        Err(QuickLendXError::BidStale),
+        "cancel after expiry must return Err(BidStale)"
+    );
+    assert_eq!(
+        client.get_bid(&bid_id).unwrap().status,
+        crate::bid::BidStatus::Expired,
+        "Expired status must be immutable"
+    );
+}

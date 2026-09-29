@@ -357,7 +357,7 @@ fn test_unverified_business_cannot_upload_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
 }
 
@@ -386,7 +386,7 @@ fn test_verified_business_can_upload_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     // Verify invoice was created
     let invoice = client.get_invoice(&invoice_id);
@@ -488,7 +488,7 @@ fn test_complete_business_kyc_to_invoice_flow() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     // Step 4: Verify invoice was created correctly
     let invoice = client.get_invoice(&invoice_id);
@@ -542,7 +542,7 @@ fn test_rejected_business_resubmission_flow() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
 
     // Step 4: Business resubmits with updated KYC
@@ -570,7 +570,7 @@ fn test_rejected_business_resubmission_flow() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.business, business);
@@ -650,7 +650,7 @@ fn test_pending_business_cannot_upload_invoice() {
         &String::from_str(&env, "Invoice from pending business"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err(), "Pending business must not upload invoices");
     let err = result.unwrap_err().unwrap();
     assert_eq!(
@@ -663,7 +663,7 @@ fn test_pending_business_cannot_upload_invoice() {
 
 /// A business with a pending KYC application must not be allowed to cancel
 /// an invoice that was uploaded before the KYC was re-submitted (e.g. after
-/// a rejection → resubmit flow where the invoice was created while verified).
+/// a rejection -> resubmit flow where the invoice was created while verified).
 /// More directly: if the business is currently pending, cancel must fail.
 #[test]
 #[ignore = "pending-after-verified transition no longer supported"]
@@ -676,7 +676,7 @@ fn test_pending_business_cannot_cancel_invoice() {
 
     env.ledger().with_mut(|li| li.timestamp = 1000);
 
-    // 1. Submit → verify → upload invoice
+    // 1. Submit -> verify -> upload invoice
     client.submit_kyc_application(&business, &kyc_data);
     client.verify_business(&admin, &business);
     let invoice_id = client.upload_invoice(
@@ -687,9 +687,9 @@ fn test_pending_business_cannot_cancel_invoice() {
         &String::from_str(&env, "Invoice to cancel"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
-    // 2. Admin rejects → business resubmits (now pending again)
+    // 2. Admin rejects -> business resubmits (now pending again)
     client.reject_business(&admin, &business, &rejection_reason);
     let new_kyc = create_test_kyc_data(&env, "PendingCancelBusinessV2");
     client.submit_kyc_application(&business, &new_kyc);
@@ -736,12 +736,12 @@ fn test_pending_business_cannot_accept_bid() {
         &String::from_str(&env, "Invoice for bid acceptance test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &10_000i128, &12_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &10_000i128, &12_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
-    // 2. Admin rejects business → business resubmits (now pending again)
+    // 2. Admin rejects business -> business resubmits (now pending again)
     client.reject_business(&admin, &business, &rejection_reason);
     let new_kyc = create_test_kyc_data(&env, "PendingAcceptBusinessV2");
     client.submit_kyc_application(&business, &new_kyc);
@@ -770,7 +770,7 @@ fn test_verified_business_can_act_after_pending_resolved() {
 
     env.ledger().with_mut(|li| li.timestamp = 1000);
 
-    // Reject → resubmit → verify cycle
+    // Reject -> resubmit -> verify cycle
     client.submit_kyc_application(&business, &kyc_data);
     client.reject_business(&admin, &business, &rejection_reason);
     let new_kyc = create_test_kyc_data(&env, "ResolvedBusinessV2");
@@ -786,7 +786,7 @@ fn test_verified_business_can_act_after_pending_resolved() {
         &String::from_str(&env, "Invoice after re-verification"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.business, business);
 }
@@ -813,7 +813,7 @@ fn test_rejected_business_gets_business_not_verified_on_upload() {
         &String::from_str(&env, "Invoice from rejected business"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.unwrap_err().unwrap();
     assert_eq!(
@@ -842,7 +842,7 @@ fn test_no_kyc_business_gets_business_not_verified_on_upload() {
         &String::from_str(&env, "Invoice from unknown business"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.unwrap_err().unwrap();
     assert_eq!(
@@ -866,15 +866,21 @@ fn test_valid_state_transitions() {
 
     env.ledger().with_mut(|li| li.timestamp = 1000);
 
-    // 1. None → Pending (new submission) - should succeed
+    // 1. None -> Pending (new submission) - should succeed
     client.submit_kyc_application(&business, &kyc_data);
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Pending));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Pending
+    ));
 
-    // 2. Pending → Verified (admin approval) - should succeed
+    // 2. Pending -> Verified (admin approval) - should succeed
     client.verify_business(&admin, &business);
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Verified));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Verified
+    ));
 
     // 3. Verified is final - cannot transition further
     let result = client.try_verify_business(&admin, &business);
@@ -893,13 +899,16 @@ fn test_pending_to_rejected_transition() {
 
     env.ledger().with_mut(|li| li.timestamp = 1000);
 
-    // Submit KYC (None → Pending)
+    // Submit KYC (None -> Pending)
     client.submit_kyc_application(&business, &kyc_data);
-    
-    // Pending → Rejected (admin rejection) - should succeed
+
+    // Pending -> Rejected (admin rejection) - should succeed
     client.reject_business(&admin, &business, &rejection_reason);
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Rejected));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Rejected
+    ));
     assert_eq!(verification.rejection_reason, Some(rejection_reason));
 }
 
@@ -913,14 +922,17 @@ fn test_rejected_to_pending_transition() {
 
     env.ledger().with_mut(|li| li.timestamp = 1000);
 
-    // Submit → Reject (None → Pending → Rejected)
+    // Submit -> Reject (None -> Pending -> Rejected)
     client.submit_kyc_application(&business, &kyc_data1);
     client.reject_business(&admin, &business, &rejection_reason);
 
-    // Rejected → Pending (resubmission) - should succeed
+    // Rejected -> Pending (resubmission) - should succeed
     client.submit_kyc_application(&business, &kyc_data2);
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert!(matches!(verification.status, BusinessVerificationStatus::Pending));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Pending
+    ));
     assert!(verification.rejection_reason.is_none()); // Should be cleared on resubmission
 }
 
@@ -933,25 +945,25 @@ fn test_invalid_state_transitions() {
 
     env.ledger().with_mut(|li| li.timestamp = 1000);
 
-    // 1. Cannot verify without submission (None → Verified)
+    // 1. Cannot verify without submission (None -> Verified)
     let result = client.try_verify_business(&admin, &business);
     assert!(result.is_err());
 
-    // 2. Cannot reject without submission (None → Rejected)
+    // 2. Cannot reject without submission (None -> Rejected)
     let result = client.try_reject_business(&admin, &business, &rejection_reason);
     assert!(result.is_err());
 
-    // 3. Cannot submit duplicate (Pending → Pending)
+    // 3. Cannot submit duplicate (Pending -> Pending)
     client.submit_kyc_application(&business, &kyc_data);
     let result = client.try_submit_kyc_application(&business, &kyc_data);
     assert!(result.is_err());
 
-    // 4. Cannot reject verified business (Verified → Rejected)
+    // 4. Cannot reject verified business (Verified -> Rejected)
     client.verify_business(&admin, &business);
     let result = client.try_reject_business(&admin, &business, &rejection_reason);
     assert!(result.is_err());
 
-    // 5. Cannot verify rejected business directly (Rejected → Verified)
+    // 5. Cannot verify rejected business directly (Rejected -> Verified)
     let new_business = Address::generate(&env);
     let new_kyc_data = create_test_kyc_data(&env, "NewBusiness");
     client.submit_kyc_application(&new_business, &new_kyc_data);
@@ -974,7 +986,7 @@ fn test_duplicate_rejection_fails() {
     client.submit_kyc_application(&business, &kyc_data);
     client.reject_business(&admin, &business, &rejection_reason1);
 
-    // Try to reject again (Rejected → Rejected) - should fail
+    // Try to reject again (Rejected -> Rejected) - should fail
     let result = client.try_reject_business(&admin, &business, &rejection_reason2);
     assert!(result.is_err());
 }
@@ -998,7 +1010,10 @@ fn test_rejection_reason_persistence() {
 
     // Verify rejection reason is stored
     let verification = client.get_business_verification_status(&business).unwrap();
-    assert_eq!(verification.rejection_reason, Some(rejection_reason.clone()));
+    assert_eq!(
+        verification.rejection_reason,
+        Some(rejection_reason.clone())
+    );
 
     // Resubmit should clear rejection reason
     let new_kyc_data = create_test_kyc_data(&env, "Resubmitted");
@@ -1022,10 +1037,10 @@ fn test_rejection_reason_cleared_on_verification() {
 
     env.ledger().with_mut(|li| li.timestamp = 1000);
 
-    // Submit → Reject → Resubmit → Verify
+    // Submit -> Reject -> Resubmit -> Verify
     client.submit_kyc_application(&business, &kyc_data);
     client.reject_business(&admin, &business, &rejection_reason);
-    
+
     let new_kyc_data = create_test_kyc_data(&env, "Improved");
     client.submit_kyc_application(&business, &new_kyc_data);
     client.verify_business(&admin, &business);
@@ -1033,7 +1048,10 @@ fn test_rejection_reason_cleared_on_verification() {
     // Verify rejection reason is cleared after verification
     let verification = client.get_business_verification_status(&business).unwrap();
     assert!(verification.rejection_reason.is_none());
-    assert!(matches!(verification.status, BusinessVerificationStatus::Verified));
+    assert!(matches!(
+        verification.status,
+        BusinessVerificationStatus::Verified
+    ));
 }
 
 // ============================================================================
@@ -1117,10 +1135,10 @@ fn test_no_duplicate_entries_in_index_lists() {
 
     env.ledger().with_mut(|li| li.timestamp = 1000);
 
-    // Submit → Reject → Resubmit → Verify cycle
+    // Submit -> Reject -> Resubmit -> Verify cycle
     client.submit_kyc_application(&business, &kyc_data);
     client.reject_business(&admin, &business, &rejection_reason);
-    
+
     let new_kyc_data = create_test_kyc_data(&env, "Improved");
     client.submit_kyc_application(&business, &new_kyc_data);
     client.verify_business(&admin, &business);
@@ -1132,7 +1150,7 @@ fn test_no_duplicate_entries_in_index_lists() {
 
     assert_eq!(verified.len(), 1);
     assert!(verified.contains(&business));
-    
+
     assert_eq!(pending.len(), 0);
     assert_eq!(rejected.len(), 0);
 

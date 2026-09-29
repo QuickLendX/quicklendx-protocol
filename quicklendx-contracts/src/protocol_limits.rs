@@ -2,18 +2,75 @@ use soroban_sdk::{contracttype, Address, Env, String};
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
+use crate::storage::InvoiceStorage;
+use crate::types::InvoiceStatus;
+
+/// Hard upper bound for invoice amounts.
+///
+/// Kept well below `i128::MAX` so that downstream arithmetic — fee
+/// calculations (`amount * fee_bps / 10_000`), analytics aggregation
+/// (`saturating_add` across invoices), and settlement splits — cannot
+/// silently truncate or overflow.
+///
+/// An attacker submitting an invoice with `i128::MAX` could cause fee
+/// calculations to overflow at settlement, trapping funds or producing
+/// incorrect accounting. This constant closes that window.
+pub const MAX_INVOICE_AMOUNT: i128 = i128::MAX / 10_000;
+
+// ─── Input size ceilings (#2439) ───────────────────────────────────────────
+// These hard ceilings are enforced *before* any expensive parsing or storage
+// write.  They are intentionally tighter than what Soroban's Host limits
+// alone would allow, so that a single oversized payload cannot exhaust the
+// entire transaction budget.
+
+/// Hard ceiling on the description field passed to `store_invoice`.
+/// This is a static bound; dynamic text validation happens separately.
+pub const MAX_INPUT_DESCRIPTION_BYTES: u32 = 4_096;
+/// Hard ceiling on the kyc_data blob passed to KYC submission entrypoints.
+pub const MAX_INPUT_KYC_DATA_BYTES: u32 = 8_192;
+/// Hard ceiling on the total number of tags in a single store-invoice call.
+pub const MAX_INPUT_TAGS: u32 = 50;
+/// Hard ceiling on the number of invoices in a single batch call.
+pub const MAX_INPUT_BATCH_SIZE: u32 = 25;
+/// Hard ceiling on the number of invoice IDs in a single status-batch query.
+pub const MAX_INPUT_STATUS_BATCH_SIZE: u32 = 100;
+/// Hard ceiling on the number of line items in a single metadata update.
+pub const MAX_INPUT_LINE_ITEMS: u32 = 50;
+
+// ─── Per-address mutation rate limiter (#2439) ──────────────────────────────
+// A simple sliding-window counter keyed on (address, ledger_sequence).
+// When the counter exceeds `MAX_MUTATIONS_PER_WINDOW` within a contiguous
+// window of `RATE_LIMIT_WINDOW_SEQUENCES` ledger sequences the address is
+// rejected.  The window resets once enough ledger sequences have elapsed.
+//
+// This is a *best-effort* backstop: Soroban does not give contracts access
+// to the transaction sender's true timestamp in a separate field, so we use
+// the ledger sequence as the time anchor.
+
+/// Number of consecutive ledger sequences that form one rate-limit window.
+pub const RATE_LIMIT_WINDOW_SEQUENCES: u32 = 20;
+/// Maximum state-mutating calls any single address may issue within one window.
+pub const MAX_MUTATIONS_PER_WINDOW: u32 = 30;
 
 #[allow(dead_code)]
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
 pub struct ProtocolLimits {
+    /// Minimum invoice amount. **Inclusivity**: Inclusive (amount >= min_invoice_amount).
     pub min_invoice_amount: i128,
+    /// Minimum absolute bid amount. **Inclusivity**: Inclusive (bid >= min_bid_amount).
     pub min_bid_amount: i128,
+    /// Minimum bid in bps. **Inclusivity**: Inclusive (bps >= min_bid_bps).
     pub min_bid_bps: u32,
+    /// Max days until due date. **Inclusivity**: Inclusive (days <= max_due_date_days).
     pub max_due_date_days: u64,
+    /// Grace period. **Inclusivity**: Inclusive (seconds <= 2_592_000).
     pub grace_period_seconds: u64,
+    /// Max invoices per business. **Inclusivity**: Inclusive (active_count < limit), 0 = unlimited.
     pub max_invoices_per_business: u32,
+    /// Minimum KYC tier required for placing a bid.
+    pub min_investor_tier: crate::verification::InvestorTier,
 }
 
 #[allow(dead_code)]
@@ -28,6 +85,8 @@ const DEFAULT_MIN_AMOUNT: i128 = 10;
 pub const DEFAULT_MIN_BID_AMOUNT: i128 = 10;
 /// @notice Default minimum bid rate in basis points.
 pub const DEFAULT_MIN_BID_BPS: u32 = 100; // 1%
+/// @notice Hard minimum bid amount that admin may not undercut.
+pub const MIN_BID_FLOOR: i128 = 1;
 
 #[allow(dead_code)]
 const DEFAULT_MAX_DUE_DAYS: u64 = 365;
@@ -37,26 +96,81 @@ const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
 pub const DEFAULT_MAX_INVOICES_PER_BUSINESS: u32 = 100; // 0 = unlimited
 
 // String length limits
+/// Maximum length for invoice description (1024 bytes)
 pub const MAX_DESCRIPTION_LENGTH: u32 = 1024;
+/// Maximum length for customer name (150 bytes)
 pub const MAX_NAME_LENGTH: u32 = 150;
+/// Maximum length for customer address (300 bytes)
 pub const MAX_ADDRESS_LENGTH: u32 = 300;
+/// Maximum length for tax ID (50 bytes)
 pub const MAX_TAX_ID_LENGTH: u32 = 50;
+/// Maximum length for notes (2000 bytes)
 pub const MAX_NOTES_LENGTH: u32 = 2000;
+/// Maximum length for a single tag (50 bytes)
 pub const MAX_TAG_LENGTH: u32 = 50;
+/// Maximum length for transaction IDs (124 bytes)
 pub const MAX_TRANSACTION_ID_LENGTH: u32 = 124;
+/// Maximum length for dispute reasons (1000 bytes)
 pub const MAX_DISPUTE_REASON_LENGTH: u32 = 1000;
+/// Maximum length for dispute evidence (2000 bytes)
 pub const MAX_DISPUTE_EVIDENCE_LENGTH: u32 = 2000;
+/// Maximum length for dispute resolutions (2000 bytes)
 pub const MAX_DISPUTE_RESOLUTION_LENGTH: u32 = 2000;
+/// Maximum length for notification titles (150 bytes)
 pub const MAX_NOTIFICATION_TITLE_LENGTH: u32 = 150;
+/// Maximum length for notification messages (1000 bytes)
 pub const MAX_NOTIFICATION_MESSAGE_LENGTH: u32 = 1000;
+/// Maximum length for KYC data (5000 bytes)
 pub const MAX_KYC_DATA_LENGTH: u32 = 5000;
+/// Maximum length for rejection reasons (500 bytes)
 pub const MAX_REJECTION_REASON_LENGTH: u32 = 500;
+/// Maximum length for invoice feedback (1000 bytes)
 pub const MAX_FEEDBACK_LENGTH: u32 = 1000;
+/// Maximum length for the mandatory reason on an admin rating override (500 bytes)
+pub const MAX_RATING_OVERRIDE_REASON_LENGTH: u32 = 500;
 
 pub fn check_string_length(s: &String, max_len: u32) -> Result<(), QuickLendXError> {
     if s.len() > max_len {
         return Err(QuickLendXError::InvalidDescription);
     }
+    Ok(())
+}
+
+/// @notice Validate protocol limit update parameters.
+/// @dev Rejects out-of-bounds values and unsafe parameter combinations.
+fn validate_protocol_limits_params(
+    min_invoice_amount: i128,
+    min_bid_amount: i128,
+    min_bid_bps: u32,
+    max_due_date_days: u64,
+    grace_period_seconds: u64,
+) -> Result<(), QuickLendXError> {
+    if min_invoice_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if min_bid_amount <= 0 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if min_bid_bps > 10_000 {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    if max_due_date_days == 0 || max_due_date_days > 730 {
+        return Err(QuickLendXError::InvoiceDueDateInvalid);
+    }
+
+    if grace_period_seconds > 2_592_000 {
+        return Err(QuickLendXError::InvalidTimestamp);
+    }
+
+    // Grace period must fit within the allowed due-date window.
+    let max_grace_for_horizon = max_due_date_days.saturating_mul(86_400);
+    if grace_period_seconds > max_grace_for_horizon {
+        return Err(QuickLendXError::InvalidTimestamp);
+    }
+
     Ok(())
 }
 
@@ -83,6 +197,7 @@ impl ProtocolLimitsContract {
             max_due_date_days: DEFAULT_MAX_DUE_DAYS,
             grace_period_seconds: DEFAULT_GRACE_PERIOD,
             max_invoices_per_business: DEFAULT_MAX_INVOICES_PER_BUSINESS,
+            min_investor_tier: crate::verification::InvestorTier::Basic,
         };
 
         env.storage().instance().set(&LIMITS_KEY, &limits);
@@ -100,6 +215,7 @@ impl ProtocolLimitsContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
         max_invoices_per_business: u32,
+        min_investor_tier: crate::verification::InvestorTier,
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
         Self::set_protocol_limits_authed(
@@ -111,6 +227,7 @@ impl ProtocolLimitsContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            min_investor_tier,
         )
     }
 
@@ -126,28 +243,16 @@ impl ProtocolLimitsContract {
         max_due_date_days: u64,
         grace_period_seconds: u64,
         max_invoices_per_business: u32,
+        min_investor_tier: crate::verification::InvestorTier,
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
-
-        if min_invoice_amount <= 0 {
-            return Err(QuickLendXError::InvalidAmount);
-        }
-
-        if min_bid_amount <= 0 {
-            return Err(QuickLendXError::InvalidAmount);
-        }
-
-        if min_bid_bps > 10_000 {
-            return Err(QuickLendXError::InvalidAmount);
-        }
-
-        if max_due_date_days == 0 || max_due_date_days > 730 {
-            return Err(QuickLendXError::InvoiceDueDateInvalid);
-        }
-
-        if grace_period_seconds > 2_592_000 {
-            return Err(QuickLendXError::InvalidTimestamp);
-        }
+        validate_protocol_limits_params(
+            min_invoice_amount,
+            min_bid_amount,
+            min_bid_bps,
+            max_due_date_days,
+            grace_period_seconds,
+        )?;
 
         let limits = ProtocolLimits {
             min_invoice_amount,
@@ -156,6 +261,7 @@ impl ProtocolLimitsContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            min_investor_tier,
         };
 
         env.storage().instance().set(&LIMITS_KEY, &limits);
@@ -175,13 +281,50 @@ impl ProtocolLimitsContract {
                 max_due_date_days: DEFAULT_MAX_DUE_DAYS,
                 grace_period_seconds: DEFAULT_GRACE_PERIOD,
                 max_invoices_per_business: DEFAULT_MAX_INVOICES_PER_BUSINESS,
+                min_investor_tier: crate::verification::InvestorTier::Basic,
             })
+    }
+
+    /// @notice Admin-only: update the absolute minimum bid amount.
+    /// @dev Enforces a hard floor of `MIN_BID_FLOOR` so the protocol
+    ///      cannot be configured to accept bids below the minimum viable
+    ///      economic unit. Returns the new value on success.
+    pub fn update_minimum_bid(
+        env: Env,
+        admin: Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
+        admin.require_auth();
+        Self::update_minimum_bid_authed(&env, &admin, amount)
+    }
+
+    /// @notice Update minimum bid without calling `require_auth` again.
+    /// @dev Used during initialization or when caller is already authenticated.
+    pub(crate) fn update_minimum_bid_authed(
+        env: &Env,
+        admin: &Address,
+        amount: i128,
+    ) -> Result<i128, QuickLendXError> {
+        AdminStorage::require_admin(env, admin)?;
+
+        if amount < MIN_BID_FLOOR {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let mut limits = Self::get_protocol_limits(env.clone());
+        limits.min_bid_amount = amount;
+        env.storage().instance().set(&LIMITS_KEY, &limits);
+        Ok(amount)
     }
 
     /// @notice Validate invoice amount and due date against configured limits.
     pub fn validate_invoice(env: Env, amount: i128, due_date: u64) -> Result<(), QuickLendXError> {
-        let limits = Self::get_protocol_limits(env.clone());
         let current_time = env.ledger().timestamp();
+        if due_date <= current_time {
+            return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
+        let limits = Self::get_protocol_limits(env.clone());
 
         if amount < limits.min_invoice_amount {
             return Err(QuickLendXError::InvalidAmount);
@@ -212,4 +355,268 @@ pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> 
     } else {
         limits.min_bid_amount
     }
+}
+
+/// Maximum number of active invoices allowed per business
+pub const MAX_ACTIVE_INVOICES_PER_BUSINESS: u32 = 100;
+
+/// Maximum number of invoices that can be created in a single batch call.
+///
+/// This constant caps the size of a `store_invoices_batch` submission to
+/// prevent a single transaction from consuming an unbounded amount of CPU and
+/// storage budget. Callers that need to submit more than this many invoices
+/// should split the work across multiple calls.
+pub const MAX_BATCH_INVOICES: u32 = 10;
+
+/// Determine if an invoice status is considered "active" for limit enforcement.
+///
+/// Active invoices are those that are still in the lifecycle and not yet resolved.
+/// Terminal statuses (Paid, Defaulted, Cancelled, Refunded) are not counted toward the limit.
+///
+/// # Arguments
+/// * `status` - The invoice status to classify
+///
+/// # Returns
+/// `true` if the status is active, `false` if terminal
+///
+/// # Security Note
+/// This function uses exhaustive matching without a wildcard arm to ensure
+/// compile-time errors when new InvoiceStatus variants are added without
+/// updating this classification. Silent misclassification would be a security regression.
+pub fn is_active_status(status: &InvoiceStatus) -> bool {
+    match status {
+        InvoiceStatus::Pending => true,
+        InvoiceStatus::Verified => true,
+        InvoiceStatus::Funded => true,
+        InvoiceStatus::Paid => false,
+        InvoiceStatus::Defaulted => false,
+        InvoiceStatus::Cancelled => false,
+        InvoiceStatus::Refunded => false,
+    }
+}
+
+/// Count the number of active invoices for a business.
+///
+/// This function reads all invoices for the given business from on-chain storage
+/// and counts only those with active statuses. The count is always computed
+/// from current storage state to prevent manipulation through cached values.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `business` - The business address to count invoices for
+///
+/// # Returns
+/// The number of active invoices for the business
+///
+/// # Security Note
+/// Always reads from on-chain storage at check time. No cached or pre-computed
+/// counts are used to prevent manipulation by callers.
+pub fn count_active_invoices(env: &Env, business: &Address) -> Result<u32, QuickLendXError> {
+    let invoices = InvoiceStorage::get_business_invoices(env, business);
+    let mut active_count = 0u32;
+
+    for invoice_id in invoices.iter() {
+        if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
+            if is_active_status(&invoice.status) {
+                active_count = active_count.saturating_add(1);
+            }
+        }
+    }
+
+    Ok(active_count)
+}
+
+/// Check if a business can submit a new invoice based on active invoice limits.
+///
+/// This function enforces the maximum number of active invoices per business.
+/// The check is performed BEFORE the new invoice is written to storage to prevent
+/// race conditions where concurrent submissions could both pass the check.
+///
+/// # Arguments
+/// * `env` - The contract environment
+/// * `business` - The business address attempting to submit an invoice
+///
+/// # Returns
+/// `Ok(())` if the business can submit a new invoice
+///
+/// # Errors
+/// Returns `QuickLendXError::MaxInvoicesPerBusinessExceeded` if the business
+/// has reached or exceeded the maximum number of active invoices
+///
+/// # Security Note
+/// - Uses `>=` comparison (not `>`) to prevent off-by-one errors
+/// - Check is performed before any storage writes
+/// - Count is read directly from on-chain storage
+pub fn check_invoice_limit(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    let active_count = count_active_invoices(env, business)?;
+    let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    let limit = limits.max_invoices_per_business;
+
+    if limit > 0 && active_count >= limit {
+        return Err(QuickLendXError::MaxInvoicesPerBusinessExceeded);
+    }
+
+    Ok(())
+}
+
+// ─── Per-address mutation rate limiter (#2439) ──────────────────────────────
+//
+// Storage layout (all under `Instance` so they live in the contract's own
+// storage and are inaccessible to callers):
+//
+//   `mut_rate:{address}`  → MutationRateRecord
+//
+// A single `MutationRateRecord` tracks the sequence number of the last
+// window and how many mutations have been counted within that window.
+// Once the current ledger sequence exceeds `window_start + WINDOW_SEQUENCES`
+// the counter resets automatically (lazy reset on next access).
+
+/// Persistent record for per-address mutation accounting.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct MutationRateRecord {
+    /// Ledger sequence at which the current window started.
+    pub window_start: u32,
+    /// Number of state-mutating calls observed in this window.
+    pub count: u32,
+}
+
+impl Default for MutationRateRecord {
+    fn default() -> Self {
+        Self {
+            window_start: 0,
+            count: 0,
+        }
+    }
+}
+
+/// Internal storage key for mutation-rate records.
+///
+/// Uses a `(Symbol, Address)` tuple following the project convention
+/// (e.g. `InvoiceStorage::business_generation_key`).
+fn mutation_rate_key(_env: &Env, addr: &Address) -> (soroban_sdk::Symbol, Address) {
+    (soroban_sdk::symbol_short!("mut_rate"), addr.clone())
+}
+
+/// Read the current rate-record for `addr`.
+fn read_rate_record(env: &Env, addr: &Address) -> MutationRateRecord {
+    let key = mutation_rate_key(env, addr);
+    env.storage()
+        .instance()
+        .get(&key)
+        .unwrap_or(MutationRateRecord::default())
+}
+
+/// Write the rate-record for `addr`.
+fn write_rate_record(env: &Env, addr: &Address, record: &MutationRateRecord) {
+    let key = mutation_rate_key(env, addr);
+    env.storage().instance().set(&key, record);
+}
+
+/// Check whether `addr` has exceeded the per-window mutation limit.
+///
+/// This is a **pure read** — it does *not* increment the counter.  The
+/// caller must call [`record_mutation`] only *after* the mutation has been
+/// committed to storage, so that a rejected call never inflates the counter.
+///
+/// # Returns
+/// `Ok(())` if the address is still within budget.
+pub fn check_mutation_limit(env: &Env, addr: &Address) -> Result<(), QuickLendXError> {
+    let current_seq = env.ledger().sequence();
+    let record = read_rate_record(env, addr);
+
+    // Window expired → counter implicitly resets (lazy reset).
+    if record.window_start == 0 || current_seq > record.window_start + RATE_LIMIT_WINDOW_SEQUENCES {
+        return Ok(());
+    }
+
+    if record.count >= MAX_MUTATIONS_PER_WINDOW {
+        return Err(QuickLendXError::MutationLimitExceeded);
+    }
+
+    Ok(())
+}
+
+/// Record one mutation for `addr` after the state change has been committed.
+///
+/// If the window has expired the counter resets lazily.  This function is
+/// idempotent within the same ledger sequence (multiple calls in one
+/// transaction increment the counter by one per call).
+pub fn record_mutation(env: &Env, addr: &Address) {
+    let current_seq = env.ledger().sequence();
+    let mut record = read_rate_record(env, addr);
+
+    if record.window_start == 0 || current_seq > record.window_start + RATE_LIMIT_WINDOW_SEQUENCES {
+        // Start a fresh window.
+        record = MutationRateRecord {
+            window_start: current_seq,
+            count: 1,
+        };
+    } else {
+        record.count = record.count.saturating_add(1);
+    }
+
+    write_rate_record(env, addr, &record);
+}
+
+/// Convenience: check-then-record in a single call.
+///
+/// Use this at the top of a mutating entrypoint *before* any storage
+/// writes.  If the check passes the counter is incremented optimistically;
+/// the caller must call [`record_mutation`] again only if they want a more
+/// conservative two-phase flow.
+pub fn check_and_record_mutation(env: &Env, addr: &Address) -> Result<(), QuickLendXError> {
+    check_mutation_limit(env, addr)?;
+    record_mutation(env, addr);
+    Ok(())
+}
+
+// ─── Input-size validation helpers (#2439) ──────────────────────────────────
+
+/// Reject a description blob that exceeds [`MAX_INPUT_DESCRIPTION_BYTES`].
+pub fn require_description_bound(desc: &soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
+    if desc.len() as u32 > MAX_INPUT_DESCRIPTION_BYTES {
+        return Err(QuickLendXError::InputTooLarge);
+    }
+    Ok(())
+}
+
+/// Reject a KYC data blob that exceeds [`MAX_INPUT_KYC_DATA_BYTES`].
+pub fn require_kyc_data_bound(data: &soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
+    if data.len() as u32 > MAX_INPUT_KYC_DATA_BYTES {
+        return Err(QuickLendXError::InputTooLarge);
+    }
+    Ok(())
+}
+
+/// Reject a tags vector that exceeds [`MAX_INPUT_TAGS`].
+pub fn require_tags_bound<T>(tags: &soroban_sdk::Vec<T>) -> Result<(), QuickLendXError> {
+    if tags.len() as u32 > MAX_INPUT_TAGS {
+        return Err(QuickLendXError::InputTooLarge);
+    }
+    Ok(())
+}
+
+/// Reject a batch-size vector that exceeds [`MAX_INPUT_BATCH_SIZE`].
+pub fn require_batch_size_bound<T>(items: &soroban_sdk::Vec<T>) -> Result<(), QuickLendXError> {
+    if items.len() as u32 > MAX_INPUT_BATCH_SIZE {
+        return Err(QuickLendXError::InputTooLarge);
+    }
+    Ok(())
+}
+
+/// Reject a status-query batch that exceeds [`MAX_INPUT_STATUS_BATCH_SIZE`].
+pub fn require_status_batch_bound<T>(items: &soroban_sdk::Vec<T>) -> Result<(), QuickLendXError> {
+    if items.len() as u32 > MAX_INPUT_STATUS_BATCH_SIZE {
+        return Err(QuickLendXError::InputTooLarge);
+    }
+    Ok(())
+}
+
+/// Reject a line-items vector that exceeds [`MAX_INPUT_LINE_ITEMS`].
+pub fn require_line_items_bound<T>(items: &soroban_sdk::Vec<T>) -> Result<(), QuickLendXError> {
+    if items.len() as u32 > MAX_INPUT_LINE_ITEMS {
+        return Err(QuickLendXError::InputTooLarge);
+    }
+    Ok(())
 }

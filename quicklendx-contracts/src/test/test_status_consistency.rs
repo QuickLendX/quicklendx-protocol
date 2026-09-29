@@ -2,12 +2,14 @@ use super::*;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, Vec};
 
-fn setup_env_and_client() -> (Env, QuickLendXContractClient<'static>) {
+fn setup_env_and_client() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
-    (env, client)
+    let admin = Address::generate(&env);
+    client.set_admin(&admin);
+    (env, client, admin)
 }
 
 fn create_invoice(
@@ -26,7 +28,7 @@ fn create_invoice(
         &String::from_str(env, "Status consistency test"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 /// Assert that status list lengths match count_by_status and no orphaned IDs exist.
@@ -69,7 +71,7 @@ fn assert_status_consistency(
 
 #[test]
 fn test_status_list_after_verify() {
-    let (env, client) = setup_env_and_client();
+    let (env, client, _admin) = setup_env_and_client();
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
 
@@ -92,7 +94,7 @@ fn test_status_list_after_verify() {
 
 #[test]
 fn test_status_list_after_cancel() {
-    let (env, client) = setup_env_and_client();
+    let (env, client, _admin) = setup_env_and_client();
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
 
@@ -114,7 +116,7 @@ fn test_status_list_after_cancel() {
 
 #[test]
 fn test_status_list_after_update_invoice_status_funded() {
-    let (env, client) = setup_env_and_client();
+    let (env, client, _admin) = setup_env_and_client();
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
 
@@ -135,7 +137,7 @@ fn test_status_list_after_update_invoice_status_funded() {
 
 #[test]
 fn test_status_list_through_full_lifecycle() {
-    let (env, client) = setup_env_and_client();
+    let (env, client, _admin) = setup_env_and_client();
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
 
@@ -168,7 +170,7 @@ fn test_status_list_through_full_lifecycle() {
 
 #[test]
 fn test_status_list_no_duplicates_on_repeated_add() {
-    let (env, client) = setup_env_and_client();
+    let (env, client, _admin) = setup_env_and_client();
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
 
@@ -186,7 +188,7 @@ fn test_status_list_no_duplicates_on_repeated_add() {
 
 #[test]
 fn test_status_list_multiple_invoices_mixed_transitions() {
-    let (env, client) = setup_env_and_client();
+    let (env, client, _admin) = setup_env_and_client();
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
 
@@ -258,19 +260,16 @@ fn test_status_list_multiple_invoices_mixed_transitions() {
 
 #[test]
 fn test_accept_bid_updates_status_list() {
-    let (env, client) = setup_env_and_client();
+    let (env, client, _admin) = setup_env_and_client();
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
-    let admin = Address::generate(&env);
-
     let token_admin = Address::generate(&env);
     let currency = env.register_stellar_asset_contract(token_admin);
     let token_client = token::Client::new(&env, &currency);
     let token_admin_client = token::StellarAssetClient::new(&env, &currency);
     token_admin_client.mint(&investor, &10000);
 
-    client.set_admin(&admin);
     let due_date = env.ledger().timestamp() + 86400;
 
     let invoice_id = client.store_invoice(
@@ -281,7 +280,7 @@ fn test_accept_bid_updates_status_list() {
         &String::from_str(&env, "Bid acceptance test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
 
@@ -299,7 +298,7 @@ fn test_accept_bid_updates_status_list() {
     client.verify_investor(&investor, &10_000);
 
     token_client.approve(&investor, &client.address, &10000, &20000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100, &BytesN::from_array(&env, &[0u8; 32]));
 
     client.accept_bid(&invoice_id, &bid_id);
 
@@ -320,7 +319,7 @@ fn test_accept_bid_updates_status_list() {
 
 #[test]
 fn test_count_matches_list_length_all_statuses() {
-    let (env, client) = setup_env_and_client();
+    let (env, client, _admin) = setup_env_and_client();
     let business = Address::generate(&env);
     let currency = Address::generate(&env);
 
@@ -334,6 +333,7 @@ fn test_count_matches_list_length_all_statuses() {
     client.update_invoice_status(&id2, &InvoiceStatus::Verified);
     client.update_invoice_status(&id2, &InvoiceStatus::Funded);
     client.update_invoice_status(&id3, &InvoiceStatus::Verified);
+    client.update_invoice_status(&id3, &InvoiceStatus::Funded);
     client.update_invoice_status(&id3, &InvoiceStatus::Paid);
     client.cancel_invoice(&id4);
 

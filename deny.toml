@@ -1,0 +1,190 @@
+# cargo-deny configuration for QuickLendX Soroban Smart Contracts
+#
+# Purpose: Supply-chain security enforcement for transitive dependencies.
+#
+# This configuration enforces:
+# 1. License compliance (reject viral/restrictive licenses)
+# 2. Security vulnerability detection via RustSec Advisory Database
+# 3. Duplicate dependency prevention (especially soroban-sdk structural mismatches)
+# 4. Source registry trust policy (crates.io + approved Git sources only)
+#
+# CI Integration: This file is checked by `cargo deny check` in GitHub Actions.
+# Any violation will fail the build with actionable error messages.
+#
+# Documentation: See docs/supply-chain-policy.md for detailed rationale and
+# remediation procedures.
+
+# ============================================================================
+# ADVISORIES: Security Vulnerability Detection
+# ============================================================================
+[advisories]
+# The RustSec Advisory Database tracks known security vulnerabilities in Rust crates.
+# We pull from the official repository and enforce strict checks.
+db-path = "~/.cargo/advisory-db"
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
+# Deterministic Advisory Feed Strategy:
+# We use the default "always fetch latest" behavior for the main branch to catch
+# new vulnerabilities quickly. For release branches and hotfixes, pin to a specific
+# commit hash in your CI environment variable:
+#
+#   CARGO_DENY_ADVISORY_GIT_REF=<commit-hash>
+#
+# This prevents newly-published advisories from breaking historical builds.
+
+# Vulnerability Severity Policy
+vulnerability = "deny"      # Any CVE/RUSTSEC advisory fails the build
+unmaintained = "warn"       # Warn if a crate is marked as unmaintained
+unsound = "warn"            # Warn about unsound API usage patterns
+yanked = "warn"             # Warn about yanked crate versions (recommend upgrade)
+notice = "warn"             # Informational advisories (deprecations, etc.)
+
+# Ignored Advisories (Emergency Override Only)
+# Use this section ONLY for temporary exceptions during active incident response.
+# Each entry MUST include:
+# - id: Advisory identifier (e.g., RUSTSEC-2023-0001)
+# - reason: Justification for exception
+# - expires: ISO 8601 date when exception must be re-evaluated
+#
+# Example:
+# ignore = [
+#     { id = "RUSTSEC-2023-0001", reason = "False positive for our use case; vendor notified", expires = "2024-06-01" },
+# ]
+ignore = []
+
+
+# ============================================================================
+# LICENSES: License Compliance Policy
+# ============================================================================
+[licenses]
+# We enforce a strict allowlist of permissive open-source licenses.
+# Rationale: Smart contracts deployed on-chain have unique compliance considerations.
+# Viral licenses (GPL, AGPL) could impose source disclosure requirements on users.
+
+# License Detection Confidence Threshold
+confidence-threshold = 0.8
+
+# Policy: Explicitly allowlist safe licenses; deny everything else
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",  # Used by Rust compiler and LLVM tooling
+    "BSD-3-Clause",
+    "BSD-2-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-DFS-2016",                # Unicode data tables (ICU)
+    "CC0-1.0",                          # Public domain dedication
+]
+
+# Explicitly deny viral/restrictive licenses
+deny = [
+    "GPL-2.0",
+    "GPL-3.0",
+    "AGPL-3.0",
+    "LGPL-2.0",
+    "LGPL-2.1",
+    "LGPL-3.0",
+    "MPL-2.0",          # Weak copyleft; conflicts with static linking requirements
+    "OSL-3.0",          # Open Software License (viral)
+    "EUPL-1.2",         # European Union Public License (copyleft)
+]
+
+# Default action for licenses not in allow/deny lists
+unlicensed = "deny"   # Fail if a crate has no declared license
+copyleft = "deny"     # Block any copyleft-style license not explicitly allowed
+
+# License Exceptions
+# Use this ONLY for crates with legitimate dual-licensing where one option is allowed.
+# Example: A crate licensed as "MIT OR Apache-2.0" is automatically allowed.
+# Only add exceptions here for complex cases requiring manual review.
+exceptions = []
+
+# Private/Unpublished Crates (Workspace Members)
+# Allow our own workspace crates without license checks
+[[licenses.clarify]]
+name = "quicklendx-contracts"
+expression = "MIT OR Apache-2.0"
+license-files = []
+
+
+# ============================================================================
+# BANS: Dependency Duplicate and Unmaintained Crate Prevention
+# ============================================================================
+[bans]
+# Duplicate Dependency Policy
+# Multiple versions of the same crate can cause:
+# - Binary bloat (increased WASM size)
+# - Type mismatches across module boundaries
+# - Subtle runtime bugs when structs from different versions interact
+
+multiple-versions = "deny"   # Fail on ANY duplicate versions
+wildcards = "deny"            # Disallow wildcard version specs (e.g., "*")
+highlight = "all"             # Show all duplicate instances in error output
+
+# Critical: soroban-sdk Version Consistency
+# The soroban-sdk crate defines core types (Env, Address, BytesN, etc.) used
+# across contract boundaries. If different versions coexist, contracts cannot
+# interoperate due to structural type mismatches.
+#
+# Enforcement: Explicitly deny duplicate soroban-sdk versions.
+deny = [
+    # Example: If a transitive dependency pulls in soroban-sdk 24.x while we use 25.x,
+    # the build MUST fail. Resolution: Update the transitive dep or fork it.
+]
+
+# Workspace Dependency Consistency
+# Ensure all workspace members use identical versions for shared dependencies.
+workspace-dependencies = "deny"
+
+# Skip Dependency Trees (Performance Optimization)
+# For large dependency graphs, skip checking certain well-known crates that
+# are guaranteed not to cause issues. Use sparingly.
+skip = []
+
+# Skip Transitive Dependencies (Emergency Override)
+# Use this ONLY for temporary workarounds during active incident response.
+# Each entry MUST include a comment explaining why it's skipped.
+skip-tree = []
+
+# Unmaintained Crate Policy
+# Warn about crates marked as unmaintained in the advisory database.
+# These crates may have unpatched security vulnerabilities.
+
+
+# ============================================================================
+# SOURCES: Registry Trust Policy
+# ============================================================================
+[sources]
+# We only pull dependencies from trusted sources to prevent supply-chain attacks
+# such as:
+# - Typosquatting (malicious crates with similar names)
+# - Compromised registries
+# - Backdoored Git repositories
+
+# Unknown Registry Policy
+unknown-registry = "deny"   # Fail if a crate comes from an unrecognized registry
+unknown-git = "deny"        # Fail if a Git dependency is not explicitly allowed
+
+# Allowed Registries
+# Only crates.io (the official Rust registry) is permitted by default.
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+# Allowed Git Sources
+# For dependencies that must be pulled directly from Git (e.g., pre-release
+# versions, forks with critical patches), explicitly allowlist the repository.
+#
+# Example:
+# allow-git = [
+#     "https://github.com/stellar/rs-soroban-sdk",  # Official Soroban SDK repo
+# ]
+allow-git = []
+
+# Organization-Allowed Git Sources
+# Automatically trust all repositories under these GitHub organizations.
+# Use this for well-known, trusted organizations only.
+#
+# Example:
+# allow-org = ["stellar"]  # Trust all github.com/stellar/* repos
+allow-org = []
+

@@ -29,6 +29,7 @@
 
 #![cfg(test)]
 extern crate std;
+use std::vec::Vec as StdVec;
 
 use crate::{invoice::InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
@@ -108,7 +109,7 @@ fn create_invoice(
         &String::from_str(env, "Test Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 fn create_verified_and_funded_invoice(
@@ -122,7 +123,7 @@ fn create_verified_and_funded_invoice(
 ) -> BytesN<32> {
     let invoice_id = create_invoice(env, client, business, amount, currency, due_date);
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 1000));
+    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 1000), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
     invoice_id
 }
@@ -255,7 +256,7 @@ fn test_overdue_boundary_after_due_date_is_overdue() {
 #[test]
 fn test_grace_deadline_boundary_exact_not_defaulted() {
     // At exactly grace_deadline, invoice should NOT be allowed to default
-    // Boundary: current_timestamp <= grace_deadline → no default
+    // Boundary: current_timestamp <= grace_deadline -> no default
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, 50_000);
@@ -561,12 +562,7 @@ fn test_ledger_time_consistent_within_transaction() {
     let mut ids: Vec<soroban_sdk::BytesN<32>> = Vec::new(&env);
     for _ in 0..3 {
         ids.push_back(create_invoice(
-            &env,
-            &client,
-            &business,
-            1000,
-            &currency,
-            due_date,
+            &env, &client, &business, 1000, &currency, due_date,
         ));
     }
 
@@ -740,7 +736,7 @@ fn test_real_world_invoice_lifecycle_with_time_advances() {
 
     // Day 0: Verify and fund invoice
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1000));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1000), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
     let funded_at = client.get_invoice(&invoice_id).funded_at;
     assert!(funded_at.is_some());

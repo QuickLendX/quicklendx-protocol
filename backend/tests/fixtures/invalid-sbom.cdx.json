@@ -1,0 +1,10 @@
+{
+  "bomFormat": "CycloneDX",
+  "version": 1,
+  "metadata": {},
+  "components": [
+    {
+      "name": "missing-type"
+    }
+  ]
+}

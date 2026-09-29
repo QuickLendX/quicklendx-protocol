@@ -1,4 +1,4 @@
-use soroban_sdk::{Env, testutils::Events as _};
+use soroban_sdk::{testutils::Events as _, Env};
 
 #[test]
 fn test_diagnose_events() {

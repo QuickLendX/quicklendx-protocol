@@ -1,9 +1,9 @@
-//! Tests for issue #556 – investment status transitions on settlement and default.
+﻿//! Tests for issue #556 - investment status transitions on settlement and default.
 //!
 //! Validates:
-//! - `Active → Completed` on full settlement (no orphan)
-//! - `Active → Defaulted` on invoice default (no orphan)
-//! - `Active → Refunded` on escrow refund (no orphan)
+//! - `Active -> Completed` on full settlement (no orphan)
+//! - `Active -> Defaulted` on invoice default (no orphan)
+//! - `Active -> Refunded` on escrow refund (no orphan)
 //! - Invalid / backward transitions are rejected
 //! - `validate_no_orphan_investments` returns `true` after every terminal event
 //! - `get_active_investment_ids` shrinks correctly after each lifecycle event
@@ -20,7 +20,7 @@ use soroban_sdk::{
     token, Address, BytesN, Env, String, Vec,
 };
 
-// ─── helpers ─────────────────────────────────────────────────────────────────
+// --- helpers -----------------------------------------------------------------
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
@@ -85,17 +85,17 @@ fn funded_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount);
+    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     (business, investor, currency, invoice_id)
 }
 
-// ─── 1. Settlement → Completed ───────────────────────────────────────────────
+// --- 1. Settlement -> Completed -----------------------------------------------
 
-/// Full settlement must transition investment Active → Completed and remove it
+/// Full settlement must transition investment Active -> Completed and remove it
 /// from the active index (no orphan).
 #[test]
 fn test_settlement_sets_investment_completed() {
@@ -122,7 +122,7 @@ fn test_settlement_sets_investment_completed() {
         &4_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    client.settle_invoice(&invoice_id, &1_000i128);
+    client.settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
 
     // Investment must be Completed.
     assert_eq!(
@@ -160,14 +160,14 @@ fn test_settlement_invoice_status_paid() {
         &4_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    client.settle_invoice(&invoice_id, &1_000i128);
+    client.settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
 
     assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
 }
 
-// ─── 2. Default → Defaulted ──────────────────────────────────────────────────
+// --- 2. Default -> Defaulted --------------------------------------------------
 
-/// Default event must transition investment Active → Defaulted and remove it
+/// Default event must transition investment Active -> Defaulted and remove it
 /// from the active index.
 #[test]
 fn test_default_sets_investment_defaulted() {
@@ -220,9 +220,9 @@ fn test_default_invoice_status_defaulted() {
     );
 }
 
-// ─── 3. Refund → Refunded ────────────────────────────────────────────────────
+// --- 3. Refund -> Refunded ----------------------------------------------------
 
-/// Escrow refund must transition investment Active → Refunded.
+/// Escrow refund must transition investment Active -> Refunded.
 #[test]
 fn test_refund_sets_investment_refunded() {
     let (env, client, admin) = setup();
@@ -246,9 +246,9 @@ fn test_refund_sets_investment_refunded() {
     );
 }
 
-// ─── 4. Invalid / backward transitions rejected ──────────────────────────────
+// --- 4. Invalid / backward transitions rejected ------------------------------
 
-/// Completed → Defaulted must be rejected (terminal state).
+/// Completed -> Defaulted must be rejected (terminal state).
 #[test]
 fn test_completed_to_defaulted_rejected() {
     assert_eq!(
@@ -260,7 +260,7 @@ fn test_completed_to_defaulted_rejected() {
     );
 }
 
-/// Defaulted → Completed must be rejected.
+/// Defaulted -> Completed must be rejected.
 #[test]
 fn test_defaulted_to_completed_rejected() {
     assert_eq!(
@@ -272,7 +272,7 @@ fn test_defaulted_to_completed_rejected() {
     );
 }
 
-/// Refunded → Active must be rejected.
+/// Refunded -> Active must be rejected.
 #[test]
 fn test_refunded_to_active_rejected() {
     assert_eq!(
@@ -284,7 +284,7 @@ fn test_refunded_to_active_rejected() {
     );
 }
 
-/// Withdrawn → Completed must be rejected.
+/// Withdrawn -> Completed must be rejected.
 #[test]
 fn test_withdrawn_to_completed_rejected() {
     assert_eq!(
@@ -307,13 +307,13 @@ fn test_active_valid_transitions_accepted() {
     ] {
         assert!(
             InvestmentStatus::validate_transition(&InvestmentStatus::Active, &to).is_ok(),
-            "Active → {:?} should be allowed",
+            "Active -> {:?} should be allowed",
             to
         );
     }
 }
 
-// ─── 5. Idempotency / double-event rejection ─────────────────────────────────
+// --- 5. Idempotency / double-event rejection ---------------------------------
 
 /// Double-settle must fail with InvalidStatus.
 #[test]
@@ -331,9 +331,9 @@ fn test_double_settle_rejected() {
         &8_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    client.settle_invoice(&invoice_id, &1_000i128);
+    client.settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
 
-    let result = client.try_settle_invoice(&invoice_id, &1_000i128);
+    let result = client.try_settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err(), "second settle must fail");
 }
 
@@ -357,7 +357,7 @@ fn test_double_default_rejected() {
     );
 }
 
-// ─── 6. Partial payments do not close the investment ─────────────────────────
+// --- 6. Partial payments do not close the investment -------------------------
 
 /// A partial payment must leave the investment Active.
 #[test]
@@ -394,7 +394,7 @@ fn test_partial_payment_keeps_investment_active() {
     );
 }
 
-// ─── 7. Multiple concurrent investments ──────────────────────────────────────
+// --- 7. Multiple concurrent investments --------------------------------------
 
 /// Two independent invoices each transition their investment independently.
 #[test]
@@ -417,7 +417,7 @@ fn test_multiple_investments_independent_transitions() {
         &4_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    client.settle_invoice(&inv_id1, &1_000i128);
+    client.settle_invoice(&inv_id1, &1_000i128, &client.get_investment(&inv_id1).unwrap());
 
     // Invoice 1 investment Completed, invoice 2 still Active.
     assert_eq!(
@@ -455,7 +455,7 @@ fn test_multiple_investments_independent_transitions() {
     );
 }
 
-// ─── 8. Active index accuracy ────────────────────────────────────────────────
+// --- 8. Active index accuracy ------------------------------------------------
 
 /// Active index starts empty, grows on fund, shrinks on terminal event.
 #[test]
@@ -478,12 +478,12 @@ fn test_active_index_grows_and_shrinks() {
         &4_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    client.settle_invoice(&invoice_id, &1_000i128);
+    client.settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
 
     assert_eq!(client.get_active_investment_ids().len(), 0);
 }
 
-// ─── 9. validate_no_orphan_investments baseline ──────────────────────────────
+// --- 9. validate_no_orphan_investments baseline ------------------------------
 
 /// Returns true on empty state.
 #[test]
@@ -500,3 +500,4 @@ fn test_validate_no_orphan_after_funding() {
     let _ = funded_invoice(&env, &client, &admin, 1_000, 900);
     assert!(client.validate_no_orphan_investments());
 }
+

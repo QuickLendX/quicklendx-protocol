@@ -23,6 +23,40 @@ The `restore_backup` command is highly privileged and destructive to the active 
 2. It permanently clears all currently tracked invoice data, wiping the existing database indexes (including business mapping, tags, metadata, and status associations).
 3. It reconstitutes the original invoice state from the backup payload.
 
+Additionally, restoring backups follows this sequence:
+
+Step 1  validate_backup(backup_id)
+        ──────────────────────────
+        Full integrity check performed BEFORE any mutation. Checks:
+        - Backup record exists and has a valid ID prefix (0xB4 0xC4).
+        - Backup description is non-empty and within length limits.
+        - Invoice payload exists in storage.
+        - Payload length matches backup.invoice_count.
+        - Every invoice in the payload has amount > 0.
+
+        If validation fails → return error, no storage is mutated.
+
+Step 2  InvoiceStorage::clear_all(env)
+        ────────────────────────────────
+        Atomically wipes every invoice and every secondary index.
+        After this step, instance storage contains no invoice data.
+
+        ⚠ There is no rollback on a Soroban ledger. Reaching step 2
+        means the caller has committed to discarding the current state.
+        Always take a backup before clearing.
+
+Step 3  InvoiceStorage::store_invoice(env, &invoice) per invoice
+        ────────────────────────────────────────────────────────
+        Re-registers each invoice from the backup payload, rebuilding
+        all secondary indexes from scratch. The order of individual
+        invoices within this step does not matter.
+
+Step 4  Mark backup as Archived
+        ─────────────────────────
+        Sets backup.status = BackupStatus::Archived to prevent the same
+        backup from being restored twice. Restoring the same backup twice
+        without clearing in between would cause duplicate index entries.
+
 ### Archiving Backups
 
 Backups that are older or explicitly meant for off-chain storage can be marked as archived using the `archive_backup` function. This cleanly removes them from the active list of 5 rolling backups and stops them from being accidentally overwritten by the rolling buffer.

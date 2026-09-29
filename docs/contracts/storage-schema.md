@@ -101,6 +101,17 @@ The Soroban host serializes the enum discriminant with the payload, guaranteeing
 - Primary keys use entity IDs (BytesN<32>) for uniqueness
 - Index keys combine symbols with entity-specific data
 
+### TTL Extension for Persistent and Instance Storage
+- **Critical**: Both persistent and instance storage entries must have their TTL extended to prevent archival
+- Without TTL extension, funded invoices, bids, investments, and escrow records could be archived mid-lifecycle, causing permanent fund loss
+- TTL threshold is `PERSISTENT_TTL_THRESHOLD` (34,732,800 seconds ~402 days)
+- TTL threshold covers: max_due_date_days (365 days) + grace_period_seconds (7 days) + 30-day safety margin
+- TTL extension is applied on every read/write of long-lived keys in all storage modules:
+  - InvoiceStorage (persistent storage): store, get, update, and all index operations (business, status, customer, tax_id, tag, category)
+  - BidStorage (persistent storage): store_bid, get_bid, update_bid, index writes/reads
+  - InvestmentStorage (persistent storage): store_investment, get_investment, update_investment, investor/active indexes
+  - EscrowStorage (persistent storage): store_escrow, get_escrow, update_escrow, get_escrow_by_invoice
+
 ### Upgrade Safety
 - Storage keys are designed to be backward compatible
 - New fields can be added to structs without breaking existing data
@@ -148,3 +159,40 @@ The schema is designed to support future features:
 - Analytics and reporting (separate analytics storage)
 - Multi-currency support (currency field in Invoice)
 - Partial payments (payments vector in Invoice)
+
+## Invariant Testing
+
+The protocol includes comprehensive invariant tests to verify storage consistency:
+
+### Run Invariant Tests
+
+```bash
+cargo test --lib test_invariants
+```
+
+### Invariant Categories
+
+1. **Status Index Coherence**
+   - Invoice status indexes match primary records
+   - Bid status indexes match primary records
+   - Investment status indexes match primary records
+
+2. **Index Update Consistency**
+   - Status changes properly update indexes
+   - No orphaned records in indexes
+
+3. **Cross-Module Consistency**
+   - Funded invoices have associated investors
+   - Accepted bids correspond to investments
+   - Counters increment correctly
+
+4. **Full Lifecycle Tests**
+   - End-to-end workflow validation
+   - Multi-entity stress testing with status bucket verification
+
+### Security Invariants
+
+- Sum of all status bucket counts equals total entity count
+- All entities in indexes exist in primary storage
+- No duplicate entries in indexes
+- Counters are monotonically increasing

@@ -10,6 +10,33 @@ The audit trail system provides:
 - **Integrity validation** to verify audit log completeness and detect missing or corrupted entries
 - **Audit statistics** for comprehensive analysis of contract activities
 
+## The Append-Only Guarantee ⚡
+
+**Critical for post-incident forensics**: An audit log that overwrites or reorders entries is worse than useless—it provides false confidence in a compromised record. This implementation makes that impossible:
+
+### What "Append-Only" Means
+1. **No Overwrites**: Once stored under its `audit_id`, an entry is never modified or replaced. Only new entries are added.
+2. **No Reordering**: Invoice audit trails grow monotonically. Entries maintain chronological order by insertion time.
+3. **One Entry Per Operation**: Every state-changing contract call produces exactly one immutable audit entry.
+4. **Query Safety**: All query functions are read-only; they never delete, modify, or reorder entries.
+
+### How We Enforce It
+- **Storage structure**: Each audit entry is keyed by a unique, monotonically-increasing `audit_id`. The key for entry N cannot be overwritten; it can only be created once or read.
+- **Index-only growth**: Per-invoice, per-operation, and per-actor indices are append-only vectors. The `push_back()` operation adds to the end without removing or reordering earlier items.
+- **No internal delete**: The codebase has no `remove()`, `pop()`, or `update()` call on audit data structures—only `push_back()` and reads.
+- **Monotonic timestamps**: Within each invoice trail, timestamps are guaranteed non-decreasing (ledger timestamps only move forward).
+
+### Verification
+Comprehensive tests (`src/test_audit.rs`) verify:
+- **No-overwrite**: Creating, verifying, and bidding on an invoice appends entries without modifying earlier ones.
+- **Monotonic ordering**: Each entry's timestamp ≥ the previous entry's timestamp.
+- **One entry per call**: `store_invoice` produces exactly 1 entry, `verify_invoice` produces exactly 1, `place_bid` produces exactly 1, etc.
+- **Stats reconciliation**: `AUDIT_STATS.total_entries` matches the count from a full audit query (respecting the 100-entry limit).
+- **High-volume durability**: 50+ rapid invoices all produce exactly 50 entries; no losses under stress.
+- **Persistence under load**: Original entries remain unchanged after many subsequent operations.
+
+See "Testing Coverage" section below for the full test suite.
+
 ## Entrypoints
 
 | Entrypoint | Visibility | Description |

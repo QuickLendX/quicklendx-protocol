@@ -793,3 +793,45 @@ for id in verified_invoices.iter() {
 - [Invoice Metadata](./invoice-metadata.md) - Metadata structure and usage
 - [Bidding System](./bidding.md) - How invoices are bid on
 - [Storage Schema](./storage-schema.md) - Overall storage architecture
+
+## Invoice-to-Investment Mapping Consistency
+
+### Back-pointer Validation
+
+To prevent stale mapping pointers (where an index points to an entity that no longer
+exists or belongs to a different parent), `get_investment_by_invoice` performs a
+mandatory back-pointer check:
+
+```rust
+pub fn get_investment_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Option<Investment> {
+    let index_key = Self::invoice_index_key(invoice_id);
+    let investment_id: Option<BytesN<32>> = env.storage().instance().get(&index_key);
+    investment_id
+        .and_then(|id| Self::get_investment(env, &id))
+        .filter(|inv| inv.invoice_id == *invoice_id) // Mandatory consistency check
+}
+```
+
+This filter ensures that even if a mapping index is corrupted or stale, the protocol
+will not return an incorrect investment record.
+
+### Unified Storage Cleanup
+
+`StorageManager::clear_all_mappings` provides a centralized way to reset protocol
+state, ensuring that when invoices are cleared (e.g., during a backup restore or
+system reset), all associated mapping counters and pointers are also invalidated.
+
+### Security Assumptions
+
+- **ID Uniqueness**: Invoice and Investment IDs are generated using a combination of
+  ledger timestamp and monotonic counters to ensure 32-byte uniqueness.
+- **Authorization**: All state-changing operations require `Address::require_auth()`.
+- **Migration Safety**: The back-pointer check provides a safety net during contract
+  upgrades where storage layouts or indexing strategies might change.
+
+### Verification
+
+Consistency is verified through:
+- **Unit Tests**: `src/test_investment_queries.rs` simulates stale pointer scenarios.
+- **Consistency Tests**: `src/test_investment_consistency.rs` verifies mapping
+  integrity across lifecycle events.

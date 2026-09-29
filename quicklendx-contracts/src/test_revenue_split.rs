@@ -1,3 +1,4 @@
+use crate::errors::QuickLendXError;
 use crate::fees::FeeType;
 use crate::QuickLendXContract;
 use crate::QuickLendXContractClient;
@@ -185,7 +186,7 @@ fn test_get_revenue_split_config() {
 }
 
 // ============================================================================
-// Treasury and Revenue Config – Additional Tests
+// Treasury and Revenue Config - Additional Tests
 // ============================================================================
 
 #[test]
@@ -206,7 +207,7 @@ fn test_distribute_revenue_requires_config() {
 
     let current_period = env.ledger().timestamp() / 2_592_000;
 
-    // Should fail — no revenue config set
+    // Should fail - no revenue config set
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert!(result.is_err(), "Should fail without revenue config");
 
@@ -385,7 +386,7 @@ fn test_distribute_revenue_no_revenue_data_fails() {
 
     client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &false, &100);
 
-    // No fees collected — period has no data
+    // No fees collected - period has no data
     let result = client.try_distribute_revenue(&admin, &9999);
     assert!(
         result.is_err(),
@@ -417,13 +418,120 @@ fn test_double_distribution_same_period_fails() {
     let result = client.try_distribute_revenue(&admin, &current_period);
     assert!(result.is_ok());
 
-    // Second distribution fails — pending is now 0
+    // Second distribution fails - pending is now 0 (idempotency per settlement)
     let result = client.try_distribute_revenue(&admin, &current_period);
-    assert!(result.is_err(), "Double distribution should fail");
+    assert_eq!(
+        result
+            .err()
+            .expect("expected error")
+            .expect("contract error"),
+        QuickLendXError::OperationNotAllowed
+    );
+}
+
+/// With `min_distribution_amount == 0`, a second distribute for the same period must still fail
+/// if no new fees were collected (regression: otherwise a no-op + duplicate event could occur).
+#[test]
+fn test_double_distribution_min_zero_fails_without_new_collections() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &2500, &2500, &false, &0);
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 100);
+    client.collect_transaction_fees(&user, &fees_by_type, &100);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+    client.distribute_revenue(&admin, &current_period);
+
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert_eq!(
+        result
+            .err()
+            .expect("expected error")
+            .expect("contract error"),
+        QuickLendXError::OperationNotAllowed
+    );
+}
+
+/// New collections after a distribution replenish `pending_distribution`; a second settlement in
+/// the same period remains valid.
+#[test]
+fn test_second_distribution_same_period_after_new_collect() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &2500, &2500, &false, &1);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+
+    let mut fees1 = Map::new(&env);
+    fees1.set(FeeType::Platform, 100);
+    client.collect_transaction_fees(&user, &fees1, &100);
+    client.distribute_revenue(&admin, &current_period);
+
+    let mut fees2 = Map::new(&env);
+    fees2.set(FeeType::Platform, 200);
+    client.collect_transaction_fees(&user, &fees2, &200);
+    let (t, d, p) = client.distribute_revenue(&admin, &current_period);
+    assert_eq!(t + d + p, 200);
+}
+
+/// When platform fee treasury routing is configured, revenue split's treasury share must name
+/// the same address so admin cannot silently diverge recipients.
+#[test]
+fn test_distribute_revenue_rejects_treasury_mismatch_with_platform_routing() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let fee_treasury = Address::generate(&env);
+    let revenue_treasury_other = Address::generate(&env);
+    let user = Address::generate(&env);
+
+    client.initialize_fee_system(&admin);
+    client.configure_treasury(&fee_treasury);
+    client.configure_revenue_distribution(
+        &admin,
+        &revenue_treasury_other,
+        &5000,
+        &2500,
+        &2500,
+        &false,
+        &1,
+    );
+
+    let mut fees_by_type = Map::new(&env);
+    fees_by_type.set(FeeType::Platform, 100);
+    client.collect_transaction_fees(&user, &fees_by_type, &100);
+
+    let current_period = env.ledger().timestamp() / 2_592_000;
+    let result = client.try_distribute_revenue(&admin, &current_period);
+    assert_eq!(
+        result
+            .err()
+            .expect("expected error")
+            .expect("contract error"),
+        QuickLendXError::InvalidFeeConfiguration
+    );
 }
 
 // ============================================================================
-// Revenue Split Safety – Accounting Invariant Tests
+// Revenue Split Safety - Accounting Invariant Tests
 // ============================================================================
 
 /// Helper: collect fees and distribute, then assert the sum invariant holds.
@@ -506,7 +614,7 @@ fn test_sum_invariant_with_one_unit() {
     let treasury = Address::generate(&env);
     client.initialize_fee_system(&admin);
 
-    // 1 unit with 33/33/34 split — only platform should get the 1 unit (remainder)
+    // 1 unit with 33/33/34 split - only platform should get the 1 unit (remainder)
     assert_distribution_sum_invariant(&env, &client, &admin, &treasury, 3300, 3300, 3400, 1);
 }
 
@@ -548,7 +656,7 @@ fn test_sum_invariant_prime_amount() {
 }
 
 // ============================================================================
-// Revenue Split Safety – Invalid Configuration Rejection Tests
+// Revenue Split Safety - Invalid Configuration Rejection Tests
 // ============================================================================
 
 #[test]
@@ -583,13 +691,7 @@ fn test_negative_min_distribution_amount_rejected() {
     client.initialize_fee_system(&admin);
 
     let result = client.try_configure_revenue_distribution(
-        &admin,
-        &treasury,
-        &5000,
-        &2500,
-        &2500,
-        &false,
-        &-1, // negative
+        &admin, &treasury, &5000, &2500, &2500, &false, &-1, // negative
     );
     assert!(
         result.is_err(),
@@ -609,9 +711,8 @@ fn test_shares_sum_over_10000_rejected() {
     client.initialize_fee_system(&admin);
 
     // Sum = 10001
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &2001, &false, &100,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2001, &false, &100);
     assert!(result.is_err(), "Shares summing to > 10000 should fail");
 }
 
@@ -627,9 +728,8 @@ fn test_shares_sum_under_10000_rejected() {
     client.initialize_fee_system(&admin);
 
     // Sum = 9999
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &5000, &3000, &1999, &false, &100,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &3000, &1999, &false, &100);
     assert!(result.is_err(), "Shares summing to < 10000 should fail");
 }
 
@@ -650,7 +750,7 @@ fn test_all_zero_shares_rejected() {
 }
 
 // ============================================================================
-// Revenue Split Safety – Edge Case Distribution Tests
+// Revenue Split Safety - Edge Case Distribution Tests
 // ============================================================================
 
 #[test]
@@ -782,9 +882,8 @@ fn test_zero_min_distribution_amount_allowed() {
     client.initialize_fee_system(&admin);
 
     // min_distribution_amount = 0 should be valid
-    let result = client.try_configure_revenue_distribution(
-        &admin, &treasury, &5000, &2500, &2500, &false, &0,
-    );
+    let result = client
+        .try_configure_revenue_distribution(&admin, &treasury, &5000, &2500, &2500, &false, &0);
     assert!(
         result.is_ok(),
         "Zero min_distribution_amount should be allowed"

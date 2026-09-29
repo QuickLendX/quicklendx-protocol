@@ -1,0 +1,163 @@
+=============================================================================
+SETTLEMENT HARDENING TEST EXECUTION REPORT
+=============================================================================
+
+Date: 2026-03-27
+Branch: feature/settlement-partial-full-hardening
+Feature: Harden partial and full settlement flows
+
+=============================================================================
+TEST SUMMARY
+=============================================================================
+
+Total New/Updated Tests: 35+
+- test_settlement.rs: 19 tests (8 existing + 11 new hardening tests)
+- test_partial_payments.rs: 22 tests (12 existing + 10 new boundary tests)
+
+=============================================================================
+TEST CASES: test_settlement.rs
+=============================================================================
+
+EXISTING (preserved):
+  [1] test_cannot_settle_unfunded_invoice
+  [2] test_cannot_settle_pending_invoice
+  [3] test_payout_matches_expected_return
+  [4] test_payout_with_profit
+  [5] test_settle_invoice_profit_split_matches_calculate_profit_and_config
+  [6] test_settle_invoice_verify_amounts_with_get_platform_fee_config
+  [7] test_settle_invoice_rejects_overpayment_without_mutating_accounting
+  [8] test_settle_invoice_exact_remaining_due_preserves_totals_and_emits_final_events
+
+NEW HARDENING:
+  [9]  test_double_settle_is_rejected
+       - Verifies double-settlement is blocked after invoice is already Paid
+  [10] test_partial_payment_after_auto_settle_is_rejected
+       - Ensures partial payment fails after auto-settlement triggered by full payment
+  [11] test_settle_after_auto_settle_via_partial_is_rejected
+       - Ensures explicit settle_invoice fails after auto-settlement via partials
+  [12] test_finalization_flag_is_set
+       - Verifies Finalized storage flag is set after successful settlement
+  [13] test_no_accounting_drift_after_multiple_partial_then_settle
+       - Asserts total_paid == invoice_amount and sum of payment records == total_due
+  [14] test_settle_with_zero_amount_rejected
+       - Zero-amount settle attempt returns InvalidAmount
+  [15] test_settle_with_negative_amount_rejected
+       - Negative-amount settle attempt returns InvalidAmount
+  [16] test_settle_nonexistent_invoice
+       - Non-existent invoice returns InvoiceNotFound
+  [17] test_settle_with_insufficient_amount_rejected
+       - Under-payment settle attempt returns PaymentTooLow without side effects
+  [18] test_get_payment_records_pagination
+       - Validates paginated record retrieval with from/limit parameters
+  [19] test_investment_completed_after_settlement
+       - Investment status transitions to Completed
+  [20] test_overpayment_capping_preserves_balance_integrity
+       - Token balance changes match capped amounts, not requested amounts
+  [21] test_progress_percentage_accuracy
+       - Progress percentage tracks accurately at 25%, 75%, 100%
+
+=============================================================================
+TEST CASES: test_partial_payments.rs
+=============================================================================
+
+EXISTING (preserved):
+  [1]  test_partial_payment_accumulates_correctly
+  [2]  test_transaction_id_is_stored_in_records
+  [3]  test_duplicate_transaction_id_is_rejected
+  [4]  test_empty_transaction_id_is_allowed_and_recorded
+  [5]  test_final_payment_marks_invoice_paid
+  [6]  test_overpayment_is_capped_at_total_due
+  [7]  test_zero_amount_rejected
+  [8]  test_negative_amount_rejected
+  [9]  test_missing_invoice_is_rejected
+  [10] test_payment_after_invoice_paid_is_rejected
+  [11] test_payment_to_cancelled_invoice_is_rejected
+  [12] test_payment_records_are_queryable_and_ordered
+  [13] test_lifecycle_create_invoice_to_paid_with_multiple_payments
+
+NEW BOUNDARY TESTS:
+  [14] test_single_full_partial_payment_finalizes
+       - Single payment == total_due triggers finalization flag
+  [15] test_payment_record_sum_equals_total_paid
+       - Sum of durable records == invoice.total_paid invariant
+  [16] test_minimum_payment_accepted
+       - Minimum payment of 1 unit is accepted
+  [17] test_many_small_payments_accumulate_to_full
+       - 100 payments of 1 unit each settle a 100-unit invoice
+  [18] test_capped_payment_record_reflects_applied_not_requested
+       - Recorded amount is the capped value, not the requested excess
+  [19] test_progress_for_nonexistent_invoice
+       - Returns InvoiceNotFound for missing invoice
+  [20] test_payment_count_for_nonexistent_invoice
+       - Returns InvoiceNotFound for missing invoice
+  [21] test_payment_record_at_invalid_index
+       - Returns StorageKeyNotFound for out-of-range index
+  [22] test_same_nonce_different_invoices_accepted
+       - Nonce uniqueness is scoped per invoice, not global
+  [23] test_progress_at_100_percent_after_full_partial_payment
+       - Progress shows 100%, 0 remaining, Paid status after full payment
+
+=============================================================================
+SECURITY NOTES
+=============================================================================
+
+1. DOUBLE-SETTLEMENT PROTECTION
+   - A dedicated `Finalized(invoice_id)` flag in persistent storage prevents
+     any invoice from being settled more than once.
+   - The flag is set atomically before status transition to prevent re-entry.
+
+2. ACCOUNTING INVARIANT
+   - Before fund disbursement: `investor_return + platform_fee == total_paid`
+   - Prevents accounting drift from rounding or fee calculation errors.
+
+3. PAYMENT COUNT LIMIT
+   - MAX_PAYMENT_COUNT = 1,000 per invoice.
+   - Prevents unbounded storage growth and index overflow.
+
+4. OVERPAYMENT CAPPING
+   - Partial payments: applied_amount = min(requested, remaining_due)
+   - Full settlement: rejects if payment_amount > remaining_due
+   - Invariant: total_paid <= total_due at every step
+
+5. REPLAY PROTECTION
+   - Non-empty nonces are unique per (invoice_id, payer, nonce).
+   - Empty nonces bypass replay check (allows multiple anonymous payments).
+
+6. AUTHORIZATION
+   - All payment paths require business-owner identity and require_auth().
+
+=============================================================================
+NEW PUBLIC API FUNCTIONS
+=============================================================================
+
+Contract methods added to lib.rs:
+  - get_settlement_progress(invoice_id) -> Progress
+  - get_settlement_payment_count(invoice_id) -> u32
+  - get_settlement_payment_record(invoice_id, index) -> SettlementPaymentRecord
+  - get_settlement_payment_records(invoice_id, from, limit) -> Vec<SettlementPaymentRecord>
+  - is_settlement_finalized(invoice_id) -> bool
+
+Internal functions made public in settlement.rs:
+  - get_payment_count(env, invoice_id) -> Result<u32>
+  - get_payment_records(env, invoice_id, from, limit) -> Result<Vec<SettlementPaymentRecord>>
+  - is_invoice_finalized(env, invoice_id) -> Result<bool>
+
+=============================================================================
+FILES MODIFIED
+=============================================================================
+
+Modified:
+  - quicklendx-contracts/src/settlement.rs (hardened with finalization guard,
+    accounting invariant, payment count limit, public query functions)
+  - quicklendx-contracts/src/test_settlement.rs (11 new edge case tests)
+  - quicklendx-contracts/src/test_partial_payments.rs (10 new boundary tests)
+  - quicklendx-contracts/src/lib.rs (new imports, test modules, public API)
+  - docs/contracts/settlement.md (updated documentation)
+
+New:
+  - quicklendx-contracts/test_output_settlement_hardening.txt (this file)
+
+=============================================================================
+NOTE: Build environment requires MSVC link.exe in PATH (not Git Bash link).
+Run tests with: cargo test test_settlement test_partial_payments -- --nocapture
+=============================================================================

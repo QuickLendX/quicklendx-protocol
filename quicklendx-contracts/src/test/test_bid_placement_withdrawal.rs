@@ -20,7 +20,7 @@ fn create_verified_invoice(
         &String::from_str(env, "Issue #271 invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     invoice_id
 }
@@ -33,7 +33,7 @@ fn test_place_bid_valid_succeeds() {
     let currency = setup_token(&env, &business, &investor, &contract_addr);
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 10_000);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &5_700);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &5_700, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).expect("bid should exist");
 
     assert_eq!(bid.status, BidStatus::Placed);
@@ -50,13 +50,8 @@ fn test_place_bid_unverified_investor_fails() {
     let currency = setup_token(&env, &business, &verified_investor, &contract_addr);
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 10_000);
 
-    let result = client.try_place_bid(&unverified_investor, &invoice_id, &5_000, &5_700);
-    assert!(result.is_err());
-    let contract_err = result
-        .err()
-        .expect("expected contract error")
-        .expect("expected contract-level error");
-    assert_eq!(contract_err, QuickLendXError::BusinessNotVerified);
+    let result = client.try_place_bid(&unverified_investor, &invoice_id, &5_000, &5_700, &BytesN::from_array(&env, &[0u8; 32]));
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::BusinessNotVerified);
 }
 
 #[test]
@@ -67,13 +62,8 @@ fn test_place_bid_over_limit_fails() {
     let currency = setup_token(&env, &business, &investor, &contract_addr);
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 10_000);
 
-    let result = client.try_place_bid(&investor, &invoice_id, &1_500, &1_700);
-    assert!(result.is_err());
-    let contract_err = result
-        .err()
-        .expect("expected contract error")
-        .expect("expected contract-level error");
-    assert_eq!(contract_err, QuickLendXError::InvalidAmount);
+    let result = client.try_place_bid(&investor, &invoice_id, &1_500, &1_700, &BytesN::from_array(&env, &[0u8; 32]));
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvalidAmount);
 }
 
 #[test]
@@ -91,15 +81,10 @@ fn test_place_bid_wrong_invoice_status_fails() {
         &String::from_str(&env, "Pending status invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
-    let result = client.try_place_bid(&investor, &invoice_id, &5_000, &5_700);
-    assert!(result.is_err());
-    let contract_err = result
-        .err()
-        .expect("expected contract error")
-        .expect("expected contract-level error");
-    assert_eq!(contract_err, QuickLendXError::InvalidStatus);
+    let result = client.try_place_bid(&investor, &invoice_id, &5_000, &5_700, &BytesN::from_array(&env, &[0u8; 32]));
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::InvalidStatus);
 }
 
 #[test]
@@ -110,7 +95,7 @@ fn test_withdraw_bid_owner_succeeds() {
     let currency = setup_token(&env, &business, &investor, &contract_addr);
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 10_000);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &5_700);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &5_700, &BytesN::from_array(&env, &[0u8; 32]));
     let result = client.try_withdraw_bid(&bid_id);
 
     assert!(result.is_ok());
@@ -151,7 +136,7 @@ fn test_withdraw_bid_non_owner_fails_auth() {
         &String::from_str(&env, "Auth test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.mock_all_auths().verify_invoice(&invoice_id);
 
     let place_auth = MockAuth {
@@ -165,7 +150,7 @@ fn test_withdraw_bid_non_owner_fails_auth() {
     };
     let bid_id = client
         .mock_auths(&[place_auth])
-        .place_bid(&investor, &invoice_id, &5_000, &5_700);
+        .place_bid(&investor, &invoice_id, &5_000, &5_700, &BytesN::from_array(&env, &[0u8; 32]));
 
     let attacker = Address::generate(&env);
     let withdraw_auth = MockAuth {
@@ -199,7 +184,7 @@ fn test_withdraw_bid_already_accepted_fails() {
     let currency = setup_token(&env, &business, &investor, &contract_addr);
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 10_000);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &5_700);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &5_700, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     let result = client.try_withdraw_bid(&bid_id);
@@ -219,14 +204,9 @@ fn test_withdraw_bid_already_withdrawn_fails() {
     let currency = setup_token(&env, &business, &investor, &contract_addr);
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 10_000);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &5_700);
+    let bid_id = client.place_bid(&investor, &invoice_id, &5_000, &5_700, &BytesN::from_array(&env, &[0u8; 32]));
     client.withdraw_bid(&bid_id);
 
     let result = client.try_withdraw_bid(&bid_id);
-    assert!(result.is_err());
-    let contract_err = result
-        .err()
-        .expect("expected contract error")
-        .expect("expected contract-level error");
-    assert_eq!(contract_err, QuickLendXError::OperationNotAllowed);
+    assert_eq!(result.unwrap().unwrap_err(), QuickLendXError::OperationNotAllowed);
 }

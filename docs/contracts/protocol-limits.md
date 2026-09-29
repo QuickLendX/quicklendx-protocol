@@ -68,10 +68,26 @@ Updates are rejected unless:
 - `min_bid_bps <= 10_000`
 - `1 <= max_due_date_days <= 730`
 - `grace_period_seconds <= 2_592_000` (30 days)
+- `grace_period_seconds <= max_due_date_days * 86_400` (sanity check against contradictory horizons)
+
+The last rule prevents inconsistent configurations where the grace period
+is longer than the allowed due-date horizon.
+
+## Test Coverage Notes
+
+`quicklendx-contracts/src/test_protocol_limits.rs` covers:
+
+- admin-only authorization for all limit-update entrypoints
+- rejection of invalid bounds (`min_invoice_amount`, `max_due_date_days`, `grace_period_seconds`)
+- rejection of invalid parameter combinations (grace period exceeding due-date horizon)
+- internal protocol limit update sanity for bid constraints (`min_bid_amount`, `min_bid_bps`)
+- immediate application of updated limits on invoice validation and default-date computation
+- immediate application of `max_invoices_per_business` updates
+- initialization failure for invalid limit combinations before state commit
 
 ## Security Notes
 
 - **Admin authorization**: limit updates require admin authorization and are checked against the stored admin address.
 - **Timestamp trust**: validation uses `env.ledger().timestamp()`; it assumes ledger timestamps are monotonic and within normal network bounds.
 - **Overflow safety**: due-date computations use saturating arithmetic (`saturating_add` / `saturating_mul`) to prevent wrap-around.
-
+- **Configuration coherence**: updates reject contradictory limit combinations to avoid misconfigured risk windows.

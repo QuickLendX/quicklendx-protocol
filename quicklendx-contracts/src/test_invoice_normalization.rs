@@ -1,4 +1,4 @@
-/// Tag normalization and duplicate prevention tests — Issue #527
+/// Tag normalization and duplicate prevention tests - Issue #527
 ///
 /// These tests verify that:
 /// - Tags are stored in lowercase, trimmed form regardless of input casing/padding.
@@ -38,7 +38,7 @@ fn make_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &tags,
-    )
+        &None)
 }
 
 // ----------------------------------------------------------------------------
@@ -95,12 +95,12 @@ fn test_whitespace_only_tag_rejected() {
         &String::from_str(&env, "Spaces test"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidTag);
 }
 
-/// "Tech" and "tech" in the same tag list are normalized duplicates — rejected.
+/// "Tech" and "tech" in the same tag list are normalized duplicates - rejected.
 #[test]
 fn test_case_duplicate_tags_rejected_at_creation() {
     let env = Env::default();
@@ -119,12 +119,12 @@ fn test_case_duplicate_tags_rejected_at_creation() {
         &String::from_str(&env, "Dup test"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidTag);
 }
 
-/// " tech " and "tech" in the same tag list are normalized duplicates — rejected.
+/// " tech " and "tech" in the same tag list are normalized duplicates - rejected.
 #[test]
 fn test_whitespace_duplicate_tags_rejected_at_creation() {
     let env = Env::default();
@@ -143,7 +143,7 @@ fn test_whitespace_duplicate_tags_rejected_at_creation() {
         &String::from_str(&env, "Pad dup test"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidTag);
 }

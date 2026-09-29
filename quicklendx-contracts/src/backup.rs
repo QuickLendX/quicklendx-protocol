@@ -1,13 +1,15 @@
 use crate::errors::QuickLendXError;
-use crate::invoice::Invoice;
-use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, Vec};
+use crate::types::Invoice;
+use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, TryFromVal, Vec};
 
 const RETENTION_POLICY_KEY: soroban_sdk::Symbol = symbol_short!("bkup_pol");
 const BACKUP_COUNTER_KEY: soroban_sdk::Symbol = symbol_short!("bkup_cnt");
 const BACKUP_LIST_KEY: soroban_sdk::Symbol = symbol_short!("backups");
 const BACKUP_DATA_KEY: soroban_sdk::Symbol = symbol_short!("bkup_data");
+pub const PENDING_BACKFILL_KEY: soroban_sdk::Symbol = symbol_short!("pf_back");
 const MAX_BACKUP_DESCRIPTION_LENGTH: u32 = 128;
 
+/// A stored snapshot of all invoices at a point in time.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Backup {
@@ -16,25 +18,47 @@ pub struct Backup {
     pub description: String,
     pub invoice_count: u32,
     pub status: BackupStatus,
+    pub format_version: u32,
 }
 
+impl Backup {
+    pub fn from_v1(v1: crate::backup_v1::BackupV1) -> Self {
+        Self {
+            backup_id: v1.backup_id,
+            timestamp: v1.timestamp,
+            description: v1.description,
+            invoice_count: v1.invoice_count,
+            status: v1.status,
+            format_version: 2,
+        }
+    }
+}
+
+/// Lifecycle state of a [`Backup`] record.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum BackupStatus {
+    /// Backup is valid and available for restore.
     Active,
+    /// Backup has been superseded and should not be restored.
     Archived,
+    /// Backup data failed integrity checks and must not be restored.
     Corrupted,
 }
 
-/// Backup retention policy configuration
+/// Backup retention policy configuration.
+///
+/// Controls how many backups are kept and for how long.  When
+/// `auto_cleanup_enabled` is `true`, `cleanup_old_backups` enforces both
+/// `max_backups` and `max_age_seconds` on every invocation.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BackupRetentionPolicy {
-    /// Maximum number of backups to keep (0 = unlimited)
+    /// Maximum number of backups to keep (0 = unlimited).
     pub max_backups: u32,
-    /// Maximum age of backups in seconds (0 = unlimited)
+    /// Maximum age of backups in seconds (0 = unlimited).
     pub max_age_seconds: u64,
-    /// Whether automatic cleanup is enabled
+    /// Whether automatic cleanup is enabled.
     pub auto_cleanup_enabled: bool,
 }
 
@@ -48,10 +72,27 @@ impl Default for BackupRetentionPolicy {
     }
 }
 
+/// Low-level backup storage operations.
+///
+/// All public functions are thin wrappers around Soroban instance storage.
+/// Higher-level orchestration (backup-then-clear, validate-then-restore) lives
+/// in [`BackupStorage::restore_from_backup`] which is the **only** safe entry
+/// point for restoring data.
 pub struct BackupStorage;
 
+/// Report returned by the backup cleanup dry-run.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupCleanupDryRunReport {
+    /// Number of backups that would be purged.
+    pub would_purge_count: u32,
+    /// Number of backups that would survive.
+    pub would_retain_count: u32,
+    /// Auto-cleanup is disabled; no actual purge would occur.
+    pub cleanup_disabled: bool,
+}
+
 impl BackupStorage {
-    /// @notice Validate backup metadata before persisting it.
     fn validate_backup_metadata(
         backup: &Backup,
         invoices: Option<&Vec<Invoice>>,
@@ -60,7 +101,8 @@ impl BackupStorage {
             return Err(QuickLendXError::StorageError);
         }
 
-        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH {
+        if backup.description.is_empty() || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
+        {
             return Err(QuickLendXError::InvalidDescription);
         }
 
@@ -73,41 +115,44 @@ impl BackupStorage {
         Ok(())
     }
 
-    /// @notice Validate the backup identifier prefix format.
     pub fn is_valid_backup_id(backup_id: &BytesN<32>) -> bool {
         let bytes = backup_id.to_array();
         bytes[0] == 0xB4 && bytes[1] == 0xC4
     }
 
-    /// Get the backup retention policy
+    /// Get the backup retention policy.
     pub fn get_retention_policy(env: &Env) -> BackupRetentionPolicy {
         env.storage()
             .instance()
             .get(&RETENTION_POLICY_KEY)
-            .unwrap_or_else(|| BackupRetentionPolicy::default())
+            .unwrap_or_default()
     }
 
-    /// Set the backup retention policy (admin only)
+    /// Set the backup retention policy (admin only - caller must enforce auth).
     pub fn set_retention_policy(env: &Env, policy: &BackupRetentionPolicy) {
         env.storage().instance().set(&RETENTION_POLICY_KEY, policy);
     }
 
-    /// Generate a unique backup ID
+    /// Generate a unique backup ID.
+    ///
+    /// Format: `0xB4 0xC4 | timestamp(8B) | counter(8B) | mix(14B)`.
     pub fn generate_backup_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
-        let counter: u64 = env.storage().instance().get(&BACKUP_COUNTER_KEY).unwrap_or(0);
+        let counter: u64 = env
+            .storage()
+            .instance()
+            .get(&BACKUP_COUNTER_KEY)
+            .unwrap_or(0);
         let next_counter = counter.saturating_add(1);
-        env.storage().instance().set(&BACKUP_COUNTER_KEY, &next_counter);
+        env.storage()
+            .instance()
+            .set(&BACKUP_COUNTER_KEY, &next_counter);
 
         let mut id_bytes = [0u8; 32];
-        // Add backup prefix
-        id_bytes[0] = 0xB4; // 'B' for Backup
-        id_bytes[1] = 0xC4; // 'C' for baCkup
-                            // Embed timestamp
+        id_bytes[0] = 0xB4;
+        id_bytes[1] = 0xC4;
         id_bytes[2..10].copy_from_slice(&timestamp.to_be_bytes());
-        // Embed counter
         id_bytes[10..18].copy_from_slice(&next_counter.to_be_bytes());
-        // Fill remaining bytes (overflow-safe)
         let mix = timestamp
             .saturating_add(next_counter)
             .saturating_add(0xB4C4);
@@ -118,7 +163,10 @@ impl BackupStorage {
         BytesN::from_array(env, &id_bytes)
     }
 
-    /// Store a backup record
+    /// Persist a backup record (metadata only).
+    ///
+    /// Returns [`QuickLendXError::OperationNotAllowed`] if a backup with the
+    /// same ID already exists, preventing accidental overwrites.
     pub fn store_backup(
         env: &Env,
         backup: &Backup,
@@ -126,7 +174,7 @@ impl BackupStorage {
     ) -> Result<(), QuickLendXError> {
         Self::validate_backup_metadata(backup, invoices)?;
 
-        if Self::get_backup(env, &backup.backup_id).is_some() {
+        if env.storage().instance().has(&backup.backup_id) {
             return Err(QuickLendXError::OperationNotAllowed);
         }
 
@@ -134,19 +182,77 @@ impl BackupStorage {
         Ok(())
     }
 
-    /// Get a backup by ID
+    /// Retrieve a backup record by ID and handle format versioning / upgrades.
     pub fn get_backup(env: &Env, backup_id: &BytesN<32>) -> Option<Backup> {
-        env.storage().instance().get(backup_id)
+        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)?;
+
+        if let Ok(map) =
+            soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
+        {
+            let version_key = soroban_sdk::Symbol::new(env, "format_version");
+            if map.contains_key(version_key.clone()) {
+                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v))
+                {
+                    if version == 2 {
+                        Backup::try_from_val(env, &raw_val).ok()
+                    } else if version == 1 {
+                        let v1 = crate::backup_v1::BackupV1::try_from_val(env, &raw_val).ok()?;
+                        Some(Backup::from_v1(v1))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            } else {
+                let v1 = crate::backup_v1::BackupV1::try_from_val(env, &raw_val).ok()?;
+                Some(Backup::from_v1(v1))
+            }
+        } else {
+            None
+        }
     }
 
-    /// Update a backup record
+    /// Verify version of a stored backup and reject unsupported/malformed payloads.
+    pub fn verify_backup_version(
+        env: &Env,
+        backup_id: &BytesN<32>,
+    ) -> Result<u32, QuickLendXError> {
+        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id).unwrap();
+
+        if let Ok(map) =
+            soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
+        {
+            let version_key = soroban_sdk::Symbol::new(env, "format_version");
+            if map.contains_key(version_key.clone()) {
+                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v))
+                {
+                    if version == 2 {
+                        Ok(2)
+                    } else if version == 1 {
+                        Ok(1)
+                    } else {
+                        Err(QuickLendXError::BackfillInProgress)
+                    }
+                } else {
+                    Err(QuickLendXError::StorageError)
+                }
+            } else {
+                Ok(1)
+            }
+        } else {
+            Err(QuickLendXError::StorageError)
+        }
+    }
+
+    /// Update an existing backup record (e.g. to mark it `Archived`).
     pub fn update_backup(env: &Env, backup: &Backup) -> Result<(), QuickLendXError> {
         Self::validate_backup_metadata(backup, None)?;
         env.storage().instance().set(&backup.backup_id, backup);
         Ok(())
     }
 
-    /// Get all backup IDs
+    /// Get all backup IDs in the global backup list.
     pub fn get_all_backups(env: &Env) -> Vec<BytesN<32>> {
         env.storage()
             .instance()
@@ -154,7 +260,7 @@ impl BackupStorage {
             .unwrap_or_else(|| Vec::new(env))
     }
 
-    /// Add backup to the list of all backups
+    /// Append a backup ID to the global backup list (deduplication guard included).
     pub fn add_to_backup_list(env: &Env, backup_id: &BytesN<32>) {
         let mut backups = Self::get_all_backups(env);
         for existing in backups.iter() {
@@ -166,7 +272,7 @@ impl BackupStorage {
         env.storage().instance().set(&BACKUP_LIST_KEY, &backups);
     }
 
-    /// Remove backup from the list (when archived or corrupted)
+    /// Remove a backup ID from the global backup list.
     pub fn remove_from_backup_list(env: &Env, backup_id: &BytesN<32>) {
         let backups = Self::get_all_backups(env);
         let mut new_backups = Vec::new(env);
@@ -178,19 +284,19 @@ impl BackupStorage {
         env.storage().instance().set(&BACKUP_LIST_KEY, &new_backups);
     }
 
-    /// Store invoice data for a backup
+    /// Store the invoice payload for a backup.
     pub fn store_backup_data(env: &Env, backup_id: &BytesN<32>, invoices: &Vec<Invoice>) {
         let key = (BACKUP_DATA_KEY, backup_id.clone());
         env.storage().instance().set(&key, invoices);
     }
 
-    /// Get invoice data from a backup
+    /// Retrieve the invoice payload for a backup.
     pub fn get_backup_data(env: &Env, backup_id: &BytesN<32>) -> Option<Vec<Invoice>> {
         let key = (BACKUP_DATA_KEY, backup_id.clone());
         env.storage().instance().get(&key)
     }
 
-    /// @notice Delete a backup record and its stored data.
+    /// Delete a backup record and its stored invoice payload.
     pub fn purge_backup(env: &Env, backup_id: &BytesN<32>) {
         Self::remove_from_backup_list(env, backup_id);
         env.storage().instance().remove(backup_id);
@@ -198,22 +304,28 @@ impl BackupStorage {
         env.storage().instance().remove(&data_key);
     }
 
-    /// Validate backup data integrity
+    /// Validate backup data integrity.
+    ///
+    /// Checks that:
+    /// 1. The backup record exists and has a valid ID prefix.
+    /// 2. The invoice payload exists.
+    /// 3. The payload length matches `backup.invoice_count`.
+    /// 4. Every invoice in the payload has a positive `amount`.
     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
-        let backup = Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let _version = Self::verify_backup_version(env, backup_id)?;
+        let backup = Self::get_backup(env, backup_id).unwrap();
+
+        // Validate metadata alone first (cheap).
         Self::validate_backup_metadata(&backup, None)?;
 
-        let data =
-            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        // Fetch the payload and validate together with the count.
+        let data = Self::get_backup_data(env, backup_id).unwrap();
 
-        Self::validate_backup_metadata(&backup, Some(&data))?;
-
-        // Check if count matches
-        if data.len() as u32 != backup.invoice_count {
+        if data.len() != backup.invoice_count {
             return Err(QuickLendXError::StorageError);
         }
 
-        // Check each invoice has valid data
+        // Validate each invoice record in the payload.
         for invoice in data.iter() {
             if invoice.amount <= 0 {
                 return Err(QuickLendXError::StorageError);
@@ -223,11 +335,106 @@ impl BackupStorage {
         Ok(())
     }
 
-    /// Clean up old backups based on retention policy
+    /// Restore all invoices from a backup in a safe, validated sequence.
+    ///
+    /// # Restore ordering
+    ///
+    /// The ordering of operations is critical to prevent orphan indexes and
+    /// partial-state corruption:
+    ///
+    /// ```text
+    /// Step 1  validate_backup()
+    ///         -----------------
+    ///         Full integrity check BEFORE any mutation.  If the backup is
+    ///         corrupt or the invoice_count mismatches, we abort here and
+    ///         leave existing storage completely untouched.
+    ///
+    /// Step 2  InvoiceStorage::clear_all()
+    ///         ----------------------------
+    ///         Atomically removes every invoice record, status bucket,
+    ///         category index, tag index, business index, and metadata index.
+    ///         After this step storage is empty.  There is no rollback
+    ///         mechanism on a Soroban ledger; reaching this step means the
+    ///         caller has accepted that the current state will be discarded.
+    ///
+    /// Step 3  InvoiceStorage::store_invoice() per invoice
+    ///         --------------------------------------------
+    ///         Re-registers each invoice from the backup payload, rebuilding
+    ///         all secondary indexes from scratch.  The write order within
+    ///         this step does not matter because `store_invoice` is
+    ///         self-contained.
+    ///
+    /// Step 4  Mark the backup as Archived
+    ///         ----------------------------
+    ///         Prevents the same backup from being restored twice, which
+    ///         could cause duplicate invoice registrations if the store is
+    ///         not cleared between restores.
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Returns an error *only* in step 1.  Steps 2-4 are infallible on a
+    /// well-formed Soroban environment; panics in those steps indicate a
+    /// platform bug, not a contract bug.
+    ///
+    /// # Security
+    ///
+    /// - The caller **must** enforce admin authentication before invoking this
+    ///   function.  The contract entry point is responsible for `require_auth`.
+    /// - Validate -> clear -> restore is the only safe ordering.  Clearing
+    ///   before validating would leave the contract in an empty state if the
+    ///   backup turns out to be corrupt.
+    /// - Restoring without clearing first would overlay backup data on stale
+    ///   indexes, causing ghost entries in status/category/tag buckets for
+    ///   any invoices that existed before the restore.
+    pub fn restore_from_backup(env: &Env, backup_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
+        // Step 1: validate before mutating anything.
+        Self::validate_backup(env, backup_id)?;
+
+        // Fetch the validated payload.
+        let data = Self::get_backup_data(env, backup_id).unwrap();
+
+        let restore_outcome: Result<u32, QuickLendXError> = (|| {
+            // Fetch the validated payload.
+            let data = Self::get_backup_data(env, backup_id).unwrap();
+
+            let restored_count = data.len();
+
+            //  Step 2: atomically clear all existing invoice state
+            crate::storage::InvoiceStorage::clear_all(env);
+
+            //  Step 3: re-register every invoice, rebuilding all indexes
+            for invoice in data.iter() {
+                crate::storage::InvoiceStorage::store_invoice(env, &invoice);
+            }
+
+            // Step 4: mark the backup as archived to prevent re-use
+            if let Some(mut backup) = Self::get_backup(env, backup_id) {
+                backup.status = BackupStatus::Archived;
+                // Ignore the result - the restore itself has already succeeded.
+                let _ = Self::update_backup(env, &backup);
+            }
+
+            Ok(restored_count)
+        })();
+
+        // Always clear the in-progress flag, even on failure, so the contract
+        // is not stuck in "backfilling" forever.
+        env.storage().instance().remove(&PENDING_BACKFILL_KEY);
+
+        restore_outcome
+    }
+
+    /// Clean up old backups based on the retention policy.
+    ///
+    /// Removes backups that exceed `max_age_seconds`, then removes the oldest
+    /// backups until the count is within `max_backups`.  Only `Active` backups
+    /// are considered; `Archived` and `Corrupted` backups are left untouched.
+    ///
+    /// Returns the number of backups removed.
     pub fn cleanup_old_backups(env: &Env) -> Result<u32, QuickLendXError> {
         let policy = Self::get_retention_policy(env);
 
-        // If auto cleanup is disabled, do nothing
         if !policy.auto_cleanup_enabled {
             return Ok(0);
         }
@@ -236,18 +443,17 @@ impl BackupStorage {
         let current_time = env.ledger().timestamp();
         let mut removed_count = 0u32;
 
-        // Create a vector of tuples (backup_id, timestamp) for sorting
+        // Build (backup_id, timestamp) pairs for active backups only.
         let mut backup_timestamps = Vec::new(env);
         for backup_id in backups.iter() {
             if let Some(backup) = Self::get_backup(env, &backup_id) {
-                // Only consider active backups for cleanup
                 if backup.status == BackupStatus::Active {
                     backup_timestamps.push_back((backup_id, backup.timestamp));
                 }
             }
         }
 
-        // Sort by timestamp (oldest first) using bubble sort
+        // Bubble sort: oldest first.
         let len = backup_timestamps.len();
         for i in 0..len {
             for j in 0..len - i - 1 {
@@ -259,7 +465,7 @@ impl BackupStorage {
             }
         }
 
-        // First, remove backups that exceed max age (if configured)
+        // Remove backups that exceed max age.
         if policy.max_age_seconds > 0 {
             let mut i = 0;
             while i < backup_timestamps.len() {
@@ -276,7 +482,7 @@ impl BackupStorage {
             }
         }
 
-        // Then, remove oldest backups if we exceed max_backups (if configured)
+        // Remove oldest backups until within the max_backups limit.
         if policy.max_backups > 0 {
             while backup_timestamps.len() > policy.max_backups {
                 if let Some((oldest_id, _)) = backup_timestamps.first() {
@@ -290,23 +496,120 @@ impl BackupStorage {
         Ok(removed_count)
     }
 
-    /// Retrieve all invoices from storage across all possible statuses
+    /// Preview which backups `cleanup_old_backups` would purge without mutating state.
+    ///
+    /// Returns a `BackupCleanupDryRunReport` describing how many entries would be
+    /// removed and how many would survive under the current retention policy.
+    pub fn preview_cleanup_old_backups(env: &Env) -> BackupCleanupDryRunReport {
+        let policy = Self::get_retention_policy(env);
+
+        if !policy.auto_cleanup_enabled {
+            return BackupCleanupDryRunReport {
+                would_purge_count: 0,
+                would_retain_count: Self::get_all_backups(env).len(),
+                cleanup_disabled: true,
+            };
+        }
+
+        let backups = Self::get_all_backups(env);
+        let current_time = env.ledger().timestamp();
+        let mut active: Vec<(BytesN<32>, u64)> = Vec::new(env);
+
+        for backup_id in backups.iter() {
+            if let Some(backup) = Self::get_backup(env, &backup_id) {
+                if backup.status == BackupStatus::Active {
+                    active.push_back((backup_id, backup.timestamp));
+                }
+            }
+        }
+
+        // Sort oldest first (bubble sort, same as cleanup_old_backups).
+        let len = active.len();
+        for i in 0..len {
+            for j in 0..len.saturating_sub(i + 1) {
+                if active.get(j).unwrap().1 > active.get(j + 1).unwrap().1 {
+                    let tmp = active.get(j).unwrap().clone();
+                    active.set(j, active.get(j + 1).unwrap().clone());
+                    active.set(j + 1, tmp);
+                }
+            }
+        }
+
+        let mut would_purge: u32 = 0;
+
+        // Count age-expired entries.
+        if policy.max_age_seconds > 0 {
+            let mut i = 0;
+            while i < active.len() {
+                let age = current_time.saturating_sub(active.get(i).unwrap().1);
+                if age > policy.max_age_seconds {
+                    would_purge = would_purge.saturating_add(1);
+                    active.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+        }
+
+        // Count oldest entries exceeding max_backups.
+        if policy.max_backups > 0 {
+            while active.len() > policy.max_backups {
+                would_purge = would_purge.saturating_add(1);
+                active.remove(0);
+            }
+        }
+
+        BackupCleanupDryRunReport {
+            would_purge_count: would_purge,
+            would_retain_count: active.len(),
+            cleanup_disabled: false,
+        }
+    }
+
+    /// Returns true when a destructive backfill operation is currently
+    /// mutating invoice state (between validate and archive in
+    /// `restore_from_backup`).
+    ///
+    /// Used by the WASM upgrade guard to refuse migration while a backfill is
+    /// in progress: the new contract code would otherwise come online reading
+    /// partially-restored state with no signal that it is partial.
+    pub fn is_pending_backfill(env: &Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&PENDING_BACKFILL_KEY)
+            .unwrap_or(false)
+    }
+
+    /// Guard: reject any operation that must not race an in-flight backfill.
+    ///
+    /// Returns `QuickLendXError::BackfillInProgress` while a backfill holds
+    /// the in-progress flag; `Ok(())` once the flag has been cleared.
+    pub fn require_no_pending_backfill(env: &Env) -> Result<(), QuickLendXError> {
+        if Self::is_pending_backfill(env) {
+            return Err(QuickLendXError::BackfillInProgress);
+        }
+        Ok(())
+    }
+
+    /// Retrieve all invoices from storage across all possible statuses.
+    ///
+    /// Used when creating a new backup to snapshot the full current state.
     pub fn get_all_invoices(env: &Env) -> Vec<Invoice> {
         let mut all_invoices = Vec::new(env);
         let all_statuses = [
-            crate::invoice::InvoiceStatus::Pending,
-            crate::invoice::InvoiceStatus::Verified,
-            crate::invoice::InvoiceStatus::Funded,
-            crate::invoice::InvoiceStatus::Paid,
-            crate::invoice::InvoiceStatus::Defaulted,
-            crate::invoice::InvoiceStatus::Cancelled,
-            crate::invoice::InvoiceStatus::Refunded,
+            crate::types::InvoiceStatus::Pending,
+            crate::types::InvoiceStatus::Verified,
+            crate::types::InvoiceStatus::Funded,
+            crate::types::InvoiceStatus::Paid,
+            crate::types::InvoiceStatus::Defaulted,
+            crate::types::InvoiceStatus::Cancelled,
+            crate::types::InvoiceStatus::Refunded,
         ];
 
         for status in all_statuses.iter() {
-            let invoices = crate::invoice::InvoiceStorage::get_invoices_by_status(env, status);
+            let invoices = crate::storage::InvoiceStorage::get_invoices_by_status(env, *status);
             for id in invoices.iter() {
-                if let Some(inv) = crate::invoice::InvoiceStorage::get_invoice(env, &id) {
+                if let Some(inv) = crate::storage::InvoiceStorage::get_invoice(env, &id) {
                     all_invoices.push_back(inv);
                 }
             }

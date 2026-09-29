@@ -1,0 +1,1016 @@
+   Compiling quicklendx-contracts v0.1.0 (C:\Users\ADMIN\Desktop\midea-drips\quicklendx-protocol\quicklendx-contracts)
+warning: unused imports: `Symbol` and `symbol_short`
+ --> src\events.rs:7:34
+  |
+7 | use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+  |                                  ^^^^^^^^^^^^                                ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MAX_TAG_LENGTH`
+ --> src\invoice.rs:7:40
+  |
+7 |     MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+  |                                        ^^^^^^^^^^^^^^
+
+warning: unused imports: `BytesN` and `Vec`
+  --> src\types.rs:12:42
+   |
+12 | use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
+   |                                          ^^^^^^          ^^^
+
+warning: unused imports: `Dispute as InvoiceDispute`, `DisputeStatus as InvoiceDisputeStatus`, `Invoice as InvoiceData`, `InvoiceCategory as InvoiceCategoryData`, `InvoiceMetadata as InvoiceMetadataData`, `InvoiceRating as InvoiceRatingData`, `InvoiceStatus as InvoiceStatusData`, `LineItemRecord as LineItemRecordData`, and `PaymentRecord as InvoicePaymentRecord`
+  --> src\types.rs:15:5
+   |
+15 |     Dispute as InvoiceDispute, DisputeStatus as InvoiceDisputeStatus, Invoice as InvoiceData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^
+16 |     InvoiceCategory as InvoiceCategoryData, InvoiceMetadata as InvoiceMetadataData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+17 |     InvoiceRating as InvoiceRatingData, InvoiceStatus as InvoiceStatusData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+18 |     LineItemRecord as LineItemRecordData, PaymentRecord as InvoicePaymentRecord,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `Bid as BidData` and `BidStatus as BidStatusData`
+  --> src\types.rs:20:18
+   |
+20 | use crate::bid::{Bid as BidData, BidStatus as BidStatusData};
+   |                  ^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused imports: `InsuranceCoverage as InsuranceCoverageData`, `Investment as InvestmentData`, and `InvestmentStatus as InvestmentStatusData`
+  --> src\types.rs:22:5
+   |
+22 |     InsuranceCoverage as InsuranceCoverageData, Investment as InvestmentData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^  ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+23 |     InvestmentStatus as InvestmentStatusData,
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `IntoVal`
+ --> src\test_init.rs:6:33
+  |
+6 | use soroban_sdk::{Address, Env, IntoVal, Vec};
+  |                                 ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:264:22
+    |
+264 |         env.events().publish(
+    |                      ^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:311:22
+    |
+311 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:348:14
+    |
+348 |             .publish((symbol_short!("pref_up"),), (user.clone(),));
+    |              ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:541:18
+    |
+541 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:559:18
+    |
+559 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:851:18
+    |
+851 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:862:18
+    |
+862 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:874:18
+    |
+874 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:886:18
+    |
+886 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:134:22
+    |
+134 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:215:22
+    |
+215 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\lib.rs:361:22
+    |
+361 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: variable does not need to be mutable
+   --> src\storage.rs:275:13
+    |
+275 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src\storage.rs:304:13
+    |
+304 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `env`
+   --> src\test_init.rs:192:10
+    |
+192 |     let (env, client) = setup();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `env`
+   --> src\test_init.rs:275:10
+    |
+275 |     let (env, client) = setup();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `current_admin`
+   --> src\test_init.rs:316:9
+    |
+316 |     let current_admin = client.get_current_admin().unwrap();
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_current_admin`
+
+warning: unused variable: `env`
+   --> src\test_admin.rs:781:14
+    |
+781 |         let (env, client) = setup();
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `business`
+   --> src\test_partial_payments.rs:263:26
+    |
+263 |         let (invoice_id, business, _investor, _currency) =
+    |                          ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `limits`
+   --> src\verification.rs:621:9
+    |
+621 |     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+
+warning: unused variable: `limits`
+   --> src\verification.rs:621:9
+    |
+621 |     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: multiple associated functions are never used
+   --> src\analytics.rs:178:8
+    |
+177 | impl AnalyticsStorage {
+    | --------------------- associated functions in this implementation
+178 |     fn platform_metrics_key() -> (soroban_sdk::Symbol,) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+182 |     fn performance_metrics_key() -> (soroban_sdk::Symbol,) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+...
+186 |     fn user_behavior_key(user: &Address) -> (soroban_sdk::Symbol, Address) {
+    |        ^^^^^^^^^^^^^^^^^
+...
+198 |     fn investor_analytics_key(investor: &Address) -> (soroban_sdk::Symbol, Address) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+...
+202 |     fn investor_performance_key() -> (soroban_sdk::Symbol,) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+211 |     pub fn store_platform_metrics(env: &Env, metrics: &PlatformMetrics) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+217 |     pub fn get_platform_metrics(env: &Env) -> Option<PlatformMetrics> {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+221 |     pub fn store_performance_metrics(env: &Env, metrics: &PerformanceMetrics) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+227 |     pub fn get_performance_metrics(env: &Env) -> Option<PerformanceMetrics> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+233 |     pub fn store_user_behavior(env: &Env, user: &Address, behavior: &UserBehaviorMetrics) {
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+239 |     pub fn store_business_report(env: &Env, report: &BusinessReport) {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+251 |     pub fn store_investor_report(env: &Env, report: &InvestorReport) {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+263 |     pub fn store_investor_analytics(env: &Env, investor: &Address, analytics: &InvestorAnalytics) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+269 |     pub fn get_investor_analytics(env: &Env, investor: &Address) -> Option<InvestorAnalytics> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+275 |     pub fn store_investor_performance(env: &Env, metrics: &InvestorPerformanceMetrics) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+281 |     pub fn get_investor_performance(env: &Env) -> Option<InvestorPerformanceMetrics> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated functions `calculate_investor_analytics` and `calc_investor_perf_metrics` are never used
+    --> src\analytics.rs:1049:12
+     |
+ 300 | impl AnalyticsCalculator {
+     | ------------------------ associated functions in this implementation
+...
+1049 |     pub fn calculate_investor_analytics(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1141 |     pub fn calc_investor_perf_metrics(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_audit_entry`, `query_audit_logs`, `get_audit_stats`, `validate_invoice_audit_integrity`, `get_all_audit_entries`, and `matches_filter` are never used
+   --> src\audit.rs:191:12
+    |
+168 | impl AuditStorage {
+    | ----------------- associated functions in this implementation
+...
+191 |     pub fn get_audit_entry(env: &Env, audit_id: &BytesN<32>) -> Option<AuditLogEntry> {
+    |            ^^^^^^^^^^^^^^^
+...
+226 |     pub fn query_audit_logs(
+    |            ^^^^^^^^^^^^^^^^
+...
+269 |     pub fn get_audit_stats(env: &Env) -> AuditStats {
+    |            ^^^^^^^^^^^^^^^
+...
+304 |     pub fn validate_invoice_audit_integrity(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+368 |     fn get_all_audit_entries(env: &Env) -> Vec<BytesN<32>> {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+376 |     fn matches_filter(entry: &AuditLogEntry, filter: &AuditQueryFilter) -> bool {
+    |        ^^^^^^^^^^^^^^
+
+warning: function `log_payment_processed` is never used
+   --> src\audit.rs:514:8
+    |
+514 | pub fn log_payment_processed(
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_invoice_uploaded` is never used
+   --> src\audit.rs:548:8
+    |
+548 | pub fn log_invoice_uploaded(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_invoice_verified` is never used
+   --> src\audit.rs:562:8
+    |
+562 | pub fn log_invoice_verified(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_invoice_cancelled` is never used
+   --> src\audit.rs:576:8
+    |
+576 | pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_bid_placed` is never used
+   --> src\audit.rs:590:8
+    |
+590 | pub fn log_bid_placed(
+    |        ^^^^^^^^^^^^^^
+
+warning: function `log_bid_accepted` is never used
+   --> src\audit.rs:610:8
+    |
+610 | pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `log_bid_withdrawn` is never used
+   --> src\audit.rs:624:8
+    |
+624 | pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid_id: BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: function `log_escrow_created` is never used
+   --> src\audit.rs:638:8
+    |
+638 | pub fn log_escrow_created(
+    |        ^^^^^^^^^^^^^^^^^^
+
+warning: function `log_settlement_completed` is never used
+   --> src\audit.rs:658:8
+    |
+658 | pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_bid_ttl_config`, `reset_bid_ttl_to_default`, `set_max_active_bids_per_investor`, `count_active_bids_by_investor`, `assert_bid_invariants`, and `count_bids_by_status` are never used
+   --> src\bid.rs:172:12
+    |
+ 89 | impl BidStorage {
+    | --------------- associated functions in this implementation
+...
+172 |     pub fn get_bid_ttl_config(env: &Env) -> BidTtlConfig {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+224 |     pub fn reset_bid_ttl_to_default(env: &Env, admin: &Address) -> Result<u64, QuickLendXError> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+245 |     pub fn set_max_active_bids_per_investor(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+503 |     pub fn count_active_bids_by_investor(env: &Env, investor: &Address) -> u32 {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+565 |     pub fn assert_bid_invariants(
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+595 |     pub fn count_bids_by_status(
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `PaymentRecorded` is never constructed
+  --> src\events.rs:81:12
+   |
+81 | pub struct PaymentRecorded {
+   |            ^^^^^^^^^^^^^^^
+
+warning: struct `InvoiceSettledFinal` is never constructed
+  --> src\events.rs:91:12
+   |
+91 | pub struct InvoiceSettledFinal {
+   |            ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `AuditValidation` is never constructed
+   --> src\events.rs:327:12
+    |
+327 | pub struct AuditValidation {
+    |            ^^^^^^^^^^^^^^^
+
+warning: struct `AuditQuery` is never constructed
+   --> src\events.rs:335:12
+    |
+335 | pub struct AuditQuery {
+    |            ^^^^^^^^^^
+
+warning: struct `DisputeCreated` is never constructed
+   --> src\events.rs:367:12
+    |
+367 | pub struct DisputeCreated {
+    |            ^^^^^^^^^^^^^^
+
+warning: struct `DisputeUnderReview` is never constructed
+   --> src\events.rs:376:12
+    |
+376 | pub struct DisputeUnderReview {
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: struct `DisputeResolved` is never constructed
+   --> src\events.rs:384:12
+    |
+384 | pub struct DisputeResolved {
+    |            ^^^^^^^^^^^^^^^
+
+warning: function `emit_payment_recorded` is never used
+   --> src\events.rs:590:8
+    |
+590 | pub fn emit_payment_recorded(
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_invoice_settled_final` is never used
+   --> src\events.rs:607:8
+    |
+607 | pub fn emit_invoice_settled_final(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_audit_validation` is never used
+   --> src\events.rs:946:8
+    |
+946 | pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_audit_query` is never used
+   --> src\events.rs:955:8
+    |
+955 | pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_created` is never used
+    --> src\events.rs:1015:8
+     |
+1015 | pub fn emit_dispute_created(
+     |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_under_review` is never used
+    --> src\events.rs:1030:8
+     |
+1030 | pub fn emit_dispute_under_review(env: &Env, invoice_id: &BytesN<32>, reviewed_by: &Address) {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_resolved` is never used
+    --> src\events.rs:1039:8
+     |
+1039 | pub fn emit_dispute_resolved(
+     |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ROTATION_TTL_SECONDS` is never used
+  --> src\fees.rs:12:7
+   |
+12 | const ROTATION_TTL_SECONDS: u64 = 604_800; // 7 days
+   |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ROTATION_KEY` is never used
+  --> src\fees.rs:21:7
+   |
+21 | const ROTATION_KEY: Symbol = symbol_short!("rotate");
+   |       ^^^^^^^^^^^^
+
+warning: associated functions `initiate_treasury_rotation`, `confirm_treasury_rotation`, `cancel_treasury_rotation`, and `get_pending_rotation` are never used
+   --> src\fees.rs:769:12
+    |
+149 | impl FeeManager {
+    | --------------- associated functions in this implementation
+...
+769 |     pub fn initiate_treasury_rotation(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+809 |     pub fn confirm_treasury_rotation(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+846 |     pub fn cancel_treasury_rotation(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+866 |     pub fn get_pending_rotation(env: &Env) -> Option<RecipientRotationRequest> {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MIN_INVOICE_AMOUNT` is never used
+  --> src\init.rs:51:7
+   |
+51 | const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 10;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MAX_DUE_DATE_DAYS` is never used
+  --> src\init.rs:52:7
+   |
+52 | const DEFAULT_MAX_DUE_DATE_DAYS: u64 = 365;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_GRACE_PERIOD_SECONDS` is never used
+  --> src\init.rs:53:7
+   |
+53 | const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 7 * 24 * 60 * 60; // 7 days
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_FEE_BPS` is never used
+  --> src\init.rs:54:7
+   |
+54 | const DEFAULT_FEE_BPS: u32 = 200; // 2%
+   |       ^^^^^^^^^^^^^^^
+
+warning: associated functions `get_active_investment_ids` and `validate_no_orphan_investments` are never used
+   --> src\investment.rs:412:12
+    |
+279 | impl InvestmentStorage {
+    | ---------------------- associated functions in this implementation
+...
+412 |     pub fn get_active_investment_ids(env: &Env) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+430 |     pub fn validate_no_orphan_investments(env: &Env) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_invoices_with_rating_above`, `get_business_invoices_with_rating_above`, `get_invoice_rating_stats`, `delete_invoice`, and `get_total_invoice_count` are never used
+    --> src\invoice.rs:1040:12
+     |
+ 785 | impl InvoiceStorage {
+     | ------------------- associated functions in this implementation
+...
+1040 |     pub fn get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<32>> {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1060 |     pub fn get_business_invoices_with_rating_above(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1097 |     pub fn get_invoice_rating_stats(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1302 |     pub fn delete_invoice(env: &Env, invoice_id: &BytesN<32>) {
+     |            ^^^^^^^^^^^^^^
+...
+1349 |     pub fn get_total_invoice_count(env: &Env) -> u32 {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_notification`, `update_notification_status`, `update_user_preferences`, and `get_user_notification_stats` are never used
+   --> src\notifications.rs:284:12
+    |
+226 | impl NotificationSystem {
+    | ----------------------- associated functions in this implementation
+...
+284 |     pub fn get_notification(env: &Env, notification_id: &BytesN<32>) -> Option<Notification> {
+    |            ^^^^^^^^^^^^^^^^
+...
+290 |     pub fn update_notification_status(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+338 |     pub fn update_user_preferences(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+352 |     pub fn get_user_notification_stats(env: &Env, user: &Address) -> NotificationStats {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src\notifications.rs:404:12
+    |
+402 | impl NotificationSystem {
+    | ----------------------- associated functions in this implementation
+403 |     /// Create invoice created notification
+404 |     pub fn notify_invoice_created(
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+428 |     pub fn notify_invoice_verified(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+452 |     pub fn notify_invoice_status_changed(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+546 |     pub fn notify_bid_received(
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+568 |     pub fn notify_bid_accepted(
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+593 |     pub fn notify_payment_received(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+633 |     pub fn notify_invoice_defaulted(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `make_breakdown` is never used
+   --> src\profits.rs:514:8
+    |
+514 |     fn make_breakdown(
+    |        ^^^^^^^^^^^^^^
+
+warning: constant `MAX_TAG_LENGTH` is never used
+  --> src\protocol_limits.rs:45:11
+   |
+45 | pub const MAX_TAG_LENGTH: u32 = 50;
+   |           ^^^^^^^^^^^^^^
+
+warning: function `compute_min_bid_amount` is never used
+   --> src\protocol_limits.rs:206:8
+    |
+206 | pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> i128 {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `StorageKeys` is never constructed
+  --> src\storage.rs:38:12
+   |
+38 | pub struct StorageKeys;
+   |            ^^^^^^^^^^^
+
+warning: associated functions `platform_fees`, `invoice_count`, `bid_count`, and `investment_count` are never used
+  --> src\storage.rs:62:12
+   |
+60 | impl StorageKeys {
+   | ---------------- associated functions in this implementation
+61 |     /// Key for platform fee configuration
+62 |     pub fn platform_fees() -> Symbol {
+   |            ^^^^^^^^^^^^^
+...
+67 |     pub fn invoice_count() -> Symbol {
+   |            ^^^^^^^^^^^^^
+...
+72 |     pub fn bid_count() -> Symbol {
+   |            ^^^^^^^^^
+...
+77 |     pub fn investment_count() -> Symbol {
+   |            ^^^^^^^^^^^^^^^^
+
+warning: struct `Indexes` is never constructed
+  --> src\storage.rs:83:12
+   |
+83 | pub struct Indexes;
+   |            ^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src\storage.rs:87:12
+    |
+ 85 | impl Indexes {
+    | ------------ associated functions in this implementation
+ 86 |     /// Index: invoices by business address
+ 87 |     pub fn invoices_by_business(business: &Address) -> (Symbol, Address) {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+ 92 |     pub fn invoices_by_status(status: InvoiceStatus) -> (Symbol, Symbol) {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+106 |     pub fn bids_by_invoice(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
+    |            ^^^^^^^^^^^^^^^
+...
+111 |     pub fn bids_by_investor(investor: &Address) -> (Symbol, Address) {
+    |            ^^^^^^^^^^^^^^^^
+...
+116 |     pub fn bids_by_status(status: BidStatus) -> (Symbol, Symbol) {
+    |            ^^^^^^^^^^^^^^
+...
+128 |     pub fn investments_by_invoice(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+133 |     pub fn investments_by_investor(investor: &Address) -> (Symbol, Address) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+138 |     pub fn investments_by_status(status: InvestmentStatus) -> (Symbol, Symbol) {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+150 |     pub fn invoices_by_customer(
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+157 |     pub fn invoices_by_tax_id(tax_id: &soroban_sdk::String) -> (Symbol, soroban_sdk::String) {
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: struct `InvoiceStorage` is never constructed
+   --> src\storage.rs:163:12
+    |
+163 | pub struct InvoiceStorage;
+    |            ^^^^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src\storage.rs:167:12
+    |
+165 | impl InvoiceStorage {
+    | ------------------- associated functions in this implementation
+166 |     /// Store an invoice
+167 |     pub fn store(env: &Env, invoice: &Invoice) {
+    |            ^^^^^
+...
+179 |     pub fn get_by_business(env: &Env, business: &Address) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^^^
+...
+187 |     pub fn get_by_status(env: &Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^
+...
+196 |     pub fn get(env: &Env, invoice_id: &BytesN<32>) -> Option<Invoice> {
+    |            ^^^
+...
+201 |     pub fn update(env: &Env, invoice: &Invoice) {
+    |            ^^^^^^
+...
+228 |     fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+239 |     fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+250 |     fn remove_from_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+260 |     pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+273 |     pub fn remove_from_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+289 |     pub fn add_to_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+302 |     pub fn remove_from_tax_id_index(env: &Env, tax_id: &String, invoice_id: &BytesN<32>) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+319 |     pub fn next_count(env: &Env) -> u64 {
+    |            ^^^^^^^^^^
+
+warning: struct `BidStorage` is never constructed
+   --> src\storage.rs:334:12
+    |
+334 | pub struct BidStorage;
+    |            ^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src\storage.rs:338:12
+    |
+336 | impl BidStorage {
+    | --------------- associated functions in this implementation
+337 |     /// Store a bid
+338 |     pub fn store(env: &Env, bid: &Bid) {
+    |            ^^^^^
+...
+348 |     pub fn get(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
+    |            ^^^
+...
+353 |     pub fn update(env: &Env, bid: &Bid) {
+    |            ^^^^^^
+...
+366 |     pub fn get_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^^
+...
+374 |     pub fn get_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^^^
+...
+382 |     pub fn get_by_status(env: &Env, status: BidStatus) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^
+...
+390 |     fn add_to_invoice_index(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+401 |     fn add_to_investor_index(env: &Env, investor: &Address, bid_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+412 |     fn add_to_status_index(env: &Env, status: BidStatus, bid_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+423 |     fn remove_from_status_index(env: &Env, status: BidStatus, bid_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+434 |     pub fn next_count(env: &Env) -> u64 {
+    |            ^^^^^^^^^^
+
+warning: struct `InvestmentStorage` is never constructed
+   --> src\storage.rs:449:12
+    |
+449 | pub struct InvestmentStorage;
+    |            ^^^^^^^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src\storage.rs:453:12
+    |
+451 | impl InvestmentStorage {
+    | ---------------------- associated functions in this implementation
+452 |     /// Store an investment
+453 |     pub fn store(env: &Env, investment: &Investment) {
+    |            ^^^^^
+...
+465 |     pub fn get(env: &Env, investment_id: &BytesN<32>) -> Option<Investment> {
+    |            ^^^
+...
+470 |     pub fn update(env: &Env, investment: &Investment) {
+    |            ^^^^^^
+...
+493 |     pub fn get_by_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^^
+...
+501 |     pub fn get_by_investor(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^^^
+...
+509 |     pub fn get_by_status(env: &Env, status: InvestmentStatus) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^
+...
+517 |     fn add_to_invoice_index(env: &Env, invoice_id: &BytesN<32>, investment_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+528 |     fn add_to_investor_index(env: &Env, investor: &Address, investment_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+539 |     fn add_to_status_index(env: &Env, status: InvestmentStatus, investment_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^
+...
+550 |     fn remove_from_status_index(env: &Env, status: InvestmentStatus, investment_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+561 |     pub fn next_count(env: &Env) -> u64 {
+    |            ^^^^^^^^^^
+
+warning: struct `ConfigStorage` is never constructed
+   --> src\storage.rs:576:12
+    |
+576 | pub struct ConfigStorage;
+    |            ^^^^^^^^^^^^^
+
+warning: associated functions `set_platform_fees` and `get_platform_fees` are never used
+   --> src\storage.rs:580:12
+    |
+578 | impl ConfigStorage {
+    | ------------------ associated functions in this implementation
+579 |     /// Store platform fee configuration
+580 |     pub fn set_platform_fees(env: &Env, config: &PlatformFeeConfig) {
+    |            ^^^^^^^^^^^^^^^^^
+...
+587 |     pub fn get_platform_fees(env: &Env) -> Option<PlatformFeeConfig> {
+    |            ^^^^^^^^^^^^^^^^^
+
+warning: function `setup_cancelled_invoice` is never used
+  --> src\test_partial_payments.rs:61:8
+   |
+61 |     fn setup_cancelled_invoice(
+   |        ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `create_verified_business` is never used
+   --> src\test_partial_payments.rs:295:8
+    |
+295 |     fn create_verified_business(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `create_verified_investor` is never used
+   --> src\test_partial_payments.rs:306:8
+    |
+306 |     fn create_verified_investor(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `is_business_verified` is never used
+   --> src\verification.rs:227:12
+    |
+ 72 | impl BusinessVerificationStorage {
+    | -------------------------------- associated function in this implementation
+...
+227 |     pub fn is_business_verified(env: &Env, business: &Address) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: associated constants `INVESTOR_HISTORY_KEY` and `INVESTOR_ANALYTICS_KEY` are never used
+   --> src\verification.rs:358:11
+    |
+353 | impl InvestorVerificationStorage {
+    | -------------------------------- associated constants in this implementation
+...
+358 |     const INVESTOR_HISTORY_KEY: &'static str = "investor_history";
+    |           ^^^^^^^^^^^^^^^^^^^^
+359 |     #[cfg(test)]
+360 |     const INVESTOR_ANALYTICS_KEY: &'static str = "investor_analytics";
+    |           ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `require_business_verification` is never used
+   --> src\verification.rs:769:8
+    |
+769 | pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `recover_base_limit_from_current_limit` is never used
+    --> src\verification.rs:1168:4
+     |
+1168 | fn recover_base_limit_from_current_limit(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `update_investor_analytics` is never used
+    --> src\verification.rs:1189:8
+     |
+1189 | pub fn update_investor_analytics(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_investor_analytics` is never used
+    --> src\verification.rs:1242:8
+     |
+1242 | pub fn get_investor_analytics(
+     |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MIN_INVOICE_AMOUNT` is never used
+  --> src\init.rs:49:7
+   |
+49 | const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `quicklendx-contracts` (lib test) generated 89 warnings (6 duplicates) (run `cargo fix --lib -p quicklendx-contracts --tests` to apply 9 suggestions)
+warning: `quicklendx-contracts` (lib) generated 64 warnings (56 duplicates) (run `cargo fix --lib -p quicklendx-contracts` to apply 7 suggestions)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 46s
+     Running unittests src\lib.rs (target\debug\deps\quicklendx_contracts-bb77a733cf24da30.exe)
+
+running 99 tests
+test profits::tests::test_breakdown_no_profit ... ok
+test profits::tests::test_exact_payment_no_profit ... ok
+test profits::tests::test_overpayment_high_profit ... ok
+test profits::tests::test_rounding_boundary ... ok
+test profits::tests::test_basic_profit_calculation ... ok
+test profits::tests::test_breakdown_complete ... ok
+test profits::tests::test_large_amounts ... ok
+test profits::tests::test_max_fee ... ok
+test profits::tests::test_treasury_split_basic ... ok
+test profits::tests::test_treasury_split_full_share ... ok
+test profits::tests::test_rounding_down_small_profit ... ok
+test profits::tests::test_rounding_just_below_boundary ... ok
+test profits::tests::test_treasury_split_zero_fee ... ok
+test profits::tests::test_treasury_split_zero_share ... ok
+test profits::tests::test_validate_inputs_valid ... ok
+test profits::tests::test_various_fee_percentages ... ok
+test profits::tests::test_treasury_split_rounding ... ok
+test profits::tests::test_treasury_split_uneven ... ok
+test profits::tests::test_validate_inputs_negative ... ok
+test profits::tests::test_underpayment_loss ... ok
+test profits::tests::test_zero_fee ... ok
+test profits::tests::test_zero_investment ... ok
+test profits::tests::test_verify_no_dust_negative ... ok
+test profits::tests::test_verify_no_dust_positive ... ok
+test profits::tests::test_zero_payment ... ok
+test scratch_events::test_diagnose_events ... ok
+test test_admin::test_admin::test_admin_can_reject_business_after_set_admin ... ok
+test test_admin::test_admin::test_admin_can_set_platform_fee ... ok
+test test_admin::test_admin::test_admin_authorization_in_investor_verification ... ok
+test test_admin::test_admin::test_admin_verification_workflow_with_set_admin ... ok
+test test_admin::test_admin::test_coverage_edge_case_admin_transfer_to_same_address ... ok
+test test_admin::test_admin::test_get_admin_consistency_between_modules ... ok
+test test_admin::test_admin::test_admin_can_reject_investor ... ok
+test test_admin::test_admin::test_get_admin_returns_none_before_init ... ok
+test test_admin::test_admin::test_get_current_admin_after_init_returns_address ... ok
+test test_admin::test_admin::test_admin_operations_fail_without_initialization ... ok
+test test_admin::test_admin::test_admin_verification_workflow_with_initialize_admin ... ok
+test test_admin::test_admin::test_admin_can_verify_invoice ... ok
+test test_admin::test_admin::test_get_current_admin_after_transfer_returns_new_address ... ok
+test test_admin::test_admin::test_get_current_admin_tracks_full_lifecycle ... ok
+test test_admin::test_admin::test_get_current_admin_before_init_returns_none ... ok
+test test_admin::test_admin::test_get_admin_returns_none_before_any_initialization ... ok
+test test_admin::test_admin::test_initialize_admin_and_set_admin_consistency ... ok
+test test_admin::test_admin::test_initialize_admin_same_address_twice_fails ... ok
+test test_admin::test_admin::test_initialize_admin_double_init_fails ... ok
+test test_admin::test_admin::test_initialize_admin_succeeds ... ok
+test test_admin::test_admin::test_is_admin_returns_false_before_init ... ok
+test test_admin::test_admin::test_is_admin_returns_false_for_different_address ... ok
+test test_admin::test_admin::test_initialize_admin_prevents_initialize ... FAILED
+test test_admin::test_admin::test_initialize_emits_admin_set_event ... ok
+test test_admin::test_admin::test_non_admin_cannot_verify_after_set_admin ... ok
+test test_admin::test_admin::test_non_admin_cannot_verify_investor ... ok
+test test_admin::test_admin::test_admin_storage_persistence_across_operations ... ok
+test test_admin::test_admin::test_require_admin_succeeds_for_admin ... ok
+test test_admin::test_admin::test_set_admin_and_initialize_admin_consistency ... ok
+test test_admin::test_admin::test_is_admin_returns_true_for_current_admin ... ok
+test test_admin::test_admin::test_require_admin_fails_before_init ... ok
+test test_admin::test_admin::test_require_admin_fails_for_non_admin ... ok
+test test_admin::test_admin::test_multiple_admin_transfers_in_verification_context ... ok
+test test_admin::test_admin::test_initialize_prevents_initialize_admin ... ok
+test test_admin::test_admin::test_set_admin_syncs_with_admin_storage_initialization_flag ... ok
+test test_admin::test_admin::test_set_admin_transfer_via_verification_module ... ok
+test test_admin::test_admin::test_set_admin_first_time_via_verification_module ... ok
+test test_admin::test_admin::test_set_admin_rejects_non_admin_caller ... ok
+test test_admin::test_admin::test_set_platform_fee_without_admin_fails ... ok
+test test_admin::test_admin::test_transfer_admin_succeeds ... ok
+test test_admin::test_admin::test_transfer_admin_chain ... ok
+test test_init::test_get_version_before_initialization ... ok
+test test_init::test_idempotent_initialization ... ok
+test test_admin::test_admin::test_transfer_admin_to_self ... ok
+test test_admin::test_admin::test_transferred_admin_can_verify_business ... ok
+test test_admin::test_admin::test_verify_invoice_without_admin_fails ... ok
+test test_admin::test_admin::test_transfer_emits_admin_transferred_event ... ok
+test test_init::test_validation_invalid_due_date ... ok
+test test_init::test_validation_invalid_amount ... ok
+test test_init::test_double_initialization_fails ... ok
+test test_init::test_get_version_after_initialization ... ok
+test test_admin::test_admin::test_transfer_admin_without_init_fails ... ok
+test test_init::test_version_edge_cases ... ok
+test test_init::test_validation_invalid_fees ... ok
+test test_init::test_version_consistency_across_operations ... ok
+test test_init::test_successful_initialization ... ok
+test test_init::test_validation_invalid_grace_period ... ok
+test test_init::test_version_format_documentation ... ok
+test test_init::test_initialization_requires_admin_auth - should panic ... FAILED
+test test_init::test_version_immutability ... ok
+test test_partial_payments::tests::test_missing_invoice_is_rejected ... ok
+test test_partial_payments::tests::test_duplicate_transaction_id_is_deduplicated ... ok
+test test_partial_payments::tests::test_duplicate_transaction_id_idempotency ... ok
+test test_partial_payments::tests::test_overpayment_capping_order ... ok
+test test_partial_payments::tests::test_partial_payment_accumulates_correctly ... ok
+test test_partial_payments::tests::test_zero_amount_rejected ... ok
+test test_partial_payments::tests::test_payment_ordering_integrity ... ok
+test test_partial_payments::tests::test_empty_transaction_id_is_allowed_and_recorded ... ok
+test test_partial_payments::tests::test_overpayment_is_capped_at_total_due ... ok
+test test_partial_payments::tests::test_final_payment_marks_invoice_paid ... ok
+test test_partial_payments::tests::test_transaction_id_is_stored_in_records ... ok
+test test_partial_payments::tests::test_payment_records_are_queryable_and_ordered ... ok
+test test_partial_payments::tests::test_pagination_and_limits ... ok
+
+failures:
+
+---- test_admin::test_admin::test_initialize_admin_prevents_initialize stdout ----
+
+thread 'test_admin::test_admin::test_initialize_admin_prevents_initialize' (15380) panicked at src\test_admin.rs:142:9:
+assertion `left == right` failed: initialize must fail after initialize_admin
+  left: Ok(Ok(()))
+ right: Err(Ok(OperationNotAllowed))
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+Writing test snapshot file for test "test_admin::test_admin::test_initialize_admin_prevents_initialize" to "test_snapshots\\test_admin\\test_admin\\test_initialize_admin_prevents_initialize.1.json".
+
+---- test_init::test_initialization_requires_admin_auth stdout ----
+Writing test snapshot file for test "test_init::test_initialization_requires_admin_auth" to "test_snapshots\\test_init\\test_initialization_requires_admin_auth.1.json".
+note: test did not panic as expected at src\test_init.rs:94:4
+
+failures:
+    test_admin::test_admin::test_initialize_admin_prevents_initialize
+    test_init::test_initialization_requires_admin_auth
+
+test result: FAILED. 97 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 10.74s
+
+error: test failed, to rerun pass `--lib`

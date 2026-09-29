@@ -39,6 +39,7 @@ fn make_dispute(env: &Env) -> Dispute {
         resolution: String::from_str(env, ""),
         resolved_by: Address::generate(env),
         resolved_at: 0,
+        resolution_outcome: DisputeResolution::None,
     }
 }
 
@@ -55,6 +56,7 @@ fn make_metadata(env: &Env) -> InvoiceMetadata {
 
 /// Build a minimal, valid `Invoice`.
 fn make_invoice(env: &Env) -> Invoice {
+    let metadata = make_metadata(env);
     Invoice {
         id: BytesN::from_array(env, &[1u8; 32]),
         business: Address::generate(env),
@@ -62,15 +64,29 @@ fn make_invoice(env: &Env) -> Invoice {
         currency: Address::generate(env),
         due_date: 1_800_000_000,
         status: InvoiceStatus::Pending,
+        created_at: 1_700_000_000,
         description: String::from_str(env, "Test invoice"),
+        metadata_customer_name: Some(metadata.customer_name.clone()),
+        metadata_customer_address: Some(metadata.customer_address.clone()),
+        metadata_tax_id: Some(metadata.tax_id.clone()),
+        metadata_notes: Some(metadata.notes.clone()),
+        metadata_line_items: metadata.line_items.clone(),
         category: InvoiceCategory::Services,
         tags: Vec::new(env),
-        metadata: make_metadata(env),
-        dispute: make_dispute(env),
-        payments: Vec::new(env),
+        funded_amount: 0,
+        funded_at: None,
+        investor: None,
+        settled_at: None,
+        average_rating: None,
+        total_ratings: 0,
         ratings: Vec::new(env),
-        created_at: 1_700_000_000,
-        updated_at: 1_700_000_000,
+        dispute_status: DisputeStatus::None,
+        dispute: make_dispute(env),
+        total_paid: 0,
+        payment_history: Vec::new(env),
+        origination_fee_bps: None,
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     }
 }
 
@@ -703,6 +719,7 @@ fn test_dispute_unresolved_state() {
         resolution: String::from_str(&env, ""),
         resolved_by: Address::generate(&env),
         resolved_at: 0,
+        resolution_outcome: DisputeResolution::None,
     };
     assert_eq!(d.resolved_at, 0);
     assert_eq!(d.resolution, String::from_str(&env, ""));

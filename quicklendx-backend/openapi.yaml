@@ -1,0 +1,427 @@
+openapi: 3.0.3
+info:
+  title: QuickLendX API
+  description: Invoice factoring and lending platform API
+  version: 1.0.0
+  contact:
+    name: QuickLendX Team
+
+servers:
+  - url: http://localhost:3000/api/v1
+    description: Development server
+  - url: https://api.quicklendx.com/v1
+    description: Production server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Error:
+      type: object
+      required:
+        - error
+        - message
+      properties:
+        error:
+          type: string
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          example: "Invalid request parameters"
+        details:
+          type: object
+          additionalProperties: true
+
+    User:
+      type: object
+      required:
+        - id
+        - email
+        - role
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: "550e8400-e29b-41d4-a716-446655440000"
+        email:
+          type: string
+          format: email
+          example: "user@example.com"
+        role:
+          type: string
+          enum: [investor, business, admin]
+          example: "investor"
+        kycStatus:
+          type: string
+          enum: [pending, approved, rejected]
+          example: "approved"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+        updatedAt:
+          type: string
+          format: date-time
+          example: "2024-01-15T10:30:00Z"
+
+    Invoice:
+      type: object
+      required:
+        - id
+        - businessId
+        - amount
+        - currency
+        - dueDate
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        businessId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          pattern: '^\d+(\.\d{1,7})?$'
+          example: "10000.00"
+        currency:
+          type: string
+          enum: [USDC, EURC]
+          example: "USDC"
+        dueDate:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum: [pending, active, funded, settled, defaulted]
+        metadata:
+          type: object
+          additionalProperties: true
+
+    Bid:
+      type: object
+      required:
+        - id
+        - invoiceId
+        - investorId
+        - amount
+        - interestRate
+        - status
+      properties:
+        id:
+          type: string
+          format: uuid
+        invoiceId:
+          type: string
+          format: uuid
+        investorId:
+          type: string
+          format: uuid
+        amount:
+          type: string
+          pattern: '^\d+(\.\d{1,7})?$'
+        interestRate:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 100
+        status:
+          type: string
+          enum: [pending, accepted, rejected, expired]
+        createdAt:
+          type: string
+          format: date-time
+
+    AuthResponse:
+      type: object
+      required:
+        - token
+        - user
+      properties:
+        token:
+          type: string
+          example: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        refreshToken:
+          type: string
+        user:
+          $ref: '#/components/schemas/User'
+
+paths:
+  /auth/login:
+    post:
+      summary: User login
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Successful login
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/register:
+    post:
+      summary: User registration
+      tags: [Authentication]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - email
+                - password
+                - role
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                role:
+                  type: string
+                  enum: [investor, business]
+      responses:
+        '201':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /users/profile:
+    get:
+      summary: Get user profile
+      tags: [Users]
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: User profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /invoices:
+    get:
+      summary: List invoices
+      tags: [Invoices]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, active, funded, settled, defaulted]
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: List of invoices
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                  - total
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Invoice'
+                  total:
+                    type: integer
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+
+    post:
+      summary: Create invoice
+      tags: [Invoices]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - amount
+                - currency
+                - dueDate
+              properties:
+                amount:
+                  type: string
+                  pattern: '^\d+(\.\d{1,7})?$'
+                currency:
+                  type: string
+                  enum: [USDC, EURC]
+                dueDate:
+                  type: string
+                  format: date-time
+                metadata:
+                  type: object
+      responses:
+        '201':
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /invoices/{invoiceId}:
+    get:
+      summary: Get invoice by ID
+      tags: [Invoices]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: invoiceId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Invoice details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Invoice'
+        '404':
+          description: Invoice not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /bids:
+    post:
+      summary: Create bid
+      tags: [Bids]
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - invoiceId
+                - amount
+                - interestRate
+              properties:
+                invoiceId:
+                  type: string
+                  format: uuid
+                amount:
+                  type: string
+                  pattern: '^\d+(\.\d{1,7})?$'
+                interestRate:
+                  type: number
+                  format: float
+                  minimum: 0
+                  maximum: 100
+      responses:
+        '201':
+          description: Bid created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bid'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /health:
+    get:
+      summary: Health check
+      tags: [System]
+      responses:
+        '200':
+          description: Service is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - status
+                  - timestamp
+                properties:
+                  status:
+                    type: string
+                    enum: [healthy]
+                  timestamp:
+                    type: string
+                    format: date-time
+                  version:
+                    type: string

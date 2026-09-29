@@ -1,6 +1,19 @@
+#![allow(dead_code)]
+
 use crate::errors::QuickLendXError;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use crate::types::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, Address, Bytes, BytesN, Env, String, Vec};
+
+/// Category breakdown for invoices
+///
+/// A lightweight summary of invoice count per category, suitable for dashboard views.
+/// Omits categories with zero invoices to minimize response size. The breakdown is
+/// bounded by the number of distinct categories (9 as of the current InvoiceCategory enum).
+///
+/// Each entry is `(category, invoice_count)`.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CategoryBreakdown(pub Vec<(InvoiceCategory, u32)>);
 
 /// Time period for analytics reports
 #[contracttype]
@@ -14,9 +27,16 @@ pub enum TimePeriod {
     AllTime,
 }
 
+/// Analytics snapshot schema version exposed to off-chain indexers.
+///
+/// Increment this constant whenever `AnalyticsSnapshot` changes in a breaking
+/// way (field removal, rename, semantic change, or type change). Additive
+/// fields should be coordinated with indexers before bumping.
+pub const ANALYTICS_SCHEMA_VERSION: u32 = 1;
+
 /// Platform metrics structure
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformMetrics {
     pub total_invoices: u32,
     pub total_investments: u32,
@@ -30,6 +50,22 @@ pub struct PlatformMetrics {
     pub default_rate: i128,
     pub success_rate: i128,
     pub timestamp: u64,
+}
+
+/// Versioned analytics snapshot for off-chain indexers.
+///
+/// This contract type has a JSON-equivalent shape documented in
+/// `quicklendx-contracts/docs/analytics-snapshot.md`. The snapshot bundles
+/// platform and performance metrics produced during one read-only contract
+/// invocation, and `schema_version` is stamped from
+/// `ANALYTICS_SCHEMA_VERSION` so indexers can reject incompatible schemas.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct AnalyticsSnapshot {
+    pub schema_version: u32,
+    pub ledger_timestamp: u64,
+    pub platform_metrics: PlatformMetrics,
+    pub performance_metrics: PerformanceMetrics,
 }
 
 /// User behavior analytics
@@ -66,7 +102,7 @@ pub struct FinancialMetrics {
 
 /// Performance tracking metrics
 #[contracttype]
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PerformanceMetrics {
     pub platform_uptime: u64,
     pub average_settlement_time: u64,
@@ -175,6 +211,10 @@ pub struct AnalyticsData {
 pub struct AnalyticsStorage;
 
 impl AnalyticsStorage {
+    fn report_counter_key() -> (soroban_sdk::Symbol,) {
+        (symbol_short!("rpt_cnt"),)
+    }
+
     fn platform_metrics_key() -> (soroban_sdk::Symbol,) {
         (symbol_short!("plt_met"),)
     }
@@ -287,10 +327,14 @@ impl AnalyticsStorage {
     pub fn generate_report_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let sequence = env.ledger().sequence();
-        let _combined = timestamp.wrapping_add(sequence as u64);
-        let bytes = Bytes::new(env);
+        let ts = timestamp.to_be_bytes();
+        let seq = sequence.to_be_bytes();
+        let combined: [u8; 12] = [
+            ts[0], ts[1], ts[2], ts[3], ts[4], ts[5], ts[6], ts[7], seq[0], seq[1], seq[2], seq[3],
+        ];
+        let bytes = Bytes::from_array(env, &combined);
         let hash = env.crypto().sha256(&bytes);
-        BytesN::from_array(&env, &hash.to_array())
+        BytesN::from_array(env, &hash.to_array())
     }
 }
 
@@ -298,27 +342,41 @@ impl AnalyticsStorage {
 pub struct AnalyticsCalculator;
 
 impl AnalyticsCalculator {
-    /// Calculate comprehensive platform metrics
+    fn bps(numer: u32, denom: u32) -> i128 {
+        if denom == 0 {
+            return 0;
+        }
+        let v = (numer.saturating_mul(10000)).saturating_div(denom) as i128;
+        v.clamp(0, 10000)
+    }
+
+    /// Calculate a snapshot of comprehensive platform metrics from on-chain state.
+    ///
+    /// Iterates all invoices by status to derive totals, rates, and averages.
+    /// Returns zero for every field when the contract has no data (empty state).
+    ///
+    /// # Security
+    /// Read-only — no auth required. Does not expose individual user data.
     pub fn calculate_platform_metrics(env: &Env) -> Result<PlatformMetrics, QuickLendXError> {
         let current_timestamp = env.ledger().timestamp();
 
         // Get all invoices by status
         let pending_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Pending);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Pending);
         let verified_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Verified);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Verified);
         let funded_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Funded);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
         let paid_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Paid);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Paid);
         let defaulted_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Defaulted);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Defaulted);
 
-        let total_invoices = (pending_invoices.len()
+        let total_invoices = pending_invoices.len()
             + verified_invoices.len()
             + funded_invoices.len()
             + paid_invoices.len()
-            + defaulted_invoices.len()) as u32;
+            + defaulted_invoices.len();
 
         // Calculate total volume
         let mut total_volume = 0i128;
@@ -332,19 +390,21 @@ impl AnalyticsCalculator {
         .iter()
         {
             for id in invoice_id.iter() {
-                if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &id) {
+                if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &id) {
                     total_volume = total_volume.saturating_add(invoice.amount);
                 }
             }
         }
 
-        // Calculate total investments by counting funded invoices
-        let total_investments = funded_invoices.len() as u32;
+        // Calculate total investments by counting invoices that have been funded at least once.
+        // In this contract model, an invoice that is Paid or Defaulted must have been funded.
+        let total_investments =
+            funded_invoices.len() + paid_invoices.len() + defaulted_invoices.len();
 
         // Calculate total fees collected
         let mut total_fees = 0i128;
         for invoice_id in paid_invoices.iter() {
-            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+            if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if let Some(investment) =
                     crate::investment::InvestmentStorage::get_investment_by_invoice(
                         env,
@@ -364,7 +424,7 @@ impl AnalyticsCalculator {
         // Count verified businesses
         let verified_businesses =
             crate::verification::BusinessVerificationStorage::get_verified_businesses(env);
-        let verified_businesses_count = verified_businesses.len() as u32;
+        let verified_businesses_count = verified_businesses.len();
 
         // Calculate averages
         let average_invoice_amount = if total_invoices > 0 {
@@ -375,14 +435,17 @@ impl AnalyticsCalculator {
 
         let average_investment_amount = if total_investments > 0 {
             let mut total_invested = 0i128;
-            for invoice_id in funded_invoices.iter() {
-                if let Some(investment) =
-                    crate::investment::InvestmentStorage::get_investment_by_invoice(
-                        env,
-                        &invoice_id,
-                    )
-                {
-                    total_invested = total_invested.saturating_add(investment.amount);
+            // Include all invoices that should have associated investments.
+            for invoice_ids in [&funded_invoices, &paid_invoices, &defaulted_invoices].iter() {
+                for invoice_id in invoice_ids.iter() {
+                    if let Some(investment) =
+                        crate::investment::InvestmentStorage::get_investment_by_invoice(
+                            env,
+                            &invoice_id,
+                        )
+                    {
+                        total_invested = total_invested.saturating_add(investment.amount);
+                    }
                 }
             }
             total_invested.saturating_div(total_investments as i128)
@@ -396,20 +459,13 @@ impl AnalyticsCalculator {
 
         // Calculate default rate
         let _current_timestamp = env.ledger().timestamp();
-        let default_rate = if total_investments > 0 {
-            let defaulted_count = defaulted_invoices.len() as u32;
-            (defaulted_count.saturating_mul(10000)).saturating_div(total_investments) as i128
-        } else {
-            0
-        };
+        let default_rate = Self::bps(defaulted_invoices.len(), total_investments);
 
         // Calculate success rate
-        let success_rate = if total_investments > 0 {
-            let successful_count = paid_invoices.len() as u32;
-            (successful_count.saturating_mul(10000)).saturating_div(total_investments) as i128
-        } else {
-            0
-        };
+        let success_rate = Self::bps(paid_invoices.len(), total_investments);
+
+        let success_rate = success_rate.min(10000);
+        let default_rate = default_rate.min(10000);
 
         Ok(PlatformMetrics {
             total_invoices,
@@ -427,6 +483,35 @@ impl AnalyticsCalculator {
         })
     }
 
+    /// Export a versioned analytics snapshot for off-chain indexers.
+    ///
+    /// The composed metrics are calculated in this single read-only host call,
+    /// so they observe one ledger close and cannot be torn by an intervening
+    /// contract mutation. The internal work is bounded by the same platform
+    /// invoice limits enforced at upload time (`max_invoices_per_business`,
+    /// default 100 active invoices per business) plus the finite stored status
+    /// indexes scanned by the reused calculators. This function performs no
+    /// storage writes and requires no auth.
+    ///
+    /// Fails with [`QuickLendXError::ActiveDisputeExists`] while any invoice
+    /// has an unresolved dispute — see
+    /// [`crate::dispute::require_no_active_dispute_snapshot`] for the threat
+    /// this guards against.
+    pub fn export_analytics_snapshot(env: &Env) -> Result<AnalyticsSnapshot, QuickLendXError> {
+        crate::dispute::require_no_active_dispute_snapshot(env)?;
+
+        let ledger_timestamp = env.ledger().timestamp();
+        let platform_metrics = Self::calculate_platform_metrics(env)?;
+        let performance_metrics = Self::calculate_performance_metrics(env)?;
+
+        Ok(AnalyticsSnapshot {
+            schema_version: ANALYTICS_SCHEMA_VERSION,
+            ledger_timestamp,
+            platform_metrics,
+            performance_metrics,
+        })
+    }
+
     /// Calculate user behavior metrics
     pub fn calculate_user_behavior_metrics(
         env: &Env,
@@ -435,8 +520,8 @@ impl AnalyticsCalculator {
         let _current_timestamp = env.ledger().timestamp();
 
         // Get user's invoices
-        let user_invoices = crate::invoice::InvoiceStorage::get_business_invoices(env, user);
-        let total_invoices_uploaded = user_invoices.len() as u32;
+        let user_invoices = crate::storage::InvoiceStorage::get_business_invoices(env, user);
+        let total_invoices_uploaded = user_invoices.len();
 
         // Get user's investments (simplified - would need proper tracking)
         let total_investments_made = 0u32; // Placeholder - would need investor tracking
@@ -477,7 +562,7 @@ impl AnalyticsCalculator {
         // Find last activity
         let mut last_activity = 0u64;
         for invoice_id in user_invoices.iter() {
-            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+            if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if invoice.created_at > last_activity {
                     last_activity = invoice.created_at;
                 }
@@ -499,7 +584,20 @@ impl AnalyticsCalculator {
         })
     }
 
-    /// Calculate financial metrics
+    /// Calculate financial metrics for the given `TimePeriod`.
+    ///
+    /// Only invoices whose `created_at` falls within `[start_date, end_date]`
+    /// (both ends inclusive) contribute to volume, fees, and profits.
+    /// Returns all-zero fields when no invoices match the window.
+    ///
+    /// # Edge cases
+    /// - At `timestamp = 0`, every timed period produces `start == end == 0`; the
+    ///   window is degenerate (zero-length) and all totals will be zero.
+    /// - `AllTime` always uses `start = 0`, so it captures every invoice ever created.
+    ///
+    /// # Security
+    /// Read-only — no auth required. Aggregated totals only; no individual invoice
+    /// details are returned.
     pub fn calculate_financial_metrics(
         env: &Env,
         period: TimePeriod,
@@ -525,7 +623,7 @@ impl AnalyticsCalculator {
         ];
 
         for category in categories.iter() {
-            volume_by_category.push_back((category.clone(), 0i128));
+            volume_by_category.push_back((*category, 0i128));
         }
 
         // Get all invoices in the period by combining all statuses
@@ -539,13 +637,13 @@ impl AnalyticsCalculator {
         ]
         .iter()
         {
-            let invoices = crate::invoice::InvoiceStorage::get_invoices_by_status(env, status);
+            let invoices = crate::storage::InvoiceStorage::get_invoices_by_status(env, *status);
             for invoice_id in invoices.iter() {
                 all_invoices.push_back(invoice_id);
             }
         }
         for invoice_id in all_invoices.iter() {
-            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+            if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if invoice.created_at >= start_date && invoice.created_at <= end_date {
                     total_volume = total_volume.saturating_add(invoice.amount);
 
@@ -691,8 +789,7 @@ impl AnalyticsCalculator {
         ]
         .iter()
         {
-            let count =
-                crate::invoice::InvoiceStorage::get_invoices_by_status(env, status).len() as u32;
+            let count = crate::storage::InvoiceStorage::get_invoices_by_status(env, *status).len();
             total_transactions += count;
             if *status == InvoiceStatus::Paid {
                 successful_transactions = count;
@@ -707,9 +804,10 @@ impl AnalyticsCalculator {
 
         // Calculate error rate (simplified)
         let defaulted_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Defaulted);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Defaulted);
         let error_rate = if total_transactions > 0 {
-            (defaulted_invoices.len() as u32)
+            defaulted_invoices
+                .len()
                 .saturating_mul(10000)
                 .saturating_div(total_transactions) as i128
         } else {
@@ -719,14 +817,12 @@ impl AnalyticsCalculator {
         // Calculate user satisfaction score (based on ratings)
         let mut total_rating = 0u32;
         let mut rating_count = 0u32;
-        let _invoices_with_ratings =
-            crate::invoice::InvoiceStorage::get_invoices_with_ratings_count(env);
 
         // Get paid invoices for rating calculation
         let paid_invoices =
-            crate::invoice::InvoiceStorage::get_invoices_by_status(env, &InvoiceStatus::Paid);
+            crate::storage::InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Paid);
         for invoice_id in paid_invoices.iter() {
-            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+            if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if let Some(avg_rating) = invoice.average_rating {
                     total_rating = total_rating.saturating_add(avg_rating);
                     rating_count += 1;
@@ -759,7 +855,25 @@ impl AnalyticsCalculator {
         })
     }
 
-    /// Generate business report
+    /// Generate and persist a `BusinessReport` for `business` over `period`.
+    ///
+    /// Counts invoices, funding events, volume, success/default rates, and
+    /// category breakdowns scoped to invoices whose `created_at` is within
+    /// the period window `[start_date, end_date]` (both inclusive).
+    ///
+    /// The report is stored on-chain and retrievable via `AnalyticsStorage::get_business_report`.
+    /// Each call produces a new report with a fresh ID; existing stored reports
+    /// are never mutated — they remain immutable snapshots of the ledger state
+    /// at the moment of generation.
+    ///
+    /// # Edge cases
+    /// - If no invoices fall within the period window, all counters are 0.
+    /// - A near-zero `current_timestamp` causes timed periods to saturate to
+    ///   `start = 0` via `saturating_sub`, making the window `[0, ts]`.
+    ///
+    /// # Security
+    /// Does not expose private user data from other businesses.
+    /// Callers should authenticate the business address before surfacing results.
     pub fn generate_business_report(
         env: &Env,
         business: &Address,
@@ -770,7 +884,7 @@ impl AnalyticsCalculator {
         let report_id = AnalyticsStorage::generate_report_id(env);
 
         // Get business invoices in the period
-        let all_invoices = crate::invoice::InvoiceStorage::get_business_invoices(env, business);
+        let all_invoices = crate::storage::InvoiceStorage::get_business_invoices(env, business);
         let mut invoices_uploaded = 0u32;
         let mut invoices_funded = 0u32;
         let mut total_volume = 0i128;
@@ -793,11 +907,11 @@ impl AnalyticsCalculator {
         ];
 
         for category in categories.iter() {
-            category_breakdown.push_back((category.clone(), 0u32));
+            category_breakdown.push_back((*category, 0u32));
         }
 
         for invoice_id in all_invoices.iter() {
-            if let Some(invoice) = crate::invoice::InvoiceStorage::get_invoice(env, &invoice_id) {
+            if let Some(invoice) = crate::storage::InvoiceStorage::get_invoice(env, &invoice_id) {
                 if invoice.created_at >= start_date && invoice.created_at <= end_date {
                     invoices_uploaded += 1;
                     total_volume = total_volume.saturating_add(invoice.amount);
@@ -867,7 +981,7 @@ impl AnalyticsCalculator {
             None
         };
 
-        Ok(BusinessReport {
+        let report = BusinessReport {
             report_id,
             business_address: business.clone(),
             period,
@@ -883,10 +997,21 @@ impl AnalyticsCalculator {
             rating_average,
             total_ratings: rating_count,
             generated_at: current_timestamp,
-        })
+        };
+
+        AnalyticsStorage::store_business_report(env, &report);
+
+        Ok(report)
     }
 
-    /// Generate investor report
+    /// Generate and persist an `InvestorReport` for `investor` over `period`.
+    ///
+    /// Filters investments by `funded_at` within `[start_date, end_date]`.
+    /// Returns all-zero counts when the investor has no activity in the window.
+    /// Each call creates an immutable snapshot with a fresh report ID.
+    ///
+    /// # Security
+    /// Aggregated; does not expose other investors' private data.
     pub fn generate_investor_report(
         env: &Env,
         investor: &Address,
@@ -896,50 +1021,38 @@ impl AnalyticsCalculator {
         let (start_date, end_date) = Self::get_period_dates(current_timestamp, period.clone());
         let report_id = AnalyticsStorage::generate_report_id(env);
 
-        // Get investor's investments in the period (simplified)
-        let all_investments: Vec<crate::investment::Investment> = Vec::new(env); // Placeholder - would need proper tracking
+        let investment_ids =
+            crate::investment::InvestmentStorage::get_investments_by_investor(env, investor);
         let mut investments_made = 0u32;
         let mut total_invested = 0i128;
         let mut total_returns = 0i128;
         let mut successful_investments = 0u32;
         let mut defaulted_investments = 0u32;
-        let mut preferred_categories = Vec::new(env);
+        let mut preferred_categories = Self::initialize_category_counters(env);
 
-        // Initialize category tracking
-        let categories = [
-            InvoiceCategory::Services,
-            InvoiceCategory::Products,
-            InvoiceCategory::Consulting,
-            InvoiceCategory::Manufacturing,
-            InvoiceCategory::Technology,
-            InvoiceCategory::Healthcare,
-            InvoiceCategory::Other,
-        ];
-
-        for category in categories.iter() {
-            preferred_categories.push_back((category.clone(), 0u32));
-        }
-
-        for investment in all_investments.iter() {
+        for investment_id in investment_ids.iter() {
+            let Some(investment) =
+                crate::investment::InvestmentStorage::get_investment(env, &investment_id)
+            else {
+                continue;
+            };
             if investment.funded_at >= start_date && investment.funded_at <= end_date {
                 investments_made += 1;
                 total_invested = total_invested.saturating_add(investment.amount);
 
                 if let Some(invoice) =
-                    crate::invoice::InvoiceStorage::get_invoice(env, &investment.invoice_id)
+                    crate::storage::InvoiceStorage::get_invoice(env, &investment.invoice_id)
                 {
-                    // Update category preferences
-                    for i in 0..preferred_categories.len() {
-                        let (cat, count) = preferred_categories.get(i).unwrap();
-                        if cat == invoice.category {
-                            preferred_categories.set(i, (cat, count.saturating_add(1)));
-                            break;
-                        }
-                    }
+                    Self::increment_category_counter(&mut preferred_categories, &invoice.category);
+                }
 
-                    match invoice.status {
-                        InvoiceStatus::Paid => {
-                            successful_investments += 1;
+                match investment.status {
+                    crate::types::InvestmentStatus::Completed => {
+                        successful_investments += 1;
+
+                        if let Some(invoice) =
+                            crate::storage::InvoiceStorage::get_invoice(env, &investment.invoice_id)
+                        {
                             let (profit, _) = crate::profits::calculate_profit(
                                 env,
                                 investment.amount,
@@ -947,10 +1060,14 @@ impl AnalyticsCalculator {
                             );
                             total_returns = total_returns
                                 .saturating_add(investment.amount.saturating_add(profit));
+                        } else {
+                            total_returns = total_returns.saturating_add(investment.amount);
                         }
-                        InvoiceStatus::Defaulted => defaulted_investments += 1,
-                        _ => {}
                     }
+                    crate::types::InvestmentStatus::Defaulted => {
+                        defaulted_investments += 1;
+                    }
+                    _ => {}
                 }
             }
         }
@@ -990,16 +1107,22 @@ impl AnalyticsCalculator {
 
         // Calculate portfolio diversity (simplified)
         let portfolio_diversity = if investments_made > 0 {
-            let unique_categories = preferred_categories
-                .iter()
-                .filter(|(_, count)| *count > 0)
-                .count() as u32;
+            let mut unique_categories = 0u32;
+            let plen = preferred_categories.len();
+            let mut pi: u32 = 0;
+            while pi < plen {
+                let (_, count) = preferred_categories.get(pi).unwrap();
+                if count > 0 {
+                    unique_categories = unique_categories.saturating_add(1);
+                }
+                pi += 1;
+            }
             (unique_categories.saturating_mul(10000)).saturating_div(investments_made) as i128
         } else {
             0
         };
 
-        Ok(InvestorReport {
+        let report = InvestorReport {
             report_id,
             investor_address: investor.clone(),
             period,
@@ -1015,10 +1138,77 @@ impl AnalyticsCalculator {
             risk_tolerance,
             portfolio_diversity,
             generated_at: current_timestamp,
-        })
+        };
+
+        Self::validate_investor_report(&report)?;
+        AnalyticsStorage::store_investor_report(env, &report);
+
+        Ok(report)
     }
 
-    /// Get period dates based on time period
+    fn get_investor_investments(env: &Env, investor: &Address) -> Vec<crate::types::Investment> {
+        let mut investments = Vec::new(env);
+        for investment_id in
+            crate::investment::InvestmentStorage::get_investments_by_investor(env, investor).iter()
+        {
+            if let Some(investment) =
+                crate::investment::InvestmentStorage::get_investment(env, &investment_id)
+            {
+                investments.push_back(investment);
+            }
+        }
+        investments
+    }
+
+    fn initialize_category_counters(env: &Env) -> Vec<(InvoiceCategory, u32)> {
+        let mut counters = Vec::new(env);
+        for category in crate::storage::InvoiceStorage::get_all_categories(env).iter() {
+            counters.push_back((category, 0u32));
+        }
+        counters
+    }
+
+    fn increment_category_counter(
+        counters: &mut Vec<(InvoiceCategory, u32)>,
+        category: &InvoiceCategory,
+    ) {
+        for i in 0..counters.len() {
+            let Some((existing_category, count)) = counters.get(i) else {
+                continue;
+            };
+            if existing_category == *category {
+                counters.set(i, (existing_category, count.saturating_add(1)));
+                return;
+            }
+        }
+    }
+
+    fn validate_investor_report(report: &InvestorReport) -> Result<(), QuickLendXError> {
+        if report.end_date < report.start_date {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+        Ok(())
+    }
+
+    /// Compute `(start_date, end_date)` for `period` relative to `current_timestamp`.
+    ///
+    /// All arithmetic uses `saturating_sub` so the result is always well-defined:
+    ///
+    /// | Period    | start                         | end                |
+    /// |-----------|-------------------------------|--------------------|
+    /// | Daily     | `ts.saturating_sub(86_400)`   | `ts`               |
+    /// | Weekly    | `ts.saturating_sub(604_800)`  | `ts`               |
+    /// | Monthly   | `ts.saturating_sub(2_592_000)`| `ts`               |
+    /// | Quarterly | `ts.saturating_sub(7_776_000)`| `ts`               |
+    /// | Yearly    | `ts.saturating_sub(31_536_000)`| `ts`              |
+    /// | AllTime   | `0`                           | `ts`               |
+    ///
+    /// # Edge cases
+    /// - When `current_timestamp` is less than the period duration, `start`
+    ///   saturates to `0`, producing a shorter-than-nominal window.
+    /// - At `current_timestamp = 0`, every variant returns `(0, 0)` — a
+    ///   degenerate zero-length window. Callers must handle this gracefully.
+    /// - `AllTime` always returns `start = 0`, capturing the full history.
     pub fn get_period_dates(current_timestamp: u64, period: TimePeriod) -> (u64, u64) {
         match period {
             TimePeriod::Daily => {
@@ -1081,14 +1271,14 @@ impl AnalyticsCalculator {
         // Calculate portfolio diversity score (simplified)
         let portfolio_diversity_score = if total_investments > 0 {
             // In a real implementation, this would analyze category distribution
-            let diversity = if total_investments > 10 {
+
+            if total_investments > 10 {
                 80
             } else if total_investments > 5 {
                 60
             } else {
                 40
-            };
-            diversity
+            }
         } else {
             0
         };
@@ -1170,7 +1360,7 @@ impl AnalyticsCalculator {
                     env,
                     tier.clone(),
                 );
-            investors_by_tier.push_back((tier.clone(), tier_investors.len() as u32));
+            investors_by_tier.push_back((tier.clone(), tier_investors.len()));
         }
 
         // Calculate investors by risk level
@@ -1188,7 +1378,7 @@ impl AnalyticsCalculator {
                     env,
                     risk_level.clone(),
                 );
-            investors_by_risk.push_back((risk_level.clone(), risk_investors.len() as u32));
+            investors_by_risk.push_back((risk_level.clone(), risk_investors.len()));
         }
 
         // Calculate total investment volume and average
@@ -1224,8 +1414,8 @@ impl AnalyticsCalculator {
             0
         };
 
-        let average_risk_score = if verified_investors.len() > 0 {
-            total_risk_score.saturating_div(verified_investors.len() as u32)
+        let average_risk_score = if !verified_investors.is_empty() {
+            total_risk_score.saturating_div(verified_investors.len())
         } else {
             0
         };
@@ -1246,10 +1436,10 @@ impl AnalyticsCalculator {
         }
 
         Ok(InvestorPerformanceMetrics {
-            total_investors: total_investors as u32,
-            verified_investors: verified_investors.len() as u32,
-            pending_investors: pending_investors.len() as u32,
-            rejected_investors: rejected_investors.len() as u32,
+            total_investors,
+            verified_investors: verified_investors.len(),
+            pending_investors: pending_investors.len(),
+            rejected_investors: rejected_investors.len(),
             investors_by_tier,
             investors_by_risk,
             total_investment_volume,
@@ -1259,5 +1449,9 @@ impl AnalyticsCalculator {
             top_performing_investors,
             generated_at: current_timestamp,
         })
+    }
+
+    fn get_investor_investment_ids(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
+        crate::investment::InvestmentStorage::get_investments_by_investor(env, investor)
     }
 }

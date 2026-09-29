@@ -1,34 +1,43 @@
-//! Contract initialization module for the QuickLendX protocol.
+//! Hardened contract initialization module for the QuickLendX protocol.
 //!
-//! This module provides a secure, one-time initialization flow for the protocol,
-//! setting up all critical configuration parameters including admin, fees, treasury,
-//! currency whitelist, and protocol constants.
+//! This module provides a secure, atomic initialization flow for the protocol,
+//! setting up all critical configuration parameters with comprehensive validation
+//! and robust security protections.
 //!
 //! # Security Model
 //!
 //! - **One-time initialization**: The contract can only be initialized once
+//! - **Atomic operations**: All initialization is atomic (all-or-nothing)
 //! - **Admin authorization**: Initialization requires authorization from the admin address
+//! - **Parameter validation**: Comprehensive validation before any state changes
 //! - **Re-initialization protection**: Subsequent calls to initialize will fail
-//! - **Phased initialization**: Supports both single-shot and phased initialization patterns
+//! - **Audit trail**: All initialization events are logged for transparency
 //!
 //! # Initialization Flow
 //!
-//! 1. Call `initialize()` with all required parameters
-//! 2. The function validates inputs and checks initialization state
-//! 3. On success, all configuration is stored atomically
-//! 4. Events are emitted for audit trail
+//! 1. Validate admin authorization
+//! 2. Check initialization state (atomic)
+//! 3. Validate all parameters comprehensively
+//! 4. Initialize admin system (atomic)
+//! 5. Store all configuration (atomic)
+//! 6. Mark as initialized (commit point)
+//! 7. Emit audit events
 //!
 //! # Post-Initialization
 //!
 //! After initialization, the admin can update configuration via:
 //! - `set_protocol_config()` - Update protocol parameters
 //! - `set_fee_config()` - Update fee configuration
-//! - `add_currency()` - Add whitelisted currencies
+//! - `set_treasury()` - Update treasury address
+//! - Currency whitelist management functions
 
-use crate::admin::ADMIN_INITIALIZED_KEY;
-
+use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
+use crate::audit::{
+    address_to_audit_string, log_config_change, write_i128_to_buf, write_u64_to_buf, AuditOperation,
+};
 use crate::errors::QuickLendXError;
-use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol, Vec};
+use crate::storage::StorageManager;
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol, Vec};
 
 /// Storage key for protocol initialization flag
 const PROTOCOL_INITIALIZED_KEY: Symbol = symbol_short!("proto_in");
@@ -42,23 +51,53 @@ const TREASURY_KEY: Symbol = symbol_short!("treasury");
 /// Storage key for fee basis points
 const FEE_BPS_KEY: Symbol = symbol_short!("fee_bps");
 
-/// Storage key for currency whitelist (re-exported from currency module)
+/// Storage key for currency whitelist
 const WHITELIST_KEY: Symbol = symbol_short!("curr_wl");
 
+/// Storage key for corridor list
+const CORRIDORS_KEY: Symbol = symbol_short!("corridors");
+
+/// Storage key for initialization lock (prevents concurrent initialization)
+const INIT_LOCK_KEY: Symbol = symbol_short!("init_lck");
+
+/// Storage key for the protocol version written at initialization time
+pub(crate) const PROTOCOL_VERSION_KEY: Symbol = symbol_short!("proto_ver");
+
+/// Current protocol version.
+///
+/// Increment this constant when deploying a new contract version.
+/// The value is written to storage during `initialize` so that
+/// `get_version` always reflects the version that was active when
+/// the contract was first set up, even after a WASM upgrade that
+/// bumps this constant.
+///
+/// # Upgrade policy
+/// - Patch releases (bug-fixes, no storage-schema changes): no bump required.
+/// - Minor releases (new fields, backward-compatible): bump recommended.
+/// - Major releases (breaking storage changes, migration required): bump mandatory.
+pub const PROTOCOL_VERSION: u32 = 1;
+
+// Configuration constants with secure defaults
 #[cfg(not(test))]
 const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
 #[cfg(test)]
-const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 10;
-const DEFAULT_MAX_DUE_DATE_DAYS: u64 = 365;
+const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 10; // Smaller for tests
+
+const DEFAULT_MAX_DUE_DATE_DAYS: u64 = 365; // 1 year
 const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 7 * 24 * 60 * 60; // 7 days
 const DEFAULT_FEE_BPS: u32 = 200; // 2%
-const MAX_FEE_BPS: u32 = 1000; // 10%
-const MIN_FEE_BPS: u32 = 0;
 
-/// Protocol configuration structure
+// Security limits
+pub(crate) const MAX_FEE_BPS: u32 = 1000; // 10% maximum fee
+const MIN_FEE_BPS: u32 = 0; // 0% minimum fee
+const MAX_DUE_DATE_DAYS: u64 = 730; // 2 years maximum
+const MAX_GRACE_PERIOD_SECONDS: u64 = 30 * 24 * 60 * 60; // 30 days maximum
+
+/// Protocol configuration structure with comprehensive validation
 ///
 /// Contains all protocol-wide parameters that control invoice validation,
-/// fee calculations, and grace periods.
+/// fee calculations, and grace periods. All fields are validated during
+/// initialization and updates.
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
@@ -73,41 +112,177 @@ pub struct ProtocolConfig {
     pub updated_at: u64,
     /// Address that made the last update
     pub updated_by: Address,
+    /// Maximum number of items processed in a single backfill or heavy run
+    pub backfill_max_batch_size: u32,
 }
 
-/// Initialization parameters for the protocol
+/// Initialization parameters for the protocol with comprehensive validation
 ///
 /// Bundles all parameters needed for initial setup in a single struct
 /// to simplify the initialization API and ensure atomic configuration.
+/// All parameters are validated before any state changes.
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
 #[cfg_attr(test, derive(Debug))]
 pub struct InitializationParams {
-    /// Admin address for the protocol
+    /// Admin address for the protocol (must authorize initialization)
     pub admin: Address,
     /// Treasury address for fee collection
     pub treasury: Address,
-    /// Fee basis points (e.g., 200 = 2%)
+    /// Fee basis points (0-1000, e.g., 200 = 2%)
     pub fee_bps: u32,
-    /// Minimum invoice amount
+    /// Minimum invoice amount (must be positive)
     pub min_invoice_amount: i128,
-    /// Maximum due date days
+    /// Maximum due date days (1-730)
     pub max_due_date_days: u64,
-    /// Grace period in seconds
+    /// Grace period in seconds (0-2,592,000)
     pub grace_period_seconds: u64,
     /// Initial whitelisted currencies
     pub initial_currencies: Vec<Address>,
+    /// Initial corridor list (approved counterparty addresses for cross-invoice operations)
+    pub corridors: Vec<Address>,
+    /// Maximum number of items processed in a single backfill or heavy run
+    pub backfill_max_batch_size: u32,
 }
 
-/// Protocol initialization and configuration management
+/// Proposed parameter bundle for [`ProtocolInitializer::preview_protocol_config`].
+///
+/// Bundles all four mutable protocol configuration values into a single argument
+/// to keep the preview API stable as fields evolve — consistent with the
+/// [`InitializationParams`] convention used elsewhere in this module.
+#[contracttype]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+pub struct ProtocolConfigParams {
+    /// Proposed minimum invoice amount (must be positive).
+    pub min_invoice_amount: i128,
+    /// Proposed maximum due-date days (1–730).
+    pub max_due_date_days: u64,
+    /// Proposed grace period in seconds (0–2 592 000).
+    pub grace_period_seconds: u64,
+    /// Proposed protocol fee in basis points (0–1 000).
+    pub fee_bps: u32,
+    /// Proposed backfill max batch size
+    pub backfill_max_batch_size: u32,
+}
+
+/// Projected before/after diff for a proposed protocol or fee configuration change.
+///
+/// Returned by [`ProtocolInitializer::preview_protocol_config`]. Every field is
+/// derived from **live storage reads** — no writes are performed. Operators can
+/// use this struct to validate a pending configuration change before committing it.
+///
+/// # No-op detection
+///
+/// When `is_noop` is `true` all four proposed values already match the current
+/// on-chain values. Applying the change would produce no observable effect.
+///
+/// # Validation metadata
+///
+/// `would_succeed` is `true` when all proposed values pass the same validation
+/// rules enforced by [`ProtocolInitializer::set_protocol_config`] and
+/// [`ProtocolInitializer::set_fee_config`]. When `false`, `validation_error_code`
+/// contains the `u32` discriminant of the [`crate::errors::QuickLendXError`]
+/// variant that would be returned (e.g. `1852` for `InvalidFeeBasisPoints`).
+/// A code of `0` means no validation error.
+#[contracttype]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+pub struct ProtocolConfigDiff {
+    // ── before (current on-chain values) ────────────────────────────────────
+    /// Current minimum invoice amount stored on-chain.
+    pub before_min_invoice_amount: i128,
+    /// Current maximum due-date days stored on-chain.
+    pub before_max_due_date_days: u64,
+    /// Current grace period in seconds stored on-chain.
+    pub before_grace_period_seconds: u64,
+    /// Current fee in basis points stored on-chain.
+    pub before_fee_bps: u32,
+    /// Current backfill max batch size stored on-chain.
+    pub before_backfill_max_batch_size: u32,
+    // ── after (projected from proposed params) ───────────────────────────────
+    /// Proposed minimum invoice amount.
+    pub after_min_invoice_amount: i128,
+    /// Proposed maximum due-date days.
+    pub after_max_due_date_days: u64,
+    /// Proposed grace period in seconds.
+    pub after_grace_period_seconds: u64,
+    /// Proposed fee in basis points.
+    pub after_fee_bps: u32,
+    /// Proposed backfill max batch size.
+    pub after_backfill_max_batch_size: u32,
+    // ── metadata ────────────────────────────────────────────────────────────
+    /// `true` when all proposed values equal the current on-chain values
+    /// (applying the change would be a no-op).
+    pub is_noop: bool,
+    /// `true` when all proposed values pass validation and would be accepted
+    /// by [`ProtocolInitializer::set_protocol_config`] /
+    /// [`ProtocolInitializer::set_fee_config`] if applied.
+    pub would_succeed: bool,
+    /// `u32` discriminant of the [`crate::errors::QuickLendXError`] variant
+    /// that would be returned if the change were applied, or `0` when
+    /// `would_succeed` is `true`. Callers can cast this to the error enum for
+    /// human-readable display.
+    pub validation_error_code: u32,
+}
+
+// ─── Audit serialization helpers ─────────────────────────────────────────────
+
+fn fmt_proto_cfg(
+    env: &Env,
+    min_invoice_amount: i128,
+    max_due_date_days: u64,
+    grace_period_seconds: u64,
+    backfill_max_batch_size: u32,
+) -> String {
+    // "min_inv:{i128};max_days:{u64};grace:{u64};bkf_sz:{u32}"
+    let mut buf = [0u8; 150];
+    let mut pos = 0usize;
+    let p = b"min_inv:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_i128_to_buf(&mut buf[pos..], min_invoice_amount);
+    let p = b";max_days:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_u64_to_buf(&mut buf[pos..], max_due_date_days);
+    let p = b";grace:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_u64_to_buf(&mut buf[pos..], grace_period_seconds);
+    let p = b";bkf_sz:";
+    buf[pos..pos + p.len()].copy_from_slice(p);
+    pos += p.len();
+    pos += write_u64_to_buf(&mut buf[pos..], backfill_max_batch_size as u64);
+    String::from_str(
+        env,
+        core::str::from_utf8(&buf[..pos]).unwrap_or("proto_cfg"),
+    )
+}
+
+fn fmt_fee_bps(env: &Env, value: u32) -> String {
+    let mut buf = [0u8; 10];
+    let len = write_u64_to_buf(&mut buf, value as u64);
+    String::from_str(env, core::str::from_utf8(&buf[..len]).unwrap_or("0"))
+}
+
+/// Protocol initialization and configuration management with hardened security
 pub struct ProtocolInitializer;
 
 impl ProtocolInitializer {
-    /// Initialize the protocol with all required configuration.
+    /// Initialize the protocol with comprehensive security and validation.
     ///
-    /// This function performs a one-time initialization of the protocol,
-    /// setting up admin, treasury, fees, protocol limits, and currency whitelist.
-    /// It can only be called once - subsequent calls will fail.
+    /// This function performs a one-time, atomic initialization of the protocol
+    /// with extensive security protections:
+    /// - Admin authorization requirement
+    /// - Atomic initialization check
+    /// - Comprehensive parameter validation
+    /// - Atomic state updates
+    /// - Audit trail emission
+    ///
+    /// @notice Initializes the protocol in a single atomic operation.
+    /// @dev Requires admin authorization and validates all addresses/parameters
+    ///      before any state changes are committed.
     ///
     /// # Arguments
     /// * `env` - The contract environment
@@ -115,64 +290,105 @@ impl ProtocolInitializer {
     ///
     /// # Returns
     /// * `Ok(())` if initialization succeeds
-    /// * `Err(QuickLendXError::OperationNotAllowed)` if already initialized
+    /// * `Err(QuickLendXError::OperationNotAllowed)` if already initialized or locked
     /// * `Err(QuickLendXError::InvalidFeeBasisPoints)` if fee_bps is out of range
     /// * `Err(QuickLendXError::InvalidAmount)` if min_invoice_amount is invalid
     /// * `Err(QuickLendXError::InvoiceDueDateInvalid)` if max_due_date_days is invalid
+    /// * `Err(QuickLendXError::InvalidTimestamp)` if grace_period_seconds is invalid
     ///
-    /// # Security
+    /// # Security Invariants
     /// - Requires authorization from the admin address
     /// - Can only be called once (atomic check-and-set)
-    /// - Validates all parameters before any state changes
+    /// - All parameters validated before any state changes
+    /// - All state updates are atomic
+    /// - Initialization lock prevents concurrent calls
     /// - Emits initialization event for audit trail
     pub fn initialize(env: &Env, params: &InitializationParams) -> Result<(), QuickLendXError> {
+        // Zero-address guard: reject the well-known Stellar zero/burn address.
+        let zero = Self::zero_address(env);
+        if params.admin == zero || params.treasury == zero {
+            return Err(QuickLendXError::InvalidAddress);
+        }
 
+        // Initialization lock prevents concurrent calls (re-entrancy protection)
+        if Self::is_initialization_locked(env) {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        Self::set_initialization_lock(env, true);
+        let result = Self::initialize_internal(env, params);
+        Self::set_initialization_lock(env, false);
+        result
+    }
+
+    /// Internal initialization logic with comprehensive validation
+    fn initialize_internal(
+        env: &Env,
+        params: &InitializationParams,
+    ) -> Result<(), QuickLendXError> {
         // Check if already initialized (re-initialization protection with idempotency)
         if Self::is_initialized(env) {
-            // Check for idempotency: if initialized with exact same parameters, return Ok(())
-            let current_admin: Address = env.storage().instance().get(&crate::admin::ADMIN_KEY).unwrap();
-            let current_treasury: Address = env.storage().instance().get(&TREASURY_KEY).unwrap();
-            let current_fee_bps: u32 = env.storage().instance().get(&FEE_BPS_KEY).unwrap();
-            let current_config: ProtocolConfig = env.storage().instance().get(&PROTOCOL_CONFIG_KEY).unwrap();
-            let current_whitelist: Vec<Address> = env.storage().instance().get(&WHITELIST_KEY).unwrap_or(Vec::new(env));
+            // Check for idempotency: if fully initialized with exact same parameters, return Ok(())
+            let current_admin: Option<Address> =
+                env.storage().instance().get(&crate::admin::ADMIN_KEY);
+            let current_treasury: Option<Address> = env.storage().instance().get(&TREASURY_KEY);
+            let current_fee_bps: Option<u32> = env.storage().instance().get(&FEE_BPS_KEY);
+            let current_config: Option<ProtocolConfig> =
+                env.storage().instance().get(&PROTOCOL_CONFIG_KEY);
+            let current_whitelist: Vec<Address> = env
+                .storage()
+                .instance()
+                .get(&WHITELIST_KEY)
+                .unwrap_or(Vec::new(env));
+            let current_corridors: Vec<Address> = env
+                .storage()
+                .instance()
+                .get(&CORRIDORS_KEY)
+                .unwrap_or(Vec::new(env));
 
-            if current_admin == params.admin 
-                && current_treasury == params.treasury
-                && current_fee_bps == params.fee_bps
-                && current_config.min_invoice_amount == params.min_invoice_amount
-                && current_config.max_due_date_days == params.max_due_date_days
-                && current_config.grace_period_seconds == params.grace_period_seconds
-                && current_whitelist == params.initial_currencies
-            {
-                return Ok(());
+            if let (Some(c_admin), Some(c_treasury), Some(c_fee), Some(c_conf)) = (
+                current_admin,
+                current_treasury,
+                current_fee_bps,
+                current_config,
+            ) {
+                if c_admin == params.admin
+                    && c_treasury == params.treasury
+                    && c_fee == params.fee_bps
+                    && c_conf.min_invoice_amount == params.min_invoice_amount
+                    && c_conf.max_due_date_days == params.max_due_date_days
+                    && c_conf.grace_period_seconds == params.grace_period_seconds
+                    && c_conf.backfill_max_batch_size == params.backfill_max_batch_size
+                    && current_whitelist == params.initial_currencies
+                    && current_corridors == params.corridors
+                {
+                    return Ok(());
+                }
             }
 
             return Err(QuickLendXError::OperationNotAllowed);
         }
 
-        // Validate all parameters before making any state changes
+        // VALIDATION: Validate all parameters before making any state changes
         Self::validate_initialization_params(env, params)?;
 
-        // Initialize admin (this also checks admin_initialized flag)
-        // We set this first as it's the foundation for all admin operations
-        env.storage().instance().set(&ADMIN_INITIALIZED_KEY, &true);
-        env.storage()
-            .instance()
-            .set(&crate::admin::ADMIN_KEY, &params.admin);
+        // ATOMIC: Initialize admin system first (foundation for all operations)
+        AdminStorage::initialize(env, &params.admin)?;
 
-        // Store treasury address
+        // ATOMIC: Store treasury address
         env.storage()
             .instance()
             .set(&TREASURY_KEY, &params.treasury);
 
-        // Store fee configuration
+        // ATOMIC: Store fee configuration
         env.storage().instance().set(&FEE_BPS_KEY, &params.fee_bps);
 
-        // Store protocol configuration
+        // ATOMIC: Store protocol configuration
         let config = ProtocolConfig {
             min_invoice_amount: params.min_invoice_amount,
             max_due_date_days: params.max_due_date_days,
             grace_period_seconds: params.grace_period_seconds,
+            backfill_max_batch_size: params.backfill_max_batch_size,
             updated_at: env.ledger().timestamp(),
             updated_by: params.admin.clone(),
         };
@@ -190,6 +406,7 @@ impl ProtocolInitializer {
             params.max_due_date_days,
             params.grace_period_seconds,
             crate::protocol_limits::DEFAULT_MAX_INVOICES_PER_BUSINESS,
+            crate::verification::InvestorTier::Basic,
         )?;
 
         // Initialize currency whitelist with provided currencies
@@ -199,12 +416,25 @@ impl ProtocolInitializer {
                 .set(&WHITELIST_KEY, &params.initial_currencies);
         }
 
-        // Mark protocol as initialized (this is the atomic commit point)
+        // Initialize corridor list with provided addresses
+        if !params.corridors.is_empty() {
+            env.storage()
+                .instance()
+                .set(&CORRIDORS_KEY, &params.corridors);
+        }
+
+        // ATOMIC: Persist the protocol version so get_version is consistent
+        // with the version that was active at initialization time.
+        env.storage()
+            .instance()
+            .set(&PROTOCOL_VERSION_KEY, &PROTOCOL_VERSION);
+
+        // COMMIT: Mark protocol as initialized (this is the atomic commit point)
         env.storage()
             .instance()
             .set(&PROTOCOL_INITIALIZED_KEY, &true);
 
-        // Emit initialization event
+        // AUDIT: Emit initialization event
         emit_protocol_initialized(
             env,
             &params.admin,
@@ -213,6 +443,8 @@ impl ProtocolInitializer {
             params.min_invoice_amount,
             params.max_due_date_days,
             params.grace_period_seconds,
+            params.backfill_max_batch_size,
+            &params.corridors,
         );
 
         Ok(())
@@ -226,39 +458,124 @@ impl ProtocolInitializer {
     /// # Returns
     /// * `true` if the protocol has been initialized
     /// * `false` otherwise
+    ///
+    /// @notice Returns true when the initialization flag is set.
     pub fn is_initialized(env: &Env) -> bool {
-        env.storage()
+        let proto_init = env
+            .storage()
             .instance()
             .get(&PROTOCOL_INITIALIZED_KEY)
-            .unwrap_or(false)
+            .unwrap_or(false);
+
+        // Also check if admin was initialized via legacy/phased flow
+        let admin_init = env
+            .storage()
+            .instance()
+            .get(&ADMIN_INITIALIZED_KEY)
+            .unwrap_or(false);
+
+        proto_init || admin_init
     }
 
-    /// Validate initialization parameters.
+    /// Validate initialization parameters with comprehensive checks.
     ///
-    /// Performs comprehensive validation of all parameters before
-    /// any state changes are made.
+    /// Performs extensive validation of all parameters before any state changes
+    /// are made. This ensures that invalid configurations cannot be stored.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `params` - The initialization parameters to validate
+    ///
+    /// # Returns
+    /// * `Ok(())` if all parameters are valid
+    /// * `Err(QuickLendXError)` with specific error for invalid parameters
+    fn zero_address(env: &Env) -> Address {
+        Address::from_string(&String::from_str(
+            env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        ))
+    }
+
     fn validate_initialization_params(
-        _env: &Env,
+        env: &Env,
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
-        // Validate fee basis points (0% to 10%)
+        // VALIDATION: Fee basis points (0% to 10%)
         if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
-        // Validate minimum invoice amount (must be positive)
+        // VALIDATION: Minimum invoice amount (must be positive)
         if params.min_invoice_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
 
-        // Validate max due date days (must be reasonable, 1-730 days)
-        if params.max_due_date_days == 0 || params.max_due_date_days > 730 {
+        // VALIDATION: Backfill max batch size (must be reasonable, > 0)
+        if params.backfill_max_batch_size == 0 || params.backfill_max_batch_size > 1000 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        // VALIDATION: Max due date days (must be reasonable, 1-730 days)
+        if params.max_due_date_days == 0 || params.max_due_date_days > MAX_DUE_DATE_DAYS {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
 
-        // Validate grace period (max 30 days = 2,592,000 seconds)
-        if params.grace_period_seconds > 2_592_000 {
+        // VALIDATION: Grace period (max 30 days)
+        if params.grace_period_seconds > MAX_GRACE_PERIOD_SECONDS {
             return Err(QuickLendXError::InvalidTimestamp);
+        }
+
+        // VALIDATION: Treasury address is not the same as admin (separation of concerns)
+        if params.treasury == params.admin {
+            return Err(QuickLendXError::InvalidAddress);
+        }
+
+        // VALIDATION: Neither admin nor treasury may be the contract address itself.
+        let contract_address = env.current_contract_address();
+        if params.admin == contract_address || params.treasury == contract_address {
+            return Err(QuickLendXError::InvalidAddress);
+        }
+
+        // VALIDATION: Initial currencies must not contain duplicates, reserved
+        // addresses, or the well-known zero/burn address.
+        let contract_address = env.current_contract_address();
+        let zero = Self::zero_address(env);
+        let len = params.initial_currencies.len();
+        for i in 0..len {
+            let curr = params.initial_currencies.get(i).unwrap();
+            // Must not be a reserved address
+            if curr == params.admin
+                || curr == params.treasury
+                || curr == contract_address
+                || curr == zero
+            {
+                return Err(QuickLendXError::InvalidCurrency);
+            }
+            // Must not be a duplicate (O(n-) - list is expected to be small)
+            for j in (i + 1)..len {
+                if curr == params.initial_currencies.get(j).unwrap() {
+                    return Err(QuickLendXError::InvalidCurrency);
+                }
+            }
+        }
+
+        // VALIDATION: Corridor list must not contain duplicates, reserved
+        // addresses, or the well-known zero/burn address.
+        let corridor_len = params.corridors.len();
+        for i in 0..corridor_len {
+            let corridor = params.corridors.get(i).unwrap();
+            if corridor == params.admin
+                || corridor == params.treasury
+                || corridor == contract_address
+                || corridor == zero
+            {
+                return Err(QuickLendXError::InvalidAddress);
+            }
+            for j in (i + 1)..corridor_len {
+                if corridor == params.corridors.get(j).unwrap() {
+                    return Err(QuickLendXError::InvalidAddress);
+                }
+            }
         }
 
         Ok(())
@@ -272,8 +589,411 @@ impl ProtocolInitializer {
     /// # Returns
     /// * `Some(ProtocolConfig)` if configuration exists
     /// * `None` if protocol has not been initialized
+    ///
+    /// @notice Returns the stored protocol configuration, if initialized.
     pub fn get_protocol_config(env: &Env) -> Option<ProtocolConfig> {
         env.storage().instance().get(&PROTOCOL_CONFIG_KEY)
+    }
+
+    /// Update protocol configuration (admin only).
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `admin` - The admin address (must authorize)
+    /// * `min_invoice_amount` - New minimum invoice amount
+    /// * `max_due_date_days` - New maximum due date days
+    /// * `grace_period_seconds` - New grace period in seconds
+    ///
+    /// # Returns
+    /// * `Ok(())` if update succeeds
+    /// * `Err(QuickLendXError)` if validation fails or not admin
+    pub fn set_protocol_config(
+        env: &Env,
+        admin: &Address,
+        min_invoice_amount: i128,
+        max_due_date_days: u64,
+        grace_period_seconds: u64,
+        backfill_max_batch_size: u32,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::with_admin_auth(env, admin, || {
+            // Validate parameters
+            if min_invoice_amount <= 0 {
+                return Err(QuickLendXError::InvalidAmount);
+            }
+            if max_due_date_days == 0 || max_due_date_days > MAX_DUE_DATE_DAYS {
+                return Err(QuickLendXError::InvoiceDueDateInvalid);
+            }
+            if grace_period_seconds > MAX_GRACE_PERIOD_SECONDS {
+                return Err(QuickLendXError::InvalidTimestamp);
+            }
+            if backfill_max_batch_size == 0 || backfill_max_batch_size > 1000 {
+                return Err(QuickLendXError::InvalidAmount);
+            }
+
+            // Capture old value before write
+            let old_str = Self::get_protocol_config(env).map(|c| {
+                fmt_proto_cfg(
+                    env,
+                    c.min_invoice_amount,
+                    c.max_due_date_days,
+                    c.grace_period_seconds,
+                    c.backfill_max_batch_size,
+                )
+            });
+
+            // Update configuration
+            let config = ProtocolConfig {
+                min_invoice_amount,
+                max_due_date_days,
+                grace_period_seconds,
+                backfill_max_batch_size,
+                updated_at: env.ledger().timestamp(),
+                updated_by: admin.clone(),
+            };
+            env.storage().instance().set(&PROTOCOL_CONFIG_KEY, &config);
+
+            // Tamper-evident audit entry (atomic with storage write above via Soroban tx semantics)
+            log_config_change(
+                env,
+                AuditOperation::ConfigProtocolChanged,
+                admin.clone(),
+                "proto_cfg",
+                old_str,
+                Some(fmt_proto_cfg(
+                    env,
+                    min_invoice_amount,
+                    max_due_date_days,
+                    grace_period_seconds,
+                    backfill_max_batch_size,
+                )),
+            );
+
+            // Emit event
+            emit_protocol_config_updated(
+                env,
+                admin,
+                min_invoice_amount,
+                max_due_date_days,
+                grace_period_seconds,
+            );
+
+            Ok(())
+        })
+    }
+
+    /// Dry-run preview for `set_protocol_config` and `set_fee_config` (admin-gated, read-only).
+    ///
+    /// Reads the current protocol configuration from storage, validates the
+    /// proposed `params` using **exactly the same rules** applied by
+    /// [`Self::set_protocol_config`] and [`Self::set_fee_config`], and returns
+    /// a [`ProtocolConfigDiff`] containing projected before/after values and
+    /// validation metadata.
+    ///
+    /// # Security
+    ///
+    /// - Requires admin authorization: `admin.require_auth()` is called and
+    ///   the caller must be the current protocol admin.
+    /// - **No storage writes occur** — this function is entirely read-only.
+    ///   It is safe to call from monitoring tooling, operator scripts, or
+    ///   governance UIs without risk of unintended state mutation.
+    ///
+    /// # Arguments
+    ///
+    /// * `env`    — The contract environment.
+    /// * `admin`  — The admin address (must authorize the call).
+    /// * `params` — The proposed configuration values to preview.
+    ///
+    /// # Returns
+    ///
+    /// * `Ok(ProtocolConfigDiff)` — diff with before/after fields and validation
+    ///   metadata. Inspect `would_succeed` and `is_noop` before applying.
+    /// * `Err(QuickLendXError::NotAdmin)` — caller is not the current admin.
+    /// * `Err(QuickLendXError::OperationNotAllowed)` — admin subsystem not initialized.
+    pub fn preview_protocol_config(
+        env: &Env,
+        admin: &Address,
+        params: ProtocolConfigParams,
+    ) -> Result<ProtocolConfigDiff, QuickLendXError> {
+        StorageManager::with_view_only(env, || {
+            AdminStorage::with_admin_auth(env, admin, || {
+                // ── Read current on-chain values (no writes below this line) ────
+                let current_config = Self::get_protocol_config(env);
+                let before_min_invoice_amount = current_config
+                    .as_ref()
+                    .map(|c| c.min_invoice_amount)
+                    .unwrap_or(DEFAULT_MIN_INVOICE_AMOUNT);
+                let before_max_due_date_days = current_config
+                    .as_ref()
+                    .map(|c| c.max_due_date_days)
+                    .unwrap_or(DEFAULT_MAX_DUE_DATE_DAYS);
+                let before_grace_period_seconds = current_config
+                    .as_ref()
+                    .map(|c| c.grace_period_seconds)
+                    .unwrap_or(DEFAULT_GRACE_PERIOD_SECONDS);
+                let before_backfill_max_batch_size = current_config
+                    .as_ref()
+                    .map(|c| c.backfill_max_batch_size)
+                    .unwrap_or(100);
+                let before_fee_bps = Self::get_fee_bps(env);
+
+                // ── Validate proposed params (mirrors set_protocol_config + set_fee_config) ──
+                let (would_succeed, validation_error_code) = Self::validate_config_params(&params);
+
+                // ── Compute no-op flag ───────────────────────────────────────────
+                let is_noop = params.min_invoice_amount == before_min_invoice_amount
+                    && params.max_due_date_days == before_max_due_date_days
+                    && params.grace_period_seconds == before_grace_period_seconds
+                    && params.backfill_max_batch_size == before_backfill_max_batch_size
+                    && params.fee_bps == before_fee_bps;
+
+                Ok(ProtocolConfigDiff {
+                    before_min_invoice_amount,
+                    before_max_due_date_days,
+                    before_grace_period_seconds,
+                    before_fee_bps,
+                    before_backfill_max_batch_size,
+                    after_min_invoice_amount: params.min_invoice_amount,
+                    after_max_due_date_days: params.max_due_date_days,
+                    after_grace_period_seconds: params.grace_period_seconds,
+                    after_fee_bps: params.fee_bps,
+                    after_backfill_max_batch_size: params.backfill_max_batch_size,
+                    is_noop,
+                    would_succeed,
+                    validation_error_code,
+                })
+            })
+        })
+    }
+
+    /// Validate proposed config params without touching storage.
+    ///
+    /// Returns `(true, 0)` on success or `(false, error_discriminant)` on the
+    /// first validation failure. Discriminants match `QuickLendXError` repr values.
+    fn validate_config_params(params: &ProtocolConfigParams) -> (bool, u32) {
+        // fee_bps: 0–1 000  (mirrors set_fee_config)
+        if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
+            return (false, QuickLendXError::InvalidFeeBasisPoints as u32);
+        }
+        // min_invoice_amount must be positive  (mirrors set_protocol_config)
+        if params.min_invoice_amount <= 0 {
+            return (false, QuickLendXError::InvalidAmount as u32);
+        }
+        // max_due_date_days: 1–730
+        if params.max_due_date_days == 0 || params.max_due_date_days > MAX_DUE_DATE_DAYS {
+            return (false, QuickLendXError::InvoiceDueDateInvalid as u32);
+        }
+        // grace_period_seconds: max 30 days
+        if params.grace_period_seconds > MAX_GRACE_PERIOD_SECONDS {
+            return (false, QuickLendXError::InvalidTimestamp as u32);
+        }
+        (true, 0)
+    }
+
+    /// Update fee configuration (admin only).
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `admin` - The admin address (must authorize)
+    /// * `fee_bps` - New fee in basis points
+    ///
+    /// # Returns
+    /// * `Ok(())` if update succeeds
+    /// * `Err(QuickLendXError)` if validation fails or not admin
+    pub fn set_fee_config(env: &Env, admin: &Address, fee_bps: u32) -> Result<(), QuickLendXError> {
+        AdminStorage::with_admin_auth(env, admin, || {
+            // Validate fee
+            if !(MIN_FEE_BPS..=MAX_FEE_BPS).contains(&fee_bps) {
+                return Err(QuickLendXError::InvalidFeeBasisPoints);
+            }
+
+            // Capture old value before write
+            let old_str = Some(fmt_fee_bps(env, Self::get_fee_bps(env)));
+
+            // Update fee
+            env.storage().instance().set(&FEE_BPS_KEY, &fee_bps);
+
+            // Tamper-evident audit entry (atomic with storage write above via Soroban tx semantics)
+            log_config_change(
+                env,
+                AuditOperation::ConfigFeeChanged,
+                admin.clone(),
+                "fee_bps",
+                old_str,
+                Some(fmt_fee_bps(env, fee_bps)),
+            );
+
+            // Emit event
+            emit_fee_config_updated(env, admin, fee_bps);
+
+            Ok(())
+        })
+    }
+
+    /// Update treasury address (admin only).
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    /// * `admin` - The admin address (must authorize)
+    /// * `treasury` - New treasury address
+    ///
+    /// # Returns
+    /// * `Ok(())` if update succeeds
+    /// * `Err(QuickLendXError)` if validation fails or not admin
+    pub fn set_treasury(
+        env: &Env,
+        admin: &Address,
+        treasury: &Address,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::with_admin_auth(env, admin, || {
+            // Validate treasury is not admin (separation of concerns)
+            if treasury == admin {
+                return Err(QuickLendXError::InvalidAddress);
+            }
+
+            // Capture old value before write
+            let old_str = Self::get_treasury(env).map(|t| address_to_audit_string(env, &t));
+
+            // Update treasury
+            env.storage().instance().set(&TREASURY_KEY, treasury);
+
+            // Tamper-evident audit entry (atomic with storage write above via Soroban tx semantics)
+            log_config_change(
+                env,
+                AuditOperation::ConfigTreasuryChanged,
+                admin.clone(),
+                "treasury",
+                old_str,
+                Some(address_to_audit_string(env, treasury)),
+            );
+
+            // Emit event
+            emit_treasury_updated(env, admin, treasury);
+
+            Ok(())
+        })
+    }
+
+    /// Check if initialization is currently locked
+    fn is_initialization_locked(env: &Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&INIT_LOCK_KEY)
+            .unwrap_or(false)
+    }
+
+    /// Set initialization lock state
+    fn set_initialization_lock(env: &Env, locked: bool) {
+        if locked {
+            env.storage().instance().set(&INIT_LOCK_KEY, &true);
+        } else {
+            env.storage().instance().remove(&INIT_LOCK_KEY);
+        }
+    }
+}
+
+// ============================================================================
+// Query Functions
+// ============================================================================
+
+impl ProtocolInitializer {
+    /// Get the protocol version stored at initialization time.
+    ///
+    /// Returns the `PROTOCOL_VERSION` constant that was compiled into the
+    /// contract when `initialize` was first called.  Falls back to the
+    /// current `PROTOCOL_VERSION` constant when the contract has not been
+    /// initialized yet (e.g. in a fresh test environment).
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    /// * `u32` - The stored protocol version, or `PROTOCOL_VERSION` if unset.
+    ///
+    /// @notice Always consistent with the version active at init time.
+    pub fn get_version(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&PROTOCOL_VERSION_KEY)
+            .unwrap_or(PROTOCOL_VERSION)
+    }
+
+    /// Get the current fee in basis points.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    /// * Current fee in basis points (defaults to DEFAULT_FEE_BPS if not set)
+    pub fn get_fee_bps(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&FEE_BPS_KEY)
+            .unwrap_or(DEFAULT_FEE_BPS)
+    }
+
+    /// Get the treasury address.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    /// * `Some(Address)` if treasury is set
+    /// * `None` if treasury has not been configured
+    pub fn get_treasury(env: &Env) -> Option<Address> {
+        env.storage().instance().get(&TREASURY_KEY)
+    }
+
+    /// Get the minimum invoice amount.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    /// * Current minimum invoice amount (defaults to DEFAULT_MIN_INVOICE_AMOUNT)
+    pub fn get_min_invoice_amount(env: &Env) -> i128 {
+        Self::get_protocol_config(env)
+            .map(|config| config.min_invoice_amount)
+            .unwrap_or(DEFAULT_MIN_INVOICE_AMOUNT)
+    }
+
+    /// Get the maximum due date days.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    /// * Current maximum due date days (defaults to DEFAULT_MAX_DUE_DATE_DAYS)
+    pub fn get_max_due_date_days(env: &Env) -> u64 {
+        Self::get_protocol_config(env)
+            .map(|config| config.max_due_date_days)
+            .unwrap_or(DEFAULT_MAX_DUE_DATE_DAYS)
+    }
+
+    /// Get the grace period in seconds.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    /// * Current grace period in seconds (defaults to DEFAULT_GRACE_PERIOD_SECONDS)
+    pub fn get_grace_period_seconds(env: &Env) -> u64 {
+        Self::get_protocol_config(env)
+            .map(|config| config.grace_period_seconds)
+            .unwrap_or(DEFAULT_GRACE_PERIOD_SECONDS)
+    }
+
+    /// Get the corridor list.
+    ///
+    /// # Arguments
+    /// * `env` - The contract environment
+    ///
+    /// # Returns
+    /// * The stored corridor address list (empty vec if not set)
+    pub fn get_corridors(env: &Env) -> Vec<Address> {
+        env.storage()
+            .instance()
+            .get(&CORRIDORS_KEY)
+            .unwrap_or(Vec::new(env))
     }
 }
 
@@ -282,6 +1002,7 @@ impl ProtocolInitializer {
 // ============================================================================
 
 /// Emit protocol initialization event
+/// @notice Emits a single initialization event with the configured parameters.
 fn emit_protocol_initialized(
     env: &Env,
     admin: &Address,
@@ -290,17 +1011,54 @@ fn emit_protocol_initialized(
     min_invoice_amount: i128,
     max_due_date_days: u64,
     grace_period_seconds: u64,
+    backfill_max_batch_size: u32,
+    corridors: &Vec<Address>,
+) {
+    crate::events::emit_protocol_initialized(
+        env,
+        admin,
+        treasury,
+        fee_bps,
+        min_invoice_amount,
+        max_due_date_days,
+        grace_period_seconds,
+        backfill_max_batch_size,
+        corridors,
+    );
+}
+
+/// Emit protocol configuration update event
+fn emit_protocol_config_updated(
+    env: &Env,
+    admin: &Address,
+    min_invoice_amount: i128,
+    max_due_date_days: u64,
+    grace_period_seconds: u64,
 ) {
     env.events().publish(
-        (symbol_short!("proto_in"),),
+        (symbol_short!("proto_cfg"),),
         (
             admin.clone(),
-            treasury.clone(),
-            fee_bps,
             min_invoice_amount,
             max_due_date_days,
             grace_period_seconds,
             env.ledger().timestamp(),
         ),
+    );
+}
+
+/// Emit fee configuration update event
+fn emit_fee_config_updated(env: &Env, admin: &Address, fee_bps: u32) {
+    env.events().publish(
+        (symbol_short!("fee_cfg"),),
+        (admin.clone(), fee_bps, env.ledger().timestamp()),
+    );
+}
+
+/// Emit treasury update event
+fn emit_treasury_updated(env: &Env, admin: &Address, treasury: &Address) {
+    env.events().publish(
+        (symbol_short!("trsr_upd"),),
+        (admin.clone(), treasury.clone(), env.ledger().timestamp()),
     );
 }

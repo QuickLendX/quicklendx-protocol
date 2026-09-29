@@ -1,0 +1,1073 @@
+warning: unused imports: `Symbol` and `symbol_short`
+ --> src\events.rs:7:34
+  |
+7 | use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol};
+  |                                  ^^^^^^^^^^^^                                ^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused import: `MAX_TAG_LENGTH`
+ --> src\invoice.rs:7:40
+  |
+7 |     MAX_NAME_LENGTH, MAX_NOTES_LENGTH, MAX_TAG_LENGTH, MAX_TAX_ID_LENGTH, MAX_TRANSACTION_ID_LENGTH,
+  |                                        ^^^^^^^^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:264:22
+    |
+264 |         env.events().publish(
+    |                      ^^^^^^^
+    |
+    = note: `#[warn(deprecated)]` on by default
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:311:22
+    |
+311 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\notifications.rs:348:14
+    |
+348 |             .publish((symbol_short!("pref_up"),), (user.clone(),));
+    |              ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:541:18
+    |
+541 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\settlement.rs:559:18
+    |
+559 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:851:18
+    |
+851 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:862:18
+    |
+862 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:874:18
+    |
+874 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\verification.rs:886:18
+    |
+886 |     env.events().publish(
+    |                  ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:134:22
+    |
+134 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\vesting.rs:215:22
+    |
+215 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: use of deprecated method `soroban_sdk::events::Events::publish`: use the #[contractevent] macro on a contract event type
+   --> src\lib.rs:359:22
+    |
+359 |         env.events().publish(
+    |                      ^^^^^^^
+
+warning: unused variable: `limits`
+   --> src\verification.rs:621:9
+    |
+621 |     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: multiple associated functions are never used
+   --> src\analytics.rs:178:8
+    |
+177 | impl AnalyticsStorage {
+    | --------------------- associated functions in this implementation
+178 |     fn platform_metrics_key() -> (soroban_sdk::Symbol,) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+...
+182 |     fn performance_metrics_key() -> (soroban_sdk::Symbol,) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^
+...
+186 |     fn user_behavior_key(user: &Address) -> (soroban_sdk::Symbol, Address) {
+    |        ^^^^^^^^^^^^^^^^^
+...
+198 |     fn investor_analytics_key(investor: &Address) -> (soroban_sdk::Symbol, Address) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+...
+202 |     fn investor_performance_key() -> (soroban_sdk::Symbol,) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+211 |     pub fn store_platform_metrics(env: &Env, metrics: &PlatformMetrics) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+217 |     pub fn get_platform_metrics(env: &Env) -> Option<PlatformMetrics> {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+221 |     pub fn store_performance_metrics(env: &Env, metrics: &PerformanceMetrics) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+227 |     pub fn get_performance_metrics(env: &Env) -> Option<PerformanceMetrics> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+233 |     pub fn store_user_behavior(env: &Env, user: &Address, behavior: &UserBehaviorMetrics) {
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+239 |     pub fn store_business_report(env: &Env, report: &BusinessReport) {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+251 |     pub fn store_investor_report(env: &Env, report: &InvestorReport) {
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+263 |     pub fn store_investor_analytics(env: &Env, investor: &Address, analytics: &InvestorAnalytics) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+269 |     pub fn get_investor_analytics(env: &Env, investor: &Address) -> Option<InvestorAnalytics> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+275 |     pub fn store_investor_performance(env: &Env, metrics: &InvestorPerformanceMetrics) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+281 |     pub fn get_investor_performance(env: &Env) -> Option<InvestorPerformanceMetrics> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: associated functions `calculate_investor_analytics` and `calc_investor_perf_metrics` are never used
+    --> src\analytics.rs:1049:12
+     |
+ 300 | impl AnalyticsCalculator {
+     | ------------------------ associated functions in this implementation
+...
+1049 |     pub fn calculate_investor_analytics(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1141 |     pub fn calc_investor_perf_metrics(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_audit_entry`, `query_audit_logs`, `get_audit_stats`, `validate_invoice_audit_integrity`, `get_all_audit_entries`, and `matches_filter` are never used
+   --> src\audit.rs:191:12
+    |
+168 | impl AuditStorage {
+    | ----------------- associated functions in this implementation
+...
+191 |     pub fn get_audit_entry(env: &Env, audit_id: &BytesN<32>) -> Option<AuditLogEntry> {
+    |            ^^^^^^^^^^^^^^^
+...
+226 |     pub fn query_audit_logs(
+    |            ^^^^^^^^^^^^^^^^
+...
+269 |     pub fn get_audit_stats(env: &Env) -> AuditStats {
+    |            ^^^^^^^^^^^^^^^
+...
+304 |     pub fn validate_invoice_audit_integrity(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+368 |     fn get_all_audit_entries(env: &Env) -> Vec<BytesN<32>> {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+...
+376 |     fn matches_filter(entry: &AuditLogEntry, filter: &AuditQueryFilter) -> bool {
+    |        ^^^^^^^^^^^^^^
+
+warning: function `log_payment_processed` is never used
+   --> src\audit.rs:514:8
+    |
+514 | pub fn log_payment_processed(
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_invoice_uploaded` is never used
+   --> src\audit.rs:548:8
+    |
+548 | pub fn log_invoice_uploaded(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_invoice_verified` is never used
+   --> src\audit.rs:562:8
+    |
+562 | pub fn log_invoice_verified(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_invoice_cancelled` is never used
+   --> src\audit.rs:576:8
+    |
+576 | pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `log_bid_placed` is never used
+   --> src\audit.rs:590:8
+    |
+590 | pub fn log_bid_placed(
+    |        ^^^^^^^^^^^^^^
+
+warning: function `log_bid_accepted` is never used
+   --> src\audit.rs:610:8
+    |
+610 | pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `log_bid_withdrawn` is never used
+   --> src\audit.rs:624:8
+    |
+624 | pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid_id: BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: function `log_escrow_created` is never used
+   --> src\audit.rs:638:8
+    |
+638 | pub fn log_escrow_created(
+    |        ^^^^^^^^^^^^^^^^^^
+
+warning: function `log_settlement_completed` is never used
+   --> src\audit.rs:658:8
+    |
+658 | pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `RETENTION_POLICY_KEY` is never used
+ --> src\backup.rs:5:7
+  |
+5 | const RETENTION_POLICY_KEY: soroban_sdk::Symbol = symbol_short!("bkup_pol");
+  |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `BACKUP_COUNTER_KEY` is never used
+ --> src\backup.rs:6:7
+  |
+6 | const BACKUP_COUNTER_KEY: soroban_sdk::Symbol = symbol_short!("bkup_cnt");
+  |       ^^^^^^^^^^^^^^^^^^
+
+warning: constant `BACKUP_LIST_KEY` is never used
+ --> src\backup.rs:7:7
+  |
+7 | const BACKUP_LIST_KEY: soroban_sdk::Symbol = symbol_short!("backups");
+  |       ^^^^^^^^^^^^^^^
+
+warning: constant `BACKUP_DATA_KEY` is never used
+ --> src\backup.rs:8:7
+  |
+8 | const BACKUP_DATA_KEY: soroban_sdk::Symbol = symbol_short!("bkup_data");
+  |       ^^^^^^^^^^^^^^^
+
+warning: constant `MAX_BACKUP_DESCRIPTION_LENGTH` is never used
+ --> src\backup.rs:9:7
+  |
+9 | const MAX_BACKUP_DESCRIPTION_LENGTH: u32 = 128;
+  |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `BackupStorage` is never constructed
+  --> src\backup.rs:51:12
+   |
+51 | pub struct BackupStorage;
+   |            ^^^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src\backup.rs:55:8
+    |
+ 53 | impl BackupStorage {
+    | ------------------ associated functions in this implementation
+ 54 |     /// @notice Validate backup metadata before persisting it.
+ 55 |     fn validate_backup_metadata(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+ 77 |     pub fn is_valid_backup_id(backup_id: &BytesN<32>) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+ 83 |     pub fn get_retention_policy(env: &Env) -> BackupRetentionPolicy {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+ 91 |     pub fn set_retention_policy(env: &Env, policy: &BackupRetentionPolicy) {
+    |            ^^^^^^^^^^^^^^^^^^^^
+...
+ 96 |     pub fn generate_backup_id(env: &Env) -> BytesN<32> {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+122 |     pub fn store_backup(
+    |            ^^^^^^^^^^^^
+...
+138 |     pub fn get_backup(env: &Env, backup_id: &BytesN<32>) -> Option<Backup> {
+    |            ^^^^^^^^^^
+...
+143 |     pub fn update_backup(env: &Env, backup: &Backup) -> Result<(), QuickLendXError> {
+    |            ^^^^^^^^^^^^^
+...
+150 |     pub fn get_all_backups(env: &Env) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^^^
+...
+158 |     pub fn add_to_backup_list(env: &Env, backup_id: &BytesN<32>) {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+170 |     pub fn remove_from_backup_list(env: &Env, backup_id: &BytesN<32>) {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+182 |     pub fn store_backup_data(env: &Env, backup_id: &BytesN<32>, invoices: &Vec<Invoice>) {
+    |            ^^^^^^^^^^^^^^^^^
+...
+188 |     pub fn get_backup_data(env: &Env, backup_id: &BytesN<32>) -> Option<Vec<Invoice>> {
+    |            ^^^^^^^^^^^^^^^
+...
+194 |     pub fn purge_backup(env: &Env, backup_id: &BytesN<32>) {
+    |            ^^^^^^^^^^^^
+...
+202 |     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+    |            ^^^^^^^^^^^^^^^
+...
+227 |     pub fn cleanup_old_backups(env: &Env) -> Result<u32, QuickLendXError> {
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+294 |     pub fn get_all_invoices(env: &Env) -> Vec<Invoice> {
+    |            ^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_bid_ttl_config`, `reset_bid_ttl_to_default`, `set_max_active_bids_per_investor`, `count_active_bids_by_investor`, `assert_bid_invariants`, and `count_bids_by_status` are never used
+   --> src\bid.rs:172:12
+    |
+ 89 | impl BidStorage {
+    | --------------- associated functions in this implementation
+...
+172 |     pub fn get_bid_ttl_config(env: &Env) -> BidTtlConfig {
+    |            ^^^^^^^^^^^^^^^^^^
+...
+224 |     pub fn reset_bid_ttl_to_default(env: &Env, admin: &Address) -> Result<u64, QuickLendXError> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+245 |     pub fn set_max_active_bids_per_investor(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+503 |     pub fn count_active_bids_by_investor(env: &Env, investor: &Address) -> u32 {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+565 |     pub fn assert_bid_invariants(
+    |            ^^^^^^^^^^^^^^^^^^^^^
+...
+595 |     pub fn count_bids_by_status(
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `PaymentRecorded` is never constructed
+  --> src\events.rs:81:12
+   |
+81 | pub struct PaymentRecorded {
+   |            ^^^^^^^^^^^^^^^
+
+warning: struct `InvoiceSettledFinal` is never constructed
+  --> src\events.rs:91:12
+   |
+91 | pub struct InvoiceSettledFinal {
+   |            ^^^^^^^^^^^^^^^^^^^
+
+warning: struct `BackupCreated` is never constructed
+   --> src\events.rs:280:12
+    |
+280 | pub struct BackupCreated {
+    |            ^^^^^^^^^^^^^
+
+warning: struct `BackupRestored` is never constructed
+   --> src\events.rs:288:12
+    |
+288 | pub struct BackupRestored {
+    |            ^^^^^^^^^^^^^^
+
+warning: struct `BackupValidated` is never constructed
+   --> src\events.rs:296:12
+    |
+296 | pub struct BackupValidated {
+    |            ^^^^^^^^^^^^^^^
+
+warning: struct `BackupArchived` is never constructed
+   --> src\events.rs:304:12
+    |
+304 | pub struct BackupArchived {
+    |            ^^^^^^^^^^^^^^
+
+warning: struct `RetentionPolicyUpdated` is never constructed
+   --> src\events.rs:311:12
+    |
+311 | pub struct RetentionPolicyUpdated {
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: struct `BackupsCleaned` is never constructed
+   --> src\events.rs:320:12
+    |
+320 | pub struct BackupsCleaned {
+    |            ^^^^^^^^^^^^^^
+
+warning: struct `AuditValidation` is never constructed
+   --> src\events.rs:327:12
+    |
+327 | pub struct AuditValidation {
+    |            ^^^^^^^^^^^^^^^
+
+warning: struct `AuditQuery` is never constructed
+   --> src\events.rs:335:12
+    |
+335 | pub struct AuditQuery {
+    |            ^^^^^^^^^^
+
+warning: struct `DisputeCreated` is never constructed
+   --> src\events.rs:367:12
+    |
+367 | pub struct DisputeCreated {
+    |            ^^^^^^^^^^^^^^
+
+warning: struct `DisputeUnderReview` is never constructed
+   --> src\events.rs:376:12
+    |
+376 | pub struct DisputeUnderReview {
+    |            ^^^^^^^^^^^^^^^^^^
+
+warning: struct `DisputeResolved` is never constructed
+   --> src\events.rs:384:12
+    |
+384 | pub struct DisputeResolved {
+    |            ^^^^^^^^^^^^^^^
+
+warning: function `emit_payment_recorded` is never used
+   --> src\events.rs:590:8
+    |
+590 | pub fn emit_payment_recorded(
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_invoice_settled_final` is never used
+   --> src\events.rs:607:8
+    |
+607 | pub fn emit_invoice_settled_final(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backup_created` is never used
+   --> src\events.rs:884:8
+    |
+884 | pub fn emit_backup_created(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backup_restored` is never used
+   --> src\events.rs:893:8
+    |
+893 | pub fn emit_backup_restored(env: &Env, backup_id: &BytesN<32>, invoice_count: u32) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backup_validated` is never used
+   --> src\events.rs:902:8
+    |
+902 | pub fn emit_backup_validated(env: &Env, backup_id: &BytesN<32>, success: bool) {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backup_archived` is never used
+   --> src\events.rs:911:8
+    |
+911 | pub fn emit_backup_archived(env: &Env, backup_id: &BytesN<32>) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_retention_policy_updated` is never used
+   --> src\events.rs:919:8
+    |
+919 | pub fn emit_retention_policy_updated(
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_backups_cleaned` is never used
+   --> src\events.rs:934:8
+    |
+934 | pub fn emit_backups_cleaned(env: &Env, removed_count: u32) {
+    |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_audit_validation` is never used
+   --> src\events.rs:946:8
+    |
+946 | pub fn emit_audit_validation(env: &Env, invoice_id: &BytesN<32>, is_valid: bool) {
+    |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_audit_query` is never used
+   --> src\events.rs:955:8
+    |
+955 | pub fn emit_audit_query(env: &Env, query_type: String, result_count: u32) {
+    |        ^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_created` is never used
+    --> src\events.rs:1015:8
+     |
+1015 | pub fn emit_dispute_created(
+     |        ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_under_review` is never used
+    --> src\events.rs:1030:8
+     |
+1030 | pub fn emit_dispute_under_review(env: &Env, invoice_id: &BytesN<32>, reviewed_by: &Address) {
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `emit_dispute_resolved` is never used
+    --> src\events.rs:1039:8
+     |
+1039 | pub fn emit_dispute_resolved(
+     |        ^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ROTATION_TTL_SECONDS` is never used
+  --> src\fees.rs:12:7
+   |
+12 | const ROTATION_TTL_SECONDS: u64 = 604_800; // 7 days
+   |       ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `ROTATION_KEY` is never used
+  --> src\fees.rs:21:7
+   |
+21 | const ROTATION_KEY: Symbol = symbol_short!("rotate");
+   |       ^^^^^^^^^^^^
+
+warning: associated functions `initiate_treasury_rotation`, `confirm_treasury_rotation`, `cancel_treasury_rotation`, and `get_pending_rotation` are never used
+   --> src\fees.rs:769:12
+    |
+149 | impl FeeManager {
+    | --------------- associated functions in this implementation
+...
+769 |     pub fn initiate_treasury_rotation(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+809 |     pub fn confirm_treasury_rotation(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+846 |     pub fn cancel_treasury_rotation(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+866 |     pub fn get_pending_rotation(env: &Env) -> Option<RecipientRotationRequest> {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MIN_INVOICE_AMOUNT` is never used
+  --> src\init.rs:49:7
+   |
+49 | const DEFAULT_MIN_INVOICE_AMOUNT: i128 = 1_000_000; // 1 token (6 decimals)
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_MAX_DUE_DATE_DAYS` is never used
+  --> src\init.rs:52:7
+   |
+52 | const DEFAULT_MAX_DUE_DATE_DAYS: u64 = 365;
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_GRACE_PERIOD_SECONDS` is never used
+  --> src\init.rs:53:7
+   |
+53 | const DEFAULT_GRACE_PERIOD_SECONDS: u64 = 7 * 24 * 60 * 60; // 7 days
+   |       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `DEFAULT_FEE_BPS` is never used
+  --> src\init.rs:54:7
+   |
+54 | const DEFAULT_FEE_BPS: u32 = 200; // 2%
+   |       ^^^^^^^^^^^^^^^
+
+warning: associated functions `get_active_investment_ids` and `validate_no_orphan_investments` are never used
+   --> src\investment.rs:412:12
+    |
+279 | impl InvestmentStorage {
+    | ---------------------- associated functions in this implementation
+...
+412 |     pub fn get_active_investment_ids(env: &Env) -> Vec<BytesN<32>> {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+430 |     pub fn validate_no_orphan_investments(env: &Env) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_invoices_with_rating_above`, `get_business_invoices_with_rating_above`, `get_invoice_rating_stats`, `delete_invoice`, and `get_total_invoice_count` are never used
+    --> src\invoice.rs:1040:12
+     |
+ 785 | impl InvoiceStorage {
+     | ------------------- associated functions in this implementation
+...
+1040 |     pub fn get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<32>> {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1060 |     pub fn get_business_invoices_with_rating_above(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1097 |     pub fn get_invoice_rating_stats(
+     |            ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+1302 |     pub fn delete_invoice(env: &Env, invoice_id: &BytesN<32>) {
+     |            ^^^^^^^^^^^^^^
+...
+1349 |     pub fn get_total_invoice_count(env: &Env) -> u32 {
+     |            ^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: associated functions `get_notification`, `update_notification_status`, `update_user_preferences`, and `get_user_notification_stats` are never used
+   --> src\notifications.rs:284:12
+    |
+226 | impl NotificationSystem {
+    | ----------------------- associated functions in this implementation
+...
+284 |     pub fn get_notification(env: &Env, notification_id: &BytesN<32>) -> Option<Notification> {
+    |            ^^^^^^^^^^^^^^^^
+...
+290 |     pub fn update_notification_status(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+338 |     pub fn update_user_preferences(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+352 |     pub fn get_user_notification_stats(env: &Env, user: &Address) -> NotificationStats {
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: multiple associated functions are never used
+   --> src\notifications.rs:404:12
+    |
+402 | impl NotificationSystem {
+    | ----------------------- associated functions in this implementation
+403 |     /// Create invoice created notification
+404 |     pub fn notify_invoice_created(
+    |            ^^^^^^^^^^^^^^^^^^^^^^
+...
+428 |     pub fn notify_invoice_verified(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+452 |     pub fn notify_invoice_status_changed(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+...
+546 |     pub fn notify_bid_received(
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+568 |     pub fn notify_bid_accepted(
+    |            ^^^^^^^^^^^^^^^^^^^
+...
+593 |     pub fn notify_payment_received(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^
+...
+633 |     pub fn notify_invoice_defaulted(
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: constant `MAX_TAG_LENGTH` is never used
+  --> src\protocol_limits.rs:45:11
+   |
+45 | pub const MAX_TAG_LENGTH: u32 = 50;
+   |           ^^^^^^^^^^^^^^
+
+warning: function `compute_min_bid_amount` is never used
+   --> src\protocol_limits.rs:206:8
+    |
+206 | pub fn compute_min_bid_amount(invoice_amount: i128, limits: &ProtocolLimits) -> i128 {
+    |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_payment_count` is never used
+   --> src\settlement.rs:331:8
+    |
+331 | pub fn get_payment_count(env: &Env, invoice_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
+    |        ^^^^^^^^^^^^^^^^^
+
+warning: function `get_payment_records` is never used
+   --> src\settlement.rs:355:8
+    |
+355 | pub fn get_payment_records(
+    |        ^^^^^^^^^^^^^^^^^^^
+
+warning: associated function `is_business_verified` is never used
+   --> src\verification.rs:227:12
+    |
+ 72 | impl BusinessVerificationStorage {
+    | -------------------------------- associated function in this implementation
+...
+227 |     pub fn is_business_verified(env: &Env, business: &Address) -> bool {
+    |            ^^^^^^^^^^^^^^^^^^^^
+
+warning: function `require_business_verification` is never used
+   --> src\verification.rs:769:8
+    |
+769 | pub fn require_business_verification(env: &Env, business: &Address) -> Result<(), QuickLendXError> {
+    |        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `recover_base_limit_from_current_limit` is never used
+    --> src\verification.rs:1168:4
+     |
+1168 | fn recover_base_limit_from_current_limit(
+     |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `update_investor_analytics` is never used
+    --> src\verification.rs:1189:8
+     |
+1189 | pub fn update_investor_analytics(
+     |        ^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: function `get_investor_analytics` is never used
+    --> src\verification.rs:1242:8
+     |
+1242 | pub fn get_investor_analytics(
+     |        ^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `quicklendx-contracts` (lib) generated 81 warnings (run `cargo fix --lib -p quicklendx-contracts` to apply 3 suggestions)
+   Compiling quicklendx-contracts v0.1.0 (C:\Users\ADMIN\Desktop\midea-drips\quicklendx-protocol\quicklendx-contracts)
+error[E0432]: unresolved import `quicklendx_contracts::InvoiceCategory`
+ --> tests\invoice_id_collision_regression.rs:3:28
+  |
+3 | use quicklendx_contracts::{InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
+  |                            ^^^^^^^^^^^^^^^ no `InvoiceCategory` in the root
+  |
+  = help: consider importing this enum instead:
+          quicklendx_contracts::types::InvoiceCategory
+
+error[E0432]: unresolved import `quicklendx_contracts::InvoiceCategory`
+ --> tests\backup_retention_validation.rs:2:5
+  |
+2 |     InvoiceCategory, QuickLendXContract, QuickLendXContractClient,
+  |     ^^^^^^^^^^^^^^^ no `InvoiceCategory` in the root
+  |
+  = help: consider importing this enum instead:
+          quicklendx_contracts::types::InvoiceCategory
+
+For more information about this error, try `rustc --explain E0432`.
+error: could not compile `quicklendx-contracts` (test "invoice_id_collision_regression") due to 1 previous error
+warning: build failed, waiting for other jobs to finish...
+error[E0599]: no method named `try_create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:46:20
+   |
+46 |     assert!(client.try_create_backup(&stranger).is_err());
+   |                    ^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:48:28
+   |
+48 |     let backup_id = client.create_backup(&admin);
+   |                            ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `get_backup_details` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:49:25
+   |
+49 |     let backup = client.get_backup_details(&backup_id).unwrap();
+   |                         ^^^^^^^^^^^^^^^^^^
+   |
+help: there is a method `get_escrow_details` with a similar name
+   |
+49 -     let backup = client.get_backup_details(&backup_id).unwrap();
+49 +     let backup = client.get_escrow_details(&backup_id).unwrap();
+   |
+
+error[E0599]: no method named `validate_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:52:20
+   |
+52 |     assert!(client.validate_backup(&backup_id));
+   |                    ^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:60:22
+   |
+60 |     let id1 = client.create_backup(&admin);
+   |                      ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:61:22
+   |
+61 |     let id2 = client.create_backup(&admin);
+   |                      ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:62:22
+   |
+62 |     let id3 = client.create_backup(&admin);
+   |                      ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `get_backups` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:68:26
+   |
+68 |     let backups = client.get_backups();
+   |                          ^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `set_backup_retention_policy` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:80:12
+   |
+80 |     client.set_backup_retention_policy(&admin, &2, &0, &true);
+   |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:82:22
+   |
+82 |     let id1 = client.create_backup(&admin);
+   |                      ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:84:22
+   |
+84 |     let id2 = client.create_backup(&admin);
+   |                      ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:86:22
+   |
+86 |     let id3 = client.create_backup(&admin);
+   |                      ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `get_backups` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:88:25
+   |
+88 |     let active = client.get_backups();
+   |                         ^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `get_backup_details` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:93:20
+   |
+93 |     assert!(client.get_backup_details(&id1).is_none());
+   |                    ^^^^^^^^^^^^^^^^^^
+   |
+help: there is a method `get_escrow_details` with a similar name
+   |
+93 -     assert!(client.get_backup_details(&id1).is_none());
+93 +     assert!(client.get_escrow_details(&id1).is_none());
+   |
+
+error[E0599]: no method named `validate_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+  --> tests\backup_retention_validation.rs:94:21
+   |
+94 |     assert!(!client.validate_backup(&id1));
+   |                     ^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> tests\backup_retention_validation.rs:102:30
+    |
+102 |     let archived_id = client.create_backup(&admin);
+    |                              ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `archive_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> tests\backup_retention_validation.rs:103:12
+    |
+103 |     client.archive_backup(&admin, &archived_id);
+    |            ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `set_backup_retention_policy` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> tests\backup_retention_validation.rs:105:12
+    |
+105 |     client.set_backup_retention_policy(&admin, &1, &0, &true);
+    |            ^^^^^^^^^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> tests\backup_retention_validation.rs:106:12
+    |
+106 |     client.create_backup(&admin);
+    |            ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> tests\backup_retention_validation.rs:108:32
+    |
+108 |     let newest_active = client.create_backup(&admin);
+    |                                ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `get_backups` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> tests\backup_retention_validation.rs:110:25
+    |
+110 |     let active = client.get_backups();
+    |                         ^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `get_backup_details` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> tests\backup_retention_validation.rs:113:20
+    |
+113 |     assert!(client.get_backup_details(&archived_id).is_some());
+    |                    ^^^^^^^^^^^^^^^^^^
+    |
+help: there is a method `get_escrow_details` with a similar name
+    |
+113 -     assert!(client.get_backup_details(&archived_id).is_some());
+113 +     assert!(client.get_escrow_details(&archived_id).is_some());
+    |
+
+error[E0599]: no method named `validate_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> tests\backup_retention_validation.rs:114:20
+    |
+114 |     assert!(client.validate_backup(&archived_id));
+    |                    ^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `create_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> tests\backup_retention_validation.rs:121:28
+    |
+121 |     let backup_id = client.create_backup(&admin);
+    |                            ^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+error[E0599]: no method named `restore_backup` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> tests\backup_retention_validation.rs:126:12
+    |
+126 |     client.restore_backup(&admin, &backup_id);
+    |            ^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+
+Some errors have detailed explanations: E0432, E0599.
+For more information about an error, try `rustc --explain E0432`.
+error: could not compile `quicklendx-contracts` (test "backup_retention_validation") due to 26 previous errors
+warning: unused import: `IntoVal`
+ --> src\test_init.rs:6:33
+  |
+6 | use soroban_sdk::{Address, Env, IntoVal, Vec};
+  |                                 ^^^^^^^
+
+error[E0599]: no method named `get_invoice_progress` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:327:33
+    |
+327 |         let progress_1 = client.get_invoice_progress(&invoice_id);
+    |                                 ^^^^^^^^^^^^^^^^^^^^
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_invoice_progress` not found for this struct
+    |
+help: there is a method `get_invoice` with a similar name
+    |
+327 -         let progress_1 = client.get_invoice_progress(&invoice_id);
+327 +         let progress_1 = client.get_invoice(&invoice_id);
+    |
+
+error[E0599]: no method named `get_invoice_progress` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:333:33
+    |
+333 |         let progress_2 = client.get_invoice_progress(&invoice_id);
+    |                                 ^^^^^^^^^^^^^^^^^^^^
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_invoice_progress` not found for this struct
+    |
+help: there is a method `get_invoice` with a similar name
+    |
+333 -         let progress_2 = client.get_invoice_progress(&invoice_id);
+333 +         let progress_2 = client.get_invoice(&invoice_id);
+    |
+
+error[E0599]: no method named `get_payment_count` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:351:28
+    |
+351 |         let count = client.get_payment_count(&invoice_id);
+    |                            ^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_count` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:354:30
+    |
+354 |         let records = client.get_payment_records(&invoice_id, &0, &10);
+    |                              ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:375:29
+    |
+375 |         let page_1 = client.get_payment_records(&invoice_id, &0, &5);
+    |                             ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:379:29
+    |
+379 |         let page_2 = client.get_payment_records(&invoice_id, &5, &5);
+    |                             ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:383:29
+    |
+383 |         let page_3 = client.get_payment_records(&invoice_id, &10, &100);
+    |                             ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:386:33
+    |
+386 |         let page_empty = client.get_payment_records(&invoice_id, &15, &5);
+    |                                 ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+error[E0599]: no method named `get_payment_records` found for struct `QuickLendXContractClient<'a>` in the current scope
+   --> src\test_partial_payments.rs:399:30
+    |
+399 |         let records = client.get_payment_records(&invoice_id, &0, &10);
+    |                              ^^^^^^^^^^^^^^^^^^^ method not found in `QuickLendXContractClient<'_>`
+    |
+   ::: src\lib.rs:77:1
+    |
+ 77 | #[contract]
+    | ----------- method `get_payment_records` not found for this struct
+
+warning: variable does not need to be mutable
+   --> src\storage.rs:275:13
+    |
+275 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+    |
+    = note: `#[warn(unused_mut)]` (part of `#[warn(unused)]`) on by default
+
+warning: variable does not need to be mutable
+   --> src\storage.rs:304:13
+    |
+304 |         let mut ids: Vec<BytesN<32>> = env
+    |             ----^^^
+    |             |
+    |             help: remove this `mut`
+
+warning: unused variable: `env`
+   --> src\test_init.rs:192:10
+    |
+192 |     let (env, client) = setup();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+    |
+    = note: `#[warn(unused_variables)]` (part of `#[warn(unused)]`) on by default
+
+warning: unused variable: `env`
+   --> src\test_init.rs:275:10
+    |
+275 |     let (env, client) = setup();
+    |          ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `current_admin`
+   --> src\test_init.rs:316:9
+    |
+316 |     let current_admin = client.get_current_admin().unwrap();
+    |         ^^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_current_admin`
+
+warning: unused variable: `env`
+   --> src\test_admin.rs:781:14
+    |
+781 |         let (env, client) = setup();
+    |              ^^^ help: if this is intentional, prefix it with an underscore: `_env`
+
+warning: unused variable: `business`
+   --> src\test_partial_payments.rs:263:26
+    |
+263 |         let (invoice_id, business, _investor, _currency) =
+    |                          ^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_business`
+
+warning: unused variable: `limits`
+   --> src\verification.rs:621:9
+    |
+621 |     let limits = ProtocolLimitsContract::get_protocol_limits(env.clone());
+    |         ^^^^^^ help: if this is intentional, prefix it with an underscore: `_limits`
+
+For more information about this error, try `rustc --explain E0599`.
+warning: `quicklendx-contracts` (lib test) generated 23 warnings (14 duplicates)
+error: could not compile `quicklendx-contracts` (lib test) due to 9 previous errors; 23 warnings emitted
