@@ -57,7 +57,9 @@ function loadPolicy(): void {
   loadedPolicy = RedactionPolicySchema.parse(parsedPolicy);
   
   // Build the field tier map
-  fieldTierMap = {};
+  // A null prototype keeps unlisted names such as "constructor" and
+  // "toString" from resolving through Object.prototype.
+  fieldTierMap = Object.create(null) as Record<string, FieldTier>;
   for (const field of loadedPolicy.public) {
     fieldTierMap[field] = FieldTier.PUBLIC;
   }
