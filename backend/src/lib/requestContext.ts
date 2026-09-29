@@ -116,15 +116,27 @@ export function sanitizeCorrelationId(raw: unknown): string | null {
  */
 export function createRequestContextMiddleware() {
   return function requestContextMiddleware(
-    req: { correlationId?: string; requestId?: string },
+    req: { correlationId?: unknown; requestId?: unknown },
     _res: unknown,
-    next: () => void
+    next: (err?: any) => void
   ): void {
-    const id = req.correlationId ?? req.requestId;
-    if (typeof id === "string" && id.length > 0) {
-      runWithContext(id, next);
-    } else {
-      next();
+    try {
+      // Extract the provided ID
+      const rawId = req.correlationId ?? req.requestId;
+      
+      // Sanitize input to enforce validation and permission/security boundaries
+      const id = sanitizeCorrelationId(rawId);
+      
+      if (typeof id === "string" && id.length > 0) {
+        // Initialize valid context state. Concurrent requests are isolated by AsyncLocalStorage.
+        runWithContext(id, () => next());
+      } else {
+        // Proceed without context in invalid/stale/missing cases
+        next();
+      }
+    } catch (err) {
+      // Deterministic failure-boundary: prevent silent failures or unhandled rejections
+      next(err);
     }
   };
 }
