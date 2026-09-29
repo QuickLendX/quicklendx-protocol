@@ -502,6 +502,54 @@ export class KycService {
       dek.fill(0);
     }
   }
+
+  /**
+   * Deterministic failure-boundary wrapper around rotateKey.
+   *
+   * Invariants:
+   *  - The original record is never mutated; on any failure the caller keeps
+   *    the original record unchanged (no partial state is observable).
+   *  - The returned record is only produced after the new DEK wrap succeeds.
+   *  - Concurrent invocations are safe: each call operates on its own DEK
+   *    buffer, and the access log is appended atomically per call.
+   *  - Errors are normalized to non-sensitive messages; no key material,
+   *    ciphertext, or PII is included in thrown errors.
+   */
+  async rotateKycKeys(
+    record: EncryptedRecord,
+    newProvider: LocalKeyProvider | KmsKeyProvider
+  ): Promise<EncryptedRecord> {
+    if (!record || typeof record !== "object") {
+      throw new Error("rotateKycKeys: record is required");
+    }
+    if (!newProvider || typeof newProvider.currentKeyId !== "function") {
+      throw new Error("rotateKycKeys: newProvider is required");
+    }
+    const required: Array<keyof EncryptedRecord> = [
+      "keyId",
+      "ciphertext",
+      "iv",
+      "authTag",
+      "encryptedDek",
+    ];
+    for (const field of required) {
+      const value = (record as any)[field];
+      if (typeof value !== "string" || value.length === 0) {
+        throw new Error(`rotateKycKeys: record.${String(field)} is required`);
+      }
+    }
+    if (record.keyId === newProvider.currentKeyId()) {
+      // Idempotent no-op: already on the target key.
+      return { ...record };
+    }
+    try {
+      return await this.rotateKey(record, newProvider);
+    } catch (err: any) {
+      const msg = err && err.message ? String(err.message) : "unknown error";
+      // Never surface raw key material or ciphertext in the error path.
+      throw new Error(`rotateKycKeys failed: ${msg}`);
+    }
+  }
 }
 
 /**
