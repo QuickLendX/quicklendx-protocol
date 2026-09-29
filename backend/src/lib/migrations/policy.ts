@@ -47,7 +47,7 @@ export class MigrationPolicy {
     const errors: string[] = [];
     const warnings: string[] = [];
 
-    const seenVersions = new Set<string>();
+    const seenVersions = new Set<number>();
     for (const mig of migrations) {
       const metaCheck = this.validateMetadata(mig);
       if (!metaCheck.valid) {
