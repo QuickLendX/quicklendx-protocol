@@ -1,4 +1,4 @@
-// Updated implementation with deterministic failure‭boundary handling for prepared statements.
+// Updated implementation with deterministic failure₭boundary handling for prepared statements.
 
 import Database from 'better-sqlite3';
 
@@ -50,7 +50,7 @@ let cacheMisses = 0;
 let cacheEvicts = 0;
 
 /**
- * Get a singleton instance of the better‒sqlite3 database with sensible pragmas.
+ * Get a singleton instance of the better–sqlite3 database with sensible pragmas.
  */
 export function getDatabase() {
   if (!dbInstance) {
@@ -71,13 +71,14 @@ export function getDatabase() {
  * 1. Cache‑hit returns the prepared statement after a cheap validation step.
  *    If validation fails due to a stale schema (`SQLITE_SCHEMA`) the entry is evicted
  *    and a fresh preparation is performed.
- * 2. Cache—miss triggers a guarded preparation sequence:
+ * 2. Cache–miss triggers a guarded preparation sequence:
  *    - Concurrency guard ensures only one preparation per SQL string.
  *    - Retry loop (max 3 attempts) handles transient `SQLITE_BUSY` errors.
  *    - Permission checks surface a `DatabasePermissionError` without caching.
  *    - Any other preparation error surfaces a `DatabasePrepareError`.
  *
- * The public signature is unchanged – owners receive the prepared statement or a thrown error they can handle deterministically.
+ * The public signature is unchanged – namely callers receive the prepared statement or
+ * a thrown error they can handle deterministically.
  */
 // Deterministic, synchronous prepared statement retrieval with failure handling.
 export function getPreparedStatement(sql: string): any {
@@ -128,7 +129,7 @@ export function getPreparedStatement(sql: string): any {
     } catch (err: any) {
       if (err.code === 'SQLITE_BUSY') {
         if (attempt < maxAttempts - 1) {
-          // simple synchronous back—off
+          // simple synchronous back‑off
           const delay = 50 * (attempt + 1);
           const start = Date.now();
           while (Date.now() - start < delay) {}
