@@ -13,6 +13,7 @@ process.env.RATE_LIMIT_EXPORT_POINTS = "1000";
 
 import { exportService, ExportFormat } from "../services/exportService";
 import { config } from "../config";
+import { requestExport } from "../controllers/v1/exports";
 
 const exportDir = process.env.EXPORT_DIR!;
 
@@ -203,6 +204,121 @@ describe("HTTP API - /api/v1/exports/generate", () => {
       .query({ format: "xml" });
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe("INVALID_FORMAT");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// requestExport controller - deterministic failure-boundary coverage
+// ---------------------------------------------------------------------------
+describe("requestExport controller - failure boundaries", () => {
+  function makeReq(overrides: any = {}): any {
+    return {
+      user: { userId: "user-stream-test" },
+      query: {},
+      headers: {},
+      ...overrides,
+    };
+  }
+
+  function makeRes() {
+    const res: any = {
+      statusCode: 200,
+      body: undefined,
+      status(code: number) {
+        this.statusCode = code;
+        return this;
+      },
+      json(payload: any) {
+        this.body = payload;
+        return this;
+      },
+    };
+    return res;
+  }
+
+  it("returns a download URL for a valid request", async () => {
+    const req = makeReq({ query: { format: "json" } });
+    const res = makeRes();
+    await requestExport(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.download_url).toMatch(/^\/api\/v1\/exports\/download\//);
+  });
+
+  it("rejects an invalid format deterministically", async () => {
+    const req = makeReq({ query: { format: "xml" } });
+    const res = makeRes();
+    await requestExport(req, res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error.code).toBe("INVALID_FORMAT");
+  });
+
+  it("rejects a missing user (permission boundary)", async () => {
+    const req = makeReq({ user: undefined, query: { format: "json" } });
+    const res = makeRes();
+    await requestExport(req, res);
+    expect(res.statusCode).toBe(401);
+    expect(res.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("rejects a missing userId (permission boundary)", async () => {
+    const req = makeReq({ user: {}, query: { format: "json" } });
+    const res = makeRes();
+    await requestExport(req, res);
+    expect(res.statusCode).toBe(401);
+    expect(res.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("defaults to JSON when format is omitted", async () => {
+    const req = makeReq({ query: {} });
+    const res = makeRes();
+    await requestExport(req, res);
+    expect(res.statusCode).toBe(200);
+    expect(res.body.success).toBe(true);
+  });
+
+  it("is deterministic across repeated valid calls", async () => {
+    const req1 = makeReq({ query: { format: "csv" } });
+    const res1 = makeRes();
+    await requestExport(req1, res1);
+    const req2 = makeReq({ query: { format: "csv" } });
+    const res2 = makeRes();
+    await requestExport(req2, res2);
+    expect(res1.statusCode).toBe(200);
+    expect(res2.statusCode).toBe(200);
+    expect(res1.body.success).toBe(true);
+    expect(res2.body.success).toBe(true);
+  });
+
+  it("surfaces a diagnosable error on generation failure without leaking secrets", async () => {
+    const spy = jest
+      .spyOn(exportService, "generateExportFile")
+      .mockRejectedValueOnce(new Error("disk full at /secret/path"));
+    const req = makeReq({ query: { format: "json" } });
+    const res = makeRes();
+    await requestExport(req, res);
+    expect(res.statusCode).toBeGreaterThanOrEqual(500);
+    expect(res.body.success).toBe(false);
+    expect(res.body.error).toBeDefined();
+    expect(JSON.stringify(res.body)).not.toContain("/secret/path");
+    spy.mockRestore();
+  });
+
+  it("recovers after a transient failure (retry boundary)", async () => {
+    const spy = jest
+      .spyOn(exportService, "generateExportFile")
+      .mockRejectedValueOnce(new Error("transient"));
+    const failReq = makeReq({ query: { format: "json" } });
+    const failRes = makeRes();
+    await requestExport(failReq, failRes);
+    expect(failRes.body.success).toBe(false);
+    spy.mockRestore();
+
+    const okReq = makeReq({ query: { format: "json" } });
+    const okRes = makeRes();
+    await requestExport(okReq, okRes);
+    expect(okRes.statusCode).toBe(200);
+    expect(okRes.body.success).toBe(true);
   });
 });
 
