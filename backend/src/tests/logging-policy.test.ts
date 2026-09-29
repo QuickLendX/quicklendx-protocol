@@ -93,6 +93,9 @@ describe("classifyField", () => {
       "mnemonic", "seed_phrase",
       // Webhook
       "webhook_secret", "signing_secret",
+      // Additional camelCase policy entries
+      "dateOfBirth", "passportNumber", "bankAccountNumber",
+      "routingNumber", "taxId",
     ];
 
     it.each(secretFields)("classifies '%s' as SECRET", (field) => {
@@ -106,6 +109,32 @@ describe("classifyField", () => {
   it("defaults unknown fields to PRIVATE", () => {
     expect(classifyField("totally_unknown_field_xyz")).toBe(FieldTier.PRIVATE);
     expect(isPrivate("totally_unknown_field_xyz")).toBe(true);
+  });
+
+  it.each([
+    "",
+    "ID",
+    "Status",
+    " id",
+    "id ",
+    "invoice-id",
+    "__proto__",
+    "constructor",
+    "toString",
+    "valueOf",
+    "hasOwnProperty",
+  ])("defaults unlisted boundary name %j to PRIVATE", (field) => {
+    expect(classifyField(field)).toBe(FieldTier.PRIVATE);
+    expect(isPrivate(field)).toBe(true);
+    expect(isPublic(field)).toBe(false);
+    expect(isSecret(field)).toBe(false);
+  });
+
+  it("returns the same classification on repeated calls", () => {
+    expect(classifyField("authorization")).toBe(FieldTier.SECRET);
+    expect(classifyField("authorization")).toBe(FieldTier.SECRET);
+    expect(classifyField("unlisted_field")).toBe(FieldTier.PRIVATE);
+    expect(classifyField("unlisted_field")).toBe(FieldTier.PRIVATE);
   });
 });
 
