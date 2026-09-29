@@ -94,4 +94,36 @@ export const MigrationErrorCodes = {
   CHECKSUM_MISMATCH: "CHECKSUM_MISMATCH",
   HOTFIX_REQUIRES_APPROVAL: "HOTFIX_REQUIRES_APPROVAL",
   UNSUPPORTED_IN_PRODUCTION: "UNSUPPORTED_IN_PRODUCTION",
+  /** The migrations directory could not be read (missing, not a directory, or permission denied). */
+  MIGRATIONS_DIRECTORY_UNREADABLE: "MIGRATIONS_DIRECTORY_UNREADABLE",
+  /** A migration file failed to parse or export a valid definition. */
+  MIGRATION_FILE_INVALID: "MIGRATION_FILE_INVALID",
+  /** Two migration files declare the same version. */
+  MIGRATION_DUPLICATE_VERSION: "MIGRATION_DUPLICATE_VERSION",
 } as const;
+
+export type MigrationErrorCode = (typeof MigrationErrorCodes)[keyof typeof MigrationErrorCodes];
+
+/**
+ * Structured error thrown by the migration runner.
+ *
+ * Invariants:
+ *  - `code` is always one of {@link MigrationErrorCodes}.
+ *  - `context` must never contain secrets (passwords, tokens, SQL parameters).
+ *  - `message` is safe to log and to surface to operators.
+ */
+export class MigrationError extends Error {
+  public readonly code: MigrationErrorCode;
+  public readonly context?: Record<string, unknown>;
+
+  constructor(
+    code: MigrationErrorCode,
+    message: string,
+    context?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "MigrationError";
+    this.code = code;
+    this.context = context;
+  }
+}

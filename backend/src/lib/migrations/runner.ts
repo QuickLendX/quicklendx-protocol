@@ -19,13 +19,41 @@ const MIGRATIONS_TABLE = `
     applied_at TEXT NOT NULL,
     duration_ms INTEGER NOT NULL,
     author TEXT NOT NULL,
-    meta TEXT DEFAULT '{}',
+    meta TEXT DEFAULT 't{}',
     UNIQUE(version)
   )
 `;
 
 const MIGRATIONS_DIR = path.resolve(process.cwd(), "src", "migrations");
 const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), ".hotfix-approvals");
+
+/**
+ * Error class for migration loading failures. Carries a deterministic `code` so callers
+ * can distinguish boundary conditions (permission, stale, duplicate, etc.) without
+ * parsing human-messages.
+ */
+export class MigrationLoadError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "MigrationLoadError";
+    this.code = code;
+  }
+}
+
+export const MigrationLoadErrorCodes = {
+  ENO_ENT: "ENOENT",
+  NOT_A_DIRECTORY: "NOT_A_DIRECTORY",
+  PERMISSION_DENIED: "PERMISSION_DENIED",
+  INVALID_FILENAME: "INVALID_FILENAME",
+  DUPLICATE_VERSION: "DUPLICATE_VERSION",
+  VERSION_MISMATCH: "VERSION_MISMATCH",
+  MISSING_DEFAULT_EXPORT: "MISSING_DEFAULT_EXPORT",
+  INVALID_DEFINITION: "INVALID_DEFINITION",
+  FILE_READ_FAILED: "FILE_READ_FAILED",
+} as const;
+
+export type MigrationLoadErrorCode = (typeof MigrationLoadErrorCodes)[keydof typeof MigrationLoadErrorCodes];
 
 export function computeChecksum(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -37,37 +65,153 @@ export function parseMigrationFilename(filename: string): { version: number; nam
   return { version: parseInt(match[1], 10), name: match[2] };
 }
 
+/**
+ * Resolve the migrations directory. Tests and callers may override via the
+ * `MIGRATIONS_DIR` environment variable to exercise boundary conditions without
+ * touching the repository layout. Defaults to `<cwd>/src/migrations`.
+ */
+function resolveMigrationsDir(): string {
+  const override = process.env.MIGRATIONS_DIR;
+  if (override && override.trim().length > 0) {
+    return path.resolve(override);
+  }
+  return MIGRATIONS_DIR;
+}
+
+function isErrorWithCode(err: unknown, code: string): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    (err as { code?: unknown }).code === code
+  );
+}
+
+function validateDefinition(
+  def: unknown,
+  file: string,
+  parsed: { version: number; name: string },
+): MigrationDefinition {
+  if (!def || typeof def !== "object") {
+    throw new MigrationLoadError(
+      MigrationLoadErrorCodes.INVALID_DEFINITION,
+      `Migration ${file} does not export a default object.`,
+    );
+  }
+  const candidate = def as { version?: unknown; up?: unknown };
+  if (typeof candidate.version !== "number") {
+    throw new MigrationLoadError(
+      MigrationLoadErrorCodes.INVALID_DEFINITION,
+      `Migration ${file} is missing a numeric `version` export.`,
+    );
+  }
+  if (candidate.version !== parsed.version) {
+    throw new MigrationLoadError(
+      MigrationLoadErrorCodes.VERSION_MISMATCH,
+      `Version mismatch in ${file}: filename ${parsed.version} but export ${candidate.version}`,
+    );
+  }
+  if (typeof candidate.up !== "function") {
+    throw new MigrationLoadError(
+      MigrationLoadErrorCodes.INVALID_DEFINITION,
+      `Migration ${file} is missing a `up` function.`,
+    );
+  }
+  return def as MigrationDefinition;
+}
+
+/**
+ * Load and validate all migration files from the migrations directory.
+ *
+ * Invariants:
+ *   - Returned migrations are sorted by ascending version.
+ *   - Version numbers are unique; duplicates fail loud and deterministically.
+ *   - Every file whose name matches the convention must export a valid definition
+ *     whose `version` matches the filename.
+ *   - A missing directory is treated as an empty migration set (ENOENT).
+ *   - Permission and I/O errors are surfaced as `MigrationLoadError` with a code.
+ */
 export async function loadMigrationsFromFS(): Promise<ParsedMigration[]> {
+  const dir = resolveMigrationsDir();
+
+  let files: string[];
   try {
-    const files = await fs.readdir(MIGRATIONS_DIR);
-    const migrations: ParsedMigration[] = [];
-
-    for (const file of files) {
-      const parsed = parseMigrationFilename(file);
-      if (!parsed) continue;
-
-      const filePath = path.join(MIGRATIONS_DIR, file);
-      const content = await fs.readFile(filePath, "utf-8");
-
-      let def: MigrationDefinition;
-      try {
-        def = require(filePath).default as MigrationDefinition;
-      } catch (err: any) {
-        throw new Error(`Failed to load migration ${file}: ${err.message}`);
-      }
-
-      if (def.version !== parsed.version) {
-        throw new Error(`Version mismatch in ${file}: filename ${parsed.version} but export ${def.version}`);
-      }
-
-      migrations.push({ file, version: parsed.version, name: parsed.name, content: def });
+    files = await fs.readdir(dir);
+  } catch (err: unknown) {
+    if (isErrorWithCode(err, "ENOENT")) {
+      return [];
     }
-
-    return migrations.sort((a, b) => a.version - b.version);
-  } catch (err: any) {
-    if (err.code === "ENOENT") return [];
+    if (isErrorWithCode(err, "ENOTDIR")) {
+      throw new MigrationLoadError(
+        MigrationLoadErrorCodes.NOT_A_DIRECTORY,
+        `Migrations path is not a directory: ${dir}`,
+      );
+    }
+    if (isErrorWithCode(err, "EACCES") || isErrorWithCode(err, "EPROTO")) {
+      throw new MigrationLoadError(
+        MigrationLoadErrorCodes.PERMISSION_DENIED,
+        `Permission denied reading migrations directory: ${dir}`,
+      );
+    }
     throw err;
   }
+
+  // Deterministic ordering: sort filenames before processing so error reporting is
+  // stable regardless of the underlying filesystem readdir order.
+  const sortedFiles = [...files].sort();
+
+  const migrations: ParsedMigration[] = [];
+  const seenVersions = new Map<number, string>();
+
+  for (const file of sortedFiles) {
+    const parsed = parseMigrationFilename(file);
+    if (!parsed) continue;
+
+    const existing = seenVersions.get(parsed.version);
+    if (existing) {
+      throw new MigrationLoadError(
+        MigrationLoadErrorCodes.DUPLICATE_VERSION,
+        `Duplicate migration version ${parsed.version}: ${existing} and ${file}`,
+      );
+    }
+    seenVersions.set(parsed.version, file);
+
+    const filePath = path.join(dir, file);
+
+    // Read the source content first so we can report a coded error on I/O failure.
+    try {
+      await fs.readFile(filePath, "utf-8");
+    } catch (err: unknown) {
+      if (isErrorWithCode(err, "EACCES") || isErrorWithCode(err, "EPROTO")) {
+        throw new MigrationLoadError(
+          MigrationLoadErrorCodes.PERMISSION_DENIED,
+          `Permission denied reading migration file: ${file}`,
+        );
+      }
+      throw new MigrationLoadError(
+        MigrationLoadErrorCodes.FILE_READ_FAILED,
+        `Failed to read migration ${file}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    let def: MigrationDefinition;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const loaded = require(filePath);
+      def = (loaded && (loaded.default ?? loaded)) as MigrationDefinition;
+    } catch (err: unknown) {
+      const message = err instance of Error ? err.message : String(err);
+      throw new MigrationLoadError(
+        MigrationLoadErrorCodes.MISSING_DEFAULT_EXPORT,
+        `Failed to load migration ${file}: ${message}`,
+      );
+    }
+
+    const validated = validateDefinition(def, file, parsed);
+
+    migrations.push({ file, version: parsed.version, name: parsed.name, content: validated });
+  }
+
+  return migrations.sort((a, b) => a.version - b.version);
 }
 
 async function isHotfixApproved(migration: ParsedMigration): Promise<boolean> {
@@ -162,7 +306,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
 
     if (direction === "up") {
       if (existing) {
-        if (verbose) console.log(`⏭  Migration ${version}_${fileMig.name} already applied, skipping`);
+        if (verbose) console.log(`⎭  Migration ${version}_${fileMig.name} already applied, skipping`);
         skipped++;
         continue;
       }
@@ -181,7 +325,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
 
       if (!dryRun) {
         try {
-          const fileContent = await fs.readFile(path.join(MIGRATIONS_DIR, fileMig.file), "utf-8");
+          const fileContent = await fs.readFile(path.join(resolveMigrationsDir(), fileMig.file), "utf-8");
           const checksum = computeChecksum(fileContent);
           const meta = fileMig.content.meta || {};
           const appliedAt = new Date().toISOString();
@@ -211,7 +355,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
           });
 
           appliedThisRun.push(state);
-          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${durationMs}ms)`);
+          if (verbose) console.log`✅ Applied migration ${version}_${fileMig.name} (${durationMs}ms)`);
         } catch (err: any) {
           console.error(`❌ Migration ${version}_${fileMig.name} failed:`, err.message);
           throw err;
@@ -234,7 +378,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
       }
 
       if (!existing) {
-        if (verbose) console.log(`⏭  Migration ${version}_${fileMig.name} not applied, cannot rollback`);
+        if (verbose) console.log(`⎭  Migration ${version}_${fileMig.name} not applied, cannot rollback`);
         skipped++;
         continue;
       }
@@ -276,7 +420,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             meta: fileMig.content.meta,
           });
 
-          if (verbose) console.log(`⏪ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms)`);
+          if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms)`);
         } catch (err: any) {
           console.error(`❌ Rollback of ${version}_${fileMig.name} failed:`, err.message);
           throw err;
@@ -332,36 +476,30 @@ export async function validateMigrationFiles(): Promise<{ valid: boolean; errors
 export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ valid: boolean; errors: string[] }> {
   const errors: string[] = [];
   const database = db || getDatabase();
-  
-  // Ensure migrations table exists
-  database.exec(MIGRATIONS_TABLE);
-  
+
   const appliedRows = database.prepare(
     "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
   ).all() || [];
-  
-  const fileMigrations = await loadMigrationsFromFS();
-  const fileMigrationMap = new Map(fileMigrations.map((m) => [m.version, m]));
-  
-  for (const row of appliedRows) {
-    const fileMig = fileMigrationMap.get(row.version);
-    if (!fileMig) {
-      errors.push(`Applied migration ${row.version}_${row.name} not found in filesystem`);
+
+  if (appliedRows.length === 0) {
+    return { valid: true, errors: [] };
+  }
+
+  const migrations = await loadMigrationsFromFS();
+  const byVersion = new Map(migrations.map((m) => [m.version, m]));
+
+  for (const row of appliedRows as any[]) {
+    const mig = byVersion.get(row.version);
+    if (!mig) {
+      errors.push(`Applied migration ${row.version}_${row.name} has no corresponding file`);
       continue;
     }
-    
-    const filePath = path.join(MIGRATIONS_DIR, fileMig.file);
-    const fileContent = await fs.readFile(filePath, "utf-8");
-    const currentChecksum = computeChecksum(fileContent);
-    
-    if (currentChecksum !== row.checksum) {
-      errors.push(
-        `Checksum mismatch for migration ${row.version}_${row.name}: ` +
-        `expected ${row.checksum}, got ${currentChecksum}. ` +
-        `Migration file may have been modified after application.`
-      );
+    const fileContent = await fs.readFile(path.join(resolveMigrationsDir(), mig.file), "utf-8");
+    const actual = computeChecksum(fileContent);
+    if (actual !== row.checksum) {
+      errors.push(`Checksum mismatch for ${row.version}_${row.name}`);
     }
   }
-  
+
   return { valid: errors.length === 0, errors };
 }

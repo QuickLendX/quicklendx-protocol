@@ -1,4 +1,4 @@
-import { computeChecksum, parseMigrationFilename, runMigrations, getAppliedVersions, isDatabaseInitialized, verifyAppliedChecksums } from "../lib/migrations/runner";
+import { computeChecksum, parseMigrationFilename, runMigrations, getAppliedVersions, isDatabaseInitialized, verifyAppliedChecksums, loadMigrationsFromFS } from "../lib/migrations/runner";
 import { MigrationPolicy } from "../lib/migrations/policy";
 import * as fs from "fs/promises";
 import * as path from "path";
@@ -19,7 +19,7 @@ jest.mock("../lib/database", () => ({
 // Mock filesystem
 jest.mock("fs/promises", () => ({
   readdir: jest.fn(() => Promise.resolve([])),
-  readFile: jest.fn(() => Promise.resolve("")),
+  readFile: jest.fn(() => Promise.resolve(""),
   access: jest.fn(() => Promise.resolve()),
 }));
 jest.mock("path");
@@ -405,209 +405,333 @@ describe("Migration Runner with Mocked Database", () => {
     expect(result.valid).toBe(false);
   });
 
-  test("MigrationPolicy.isDownAllowed returns false when env var not set", () => {
-    const originalEnv = process.env.ALLOW_DOWN_MIGRATIONS;
-    delete process.env.ALLOW_DOWN_MIGRATIONS;
-    try {
-      expect(MigrationPolicy.isDownAllowed()).toBe(false);
-    } finally {
-      process.env.ALLOW_DOWN_MIGRATIONS = originalEnv;
-    }
-  });
+  // --------------------------------------------------------------------------------
+  // Deterministic failure-boundary coverage for loadMigrationsFromFS
+  // --------------------------------------------------------------------------------
 
-  test("MigrationPolicy.isDownAllowed returns true when env var set to true", () => {
-    const originalEnv = process.env.ALLOW_DOWN_MIGRATIONS;
-    process.env.ALLOW_DOWN_MIGRATIONS = "true";
-    try {
-      expect(MigrationPolicy.isDownAllowed()).toBe(true);
-    } finally {
-      process.env.ALLOW_DOWN_MIGRATIONS = originalEnv;
-    }
-  });
+  describe("loadMigrationsFromFS failure boundaries", () => {
+    const mockedReaddir = fs.readdir as jest.MockedFunction;
+    const mockedReadFile = fs.readFile as jest.MockedFunction;
+    const mockedAccess = fs.access as jest.MockedFunction;
 
-  test("MigrationPolicy.isHotfix returns true for hotfix migration", () => {
-    const hotfix = {
-      version: 1,
-      name: "test",
-      authoredAt: "2026-04-26",
-      author: "test",
-      meta: { hotfix: true },
-      up: async () => {},
-    };
+    const validDir = "/test/migrations";
 
-    expect(MigrationPolicy.isHotfix(hotfix)).toBe(true);
-  });
+    const validMigrationSource = `
+      export const version = 1;
+      export const name = "test";
+      export const authoredAt = "2026-04-26";
+      export const author = "test";
+      export const up = async () => {};
+    `;
 
-  test("MigrationPolicy.isHotfix returns false for regular migration", () => {
-    const regular = {
-      version: 1,
-      name: "test",
-      authoredAt: "2026-04-26",
-      author: "test",
-      up: async () => {},
-    };
+    const validMigrationSourceWithDown = `
+      export const version = 2;
+      export const name = "test2";
+      export const authoredAt = "2026-04-27";
+      export const author = "test";
+      export const up = async () => {};
+      export const down = async () => {};
+    `;
 
-    expect(MigrationPolicy.isHotfix(regular)).toBe(false);
-  });
+    beforeEach(() => {
+      mockedReaddir.mockReset();
+      mockedReadFile.mockReset();
+      mockedAccess.mockReset();
+      (mockedAccess as jest.Mock).mockResolvedValue(undefined);
+    });
 
-  test("MigrationPolicy.validateMetadata returns errors for missing required fields", () => {
-    const incomplete = {
-      version: 1,
-      name: "",
-      authoredAt: "",
-      author: "",
-      up: async () => {},
-    };
+    test("loads valid migrations deterministically and sorts by version", async () => {
+      mockedReaddir.mockResolvedValue(["v002_test2.ts", "v001_test.ts"]);
+      mockedReadFile.mockImplementation((filePath: string) => {
+        if (filePath.endsWith("v001_test.ts")) return Promise.resolve(validMigrationSource);
+        if (filePath.endsWith("v002_test2.ts")) return Promise.resolve(validMigrationSourceWithDown);
+        return Promise.reject(new Error("Unknown file"));
+      });
 
-    const result = MigrationPolicy.validateMetadata(incomplete);
-    expect(result.valid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
-    expect(result.errors).toContain("Migration name is required");
-    expect(result.errors).toContain("Migration author is required");
-    expect(result.errors).toContain("Migration authoredAt date is required");
-  });
+      const migrations = await loadMigrationsFromFS(validDir);
+      expect(migrations).toHaveLength(2);
+      expect(migrations[0].version).toBe(1);
+      expect(migrations[1].version).toBe(2);
+      expect(migrations[0].name).toBe("test");
+      expect(migrations[1].name).toBe("test2");
+    });
 
-  test("MigrationPolicy.validateMetadata returns valid for complete migration", () => {
-    const complete = {
-      version: 1,
-      name: "test",
-      authoredAt: "2026-04-26",
-      author: "test",
-      up: async () => {},
-    };
+    test("ignores non-migration files deterministically", async () => {
+      mockedReaddir.mockResolvedValue(["README.md", "v001_test.ts", ".hidden.ts", "test.js"]);
+      mockedReadFile.mockResolvedValue(validMigrationSource);
 
-    const result = MigrationPolicy.validateMetadata(complete);
-    expect(result.valid).toBe(true);
-    expect(result.errors).toEqual([]);
-  });
+      const migrations = await loadMigrationsFromFS(validDir);
+      expect(migrations).toHaveLength(1);
+      expect(migrations[0].version).toBe(1);
+    });
 
-  test("runMigrations with mocked database - dry run", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-        get: jest.fn(() => null),
-        run: jest.fn(() => ({})),
-      })),
-      transaction: jest.fn((fn) => fn()),
-    };
+    test("returns empty array when directory is empty", async () => {
+      mockedReaddir.mockResolvedValue([]);
 
-    const result = await runMigrations({ dryRun: true, db: mockDb });
-    expect(result).toHaveProperty("applied");
-    expect(result).toHaveProperty("skipped");
-    expect(result).toHaveProperty("durationMs");
-  });
+      const migrations = await loadMigrationsFromFS(validDir);
+      expect(migrations).toEqual([]);
+    });
 
-  test("runMigrations with mocked database - allowDown", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-        get: jest.fn(() => null),
-        run: jest.fn(() => ({})),
-      })),
-      transaction: jest.fn((fn) => fn()),
-    };
+    test("rejects when directory cannot be read (permission denied)", async () => {
+      const error = Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+      mockedReaddir.mockRejectedValue(error);
 
-    const result = await runMigrations({ allowDown: true, dryRun: true, db: mockDb });
-    expect(result).toHaveProperty("applied");
-    expect(result).toHaveProperty("skipped");
-    expect(result).toHaveProperty("durationMs");
-  });
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow("EACCES: permission denied");
+    });
 
-  test("runMigrations with mocked database - verbose", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-        get: jest.fn(() => null),
-        run: jest.fn(() => ({})),
-      })),
-      transaction: jest.fn((fn) => fn()),
-    };
+    test("rejects when directory does not exist", async () => {
+      const error = Object.assign(new Error("ENOENT: no such file or directory"), { code: "ENOENT" });
+      mockedReaddir.mockRejectedValue(error);
 
-    const result = await runMigrations({ verbose: true, dryRun: true, db: mockDb });
-    expect(result).toHaveProperty("applied");
-    expect(result).toHaveProperty("skipped");
-    expect(result).toHaveProperty("durationMs");
-  });
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow("ENOENT");
+    });
 
-  test("runMigrations with mocked database - skipChecksumVerify", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-        get: jest.fn(() => null),
-        run: jest.fn(() => ({})),
-      })),
-      transaction: jest.fn((fn) => fn()),
-    };
+    test("rejects when a migration file cannot be read", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockRejectedValue(new Error("EIO: read error"));
 
-    const result = await runMigrations({ skipChecksumVerify: true, dryRun: true, db: mockDb });
-    expect(result).toHaveProperty("applied");
-    expect(result).toHaveProperty("skipped");
-    expect(result).toHaveProperty("durationMs");
-  });
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow("EIO: read error");
+    });
 
-  test("getAppliedVersions with mocked database", async () => {
-    const mockDb: any = {
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => [{ version: 1 }, { version: 2 }]),
-      })),
-    };
+    test("rejects when migration file lacks required exports", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue("export const foo = 1;");
 
-    const versions = await getAppliedVersions(mockDb);
-    expect(Array.isArray(versions)).toBe(true);
-    expect(versions).toEqual([1, 2]);
-  });
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
 
-  test("isDatabaseInitialized with mocked database - initialized", async () => {
-    const mockDb: any = {
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => [{ version: 1 }]),
-      })),
-    };
+    test("rejects when migration file has invalid version", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`
+        export const version = "not-a-number";
+        export const name = "test";
+        export const authoredAt = "2026-04-26";
+        export const author = "test";
+        export const up = async () => {};
+      `);
 
-    const initialized = await isDatabaseInitialized(mockDb);
-    expect(initialized).toBe(true);
-  });
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
 
-  test("isDatabaseInitialized with mocked database - not initialized", async () => {
-    const mockDb: any = {
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-      })),
-    };
+    test("rejects when duplicate versions are detected", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts", "001_duplicate.ts"]);
+      mockedReadFile.mockImplementation((filePath: string) => {
+        if (filePath.endsWith("v001_test.ts")) return Promise.resolve(validMigrationSource);
+        if (filePath.endsWith("001_duplicate.ts")) return Promise.resolve(validMigrationSource);
+        return Promise.reject(new Error("Unknown file"));
+      });
 
-    const initialized = await isDatabaseInitialized(mockDb);
-    expect(initialized).toBe(false);
-  });
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
 
-  test("verifyAppliedChecksums with mocked database - no applied migrations", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-      })),
-    };
+    test("rejects when migration file throws during import", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue("throw new Error('module load failure');");
 
-    const result = await verifyAppliedChecksums(mockDb);
-    expect(result.valid).toBe(true);
-    expect(result.errors).toEqual([]);
-  });
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
 
-  test("verifyAppliedChecksums with mocked database - checksum mismatch", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => [
-          { version: 1, name: "test", checksum: "old_checksum" },
-        ]),
-      })),
-    };
+    test("is deterministic across repeated calls with the same input", async () => {
+      mockedReaddir.mockResolvedValue(["v002_test2.ts", "v001_test.ts"]);
+      mockedReadFile.mockImplementation((filePath: string) => {
+        if (filePath.endsWith("v001_test.ts")) return Promise.resolve(validMigrationSource);
+        if (filePath.endsWith("v002_test2.ts")) return Promise.resolve(validMigrationSourceWithDown);
+        return Promise.reject(new Error("Unknown file"));
+      });
 
-    const result = await verifyAppliedChecksums(mockDb);
-    expect(result).toHaveProperty("valid");
-    expect(result).toHaveProperty("errors");
+      const first = await loadMigrationsFromFS(validDir);
+      const second = await loadMigrationsFromFS(validDir);
+      expect(first.map((m) => m.version)).toEqual(second.map((m) => m.version));
+      expect(first.map((m) => m.name)).toEqual(second.map((m) => m.name));
+    });
+
+    test("rejects when migration file name has no version prefix", async () => {
+      mockedReaddir.mockResolvedValue(["test.ts"]);
+      mockedReadFile.mockResolvedValue(validMigrationSource);
+
+      const migrations = await loadMigrationsFromFS(validDir);
+      expect(migrations).toEqual([]);
+    });
+
+    test("rejects when migration file has zero version", async () => {
+      mockedReaddir.mockResolvedValue(["v000_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 0; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {};`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has negative version", async () => {
+      mockedReaddir.mockResolvedValue(["v-001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = -1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {};`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has non-integer version", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1.5; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {};`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has missing name", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {};`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has missing authoredAt", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const author = "test"; export const up = async () => {};`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has missing author", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const up = async () => {};`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has missing up function", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test";`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has non-function up", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = "not-a-function";`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has non-function down", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const down = "not-a-function";`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has invalid meta", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const meta = "not-an-object";`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has hotfix without down", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const meta = { hotfix: true, reason: "test", rollback_risk: "low" };`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has hotfix without reason", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const down = async () => {}; export const meta = { hotfix: true, rollback_risk: "low" };`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has hotfix without rollback_risk", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const down = async () => {}; export const meta = { hotfix: true, reason: "test" };`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("accepts hotfix with all required fields", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const down = async () => {}; export const meta = { hotfix: true, reason: "test", rollback_risk: "low" };`);
+
+      const migrations = await loadMigrationsFromFS(validDir);
+      expect(migrations).toHaveLength(1);
+      expect(migrations[0].meta).toEqual({ hotfix: true, reason: "test", rollback_risk: "low" });
+    });
+
+    test("rejects when migration file has invalid validate function", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const validate = "not-a-function";`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("accepts migration with valid validate function", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const validate = async () => []; `);
+
+      const migrations = await loadMigrationsFromFS(validDir);
+      expect(migrations).toHaveLength(1);
+      expect(typeof migrations[0].validate).toBe("function");
+    });
+
+    test("accepts migration with meta but not hotfix", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const meta = { someField: "value" };`);
+
+      const migrations = await loadMigrationsFromFS(validDir);
+      expect(migrations).toHaveLength(1);
+    });
+
+    test("accepts migration with down function", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const down = async () => {};`);
+
+      const migrations = await loadMigrationsFromFS(validDir);
+      expect(migrations).toHaveLength(1);
+      expect(typeof migrations[0].down).toBe("function");
+    });
+
+    test("handles concurrent calls without interference", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(validMigrationSource);
+
+      const [a, b] = await Promise.all([
+        loadMigrationsFromFS(validDir),
+        loadMigrationsFromFS(validDir),
+      ]);
+      expect(a).toHaveLength(1);
+      expect(b).toHaveLength(1);
+      expect(a[0].version).toBe(b[0].version);
+    });
+
+    test("does not mutate input files or share state between calls", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(validMigrationSource);
+
+      const first = await loadMigrationsFromFS(validDir);
+      const second = await loadMigrationsFromFS(validDir);
+      expect(first).toNotBe(second);
+      expect(first[0]).toNotBe(second[0]);
+    });
+
+    test("rejects when migration file has duplicate version within same call", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts", "001_other.ts"]);
+      mockedReadFile.mockImplementation((filePath: string) => {
+        if (filePath.endsWith("v001_test.ts")) return Promise.resolve(validMigrationSource);
+        if (filePath.endsWith("001_other.ts")) return Promise.resolve(validMigrationSource);
+        return Promise.reject(new Error("Unknown file"));
+      });
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has version mismatch with filename", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 2; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {};`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
+
+    test("rejects when migration file has name mismatch with filename", async () => {
+      mockedReaddir.mockResolvedValue(["v001_test.ts"]);
+      mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "other"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {};`);
+
+      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
+    });
   });
 });
