@@ -135,29 +135,42 @@ export function startSpan(name: string, attrs: SpanAttributes = {}): Span {
 }
 
 export function endSpan(span: Span, err?: unknown): void {
-  if (span.ended) {
-    return;
+  try {
+    if (!span || typeof span !== "object" || span.ended) {
+      return;
+    }
+
+    span.ended = true;
+    
+    let durationMs: number | undefined;
+    try {
+      if (typeof span.startedAtNs === "bigint") {
+        const endedAtNs = process.hrtime.bigint();
+        durationMs = Number(endedAtNs - span.startedAtNs) / 1_000_000;
+      }
+    } catch {
+      // Ignore duration calculation errors
+    }
+
+    emitSpanLog({
+      level: "INFO",
+      type: "TRACE_SPAN",
+      event: "end",
+      timestamp: new Date().toISOString(),
+      name: span.name || "unknown",
+      trace_id: span.traceId || "unknown",
+      span_id: span.spanId || "unknown",
+      parent_span_id: span.parentSpanId ?? null,
+      duration_ms: durationMs,
+      error: err !== undefined,
+      error_message:
+        err instanceof Error ? err.message : err ? String(err) : undefined,
+      attrs: span.attrs || {},
+    });
+  } catch {
+    // Tracing must never break the calling operation. If the span processing fails,
+    // swallow the error so the business path continues deterministically.
   }
-
-  span.ended = true;
-  const endedAtNs = process.hrtime.bigint();
-  const durationMs = Number(endedAtNs - span.startedAtNs) / 1_000_000;
-
-  emitSpanLog( {
-    level: "INFO",
-    type: "TRACE_SPAN",
-    event: "end",
-    timestamp: new Date().toISOString(),
-    name: span.name,
-    trace_id: span.traceId,
-    span_id: span.spanId,
-    parent_span_id: span.parentSpanId,
-    duration_ms: durationMs,
-    error: err !== undefined,
-    error_message:
-      err instanceof Error ? err.message : err ? String(err) : undefined,
-    attrs: span.attrs,
-  });
 }
 
 export function withSpan<T>(
