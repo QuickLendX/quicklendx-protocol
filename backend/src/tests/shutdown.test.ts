@@ -22,6 +22,7 @@
  *   - Mixed queue: only pending returned, depth resets
  */
 
+
 // ---------------------------------------------------------------------------
 // Module mocks — must be hoisted before any imports from the mocked modules
 // ---------------------------------------------------------------------------
@@ -75,6 +76,7 @@ import {
   createShutdownHandler,
   resetShuttingDown,
   isShuttingDown,
+  setShuttingDownForTest,
   DEFAULT_DRAIN_TIMEOUT_MS,
   DRAIN_POLL_MS,
 } from '../lib/shutdown';
@@ -187,6 +189,27 @@ describe('createShutdownHandler', () => {
   // ── isShuttingDown state ──────────────────────────────────────────────────
 
   it('isShuttingDown() is false before any shutdown', () => {
+    expect(isShuttingDown()).toBe(false);
+  });
+
+  it('isShuttingDown() returns true when set via test hook', () => {
+    setShuttingDownForTest(true);
+    expect(isShuttingDown()).toBe(true);
+    setShuttingDownForTest(false);
+    expect(isShuttingDown()).toBe(false);
+  });
+
+  it('isShuttingDown() is idempotent across repeated reads', () => {
+    setShuttingDownForTest(true);
+    expect(isShuttingDown()).toBe(true);
+    expect(isShuttingDown()).toBe(true);
+    expect(isShuttingDown()).toBe(true);
+    setShuttingDownForTest(false);
+  });
+
+  it('resetShuttingDown() is a no-op when already false', () => {
+    expect(isShuttingDown()).toBe(false);
+    resetShuttingDown();
     expect(isShuttingDown()).toBe(false);
   });
 
