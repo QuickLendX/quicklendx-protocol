@@ -318,10 +318,12 @@ describe('pingDatabaseDetailed comprehensive failure scenarios', () => {
     const result = await pingDatabaseDetailed();
     
     expect(result.success).toBe(false);
-    expect(result.attempts).toBe(1);
-    expect(result.error).toBeInstanceOf(DatabasePingCorruptionError);
-    expect(result.error?.code).toBe('PING_CORRUPTION');
-    expect(result.error?.severity).toBe('critical');
+    if (!result.success) {
+      expect(result.attempts).toBe(1);
+      expect(result.error).toBeInstanceOf(DatabasePingCorruptionError);
+      expect(result.error.code).toBe('PING_CORRUPTION');
+      expect(result.error.severity).toBe('critical');
+    }
   });
 
   test('connection error with retries', async () => {
@@ -342,9 +344,11 @@ describe('pingDatabaseDetailed comprehensive failure scenarios', () => {
     const result = await pingDatabaseDetailed({ maxRetries: 2, baseRetryDelayMs: 1 });
     
     expect(result.success).toBe(false);
-    expect(result.attempts).toBe(3);
-    expect(result.error).toBeInstanceOf(DatabasePingConnectionError);
-    expect(result.error?.retryable).toBe(true);
+    if (!result.success) {
+      expect(result.attempts).toBe(3);
+      expect(result.error).toBeInstanceOf(DatabasePingConnectionError);
+      expect(result.error.retryable).toBe(true);
+    }
     expect(mockPrepare).toHaveBeenCalledTimes(3);
   });
 
@@ -377,7 +381,9 @@ describe('pingDatabaseDetailed comprehensive failure scenarios', () => {
     const result = await pingDatabaseDetailed();
     
     expect(result.success).toBe(false);
-    expect(result.error).toBeInstanceOf(DatabasePingCorruptionError);
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(DatabasePingCorruptionError);
+    }
   });
 });
 
@@ -416,8 +422,10 @@ describe('error classification', () => {
       const result = await pingDatabaseDetailed({ maxRetries: 0 });
       
       expect(result.success).toBe(false);
-      expect(result.error).toBeInstanceOf(expectedType);
-      expect(result.error?.retryable).toBe(retryable);
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(expectedType);
+        expect(result.error.retryable).toBe(retryable);
+      }
     }
   });
 
@@ -447,7 +455,9 @@ describe('error classification', () => {
       const result = await pingDatabaseDetailed({ maxRetries: 0 });
       
       expect(result.success).toBe(false);
-      expect(result.error).toBeInstanceOf(expectedType);
+      if (!result.success) {
+        expect(result.error).toBeInstanceOf(expectedType);
+      }
     }
   });
 });
@@ -654,7 +664,9 @@ describe('configuration options', () => {
     const result = await pingDatabaseDetailed({ timeoutMs: 50 });
     
     expect(result.success).toBe(false);
-    expect(result.error).toBeInstanceOf(DatabasePingTimeoutError);
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(DatabasePingTimeoutError);
+    }
   });
 
   test('metrics can be disabled', async () => {
@@ -747,7 +759,9 @@ describe('boundary cases and edge conditions', () => {
     const result = await pingDatabaseDetailed();
     
     expect(result.success).toBe(false);
-    expect(result.error).toBeInstanceOf(DatabasePingCorruptionError);
+    if (!result.success) {
+      expect(result.error).toBeInstanceOf(DatabasePingCorruptionError);
+    }
   });
 
   test('resetPingMetrics clears all state', () => {
