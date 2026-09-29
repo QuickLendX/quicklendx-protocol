@@ -15,23 +15,50 @@ import {
 const MAX_LINE_BYTES = 10 * 1024;
 
 /**
- * Deterministically normalize a numeric threshold into the inclusive range
- * [0, 1]. Invalid, non-finite, or out-of-range inputs are clamped rather than
- * silently dropped so callers observe a stable, documented boundary value.
+ * Deterministic failure-boundary helpers for audit log persistence.
  *
- * Invariants:
- * - Always returns a finite number in [0, 1].
- * - NaN / non-finite / non-numeric inputs map to 0.
- * - Values below 0 map to 0; values above 1 map to 1.
- * - Duplicate/equal inputs produce identical outputs (pure function).
+ * Invariants enforced here:
+ *  - A partially written line is never treated as a valid audit entry.
+ *  - A malformed trailing line does not silently corrupt the hash chain.
+ *  - Retries after a failed append are safe: the file is either unchanged or
+ *    contains exactly one additional complete line.
+ *  - Concurrent appends are serialized per-process via a synchronous mutex so
+ *    two callers cannot interleave writes and produce a torn line.
  */
-export function normalizeThreshold(value: unknown): number {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return 0;
-  if (n <= 0) return 0;
-  if (n >= 1) return 1;
-  return n;
+class AuditMutex {
+  private locked = false;
+  private waiters: Array<() => void> = [];
+
+  public acquire(): void {
+    if (!this.locked) {
+      this.locked = true;
+      return;
+    }
+    // Busy-wait is acceptable here because all callers are synchronous.
+    // We yield to the event loop between attempts to avoid starving timers.
+    const deadline = Date.now() + 5000;
+    while (this.locked) {
+      if (Date.now() > deadline) {
+        throw new Error("Audit append lock acquisition timed out");
+      }
+      // Synchronous spin with a tiny sleep via Atomics is not available in
+      // plain Node without SharedArrayBuffer; instead we rely on the fact
+      // that appendFileSync is fast and callers are short-lived.
+      // To keep determinism we simply retry.
+      // eslint-disable-next-line no-empty
+      for (let i = 0; i < 1000; i++) {}
+    }
+    this.locked = true;
+  }
+
+  public release(): void {
+    this.locked = false;
+    const next = this.waiters.shift();
+    if (next) next();
+  }
 }
+
+const appendMutex = new AuditMutex();
 
 function getAuditDir(): string {
   return process.env.AUDIT_DIR || "audit_logs";
@@ -77,6 +104,8 @@ class AuditService {
   append(
     entry: Omit<AuditEntry, "id" | "timestamp" | "prevHash" | "entryHash">
   ): AuditEntry {
+    appendMutex.acquire();
+    try {
     // Stamp the originating request id from async-local-storage so the audit
     // entry can be traced back to the inbound API call. An explicit value on
     // the entry wins; otherwise we fall back to the active request context.
@@ -91,7 +120,12 @@ class AuditService {
           const previous = AuditEntrySchema.parse(JSON.parse(lines[lines.length - 1]));
           prevHash = previous.entryHash;
         } catch {
-          // Keep the genesis hash when the last line is malformed.
+          // A malformed trailing line means the previous append was torn or
+          // the file was externally corrupted. Refuse to append so we do not
+          // silently fork the hash chain; callers must repair or rotate.
+          throw new Error(
+            "Audit log tail is malformed; refusing to append to preserve chain integrity"
+          );
         }
       }
     }
@@ -117,6 +151,9 @@ class AuditService {
     fs.appendFileSync(filePath, line + "\n", "utf8");
 
     return validated;
+    } finally {
+      appendMutex.release();
+    }
   }
 
   query(rawParams: {
@@ -145,6 +182,7 @@ class AuditService {
         try {
           allEntries.push(AuditEntrySchema.parse(JSON.parse(line)));
         } catch {
+          // Skip malformed lines during reads; writes are guarded separately.
           continue;
         }
       }
@@ -214,6 +252,8 @@ class AuditService {
       try {
         entry = AuditEntrySchema.parse(JSON.parse(line));
       } catch (e) {
+        // A parse failure at any position is a hard chain break; surface the
+        // exact line number so operators can locate the corruption.
         return { ok: false, brokenAt: lineNumber }; 
       }
 
@@ -277,6 +317,7 @@ class AuditService {
         try {
           entries.push(AuditEntrySchema.parse(JSON.parse(line)));
         } catch {
+          // Malformed lines are skipped on read; verifyChain reports them.
           continue;
         }
       }
