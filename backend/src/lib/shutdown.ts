@@ -109,7 +109,16 @@ let _shuttingDown = false;
 /** Guards against concurrent runAll() invocations. */
 let _runAllInProgress = false;
 
-/** Reset shutdown state — call in tests between cases. */
+/**
+ * Reset shutdown state — call in tests between cases.
+ *
+ * Invariants:
+ *  - Deterministic: always leaves `_shuttingDown === false` regardless of
+ *    prior state (idempotent, safe to call repeatedly or concurrently).
+ *  - Never throws: callers (tests, recovery paths) rely on this being a
+ *    pure state reset with no side effects on the step registry.
+ *  - Does not touch `_steps`; use `clearRegistry()` for that.
+ */
 export function resetShuttingDown(): void {
   _shuttingDown = false;
   _runAllInProgress = false;
