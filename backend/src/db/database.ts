@@ -2,11 +2,20 @@
  * Persistent database for API keys and audit logs backed by better-sqlite3.
  *
  * All key hashes are SHA-256 — raw secrets are never stored.
- * Prefix lookups are O,)1 via a UNIQUE index on api_keys.prefix.
+ * Prefix lookups are O,(1) via a UNIQUE index on api_keys.prefix.
  * Audit rows are INSERT-only (append-only, no updates or deletes).
  *
  * Multi-statement operations use SQLite transactions accounting for atomic rollback.
  * Performance: Uses centralized prepared statement cache for optimal throughput.
+ *
+ * Invariants:
+ * - Audit logs are append-only; no update/delete paths exist for individual rows.
+ * - Audit log rows must have a non-empty `id`, `key_id`, `actor`, and a valid `event_type`.
+ * - Row decoding is deterministic: missing optional columns become `null`, and invalid
+ *   required columns fail loud rather than silently producing a corrupt record.
+ * - Audit log event types are constrained to the known set; unknown values are rejected.
+ * - Operations are atomic within transactions; concurrent callers cannot observe
+ *   partially-applied multi-statement mutations.
  */
 
 import { getDatabase, getPreparedStatement } from '../lib/database';
@@ -27,9 +36,11 @@ export interface DbApiKey {
   created_by: string;
 }
 
+export type DbAuditLogEventType = 'created' | 'used' | 'rotated' | 'revoked';
+
 export interface DbAuditLog {
   id: string;
-  event_type: 'created' | 'used' | 'rotated' | 'revoked';
+  event_type: DbAuditLogEventType;
   key_id: string;
   actor: string;
   timestamp: string;
@@ -39,8 +50,8 @@ export interface DbAuditLog {
 }
 
 const ALL_API_KEY_COLS = [
-  'id', 'key_hash', 'signing_secret_hash', 'prev_signing_secret_hash', 'prefix', 'name', 'scopes',
-  'created_at', 'last_used_at', 'expires_at', 'prev_secret_expires_at', 'revoked', 'created_by',
+  'id', 'key_hash', 'signing_secret_hash', 'prefix', 'name', 'scopes',
+  'created_at', 'last_used_at', 'expires_at', 'revoked', 'created_by',
 ] as const;
 
 const ALL_AUDIT_COLS = [
@@ -48,27 +59,56 @@ const ALL_AUDIT_COLS = [
   'ip_address', 'endpoint', 'metadata',
 ] as const;
 
-/**
- * Audit event types permitted by the persistence layer.
- * This is the canonical allow-list used to reject unknown event types at the DB boundary.
- */
-export const AUDIT_EVENT_TYPES = ['created', 'used', 'rotated', 'revoked'] as const;
-export type AuditEventType = (typeof AUDIT_EVENT_TYPES)[number];
+const AUDIT_EVENT_TYPES: readonly DbAuditLogEventType[] = [
+  'created', 'used', 'rotated', 'revoked',
+];
 
 /**
- * Error thrown when an audit row fails to map to a valid DbAuditLog.
- * This is a deterministic failure boundary: corrupt rows are never silently coerced
- * into valid-looking objects, and the error message never leaks raw column values.
+ * Error thrown when a database row cannot be decoded into a valid audit log.
+ * This is a programming/integrity error and must not be swallowed: silently
+ * returning a malformed record would lose audit data or mask corruption.
  */
-export class AuditRowMappingError extends Error {
-  readonly code = 'AUDIT_ROW_MAPPING_FAILURE' as const;
-  readonly field: string;
+export class AuditLogRowDecodeError extends Error {
+  readonly column: string;
+  readonly reason: string;
 
-  constructor(field: string, reason: string) {
-    super(`Audit row mapping failed for field "${field}": ${reason}`);
-    this.name = 'AuditRowMappingError';
-    this.field = field;
+  constructor(column: string, reason: string) {
+    super(`Failed to decode audit log row: column "${column}" ${reason}`);
+    this.name = 'AuditLogRowDecodeError';
+    this.column = column;
+    this.reason = reason;
   }
+}
+
+function requireString(row: any, column: string): string {
+  if (row == null || typeof row !== 'object') {
+    throw new AuditLogRowDecodeError(column, 'row is not an object');
+  }
+  const value = row[column];
+  if (value == null) {
+    throw new AuditLogRowDecodeError(column, 'is missing or null');
+  }
+  if (typeof value !== 'string') {
+    throw new AuditLogRowDecodeError(column, `expected string, got ${typeof value}`);
+  }
+  if (value.length === 0) {
+    throw new AuditLogRowDecodeError(column, 'is empty');
+  }
+  return value;
+}
+
+function optionalString(row: any, column: string): string | null {
+  if (row == null || typeof row !== 'object') {
+    return null;
+  }
+  const value = row[column];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw new AuditLogRowDecodeError(column, `expected string or null, got ${typeof value}`);
+  }
+  return value;
 }
 
 function rowToDbApiKey(row: any): DbApiKey {
@@ -90,96 +130,41 @@ function rowToDbApiKey(row: any): DbApiKey {
 }
 
 /**
- * Convert a raw SQLite row into a validated DbAuditLog.
+ * Decodes a raw SQLite row into a `DbAuditLog`.
  *
- * Invariants:
- *  - Required string fields (id, event_type, key_id, actor, timestamp) must be non-empty strings.
- *  - event_type must be one of AUDIT_EVENT_TYPES.
- *  - Optional fields (ip_address, endpoint, metadata) are normalized to null when absent
- *    or undefined, and must be strings when present.
- *  - Metadata, when present, must be a JSON-object literal so downstream consumers can
- *    parse it deterministically.
+ * Deterministic failure-boundary behavior:
+ * - Required columns (`id`, `event_type`, `key_id`, `actor`, `timestamp`) must be non-empty strings.
+ *   Missing, null, or non-string values throw `AuditLogRowDecodeError`.
+ * - `event_type` must be one of the known event types; unknown values are rejected.
+ * - Optional columns (`ip_address`, `endpoint`, `metadata`) coerce missing/undefined to `null`.
+ *   Non-string non-null values throw to avoid silent coercion.
  *
- * The function is pure and synchronous: given the same row it always returns the
- * same result or throws the same AuditRowMappingError. No I/O, no time dependency,
- * no global mutation.
+ * This function is pure and has no side effects, so it is safe to call from
+ * concurrent readers and is fully deterministic for a given input row.
  */
 export function rowToDbAuditLog(row: any): DbAuditLog {
-  if (row === null || typeof row !== 'object') {
-    throw new AuditRowMappingError('row', 'row is not an object');
+  const id = requireString(row, 'id');
+  const rawEventType = requireString(row, 'event_type');
+  if (!AUDIT_EVENT_TYPES.includes(rawEventType as DbAuditLogEventType)) {
+    throw new AuditLogRowDecodeError(
+      'event_type',
+      `unknown value "${rawEventType}"; expected one of ${AUDIT_EVENT_TYPES.join(', ')}`,
+    );
   }
-
-  const id = requireNonEmptyString(row.id, 'id');
-  const eventType = requireEventType(row.event_type);
-  const keyId = requireNonEmptyString(row.key_id, 'key_id');
-  const actor = requireNonEmptyString(row.actor, 'actor');
-  const timestamp = requireNonEmptyString(row.timestamp, 'timestamp');
-  const ipAddress = optionalString(row.ip_address, 'ip_address');
-  const endpoint = optionalString(row.endpoint, 'endpoint');
-  const metadata = optionalMetadata(row.metadata);
+  const keyId = requireString(row, 'key_id');
+  const actor = requireString(row, 'actor');
+  const timestamp = requireString(row, 'timestamp');
 
   return {
     id,
-    event_type: eventType,
+    event_type: rawEventType as DbAuditLogEventType,
     key_id: keyId,
-    actor,
+    actor: actor,
     timestamp,
-    ip_address: ipAddress,
-    endpoint,
-    metadata,
+    ip_address: optionalString(row, 'ip_address'),
+    endpoint: optionalString(row, 'endpoint'),
+    metadata: optionalString(row, 'metadata'),
   };
-}
-
-function requireNonEmptyString(value: unknown, field: string): string {
-  if (typeof value !== 'string') {
-    throw new AuditRowMappingError(field, 'expected a string');
-  }
-  if (value.length === 0) {
-    throw new AuditRowMappingError(field, 'expected a non-empty string');
-  }
-  return value;
-}
-
-function requireEventType(value: unknown): AuditEventType {
-  if (typeof value !== 'string') {
-    throw new AuditRowMappingError('event_type', 'expected a string');
-  }
-  if (!(AUDIT_EVENT_TYPES as readonly string[]).includes(value)) {
-    throw new AuditRowMappingError('event_type', 'unknown event type');
-  }
-  return value as AuditEventType;
-}
-
-function optionalString(value: unknown, field: string): string | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value !== 'string') {
-    throw new AuditRowMappingError(field, 'expected a string or null');
-  }
-  return value;
-}
-
-function optionalMetadata(value: unknown): string | null {
-  if (value === null || value === undefined) {
-    return null;
-  }
-  if (typeof value !== 'string') {
-    throw new AuditRowMappingError('metadata', 'expected a string or null');
-  }
-  if (value.length === 0) {
-    throw new AuditRowMappingError('metadata', 'expected a non-empty JSON string');
-  }
-  try {
-    const parsed = JSON.parse(value);
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      throw new AuditRowMappingError('metadata', 'expected a JSON object');
-    }
-  } catch (err) {
-    if (err instanceof AuditRowMappingError) throw err;
-    throw new AuditRowMappingError('metadata', 'not valid JSON');
-  }
-  return value;
 }
 
 class Database {
@@ -197,7 +182,7 @@ class Database {
    * If any statement in the transaction throws, all changes are rolled back.
    */
   private _transaction<T>(fn: () => T): T {
-    return this.getDb().transaction(fn)();
+    return this.getDb().transaction(fn);
   }
 
   // ---- API Key operations ----
@@ -229,7 +214,7 @@ class Database {
     const keys = Object.keys(updates) as (keyof DbApiKey)[];
     if (keys.length === 0) return true;
 
-    const setClause = keys.map((k) => `${ k} = ?`).join(', ');
+    const setClause = keys.map((k) => `${k} = ?`).join(', ');
     const values = keys.map((k) => updates[k] ?? null);
 
     getPreparedStatement(`UPDATE api_keys SET ${setClause} WHERE id = ?`).run(...values, id);
@@ -241,7 +226,7 @@ class Database {
     if (!existing) return false;
 
     return this._transaction(() => {
-      getPreparedStatement('DELETE FROM api_key_audit_log WHERE key_id = ?').run(id);
+      getPreparedStatement('DELETE FROM api_key_audit_log WHERK key_id = ?').run(id);
       getPreparedStatement('DELETE FROM api_keys WHERE id = ?').run(id);
       return true;
     });
@@ -250,20 +235,20 @@ class Database {
   listApiKeys(filters?: { created_by?: string; revoked?: boolean }): DbApiKey[] {
     let sql = 'SELECT * FROM api_keys';
     const clauses: string[] = [];
-    const params: unknowwn[] = [];
+    const params: unknown[] = [];
 
-    if (filters?.created_by) {
+    if (filters.created_by) {
       clauses.push('created_by = ?');
       params.push(filters.created_by);
     }
 
-    if (filters?.revoked !== undefined) {
+    if (filters.revoked !== undefined) {
       clauses.push('revoked = ?');
       params.push(filters.revoked ? 1 : 0);
     }
 
     if (clauses.length > 0) {
-      sql += ' WHERE ' + clauses.join(' AND ');
+      sql += ' WHERE' + clauses.join(' AND ');
     }
 
     sql += ' ORDER BY created_at DESC';
@@ -287,14 +272,14 @@ class Database {
   getAuditLogs(filters?: { key_id?: string; event_type?: string }): DbAuditLog[] {
     let sql = 'SELECT * FROM api_key_audit_log';
     const clauses: string[] = [];
-    const params: unknowwn[] = [];
+    const params: unknown[] = [];
 
-    if (filters?.key_id) {
+    if (filters.key_id) {
       clauses.push('key_id = ?');
       params.push(filters.key_id);
     }
 
-    if (filters?.event_type) {
+    if (filters.event_type) {
       clauses.push('event_type = ?');
       params.push(filters.event_type);
     }
