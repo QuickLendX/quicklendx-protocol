@@ -66,9 +66,26 @@ export function clearRegistry(): void {
   _steps.length = 0;
 }
 
-/** Return a sorted copy of registered steps (lowest priority first). */
+/**
+ * Return a sorted copy of registered steps (lowest priority first).
+ *
+ * Determinism invariants:
+ *  - The returned array is a fresh copy; callers cannot mutate the registry.
+ *  - Ordering is stable: steps with equal priority preserve registration order.
+ *  - The registry itself is never mutated by this read.
+ */
 export function getRegisteredSteps(): ShutdownStep[] {
-  return [..._steps].sort((a, b) => a.priority - b.priority);
+  // Decorate with the original index so ties break by registration order
+  // deterministically, independent of the engine's sort stability.
+  return _steps
+    .map((step, index) => ({ step, index }))
+    .sort((a, b) => {
+      if (a.step.priority !== b.step.priority) {
+        return a.step.priority - b.step.priority;
+      }
+      return a.index - b.index;
+    })
+    .map((entry) => entry.step);
 }
 
 // ---------------------------------------------------------------------------
@@ -87,6 +104,13 @@ export function isShuttingDown(): boolean {
   return _shuttingDown;
 }
 
+/** Atomically claim the shutdown latch. Returns true if this call won. */
+export function beginShutdown(): boolean {
+  if (_shuttingDown) return false;
+  _shuttingDown = true;
+  return true;
+}
+
 // ---------------------------------------------------------------------------
 // Core runner
 // ---------------------------------------------------------------------------
@@ -95,6 +119,14 @@ export function isShuttingDown(): boolean {
  * Execute all registered steps in priority order.
  * Errors in one step are caught and logged; remaining steps still run.
  * Total wall-clock time is bounded by `totalTimeoutMs`.
+ *
+ * Failure-boundary invariants:
+ *  - A step that throws never aborts the sequence; the error is logged and
+ *    the next step still runs so cleanup is best-effort but complete.
+ *  - A step that hangs is bounded by the remaining budget; once the deadline
+ *    is reached, remaining steps are skipped (never run partially).
+ *  - `runAll` never rejects: callers can rely on it resolving even when
+ *    individual steps fail, so shutdown always reaches its terminal state.
  */
 export async function runAll(
   signal: string,
@@ -104,18 +136,43 @@ export async function runAll(
   const deadline = Date.now() + totalTimeoutMs;
 
   for (const step of sorted) {
-    if (Date.now() >= deadline) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
       console.warn(`[shutdown] Total timeout reached — skipping step "${step.name}"`);
       break;
     }
     try {
       console.log(`[shutdown] Running step "${step.name}" (priority ${step.priority})`);
-      await step.fn(signal);
+      // Bound each step by the remaining budget so a single hung step cannot
+      // consume the entire drain window and starve later cleanup steps.
+      await withTimeout(step.fn(signal), remainingMs, step.name);
     } catch (err) {
       console.error(`[shutdown] Step "${step.name}" failed:`, err);
       // Continue with remaining steps
     }
   }
+}
+
+/**
+ * Await `promise`, rejecting if it does not settle within `timeoutMs`.
+ * The timer is always cleared so no dangling handle keeps the process alive.
+ */
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(`[shutdown] Step "${label}" timed out after ${timeoutMs}ms`));
+    }, timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -200,16 +257,22 @@ export function createShutdownHandler(
   });
 
   return async function shutdown(signal: string): Promise<void> {
-    if (_shuttingDown) {
+    if (!beginShutdown()) {
       console.warn('[shutdown] Second signal received — forcing exit');
       process.exit(1);
       return; // guard: process.exit is a no-op in tests
     }
-    _shuttingDown = true;
 
     console.log(`[shutdown] ${signal} — starting graceful shutdown`);
-    await runAll(signal, drainTimeoutMs);
-    console.log('[shutdown] Shutdown complete');
-    process.exit(0);
+    try {
+      await runAll(signal, drainTimeoutMs);
+      console.log('[shutdown] Shutdown complete');
+      process.exit(0);
+    } catch (err) {
+      // runAll is designed not to reject, but guard the boundary anyway so a
+      // future regression cannot leave the process in a half-shutdown state.
+      console.error('[shutdown] Unexpected failure during shutdown:', err);
+      process.exit(1);
+    }
   };
 }
