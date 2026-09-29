@@ -1,5 +1,5 @@
 // Tests for deterministic getPreparedStatement implementation
-import { getPreparedStatement, getDatabase, clearStatementCache, DatabasePermissionError, DatabaseBusyError, DatabasePrepareError } from '../database';
+import { getPreparedStatement, getDatabase, clearStatementCache, getStatementCacheStats, DatabasePermissionError, DatabaseBusyError, DatabasePrepareError } from '../database';
 
 // Helper to reset environment and cache between tests
 beforeEach(() => {
@@ -92,5 +92,59 @@ describe('failure boundaries', () => {
     } as any));
 
     expect(() => getPreparedStatement('BAD SQL')).toThrow(DatabasePrepareError);
+  });
+
+  describe('getStatementCacheStats', () => {
+    test('returns correct stats when cache is empty', () => {
+      const stats = getStatementCacheStats();
+      expect(stats.size).toBe(0);
+      expect(stats.statements).toEqual([]);
+      expect(stats.statements).toHaveLength(0);
+      expect(stats.hits).toBe(0);
+      expect(stats.misses).toBe(0);
+      expect(stats.evicts).toBe(0);
+    });
+
+    test('returns correct stats after preparing statements', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      const stmt1 = getPreparedStatement('SELECT 1');
+      const stmt2 = getPreparedStatement('SELECT 2');
+      const stats = getStatementCacheStats();
+      expect(stats.size).toBe(2);
+      expect(stats.statements).toContain('SELECT 1');
+      expect(stats.statements).toContain('SELECT 2');
+      expect(stats.hits).toBe(0);
+      expect(stats.misses).toBe(2);
+      expect(stats.evicts).toBe(0);
+    });
+
+    test('returns consistent stats across multiple calls', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 1');
+      const first = getStatementCacheStats();
+      const second = getStatementCacheStats();
+      expect(first).toEqual(second);
+    });
+
+    test('returns correct stats after clearing cache', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 1');
+      clearStatementCache();
+      const stats = getStatementCacheStats();
+      expect(stats.size).toBe(0);
+      expect(stats.hits).toBe(0);
+      expect(stats.misses).toBe(0);
+      expect(stats.evicts).toBe(0);
+    });
+
+    test('statements array reflects current cache keys', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 1');
+      getPreparedStatement('SELECT 2');
+      const stats = getStatementCacheStats();
+      expect(stats.statements).toContain('SELECT 1');
+      expect(stats.statements).toContain('SELECT 2');
+      expect(stats.statements).toHaveLength(2);
+    });
   });
 });
