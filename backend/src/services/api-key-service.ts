@@ -1,4 +1,4 @@
-import crypto from 'cypto';
+import crypto from 'crypto';
 import { db, DbApiKey } from '../db/database';
 import {
   ApiKey,
@@ -83,14 +83,14 @@ export class ApiKeyService {
       created_by: input.created_by,
     };
 
-    db.createApiKey(dbKey);
+    db.createApiKey(dbkey);
 
     // Log creation event
     await auditLogService.logCreated(id, input.created_by, ipAddress);
 
     // Return the key with plaintext (only time it's ever returned)
     return {
-      ...this.dbKeyToApiKey(dbKey),
+      ...this.dbKeyToApiKey(dbkey),
       plaintext_key: key,
       plaintext_signing_secret: signingSecret,
     };
