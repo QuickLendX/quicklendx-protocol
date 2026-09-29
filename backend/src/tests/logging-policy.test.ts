@@ -157,6 +157,34 @@ describe("isSecret boundary cases", () => {
   });
 });
 
+describe("isPublic boundary cases", () => {
+  it.each([
+    null,
+    undefined,
+    123,
+    {},
+    [],
+    Symbol("id"),
+    function () {},
+    true,
+  ])("gracefully rejects non-string input %j", (input) => {
+    // We cast to any to bypass TS and simulate dynamic JS calls
+    expect(isPublic(input as any)).toBe(false);
+  });
+
+  it.each([
+    "",
+    " ",
+    "__proto__",
+    "constructor",
+    "totally_unknown_field_xyz",
+    "id ",
+    " id",
+  ])("gracefully rejects invalid string boundary %j", (field) => {
+    expect(isPublic(field)).toBe(false);
+  });
+});
+
 // ── 2. Value-level redaction ──────────────────────────────────────────────────
 
 describe("hashValue", () => {
