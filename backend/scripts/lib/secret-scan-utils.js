@@ -122,6 +122,26 @@ function isObviousPlaceholder(value) {
 }
 
 function hasMixedCharacterClasses(value) {
+  // Input validation: handle null, undefined, and non-string inputs deterministically
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  // Empty strings cannot have mixed character classes
+  if (value.length === 0) {
+    return false;
+  }
+
+  // Single character strings cannot have mixed character classes
+  if (value.length === 1) {
+    return false;
+  }
+
+  // Check for presence of each character class
   const classes = [
     /[a-z]/.test(value),
     /[A-Z]/.test(value),
@@ -129,6 +149,7 @@ function hasMixedCharacterClasses(value) {
     /[^A-Za-z0-9]/.test(value),
   ];
 
+  // At least two different character classes must be present
   return classes.filter(Boolean).length >= 2;
 }
 
@@ -550,6 +571,7 @@ module.exports = {
   collectScanTargets,
   formatFinding,
   formatFindings,
+  hasMixedCharacterClasses,
   isAllowlisted,
   isHighEntropyToken,
   isIdentifierLikeString,

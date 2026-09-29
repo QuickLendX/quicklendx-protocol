@@ -591,6 +591,102 @@ describe("secret-scan-utils", () => {
   });
 });
 
+describe("hasMixedCharacterClasses", () => {
+  it("returns false for null and undefined inputs", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses(null)).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses(undefined)).toBe(false);
+  });
+
+  it("returns false for non-string inputs", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses(123)).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses({})).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses([])).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses(true)).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses(Symbol("test"))).toBe(false);
+  });
+
+  it("returns false for empty string", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("")).toBe(false);
+  });
+
+  it("returns false for single character strings", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("a")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("A")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("1")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("!")).toBe(false);
+  });
+
+  it("returns false for strings with only one character class", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abcdefghijklmnopqrstuvwxyz")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("ABCDEFGHIJKLMNOPQRSTUVWXYZ")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("0123456789")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("!@#$%^&*()")).toBe(false);
+  });
+
+  it("returns true for strings with exactly two character classes", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abc123")).toBe(true); // lowercase + digits
+    expect(secretScanUtils.hasMixedCharacterClasses("ABC123")).toBe(true); // uppercase + digits
+    expect(secretScanUtils.hasMixedCharacterClasses("abc!@#")).toBe(true); // lowercase + special
+    expect(secretScanUtils.hasMixedCharacterClasses("ABC!@#")).toBe(true); // uppercase + special
+    expect(secretScanUtils.hasMixedCharacterClasses("123!@#")).toBe(true); // digits + special
+    expect(secretScanUtils.hasMixedCharacterClasses("abcABC")).toBe(true); // lowercase + uppercase
+  });
+
+  it("returns true for strings with three character classes", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abcABC123")).toBe(true); // lower + upper + digits
+    expect(secretScanUtils.hasMixedCharacterClasses("abc123!@#")).toBe(true); // lower + digits + special
+    expect(secretScanUtils.hasMixedCharacterClasses("ABC123!@#")).toBe(true); // upper + digits + special
+    expect(secretScanUtils.hasMixedCharacterClasses("abcABC!@#")).toBe(true); // lower + upper + special
+  });
+
+  it("returns true for strings with all four character classes", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abcABC123!@#")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("aA1!")).toBe(true);
+  });
+
+  it("handles whitespace correctly", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abc ABC")).toBe(true); // whitespace counts as special
+    expect(secretScanUtils.hasMixedCharacterClasses("abc 123")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("   ")).toBe(false); // only whitespace
+  });
+
+  it("handles Unicode characters", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abc123")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("test1")).toBe(true);
+  });
+
+  it("is deterministic for repeated calls", () => {
+    const testValue = "abc123";
+    const results = Array.from({ length: 100 }, () => secretScanUtils.hasMixedCharacterClasses(testValue));
+    expect(results.every((result) => result === true)).toBe(true);
+
+    const testValue2 = "abcdef";
+    const results2 = Array.from({ length: 100 }, () => secretScanUtils.hasMixedCharacterClasses(testValue2));
+    expect(results2.every((result) => result === false)).toBe(true);
+  });
+
+  it("handles boundary cases with mixed content", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("a1")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("A1")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("a!")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("A!")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("1!")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("aA")).toBe(true);
+  });
+
+  it("handles strings with repeated same-class characters", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("aaaaaaaa11111111")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("AAAAAAAA11111111")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("aaaaaaaa!!!!!!!!")).toBe(true);
+  });
+
+  it("returns false for strings that appear mixed but are actually single class", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abcdefghijklmnopqrstuvwxyz")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("ABCDEFGHIJKLMNOPQRSTUVWXYZ")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("01234567890123456789")).toBe(false);
+  });
+});
+
 describe("backend security:scan integration", () => {
   const repoRoot = path.resolve(__dirname, "..");
 
