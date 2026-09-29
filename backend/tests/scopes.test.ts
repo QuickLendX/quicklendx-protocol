@@ -2,8 +2,10 @@ import {
   isValidScope,
   getValidScopes,
   validateScopes,
+  roleFromScopes,
   SCOPE_REGISTRY,
 } from "../src/config/scopes";
+import { ADMIN_ROLES, AdminRole } from "../src/types/rbac";
 
 describe("isValidScope", () => {
   describe("valid scopes (success path)", () => {
@@ -288,5 +290,266 @@ describe("validateScopes (isValidScope consumer)", () => {
     const result = validateScopes(["bogus", "bogus", "read:users"]);
     expect(result.valid).toBe(false);
     expect(result.invalid).toEqual(["bogus", "bogus"]);
+  });
+});
+
+// ── roleFromScopes — deterministic failure-boundary coverage (issue #2642) ───
+
+describe("roleFromScopes", () => {
+  // ── Valid privilege levels ──────────────────────────────────────────────────
+
+  describe("valid privilege levels", () => {
+    it("returns super_admin for ['admin:*']", () => {
+      expect(roleFromScopes(["admin:*"])).toBe("super_admin");
+    });
+
+    it("returns operations_admin for ['write:*']", () => {
+      expect(roleFromScopes(["write:*"])).toBe("operations_admin");
+    });
+
+    it("returns operations_admin for ['admin:keys']", () => {
+      expect(roleFromScopes(["admin:keys"])).toBe("operations_admin");
+    });
+
+    it("returns support for ['read:*']", () => {
+      expect(roleFromScopes(["read:*"])).toBe("support");
+    });
+
+    it("returns null for empty array", () => {
+      expect(roleFromScopes([])).toBeNull();
+    });
+  });
+
+  // ── Priority ordering ───────────────────────────────────────────────────────
+
+  describe("priority ordering", () => {
+    it("admin:* wins over write:* when both present", () => {
+      expect(roleFromScopes(["write:*", "admin:*"])).toBe("super_admin");
+    });
+
+    it("admin:* wins over admin:keys when both present", () => {
+      expect(roleFromScopes(["admin:keys", "admin:*"])).toBe("super_admin");
+    });
+
+    it("admin:* wins over read:* when both present", () => {
+      expect(roleFromScopes(["read:*", "admin:*"])).toBe("super_admin");
+    });
+
+    it("admin:* wins over all three lower-privilege scopes combined", () => {
+      expect(roleFromScopes(["read:*", "write:*", "admin:keys", "admin:*"])).toBe("super_admin");
+    });
+
+    it("write:* wins over read:* when admin:* absent", () => {
+      expect(roleFromScopes(["read:*", "write:*"])).toBe("operations_admin");
+    });
+
+    it("write:* + admin:keys together yield operations_admin (no escalation)", () => {
+      expect(roleFromScopes(["write:*", "admin:keys"])).toBe("operations_admin");
+    });
+  });
+
+  // ── Duplicate scopes ────────────────────────────────────────────────────────
+
+  describe("duplicate scopes", () => {
+    it("duplicate admin:* entries still return super_admin", () => {
+      expect(roleFromScopes(["admin:*", "admin:*", "admin:*"])).toBe("super_admin");
+    });
+
+    it("duplicate write:* entries still return operations_admin", () => {
+      expect(roleFromScopes(["write:*", "write:*"])).toBe("operations_admin");
+    });
+
+    it("result is stable when a scope appears 100 times", () => {
+      expect(roleFromScopes(Array(100).fill("read:*"))).toBe("support");
+    });
+  });
+
+  // ── Order independence ──────────────────────────────────────────────────────
+
+  describe("order independence", () => {
+    it("super_admin regardless of admin:* position", () => {
+      expect(roleFromScopes(["admin:*", "read:*", "write:*"])).toBe("super_admin");
+      expect(roleFromScopes(["read:*", "write:*", "admin:*"])).toBe("super_admin");
+    });
+
+    it("operations_admin regardless of write:* position", () => {
+      expect(roleFromScopes(["read:*", "write:*"])).toBe("operations_admin");
+      expect(roleFromScopes(["write:*", "read:*"])).toBe("operations_admin");
+    });
+  });
+
+  // ── Null / no-role boundary ─────────────────────────────────────────────────
+
+  describe("null / no-role boundary", () => {
+    it("returns null for granular read scopes without read:*", () => {
+      expect(roleFromScopes(["read:users", "read:invoices"])).toBeNull();
+    });
+
+    it("returns null for granular write scopes without write:*", () => {
+      expect(roleFromScopes(["write:users", "write:invoices"])).toBeNull();
+    });
+
+    it("returns null for service scopes only", () => {
+      expect(roleFromScopes(["service:ingest", "service:export"])).toBeNull();
+    });
+
+    it("returns null for all non-wildcard registry scopes", () => {
+      const roleScopes = new Set(["admin:*", "write:*", "admin:keys", "read:*"]);
+      const nonRole = SCOPE_REGISTRY.map((s) => s.scope).filter((s) => !roleScopes.has(s));
+      expect(roleFromScopes(nonRole)).toBeNull();
+    });
+  });
+
+  // ── Adversarial / near-match inputs ────────────────────────────────────────
+
+  describe("adversarial near-match inputs", () => {
+    it("returns null for 'ADMIN:*' (wrong case)", () => {
+      expect(roleFromScopes(["ADMIN:*"])).toBeNull();
+    });
+
+    it("returns null for 'admin: *' (space before asterisk)", () => {
+      expect(roleFromScopes(["admin: *"])).toBeNull();
+    });
+
+    it("returns null for ' write:*' (leading space)", () => {
+      expect(roleFromScopes([" write:*"])).toBeNull();
+    });
+
+    it("returns null for 'write:* ' (trailing space)", () => {
+      expect(roleFromScopes(["write:* "])).toBeNull();
+    });
+
+    it("returns null for empty-string scope in array", () => {
+      expect(roleFromScopes([""])).toBeNull();
+    });
+
+    it("returns null for completely unknown scope strings", () => {
+      expect(roleFromScopes(["unknown:scope", "foo:bar"])).toBeNull();
+    });
+
+    it("does not treat 'admin:keys' as admin:* (no escalation)", () => {
+      expect(roleFromScopes(["admin:keys"])).toBe("operations_admin");
+      expect(roleFromScopes(["admin:keys"])).not.toBe("super_admin");
+    });
+  });
+
+  // ── Type-safety boundary (non-array runtime values) ────────────────────────
+
+  describe("type-safety boundary", () => {
+    const cast = (v: unknown) => roleFromScopes(v as string[]);
+
+    it("returns null for null without throwing", () => {
+      expect(() => cast(null)).not.toThrow();
+      expect(cast(null)).toBeNull();
+    });
+
+    it("returns null for undefined without throwing", () => {
+      expect(() => cast(undefined)).not.toThrow();
+      expect(cast(undefined)).toBeNull();
+    });
+
+    it("returns null for a plain string without throwing", () => {
+      expect(() => cast("admin:*")).not.toThrow();
+      expect(cast("admin:*")).toBeNull();
+    });
+
+    it("returns null for a number without throwing", () => {
+      expect(() => cast(42)).not.toThrow();
+      expect(cast(42)).toBeNull();
+    });
+
+    it("returns null for a plain object without throwing", () => {
+      expect(() => cast({ scope: "admin:*" })).not.toThrow();
+      expect(cast({ scope: "admin:*" })).toBeNull();
+    });
+
+    it("returns null for boolean without throwing", () => {
+      expect(() => cast(true)).not.toThrow();
+      expect(cast(true)).toBeNull();
+    });
+  });
+
+  // ── Determinism sweep ───────────────────────────────────────────────────────
+
+  describe("determinism", () => {
+    const cases: Array<[string, string[], AdminRole | null]> = [
+      ["super_admin", ["admin:*"], "super_admin"],
+      ["operations_admin via write:*", ["write:*"], "operations_admin"],
+      ["operations_admin via admin:keys", ["admin:keys"], "operations_admin"],
+      ["support", ["read:*"], "support"],
+      ["null — empty", [], null],
+      ["null — granular only", ["read:users", "write:bids"], null],
+      ["null — unknown scope", ["unknown:x"], null],
+    ];
+
+    for (const [label, input, expected] of cases) {
+      it(`stable across 5 calls: ${label}`, () => {
+        for (let i = 0; i < 5; i++) {
+          expect(roleFromScopes(input)).toBe(expected);
+        }
+      });
+    }
+
+    it("no cross-contamination between sequential calls", () => {
+      expect(roleFromScopes(["admin:*"])).toBe("super_admin");
+      expect(roleFromScopes([])).toBeNull();
+      expect(roleFromScopes(["read:*"])).toBe("support");
+      expect(roleFromScopes(["admin:*"])).toBe("super_admin");
+    });
+  });
+
+  // ── Concurrency ─────────────────────────────────────────────────────────────
+
+  describe("concurrency safety", () => {
+    it("parallel calls with different inputs never cross-contaminate", async () => {
+      const tasks: Array<{ input: string[]; expected: AdminRole | null }> = [
+        { input: ["admin:*"], expected: "super_admin" },
+        { input: ["write:*"], expected: "operations_admin" },
+        { input: ["read:*"], expected: "support" },
+        { input: [], expected: null },
+        { input: ["admin:keys"], expected: "operations_admin" },
+        { input: ["read:users"], expected: null },
+      ];
+      const results = await Promise.all(
+        tasks.map(({ input }) => Promise.resolve().then(() => roleFromScopes(input)))
+      );
+      results.forEach((result, i) => {
+        expect(result).toBe(tasks[i].expected);
+      });
+    });
+  });
+
+  // ── Security invariants ─────────────────────────────────────────────────────
+
+  describe("security invariants", () => {
+    it("every returned role is a member of ADMIN_ROLES or null", () => {
+      const allInputs: string[][] = [
+        ["admin:*"], ["write:*"], ["admin:keys"], ["read:*"],
+        ["read:*", "write:*"], [], ["read:users"], ["service:ingest"],
+      ];
+      for (const input of allInputs) {
+        const role = roleFromScopes(input);
+        if (role !== null) expect(ADMIN_ROLES).toContain(role);
+      }
+    });
+
+    it("no scope combination produces security_admin (intentionally unmapped)", () => {
+      const combos: string[][] = [
+        SCOPE_REGISTRY.map((s) => s.scope),
+        ["admin:*"],
+        ["write:*", "admin:keys", "read:*"],
+        ["admin:*", "write:*", "admin:keys", "read:*"],
+      ];
+      for (const combo of combos) {
+        expect(roleFromScopes(combo)).not.toBe("security_admin");
+      }
+    });
+
+    it("admin:* is the only scope that yields super_admin", () => {
+      const nonAdminWildcard = SCOPE_REGISTRY.map((s) => s.scope).filter((s) => s !== "admin:*");
+      for (const scope of nonAdminWildcard) {
+        expect(roleFromScopes([scope])).not.toBe("super_admin");
+      }
+    });
   });
 });

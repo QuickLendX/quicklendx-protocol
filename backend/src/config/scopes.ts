@@ -175,11 +175,26 @@ export function getScopesByCategory(category: ScopeDefinition['category']): Scop
  * Map a set of granted scopes to an administrative role.
  * Returns an `AdminRole` string when the scopes confer admin privileges,
  * or `null` when no administrative role is implied.
+ *
+ * Invariants:
+ * - Pure function: deterministic, no side-effects, no shared mutable state.
+ * - Priority is fixed: super_admin > operations_admin > support > null.
+ *   Adding more scopes can only maintain or increase the resolved role.
+ * - Only exact string matches are used — no trimming, case-folding, or
+ *   prefix matching. Near-matches ("ADMIN:*", "admin: *") are not elevated.
+ * - Non-array runtime values (null, undefined, string, …) return null
+ *   without throwing, since this function is called from network paths
+ *   where input types cannot be fully guaranteed at runtime.
+ * - `security_admin` exists in AdminRole but no scope currently maps to it.
+ *   Any future mapping must be a deliberate, reviewed change.
  */
 import { AdminRole } from "../types/rbac";
 
 export function roleFromScopes(grantedScopes: string[]): AdminRole | null {
-  // Full admin grants highest privilege
+  // Guard: non-array runtime values must not throw
+  if (!Array.isArray(grantedScopes)) return null;
+
+  // Full admin grants highest privilege — checked first so it always wins
   if (grantedScopes.includes('admin:*')) return 'super_admin';
 
   // Operations-level privileges: management scopes or write:*
