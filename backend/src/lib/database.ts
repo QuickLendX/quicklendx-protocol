@@ -172,6 +172,58 @@ export function getStatementCacheStats() {
 }
 
 /**
+ * Convert a raw database row into a DbApiKey domain object.
+ *
+ * Deterministic failure boundaries:
+ * - Missing/null row -> returns null (no throw, no partial object).
+ * - Missing required fields -> throws DatabaseError with a stable message.
+ * - Invalid types -> throws DatabaseError (never coerces silently).
+ * - Unknown extra fields are ignored to preserve forward compatibility.
+ *
+ * Invariants:
+ * - Returned object always has non-empty `id`, `keyHash`, and `userId`.
+ * - `createdAt` is always a valid Date when present.
+ * - No sensitive material (raw key) is ever read from the row.
+ */
+export function rowToDbApiKey(row: any): {
+  id: string;
+  keyHash: string;
+  userId: string;
+  createdAt: Date;
+  revokedAt: Date | null;
+} | null {
+  if (row === null || row === undefined) {
+    return null;
+  }
+  if (typeof row !== 'object') {
+    throw new DatabaseError('rowToDbApiKey: row must be an object');
+  }
+  const { id, key_hash, user_id, created_at, revoked_at } = row;
+  if (typeof id !== 'string' || id.length === 0) {
+    throw new DatabaseError('rowToDbApiKey: missing or invalid id');
+  }
+  if (typeof key_hash !== 'string' || key_hash.length === 0) {
+    throw new DatabaseError('rowToDbApiKey: missing or invalid key_hash');
+  }
+  if (typeof user_id !== 'string' || user_id.length === 0) {
+    throw new DatabaseError('rowToDbApiKey: missing or invalid user_id');
+  }
+  const createdAt = created_at instanceof Date ? created_at : new Date(created_at);
+  if (Number.isNaN(createdAt.getTime())) {
+    throw new DatabaseError('rowToDbApiKey: invalid created_at');
+  }
+  let revokedAt: Date | null = null;
+  if (revoked_at !== null && revoked_at !== undefined) {
+    const parsed = revoked_at instanceof Date ? revoked_at : new Date(revoked_at);
+    if (Number.isNaN(parsed.getTime())) {
+      throw new DatabaseError('rowToDbApiKey: invalid revoked_at');
+    }
+    revokedAt = parsed;
+  }
+  return { id, keyHash: key_hash, userId: user_id, createdAt, revokedAt };
+}
+
+/**
  * Simple health probe – deterministic, never throws.
  */
 export function pingDatabase(): boolean {
