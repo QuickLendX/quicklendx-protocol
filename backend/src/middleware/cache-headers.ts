@@ -223,6 +223,36 @@ export interface ConditionalWriteOptions {
 }
 
 /**
+ * Normalizes an ETag string by stripping weak indicator (W/) and surrounding double quotes,
+ * and trimming whitespace.
+ */
+function normalizeETag(etag: string): string {
+  let cleaned = etag.trim();
+  if (cleaned.startsWith("W/")) {
+    cleaned = cleaned.substring(2).trim();
+  }
+  if (cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2) {
+    cleaned = cleaned.substring(1, cleaned.length - 1);
+  }
+  return cleaned;
+}
+
+/**
+ * Checks if a specific raw If-Match tag matches the given server etag.
+ * Per RFC 7232 §3.1: If-Match MUST use strong comparison function for state-changing calls.
+ * Weak ETags (prefixed with W/) cannot satisfy If-Match strong comparison.
+ */
+function matchesIfMatchTag(rawTag: string, serverETag: string): boolean {
+  const trimmed = rawTag.trim();
+  if (trimmed === "*") return true;
+  if (trimmed.startsWith("W/")) return false;
+
+  const tagVal = normalizeETag(trimmed);
+  const serverVal = normalizeETag(serverETag);
+  return tagVal === serverVal;
+}
+
+/**
  * Evaluates If-Match / If-Unmodified-Since preconditions for write requests.
  *
  * Returns `true` when the response has already been sent (caller must stop).
@@ -237,58 +267,104 @@ export function assertConditionalWrite(
   etag: string | null,
   options?: ConditionalWriteOptions
 ): boolean {
-  const ifMatch = req.headers["if-match"] as string | undefined;
+  try {
+    const rawIfMatch = req?.headers?.["if-match"];
+    const ifMatch = Array.isArray(rawIfMatch) ? rawIfMatch.join(",") : rawIfMatch;
 
-  if (ifMatch) {
-    const tags = ifMatch.split(",").map((t) => t.trim());
-    const isWildcard = tags.includes("*");
+    if (ifMatch !== undefined) {
+      const trimmedIfMatch = ifMatch.trim();
+      if (trimmedIfMatch === "") {
+        if (options?.required) {
+          res.setHeader("Cache-Control", CC_NO_STORE);
+          res.status(400).json({
+            error: {
+              message: "If-Match header is required",
+              code: "PRECONDITION_REQUIRED",
+            },
+          });
+          return true;
+        }
+        res.setHeader("Cache-Control", CC_NO_STORE);
+        res.status(412).json({
+          error: {
+            message: "Precondition Failed: resource has been modified",
+            code: "PRECONDITION_FAILED",
+          },
+        });
+        return true;
+      }
 
-    if (etag === null) {
+      if (etag === null || etag === undefined) {
+        res.setHeader("Cache-Control", CC_NO_STORE);
+        res.status(412).json({
+          error: {
+            message: "Precondition Failed: resource has been modified",
+            code: "PRECONDITION_FAILED",
+          },
+        });
+        return true;
+      }
+
+      const tags = trimmedIfMatch.split(",").map((t) => t.trim()).filter(Boolean);
+      const isWildcard = tags.includes("*");
+
+      const hasMatch = isWildcard || tags.some((tag) => matchesIfMatchTag(tag, etag));
+
+      if (!hasMatch) {
+        res.setHeader("Cache-Control", CC_NO_STORE);
+        res.status(412).json({
+          error: {
+            message: "Precondition Failed: resource has been modified",
+            code: "PRECONDITION_FAILED",
+          },
+        });
+        return true;
+      }
+
+      // RFC 7232 §3.4: MUST ignore If-Unmodified-Since if If-Match is present.
+      return false;
+    }
+
+    if (options?.required) {
       res.setHeader("Cache-Control", CC_NO_STORE);
-      res.status(412).json({
+      res.status(400).json({
         error: {
-          message: "Precondition Failed: resource has been modified",
-          code: "PRECONDITION_FAILED",
+          message: "If-Match header is required",
+          code: "PRECONDITION_REQUIRED",
         },
       });
       return true;
     }
 
-    if (!isWildcard && !tags.includes(etag)) {
-      res.setHeader("Cache-Control", CC_NO_STORE);
-      res.status(412).json({
-        error: {
-          message: "Precondition Failed: resource has been modified",
-          code: "PRECONDITION_FAILED",
-        },
-      });
-      return true;
+    const rawIfUnmodifiedSince = req?.headers?.["if-unmodified-since"];
+    const ifUnmodifiedSince = Array.isArray(rawIfUnmodifiedSince) ? rawIfUnmodifiedSince[0] : rawIfUnmodifiedSince;
+
+    if (ifUnmodifiedSince && options?.lastModified) {
+      const lm = options.lastModified;
+      if (lm instanceof Date && !isNaN(lm.getTime())) {
+        const since = new Date(ifUnmodifiedSince);
+        if (!isNaN(since.getTime()) && lm > since) {
+          res.setHeader("Cache-Control", CC_NO_STORE);
+          res.status(412).json({
+            error: {
+              message: "Precondition Failed: resource has been modified",
+              code: "PRECONDITION_FAILED",
+            },
+          });
+          return true;
+        }
+      }
     }
-  } else if (options?.required) {
+
+    return false;
+  } catch (err) {
     res.setHeader("Cache-Control", CC_NO_STORE);
     res.status(400).json({
       error: {
-        message: "If-Match header is required",
-        code: "PRECONDITION_REQUIRED",
+        message: "Invalid conditional write request headers",
+        code: "INVALID_PRECONDITION_HEADER",
       },
     });
     return true;
   }
-
-  const ifUnmodifiedSince = req.headers["if-unmodified-since"] as string | undefined;
-  if (ifUnmodifiedSince && options?.lastModified) {
-    const since = new Date(ifUnmodifiedSince);
-    if (!isNaN(since.getTime()) && options.lastModified > since) {
-      res.setHeader("Cache-Control", CC_NO_STORE);
-      res.status(412).json({
-        error: {
-          message: "Precondition Failed: resource has been modified",
-          code: "PRECONDITION_FAILED",
-        },
-      });
-      return true;
-    }
-  }
-
-  return false;
 }
