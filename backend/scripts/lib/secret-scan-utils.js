@@ -192,12 +192,35 @@ function hasMixedCharacterClasses(value) {
   return classes.filter(Boolean).length >= 2;
 }
 
+const STELLAR_STRKEY_REGEX = /^[GX][A-Z2-7]{55}$/;
+
+/**
+ * Validates whether a value is a Stellar StrKey-like public identifier (e.g. account G... or hash signer X...).
+ *
+ * Invariants:
+ * - Type Safety: Safely handles non-string inputs (null, undefined, Symbol, BigInt, objects) returning false without throwing.
+ * - Length Boundary: Exactly 56 ASCII characters; fast-fails for any other length.
+ * - Alphabet Boundary: RFC 4648 Base32 alphabet ([A-Z2-7]) prefixed strictly by public key identifiers 'G' or 'X'.
+ * - Security Rejection: Never returns true for Stellar secret seeds ('S...') or other sensitive key types.
+ * - Stateless & Deterministic: Pure function with no shared mutable regex state; safe across concurrent, retry, and re-entrant calls.
+ *
+ * @param {unknown} value The candidate value to evaluate.
+ * @returns {boolean} True if the value matches the Stellar StrKey public format, false otherwise.
+ */
 function isStellarStrKeyLike(value) {
-  return /^[GX][A-Z2-7]{55}$/.test(value);
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  if (value.length !== 56) {
+    return false;
+  }
+
+  return STELLAR_STRKEY_REGEX.test(value);
 }
 
 function isHighEntropyToken(value) {
-  if (value.length < MIN_HIGH_ENTROPY_LENGTH) {
+  if (typeof value !== "string" || value.length < MIN_HIGH_ENTROPY_LENGTH) {
     return false;
   }
 
