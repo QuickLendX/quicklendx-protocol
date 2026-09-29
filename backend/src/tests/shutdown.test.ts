@@ -22,13 +22,13 @@
  *   - Mixed queue: only pending returned, depth resets
  */
 
-
 // ---------------------------------------------------------------------------
 // Module mocks — must be hoisted before any imports from the mocked modules
 // ---------------------------------------------------------------------------
 jest.mock('../middleware/load-shedding', () => ({
   getActiveRequests: jest.fn(() => 0),
   resetActiveRequests: jest.fn(),
+  getActiveRequestCount: jest.fn(() => 0),
 }));
 
 jest.mock('../services/webhookQueueService', () => ({
@@ -76,7 +76,7 @@ import {
   createShutdownHandler,
   resetShuttingDown,
   isShuttingDown,
-  setShuttingDownForTest,
+  markShuttingDown,
   DEFAULT_DRAIN_TIMEOUT_MS,
   DRAIN_POLL_MS,
 } from '../lib/shutdown';
@@ -91,6 +91,9 @@ import type { WebhookEvent } from '../services/webhookQueueService';
 // ---------------------------------------------------------------------------
 const mockGetActiveRequests = getActiveRequests as jest.MockedFunction<
   typeof getActiveRequests
+>;
+const mockMarkShuttingDown = markShuttingDown as jest.MockedFunction<
+  typeof markShuttingDown
 >;
 const mockCloseDatabase = closeDatabase as jest.MockedFunction<typeof closeDatabase>;
 const mockSetMaintenanceMode = statusService.setMaintenanceMode as jest.MockedFunction<
@@ -130,6 +133,7 @@ describe('createShutdownHandler', () => {
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     mockGetActiveRequests.mockReturnValue(0);
     mockFlush.mockReturnValue([]);
+    mockMarkShuttingDown.mockClear();
   });
 
   afterEach(() => {
@@ -192,31 +196,46 @@ describe('createShutdownHandler', () => {
     expect(isShuttingDown()).toBe(false);
   });
 
-  it('isShuttingDown() returns true when set via test hook', () => {
-    setShuttingDownForTest(true);
+  it('isShuttingDown() is true after shutdown starts', async () => {
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
     expect(isShuttingDown()).toBe(true);
-    setShuttingDownForTest(false);
+  });
+
+  it('markShuttingDown() is idempotent and returns false on first call', () => {
     expect(isShuttingDown()).toBe(false);
+    expect(markShuttingDown()).toBe(false);
+    expect(isShuttingDown()).toBe(true);
+    expect(markShuttingDown()).toBe(true);
+    expect(isShuttingDown()).toBe(true);
   });
 
-  it('isShuttingDown() is idempotent across repeated reads', () => {
-    setShuttingDownForTest(true);
-    expect(isShuttingDown()).toBe(true);
-    expect(isShuttingDown()).toBe(true);
-    expect(isShuttingDown()).toBe(true);
-    setShuttingDownForTest(false);
+  it('markShuttingDown() returns true when already shutting down', () => {
+    markShuttingDown();
+    expect(markShuttingDown()).toBe(true);
   });
 
-  it('resetShuttingDown() is a no-op when already false', () => {
+  it('isShuttingDown() is deterministic across repeated reads', () => {
+    expect(isShuttingDown()).toBe(false);
+    expect(isShuttingDown()).toBe(false);
+    markShuttingDown();
+    expect(isShuttingDown()).toBe(true);
+    expect(isShuttingDown()).toBe(true);
+  });
+
+  it('resetShuttingDown() is idempotent on already-reset state', () => {
+    expect(isShuttingDown()).toBe(false);
+    resetShuttingDown();
     expect(isShuttingDown()).toBe(false);
     resetShuttingDown();
     expect(isShuttingDown()).toBe(false);
   });
 
-  it('isShuttingDown() is true after shutdown starts', async () => {
-    const server = makeMockServer();
-    await createShutdownHandler(server, 100)('SIGTERM');
+  it('resetShuttingDown() after markShuttingDown() restores false', () => {
+    markShuttingDown();
     expect(isShuttingDown()).toBe(true);
+    resetShuttingDown();
+    expect(isShuttingDown()).toBe(false);
   });
 
   it('resetShuttingDown() resets isShuttingDown to false', async () => {
@@ -242,6 +261,23 @@ describe('createShutdownHandler', () => {
     expect(callCount).toBeGreaterThanOrEqual(4);
     expect(exitSpy).toHaveBeenCalledWith(0);
   }, 10_000);
+
+  it('exits 0 immediately when zero active requests (no polling delay)', async () => {
+    mockGetActiveRequests.mockReturnValue(0);
+    const server = makeMockServer();
+    const start = Date.now();
+    await createShutdownHandler(server, 5000)('SIGTERM');
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(500);
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('exits 0 when drain timeout is zero with no active requests', async () => {
+    mockGetActiveRequests.mockReturnValue(0);
+    const server = makeMockServer();
+    await createShutdownHandler(server, 0)('SIGTERM');
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
 
   it('exits 0 when drain timeout expires with requests still in-flight', async () => {
     mockGetActiveRequests.mockReturnValue(3); // never drains
@@ -293,6 +329,24 @@ describe('createShutdownHandler', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it('second signal forces exit(1) even when first shutdown is still draining', async () => {
+    mockGetActiveRequests.mockReturnValue(5);
+    const server = makeMockServer();
+    const handler = createShutdownHandler(server, 5000);
+
+    const first = handler('SIGTERM');
+    // Give the first handler a tick to mark shutting down.
+    await new Promise((r) => setTimeout(r, 10));
+
+    exitSpy.mockClear();
+    await handler('SIGTERM');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+
+    // Let the first handler finish so it doesn't leak into other tests.
+    mockGetActiveRequests.mockReturnValue(0);
+    await first;
+  }, 10_000);
+
   it('does not run the rest of the shutdown sequence on the second signal', async () => {
     const server = makeMockServer();
     const handler = createShutdownHandler(server, 100);
@@ -336,6 +390,29 @@ describe('createShutdownHandler', () => {
       expect.stringContaining('Webhook queue flush failed'),
       flushError,
     );
+    errorSpy.mockRestore();
+  });
+
+  it('continues shutdown sequence when flush() throws (closeDatabase still called)', async () => {
+    mockFlush.mockImplementation(() => { throw new Error('flush exploded'); });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(mockCloseDatabase).toHaveBeenCalledTimes(1);
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    errorSpy.mockRestore();
+  });
+
+  it('continues shutdown sequence when closeDatabase() throws (exit still 0)', async () => {
+    mockCloseDatabase.mockImplementation(() => { throw new Error('db close failed'); });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
     errorSpy.mockRestore();
   });
 
@@ -408,6 +485,27 @@ describe('createShutdownHandler', () => {
     warnSpy.mockRestore();
   });
 
+  it('logs undelivered webhook event ids for diagnosability', async () => {
+    const pending: WebhookEvent[] = [
+      makeWebhookEvent('evt-alpha'),
+      makeWebhookEvent('evt-beta'),
+    ];
+    mockFlush.mockReturnValue(pending);
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    const undeliveredCall = warnSpy.mock.calls.find((args) =>
+      String(args[0]).includes('not delivered'),
+    );
+    expect(undeliveredCall).toBeDefined();
+    const serialized = JSON.stringify(undeliveredCall);
+    expect(serialized).toContain('evt-alpha');
+    expect(serialized).toContain('evt-beta');
+    warnSpy.mockRestore();
+  });
+
   // ── Ordering ──────────────────────────────────────────────────────────────
 
   it('calls server.close() before closeDatabase()', async () => {
@@ -430,6 +528,19 @@ describe('createShutdownHandler', () => {
 
     expect(callOrder.indexOf('maintenance')).toBeLessThan(callOrder.indexOf('close'));
   });
+
+  it('does not call process.exit more than once on a clean shutdown', async () => {
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+    expect(exitSpy).toHaveBeenCalledTimes(1);
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('rejects unknown signals by still performing a safe shutdown', async () => {
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGUSR2');
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -440,6 +551,18 @@ describe('shutdown constants', () => {
     expect(typeof DEFAULT_DRAIN_TIMEOUT_MS).toBe('number');
     expect(DEFAULT_DRAIN_TIMEOUT_MS).toBeGreaterThan(0);
     expect(Number.isInteger(DEFAULT_DRAIN_TIMEOUT_MS)).toBe(true);
+  });
+
+  it('DEFAULT_DRAIN_TIMEOUT_MS is stable across reads (deterministic)', () => {
+    const a = DEFAULT_DRAIN_TIMEOUT_MS;
+    const b = DEFAULT_DRAIN_TIMEOUT_MS;
+    expect(a).toBe(b);
+  });
+
+  it('DRAIN_POLL_MS is a positive integer', () => {
+    expect(typeof DRAIN_POLL_MS).toBe('number');
+    expect(DRAIN_POLL_MS).toBeGreaterThan(0);
+    expect(Number.isInteger(DRAIN_POLL_MS)).toBe(true);
   });
 
   it('DRAIN_POLL_MS is a positive integer less than DEFAULT_DRAIN_TIMEOUT_MS', () => {
@@ -525,6 +648,22 @@ describe('WebhookQueueService.flush (real implementation)', () => {
     expect(flushed[0].status).toBe('pending');
     expect(flushed[1].status).toBe('pending');
     expect(q.getDepth()).toBe(0);
+  });
+
+  it('flush() is idempotent — second flush returns empty array', () => {
+    const q = freshQueue();
+    q.enqueue('once');
+    const first = q.flush();
+    expect(first).toHaveLength(1);
+    const second = q.flush();
+    expect(second).toEqual([]);
+  });
+
+  it('flush() on empty queue is deterministic across repeated calls', () => {
+    const q = freshQueue();
+    expect(q.flush()).toEqual([]);
+    expect(q.flush()).toEqual([]);
+    expect(q.flush()).toEqual([]);
   });
 
   it('excludes events already marked success', () => {

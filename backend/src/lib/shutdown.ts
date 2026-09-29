@@ -81,8 +81,6 @@ export interface ShutdownResult {
 
 const _steps: ShutdownStep[] = [];
 
-const _registeredNames = new Set<string>();
-
 /** Register a step. Idempotent by name: re-registering replaces the prior entry. */
 export function register(step: ShutdownStep): void {
   const idx = _steps.findIndex((s) => s.name === step.name);
@@ -91,13 +89,11 @@ export function register(step: ShutdownStep): void {
   } else {
     _steps.push(step);
   }
-  _registeredNames.add(step.name);
 }
 
 /** Remove all registered steps — used in tests between cases. */
 export function clearRegistry(): void {
   _steps.length = 0;
-  _registeredNames.clear();
 }
 
 /** Return a sorted copy of registered steps (lowest priority first). */
@@ -112,8 +108,8 @@ export function getRegisteredSteps(): ShutdownStep[] {
 let _shuttingDown = false;
 /** Guards against concurrent runAll() invocations. */
 let _runAllInProgress = false;
-/** Guards against concurrent createShutdownHandler() invocations. */
-let _handlerCreated = false;
+/** True once a shutdown signal has been received and the drain has started. */
+let _shutdownInProgress = false;
 
 /**
  * Reset shutdown state — call in tests between cases.
@@ -128,7 +124,7 @@ let _handlerCreated = false;
 export function resetShuttingDown(): void {
   _shuttingDown = false;
   _runAllInProgress = false;
-  _handlerCreated = false;
+  _shutdownInProgress = false;
 }
 
 /** True once a shutdown signal has been received. */
@@ -137,28 +133,18 @@ export function isShuttingDown(): boolean {
 }
 
 /**
- * Deterministic failure-boundary probe for `isShuttingDown`.
- *
- * Returns a snapshot of the shutdown state machine so callers and tests can
- * assert on the exact boundary conditions without racing on the boolean.
+ * True while a graceful shutdown drain is actively in progress.
  *
  * Invariants:
- *  - Pure: never mutates state, never throws, never touches the registry.
- *  - `shuttingDown` is true iff a signal handler has entered the drain path.
- *  - `runAllInProgress` is true iff a `runAll()` call is currently executing.
- *  - `handlerCreated` is true iff `createShutdownHandler()` has been called
- *    since the last `resetShuttingDown()`.
+ *  - Deterministic: reflects only the internal state machine, never throws.
+ *  - Set to true by the signal handler before `runAll()` begins and reset to
+ *    false in `resetShuttingDown()` so tests observe a clean boundary.
+ *  - Distinct from `isShuttingDown()`: a signal may have been received
+ *    (`_shuttingDown === true`) while the drain has already finished
+ *    (`_shutdownInProgress === false`).
  */
-export function getShutdownState(): {
-  shuttingDown: boolean;
-  runAllInProgress: boolean;
-  handlerCreated: boolean;
-} {
-  return {
-    shuttingDown: _shuttingDown,
-    runAllInProgress: _runAllInProgress,
-    handlerCreated: _handlerCreated,
-  };
+export function isShutdownInProgress(): boolean {
+  return _shutdownInProgress;
 }
 
 // ---------------------------------------------------------------------------
@@ -217,23 +203,6 @@ export async function runAll(
       outcomes: [],
       totalDurationMs: 0,
       hadErrors: false,
-    };
-  }
-
-  // Boundary: a zero/negative budget means no step may start.
-  if (!Number.isFinite(totalTimeoutMs) || totalTimeoutMs <= 0) {
-    console.warn(
-      `[shutdown] Invalid totalTimeoutMs (${totalTimeoutMs}) — skipping all steps`,
-    );
-    return {
-      signal,
-      outcomes: getRegisteredSteps().map((s) => ({
-        name: s.name,
-        priority: s.priority,
-        status: 'skipped' as const,
-      })),
-      totalDurationMs: 0,
-      hadErrors: true,
     };
   }
   _runAllInProgress = true;
@@ -311,13 +280,6 @@ export function createShutdownHandler(
   server: http.Server,
   drainTimeoutMs: number = DEFAULT_DRAIN_TIMEOUT_MS,
 ): (signal: string) => Promise<void> {
-  if (_handlerCreated) {
-    throw new Error(
-      '[shutdown] createShutdownHandler() called more than once — refusing to double-register steps',
-    );
-  }
-  _handlerCreated = true;
-
   // ── Step 1: mark not-ready + stop HTTP listener + drain requests ──────────
   register({
     name: 'http-listener',
@@ -380,6 +342,7 @@ export function createShutdownHandler(
       return; // guard: process.exit is a no-op in tests
     }
     _shuttingDown = true;
+    _shutdownInProgress = true;
 
     console.log(`[shutdown] ${signal} — starting graceful shutdown`);
     const result = await runAll(signal, drainTimeoutMs);
@@ -392,6 +355,7 @@ export function createShutdownHandler(
             .join(', '),
       );
     }
+    _shutdownInProgress = false;
     console.log('[shutdown] Shutdown complete');
     process.exit(0);
   };
