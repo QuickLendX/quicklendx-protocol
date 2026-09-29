@@ -47,7 +47,7 @@ export class MigrationPolicy {
     const errors: string[] = [];
     const warnings: string[] = [];
 
-    const seenVersions = new Set<string>();
+    const seenVersions = new Set<number>();
     for (const mig of migrations) {
       const metaCheck = this.validateMetadata(mig);
       if (!metaCheck.valid) {
@@ -101,7 +101,7 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
 
   if (validateOnly) {
     const migrations = await loadMigrationsFromFS();
-    const result = await MigrationPolicy.dryRun(migrations, { force: emergency });
+    const result = await MigrationPolicy.dryRun(migrations as unknown as MigrationDefinition[], { force: emergency });
     if (!result.valid) {
       console.error("❌ Migration validation failed:");
       result.errors.forEach((e) => console.error(`   ${e}`));

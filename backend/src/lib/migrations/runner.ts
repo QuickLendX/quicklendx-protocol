@@ -95,8 +95,8 @@ function buildContext(db: any, isProd: boolean): any {
   };
 }
 
-export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
-  const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb } = options;
+export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient; to?: number | string; all?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
+  const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb, to, all } = options;
   const isProd = config.NODE_ENV === "production";
   const startTime = Date.now();
 
@@ -210,8 +210,19 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             ).run(state.version, state.name, state.checksum, state.appliedAt, state.durationMs, state.author, JSON.stringify(state.meta));
           });
 
+          const appliedDurationMs = Date.now() - migStart;
+          state = {
+            version,
+            name: fileMig.name,
+            checksum,
+            appliedAt,
+            durationMs: appliedDurationMs,
+            author: fileMig.content.author,
+            meta,
+          };
+
           appliedThisRun.push(state);
-          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${durationMs}ms)`);
+          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${appliedDurationMs}ms)`);
         } catch (err: any) {
           console.error(`❌ Migration ${version}_${fileMig.name} failed:`, err.message);
           throw err;
