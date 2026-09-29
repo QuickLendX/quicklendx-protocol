@@ -250,6 +250,18 @@ function normalizeAllowlist(allowlist) {
   };
 }
 
+function safeCompilePattern(pattern) {
+  if (typeof pattern !== "string" || pattern.length === 0) {
+    return null;
+  }
+
+  try {
+    return new RegExp(pattern);
+  } catch {
+    return null;
+  }
+}
+
 function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
   if (!entry || typeof entry !== "object") {
     return false;
@@ -268,16 +280,40 @@ function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
     return false;
   }
 
-  if (hasLine && Number(entry.line) !== lineNumber) {
+  if (hasLine) {
+    const expectedLine = Number(entry.line);
+    const actualLine = Number(lineNumber);
+    if (Number.isNaN(expectedLine) || Number.isNaN(actualLine)) {
+      return false;
+    }
+    if (expectedLine !== actualLine) {
+      return false;
+    }
+  }
+
+  // Invariants (fail-closed, no throws, no logging of matchValue):
+  // - matchValue must be a string for match/pattern selectors; anything
+  //   else (null, undefined, number, object) cannot be allowlisted.
+  // - entry.match must be a string; non-string selectors never match.
+  // - entry.pattern must compile; invalid regex never matches and never throws.
+  if ((hasMatch || hasPattern) && typeof matchValue !== "string") {
     return false;
   }
 
-  if (hasMatch && !matchValue.includes(entry.match)) {
-    return false;
+  if (hasMatch) {
+    if (typeof entry.match !== "string") {
+      return false;
+    }
+    if (!matchValue.includes(entry.match)) {
+      return false;
+    }
   }
 
   if (hasPattern) {
-    const pattern = new RegExp(entry.pattern);
+    const pattern = safeCompilePattern(entry.pattern);
+    if (!pattern) {
+      return false;
+    }
     if (!pattern.test(matchValue)) {
       return false;
     }
@@ -286,7 +322,20 @@ function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
   return true;
 }
 
+// Invariants for isAllowlisted:
+// - Pure and deterministic: same inputs always yield the same boolean, with
+//   no shared mutable state, no I/O, and no logging of matchValue (caller is
+//   responsible for redaction via redactPreview/formatFindings).
+// - Fail-closed: null/undefined/malformed allowlists, non-string matchValue,
+//   and invalid regex patterns all yield false instead of throwing, so retries,
+//   partial failure, or concurrent execution cannot produce an unsafe allow.
+// - Line comparison is numeric (Number() on both sides); NaN on either side
+//   never matches. File comparison remains strict equality.
 function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
+  if (typeof matchValue !== "string") {
+    return false;
+  }
+
   const normalized = normalizeAllowlist(allowlist);
 
   for (const entry of normalized.entries) {
@@ -296,11 +345,14 @@ function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
   }
 
   for (const entry of normalized.globalPatterns) {
-    if (!entry?.pattern) {
+    if (!entry || typeof entry.pattern !== "string" || entry.pattern.length === 0) {
       continue;
     }
 
-    const pattern = new RegExp(entry.pattern);
+    const pattern = safeCompilePattern(entry.pattern);
+    if (!pattern) {
+      continue;
+    }
     if (pattern.test(matchValue)) {
       return true;
     }
@@ -550,6 +602,7 @@ module.exports = {
   normalizeAllowlist,
   redactPreview,
   runSecretScan,
+  safeCompilePattern,
   scanBackend,
   scanFileContent,
   scanLine,
