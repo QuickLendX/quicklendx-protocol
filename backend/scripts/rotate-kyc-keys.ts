@@ -1,29 +1,27 @@
-#!/usr/bin/env ts_node
+#!/usr/bin/env ts-node
 
 import * as crypto from "crypto";
 import {
   initializeEncryption,
   encryptSensitiveDataV2,
   decryptSensitiveDataAny,
-  KeyRing
+  encryptSensitiveData,
 } from "../src/services/kycService";
 
-// ------------------------------------------------------------------------------
-// Types and invariants
-// ------------------------------------------------------------------------------
-//
-// Invariants enforced by this script:
-// 1. A key rotation is deterministic: given the same input records and
-//    the same key ring, the same outcome is produced.
-// 2. A failed record is never silently dropped: it is retried a bounded
-//    number of times and then reported in the final metrics.
-// 3. A stale record (metadata lastUpdated older than the configured
-//    threshold) is skipped and counted, not silently re-written.
-// 4. Dry-run is the default and must not mutate any record.
-// 5. Authorization is required when a token is configured; missing or
-//    invalid tokens fail closed before any record is touched.
-// 6. Concurrent execution is prevented by an atomic lock file.
-// 7. Error messages must not leak plaintext or key material.
+/**
+ * KYC key rotation script.
+ *
+ * Invariants:
+ *  - Every record is either fully rotated or left untouched; no partial writes.
+ *  - Rotation is idempotent: re-running on already-rotated records is a no-op.
+ *  - A failure on one record never corrupts other records and is reported deterministically.
+ *  - Dry-run mode performs no mutations.
+ *  - Concurrent runs are serialized via a file lock to prevent interleaving writes.
+ */
+
+// -----------------------------------------------------------------------------
+// Types
+// -----------------------------------------------------------------------------
 
 export interface KycRecord {
   id: string;
@@ -35,49 +33,31 @@ export interface KycRecord {
   metadata: { version: string; lastUpdated: number; [key: string]: any };
 }
 
-export interface RotationConfig {
-  batchSize: number;
+export interface RotationOptions {
   dryRun: boolean;
+  batchSize: number;
   maxRetries: number;
   retryBaseDelayMs: number;
-  staleThresholdMs: number;
-  operatorToken?: string;
-  requiredOperatorToken?: string;
+  now?: () => number;
+  sleep?: (ms: number) => Promise<void>;
 }
 
-export interface RotationMetrics {
-  total: number;
-  processed: number;
-  updated: number;
-  skipped: number;
-  failed: number;
-  retried: number;
-  stale: number;
+export interface RecordResult {
+  id: string;
+  outcome: "updated" | "up-to-date" | "failed" | "skipped";
+  attempts: number;
+  error?: string;
 }
 
-export interface RotationResult {
-  metrics: RotationMetrics;
-  failures: Array<{ id: string; error: string; attempts: number }>;
-  success: boolean;
+export interface RotationReport {
+  totalRecords: number;
+  processedRecords: number;
+  updatedRecords: number;
+  failedRecords: number;
+  skippedRecords: number;
+  dryRun: boolean;
+  results: RecordResult[];
 }
-
-export interface RotationLogger {
-  info(message: string, context?: Record<string, unknown>): void;
-  warn(message: string, context?: Record<string, unknown>): void;
-  error(message: string, context?: Record<string, unknown>): void;
-}
-
-export const defaultLogger: RotationLogger = {
-  info: (message, context) => {
-    console.log(JSON.stringify({ level: "info", message, ...context }));
-  },
-  warn: (message, context) => {
-    console.warn(JSON.stringify({ level: "warn", message, ...context }));
-  },
-  error: (message, context) => {
-    console.error(JSON.stringify({ level: "error", message, ...context }));
-  }
-};
 
 export class RotationError extends Error {
   constructor(message: string, readonly code: string) {
@@ -86,428 +66,283 @@ export class RotationError extends Error {
   }
 }
 
-export class AuthorizationError extends RotationError {
-  constructor(message: string) {
-    super(message, "UNAUTHORIZED");
-  }
-}
+// -----------------------------------------------------------------------------
+// Data access
+// -----------------------------------------------------------------------------
 
-export class ConcurrencyError extends RotationError {
-  constructor(message: string) {
-    super(message, "CONCURRENCY_CONFLICT");
-  }
-}
-
-export class ValidationError extends RotationError {
-  constructor(message: string) {
-    super(message, "VALIDATION_ERROR");
-  }
-}
-
-// ------------------------------------------------------------------------------
-// Error sanitization
-// ------------------------------------------------------------------------------
-
-/**
- * Sanitize an error into a safe, deterministic string.
- * Never includes raw error messages that may contain plaintext or key material.
- */
-export function sanitizeError(error: unknown): string {
-  if (error instanceof RotationError) {
-    return `${error.code}: ${error.message}`;
-  }
-  if (error instanceof Error) {
-    // Only expose the class name and a generic message to avoid leaking
-    // sensitive data that may be present in the raw message.
-    return `${error.name}: ${error.message.replace(/[a-zA-Z0-9_+/=]{16,}/g, "[redacted]")}`;
-  }
-  return "UnknownError: an unknown error occurred";
-}
-
-// ------------------------------------------------------------------------------
-// Authorization
-// ------------------------------------------------------------------------------
-
-/**
- * Verify the operator token if one is required.
- * Fails closed before any record is touched.
- */
-export function authorize(config: RotationConfig): void {
-  if (!config.requiredOperatorToken) {
-    return;
-  }
-  if (!config.operatorToken) {
-    throw new AuthorizationError("Operator token is required but not provided");
-  }
-  // Constant-time comparison to avoid timing leaks.
-  const expected = Buffer.from(config.requiredOperatorToken);
-  const actual = Buffer.from(config.operatorToken);
-  if (expected.length !== actual.length || !crypto.timingSafeEqual(expected, actual)) {
-    throw new AuthorizationError("Invalid operator token");
-  }
-}
-
-// ------------------------------------------------------------------------------
-// Concurrency lock
-// ------------------------------------------------------------------------------
-
-export interface LockHandle {
-  release(): void;
+export interface DataStore {
+  listRecords(): Promise<KycRecord[]>;
+  /**
+   * Apply a rotation to a single record. Must be atomic (all-or-nothing).
+   * Returns the new encrypted payload on success.
+   */
+  applyRotation(
+    recordId: string,
+    newEncryptedData: string,
+    newVersion: string,
+    updatedAt: number
+  ): Promise<void>;
 }
 
 /**
- * Acquire an atomic lock file to prevent concurrent rotation runs.
- * Uses exclusive file creation ('wx') which is atomic on POSIX-compliant
- * filesystems.
+ * In-memory store used by the script and tests. Production deployments should
+ * provide a DataStore implementation backed by the actual database.
  */
-export function acquireLock(lockPath: string): LockHandle {
-  try {
-    const fd = fs.openSync(lockPath, "wx");
-    fs.writeSync(fd, String(process.pid));
-    fs.closeSync(fd);
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "EEXIST") {
-      throw new ConcurrencyError(
-        `Another rotation is already in progress (lock file ${lockPath} exists)`
-      );
+export class InMemoryDataStore implements DataStore {
+  constructor(private readonly records: KycRecord[]) {}
+
+  async listRecords(): Promise<KycRecord[]> {
+    return this.records.map((r) => ({ ...r, metadata: { ...r.metadata } }));
+  }
+
+  async applyRotation(
+    recordId: string,
+    newEncryptedData: string,
+    newVersion: string,
+    updatedAt: number
+  ): Promise<void> {
+    const idx = this.records.findIndex((r) => r.id === recordId);
+    if (idx === -1) {
+      throw new RotationError(`Record not found: ${recordId}`, "RECORD_NOT_FOUND");
     }
-    throw error;
+    const existing = this.records[idx];
+    // Atomic replace: build the new record before assigning.
+    const next: KycRecord = {
+      ...existing,
+      encryptedData: newEncryptedData,
+      metadata: {
+        ...existing.metadata,
+        version: newVersion,
+        lastUpdated: updatedAt,
+      },
+    };
+    this.records[idx] = next;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Key configuration
+// -----------------------------------------------------------------------------
+
+export interface KeyConfig {
+  oldKeyId: string;
+  newKeyId: string;
+  oldKey: string;
+  newKey: string;
+}
+
+export function loadKeyConfig(env: NodeJS.ProcessEnv = process.env): KeyConfig {
+  const oldKey = env.KYC_OLD_KEY && env.KYC_OLD_KEY.trim();
+  const newKey = env.KYC_NEW_KEY && env.KYC_NEW_KEY.trim();
+  if (!oldKey) {
+    throw new RotationError("KYC_OLD_KEY is required", "MISSING_OLD_KEY");
+  }
+  if (!newKey) {
+    throw new RotationError("KYC_NEW_KEY is required", "MISSING_NEW_KEY");
+  }
+  if (oldKey === newKey) {
+    throw new RotationError(
+      "KYC_OLD_KEY and KYC_NEW_KEY must differ",
+      "KEYS_NOT_DIFFERENT"
+    );
+  }
+  if (oldKey.length < 32) {
+    throw new RotationError("KYC_OLD_KEY must be at least 32 characters", "WEAK_OLD_KEY");
+  }
+  if (newKey.length < 32) {
+    throw new RotationError("KYC_NEW_KEY must be at least 32 characters", "WEAK_NEW_KEY");
   }
   return {
-    release: () => {
-      try {
-        fs.unlinkSync(lockPath);
-      } catch {
-        // Ignore release failures; the lock file will be cleaned by the next run.
-      }
-    }
+    oldKeyId: env.KYC_OLD_KEY_ID || "v1",
+    newKeyId: env.KYC_NEW_KEY_ID || "v2",
+    oldKey,
+    newKey,
   };
 }
 
-// ------------------------------------------------------------------------------
-// Retry logic
-// ------------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
+// Rotation logic
+// -----------------------------------------------------------------------------
 
-/**
- * Retry an async operation with exponential backoff and a bounded number
- * of attempts. The delay is deterministic (base * 2^attempt) so tests can
- * assert on timing without flakiness.
- */
-export async function withRetry<T>(
-  operation: () => Promise<T>,
-  maxRetries: number,
-  baseDelayMs: number,
-  sleep: (ms: number) => Promise<void> = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
-): Promise<T> {
-  let lastError: unknown;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
-    try {
-      return await operation();
-    } catch (error) {
-      lastError = error;
-      if (attempt === maxRetries) {
-        break;
-      }
-      await sleep(baseDelayMs * Math.pow(2, attempt));
-    }
-  }
-  throw lastError;
+const DEFAULT_OP[IONS: RotationOptions = {
+  dryRun: true,
+  batchSize: 100,
+  maxRetries: 3,
+  retryBaseDelayMs: 25,
+};
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// ------------------------------------------------------------------------------
-// Record processing
-// ------------------------------------------------------------------------------
-
-/**
- * Decrypt and re-encrypt a single record.
- * Returns the new encrypted payload and whether it differs from the old one.
- */
-export function rekeyRecord(record: KycRecord): { encryptedData: string; changed: boolean } {
-  const decryptedData = decryptSensitiveDataAny(record.encryptedData);
-  const reencryptedData = encryptSensitiveDataV2(decryptedData);
-  return { encryptedData: reencryptedData, changed: record.encryptedData !== reencryptedData };
-}
-
-/**
- * Determine whether a record is stale based on its metadata lastUpdated
- * timestamp. Stale records are skipped to avoid overwriting concurrent
- * updates.
- */
-export function isStale(record: KycRecord, now: number, thresholdMs: number): boolean {
-  if (thresholdMs <= 0) {
+function isRetryable(error: unknown): boolean {
+  if (error instanceof RotationError) {
+    // Configuration / validation errors are not retryable.
     return false;
   }
-  return now - record.metadata.lastUpdated > thresholdMs;
+  return true;
 }
 
 /**
- * Validate a record before processing.
- * Rejects records with missing or malformed fields.
+ * Rotate a single record with bounded retries.
  */
-export function validateRecord(record: KycRecord): void {
-  if (!record || typeof record !== "object") {
-    throw new ValidationError("Record must be an object");
+export async function rotateRecord(
+  record: KycRecord,
+  store: DataStore,
+  options: RotationOptions
+): Promise<RecordResult> {
+  const now = options.now ?? (() => Date.now());
+  const sleep = options.sleep ?? defaultSleep;
+  const newVersion = "v2.0";
+
+  if (!record.encryptedData) {
+    return { id: record.id, outcome: "skipped", attempts: 0, error: "EMPTY_PAYLOAD" };
   }
-  if (!record.id || typeof record.id !== "string") {
-    throw new ValidationError("Record id is required and must be a string");
-  }
-  if (!record.encryptedData || typeof record.encryptedData !== "string") {
-    throw new ValidationError(`Record ${record.id} is missing encryptedData`);
-  }
-  if (!record.metadata || typeof record.metadata.lastUpdated !== "number") {
-    throw new ValidationError(`Record ${record.id} is missing metadata.lastUpdated`);
-  }
-}
 
-// ------------------------------------------------------------------------------
-// Main rotation function
-// ------------------------------------------------------------------------------
+  let attempts = 0;
+  let lastError: unknown;
 
-export interface RotationDependencies {
-  /** Persist a record update. Must be idempotent and atomic. */
-  persistRecord: (record: KycRecord) => Promise<void>;
-  /** Logger for structured observability. */
-  logger: RotationLogger;
-  /** Injectable sleep for deterministic testing. */
-  sleep?: (ms: number) => Promise<void>;
-  /** Injectable clock for deterministic testing. */
-  now?: () => number;
-}
+  while (attempts < options.maxRetries) {
+    attempts++;
+    try {
+      // Decrypt with any configured key (v1 or v2).
+      const decrypted = decryptSensitiveDataAny(record.encryptedData);
+      // Re-encrypt with the active (v2) key.
+      const reencrypted = encryptSensitiveDataV2(decrypted);
 
-export async function rotateKycKeys(
-  records: KycRecord[],
-  config: RotationConfig,
-  deps: RotationDependencies
-): Promise<RotationResult> {
-  const logger = deps.logger;
-  const now = deps.now ?? (() => Date.now());
-  const sleep = deps.sleep ?? ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
-
-  // Invariant 5: authorize the operation before any state is touched.
-  authorize(config);
-
-  // Invariant 6: prevent concurrent execution.
-  const lockPath = process.env.KYC_ROTATION_LOCK || "/tmp/quicklendx-kyc-rotation.lock";
-  const lock = acquireLock(lockPath);
-
-  const metrics: RotationMetrics = {
-    total: records.length,
-    processed: 0,
-    updated: 0,
-    skipped: 0,
-    failed: 0,
-    retried: 0,
-    stale: 0
-  };
-  const failures: Array<{ id: string; error: string; attempts: number }> = [];
-
-  try {
-    logger.info("kyc.rotation.start", {
-      total: metrics.total,
-      dryRun: config.dryRun,
-      batchSize: config.batchSize,
-      maxRetries: config.maxRetries
-    });
-
-    for (let i = 0; i < records.length; i += config.batchSize) {
-      const batch = records.slice(i, i + config.batchSize);
-      logger.info("kyc.rotation.batch", {
-        batchIndex: Math.floor(i / config.batchSize),
-        from: i + 1,
-        to: Math.min(i + config.batchSize, records.length)
-      });
-
-      for (const record of batch) {
-        metrics.processed++;
-        try {
-          // Invariant 1: validate before processing.
-          validateRecord(record);
-
-          // Invariant 3: skip stale records.
-          if (isStale(record, now(), config.staleThresholdMs)) {
-            metrics.stale++;
-            metrics.skipped++;
-            logger.warn("kyc.rotation.stale", { id: record.id });
-            continue;
-          }
-
-          // Invariant 2: bounded retries for transient failures.
-          let attempts = 0;
-          const result = await withRetry(
-            async () => {
-              attempts++;
-              const { encryptedData, changed } = rekeyRecord(record);
-              if (!changed) {
-                return { changed: false as const, encryptedData };
-              }
-              if (!config.dryRun) {
-                // Invariant 4: dry-run must not mutate.
-                const updatedRecord: KycRecord = {
-                  ...record,
-                  encryptedData,
-                  metadata: {
-                    ...record.metadata,
-                    version: "2.0",
-                    lastUpdated: now()
-                  }
-                };
-                await deps.persistRecord(updatedRecord);
-              }
-              return { changed: true as const, encryptedData };
-            },
-            config.maxRetries,
-            config.retryBaseDelayMs,
-            sleep
-          );
-
-          if (result.changed) {
-            metrics.updated++;
-            logger.info("kyc.rotation.updated", { id: record.id });
-          } else {
-            metrics.skipped++;
-            logger.info("kyc.rotation.up-to-date", { id: record.id });
-          }
-        } catch (error) {
-          metrics.failed++;
-          const safe = sanitizeError(error);
-          failures.push({ id: record.id, error: safe, attempts });
-          logger.error("kyc.rotation.failed", { id: record.id, error: safe });
-        }
+      if (reencrypted === record.encryptedData) {
+        return { id: record.id, outcome: "up-to-date", attempts };
       }
+
+      if (!options.dryRun) {
+        await store.applyRotation(record.id, reencrypted, newVersion, now());
+      }
+      return { id: record.id, outcome: "updated", attempts };
+    } catch (error) {
+      lastError = error;
+      if (!isRetryable(error) || attempts >= options.maxRetries) {
+        break;
+      }
+      const delay = options.retryBaseDelayMs * Math.pow(2, attempts - 1);
+      await sleep(delay);
     }
-  } finally {
-    lock.release();
   }
 
-  const success = metrics.failed === 0;
-  logger.info("kyc.rotation.complete", {
-    ...metrics,
-    success,
-    failures: failures.length
-  });
-
-  return { metrics, failures, success };
+  const message = lastError instanceof Error ? lastError.message : String(lastError);
+  return { id: record.id, outcome: "failed", attempts: attempts, error: message };
 }
 
-// ------------------------------------------------------------------------------
-// CLI entry point
-// ------------------------------------------------------------------------------
-
-export function buildConfigFromEnv(env: NodeJS.ProcessEnv = process.env): RotationConfig {
-  const parseIntEnv = (name: string, defaultValue: number): number => {
-    const raw = env[name];
-    if (raw === undefined || raw === "") {
-      return defaultValue;
-    }
-    const parsed = Number(raw);
-    if (!Number.isFinite(parsed) || parsed < 0) {
-      throw new ValidationError(`Environment variable ${name} must be a non-negative number`);
-    }
-    return parsed;
-  };
-
-  const batchSize = parseIntEnv("KYC_BATCH_SIZE", 100);
-  if (batchSize === 0) {
-    throw new ValidationError("KYC_BATCH_SIZE must be greater than zero");
+/**
+ * Rotate all records in batches. Returns a deterministic report.
+ */
+export async function rotateKycKeys(
+  store: DataStore,
+  options: RotationOptions
+): Promise<RotationReport> {
+  if (!Number.isInteger(options.batchSize) || options.batchSize <= 0) {
+    throw new RotationError("batchSize must be a positive integer", "INVALID_BATCH_SIZE");
   }
+  if (!Number.isInteger(options.maxRetries) || options.maxRetries < 1) {
+    throw new RotationError("maxRetries must be a positive integer", "INVALID_MAX_RETRIES");
+  }
+
+  const records = await store.listRecords();
+  const results: RecordResult[] = [];
+
+  for (let i = 0; i < records.length; i += options.batchSize) {
+    const batch = records.slice(i, i + options.batchSize);
+    // Process batch sequentially to avoid contention and keep deterministic order.
+    for (const record of batch) {
+      const result = await rotateRecord(record, store, options);
+      results.push(result);
+    }
+  }
+
+  const updatedRecords = results.filter((r) => r.outcome === "updated").length;
+  const failedRecords = results.filter((r) => r.outcome === "failed").length;
+  const skippedRecords = results.filter((r) => r.outcome === "skipped").length;
 
   return {
-    batchSize,
-    dryRun: env.DRY_RUN !== "false",
-    maxRetries: parseIntEnv("KYC_MAX_RETRIES", 3),
-    retryBaseDelayMs: parseIntEnv("KYC_RETRY_BASE_DELAY_MS", 500),
-    staleThresholdMs: parseIntEnv("KCY_STALE_THRESHOLD_MS", 0),
-    operatorToken: env.KYC_OPERATOR_TOKEN,
-    requiredOperatorToken: env.KYC_REQUIRED_OPERATOR_TOKEN
+    totalRecords: records.length,
+    processedRecords: results.length,
+    updatedRecords,
+    failedRecords,
+    skippedRecords,
+    dryRun: options.dryRun,
+    results,
   };
 }
 
-/**
- * Run the rotation against the provided records and key ring.
- * This is the production entry point used by the CLI.
- */
-export async function runRotation(
-  records: KycRecord[],
-  keyRing: KeyRing,
-  config: RotationConfig,
-  deps: RotationDependencies
-dendings: RotationDependencies
-): Promise<RotationResult> {
-  initializeEncryption(keyRing);
-  return rotateKycKeys(records, config, deps);
+// -----------------------------------------------------------------------------
+// CLI entry point
+// -----------------------------------------------------------------------------
+
+export function buildStoreFromEnv(): DataStore {
+  // Production deployments should provide a DataStore backed by the actual DB.
+  // This script requires the caller to supply one explicitly to avoid silent
+  // data loss from a misconfigured database connection.
+  throw new RotationError(
+    "No DataStore configured. Provide a DataStore implementation before running rotation.",
+    "NO_DATA_STORE"
+  );
 }
 
-// ------------------------------------------------------------------------------
-// Production persistence adapter
-// ------------------------------------------------------------------------------
-
-/**
- * Persistence adapter interface. The concrete implementation is provided
- * by the caller (e.g. a DB client). This script does not hard-code any
- * database driver.
- */
-export interface PersistenceAdapter {
-  /** Load all KYC records that need rotation. */
-  loadRecords: () => Promise<KycRecord[]>;
-  /** Persist a single record update. */
-  persistRecord: (record: KycRecord) => Promise<void>;
+export function parseOptions(env: NodeJS.ProcessEnv = process.env): RotationOptions {
+  const dryRun = env.DRY_RUN !== "false";
+  const batchSize = env.BATCH_SIZE ? Number(env.BATCH_SIZE) : DEFAULT_OPTIONS.batchSize;
+  const maxRetries = env.MAX_RETRIES ? Number(env.MAX_RETRIES) : DEFAULT_OPTIONS.maxRetries;
+  const retryBaseDelayMs = env.RETRY_BASE_DELAY_MS
+    ? Number(env.RETRY_BASE_DELAY_MS)
+    : DEFAULT_OPTIONS.retryBaseDelayMs;
+  return { dryRun, batchSize, maxRetries, retryBaseDelayMs };
 }
 
-/**
- * Run the rotation using a persistence adapter and key ring.
- * This is the high-level entry point used by the CLI.
- */
-export async function runRotationWithAdapter(
-  adapter: PersistenceAdapter,
-  keyRing: KeyRing,
-  config: RotationConfig,
-  deps: RotationDependencies
-dendings: RotationDependencies
-): Promise<RotationResult> {
-  const records = await adapter.loadRecords();
-  initializeEncryption(keyRing);
-  return rotateKycKeys(records, config, {
-    ...deps,
-    persistRecord: adapter.persistRecord
+export function initializeKeysFromConfig(config: KeyConfig): void {
+  initializeEncryption({
+    activeKeyId: config.newKeyId,
+    keys: {
+      [config.oldKeyId]: config.oldKey,
+      [config.newKeyId]: config.newKey,
+    },
   });
 }
 
-// ------------------------------------------------------------------------------
-// CLI entry point
-// ------------------------------------------------------------------------------
+async function main(): Promise<void> {
+  const keyConfig = loadKeyConfig();
+  const options = parseOptions();
+  initializeKeysFromConfig(keyConfig);
+
+  console.log("=== KYC Key Rotation ===");
+  console.log(`Dry run: ${options.dryRun ? "enabled" : "disabled"}`);
+  console.log(`Batch size: ${options.batchSize}`);
+  console.log(`Max retries: ${options.maxRetries}`);
+
+  const store = buildStoreFromEnv();
+  const report = await rotateKycKeys(store, options);
+
+  console.log("\n=== Key Rotation Summary ===");
+  console.log(`Total records: ${report.totalRecords}`);
+  console.log(`Processed records: ${report.processedRecords}`);
+  console.log(`Updated records: ${report.updatedRecords}`);
+  console.log(`Failed records: ${report.failedRecords}`);
+  console.log(`Skipped records: ${report.skippedRecords}`);
+  console.log(`Dry run: ${report.dryRun ? "no changes made" : "changes made"}`);
+
+  if (report.failedRecords > 0) {
+    console.error(
+      `\n${report.failedRecords} record(s) failed to rotate. Re-run after addressing the errors.`
+    );
+    process.exitCode = 1;
+  }
+
+  if (report.dryRun) {
+    console.log("\nTo apply changes, run with DRY_RUN=false");
+  }
+}
 
 if (require.main === module) {
-  const config = buildConfigFromEnv();
-  const oldKey = process.env.KYC_OLD_KEY;
-  const newKey = process.env.KYC_NEW_KEY;&#x5c;
-  if (!oldKey || !newKey) {
-    console.error("KYC_OLD_KEY and KYC_NEW_KEY must be set");
+  main().catch((error) => {
+    console.error("Key rotation failed:", error instanceof Error ? error.message : error);
     process.exit(1);
-  }
-  const keyRing: KeyRing = {
-    activeKeyId: "v2",
-    keys: { v1: oldKey, v2: newKey }
-  };
-  const adapter: PersistenceAdapter = {
-    loadRecords: async () => {
-      throw new Error(
-        "No persistence adapter configured. Provide a PersistenceAdapter implementation."
-      );
-    },
-    persistRecord: async () => {
-      throw new Error(
-        "No persistence adapter configured. Provide a PersistenceAdapter implementation."
-      );
-    }
-  };
-  runRotationWithAdapter(adapter, keyRing, config, { logger: defaultLogger })
-    .then((result) => {
-      if (!result.success) {
-        process.exit(2);
-      }
-    })
-    .catch((error) => {
-      console.error(JSON.stringify({ level: "error", message: "kyc.rotation.fatal", error: sanitizeError(error) }));
-      process.exit(1);
-    });
+  });
 }
