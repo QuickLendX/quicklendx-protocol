@@ -12,6 +12,7 @@
  * - Context isolation prevents bleeding between concurrent requests
  */
 import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
 import { ulid } from "ulid";
 
 interface RequestContext {
@@ -74,11 +75,107 @@ export function withCorrelationId<T>(correlationId: string, fn: () => T): T {
 }
 
 /**
+ * Exact shape of a ULID: 26 Crockford base32 characters, excluding I, L, O and
+ * U. A healthy `ulid` source always produces a value matching this pattern, so
+ * anything else is treated as a corrupted source.
+ *
+ * Note that this contract is a strict subset of what `sanitizeCorrelationId`
+ * accepts (alphanumerics, hyphens and underscores, 1–128 characters), which is
+ * what guarantees the "every generated id is log-safe" invariant below.
+ */
+const ULID_PATTERN = /^[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/**
+ * Marker prefix for degraded-mode ids, i.e. ids produced when the ULID source
+ * is unavailable or returned an invalid value.
+ *
+ * This is the observability hook for the failure boundary: operators can alert
+ * on `fb-` prefixed request ids in logs to detect a failing id source. The
+ * underlying error is deliberately *not* embedded in the id, so no untrusted or
+ * sensitive data can leak into logs through the correlation id.
+ */
+const DEGRADED_ID_PREFIX = "fb";
+
+/**
+ * Monotonic per-process counter that keeps degraded-mode ids unique even when
+ * two ids are generated within the same millisecond, when the clock is frozen,
+ * or when `Date.now()` is mocked/removed by a test or a host patch.
+ */
+let degradedSequence = 0;
+
+/**
+ * Best-effort entropy suffix for degraded-mode ids. Never throws.
+ *
+ * This value only exists to avoid collisions between separate processes; it is
+ * never used for an authorization or security decision, so the `Math.random`
+ * fallback (used when the crypto source itself is unavailable) is acceptable.
+ */
+function degradedEntropy(): string {
+  try {
+    return randomUUID().replace(/-/g, "");
+  } catch {
+    return Math.random().toString(36).slice(2).padEnd(8, "0");
+  }
+}
+
+/** Advance and return the degraded-mode sequence, never throwing. */
+function nextDegradedSequence(): number {
+  degradedSequence =
+    degradedSequence >= Number.MAX_SAFE_INTEGER ? 1 : degradedSequence + 1;
+  return degradedSequence;
+}
+
+/**
+ * Build the fallback correlation id used when the ULID source fails.
+ *
+ * Invariants:
+ * - Never throws.
+ * - Always accepted by `sanitizeCorrelationId` (lowercase alphanumerics and
+ *   hyphens, well under the 128 character ceiling), so it can be used anywhere
+ *   a ULID can — response headers, outbound RPC headers, audit entries.
+ * - Unique per process: the monotonic sequence guarantees uniqueness even if
+ *   `Date.now()` is frozen, and the entropy suffix separates processes.
+ */
+function generateDegradedCorrelationId(): string {
+  const sequence = nextDegradedSequence().toString(36);
+  try {
+    return `${DEGRADED_ID_PREFIX}-${Date.now().toString(36)}-${sequence}-${degradedEntropy()}`;
+  } catch {
+    // `Date.now` is missing or throwing; the monotonic sequence on its own is
+    // still a unique, log-safe identifier.
+    return `${DEGRADED_ID_PREFIX}-${sequence}`;
+  }
+}
+
+/**
  * Generate a new ULID-based correlation ID.
- * ULIDs lexicographically sortable and URL-safe.
+ * ULIDs are lexicographically sortable and URL-safe.
+ *
+ * Failure-boundary guarantees:
+ * - Never throws: callers on the request path always receive an id, so a broken
+ *   id source can never turn into a 5xx or an aborted request.
+ * - Deterministic: the result is always a non-empty string that
+ *   `sanitizeCorrelationId` accepts — a canonical ULID when the source is
+ *   healthy, an `fb-…` degraded id otherwise. It never returns a partial,
+ *   empty, or unvalidated value.
+ * - Taint resistance: the source output is validated against the ULID shape
+ *   before use, so a corrupted or patched source cannot smuggle newlines,
+ *   control characters, or other log-forging content into logs.
+ * - Duplicates: every call returns a distinct id, including repeated failures
+ *   and concurrent calls.
+ * - Diagnosability: degraded ids carry the `fb-` prefix, so a failing id source
+ *   is visible and alertable from logs without exposing the underlying error.
  */
 export function generateCorrelationId(): string {
-  return ulid();
+  try {
+    const candidate = ulid();
+    if (typeof candidate === "string" && ULID_PATTERN.test(candidate)) {
+      return candidate;
+    }
+  } catch {
+    // A failure in the id source must never surface on the request path.
+  }
+  return generateDegradedCorrelationId();
 }
 
 /**
