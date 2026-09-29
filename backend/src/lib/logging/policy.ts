@@ -18,7 +18,7 @@
  */
 
 import { createHash } from "crypto";
-import { readFileSync } from "fs";
+import { readFileSync, promises as fsPromises } from "fs";
 import { join } from "path";
 import { z } from "zod";
 
@@ -51,44 +51,102 @@ let loadedPolicy: RedactionPolicy;
 let fieldTierMap: Record<string, FieldTier>;
 let policyLoadError: Error | null = null;
 
-function loadPolicy(): void {
-  const policyPath = join(__dirname, "redaction-policy.json");
-  const policyContent = readFileSync(policyPath, "utf-8");
-  const parsedPolicy = JSON.parse(policyContent);
-  loadedPolicy = RedactionPolicySchema.parse(parsedPolicy);
-  
-  // Build the field tier map
-  // A null prototype keeps unlisted names such as "constructor" and
-  // "toString" from resolving through Object.prototype.
-  fieldTierMap = Object.create(null) as Record<string, FieldTier>;
-  for (const field of loadedPolicy.public) {
-    fieldTierMap[field] = FieldTier.PUBLIC;
-  }
-  for (const field of loadedPolicy.private) {
-    fieldTierMap[field] = FieldTier.PRIVATE;
-  }
-  for (const field of loadedPolicy.secret) {
-    fieldTierMap[field] = FieldTier.SECRET;
-  }
+export const PolicyState = {
+  UNINITIALIZED: "UNINITIALIZED",
+  LOADING: "LOADING",
+  LOADED: "LOADED",
+  ERROR: "ERROR",
+  RETRYING: "RETRYING",
+  STALE: "STALE",
+  PERMISSION_DENIED: "PERMISSION_DENIED"
+} as const;
+
+export type PolicyState = (typeof PolicyState)[keyof typeof PolicyState];
+
+let currentState: PolicyState = PolicyState.UNINITIALIZED;
+let activePromise: Promise<void> | null = null;
+let retryCount = 0;
+const MAX_RETRIES = 3;
+
+export function getPolicyState(): PolicyState {
+  return currentState;
 }
 
-/**
- * Initialize policy on module load.
- *
- * Invariant: after this call, `loadedPolicy` and `fieldTierMap` are always
- * defined. If the on-disk policy cannot be read or fails schema validation,
- * we fall back to a deny-by-default empty policy (every field classifies as
- * PRIVATE) and record the failure so `getPolicyFields` can surface it
- * deterministically instead of throwing at import time.
- */
+export async function loadPolicy(): Promise<void> {
+  if (
+    currentState === PolicyState.LOADING ||
+    currentState === PolicyState.RETRYING
+  ) {
+    if (activePromise) return activePromise;
+  }
+
+  const doLoad = async (attempt: number): Promise<void> => {
+    try {
+      const policyPath = join(__dirname, "redaction-policy.json");
+      const policyContent = await fsPromises.readFile(policyPath, "utf-8");
+      const parsedPolicy = JSON.parse(policyContent);
+      const newLoadedPolicy = RedactionPolicySchema.parse(parsedPolicy);
+      
+      const newFieldTierMap = Object.create(null) as Record<string, FieldTier>;
+      for (const field of newLoadedPolicy.public) newFieldTierMap[field] = FieldTier.PUBLIC;
+      for (const field of newLoadedPolicy.private) newFieldTierMap[field] = FieldTier.PRIVATE;
+      for (const field of newLoadedPolicy.secret) newFieldTierMap[field] = FieldTier.SECRET;
+
+      loadedPolicy = newLoadedPolicy;
+      fieldTierMap = newFieldTierMap;
+      policyLoadError = null;
+      currentState = PolicyState.LOADED;
+      retryCount = 0;
+    } catch (err: any) {
+      if (err.code === "EACCES" || err.code === "EPERM") {
+        currentState = currentState === PolicyState.LOADED || currentState === PolicyState.STALE ? PolicyState.STALE : PolicyState.PERMISSION_DENIED;
+        policyLoadError = err;
+        throw err;
+      }
+      
+      if (attempt < MAX_RETRIES) {
+        currentState = PolicyState.RETRYING;
+        await new Promise(res => setTimeout(res, 100 * Math.pow(2, attempt)));
+        return doLoad(attempt + 1);
+      } else {
+        currentState = currentState === PolicyState.LOADED || currentState === PolicyState.STALE ? PolicyState.STALE : PolicyState.ERROR;
+        policyLoadError = err instanceof Error ? err : new Error(String(err));
+        throw err;
+      }
+    }
+  };
+
+  currentState = currentState === PolicyState.LOADED || currentState === PolicyState.STALE ? PolicyState.STALE : PolicyState.LOADING;
+  activePromise = doLoad(0).finally(() => {
+    activePromise = null;
+  });
+
+  return activePromise;
+}
+
 function initialisePolicy(): void {
   try {
-    loadPolicy();
+    const policyPath = join(__dirname, "redaction-policy.json");
+    const policyContent = readFileSync(policyPath, "utf-8");
+    const parsedPolicy = JSON.parse(policyContent);
+    loadedPolicy = RedactionPolicySchema.parse(parsedPolicy);
+    
+    fieldTierMap = Object.create(null) as Record<string, FieldTier>;
+    for (const field of loadedPolicy.public) fieldTierMap[field] = FieldTier.PUBLIC;
+    for (const field of loadedPolicy.private) fieldTierMap[field] = FieldTier.PRIVATE;
+    for (const field of loadedPolicy.secret) fieldTierMap[field] = FieldTier.SECRET;
+    
+    currentState = PolicyState.LOADED;
     policyLoadError = null;
-  } catch (err) {
+  } catch (err: any) {
     policyLoadError = err instanceof Error ? err : new Error(String(err));
     loadedPolicy = { public: [], private: [], secret: [] };
     fieldTierMap = {};
+    if (err.code === "EACCES" || err.code === "EPERM") {
+      currentState = PolicyState.PERMISSION_DENIED;
+    } else {
+      currentState = PolicyState.ERROR;
+    }
   }
 }
 
