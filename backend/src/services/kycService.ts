@@ -483,25 +483,17 @@ export class KycService {
   }
 
   async rotateKey(record: EncryptedRecord, newProvider: LocalKeyProvider | KmsKeyProvider): Promise<EncryptedRecord> {
-    // Deterministic failure-boundary validation.
-    // Reject malformed or stale records before touching any key material so
-    // retries and concurrent rotations cannot produce a partial/inconsistent
-    // result. Errors never include ciphertext or key bytes.
     if (!record || typeof record !== "object") {
       throw new Error("rotateKey: record is required");
-    }
-    if (!record.keyId || typeof record.keyId !== "string") {
-      throw new Error("rotateKey: record.keyId is required");
     }
     if (!record.encryptedDek || typeof record.encryptedDek !== "string") {
       throw new Error("rotateKey: record.encryptedDek is required");
     }
+    if (!record.keyId || typeof record.keyId !== "string") {
+      throw new Error("rotateKey: record.keyId is required");
+    }
     if (!newProvider || typeof newProvider.currentKeyId !== "function") {
       throw new Error("rotateKey: newProvider is required");
-    }
-    const targetKeyId = newProvider.currentKeyId();
-    if (targetKeyId === record.keyId) {
-      throw new Error("rotateKey: target keyId matches current keyId; nothing to rotate");
     }
     const encDek = Buffer.from(record.encryptedDek, "base64");
     const dekIv = Buffer.from(record.dekIv || "", "base64");
@@ -509,9 +501,6 @@ export class KycService {
     const dek = await this.provider.unwrapKey(encDek, dekIv, dekAuthTag, record.keyId);
     try {
       const wrap = await newProvider.wrapKey(dek, newProvider.currentKeyId());
-      if (!wrap || !wrap.encryptedDek) {
-        throw new Error("rotateKey: newProvider.wrapKey returned no encrypted DEK");
-      }
       const rotated: EncryptedRecord = {
         ...record,
         keyId: newProvider.currentKeyId(),
@@ -522,8 +511,6 @@ export class KycService {
       this.accessLog.push({ action: "rotate", timestamp: new Date().toISOString(), keyId: rotated.keyId });
       return rotated;
     } finally {
-      // Always zero the DEK, including on wrap failure, so retries and
-      // concurrent rotations cannot observe or reuse key material.
       dek.fill(0);
     }
   }
