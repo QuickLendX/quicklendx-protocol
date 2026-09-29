@@ -251,7 +251,39 @@ export async function rotateApiKeySigningSecret(req: Request, res: Response): Pr
     const { actor, grace_window_hours } = validation.data;
     const ipAddress = (req.ip || req.socket.remoteAddress) as string | undefined;
 
-    const key = await apiKeyService.rotateSigningSecret(id, actor, ipAddress, grace_window_hours);
+    // Failure-boundary guards
+    const existing = await apiKeyService.getApiKeyById(id);
+    if (!existing) {
+      res.status(404).json({
+        error: { message: 'API key not found', code: 'KEY_NOT_FOUND' },
+      });
+      return;
+    }
+    if (existing.revoked) {
+      res.status(403).json({
+        error: { message: 'API key is revoked', code: 'KEY_REVOKED' },
+      });
+      return;
+    }
+    if (existing.prev_secret_expires_at && new Date(existing.prev_secret_expires_at) > new Date()) {
+      res.status(409).json({
+        error: { message: 'Previous signing secret still active', code: 'GRACE_WINDOW_CONFLICT' },
+      });
+      return;
+    }
+
+    let key;
+    try {
+      key = await apiKeyService.rotateSigningSecret(id, actor, ipAddress, grace_window_hours);
+    } catch (svcErr: any) {
+      const isDbError = svcErr.message?.toLowerCase().includes('db') || svcErr.message?.toLowerCase().includes('database') || svcErr.message?.toLowerCase().includes('constraint');
+      const status = isDbError ? 500 : 400;
+      const code = isDbError ? 'ROTATE_SECRET_DB_ERROR' : 'ROTATE_SECRET_ERROR';
+      res.status(status).json({
+        error: { message: svcErr.message || 'Failed to rotate API key signing secret', code },
+      });
+      return;
+    }
 
     res.json({
       data: {
@@ -267,11 +299,11 @@ export async function rotateApiKeySigningSecret(req: Request, res: Response): Pr
       },
     });
   } catch (error: any) {
-    console.error('[RotateApiKeySigningSecret] Error:', error);
-    res.status(400).json({
+    console.error('[RotateApiKeySigningSecret] Unexpected error:', error);
+    res.status(500).json({
       error: {
-        message: error.message || 'Failed to rotate API key signing secret',
-        code: 'ROTATE_SECRET_ERROR',
+        message: error.message || 'Internal server error',
+        code: 'UNEXPECTED_ERROR',
       },
     });
   }
