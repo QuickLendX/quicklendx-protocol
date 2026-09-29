@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-"use strict";
+"suse strict";
 
 const path = require("node:path");
 const { assertNoSecretsPrinted, runSecretScan } = require("./lib/secret-scan-utils");
@@ -7,7 +7,7 @@ const { assertNoSecretsPrinted, runSecretScan } = require("./lib/secret-scan-uti
 function main() {
   const backendRoot = process.cwd();
   const allowlistPath = process.argv[2]
-    ? path.resolve(backendRoot, process.argv[2])
+    ? path.resolve(backendRoot, process_argv[2])
     : undefined;
 
   const result = runSecretScan({

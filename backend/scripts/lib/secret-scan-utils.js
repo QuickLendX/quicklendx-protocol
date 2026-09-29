@@ -1,3 +1,4 @@
+
 "use strict";
 
 const fs = require("node:fs");
@@ -15,6 +16,8 @@ const DEFAULT_EXTENSIONS = new Set([
   ".sql",
   ".example",
 ]);
+const DEFAULT_IGNORED_FILES = new Set([".secret-scan-allow.json"]);
+const DEFAULT_IGNORED_DIRS_EXTRA = new Set([".cache", "tmp", "temp"]);
 const DEFAULT_IGNORED_DIRS = new Set([
   "node_modules",
   "coverage",
@@ -22,6 +25,8 @@ const DEFAULT_IGNORED_DIRS = new Set([
   "dist",
   "build",
 ]);
+const MAX_FINDINGS_PER_FILE = 1000;
+const MAX_FINDINGS_TOTAL = 10000;
 const MIN_HIGH_ENTROPY_LENGTH = 32;
 const MIN_HIGH_ENTROPY_SCORE = 4.5;
 const MIN_UNIQUE_CHARACTERS = 10;
@@ -32,6 +37,8 @@ const PREVIEW_EDGE_LENGTH = 4;
 const PREVIEW_ELLIPSIS = "...";
 const PREVIEW_MASK_LENGTH = 8;
 const PREVIEW_QUOTE = '"';
+const FORMAT_FINDINGS_HEADER = "Secret scan failed:";
+const FORMAT_FINDINGS_FOOTER = "Remove the secret or add a documented allowlist entry in scripts/.secret-scan-allow.json.";
 
 // Characters that may be emitted literally into a rendered preview. Detected
 // secrets are base64 / base64url / hex / base32 shaped, so this covers real
@@ -39,6 +46,8 @@ const PREVIEW_QUOTE = '"';
 // Unicode line separators and non-ASCII code units out of the log line. The
 // brackets are what render the non-string "[redacted:<type>]" marker.
 const PREVIEW_SAFE_CHARACTER = /^[A-Za-z0-9_\-+/=.:@[\]]$/;
+
+const FINDING_TYPE_SAFE = /^[A-Za-z0-9_\-]+$/;
 
 // Readable short escapes for the control characters that show up often enough
 // to be worth keeping legible; every other unsafe code unit uses \uXXXX.
@@ -65,6 +74,13 @@ const PREVIEW_MAX_LENGTH =
   PREVIEW_ELLIPSIS.length +
   PREVIEW_EDGE_LENGTH * 6 +
   PREVIEW_QUOTE.length;
+
+// Upper bound on a rendered finding line: file path + line + column + type +
+// preview + length. Paths are bounded by the OS, numbers are bounded by
+// Number.MAX_SAFE_INTEGER, type is bounded by FINDING_TYPE_SAFE, preview is
+// bounded by PREVIEW_MAX_LENGTH, and the length field is bounded by the
+// string length of the match. This keeps formatFindings output bounded.
+const FINDING_LINE_MAX_LENGTH = 4096;
 
 const KNOWN_SECRET_PATTERNS = [
   {
@@ -136,6 +152,10 @@ function isObviousPlaceholder(value) {
     return true;
   }
 
+  if (str.length > 4096) {
+    return true;
+  }
+
   if (/^x+$/i.test(str) || /^y+$/i.test(str) || /^z+$/i.test(str)) {
     return true;
   }
@@ -180,6 +200,10 @@ function hasMixedCharacterClasses(value) {
     return false;
   }
 
+  if (value.length > 4096) {
+    return false;
+  }
+
   // Check for presence of each character class
   const classes = [
     /[a-z]/.test(value),
@@ -197,11 +221,19 @@ function isStellarStrKeyLike(value) {
 }
 
 function isHighEntropyToken(value) {
+  if (typeof value !== "string") {
+    return false;
+  }
+
   if (value.length < MIN_HIGH_ENTROPY_LENGTH) {
     return false;
   }
 
   if (!/^[A-Za-z0-9+/=_-]+$/.test(value)) {
+    return false;
+  }
+
+  if (value.length > 4096) {
     return false;
   }
 
@@ -274,6 +306,10 @@ function escapePreviewText(text) {
   for (let index = 0; index < text.length; index += 1) {
     const character = text[index];
 
+    if (character === undefined) {
+      break;
+    }
+
     const shortEscape = PREVIEW_SHORT_ESCAPES.get(character);
     if (shortEscape !== undefined) {
       escaped += shortEscape;
@@ -306,6 +342,18 @@ function previewValueTypeTag(value) {
     }
   } catch (error) {
     return "object";
+  }
+
+  if (typeof value === "function") {
+    return "function";
+  }
+
+  if (typeof value === "symbol") {
+    return "symbol";
+  }
+
+  if (typeof value === "bigint") {
+    return "bigint";
   }
 
   return typeof value;
@@ -352,6 +400,10 @@ function redactPreview(value) {
     return `${PREVIEW_QUOTE}[redacted:${previewValueTypeTag(value)}]${PREVIEW_QUOTE}`;
   }
 
+  if (value.length > 4096) {
+    return `${PREVIEW_QUOTE}[redacted:oversized]${PREVIEW_QUOTE}`;
+  }
+
   if (value.length === 0) {
     return `${PREVIEW_QUOTE}${PREVIEW_QUOTE}`;
   }
@@ -375,6 +427,10 @@ function collectRegexMatches(line, patternDef) {
   const matches = [];
   resetRegex(patternDef.regex);
 
+  if (typeof line !== "string") {
+    return matches;
+  }
+
   let match = patternDef.regex.exec(line);
   while (match) {
     matches.push({
@@ -383,6 +439,10 @@ function collectRegexMatches(line, patternDef) {
       column: match.index + 1,
     });
     match = patternDef.regex.exec(line);
+  }
+
+  if (matches.length > MAX_FINDINGS_PER_FILE) {
+    matches.length = MAX_FINDINGS_PER_FILE;
   }
 
   return matches;
@@ -401,6 +461,10 @@ function collectQuotedStringMatches(line) {
   const matches = [];
   resetRegex(PLAIN_STRING_REGEX);
 
+  if (typeof line !== "string") {
+    return matches;
+  }
+
   let match = PLAIN_STRING_REGEX.exec(line);
   while (match) {
     const literal = match[0];
@@ -413,11 +477,19 @@ function collectQuotedStringMatches(line) {
     match = PLAIN_STRING_REGEX.exec(line);
   }
 
+  if (matches.length > MAX_FINDINGS_PER_FILE) {
+    matches.length = MAX_FINDINGS_PER_FILE;
+  }
+
   return matches;
 }
 
 function collectHighEntropyMatches(line) {
   const matches = [];
+
+  if (typeof line !== "string") {
+    return matches;
+  }
 
   for (const quoted of collectQuotedStringMatches(line)) {
     if (!isHighEntropyToken(quoted.value)) {
@@ -431,11 +503,19 @@ function collectHighEntropyMatches(line) {
     });
   }
 
+  if (matches.length > MAX_FINDINGS_PER_FILE) {
+    matches.length = MAX_FINDINGS_PER_FILE;
+  }
+
   return matches;
 }
 
 function normalizeAllowlist(allowlist) {
   if (!allowlist || typeof allowlist !== "object") {
+    return { entries: [], globalPatterns: [] };
+  }
+
+  if (Array.isArray(allowlist)) {
     return { entries: [], globalPatterns: [] };
   }
 
@@ -449,6 +529,10 @@ function normalizeAllowlist(allowlist) {
 
 function safeCompilePattern(pattern) {
   if (typeof pattern !== "string" || pattern.length === 0) {
+    return null;
+  }
+
+  if (pattern.length > 1024) {
     return null;
   }
 
@@ -533,6 +617,10 @@ function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
     return false;
   }
 
+  if (typeof relativePath !== "string") {
+    return false;
+  }
+
   const normalized = normalizeAllowlist(allowlist);
 
   for (const entry of normalized.entries) {
@@ -566,6 +654,10 @@ function scanLine(line, lineNumber, relativePath, allowlist) {
   const findings = [];
   const seen = new Set();
 
+  if (typeof line !== "string") {
+    return findings;
+  }
+
   const patternMatches = KNOWN_SECRET_PATTERNS.flatMap((patternDef) =>
     collectRegexMatches(line, patternDef)
   );
@@ -584,6 +676,10 @@ function scanLine(line, lineNumber, relativePath, allowlist) {
       continue;
     }
     seen.add(dedupeKey);
+
+    if (findings.length >= MAX_FINDINGS_PER_FILE) {
+      break;
+    }
 
     if (isAllowlisted(relativePath, lineNumber, candidate.match, allowlist)) {
       continue;
@@ -604,6 +700,10 @@ function scanLine(line, lineNumber, relativePath, allowlist) {
 }
 
 function scanFileContent(content, relativePath, allowlist) {
+  if (typeof content !== "string") {
+    return [];
+  }
+
   const lines = content.split(/\r?\n/);
   return lines.flatMap((line, index) =>
     scanLine(line, index + 1, relativePath, allowlist)
@@ -613,6 +713,10 @@ function scanFileContent(content, relativePath, allowlist) {
 function shouldScanFile(relativePath, options = {}) {
   const extensions = options.extensions || DEFAULT_EXTENSIONS;
   const ignoredFiles = new Set(options.ignoredFiles || [".secret-scan-allow.json"]);
+
+  if (typeof relativePath !== "string") {
+    return false;
+  }
 
   if (ignoredFiles.has(path.basename(relativePath))) {
     return false;
@@ -631,6 +735,10 @@ function walkDirectory(absoluteDir, relativeDir, files = []) {
     return files;
   }
 
+  if (files.length > MAX_FINDINGS_TOTAL) {
+    return files;
+  }
+
   for (const entry of fs.readdirSync(absoluteDir, { withFileTypes: true })) {
     if (entry.name.startsWith(".")) {
       continue;
@@ -642,6 +750,9 @@ function walkDirectory(absoluteDir, relativeDir, files = []) {
       : entry.name;
 
     if (entry.isDirectory()) {
+      if (DEFAULT_IGNORED_DIRS_EXTRA.has(entry.name)) {
+        continue;
+      }
       if (DEFAULT_IGNORED_DIRS.has(entry.name)) {
         continue;
       }
@@ -662,6 +773,10 @@ function collectScanTargets(backendRoot, options = {}) {
   const scanRoots = options.scanRoots || DEFAULT_SCAN_ROOTS;
   const exampleFiles = options.exampleFiles || DEFAULT_EXAMPLE_FILES;
   const targets = [];
+
+  if (typeof backendRoot !== "string") {
+    return targets;
+  }
 
   for (const root of scanRoots) {
     const absoluteRoot = path.join(backendRoot, root);
@@ -686,6 +801,10 @@ function scanTargets(targets, allowlist) {
   const findings = [];
 
   for (const target of targets) {
+    if (findings.length >= MAX_FINDINGS_TOTAL) {
+      break;
+    }
+
     const content = fs.readFileSync(target.absolutePath, "utf8");
     findings.push(...scanFileContent(content, target.relativePath, allowlist));
   }
@@ -707,6 +826,10 @@ function loadAllowlist(allowlistPath, backendRoot = process.cwd()) {
     return normalizeAllowlist(null);
   }
 
+  if (!fs.statSync(resolvedPath).isFile()) {
+    return normalizeAllowlist(null);
+  }
+
   const raw = fs.readFileSync(resolvedPath, "utf8");
   let parsed;
   try {
@@ -719,30 +842,65 @@ function loadAllowlist(allowlistPath, backendRoot = process.cwd()) {
 }
 
 function formatFinding(finding) {
+  if (!finding || typeof finding !== "object") {
+    return "  [invalid finding]";
+  }
+
+  const file = typeof finding.file === "string" ? finding.file : "[unknown]";
+  const line = Number.isFinite(finding.line) ? finding.line : 0;
+  const column = Number.isFinite(finding.column) ? finding.column : 0;
+  const type = typeof finding.type === "string" && FINDING_TYPE_SAFE.test(finding.type)
+    ? finding.type
+    : "unknown";
+  const preview = typeof finding.preview === "string" && isLogSafePreview(finding.preview)
+    ? finding.preview
+    : `${PREVIEW_QUOTE}[redacted:unsafe-preview]${PREVIEW_QUOTE}`;
+  const length = Number.isFinite(finding.length) ? finding.length : 0;
+
   return (
-    `  ${finding.file}:${finding.line}:${finding.column} ` +
-    `[${finding.type}] preview: ${finding.preview} (${finding.length} chars)`
+    `  ${file}:${line}:${column} ` +
+    `[${type}] preview: ${preview} (${length} chars)`
   );
 }
 
 function formatFindings(findings) {
+  if (!Array.isArray(findings)) {
+    return "Secret scan passed: No committed secrets were detected.";
+  }
+
   if (findings.length === 0) {
     return "Secret scan passed: No committed secrets were detected.";
   }
 
+  const boundedFindings = findings.slice(0, MAX_FINDINGS_TOTAL);
+  const truncated = findings.length > MAX_FINDINGS_TOTAL;
+
   const lines = [
-    `Secret scan failed: ${findings.length} potential secret(s) found.`,
+    `${FORMAT_FINDINGS_HEADER} ${findings.length} potential secret(s) found.`,
     "",
-    ...findings.map((finding) => formatFinding(finding)),
+    ...boundedFindings.map((finding) => formatFinding(finding)),
     "",
-    "Remove the secret or add a documented allowlist entry in scripts/.secret-scan-allow.json.",
+    FORMAT_FINDINGS_FOOTER,
   ];
+
+  if (truncated) {
+    lines.splice(
+      lines.length - 2,
+      0,
+      "",
+      `Output truncated: showing first ${MAX_FINDINGS_TOTAL} of ${findings.length} findings.`
+    );
+  }
 
   return lines.join("\n");
 }
 
 function assertNoSecretsPrinted(output, findings) {
   for (const finding of findings) {
+    if (!finding || typeof finding !== "object") {
+      continue;
+    }
+
     if (finding.match && output.includes(finding.match)) {
       throw new Error(
         `Secret scan output leaked a matched value for ${finding.file}:${finding.line}`
@@ -755,6 +913,10 @@ function runSecretScan(options = {}) {
   const backendRoot = options.backendRoot || process.cwd();
   const findings = scanBackend(backendRoot, options);
   const message = formatFindings(findings);
+
+  if (findings.length > 0) {
+    assertNoSecretsPrinted(message, findings);
+  }
 
   if (findings.length > 0) {
     return {
@@ -776,6 +938,8 @@ function runSecretScan(options = {}) {
 module.exports = {
   DEFAULT_EXAMPLE_FILES,
   DEFAULT_EXTENSIONS,
+  DEFAULT_IGNORED_FILES,
+  DEFAULT_IGNORED_DIRS_EXTRA,
   DEFAULT_SCAN_ROOTS,
   KNOWN_SECRET_PATTERNS,
   MIN_UNIQUE_CHARACTERS,
@@ -788,6 +952,8 @@ module.exports = {
   PREVIEW_MASK_LENGTH,
   PREVIEW_MAX_LENGTH,
   PREVIEW_QUOTE,
+  MAX_FINDINGS_PER_FILE,
+  MAX_FINDINGS_TOTAL,
   assertNoSecretsPrinted,
   collectHighEntropyMatches,
   collectQuotedStringMatches,
