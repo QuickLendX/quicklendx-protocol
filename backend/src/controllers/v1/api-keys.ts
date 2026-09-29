@@ -66,8 +66,54 @@ function mapApiKeyErrorToResponse(error: any): { status: number; code: string; m
 }
 
 /**
+ * Map an error thrown during creation to a deterministic HTTP response.
+ *
+ * Invariants:
+ *  - Validation errors (`ApiKeyError` with code `VALIDATION`) -> 400
+ *  - Domain conflicts (e.g. duplicate name/prefix) -> 409
+ *  - Not found (e.g. unknown scope lookup) -> 404
+ *  - Anything else -> 500
+ *
+ * The response body always includes a stable `code` so clients can branch
+ * without parsing free-text messages. Sensitive data is never echoed.
+ */
+function mapCreateApiKeyErrorToResponse(error: any): { status: number; code: string; message: string } {
+  if (error instanceof ApiKeyNotFoundError) {
+    return { status: 404, code: ApiKeyErrorCode.NOT_FOUND, message: 'Referenced resource not found' };
+  }
+  if (error instanceof ApiKeyRotationConflictError) {
+    return { status: 409, code: ApiKeyErrorCode.ROTATION_CONFLICT, message: error.message };
+  }
+  if (error instanceof ApiKeyError) {
+    // ApiKeyError carries a stable `code` that distinguishes validation
+    // failures from domain conflicts. We map the latter to 409 so clients
+    // can retry with a different name without losing the request.
+    if (error.code === ApiKeyErrorCode.VALIDATION) {
+      return { status: 400, code: error.code, message: error.message };
+    }
+    return { status: 409, code: error.code, message: error.message };
+  }
+  return { status: 500, code: ApiKeyErrorCode.INTERNAL, message: 'Failed to create API key' };
+}
+
+/**
  * Create a new API key
  * POST /api/v1/keys
+ *
+ * Failure boundaries (deterministic):
+ *  - 400 if the request body is invalid (missing/empty `name`, empty
+ *    `scopes`, malformed `expires_at`, or invalid JSON).
+ *  - 404 if a referenced resource (e.g. unknown scope) does not exist.
+ *  - 409 if the request conflicts with existing state (e.g. duplicate
+ *    name or prefix).
+ *  - 500 for unexpected internal failures (e.g. database errors).
+*
+ * Invariants:
+ *  - On any failure no key is persisted and no partial state is
+ *    committed (the service must be transactional).
+ *  - The plaintext key is returned exactly once and never logged.
+ *  - Retries are safe: a conflicting retry yields 409 without creating
+ *    a second key.
  */
 export async function createApiKey(req: Request, res: Response): Promise<void> {
   try {
@@ -77,7 +123,7 @@ export async function createApiKey(req: Request, res: Response): Promise<void> {
       res.status(400).json({
         error: {
           message: 'Invalid request body',
-          code: 'VALIDATION_ERROR',
+          code: ApiKeyErrorCode.VALIDATION,
           details: validation.error.errors,
         },
       });
@@ -85,6 +131,22 @@ export async function createApiKey(req: Request, res: Response): Promise<void> {
     }
 
     const { name, scopes, expires_at } = validation.data;
+
+    // Reject unknown scopes before touching the database. This keeps the
+    // failure boundary deterministic and avoids partial state.
+    const unknownScopes = scopes.filter(
+      (s) => !(Object.prototype.hasOwnProperty.call(SCOPE_REGISTRY, s))
+    );
+    if (unknownScopes.length > 0) {
+      res.status(400).json({
+        error: {
+          message: 'Unknown scope(s) requested',
+          code: ApiKeyErrorCode.VALIDATION,
+          details: unknownScopes.map((scope) => ({ path: ['scopes'], message: `Unknown scope: ${scope}` })),
+        },
+      });
+      return;
+    }
 
     // Get actor from API key context or request body
     const created_by = req.apiKey?.created_by || req.body.created_by || 'system';
@@ -116,11 +178,19 @@ export async function createApiKey(req: Request, res: Response): Promise<void> {
       },
     });
   } catch (error: any) {
-    console.error('[CreateApiKey] Error:', error);
-    res.status(400).json({
+    const mapped = mapCreateApiKeyErrorToResponse(error);
+    // Log at an appropriate level. 5xx errors are unexpected and warrant
+    // a full stack trace; 4xx errors are expected and are logged at warn.
+    // We never log the request body or key material.
+    if (mapped.status >= 500) {
+      console.error('[CreateApiKey] Unexpected error:', error);
+    } else {
+      console.warn(`[CreateApiKey] Rejected creation: ${mapped.code}`);
+    }
+    res.status(mapped.status).json({
       error: {
-        message: error.message || 'Failed to create API key',
-        code: 'CREATE_KEY_ERROR',
+        message: mapped.message,
+        code: mapped.code,
       },
     });
   }
@@ -431,17 +501,19 @@ export async function getKeyAuditLogs(req: Request, res: Response): Promise<void
  * Get available scopes
  * GET /api/v1/keys/scopes
  */
-export async function getScopes(req: Request, res: Response): Promise<void> {
+export async function getAvailableScopes(req: Request, res: Response): Promise<void> {
   try {
     res.json({
-      data: SCOPE_REGISTRY,
-      count: SCOPE_REGISTRY.length,
+      data: Object.keys(SCOPE_REGISTRY).map((scope) => ({
+        scope,
+        description: (SCOPE_REGISTRY[scope] as any)?.description,
+      })),
     });
   } catch (error: any) {
-    console.error('[GetScopes] Error:', error);
+    console.error('[GetAvailableScopes] Error:', error);
     res.status(500).json({
       error: {
-        message: 'Failed to get scopes',
+        message: 'Failed to get available scopes',
         code: 'GET_SCOPES_ERROR',
       },
     });
