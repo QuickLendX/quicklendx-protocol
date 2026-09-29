@@ -51,9 +51,9 @@ export const invoiceStore = {
       JSON.stringify(invoice.metadata || {}),
       invoice.created_at,
       invoice.updated_at,
-      invoice.contract_version,
-      invoice.event_schema_version,
-      invoice.indexed_at
+      invoice.contract_version ?? 1,
+      invoice.event_schema_version ?? 1,
+      invoice.indexed_at ?? null
     );
   },
 
@@ -72,12 +72,12 @@ function mapRowToInvoice(row: any): Invoice {
     status: row.status as InvoiceStatus,
     description: row.description,
     category: row.category as any,
-    tags: JSON.parse(row.tags),
-    metadata: JSON.parse(row.metadata),
+    tags: JSON.parse(row.tags || '[]'),
+    metadata: JSON.parse(row.metadata || '{}'),
     created_at: row.created_at,
     updated_at: row.updated_at,
-    contract_version: row.contract_version,
-    event_schema_version: row.event_schema_version,
-    indexed_at: row.indexed_at,
+    contract_version: row.contract_version ?? 1,
+    event_schema_version: row.event_schema_version ?? 1,
+    indexed_at: row.indexed_at ?? null,
   };
 }

@@ -115,6 +115,29 @@ fn test_confirm_one_second_past_deadline_expires() {
     assert!(client.get_pending_treasury_rotation().is_none());
 }
 
+/// Confirming before the minimum delay fails with `RotationTimelockNotElapsed`,
+/// and keeps the pending request active.
+#[test]
+fn test_confirm_before_min_delay_fails() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, _admin) = setup(&env);
+    let old_treasury = Address::generate(&env);
+    let new_treasury = Address::generate(&env);
+
+    client.configure_treasury(&old_treasury);
+    let req = client.initiate_treasury_rotation(&new_treasury);
+
+    // Set time to just before the min delay elapses.
+    env.ledger().set_timestamp(req.initiated_at + MIN_ROTATION_DELAY_SECONDS - 1);
+    let result = client.try_confirm_treasury_rotation(&new_treasury);
+    assert!(result.is_err(), "confirm before min delay must fail");
+
+    // Old treasury still in effect; pending request is NOT cleared.
+    assert_eq!(client.get_treasury_address().unwrap(), old_treasury);
+    assert!(client.get_pending_treasury_rotation().is_some());
+}
+
 // ============================================================================
 // Pending / none-pending error matrix
 // ============================================================================

@@ -85,6 +85,8 @@ below is stable. **Do not renumber any variant marked "public ABI" in the source
 | 1407  | `MaxActiveBidsPerInvestorExceeded` | `MAX_ACT`  | Active bid count for the investor hit the per-investor cap. |
 | 1408  | `MaxInvoicesPerBusinessExceeded` | `MAX_INV`  | Business hit the configured active-invoice cap. |
 | 1409  | `InvalidBidTtl` | `INV_TTL`  | Bid TTL is zero or outside the `1..=30` day range. |
+| 1410  | `InsufficientKYCTier` | `TIER_LOW` | Investor KYC tier is below the required minimum. |
+| 1411  | `PerInvestorPositionCapExceeded` | `POS_CAP` | Bid amount exceeds the invoice `per_investor_position_cap`. |
 
 ### Rating — 1500–1503
 

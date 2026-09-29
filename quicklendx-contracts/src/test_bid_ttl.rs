@@ -85,6 +85,7 @@ fn funded_setup(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
     (business, investor, invoice_id)
@@ -613,13 +614,32 @@ fn test_count_active_bids_multi_invoice_after_ttl_expiry() {
         &String::from_str(&env, "Invoice 2"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice2);
 
     // Place 1 bid on invoice1, 2 bids on invoice2
-    client.place_bid(&investor, &invoice1, &5_000, &6_000);
-    client.place_bid(&investor, &invoice2, &5_000, &6_000);
-    client.place_bid(&investor, &invoice2, &6_000, &7_000);
+    client.place_bid(
+        &investor,
+        &invoice1,
+        &5_000,
+        &6_000,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+    client.place_bid(
+        &investor,
+        &invoice2,
+        &5_000,
+        &6_000,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+    client.place_bid(
+        &investor,
+        &invoice2,
+        &6_000,
+        &7_000,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     assert_eq!(
         BidStorage::count_active_placed_bids_for_investor(&env, &investor),

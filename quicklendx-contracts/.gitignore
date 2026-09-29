@@ -7,3 +7,6 @@ target
 # Local settings
 .soroban
 .stellar
+
+# Auto-generated TypeScript contract bindings (regenerated on every make build)
+bindings/

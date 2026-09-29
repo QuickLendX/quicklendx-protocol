@@ -11,6 +11,7 @@
 use crate::emergency::{DEFAULT_EMERGENCY_EXPIRATION_SECS, DEFAULT_EMERGENCY_TIMELOCK_SECS};
 use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::testutils::{Address as _, Ledger, Logs, MockAuth, MockAuthInvoke};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Env, IntoVal};
 
 fn setup(env: &Env) -> (QuickLendXContractClient<'static>, Address, Address) {

@@ -80,6 +80,7 @@ impl PaymentFixture {
             &String::from_str(&self.env, "reentrancy-regression"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
+            &None,
         );
         client.verify_invoice(&invoice_id);
 
@@ -88,6 +89,7 @@ impl PaymentFixture {
             &invoice_id,
             &bid_amount,
             &(invoice_amount + 100),
+            &BytesN::from_array(&env, &[0u8; 32]),
         );
 
         (invoice_id, bid_id)
@@ -215,6 +217,10 @@ fn test_nested_release_escrow_is_rejected_without_releasing_funds() {
 
     let business_before = fixture.business_balance();
     let contract_before = fixture.contract_balance();
+
+    let client = fixture.client();
+    client.approve_early_escrow_release(&invoice_id, &fixture.business);
+    client.approve_early_escrow_release(&invoice_id, &fixture.investor);
 
     let result = run_nested_attempt(&fixture, || {
         QuickLendXContract::release_escrow_funds(fixture.env.clone(), invoice_id.clone())
@@ -351,6 +357,10 @@ fn test_nested_emergency_withdraw_is_rejected_without_attempting_execution() {
 fn test_cross_function_reentrancy_accept_then_release_is_blocked() {
     let fixture = PaymentFixture::new();
     let (invoice_id, bid_id) = fixture.create_invoice_with_bid(1_000, 1_000);
+
+    let client = fixture.client();
+    client.approve_early_escrow_release(&invoice_id, &fixture.business);
+    client.approve_early_escrow_release(&invoice_id, &fixture.investor);
 
     // Enter guard via accept_bid (simulated)
     let result = run_nested_attempt(&fixture, || {

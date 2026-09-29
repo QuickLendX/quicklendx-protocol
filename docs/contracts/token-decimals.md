@@ -22,7 +22,10 @@ Common values:
 | USDC on Stellar | 7 | 10 000 000 |
 | A custom 6-decimal token | 6 | 1 000 000 |
 
-The contract never calls `token.decimals()` at runtime. Amounts are passed in, stored verbatim, and compared with ordinary integer arithmetic.
+The contract calls `token.decimals()` via a `try_invoke_contract` check in
+`payments::require_matching_currency_precision` before accepting an invoice or
+bid amount.  Amounts are stored verbatim and compared with ordinary integer
+arithmetic once validated.
 
 ## What the contract does with an amount
 

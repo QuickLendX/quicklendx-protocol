@@ -10,6 +10,26 @@ Business KYC is required for businesses that want to create invoices on the plat
 - Receiving funds from investors
 - Updating business profile details
 
+Only businesses with a `Verified` KYC status — referred to as **tier-N businesses** — may call `store_invoice` or `upload_invoice`. This check is enforced at the **contract level**: no front-end bypass can circumvent it.
+
+**What it gates:**
+- Creating new invoices (`store_invoice`, `upload_invoice`)
+- Receiving funds from investors
+- Updating business profile details
+
+**Error codes returned by the contract:**
+
+| KYC state | Error returned |
+|---|---|
+| No record (unknown address) | `BusinessNotVerified` (1600) |
+| `Pending` (awaiting admin review) | `KYCAlreadyPending` (1601) |
+| `Rejected` | `BusinessNotVerified` (1600) |
+| `Verified` ✓ | allowed to proceed |
+
+The distinction between `KYCAlreadyPending` and `BusinessNotVerified` lets callers
+give actionable feedback: "your application is under review" vs. "you have not
+submitted KYC".
+
 **Concrete Example:**
 When a new business signs up, they cannot list an invoice until their KYC status is updated to `Verified`.
 ```json
@@ -19,6 +39,7 @@ When a new business signs up, they cannot list an invoice until their KYC status
   "max_invoice_limit": 50000
 }
 ```
+
 
 ## Investor KYC
 Investor KYC is required for users who want to fund invoices. It gates the ability to place bids and earn yields.

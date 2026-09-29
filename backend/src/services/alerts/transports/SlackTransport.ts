@@ -1,4 +1,4 @@
-import { Alert } from "../../types/reconciliation";
+import { Alert } from "../../../types/reconciliation";
 import { AlertTransport } from "./AlertTransport";
 
 export class SlackTransport implements AlertTransport {

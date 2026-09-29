@@ -11,6 +11,7 @@ import v1Routes from "./routes/v1";
 import webhookRoutes from "./routes/webhooks";
 import healthRoutes from "./routes/health";
 import { requestLogger } from "./middleware/request-logger";
+import { isEventIngestRequest } from "./middleware/event-ingest-limits";
 import { lagMonitor } from "./services/lagMonitor";
 import { alertRouter, Severity } from "./services/alertRouter";
 
@@ -49,14 +50,22 @@ declare global {
 // Security Middleware
 app.use(helmet());
 app.use(cors(corsOptionsDelegate));
-app.use(
-  express.json({
-    limit: "1mb",
-    verify: (req: express.Request, res: express.Response, buf: Buffer) => {
-      req.rawBody = buf;
-    },
-  })
-);
+const globalJsonParser = express.json({
+  limit: "1mb",
+  verify: (req: express.Request, res: express.Response, buf: Buffer) => {
+    req.rawBody = buf;
+  },
+});
+
+// The event ingest route enforces a stricter 256 KB budget with its own parser,
+// so the 1 MB parser must not buffer that payload first.
+app.use((req, res, next) => {
+  if (isEventIngestRequest(req)) {
+    next();
+    return;
+  }
+  globalJsonParser(req, res, next);
+});
 app.set("trust proxy", true);
 
 // Test middleware to simulate no IP for coverage

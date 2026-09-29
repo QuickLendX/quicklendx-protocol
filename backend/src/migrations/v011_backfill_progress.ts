@@ -6,26 +6,11 @@ export default {
   authoredAt: "2026-05-28T00:00:00Z",
   author: "QuickLendX Engineering",
   up: async (ctx: MigrationContext): Promise<void> => {
-    await ctx.db.exec(`
-      CREATE TABLE IF NOT EXISTS backfill_progress (
-        id TEXT PRIMARY KEY,
-        audit_id INTEGER,
-        last_processed_id TEXT,
-        remaining_count INTEGER NOT NULL,
-        total_count INTEGER NOT NULL,
-        status TEXT NOT NULL CHECK(status IN ('running', 'paused', 'completed', 'failed')),
-        created_at TEXT NOT NULL,
-        updated_at TEXT NOT NULL,
-        FOREIGN KEY (audit_id) REFERENCES backfill_audit(id) ON DELETE CASCADE
-      );
-    `);
+    await ctx.db.exec(`CREATE TABLE IF NOT EXISTS backfill_progress (id TEXT PRIMARY KEY, audit_id INTEGER, last_processed_id TEXT, remaining_count INTEGER NOT NULL, total_count INTEGER NOT NULL, status TEXT NOT NULL CHECK(status IN ('running','paused','completed','failed')), created_at TEXT NOT NULL, updated_at TEXT NOT NULL, FOREIGN KEY (audit_id) REFERENCES backfill_audit(id) ON DELETE CASCADE);`);
   },
-  down: async (ctx: MigrationContext): Promise<void> => {
-    await ctx.db.exec(`
-      DROP TABLE IF EXISTS backfill_progress;
-    `);
-  },
+  down: async (ctx: MigrationContext): Promise<void> => { await ctx.db.exec(`DROP TABLE IF EXISTS backfill_progress;`); },
   validate: async (ctx: MigrationContext): Promise<string[]> => {
-    return [];
+    const table = await ctx.db.get(`SELECT name FROM sqlite_master WHERE type='table' AND name='backfill_progress'`);
+    return table ? [] : ["backfill_progress table is missing"];
   },
 } satisfies MigrationDefinition;

@@ -32,6 +32,7 @@ mod test_protocol_limits_boundary {
             max_due_date_days: 90,
             grace_period_seconds: 86_400,
             max_invoices_per_business: 5,
+            min_investor_tier: crate::verification::InvestorTier::Basic,
         };
         env.as_contract(&contract_id, || {
             env.storage().instance().set(&"protocol_limits", &limits);
@@ -104,6 +105,7 @@ mod test_protocol_limits_boundary {
                 90,
                 86_400,
                 5,
+                crate::verification::InvestorTier::Basic,
             )
         });
         assert_eq!(result, Err(QuickLendXError::InvalidAmount));

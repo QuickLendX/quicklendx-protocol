@@ -44,7 +44,7 @@ fn trail_len(client: &QuickLendXContractClient, env: &Env) -> u32 {
 fn test_proto_cfg_emits_one_entry() {
     let (env, client, admin) = setup();
     let before = trail_len(&client, &env);
-    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64);
+    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64, &100);
     assert_eq!(trail_len(&client, &env), before + 1);
 
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
@@ -62,7 +62,7 @@ fn test_proto_cfg_emits_one_entry() {
 #[test]
 fn test_proto_cfg_first_change_has_no_old_value() {
     let (env, client, admin) = setup();
-    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64);
+    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64, &100);
 
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
     let id = ids.get(ids.len() - 1).unwrap();
@@ -73,8 +73,8 @@ fn test_proto_cfg_first_change_has_no_old_value() {
 #[test]
 fn test_proto_cfg_second_change_records_old_value() {
     let (env, client, admin) = setup();
-    client.set_protocol_config(&admin, &500_000i128, &180u64, &86_400u64);
-    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64);
+    client.set_protocol_config(&admin, &500_000i128, &180u64, &86_400u64, &100);
+    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64, &100);
 
     let ids = client.get_invoice_audit_trail(&sentinel(&env));
     let id = ids.get(ids.len() - 1).unwrap();
@@ -89,11 +89,11 @@ fn test_proto_cfg_second_change_records_old_value() {
 #[test]
 fn test_proto_cfg_non_admin_produces_no_entry() {
     let (env, client, admin) = setup();
-    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64);
+    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64, &100);
     let before = trail_len(&client, &env);
     let non_admin = Address::generate(&env);
     assert!(client
-        .try_set_protocol_config(&non_admin, &500_000i128, &180u64, &86_400u64)
+        .try_set_protocol_config(&non_admin, &500_000i128, &180u64, &86_400u64, &100)
         .is_err());
     assert_eq!(
         trail_len(&client, &env),
@@ -105,11 +105,11 @@ fn test_proto_cfg_non_admin_produces_no_entry() {
 #[test]
 fn test_proto_cfg_invalid_params_produces_no_entry() {
     let (env, client, admin) = setup();
-    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64);
+    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64, &100);
     let before = trail_len(&client, &env);
     // min_invoice_amount = 0 is invalid
     assert!(client
-        .try_set_protocol_config(&admin, &0i128, &365u64, &604_800u64)
+        .try_set_protocol_config(&admin, &0i128, &365u64, &604_800u64, &100)
         .is_err());
     assert_eq!(trail_len(&client, &env), before);
 }
@@ -117,9 +117,9 @@ fn test_proto_cfg_invalid_params_produces_no_entry() {
 #[test]
 fn test_proto_cfg_chain_integrity_after_three_changes() {
     let (env, client, admin) = setup();
-    client.set_protocol_config(&admin, &500_000i128, &180u64, &86_400u64);
-    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64);
-    client.set_protocol_config(&admin, &2_000_000i128, &730u64, &604_800u64);
+    client.set_protocol_config(&admin, &500_000i128, &180u64, &86_400u64, &100);
+    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64, &100);
+    client.set_protocol_config(&admin, &2_000_000i128, &730u64, &604_800u64, &100);
     assert!(client.verify_audit_chain(&sentinel(&env)));
     assert_eq!(client.first_audit_chain_divergence(&sentinel(&env)), None);
 }
@@ -447,7 +447,7 @@ fn test_all_five_functions_form_one_valid_chain() {
     let (env, client, admin) = setup_with_fees();
     let treasury = Address::generate(&env);
 
-    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64);
+    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64, &100);
     client.set_fee_config(&admin, &200u32);
     client.set_treasury(&admin, &treasury);
     client.update_fee_structure(
@@ -471,8 +471,8 @@ fn test_all_five_functions_form_one_valid_chain() {
 fn test_get_audit_entries_by_operation_returns_correct_counts() {
     let (env, client, admin) = setup();
 
-    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64);
-    client.set_protocol_config(&admin, &2_000_000i128, &730u64, &604_800u64);
+    client.set_protocol_config(&admin, &1_000_000i128, &365u64, &604_800u64, &100);
+    client.set_protocol_config(&admin, &2_000_000i128, &730u64, &604_800u64, &100);
     client.set_fee_config(&admin, &200u32);
 
     let proto_ids = client.get_audit_entries_by_operation(&AuditOperation::ConfigProtocolChanged);

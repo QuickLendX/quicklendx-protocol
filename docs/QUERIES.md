@@ -677,6 +677,10 @@ Used by admin dashboards to surface invoices that need attention.
 
 ## Analytics & Reporting
 
+`get_business_report` and `get_investor_report` are read-only retrieval entrypoints for
+previously generated report snapshots. The generation flow itself is documented in
+[`QLX_REPORT_LIFECYCLE.md`](QLX_REPORT_LIFECYCLE.md).
+
 ### `get_platform_metrics`
 
 ```rust

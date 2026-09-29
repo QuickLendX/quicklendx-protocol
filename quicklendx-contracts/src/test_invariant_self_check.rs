@@ -90,6 +90,9 @@ fn make_invoice(env: &Env, invoice_id: &BytesN<32>) -> Invoice {
         },
         total_paid: 0,
         payment_history: Vec::new(env),
+        origination_fee_bps: None,
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     }
 }
 
@@ -99,8 +102,8 @@ fn test_fresh_contract_all_pass() {
 
     let report = client.invariant_self_check(&admin);
 
-    // Eight composed checks, all green on an empty protocol.
-    assert_eq!(report.checks.len(), 8);
+    // Nine composed checks, all green on an empty protocol.
+    assert_eq!(report.checks.len(), 9);
     assert!(report.all_passed);
 }
 
@@ -136,6 +139,11 @@ fn test_populated_healthy_state_passes() {
     assert!(passed_for(&env, &report, "escrow_uniqueness"));
     assert!(passed_for(&env, &report, "settlement_accounting_identity"));
     assert!(passed_for(&env, &report, "settlement_total_invariant"));
+    assert!(passed_for(
+        &env,
+        &report,
+        "bid_withdrawal_refund_accounting"
+    ));
 }
 
 #[test]

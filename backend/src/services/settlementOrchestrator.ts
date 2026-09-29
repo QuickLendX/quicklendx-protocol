@@ -32,6 +32,9 @@ const VERSIONED_DEFAULTS = {
   event_schema_version: 1,
 };
 
+const SUPPORTED_CONTRACT_VERSION = 1;
+const SUPPORTED_EVENT_SCHEMA_VERSION = 1;
+
 function toSettlement(row: any): Settlement {
   return {
     id: row.id,
@@ -41,8 +44,8 @@ function toSettlement(row: any): Settlement {
     recipient: row.recipient,
     timestamp: row.timestamp,
     status: row.status as SettlementStatus,
-    contract_version: row.contract_version,
-    event_schema_version: row.event_schema_version,
+    contract_version: row.contract_version ?? VERSIONED_DEFAULTS.contract_version,
+    event_schema_version: row.event_schema_version ?? VERSIONED_DEFAULTS.event_schema_version,
     indexed_at: row.indexed_at,
   };
 }
@@ -81,13 +84,26 @@ class SettlementOrchestrator {
     const cv = input.contract_version ?? VERSIONED_DEFAULTS.contract_version;
     const esv = input.event_schema_version ?? VERSIONED_DEFAULTS.event_schema_version;
 
-    db.prepare(`
-      INSERT INTO settlements (id, invoice_id, amount, payer, recipient, timestamp, status, contract_version, event_schema_version, indexed_at, created_at, updated_at, event_id)
+    if (cv > SUPPORTED_CONTRACT_VERSION || esv > SUPPORTED_EVENT_SCHEMA_VERSION) {
+      throw new Error(
+        `Unsupported settlement version: contractVersion=${cv}, eventSchemaVersion=${esv}. ` +
+        `Supported: contractVersion<=${SUPPORTED_CONTRACT_VERSION}, eventSchemaVersion<=${SUPPORTED_EVENT_SCHEMA_VERSION}`
+      );
+    }
+
+    const insertResult = db.prepare(`
+      INSERT OR IGNORE INTO settlements (id, invoice_id, amount, payer, recipient, timestamp, status, contract_version, event_schema_version, indexed_at, created_at, updated_at, event_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, input.invoice_id, input.amount, input.payer, input.recipient,
       input.timestamp, SettlementStatus.Pending, cv, esv, now, now, now, input.event_id,
     );
+
+    if (insertResult.changes === 0) {
+      // A concurrent request created this event first; return the existing record.
+      const existingAfterRace = db.prepare('SELECT * FROM settlements WHERE event_id = ?').get(input.event_id) as any;
+      return toSettlement(existingAfterRace);
+    }
 
     return this.getById(id)!;
   }
@@ -161,11 +177,15 @@ class SettlementOrchestrator {
 
     const now = new Date().toISOString();
     const updated = db.prepare(`
-      UPDATE settlements SET status = ?, updated_at = ?, event_id = ? WHERE id = ?
-    `).run(to, now, eventId, row.id);
+      UPDATE settlements
+      SET status = ?, updated_at = ?, event_id = ?
+      WHERE id = ? AND status = ?
+    `).run(to, now, eventId, row.id, current);
 
     if (updated.changes === 0) {
-      throw new Error(`Failed to update settlement ${row.id}`);
+      // Another concurrent transition won. Return the current state.
+      const latest = db.prepare('SELECT * FROM settlements WHERE id = ?').get(row.id) as any;
+      return toSettlement(latest);
     }
 
     return this.getById(row.id)!;

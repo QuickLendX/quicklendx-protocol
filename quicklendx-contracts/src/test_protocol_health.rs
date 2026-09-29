@@ -44,6 +44,8 @@ fn setup_initialized_with_admin() -> (Env, Address, Address) {
             v.push_back(currency1);
             v
         },
+        corridors: soroban_sdk::Vec::new(&env),
+        backfill_max_batch_size: 100,
     };
 
     ProtocolInitializer::initialize(&env, &params).expect("init failed");

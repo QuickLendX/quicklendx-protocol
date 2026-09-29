@@ -74,6 +74,7 @@ pub fn upload_invoice(
     description: String,
     category: InvoiceCategory,
     tags: Vec<String>,
+    origination_fee_bps: Option<u32>,
 ) -> Result<BytesN<32>, QuickLendXError>
 ```
 - Requires `business.require_auth()`.

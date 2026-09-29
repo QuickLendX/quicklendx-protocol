@@ -266,3 +266,81 @@ test` invocation (no feature flag required).
 ```bash
 cargo test test_store_invoices_batch
 ```
+
+---
+
+## Batch Invoice Cancellation — `invoice_batch_cancel`
+
+### Motivation
+
+Businesses frequently cancel multiple unpaid/pending invoices in bulk before issuing new ones or reorganizing billing. Calling `cancel_invoice` N times requires N separate transactions, each incurring authorization checks and round-trip latency. `invoice_batch_cancel` allows a verified business to cancel up to `MAX_BATCH_INVOICES` (currently **10**) invoices in a single atomic transaction.
+
+### Entrypoint signature
+
+```rust
+pub fn invoice_batch_cancel(
+    env: Env,
+    business: Address,
+    invoice_ids: Vec<BytesN<32>>,
+) -> Result<(), QuickLendXError>
+```
+
+| Parameter | Description |
+|-----------|-------------|
+| `business` | Invoice-issuing business address (must sign). |
+| `invoice_ids` | `Vec<BytesN<32>>` — 1 to `MAX_BATCH_INVOICES` entries. |
+
+### Semantics
+
+| Property | Behaviour |
+|----------|-----------|
+| **Auth** | `business.require_auth()` is called once for the whole batch. |
+| **KYC** | Business must be active and `Verified` (same requirement as `cancel_invoice`). |
+| **Batch size** | `1 ≤ len(invoice_ids) ≤ MAX_BATCH_INVOICES`; otherwise `BatchSizeExceeded` (2206). |
+| **Ownership & Pre-flight** | Every invoice in the batch must exist, belong to `business`, and not be frozen. Validated in a pre-flight pass before state mutations. |
+| **Atomicity** | All-or-nothing. An error on any single item (e.g. non-existent ID, frozen invoice, unauthorized owner) aborts the entire batch (Soroban tx semantics). |
+| **Events** | An `invoice_cancelled` event is emitted for each successfully cancelled invoice. |
+
+### Error codes returned
+
+| Code | Symbol | Meaning |
+|------|--------|---------|
+| 2100 | `PAUSED` | Protocol is paused. |
+| 2206 | `BATCH_SZ` | `invoice_ids` is empty or exceeds `MAX_BATCH_INVOICES`. |
+| 1600 | `BUS_NV` | Business has no KYC record or was rejected. |
+| 1601 | `KYC_PD` | Business KYC is still pending admin review. |
+| 1000 | `INV_NF` | At least one invoice ID in the batch was not found. |
+| 1007 | `INV_FZ` | At least one invoice ID in the batch is frozen. |
+| 1100 | `UNAUTH` | At least one invoice in the batch does not belong to the calling business. |
+
+### Example (Rust test / Soroban SDK)
+
+```rust
+let mut ids: Vec<BytesN<32>> = Vec::new(&env);
+ids.push_back(invoice_id_1);
+ids.push_back(invoice_id_2);
+
+client.invoice_batch_cancel(&business, &ids);
+```
+
+### Test coverage
+
+Tests live in `src/test_invoice_batch_cancel.rs` and run with every `cargo test` invocation.
+
+| Test | What is verified |
+|------|-----------------|
+| `test_invoice_batch_cancel_single_success` | Single-item batch cancels one invoice. |
+| `test_invoice_batch_cancel_multiple_success` | Multi-item batch cancels all specified invoices. |
+| `test_invoice_batch_cancel_max_size_success` | Exactly `MAX_BATCH_INVOICES` entries accepted. |
+| `test_invoice_batch_cancel_empty_rejected` | Empty vec → `BatchSizeExceeded`. |
+| `test_invoice_batch_cancel_oversized_rejected` | `MAX_BATCH_INVOICES + 1` entries → `BatchSizeExceeded`. |
+| `test_invoice_batch_cancel_unverified_business_rejected` | No-KYC business rejected. |
+| `test_invoice_batch_cancel_pending_business_rejected` | Pending-KYC business → `KYCAlreadyPending`. |
+| `test_invoice_batch_cancel_nonexistent_invoice_aborts` | Missing ID aborts batch with zero state mutations. |
+| `test_invoice_batch_cancel_unauthorized_business_aborts` | Invoice owned by another business aborts batch. |
+| `test_invoice_batch_cancel_frozen_invoice_aborts` | Frozen invoice in batch aborts entire operation. |
+
+```bash
+cargo test test_invoice_batch_cancel
+```
+

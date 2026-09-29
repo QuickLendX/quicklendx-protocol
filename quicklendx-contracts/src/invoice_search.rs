@@ -283,6 +283,9 @@ mod tests {
             String::from_str(env, description),
             InvoiceCategory::Services,
             Vec::new(env),
+            None,
+            None,
+            None,
         )
         .unwrap();
         invoice.metadata_customer_name = customer_name.map(|name| String::from_str(env, name));

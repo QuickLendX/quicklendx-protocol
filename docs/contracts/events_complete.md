@@ -168,6 +168,23 @@ Emitted for each individual payment transaction.
 
 ---
 
+### RepaymentAllocated (`repayment_allocated`)
+
+Additive versioned allocation for a committed payment. Shares `operation_id`
+with the `PaymentProcessed` audit entry. Legacy `pay_rec` / `inv_pp` are unchanged.
+
+**Data Fields:**
+
+- `schema_version: u32` - Observability schema (currently 1)
+- `operation_id: BytesN<32>` - Correlation id
+- `phase: TransitionPhase` - Always `Committed`
+- Applied and cumulative principal, investor profit, platform fee, late penalty
+- `total_paid` / `total_due` / `fee_bps`
+
+**Use Case:** Reconcile investor returns and fees with committed contract state
+
+---
+
 ### PartialPayment (`inv_pp`)
 
 Emitted when a partial payment is applied to an invoice.

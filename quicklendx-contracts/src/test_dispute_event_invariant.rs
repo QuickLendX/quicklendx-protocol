@@ -130,9 +130,9 @@ fn fund_invoice(
         &String::from_str(env, desc),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(inv, &id, &INV_AMOUNT, &EXP_RETURN, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&id, &bid_id);
     id
 }

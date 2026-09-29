@@ -193,16 +193,15 @@ mod test_evidence_size_cap {
 
         let currency = Address::generate(&env);
         let due_date = env.ledger().timestamp() + 86_400;
-        let invoice_id = client
-            .store_invoice(
-                &business,
-                &100_000_i128,
-                &currency,
-                &due_date,
-                &String::from_str(&env, "Invoice for evidence-cap integration test"),
-                &InvoiceCategory::Services,
-                &Vec::new(&env),
-            );
+        let invoice_id = client.store_invoice(
+            &business,
+            &100_000_i128,
+            &currency,
+            &due_date,
+            &String::from_str(&env, "Invoice for evidence-cap integration test"),
+            &InvoiceCategory::Services,
+            &Vec::new(&env),
+        );
 
         // Open a dispute with minimal (1-char) evidence so we have a Disputed invoice.
         let reason = String::from_str(&env, "reason");

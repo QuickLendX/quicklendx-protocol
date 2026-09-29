@@ -1,20 +1,23 @@
-# TODO: Hostile reentrancy fault-injection suite
+# CI Test Fix TODO
 
-- [x] Create `quicklendx-contracts/src/test_reentrancy_fault_injection.rs`
-  - [x] Implement test harness + HostileToken contract(s) or helper pattern
-  - [x] Implement hostile token behavior: re-enter QuickLendX during token transfer
-  - [x] Drive guarded entrypoints:
-    - [x] accept_bid_and_fund
-    - [x] process_partial_payment
-    - [x] settle_invoice
-    - [x] refund_escrow
-    - [x] release_escrow
-  - [x] Assertions: any re-entry fails pre-mutation with `OperationNotAllowed`
-  - [x] Edge cases: deeply nested + alternating entrypoints
-  - [x] Add security doc comments + P0 classification
-- [x] Create `docs/reentrancy-fault-injection.md`
-  - [x] Explain guard mechanism and hostile token approach
-  - [x] Document P0 note
-- [ ] Run `cargo test test_reentrancy_fault_injection`
-- [ ] Fix compile/test failures until green
+## Failures to fix (9 total)
+
+### [x] 1. `profits.rs` - test_investor_platform_treasury_sum_invariant
+   - [x] Replace `PlatformFee::calculate_breakdown(&env, ...)` with `calculate_breakdown_with_fee_bps(..., 200)` (pure function, no storage access)
+
+### [x] 2. `payments.rs` - transfer_funds MIN_TRANSFER validation
+   - [x] Add MIN_TRANSFER check in `transfer_funds` function
+
+### [x] 3. `payments.rs` - Non-existent token address handling
+   - [x] Handle `token_client.balance(from)` failure gracefully (unregistered token)
+
+### [x] 4. `lib.rs` - get_escrow_status unwrap
+   - [x] Replace `.unwrap()` with `.ok_or(QuickLendXError::StorageKeyNotFound)?`
+
+### [x] 5. `test_cancel_invoice_matrix.rs` - Invoice::new outside contract
+   - [x] Register a contract and wrap `Invoice::new()` in `env.as_contract()`
+
+## Verification
+- [ ] Run `cargo test -p quicklendx-contracts --lib` to verify all 9 tests pass
+- [ ] Run `cargo clippy --workspace --all-targets -- -D warnings`
 

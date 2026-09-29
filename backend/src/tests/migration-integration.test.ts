@@ -333,4 +333,68 @@ describe("Migration Integration", () => {
     expect(result).toHaveProperty("success");
     expect(result).toHaveProperty("message");
   });
+
+  describe("repayment allocation migration compatibility", () => {
+    test("upgrade and rerun are idempotent and checksum-valid", async () => {
+      const first = await migrateCommand({});
+      const versionsAfterFirst = await getAppliedVersions();
+      const second = await migrateCommand({});
+      const versionsAfterSecond = await getAppliedVersions();
+      const checksum = await verifyAppliedChecksums();
+
+      expect(first).toHaveProperty("success");
+      expect(second).toHaveProperty("success");
+      expect(versionsAfterSecond).toEqual(versionsAfterFirst);
+      expect(checksum.valid).toBe(true);
+      expect(checksum.errors).toEqual([]);
+    });
+
+    test("partial and failed runs do not mutate applied versions", async () => {
+      const before = await getAppliedVersions();
+      const partial = await migrateCommand({ dryRun: true, validateOnly: true });
+      const failed = await migrateCommand({ allowDown: true, emergency: false });
+      const after = await getAppliedVersions();
+
+      expect(partial).toHaveProperty("success");
+      expect(partial).toHaveProperty("message");
+      expect(failed.success).toBe(false);
+      expect(after).toEqual(before);
+    });
+
+    test("concurrent validation checks leave migration state stable", async () => {
+      const before = await getAppliedVersions();
+      const results = await Promise.all([
+        migrateCommand({ validateOnly: true }),
+        migrateCommand({ validateOnly: true }),
+      ]);
+      const after = await getAppliedVersions();
+
+      expect(after).toEqual(before);
+      results.forEach((result) => {
+        expect(result).toHaveProperty("success");
+        expect(result).toHaveProperty("message");
+      });
+    });
+
+    test("rollback remains restricted to emergency approval", async () => {
+      const result = await migrateDownCommand({ emergency: false });
+      expect(result.success).toBe(false);
+      expect(result.message).toContain("emergency");
+    });
+
+    test("migration metadata is valid and deterministically ordered", async () => {
+      const migrations = await loadMigrationsFromFS();
+      expect(migrations.length).toBeGreaterThan(0);
+
+      for (const migration of migrations) {
+        const validation = MigrationPolicy.validateMetadata(migration);
+        expect(validation.valid).toBe(true);
+        expect(validation.errors).toEqual([]);
+      }
+
+      for (let i = 1; i < migrations.length; i++) {
+        expect(migrations[i].version).toBeGreaterThanOrEqual(migrations[i - 1].version);
+      }
+    });
+  });
 });

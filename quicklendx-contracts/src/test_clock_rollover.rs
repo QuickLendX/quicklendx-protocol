@@ -107,10 +107,13 @@ fn invoice_not_overdue_when_due_date_equals_u64_max() {
                 business,
                 1_000,
                 currency,
-                u64::MAX, // due_date == u64::MAX
+                u64::MAX,
                 String::from_str(&env, "rollover test"),
                 InvoiceCategory::Services,
                 Vec::new(&env),
+                None,
+                None,
+                None,
             )
         })
         .expect("invoice construction must succeed at NEAR_MAX");
@@ -144,6 +147,9 @@ fn invoice_not_overdue_after_clock_rollover_to_zero_when_due_date_is_u64_max() {
                 String::from_str(&env, "rollover test"),
                 InvoiceCategory::Services,
                 Vec::new(&env),
+                None,
+                None,
+                None,
             )
         })
         .expect("invoice construction must succeed");
@@ -172,10 +178,13 @@ fn invoice_is_overdue_at_u64_max_minus_one_when_due_date_is_small() {
                 business,
                 1_000,
                 currency,
-                2_000_000, // due_date well before NEAR_MAX
+                2_000_000,
                 String::from_str(&env, "small due date"),
                 InvoiceCategory::Services,
                 Vec::new(&env),
+                None,
+                None,
+                None,
             )
         })
         .expect("invoice construction must succeed");
@@ -208,6 +217,9 @@ fn grace_deadline_saturates_at_u64_max_when_due_date_is_near_max() {
                 String::from_str(&env, "grace saturation"),
                 InvoiceCategory::Services,
                 Vec::new(&env),
+                None,
+                None,
+                None,
             )
         })
         .expect("invoice construction must succeed");
@@ -247,10 +259,13 @@ fn grace_deadline_at_u64_max_minus_one_saturates_with_overflow_grace_period() {
                 business,
                 1_000,
                 currency,
-                NEAR_MAX, // due_date == u64::MAX - 1
+                NEAR_MAX,
                 String::from_str(&env, "near max due date"),
                 InvoiceCategory::Services,
                 Vec::new(&env),
+                None,
+                None,
+                None,
             )
         })
         .expect("invoice construction must succeed");
@@ -409,6 +424,7 @@ fn store_invoice_accepted_when_ledger_timestamp_is_u64_max_minus_one() {
         &String::from_str(&env, "boundary invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     assert!(
         result.is_ok(),
@@ -434,6 +450,7 @@ fn store_invoice_rejected_when_due_date_equals_ledger_at_u64_max() {
         &String::from_str(&env, "max timestamp invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     assert!(
         result.is_err(),
@@ -459,6 +476,7 @@ fn invoice_created_near_u64_max_is_not_overdue_after_clock_rollover_to_zero() {
         &String::from_str(&env, "pre-rollover invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     // Simulate rollover: clock resets to 0.
@@ -489,6 +507,7 @@ fn grace_deadline_of_invoice_at_near_max_saturates_for_any_grace_period() {
         &String::from_str(&env, "grace saturation invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     let invoice = client.get_invoice(&invoice_id);
@@ -529,6 +548,7 @@ fn bid_placed_at_u64_max_minus_one_has_expiration_saturated_to_u64_max() {
         &String::from_str(&env, "bid boundary invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
@@ -575,6 +595,7 @@ fn cleanup_does_not_remove_bid_whose_expiration_saturated_to_u64_max() {
         &String::from_str(&env, "cleanup boundary invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 

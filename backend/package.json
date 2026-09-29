@@ -6,7 +6,7 @@
     "seed": "ts-node seed.ts",
     "test:seeds": "jest seeds.test.ts",
     "test": "jest",
-    "test:coverage": "jest --coverage",
+    "test:coverage": "jest --coverage --forceExit",
     "dev": "ts-node-dev src/index.ts",
     "start": "ts-node src/index.ts",
     "security:scan": "node scripts/dependency-scan.js audit-report.json high && node scripts/secret-scan.js",

@@ -25,6 +25,13 @@ The fee rate is expressed in basis points:
 The contract rejects any fee rate above `1000 bps`, so the protocol-level
 platform fee cannot exceed `10%`.
 
+### Origination Fees
+
+In addition to standard platform fees, invoices can configure a per-invoice `origination_fee_bps` when uploaded.
+- **Charged at fund-time:** The fee is calculated against the total bid amount and is deducted directly from the escrow funding amount.
+- **Split config:** Origination fees are split between the platform and treasury based on the same mechanism as other platform fees.
+- **Opt-in:** The `origination_fee_bps` is an optional setting. If omitted, no origination fee is collected.
+
 ## How fees are calculated
 
 Settlement math uses integer basis-point arithmetic. The denominator is

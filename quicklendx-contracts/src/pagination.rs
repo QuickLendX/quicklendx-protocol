@@ -19,7 +19,7 @@
 //!    goes through pre-computed safe bounds.
 
 use crate::errors::QuickLendXError;
-use alloc::vec::Vec;
+use alloc::{format, string::String, vec::Vec};
 
 /// Maximum number of records returned by paginated query endpoints.
 pub const MAX_QUERY_LIMIT: u32 = 50;
@@ -57,6 +57,51 @@ impl PageCursor {
         Self { offset, generation }
     }
 
+    /// Encode a cursor into a deterministic, reviewable string form.
+    ///
+    /// The encoding is intentionally simple and unambiguous:
+    /// `generation_offset`, where both components are base-10 digits.
+    /// This preserves ordering and makes invalid values easy to reject without
+    /// any lossy transformation or off-by-one interpretation.
+    #[inline]
+    pub fn encode(&self) -> String {
+        format!("{}_{}", self.generation, self.offset)
+    }
+
+    /// Decode a cursor produced by [`PageCursor::encode`].
+    ///
+    /// Rejects malformed or ambiguous payloads rather than silently accepting
+    /// non-numeric data or multiple separators.
+    #[inline]
+    pub fn decode(raw: &str) -> Result<Self, QuickLendXError> {
+        let mut parts = raw.split('_');
+        let generation_str = parts.next().ok_or(QuickLendXError::InvalidAmount)?;
+        let offset_str = parts.next().ok_or(QuickLendXError::InvalidAmount)?;
+        if parts.next().is_some() || generation_str.is_empty() || offset_str.is_empty() {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let generation = generation_str
+            .parse::<u64>()
+            .map_err(|_| QuickLendXError::InvalidAmount)?;
+        let offset = offset_str
+            .parse::<u32>()
+            .map_err(|_| QuickLendXError::InvalidAmount)?;
+
+        Ok(Self::new(offset, generation))
+    }
+
+    /// Calculate the next page cursor given limit and total record count.
+    /// Returns `None` if end-of-stream has been reached (`offset + limit >= total_count`).
+    pub fn next_cursor(&self, limit: u32, total_count: u32) -> Option<Self> {
+        let capped = cap_query_limit(limit);
+        let next_offset = self.offset.saturating_add(capped);
+        if next_offset < total_count {
+            Some(Self::new(next_offset, self.generation))
+        } else {
+            None
+        }
+    }
     /// Validate that this cursor's snapshot generation matches the current snapshot generation.
     ///
     /// # Returns
@@ -139,7 +184,11 @@ pub const fn validate_pagination_params(
     } else {
         capped_limit
     };
-    let has_more = safe_offset.saturating_add(effective_limit) < total_count;
+    let has_more = if effective_limit == 0 {
+        false
+    } else {
+        safe_offset.saturating_add(effective_limit) < total_count
+    };
     (safe_offset, effective_limit, has_more)
 }
 
@@ -195,6 +244,21 @@ pub fn paginate_slice<T: Clone>(items: &[T], offset: u32, limit: u32) -> Vec<T> 
     items[(start as usize)..(end as usize)].to_vec()
 }
 
+/// Compute pagination metadata (total count, has_more) for a filtered collection.
+///
+/// Returns `(total_count, has_more)` where:
+/// * `total_count` is the size of the filtered set **before** pagination.
+/// * `has_more` is `true` iff additional pages exist past `offset + limit`.
+///
+/// This helper is intended for paginated query endpoints that construct their
+/// own result vecs (e.g. using Soroban `Vec`) and need to attach metadata.
+#[inline]
+pub fn pagination_metadata(offset: u32, limit: u32, total_count: u32) -> (u32, bool) {
+    let capped_limit = cap_query_limit(limit);
+    let has_more = offset.saturating_add(capped_limit) < total_count;
+    (total_count, has_more)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -217,5 +281,43 @@ mod tests {
             cursor.require_stable(100),
             Err(QuickLendXError::UnstableCursor)
         );
+    }
+
+    #[test]
+    fn test_page_cursor_round_trip_and_invalid_input() {
+        let original = PageCursor::new(7, 42);
+        let encoded = original.encode();
+        assert_eq!(encoded, "42_7");
+        assert_eq!(PageCursor::decode(&encoded), Ok(original));
+
+        assert_eq!(
+            PageCursor::decode("42"),
+            Err(QuickLendXError::InvalidAmount)
+        );
+        assert_eq!(
+            PageCursor::decode("abc_7"),
+            Err(QuickLendXError::InvalidAmount)
+        );
+        assert_eq!(
+            PageCursor::decode("42_abc"),
+            Err(QuickLendXError::InvalidAmount)
+        );
+        assert_eq!(
+            PageCursor::decode("42_7_9"),
+            Err(QuickLendXError::InvalidAmount)
+        );
+    }
+
+    #[test]
+    fn test_page_cursor_next_cursor() {
+        let cursor = PageCursor::new(0, 100);
+        let next = cursor.next_cursor(10, 25);
+        assert_eq!(next, Some(PageCursor::new(10, 100)));
+
+        let next2 = next.unwrap().next_cursor(10, 25);
+        assert_eq!(next2, Some(PageCursor::new(20, 100)));
+
+        let next3 = next2.unwrap().next_cursor(10, 25);
+        assert_eq!(next3, None); // 20 + 10 = 30 >= 25 -> end of stream
     }
 }

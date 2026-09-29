@@ -57,6 +57,31 @@ servers:
     description: Local development server
 
 paths:
+  /fees:
+    get:
+      x-rate-limit:
+        policies: [global, perKey]
+      summary: Get the current fee schedule
+      description: Returns the platform's current fee schedule configurations.
+      operationId: getFeeSchedule
+      responses:
+        "200":
+          description: List of current fee structures
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/FeeStructure'
+              example:
+                - fee_type: "Platform"
+                  base_fee_bps: 200
+                  min_fee: "100"
+                  max_fee: "1000000"
+                  is_active: true
+                  updated_at: 1745599232
+                  updated_by: "GBSXVD727UNXJZ7ZM4VCXBTK3UMPXR7O6LLXS7XVOECGDYH3XFNV7C5K"
+
   /health:
     get:
       x-rate-limit:
@@ -1293,6 +1318,42 @@ components:
           items:
             $ref: "#/components/schemas/LineItem"
         notes: { type: string }
+
+    FeeStructure:
+      type: object
+      required:
+        - fee_type
+        - base_fee_bps
+        - min_fee
+        - max_fee
+        - is_active
+        - updated_at
+        - updated_by
+      properties:
+        fee_type:
+          type: string
+          enum: [Platform, Processing, Verification, EarlyPayment, LatePayment]
+          description: Type of the fee
+        base_fee_bps:
+          type: integer
+          description: Base fee in basis points
+        min_fee:
+          type: string
+          description: Minimum fee amount as string (i128)
+        max_fee:
+          type: string
+          description: Maximum fee amount as string (i128)
+        is_active:
+          type: boolean
+          description: Whether this fee structure is currently active
+        updated_at:
+          type: integer
+          format: int64
+          description: Unix timestamp of last update
+        updated_by:
+          type: string
+          format: stellar-address
+          description: Address of the admin who last updated the fee structure
 
     Invoice:
       type: object

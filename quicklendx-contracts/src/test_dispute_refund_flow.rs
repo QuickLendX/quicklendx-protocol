@@ -83,6 +83,7 @@ fn setup_funded_invoice_for_dispute() -> FundedDisputeFixture {
         &String::from_str(&env, "Disputed goods delivery"),
         &InvoiceCategory::Goods,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
@@ -213,7 +214,11 @@ fn dispute_resolved_against_business_refund_aligns_terminal_statuses() {
         "second refund attempt must not move funds"
     );
 
-    let settle_after_refund = fx.client.try_settle_invoice(&fx.invoice_id, &fx.bid_amount);
+    let settle_after_refund = fx.client.try_settle_invoice(
+        &fx.invoice_id,
+        &fx.bid_amount,
+        &fx.client.get_investment(&fx.invoice_id).unwrap(),
+    );
     assert!(matches!(
         settle_after_refund,
         Err(Ok(QuickLendXError::InvalidStatus))

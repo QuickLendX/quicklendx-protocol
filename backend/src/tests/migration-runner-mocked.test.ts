@@ -489,7 +489,7 @@ describe("Migration Runner with Mocked Database", () => {
         get: jest.fn(() => null),
         run: jest.fn(() => ({})),
       })),
-      transaction: jest.fn((fn) => fn()),
+      transaction: jest.fn((fn) => fn),
     };
 
     const result = await runMigrations({ dryRun: true, db: mockDb });
@@ -506,7 +506,7 @@ describe("Migration Runner with Mocked Database", () => {
         get: jest.fn(() => null),
         run: jest.fn(() => ({})),
       })),
-      transaction: jest.fn((fn) => fn()),
+      transaction: jest.fn((fn) => fn),
     };
 
     const result = await runMigrations({ allowDown: true, dryRun: true, db: mockDb });
@@ -523,7 +523,7 @@ describe("Migration Runner with Mocked Database", () => {
         get: jest.fn(() => null),
         run: jest.fn(() => ({})),
       })),
-      transaction: jest.fn((fn) => fn()),
+      transaction: jest.fn((fn) => fn),
     };
 
     const result = await runMigrations({ verbose: true, dryRun: true, db: mockDb });
@@ -540,7 +540,7 @@ describe("Migration Runner with Mocked Database", () => {
         get: jest.fn(() => null),
         run: jest.fn(() => ({})),
       })),
-      transaction: jest.fn((fn) => fn()),
+      transaction: jest.fn((fn) => fn),
     };
 
     const result = await runMigrations({ skipChecksumVerify: true, dryRun: true, db: mockDb });

@@ -338,6 +338,9 @@ fn test_timestamp_invoice_grace_deadline_saturates() {
             String::from_str(&env, "Test"),
             InvoiceCategory::Services,
             Vec::new(&env),
+            None,
+            None,
+            None,
         )
     });
     let deadline = inv.unwrap().grace_deadline(grace_period);
@@ -374,7 +377,7 @@ fn test_timestamp_boundaries() {
         &String::from_str(&env, "Max Time"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     let _ = result;
 }

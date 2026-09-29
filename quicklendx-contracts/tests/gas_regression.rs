@@ -348,7 +348,7 @@ fn test_admin_gas() {
         harness,
         "set_protocol_config",
         "default",
-        client.try_set_protocol_config(&harness.admin, &10, &30, &86400)
+        client.try_set_protocol_config(&harness.admin, &10, &30, &86400, &100)
     );
 }
 
@@ -739,7 +739,7 @@ fn test_escrow_gas() {
 
     // Cover edge case: paused-state rejection path
     // Let's call a paused state or toggle paused. If we can't toggle pause, we still call the entrypoint on test harness to verify it passes.
-    let _ = client.try_set_protocol_config(&harness.admin, &10, &30, &86400);
+    let _ = client.try_set_protocol_config(&harness.admin, &10, &30, &86400, &100);
     bench_scenario!(
         harness,
         "accept_bid",
@@ -836,6 +836,8 @@ fn test_escrow_gas() {
         "default",
         client.try_get_escrow_status(&harness.invoice_id)
     );
+    client.approve_early_escrow_release(&harness.invoice_id, &harness.business);
+    client.approve_early_escrow_release(&harness.invoice_id, &harness.investor);
     bench_scenario!(
         harness,
         "release_escrow_funds",

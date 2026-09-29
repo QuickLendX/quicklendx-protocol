@@ -492,7 +492,14 @@ impl AnalyticsCalculator {
     /// default 100 active invoices per business) plus the finite stored status
     /// indexes scanned by the reused calculators. This function performs no
     /// storage writes and requires no auth.
+    ///
+    /// Fails with [`QuickLendXError::ActiveDisputeExists`] while any invoice
+    /// has an unresolved dispute — see
+    /// [`crate::dispute::require_no_active_dispute_snapshot`] for the threat
+    /// this guards against.
     pub fn export_analytics_snapshot(env: &Env) -> Result<AnalyticsSnapshot, QuickLendXError> {
+        crate::dispute::require_no_active_dispute_snapshot(env)?;
+
         let ledger_timestamp = env.ledger().timestamp();
         let platform_metrics = Self::calculate_platform_metrics(env)?;
         let performance_metrics = Self::calculate_performance_metrics(env)?;

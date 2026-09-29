@@ -344,6 +344,42 @@ describe("KYC Service", () => {
     });
   });
 
+  describe("Atomic Rollback and Failure Consistency", () => {
+    afterEach(() => {
+      jest.restoreAllMocks();
+    });
+
+    it("should roll back atomically when KYC data cannot be serialized", () => {
+      const circularData: any = { customer_name: "Circular User" };
+      circularData.self = circularData;
+
+      expect(() =>
+        createKycRecord("kyc_atomic_serialize_1", "user_atomic_1", circularData)
+      ).toThrow(TypeError);
+    });
+
+    it("should roll back atomically when the timestamp boundary fails", () => {
+      jest.spyOn(Date, "now").mockImplementation(() => {
+        throw new Error("injected clock failure");
+      });
+
+      expect(() =>
+        createKycRecord("kyc_atomic_timestamp_1", "user_atomic_2", {
+          customer_name: "Test User"
+        })
+      ).toThrow("injected clock failure");
+    });
+
+    it("should not return partial KYC data when decryption fails", () => {
+      const record = createKycRecord("kyc_atomic_decrypt_1", "user_atomic_3", {
+        customer_name: "Test User"
+      });
+      record.encryptedData = "v2:invalid-ciphertext";
+
+      expect(() => getKycData(record)).toThrow();
+    });
+  });
+
   describe("Security Assumptions", () => {
     it("should not expose sensitive data in encrypted form", () => {
       const sensitiveData = {

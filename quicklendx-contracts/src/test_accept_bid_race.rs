@@ -125,6 +125,7 @@ fn upload_and_verify_invoice(
         &String::from_str(env, "Test invoice for race regression"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
     invoice_id
@@ -137,7 +138,13 @@ fn place_bid(
     invoice_id: &BytesN<32>,
     amount: i128,
 ) -> BytesN<32> {
-    client.place_bid(investor, invoice_id, &amount, &(amount / 10))
+    client.place_bid(
+        investor,
+        invoice_id,
+        &amount,
+        &(amount / 10),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    )
 }
 
 // ============================================================================

@@ -94,8 +94,13 @@ fn cannot_withdraw_more_than_deposited_sad_path() {
     let invoice_id = model.fund(500).expect("fund should succeed");
 
     // First withdrawal: returns 500 — that is fine.
-    let returned = model.withdraw(invoice_id).expect("first withdrawal must succeed");
-    assert_eq!(returned, 500, "first withdrawal must return the deposited amount");
+    let returned = model
+        .withdraw(invoice_id)
+        .expect("first withdrawal must succeed");
+    assert_eq!(
+        returned, 500,
+        "first withdrawal must return the deposited amount"
+    );
 
     // Second withdrawal of the same invoice: protocol rejects it (no active
     // investment), so the model must also return None.

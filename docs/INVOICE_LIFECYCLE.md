@@ -178,3 +178,4 @@ Full error reference: [`docs/ERROR_CODES.md`](ERROR_CODES.md).
 - [`docs/STORAGE_LAYOUT.md`](STORAGE_LAYOUT.md) — on-chain storage key layout.
 - [`docs/QUERIES.md`](QUERIES.md) — read-only query entrypoints.
 - [`docs/ERROR_CODES.md`](ERROR_CODES.md) — complete typed error reference.
+- [`docs/INVOICE_LOCK.md`](INVOICE_LOCK.md) — lock duration, admin freeze auto-release, and escrow hold timing.

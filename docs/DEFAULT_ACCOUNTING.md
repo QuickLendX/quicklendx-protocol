@@ -82,6 +82,17 @@ InvestmentStorage::update_investment(env, &investment);
 | `InsuranceClaimed` events (per provider) | `defaults.rs:334-344`, `events.rs:847` | `{ investment_id, invoice_id, provider, coverage_amount }` |
 | `NotificationType::InvoiceDefaulted` | `defaults.rs:351`, `notifications.rs:794` | Delivered to business and investor |
 
+### Default-history counters
+
+`handle_default` also bumps two lightweight, persistent per-address counters — independent of the risk-scoring path in [Section 2](#2-effect-on-investor-rating) below:
+
+| Counter | Storage key | Incremented for | Read via |
+|---|---|---|---|
+| Business default history | `StorageKeys::business_default_history` (`biz_def_h`) | `invoice.business` | `get_business_default_history(business) -> u32` |
+| Investor default history | `StorageKeys::investor_default_history` (`inv_def_h`) | `invoice.investor` (if `Some`, i.e. the invoice was funded) | `get_investor_default_history(investor) -> u32` |
+
+Both counters saturate (never overflow/panic) and increment exactly once per successful default transition, in the same atomic `handle_default` call guarded by the transition guard described above — so they can't double-count on retries.
+
 ---
 
 ## 2. Effect on Investor Rating

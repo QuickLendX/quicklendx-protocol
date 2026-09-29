@@ -46,7 +46,7 @@ fn test_pause_behavior_is_deterministic() {
                 &String::from_str(&env, "Test invoice"),
                 &InvoiceCategory::Services,
                 &vec![&env],
-            )
+                &None)
             .unwrap();
 
         // Pause
@@ -62,7 +62,7 @@ fn test_pause_behavior_is_deterministic() {
             &String::from_str(&env, "Test invoice 2"),
             &InvoiceCategory::Services,
             &vec![&env],
-        );
+            &None);
         assert!(result.is_err());
 
         // Unpause
@@ -79,7 +79,7 @@ fn test_pause_behavior_is_deterministic() {
                 &String::from_str(&env, "Test invoice 3"),
                 &InvoiceCategory::Services,
                 &vec![&env],
-            )
+                &None)
             .unwrap();
 
         assert_ne!(invoice_id, invoice_id_2);
@@ -103,7 +103,7 @@ fn test_no_bypass_via_internal_functions() {
         &String::from_str(&_env, "Test"),
         &InvoiceCategory::Services,
         &vec![&_env],
-    );
+        &None);
     assert!(result.is_err(), "store_invoice must be blocked when paused");
 }
 
@@ -124,7 +124,7 @@ fn test_all_user_mutating_flows_blocked() {
             &String::from_str(&env, "Test invoice"),
             &InvoiceCategory::Services,
             &vec![&env],
-        )
+            &None)
         .unwrap();
     client.verify_invoice(&invoice_id);
     client.pause(&admin);
@@ -140,7 +140,7 @@ fn test_all_user_mutating_flows_blocked() {
                 &String::from_str(&env, "Test"),
                 &InvoiceCategory::Services,
                 &vec![&env],
-            )
+                &None)
             .is_err(),
         "store_invoice blocked"
     );
@@ -148,7 +148,7 @@ fn test_all_user_mutating_flows_blocked() {
     // 2. Bid placement
     assert!(
         client
-            .try_place_bid(&investor, &invoice_id, &500i128, &600i128)
+            .try_place_bid(&investor, &invoice_id, &500i128, &600i128, &BytesN::from_array(&env, &[0u8; 32]))
             .is_err(),
         "place_bid blocked"
     );

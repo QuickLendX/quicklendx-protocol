@@ -1,8 +1,4 @@
 [toolchain]
-# Explicitly target wasm32v1-none (required by soroban-sdk 25.x build script).
-# Rust 1.82+ with wasm32-unknown-unknown triggers a build-script panic due to
-# unsupported features (reference-types, multi-value). wasm32v1-none avoids this
-# and is the correct target for Soroban contracts on Rust 1.84+.
 channel = "stable"
 components = ["rustfmt"]
 targets = ["wasm32v1-none"]

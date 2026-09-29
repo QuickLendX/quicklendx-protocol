@@ -282,8 +282,7 @@ fn first_party_sources_contain_no_unsafe_keyword() {
 /// Matches: `unsafe {`, `unsafe fn`, `unsafe impl`, `unsafe trait`,
 ///          leading/trailing word boundaries.
 fn contains_unsafe_keyword(text: &str) -> bool {
-    let chars = text.char_indices().peekable();
-    for (i, _) in chars {
+    for (i, _) in text.char_indices() {
         // Check for the substring "unsafe" starting at position i.
         if text[i..].starts_with("unsafe") {
             let end = i + "unsafe".len();

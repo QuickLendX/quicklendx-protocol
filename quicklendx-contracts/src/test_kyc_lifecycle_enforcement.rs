@@ -98,7 +98,7 @@ mod test_kyc_lifecycle_enforcement {
             &description,
             &category,
             &tags,
-        )
+            &None)
     }
 
     fn create_and_verify_invoice(
@@ -134,7 +134,7 @@ mod test_kyc_lifecycle_enforcement {
             &description,
             &category,
             &tags,
-        );
+            &None);
 
         assert_eq!(result, Err(QuickLendXError::BusinessNotVerified));
     }
@@ -162,7 +162,7 @@ mod test_kyc_lifecycle_enforcement {
             &description,
             &category,
             &tags,
-        );
+            &None);
 
         assert_eq!(result, Err(QuickLendXError::KYCAlreadyPending));
     }
@@ -192,7 +192,7 @@ mod test_kyc_lifecycle_enforcement {
             &description,
             &category,
             &tags,
-        );
+            &None);
 
         assert_eq!(result, Err(QuickLendXError::BusinessNotVerified));
     }
@@ -218,7 +218,7 @@ mod test_kyc_lifecycle_enforcement {
             &description,
             &category,
             &tags,
-        );
+            &None);
 
         assert!(result.is_ok());
     }
@@ -302,7 +302,7 @@ mod test_kyc_lifecycle_enforcement {
 
         // Create invoice and place bid
         let invoice_id = create_and_verify_invoice(&env, &client, &admin, &business);
-        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
         // Make business pending by submitting new KYC
         let new_kyc_data = create_test_kyc_data(&env, "UpdatedBusiness");
@@ -326,7 +326,7 @@ mod test_kyc_lifecycle_enforcement {
 
         // Create invoice and place bid
         let invoice_id = create_and_verify_invoice(&env, &client, &admin, &business);
-        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
         // Make business rejected by submitting and rejecting new KYC
         let new_kyc_data = create_test_kyc_data(&env, "UpdatedBusiness");
@@ -348,7 +348,7 @@ mod test_kyc_lifecycle_enforcement {
         create_verified_investor(&env, &client, &admin, &investor);
 
         let invoice_id = create_and_verify_invoice(&env, &client, &admin, &business);
-        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
         let result = client.try_accept_bid(&business, &bid_id);
         assert!(result.is_ok());
@@ -367,7 +367,7 @@ mod test_kyc_lifecycle_enforcement {
         create_verified_business(&env, &client, &admin, &business);
         let invoice_id = create_and_verify_invoice(&env, &client, &admin, &business);
 
-        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
         assert_eq!(result, Err(QuickLendXError::BusinessNotVerified));
     }
 
@@ -384,7 +384,7 @@ mod test_kyc_lifecycle_enforcement {
         // Submit KYC (becomes pending)
         client.submit_investor_kyc(&investor, &kyc_data);
 
-        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
         assert_eq!(result, Err(QuickLendXError::KYCAlreadyPending));
     }
 
@@ -403,7 +403,7 @@ mod test_kyc_lifecycle_enforcement {
         client.submit_investor_kyc(&investor, &kyc_data);
         assert!(client.try_reject_investor(&investor, &rejection_reason).is_ok());
 
-        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
         assert_eq!(result, Err(QuickLendXError::BusinessNotVerified));
     }
 
@@ -418,7 +418,7 @@ mod test_kyc_lifecycle_enforcement {
 
         let invoice_id = create_and_verify_invoice(&env, &client, &admin, &business);
 
-        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
         assert!(result.is_ok());
     }
 
@@ -433,7 +433,7 @@ mod test_kyc_lifecycle_enforcement {
         create_verified_business(&env, &client, &admin, &business);
         create_verified_investor(&env, &client, &admin, &investor);
         let invoice_id = create_and_verify_invoice(&env, &client, &admin, &business);
-        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
         // Make investor pending by submitting new KYC
         let new_kyc_data = create_test_kyc_data(&env, "UpdatedInvestor");
@@ -456,7 +456,7 @@ mod test_kyc_lifecycle_enforcement {
         create_verified_business(&env, &client, &admin, &business);
         create_verified_investor(&env, &client, &admin, &investor);
         let invoice_id = create_and_verify_invoice(&env, &client, &admin, &business);
-        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
         // Make investor rejected by submitting and rejecting new KYC
         let new_kyc_data = create_test_kyc_data(&env, "UpdatedInvestor");
@@ -478,7 +478,7 @@ mod test_kyc_lifecycle_enforcement {
         create_verified_investor(&env, &client, &admin, &investor);
 
         let invoice_id = create_and_verify_invoice(&env, &client, &admin, &business);
-        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
         let result = client.try_withdraw_bid(&bid_id);
         assert!(result.is_ok());
@@ -700,7 +700,7 @@ mod test_kyc_lifecycle_enforcement {
             &description,
             &category,
             &tags,
-        );
+            &None);
         assert_eq!(result, Err(QuickLendXError::BusinessNotVerified));
 
         // Phase 2: Submit KYC - becomes pending, still cannot upload
@@ -714,7 +714,7 @@ mod test_kyc_lifecycle_enforcement {
             &description,
             &category,
             &tags,
-        );
+            &None);
         assert_eq!(result, Err(QuickLendXError::KYCAlreadyPending));
 
         // Phase 3: Get verified - now can upload invoice
@@ -728,11 +728,11 @@ mod test_kyc_lifecycle_enforcement {
             &description,
             &category,
             &tags,
-        );
+            &None);
 
         // Phase 4: Verify invoice and place bid
         let _ = client.try_verify_invoice(&invoice_id);
-        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
         // Phase 5: Submit new KYC - becomes pending, cannot accept bid
         let new_kyc_data = create_test_kyc_data(&env, "UpdatedBusiness");
@@ -773,19 +773,19 @@ mod test_kyc_lifecycle_enforcement {
         let invoice_id = create_and_verify_invoice(&env, &client, &admin, &business);
 
         // Phase 1: Unverified - cannot place bid
-        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
         assert_eq!(result, Err(QuickLendXError::BusinessNotVerified));
 
         // Phase 2: Submit KYC - becomes pending, still cannot place bid
         client.submit_investor_kyc(&investor, &kyc_data);
 
-        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let result = client.try_place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
         assert_eq!(result, Err(QuickLendXError::KYCAlreadyPending));
 
         // Phase 3: Get verified - now can place bid
         let _ = client.try_verify_investor(&investor, &500_000i128);
 
-        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128);
+        let bid_id = client.place_bid(&investor, &invoice_id, &50_000i128, &55_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
         // Phase 4: Submit new KYC - becomes pending, cannot withdraw bid
         let new_kyc_data = create_test_kyc_data(&env, "UpdatedInvestor");

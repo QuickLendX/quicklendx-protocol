@@ -57,6 +57,7 @@ for (const event of events.events) {
 | [InvoiceUploaded]           | `invoice_uploaded`         | `store_invoice`     |
 | [InvoiceVerified]           | `invoice_verified`         | `verify_invoice`    |
 | [InvoiceCancelled]          | `invoice_cancelled`        | `cancel_invoice`    |
+| [InvoiceFrozen]             | `invoice_frozen`           | `freeze_invoice`    |
 | [InvoiceFunded]             | `invoice_funded`           | `accept_bid_and_fund` |
 | [InvoiceSettled]            | `invoice_settled`          | `settle_invoice`    |
 | [InvoiceSettledFinal]       | `invoice_settled_final`    | `settle_invoice`    |
@@ -270,6 +271,63 @@ Emitted when an invoice passes its `due_date` without settlement or default.
   "due_date":   "<u64>"
 }
 ```
+
+---
+
+### `InvoiceFrozen`
+
+Emitted when an admin applies a freeze to an invoice via `freeze_invoice`.
+The `freeze_appeal_channel` field is a static pointer to the off-chain appeals
+process that the affected business can use to contest the freeze.
+
+**Topic:** `invoice_frozen`  
+**Emitter:** `freeze_invoice(admin, invoice_id, reason)`  
+**Issue:** #1959
+
+```json
+{
+  "invoice_id":           "<bytes32>",
+  "frozen_by":            "<address>",
+  "reason":               "<string>",
+  "freeze_appeal_channel": "<string>",
+  "timestamp":            "<u64>"
+}
+```
+
+**`reason` values** (stable machine-readable labels, never enum variant names):
+
+| `BusinessFreezeReason` variant | `reason` string         |
+|--------------------------------|-------------------------|
+| `AdminAction`                  | `"admin_action"`        |
+| `KYCRejected`                  | `"kyc_rejected"`        |
+| `ComplianceViolation`          | `"compliance_violation"` |
+| `SuspiciousActivity`           | `"suspicious_activity"` |
+| `LegalHold`                    | `"legal_hold"`          |
+| `FraudSuspected`               | `"fraud_suspected"`     |
+| `Dispute`                      | `"dispute"`             |
+| `Voluntary`                    | `"voluntary"`           |
+
+**`freeze_appeal_channel`** is always `"docs/APPEALS.md"`.  Downstream consumers
+(dashboards, notification services, support tooling) should surface this value
+directly to the affected business so they know where to file an appeal without
+having to page an engineer.
+
+**Example:**
+```json
+{
+  "invoice_id":            "a1b2c3d4...",
+  "frozen_by":             "GC5DNYW4...",
+  "reason":                "compliance_violation",
+  "freeze_appeal_channel": "docs/APPEALS.md",
+  "timestamp":             1720000000
+}
+```
+
+**Backwards compatibility note:** The `freeze_appeal_channel` field was added in
+issue #1959.  Indexers that do not recognise this field can safely ignore it —
+the topic and all existing fields are unchanged.
+
+> See [`docs/APPEALS.md`](APPEALS.md) for the full appeals process documentation.
 
 ---
 

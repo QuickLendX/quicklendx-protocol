@@ -37,6 +37,7 @@ time that every key builder in `src/storage.rs`, `src/bid.rs`, and
 | `inv_count`    | Persistent | `StorageKeys::invoice_count()`                  |
 | `bid_count`    | Persistent | `StorageKeys::bid_count()`                      |
 | `inv_cnt`      | Persistent | `StorageKeys::investment_count()`               |
+| `biz_def_h`    | Persistent | `StorageKeys::business_default_history()`       |
 | `inv_bus`      | Persistent | `Indexes::invoices_by_business()`               |
 | `inv_st`       | Persistent | `Indexes::invoices_by_status()` / `investments_by_status()` |
 | `inv_cust`     | Persistent | `Indexes::invoices_by_customer()`               |
