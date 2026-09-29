@@ -112,50 +112,53 @@ export const SCOPE_REGISTRY: ScopeDefinition[] = [
 
 /**
  * Error thrown when the scope registry is invalid or corrupted.
- * This is a fail-fast guard: a corrupt registry must never silently
- * produce a partial or non-deterministic scope list.
+ * This is a fail-fast condition: the registry is a compile-time constant,
+ * so any violation indicates a programming error or tampering.
  */
 export class ScopeRegistryError extends Error {
-  readonly code: string;
-  constructor(code: string, message: string) {
+  constructor(message: string) {
     super(message);
     this.name = 'ScopeRegistryError';
-    this.code = code;
   }
 }
 
 /**
- * Invariants: the scope registry must be non-empty, contain only non-empty
- * string scopes, and be free of duplicates. Violations are fail-fast.
+ * Invariants: the scope registry must be non-empty, free of duplicates,
+ * and contain only well-formed canonical scope names.
+ *
+ * This function is deterministic and idempotent: it always returns the
+ * same result for the same input and never mutates the registry.
  */
-function assertRegistryInvariants(registry: readonly ScopeDefinition[]): void {
+export function assertScopeRegistryInvariants(
+  registry: readonly ScopeDefinition[] = SCOPE_REGISTRY,
+): void {
   if (!Array.isArray(registry) || registry.length === 0) {
-    throw new ScopeRegistryError('EMPTY_REGISTRY', 'Scope registry is empty');
+    throw new ScopeRegistryError('Scope registry must be a non-empty array');
   }
 
-  const seen = new Set<string>();
-  for (const entry of registry) {
-    if (!entry || typeof entry.scope !== 'string' || entry.scope.length === 0) {
-      throw new ScopeRegistryError('INVALID_SCOPE_ENTRY', 'Scope registry contains an invalid entry');
+  const seen: Set<string> = new Set();
+  for (const def of registry) {
+    if (!def || typeof def.scope !== 'string' || def.scope.length === 0) {
+      throw new ScopeRegistryError('Scope registry contains an entry with an empty or non-string scope');
     }
-    if (seen.has(entry.scope)) {
-      throw new ScopeRegistryError('DUPLICATE_SCOPE', `Duplicate scope definition: ${entry.scope}`);
+    if (seen.has(def.scope)) {
+      throw new ScopeRegistryError(`Duplicate scope detected: ${def.scope}`);
     }
-    seen.add(entry.scope);
+    seen.add(def.scope);
   }
 }
 
 /**
  * Get all valid scope names.
  *
- * Deterministic contract:
- * - Returns a new array in registry declaration order (stable across calls).
- * - Returns a defensive copy so callers cannot mutate internal state.
- * - Fails fast with `ScopeRegistryError` if the registry is corrupt.
- * - Never returns a duplicate or empty string entry.
+ * Deterministic and pure: returns a new array in registry order every call.
+ * The caller cannot mutate the underlying registry through the returned
+ * array. Throws a ScopeRegistryError if the registry is corrupted so
+ * failures are diagnosable and fail-fast rather than silently producing
+ * an inconsistent scope list.
  */
 export function getValidScopes(): string[] {
-  assertRegistryInvariants(SCOPE_REGISTRY);
+  assertScopeRegistryInvariants(SCOPE_REGISTRY);
   return SCOPE_REGISTRY.map(s => s.scope);
 }
 
@@ -170,27 +173,13 @@ export function isValidScope(scope: string): boolean {
 }
 
 /**
- * Validate an array of scopes.
- *
- * Invariants:
- * - Order of `invalid` mirrors input order (deterministic).
- * - Duplicate invalid entries are de-duplicated in the reported list.
- * - Non-array input is rejected as invalid rather than throwing.
+ * Validate an array of scopes
  */
 export function validateScopes(scopes: string[]): { valid: boolean; invalid: string[] } {
   if (!Array.isArray(scopes)) {
     return { valid: false, invalid: [] };
   }
-
-  const invalidSet = new Set<string>();
-  const invalid: string[] = [];
-  for (const scope of scopes) {
-    if (!isValidScope(scope) && !invalidSet.has(Scope)) {
-      invalidSet.add(scope);
-      invalid.push(scope);
-    }
-  }
-
+  const invalid = scopes.filter(scope => !isValidScope(scope));
   return {
     valid: invalid.length === 0,
     invalid,
@@ -202,14 +191,21 @@ export function validateScopes(scopes: string[]): { valid: boolean; invalid: str
  * Supports wildcard matching (e.g., read:* matches read:users)
  */
 export function hasRequiredScopes(grantedScopes: string[], requiredScopes: string[]): boolean {
+  if (!Array.isArray(grantedScopes) || !Array.isArray(requiredScopes)) {
+    return false;
+  }
+
   // Check for admin:* which grants everything
   if (grantedScopes.includes('admin:*')) {
     return true;
   }
 
   for (const required of requiredScopes) {
-    const [category, resource] = required.split(':');
-    
+    if (typeof required !== 'string' || required.length === 0) {
+      return false;
+    }
+    const [category] = required.split(':');
+
     // Check for exact match
     if (grantedScopes.includes(required)) {
       continue;
@@ -241,6 +237,8 @@ export function getScopesByCategory(category: ScopeDefinition['category']): Scop
  * or `null` when no administrative role is implied.
  */
 export function roleFromScopes(grantedScopes: string[]): AdminRole | null {
+  if (!Array.isArray(grantedScopes)) return null;
+
   // Full admin grants highest privilege
   if (grantedScopes.includes('admin:*')) return 'super_admin';
 
