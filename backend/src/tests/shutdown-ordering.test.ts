@@ -406,22 +406,22 @@ describe('createShutdownHandler — canonical step sequence', () => {
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
-  it('exits 0 even when flush() throws', async () => {
+  it('exits 1 when flush() throws', async () => {
     (webhookQueueService.flush as jest.Mock).mockImplementation(() => {
       throw new Error('flush boom');
     });
     const server = makeMockServer();
     await createShutdownHandler(server, 100)('SIGTERM');
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
-  it('exits 0 even when closeDatabase() throws', async () => {
+  it('exits 1 when closeDatabase() throws', async () => {
     (closeDatabase as jest.Mock).mockImplementation(() => {
       throw new Error('db boom');
     });
     const server = makeMockServer();
     await createShutdownHandler(server, 100)('SIGTERM');
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('handles SIGINT identically to SIGTERM', async () => {

@@ -99,13 +99,15 @@ export function isShuttingDown(): boolean {
 export async function runAll(
   signal: string,
   totalTimeoutMs = DEFAULT_DRAIN_TIMEOUT_MS,
-): Promise<void> {
+): Promise<{ success: boolean }> {
   const sorted = getRegisteredSteps();
   const deadline = Date.now() + totalTimeoutMs;
+  let success = true;
 
   for (const step of sorted) {
     if (Date.now() >= deadline) {
       console.warn(`[shutdown] Total timeout reached — skipping step "${step.name}"`);
+      success = false;
       break;
     }
     try {
@@ -113,9 +115,12 @@ export async function runAll(
       await step.fn(signal);
     } catch (err) {
       console.error(`[shutdown] Step "${step.name}" failed:`, err);
+      success = false;
       // Continue with remaining steps
     }
   }
+
+  return { success };
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +179,7 @@ export function createShutdownHandler(
           `[shutdown] Drain timeout (${drainTimeoutMs}ms) exceeded — ` +
             `${remaining} request(s) still in-flight`,
         );
+        throw new Error(`In-flight requests did not drain in time`);
       }
     },
   });
@@ -186,6 +192,7 @@ export function createShutdownHandler(
       const pending = webhookQueueService.flush();
       if (pending.length > 0) {
         console.warn(`[shutdown] ${pending.length} webhook event(s) not delivered`);
+        throw new Error(`${pending.length} webhook event(s) not delivered`);
       }
     },
   });
@@ -208,8 +215,8 @@ export function createShutdownHandler(
     _shuttingDown = true;
 
     console.log(`[shutdown] ${signal} — starting graceful shutdown`);
-    await runAll(signal, drainTimeoutMs);
+    const { success } = await runAll(signal, drainTimeoutMs);
     console.log('[shutdown] Shutdown complete');
-    process.exit(0);
+    process.exit(success ? 0 : 1);
   };
 }
