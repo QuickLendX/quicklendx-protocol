@@ -752,25 +752,54 @@ function assertNoSecretsPrinted(output, findings) {
 }
 
 function runSecretScan(options = {}) {
-  const backendRoot = options.backendRoot || process.cwd();
-  const findings = scanBackend(backendRoot, options);
-  const message = formatFindings(findings);
-
-  if (findings.length > 0) {
+  if (!options || typeof options !== "object" || Array.isArray(options)) {
     return {
       ok: false,
       exitCode: 1,
-      findings,
-      message,
+      findings: [],
+      message: "Secret scan could not complete: invalid scan options.",
     };
   }
 
-  return {
-    ok: true,
-    exitCode: 0,
-    findings,
-    message,
-  };
+  try {
+    const backendRoot = options.backendRoot || process.cwd();
+    const findings = scanBackend(backendRoot, options);
+    const message = formatFindings(findings);
+
+    if (findings.length > 0) {
+      return {
+        ok: false,
+        exitCode: 1,
+        findings,
+        message,
+      };
+    }
+
+    return {
+      ok: true,
+      exitCode: 0,
+      findings,
+      message,
+    };
+  } catch (error) {
+    // A partial filesystem read must never be reported as a clean scan. Keep
+    // the message bounded and single-line so an unexpected error cannot forge
+    // additional log entries or expose a large/sensitive value.
+    let detail = "unexpected scan error";
+    try {
+      detail = error instanceof Error ? error.message : String(error);
+    } catch {
+      // Preserve the failed result even when coercing an unusual thrown value fails.
+    }
+    detail = detail.replace(/[\r\n]+/g, " ").slice(0, 200);
+
+    return {
+      ok: false,
+      exitCode: 1,
+      findings: [],
+      message: `Secret scan could not complete: ${detail || "unexpected scan error"}`,
+    };
+  }
 }
 
 module.exports = {
