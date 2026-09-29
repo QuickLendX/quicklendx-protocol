@@ -1113,3 +1113,343 @@ describe("scanLine failure boundary coverage", () => {
     });
   });
 });
+
+describe("unquoteString failure boundaries", () => {
+  const UNBALANCED_MESSAGE =
+    "unquoteString requires a balanced quoted literal: the opening quote must be closed by the same quote character. The literal text is omitted because it may contain a secret.";
+
+  describe("valid inputs", () => {
+    it("strips each supported surrounding quote pair", () => {
+      expect(secretScanUtils.unquoteString('"value"')).toBe("value");
+      expect(secretScanUtils.unquoteString("'value'")).toBe("value");
+      expect(secretScanUtils.unquoteString("`value`")).toBe("value");
+      expect(secretScanUtils.unquoteString('""')).toBe("");
+      expect(secretScanUtils.unquoteString("''")).toBe("");
+      expect(secretScanUtils.unquoteString("``")).toBe("");
+      expect(secretScanUtils.unquoteString('" "')).toBe(" ");
+    });
+
+    it("removes only the outer pair and leaves inner text untouched", () => {
+      expect(secretScanUtils.unquoteString('"say \\"hi\\""')).toBe('say \\"hi\\"');
+      expect(secretScanUtils.unquoteString(`"a'b"`)).toBe("a'b");
+      expect(secretScanUtils.unquoteString(`'a"b'`)).toBe('a"b');
+      expect(secretScanUtils.unquoteString('"a`b"')).toBe("a`b");
+      expect(secretScanUtils.unquoteString('""a""')).toBe(`"a"`);
+    });
+
+    it("preserves whitespace and unicode content exactly", () => {
+      expect(secretScanUtils.unquoteString("'  padded  '")).toBe("  padded  ");
+      expect(secretScanUtils.unquoteString('"héllo wörld"')).toBe("héllo wörld");
+      expect(secretScanUtils.unquoteString('"日本語のシークレット"')).toBe("日本語のシークレット");
+    });
+
+    it("handles a very long literal deterministically", () => {
+      const body = "a".repeat(100000);
+      const literal = `"${body}"`;
+
+      const first = secretScanUtils.unquoteString(literal);
+      const second = secretScanUtils.unquoteString(literal);
+
+      expect(first).toHaveLength(body.length);
+      expect(second).toBe(first);
+    });
+  });
+
+  describe("boundary inputs", () => {
+    it("accepts the shortest valid quoted literal for every quote style", () => {
+      expect(secretScanUtils.unquoteString('"a"')).toBe("a");
+      expect(secretScanUtils.unquoteString("'a'")).toBe("a");
+      expect(secretScanUtils.unquoteString("`a`")).toBe("a");
+    });
+
+    it("passes through input that does not open with a quote byte-for-byte", () => {
+      const unquoted = ["", "a", "abc", 'abc"', " ", "  padded  ", "abc'", "0"];
+
+      for (const input of unquoted) {
+        expect(secretScanUtils.unquoteString(input)).toBe(input);
+      }
+    });
+
+    it("treats a lone quote character as malformed rather than an empty value", () => {
+      for (const literal of ['"', "'", "`"]) {
+        expect(() => secretScanUtils.unquoteString(literal)).toThrow(TypeError);
+        expect(() => secretScanUtils.unquoteString(literal)).toThrow(
+          /unquoteString requires a balanced quoted literal/
+        );
+      }
+    });
+  });
+
+  describe("error state", () => {
+    it("rejects non-string input with a diagnosable TypeError", () => {
+      const invalid: unknown[] = [
+        null,
+        undefined,
+        0,
+        -1,
+        42,
+        3.14,
+        true,
+        false,
+        {},
+        [],
+        () => {},
+        Symbol("x"),
+        10n,
+        new String("value"),
+        new Map(),
+      ];
+
+      for (const input of invalid) {
+        let thrown: unknown;
+        try {
+          secretScanUtils.unquoteString(input);
+        } catch (error) {
+          thrown = error;
+        }
+
+        expect(thrown).toBeInstanceOf(TypeError);
+        expect((thrown as Error).message).toMatch(
+          /^unquoteString requires a string literal, received \w+\.$/
+        );
+      }
+    });
+
+    it("names the received type without echoing the value", () => {
+      expect(() => secretScanUtils.unquoteString(null)).toThrow(
+        "unquoteString requires a string literal, received null."
+      );
+      expect(() => secretScanUtils.unquoteString(undefined)).toThrow(
+        "unquoteString requires a string literal, received undefined."
+      );
+      expect(() => secretScanUtils.unquoteString(42)).toThrow(
+        "unquoteString requires a string literal, received number."
+      );
+      expect(() => secretScanUtils.unquoteString([])).toThrow(
+        "unquoteString requires a string literal, received array."
+      );
+      expect(() => secretScanUtils.unquoteString(Symbol("id"))).toThrow(
+        "unquoteString requires a string literal, received symbol."
+      );
+      expect(() => secretScanUtils.unquoteString(10n)).toThrow(
+        "unquoteString requires a string literal, received bigint."
+      );
+
+      let message = "";
+      try {
+        secretScanUtils.unquoteString({ secret: "value" });
+      } catch (error) {
+        message = (error as Error).message;
+      }
+      expect(message).toBe("unquoteString requires a string literal, received object.");
+      expect(message).not.toContain("value");
+    });
+
+    it("rejects an unbalanced quoted literal instead of truncating it", () => {
+      const unbalanced = ['"', "'", "`", '"abc', "'abc", "`abc", `"a'`, "'a\""];
+
+      for (const literal of unbalanced) {
+        let thrown: unknown;
+        try {
+          secretScanUtils.unquoteString(literal);
+        } catch (error) {
+          thrown = error;
+        }
+
+        expect(thrown).toBeInstanceOf(TypeError);
+        expect((thrown as Error).message).toBe(UNBALANCED_MESSAGE);
+      }
+    });
+
+    it("never echoes the rejected literal into the error message", () => {
+      const secret = makeStripeKey();
+      const unterminated = `"` + secret;
+
+      let message = "";
+      try {
+        secretScanUtils.unquoteString(unterminated);
+      } catch (error) {
+        message = (error as Error).message;
+      }
+
+      expect(message).toContain("unquoteString requires a balanced quoted literal");
+      expect(message).not.toContain(secret);
+      expect(message).not.toContain(secret.slice(0, 12));
+      expect(message).not.toContain("sk_live");
+    });
+  });
+
+  describe("regression guard", () => {
+    it("keeps the behaviour existing callers rely on", () => {
+      expect(secretScanUtils.unquoteString('"value"')).toBe("value");
+      expect(secretScanUtils.unquoteString("not-quoted")).toBe("not-quoted");
+    });
+
+    it("unquotes every literal collected from a real line with stable columns", () => {
+      const line = `const a = 'one'; const b = "two";`;
+      const collected = secretScanUtils.collectQuotedStringMatches(line);
+
+      expect(collected).toEqual([
+        { literal: "'one'", value: "one", column: line.indexOf("'one'") + 1 },
+        { literal: '"two"', value: "two", column: line.indexOf('"two"') + 1 },
+      ]);
+      expect(secretScanUtils.collectQuotedStringMatches(line)).toEqual(collected);
+    });
+
+    it("does not change scanLine output for balanced lines", () => {
+      const awsKey = makeAwsKey();
+
+      const findings = secretScanUtils.scanLine(`aws="${awsKey}"`, 1, "src/a.ts", EMPTY_ALLOWLIST);
+
+      expect(findingTypes(findings)).toEqual(["aws-access-key"]);
+      expect(findings[0].column).toBe(6);
+    });
+
+    it("only ever feeds balanced literals to unquoteString from the scanner", () => {
+      const trickyLines = [
+        "const a = 'one';",
+        'const b = "two";',
+        `const c = "it's";`,
+        `const d = 'say "hi"';`,
+        `const e = "";`,
+        `const f = '';`,
+        'const g = "escaped \\" quote"',
+        "const h = 'unterminated",
+        'const i = "unterminated',
+        `const j = 'a' + "b";`,
+      ];
+
+      const collected = trickyLines.flatMap((line) =>
+        secretScanUtils.collectQuotedStringMatches(line)
+      );
+
+      // Unterminated source quotes yield no candidate at all, so the scanner
+      // never hands unquoteString a literal it cannot validate.
+      expect(secretScanUtils.collectQuotedStringMatches("const h = 'unterminated")).toEqual([]);
+      expect(secretScanUtils.collectQuotedStringMatches('const i = "unterminated')).toEqual([]);
+      expect(collected).toHaveLength(9);
+
+      for (const { literal, value } of collected) {
+        expect(literal.length).toBeGreaterThanOrEqual(2);
+        expect(literal[0]).toMatch(/^['"`]$/);
+        expect(literal[literal.length - 1]).toBe(literal[0]);
+        expect(secretScanUtils.unquoteString(literal)).toBe(value);
+      }
+    });
+
+    it("scans lines carrying unbalanced source quotes without throwing", () => {
+      const lines = [
+        `const s = "abc`,
+        `const s = 'abc`,
+        `x = "'abc"`,
+        `// don't break "quotes"`,
+      ];
+
+      for (const line of lines) {
+        expect(secretScanUtils.scanLine(line, 1, "src/a.ts", EMPTY_ALLOWLIST)).toEqual([]);
+        expect(secretScanUtils.scanLine(line, 2, "src/a.ts", EMPTY_ALLOWLIST)).toEqual([]);
+      }
+    });
+  });
+
+  describe("retry state", () => {
+    it("returns identical results for repeated and duplicate inputs", () => {
+      const inputs = ['"value"', "not-quoted", "", '""', '"a"', "'a'"];
+      const first = inputs.map((input) => secretScanUtils.unquoteString(input));
+      const second = inputs.map((input) => secretScanUtils.unquoteString(input));
+      const third = inputs.map((input) => secretScanUtils.unquoteString(input));
+
+      expect(second).toEqual(first);
+      expect(third).toEqual(first);
+      expect(secretScanUtils.unquoteString('"value"')).toBe(
+        secretScanUtils.unquoteString('"value"')
+      );
+    });
+
+    it("leaves no residue behind a rejected call and fails identically on retry", () => {
+      const valid = '"value"';
+      const before = secretScanUtils.unquoteString(valid);
+
+      expect(() => secretScanUtils.unquoteString('"unterminated')).toThrow(TypeError);
+      expect(() => secretScanUtils.unquoteString(null)).toThrow(TypeError);
+
+      expect(secretScanUtils.unquoteString(valid)).toBe(before);
+      expect(() => secretScanUtils.unquoteString('"unterminated')).toThrow(UNBALANCED_MESSAGE);
+      expect(() => secretScanUtils.unquoteString(null)).toThrow(
+        "unquoteString requires a string literal, received null."
+      );
+    });
+  });
+
+  describe("stale state", () => {
+    it("is unaffected by a stale lastIndex on the exported plain-string regex", () => {
+      const line = `const a = "first"; const b = "second";`;
+      const baseline = secretScanUtils.collectQuotedStringMatches(line);
+      expect(baseline).toHaveLength(2);
+
+      secretScanUtils.PLAIN_STRING_REGEX.lastIndex = 7;
+
+      const afterStale = secretScanUtils.collectQuotedStringMatches(line);
+      expect(afterStale).toEqual(baseline);
+      // The scanner works on a clone, so the caller's regex is left untouched.
+      expect(secretScanUtils.PLAIN_STRING_REGEX.lastIndex).toBe(7);
+
+      secretScanUtils.PLAIN_STRING_REGEX.lastIndex = 0;
+      expect(secretScanUtils.collectQuotedStringMatches(line)).toEqual(baseline);
+    });
+  });
+
+  describe("concurrent execution", () => {
+    it("does not leak state across interleaved valid and invalid calls", () => {
+      const inputs: unknown[] = [
+        '"one"',
+        null,
+        '"two"',
+        undefined,
+        '"three"',
+        '"unterminated',
+        '"four"',
+        42,
+        "'five'",
+      ];
+
+      const outcomes = inputs.map((input) => {
+        try {
+          return secretScanUtils.unquoteString(input);
+        } catch {
+          return null;
+        }
+      });
+
+      expect(outcomes).toEqual(["one", null, "two", null, "three", null, "four", null, "five"]);
+
+      const reversed = [...inputs].reverse().map((input) => {
+        try {
+          return secretScanUtils.unquoteString(input);
+        } catch {
+          return null;
+        }
+      });
+
+      expect(reversed).toEqual([...outcomes].reverse());
+    });
+  });
+
+  describe("loading state", () => {
+    it("fails closed in a fresh process without printing the literal", () => {
+      const output = readSecretScanUtilsInChildProcess(
+        [
+          "const secret = 'Ab34Cd56Ef78'.repeat(4);",
+          "try { u.unquoteString('\"' + secret); console.log('NO_ERROR'); }",
+          "catch (error) { console.log(error.constructor.name + ': ' + error.message);",
+          "console.log('LEAKED:' + String(error.message.includes(secret))); }",
+        ].join("\n")
+      );
+
+      expect(output).toContain("TypeError: unquoteString requires a balanced quoted literal");
+      expect(output).toContain("LEAKED:false");
+      expect(output).not.toContain("NO_ERROR");
+      expect(output).not.toContain("Ab34Cd56Ef78");
+    });
+  });
+});

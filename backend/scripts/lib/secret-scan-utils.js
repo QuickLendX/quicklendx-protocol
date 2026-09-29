@@ -23,6 +23,15 @@
  * 4. OUTPUT NEVER CONTAINS A SECRET. Error messages identify findings by
  *    repo-relative path, line, and allowlist index. They never embed matched
  *    secret text, nor absolute filesystem paths from the scanning machine.
+ * 5. UNQUOTING IS VALIDATED, NEVER REINTERPRETED. `unquoteString` only strips
+ *    a surrounding quote pair when the input is a string that opens and closes
+ *    with the same quote character. Non-string input and unbalanced literals
+ *    throw a `TypeError` instead of being rewritten, because `slice(1, -1)`
+ *    used to turn the unterminated literal `"abc` into `ab` and a lone `"` into
+ *    `""` -- silent data loss on inputs the scanner cannot positively evaluate
+ *    (invariant 1). Like invariant 4, these errors name the failure condition
+ *    (and, for a wrong type, the received type), never the literal text, which
+ *    may itself be a secret.
  */
 
 const fs = require("node:fs");
@@ -263,10 +272,45 @@ function collectRegexMatches(line, patternDef) {
   return matches;
 }
 
+/**
+ * Strips one surrounding quote pair from a string literal, or returns the
+ * input unchanged when it is not quoted.
+ *
+ * Deterministic contract (invariant 5 above):
+ * - non-string input throws a `TypeError` naming the received type instead of
+ *   being indexed and passed through (a `symbol` used to yield `undefined`, a
+ *   number used to return a number, and `null` used to throw an opaque
+ *   "Cannot read properties of null");
+ * - a string that opens with `'`, `"` or `` ` `` must close with the same
+ *   quote character and be at least two characters long, otherwise the literal
+ *   is unbalanced and throws a `TypeError` instead of being truncated:
+ *   `slice(1, -1)` silently rewrote `"abc` to `ab` and a lone `"` to `""`;
+ * - everything else (including the empty string) is returned byte-for-byte, so
+ *   an unquoted value such as `abc"` is never altered.
+ *
+ * As with `assertScannableLineArguments`, every rejection is a `TypeError`
+ * carrying the same contract, distinguished only by its message. Neither
+ * message carries literal text: an unbalanced literal reaching this function
+ * may contain a real secret, and errors surface verbatim in CI logs through
+ * `secret-scan.js`.
+ */
 function unquoteString(literal) {
+  if (typeof literal !== "string") {
+    throw new TypeError(
+      `unquoteString requires a string literal, received ${describeType(literal)}.`
+    );
+  }
+
   const quote = literal[0];
   if (quote !== "'" && quote !== '"' && quote !== "`") {
     return literal;
+  }
+
+  if (literal.length < 2 || literal[literal.length - 1] !== quote) {
+    throw new TypeError(
+      "unquoteString requires a balanced quoted literal: the opening quote must be " +
+        "closed by the same quote character. The literal text is omitted because it may contain a secret."
+    );
   }
 
   return literal.slice(1, -1);
