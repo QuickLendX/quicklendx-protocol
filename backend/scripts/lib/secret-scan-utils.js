@@ -227,13 +227,13 @@ function collectHighEntropyMatches(line) {
   const matches = [];
 
   try {
-    for (const quoted of collectQuotedStringMatches(line)) {
+    for (const quoted of module.exports.collectQuotedStringMatches(line)) {
       try {
         if (!quoted || typeof quoted.value !== "string") {
           continue;
         }
 
-        if (!isHighEntropyToken(quoted.value)) {
+        if (!module.exports.isHighEntropyToken(quoted.value)) {
           continue;
         }
 

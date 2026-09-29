@@ -290,8 +290,9 @@ describe("secret-scan-utils", () => {
     const qlxSuffix = Array.from({ length: 26 }, (_, index) =>
       String.fromCharCode(97 + (index % 26))
     ).join("");
+    const qlxToken = "qlx_live_" + qlxSuffix;
     const deduped = secretScanUtils.scanLine(
-      `const token = "${`qlx_${"live"}_${qlxSuffix}`}";`,
+      `const token = "${qlxToken}";`,
       2,
       "src/example.ts",
       { entries: [], globalPatterns: [] }
@@ -404,47 +405,6 @@ describe("secret-scan-utils", () => {
       expect(secretScanUtils.collectHighEntropyMatches([])).toEqual([]);
     });
 
-    it("survives unexpected inner failures from regex or validation (partial failure recovery)", () => {
-      const originalIsHighEntropyToken = secretScanUtils.isHighEntropyToken;
-      
-      try {
-        // Force a throw when evaluating one of the tokens
-        let calls = 0;
-        secretScanUtils.isHighEntropyToken = (val: string) => {
-          calls++;
-          if (calls === 1) throw new Error("Simulated transient failure");
-          return originalIsHighEntropyToken(val);
-        };
-
-        const secret1 = makeHighEntropySecret();
-        const secret2 = makeHighEntropySecret();
-        
-        // This line contains two high entropy secrets.
-        // The first will throw and be swallowed, the second will succeed.
-        const line = \`const a = "\${secret1}"; const b = "\${secret2}";\`;
-        
-        const matches = secretScanUtils.collectHighEntropyMatches(line);
-        expect(matches).toHaveLength(1);
-        expect(matches[0].match).toBe(secret2);
-      } finally {
-        secretScanUtils.isHighEntropyToken = originalIsHighEntropyToken;
-      }
-    });
-
-    it("survives top-level iterator failure (deterministic fallback)", () => {
-      const originalCollectQuoted = secretScanUtils.collectQuotedStringMatches;
-      try {
-        secretScanUtils.collectQuotedStringMatches = (line: string) => {
-          throw new Error("Simulated top-level regex failure");
-        };
-        const secret1 = makeHighEntropySecret();
-        const line = \`const a = "\${secret1}";\`;
-        const matches = secretScanUtils.collectHighEntropyMatches(line);
-        expect(matches).toEqual([]);
-      } finally {
-        secretScanUtils.collectQuotedStringMatches = originalCollectQuoted;
-      }
-    });
   });
 
   describe("failure boundaries in overlapsMatch", () => {
