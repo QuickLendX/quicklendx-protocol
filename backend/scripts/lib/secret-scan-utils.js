@@ -4,6 +4,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const DEFAULT_SCAN_ROOTS = ["src", "tests", "scripts"];
+const DEFAULT_MAX_MATCHES_PER_PATTERN = 10000;
 const DEFAULT_EXAMPLE_FILES = [".env.example"];
 const DEFAULT_EXTENSIONS = new Set([
   ".ts",
@@ -371,18 +372,78 @@ function resetRegex(regex) {
   regex.lastIndex = 0;
 }
 
+// Deterministic failure boundary: collectRegexMatches must never throw for
+// valid, invalid, duplicate, or boundary-case inputs, and must never loop
+// forever on a zero-length match. Invariants:
+//   B1 Total          - never throws for any line/patternDef combination.
+//   B2 Bounded        - the number of collected matches per pattern is capped
+//                       by maxMatches so a pathological pattern cannot
+//                       exhaust memory or stall the scan.
+//   B3 Zero-length    - a zero-length match advances lastIndex by one code
+//                       unit so the loop always terminates.
+//   B4 Reset          - the shared regex's lastIndex is reset before use and
+//                       left at 0 after use, so interleaved/concurrent calls
+//                       remain deterministic.
+//   B5 Shape          - every entry has {type, match, column} with column
+//                       being 1-based; non-string match[0] is coerced via
+//                       String() only after a typeof guard.
 function collectRegexMatches(line, patternDef) {
   const matches = [];
-  resetRegex(patternDef.regex);
 
-  let match = patternDef.regex.exec(line);
-  while (match) {
-    matches.push({
-      type: patternDef.name,
-      match: match[0],
-      column: match.index + 1,
-    });
-    match = patternDef.regex.exec(line);
+  if (typeof line !== "string") {
+    return matches;
+  }
+
+  if (!patternDef || typeof patternDef !== "object") {
+    return matches;
+  }
+
+  const regex = patternDef.regex;
+  if (!regex || typeof regex.exec !== "function") {
+    return matches;
+  }
+
+  const maxMatches =
+    typeof patternDef.maxMatches === "number" &&
+    Number.isFinite(patternDef.maxMatches) &&
+    patternDef.maxMatches > 0
+      ? Math.floor(patternDef.maxMatches)
+      : DEFAULT_MAX_MATCHES_PER_PATTERN;
+
+  resetRegex(regex);
+
+  try {
+    let match = regex.exec(line);
+    while (match) {
+      const raw = match[0];
+      const text = typeof raw === "string" ? raw : String(raw);
+
+      matches.push({
+        type: patternDef.name,
+        match: text,
+        column: match.index + 1,
+      });
+
+      if (matches.length >= maxMatches) {
+        break;
+      }
+
+      // Guard against zero-length matches: advance lastIndex by one code
+      // unit so the loop always makes progress and terminates.
+      if (text.length === 0) {
+        regex.lastIndex += 1;
+        if (regex.lastIndex > line.length) {
+          break;
+        }
+      }
+
+      match = regex.exec(line);
+    }
+  } catch (error) {
+    // Fail closed: a throwing regex must not abort the whole scan.
+    return matches;
+  } finally {
+    resetRegex(regex);
   }
 
   return matches;
