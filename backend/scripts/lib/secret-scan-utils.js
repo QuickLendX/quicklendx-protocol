@@ -1,5 +1,30 @@
 "use strict";
 
+/**
+ * Committed-secret scanner primitives.
+ *
+ * Invariants relied upon by the rest of this module and by
+ * `backend/scripts/secret-scan.js`:
+ *
+ * 1. FAIL CLOSED. Anything the scanner cannot positively evaluate as safe must
+ *    produce a finding or a thrown error. It must never resolve to "no
+ *    findings" as a result of malformed configuration, unparseable input, or
+ *    unreadable files. This is the invariant that an empty allowlist pattern
+ *    (`{ "pattern": "" }`) previously violated: it matches every candidate and
+ *    silently suppressed the entire gate.
+ * 2. NO SHARED MUTABLE STATE. The module-level regexes are exported (and are
+ *    therefore reachable and mutable by any importer), so scanning always runs
+ *    against a private clone. `lastIndex` on a shared global regex makes
+ *    results depend on call ordering, and a non-global regex in an exec loop
+ *    never advances `lastIndex`, which spins forever.
+ * 3. REDACTION IS BOUNDED. `redactPreview` never reveals more than
+ *    `MIN_PREVIEW_EDGE_LENGTH` leading and trailing characters, and never
+ *    renders a partial preview that reconstructs the value.
+ * 4. OUTPUT NEVER CONTAINS A SECRET. Error messages identify findings by
+ *    repo-relative path, line, and allowlist index. They never embed matched
+ *    secret text, nor absolute filesystem paths from the scanning machine.
+ */
+
 const fs = require("node:fs");
 const path = require("node:path");
 
@@ -25,6 +50,11 @@ const DEFAULT_IGNORED_DIRS = new Set([
 const MIN_HIGH_ENTROPY_LENGTH = 32;
 const MIN_HIGH_ENTROPY_SCORE = 4.5;
 const MIN_UNIQUE_CHARACTERS = 10;
+const MIN_PREVIEW_EDGE_LENGTH = 4;
+// Below this length a head+tail preview reconstructs most of the value (a
+// 9-character secret would reveal 8 of 9 characters), so short values are
+// masked in full instead.
+const MIN_PARTIAL_PREVIEW_LENGTH = MIN_PREVIEW_EDGE_LENGTH * 2 + 8;
 const PLAIN_STRING_REGEX = /'([^'\\]|\\.)*'|"([^"\\]|\\.)*"/g;
 
 const KNOWN_SECRET_PATTERNS = [
@@ -158,34 +188,76 @@ function isHighEntropyToken(value) {
   return shannonEntropy(value) >= MIN_HIGH_ENTROPY_SCORE;
 }
 
+/**
+ * Renders a bounded, non-reconstructable preview of a matched value.
+ *
+ * The preview is diagnostic only: it must let an operator correlate a finding
+ * with a real secret without disclosing it. A head+tail render is only safe
+ * once the value is long enough that the elided middle is meaningful, so
+ * shorter values are masked completely.
+ */
 function redactPreview(value) {
   if (!value) {
     return '""';
   }
 
-  if (value.length <= 8) {
+  if (value.length < MIN_PARTIAL_PREVIEW_LENGTH) {
     return `"${"*".repeat(value.length)}"`;
   }
 
-  return `"${value.slice(0, 4)}...${value.slice(-4)}"`;
+  return `"${value.slice(0, MIN_PREVIEW_EDGE_LENGTH)}...${value.slice(-MIN_PREVIEW_EDGE_LENGTH)}"`;
 }
 
-function resetRegex(regex) {
-  regex.lastIndex = 0;
+/**
+ * Returns a private, zero-`lastIndex` copy of a scanner regex.
+ *
+ * The exported `KNOWN_SECRET_PATTERNS` and `PLAIN_STRING_REGEX` are shared
+ * module state that any importer can mutate. Scanning a clone keeps results
+ * independent of call ordering and of concurrent/interleaved callers, and
+ * keeps a caller's in-flight `exec` loop from having its cursor moved.
+ *
+ * The `g` flag is required rather than assumed: iterating a non-global regex
+ * with `exec` re-yields the same match forever, which hung the scan instead of
+ * failing it.
+ */
+function cloneScanRegex(regex, label) {
+  if (!(regex instanceof RegExp)) {
+    throw new TypeError(
+      `Secret scan pattern "${label}" must be a RegExp, received ${describeType(regex)}.`
+    );
+  }
+
+  if (!regex.global) {
+    throw new TypeError(
+      `Secret scan pattern "${label}" must use the global (g) flag so every match on a line is scanned.`
+    );
+  }
+
+  return new RegExp(regex.source, regex.flags);
+}
+
+function describeType(value) {
+  if (value === null) {
+    return "null";
+  }
+
+  if (Array.isArray(value)) {
+    return "array";
+  }
+
+  return typeof value;
 }
 
 function collectRegexMatches(line, patternDef) {
   const matches = [];
-  resetRegex(patternDef.regex);
+  const regex = cloneScanRegex(patternDef.regex, patternDef.name);
 
-  let match = patternDef.regex.exec(line);
-  while (match) {
+  for (const match of line.matchAll(regex)) {
     matches.push({
       type: patternDef.name,
       match: match[0],
       column: match.index + 1,
     });
-    match = patternDef.regex.exec(line);
   }
 
   return matches;
@@ -202,18 +274,14 @@ function unquoteString(literal) {
 
 function collectQuotedStringMatches(line) {
   const matches = [];
-  resetRegex(PLAIN_STRING_REGEX);
 
-  let match = PLAIN_STRING_REGEX.exec(line);
-  while (match) {
+  for (const match of line.matchAll(cloneScanRegex(PLAIN_STRING_REGEX, "plain-string"))) {
     const literal = match[0];
-    const value = unquoteString(literal);
     matches.push({
       literal,
-      value,
+      value: unquoteString(literal),
       column: match.index + 1,
     });
-    match = PLAIN_STRING_REGEX.exec(line);
   }
 
   return matches;
@@ -250,35 +318,69 @@ function normalizeAllowlist(allowlist) {
   };
 }
 
+/**
+ * Compiles an allowlist `pattern` into a RegExp, or returns `null` when the
+ * pattern cannot be trusted.
+ *
+ * Returning `null` means "this entry does not allowlist anything", which is
+ * the fail-closed outcome: the candidate stays in the report instead of being
+ * silently suppressed. This deliberately covers
+ *   - `""` / whitespace-only patterns, which match every candidate and would
+ *     otherwise disable the whole gate with a one-character typo;
+ *   - patterns that do not compile, which previously threw a `SyntaxError` out
+ *     of `scanLine` and aborted the entire scan with no indication of which
+ *     allowlist entry was at fault;
+ *   - non-string, non-RegExp patterns.
+ */
+function compilePattern(pattern) {
+  if (pattern instanceof RegExp) {
+    return new RegExp(pattern.source, pattern.flags);
+  }
+
+  if (typeof pattern !== "string" || pattern.trim().length === 0) {
+    return null;
+  }
+
+  try {
+    return new RegExp(pattern);
+  } catch {
+    return null;
+  }
+}
+
 function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
   if (!entry || typeof entry !== "object") {
     return false;
   }
 
-  const hasFile = entry.file !== undefined;
-  const hasLine = entry.line !== undefined;
-  const hasMatch = entry.match !== undefined;
-  const hasPattern = entry.pattern !== undefined;
+  // Each property is read exactly once so a reentrant or instrumented entry
+  // observes a deterministic access pattern no matter which fields are
+  // present: a getter on `pattern` fires once per candidate, not once per
+  // internal check.
+  const file = entry.file;
+  const line = entry.line;
+  const match = entry.match;
+  const pattern = entry.pattern;
 
-  if (!hasFile && !hasLine && !hasMatch && !hasPattern) {
+  if (file === undefined && line === undefined && match === undefined && pattern === undefined) {
     return false;
   }
 
-  if (hasFile && entry.file !== relativePath) {
+  if (file !== undefined && file !== relativePath) {
     return false;
   }
 
-  if (hasLine && Number(entry.line) !== lineNumber) {
+  if (line !== undefined && Number(line) !== lineNumber) {
     return false;
   }
 
-  if (hasMatch && !matchValue.includes(entry.match)) {
+  if (match !== undefined && !matchValue.includes(match)) {
     return false;
   }
 
-  if (hasPattern) {
-    const pattern = new RegExp(entry.pattern);
-    if (!pattern.test(matchValue)) {
+  if (pattern !== undefined) {
+    const compiled = compilePattern(pattern);
+    if (!compiled || !compiled.test(matchValue)) {
       return false;
     }
   }
@@ -286,9 +388,7 @@ function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
   return true;
 }
 
-function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
-  const normalized = normalizeAllowlist(allowlist);
-
+function isAllowlistedIn(normalized, relativePath, lineNumber, matchValue) {
   for (const entry of normalized.entries) {
     if (matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue)) {
       return true;
@@ -296,12 +396,17 @@ function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
   }
 
   for (const entry of normalized.globalPatterns) {
-    if (!entry?.pattern) {
+    if (!entry || typeof entry !== "object") {
       continue;
     }
 
-    const pattern = new RegExp(entry.pattern);
-    if (pattern.test(matchValue)) {
+    const patternSource = entry.pattern;
+    if (patternSource === undefined) {
+      continue;
+    }
+
+    const pattern = compilePattern(patternSource);
+    if (pattern && pattern.test(matchValue)) {
       return true;
     }
   }
@@ -309,13 +414,63 @@ function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
   return false;
 }
 
+function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
+  return isAllowlistedIn(normalizeAllowlist(allowlist), relativePath, lineNumber, matchValue);
+}
+
+/**
+ * A candidate from two different sources is considered the same leak only when
+ * the matched text is identical; a known-format match suppresses the
+ * high-entropy match covering the same text so a secret is reported once under
+ * its most specific rule.
+ */
 function overlapsMatch(left, right) {
   return left.match === right.match;
 }
 
+/**
+ * Rejects inputs `scanLine` cannot reason about.
+ *
+ * Previously a non-string `line` was coerced by `RegExp.prototype.exec` (null
+ * became the literal "null"), so a caller that lost its file contents scanned
+ * the string "null", found nothing, and reported a clean pass. Invalid
+ * line numbers likewise produced findings whose `line` field could never
+ * reconcile with an allowlist entry. Failing loudly keeps the gate's
+ * fail-closed guarantee.
+ */
+function assertScannableLineArguments(line, lineNumber, relativePath) {
+  if (typeof line !== "string") {
+    throw new TypeError(
+      `scanLine requires a string line, received ${describeType(line)}.`
+    );
+  }
+
+  if (typeof relativePath !== "string" || relativePath.length === 0) {
+    throw new TypeError("scanLine requires a non-empty relativePath string.");
+  }
+
+  if (!Number.isInteger(lineNumber) || lineNumber < 1) {
+    throw new TypeError(
+      `scanLine requires a positive integer lineNumber, received ${describeType(lineNumber)}.`
+    );
+  }
+}
+
+/**
+ * Scans one line and returns its findings.
+ *
+ * Findings are ordered deterministically: known-format matches first, in
+ * `KNOWN_SECRET_PATTERNS` declaration order and then by column, followed by
+ * high-entropy matches by column. Identical (type, match) pairs on the same
+ * line are reported once, anchored at the first column, so repeating a secret
+ * in one line cannot inflate the finding count or shift its reported position.
+ */
 function scanLine(line, lineNumber, relativePath, allowlist) {
+  assertScannableLineArguments(line, lineNumber, relativePath);
+
   const findings = [];
   const seen = new Set();
+  const normalizedAllowlist = normalizeAllowlist(allowlist);
 
   const patternMatches = KNOWN_SECRET_PATTERNS.flatMap((patternDef) =>
     collectRegexMatches(line, patternDef)
@@ -336,7 +491,7 @@ function scanLine(line, lineNumber, relativePath, allowlist) {
     }
     seen.add(dedupeKey);
 
-    if (isAllowlisted(relativePath, lineNumber, candidate.match, allowlist)) {
+    if (isAllowlistedIn(normalizedAllowlist, relativePath, lineNumber, candidate.match)) {
       continue;
     }
 
@@ -355,6 +510,12 @@ function scanLine(line, lineNumber, relativePath, allowlist) {
 }
 
 function scanFileContent(content, relativePath, allowlist) {
+  if (typeof content !== "string") {
+    throw new TypeError(
+      `scanFileContent requires string content, received ${describeType(content)}.`
+    );
+  }
+
   const lines = content.split(/\r?\n/);
   return lines.flatMap((line, index) =>
     scanLine(line, index + 1, relativePath, allowlist)
@@ -382,7 +543,20 @@ function walkDirectory(absoluteDir, relativeDir, files = []) {
     return files;
   }
 
-  for (const entry of fs.readdirSync(absoluteDir, { withFileTypes: true })) {
+  let entries;
+  try {
+    entries = fs.readdirSync(absoluteDir, { withFileTypes: true });
+  } catch (error) {
+    // Fail closed: an unreadable directory could hide secrets, so abort the
+    // scan instead of skipping it. The message carries the repo-relative path
+    // and the errno code only, never the absolute path of the build machine.
+    throw new Error(
+      `Failed to list ${relativeDir || "."} during secret scan (${describeFileSystemError(error)}). ` +
+        "Unreadable paths are a scan failure, not a clean result."
+    );
+  }
+
+  for (const entry of entries) {
     if (entry.name.startsWith(".")) {
       continue;
     }
@@ -407,6 +581,14 @@ function walkDirectory(absoluteDir, relativeDir, files = []) {
   }
 
   return files;
+}
+
+function describeFileSystemError(error) {
+  if (error && typeof error.code === "string" && error.code.length > 0) {
+    return error.code;
+  }
+
+  return "unknown error";
 }
 
 function collectScanTargets(backendRoot, options = {}) {
@@ -437,7 +619,20 @@ function scanTargets(targets, allowlist) {
   const findings = [];
 
   for (const target of targets) {
-    const content = fs.readFileSync(target.absolutePath, "utf8");
+    let content;
+    try {
+      content = fs.readFileSync(target.absolutePath, "utf8");
+    } catch (error) {
+      // Fail closed: a file the scan cannot read is a file whose contents were
+      // never checked, so it must abort the gate rather than pass silently.
+      // Identified by repo-relative path and errno so an operator can act on
+      // it from CI logs without the absolute path of the build machine.
+      throw new Error(
+        `Failed to read ${target.relativePath} during secret scan (${describeFileSystemError(error)}). ` +
+          "Unreadable files are a scan failure, not a clean result."
+      );
+    }
+
     findings.push(...scanFileContent(content, target.relativePath, allowlist));
   }
 
@@ -450,6 +645,37 @@ function scanBackend(backendRoot, options = {}) {
   return scanTargets(targets, allowlist);
 }
 
+/**
+ * Validates allowlist patterns at the configuration boundary.
+ *
+ * Runtime matching already fails closed on an uncompilable pattern, but that
+ * degrades silently into "not allowlisted" and would show up only as a flood of
+ * findings. Rejecting the file at load time turns a typo into one actionable
+ * error. The message names only the entry's index and field, never the pattern
+ * text, so a pattern copied from a leaked secret is not echoed to CI logs.
+ */
+function assertAllowlistPatternsCompilable(normalized, source) {
+  const groups = [
+    ["entries", normalized.entries],
+    ["globalPatterns", normalized.globalPatterns],
+  ];
+
+  for (const [groupName, items] of groups) {
+    items.forEach((item, index) => {
+      if (!item || typeof item !== "object" || item.pattern === undefined) {
+        return;
+      }
+
+      if (compilePattern(item.pattern) === null) {
+        throw new Error(
+          `Failed to parse secret scan allowlist: ${source}.${groupName}[${index}].pattern ` +
+            "must be a non-empty regular expression that compiles."
+        );
+      }
+    });
+  }
+}
+
 function loadAllowlist(allowlistPath, backendRoot = process.cwd()) {
   const resolvedPath =
     allowlistPath || path.join(backendRoot, "scripts", ".secret-scan-allow.json");
@@ -458,7 +684,15 @@ function loadAllowlist(allowlistPath, backendRoot = process.cwd()) {
     return normalizeAllowlist(null);
   }
 
-  const raw = fs.readFileSync(resolvedPath, "utf8");
+  let raw;
+  try {
+    raw = fs.readFileSync(resolvedPath, "utf8");
+  } catch (error) {
+    throw new Error(
+      `Failed to read secret scan allowlist (${describeFileSystemError(error)}).`
+    );
+  }
+
   let parsed;
   try {
     parsed = JSON.parse(raw);
@@ -466,7 +700,9 @@ function loadAllowlist(allowlistPath, backendRoot = process.cwd()) {
     throw new Error(`Failed to parse secret scan allowlist: ${error.message}`);
   }
 
-  return normalizeAllowlist(parsed);
+  const normalized = normalizeAllowlist(parsed);
+  assertAllowlistPatternsCompilable(normalized, "allowlist");
+  return normalized;
 }
 
 function formatFinding(finding) {
@@ -529,18 +765,23 @@ module.exports = {
   DEFAULT_EXTENSIONS,
   DEFAULT_SCAN_ROOTS,
   KNOWN_SECRET_PATTERNS,
+  MIN_PARTIAL_PREVIEW_LENGTH,
+  MIN_PREVIEW_EDGE_LENGTH,
   MIN_UNIQUE_CHARACTERS,
   PLAIN_STRING_REGEX,
   MIN_HIGH_ENTROPY_LENGTH,
   MIN_HIGH_ENTROPY_SCORE,
   assertNoSecretsPrinted,
+  assertAllowlistPatternsCompilable,
   collectHighEntropyMatches,
   collectQuotedStringMatches,
   collectRegexMatches,
   collectScanTargets,
+  compilePattern,
   formatFinding,
   formatFindings,
   isAllowlisted,
+  isAllowlistedIn,
   isHighEntropyToken,
   isIdentifierLikeString,
   isObviousPlaceholder,
