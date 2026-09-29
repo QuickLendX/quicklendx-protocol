@@ -108,8 +108,6 @@ export function getRegisteredSteps(): ShutdownStep[] {
 let _shuttingDown = false;
 /** Guards against concurrent runAll() invocations. */
 let _runAllInProgress = false;
-/** True once a shutdown signal has been received and the drain has started. */
-let _shutdownInProgress = false;
 
 /**
  * Reset shutdown state — call in tests between cases.
@@ -124,27 +122,23 @@ let _shutdownInProgress = false;
 export function resetShuttingDown(): void {
   _shuttingDown = false;
   _runAllInProgress = false;
-  _shutdownInProgress = false;
-}
-
-/** True once a shutdown signal has been received. */
-export function isShuttingDown(): boolean {
-  return _shuttingDown;
 }
 
 /**
- * True while a graceful shutdown drain is actively in progress.
+ * True once a shutdown signal has been received.
  *
- * Invariants:
- *  - Deterministic: reflects only the internal state machine, never throws.
- *  - Set to true by the signal handler before `runAll()` begins and reset to
- *    false in `resetShuttingDown()` so tests observe a clean boundary.
- *  - Distinct from `isShuttingDown()`: a signal may have been received
- *    (`_shuttingDown === true`) while the drain has already finished
- *    (`_shutdownInProgress === false`).
+ * Failure-boundary invariants (Issue #2709):
+ *  - Deterministic: returns the exact boolean state of `_shuttingDown` with
+ *    no side effects, no I/O, and no dependency on the step registry.
+ *  - Never throws: safe to call from signal handlers, readiness probes, and
+ *    request middleware even during a partial or failed drain.
+ *  - Monotonic within a process lifetime: once `true`, only an explicit
+ *    `resetShuttingDown()` (test/recovery path) can flip it back to `false`.
+ *  - Concurrent reads are safe: the flag is a single boolean assignment, so
+ *    callers observe either the pre- or post-signal value, never a torn read.
  */
-export function isShutdownInProgress(): boolean {
-  return _shutdownInProgress;
+export function isShuttingDown(): boolean {
+  return _shuttingDown;
 }
 
 // ---------------------------------------------------------------------------
@@ -342,7 +336,6 @@ export function createShutdownHandler(
       return; // guard: process.exit is a no-op in tests
     }
     _shuttingDown = true;
-    _shutdownInProgress = true;
 
     console.log(`[shutdown] ${signal} — starting graceful shutdown`);
     const result = await runAll(signal, drainTimeoutMs);
@@ -355,7 +348,6 @@ export function createShutdownHandler(
             .join(', '),
       );
     }
-    _shutdownInProgress = false;
     console.log('[shutdown] Shutdown complete');
     process.exit(0);
   };
