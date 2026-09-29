@@ -1,0 +1,19 @@
+{
+  "name": "quicklendx-backend",
+  "version": "0.1.0",
+  "description": "QuickLendX backend API controllers (TypeScript).",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "lint": "tsc --noEmit && vitest run --reporter=verbose"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  }
+}

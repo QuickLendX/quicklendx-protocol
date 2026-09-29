@@ -1,0 +1,58 @@
+name: Backend CI
+
+on:
+  push:
+    branches: ["main", "develop"]
+    paths:
+      - "backend/**"
+  pull_request:
+    branches: ["main", "develop"]
+    paths:
+      - "backend/**"
+
+env:
+  NODE_VERSION: "20"
+
+jobs:
+  test:
+    name: Type check, lint, and tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          cd backend
+          npm ci
+
+      - name: Run TypeScript type checking
+        run: |
+          cd backend
+          npm run typecheck
+
+      - name: Run Prettier check
+        run: |
+          cd backend
+          npx prettier --check "src/**/*.ts"
+
+      - name: Run tests with coverage
+        run: |
+          cd backend
+          npx vitest run --coverage
+
+      - name: Upload coverage artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: backend/coverage/
+          retention-days: 7
