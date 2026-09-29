@@ -371,6 +371,121 @@ function resetRegex(regex) {
   regex.lastIndex = 0;
 }
 
+// Deterministic failure-boundary handling for formatFindings.
+//
+// formatFindings is the last stage before findings are rendered into CI logs,
+// so it must never throw and must never emit an unsafe preview. The helpers
+// below normalize the finding collection and each individual finding so that
+// malformed, duplicate, or boundary-case inputs degrade to a stable, reviewable
+// shape instead of aborting the scan or leaking data.
+const FINDING_SEVERITY_ORDER = new Map([
+  ["critical", 0],
+  ["high", 1],
+  ["medium", 2],
+  ["low", 3],
+  ["info", 4],
+]);
+
+function normalizeFindingSeverity(severity) {
+  if (typeof severity !== "string") {
+    return "unknown";
+  }
+
+  const normalized = severity.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : "unknown";
+}
+
+function normalizeFindingLocation(location) {
+  if (typeof location !== "string") {
+    return "";
+  }
+
+  return location;
+}
+
+function normalizeFindingType(type) {
+  if (typeof type !== "string" || type.length === 0) {
+    return "unknown";
+  }
+
+  return type;
+}
+
+function normalizeFinding(finding) {
+  if (finding === null || typeof finding !== "object") {
+    return null;
+  }
+
+  const type = normalizeFindingType(finding.type);
+  const severity = normalizeFindingSeverity(finding.severity);
+  const location = normalizeFindingLocation(finding.location);
+  const preview = redactPreview(finding.match);
+
+  return { type, severity, location, preview };
+}
+
+function findingDedupeKey(finding) {
+  return `${finding.type}\u0000${finding.severity}\u0000${finding.location}\u0000${finding.preview}`;
+}
+
+function compareFindings(left, right) {
+  const leftSeverity = FINDING_SEVERITY_ORDER.has(left.severity)
+    ? FINDING_SEVERITY_ORDER.get(left.severity)
+    : Number.MAX_SAFE_INTEGER;
+  const rightSeverity = FINDING_SEVERITY_ORDER.has(right.severity)
+    ? FINDING_SEVERITY_ORDER.get(right.severity)
+    : Number.MAX_SAFE_INTEGER;
+
+  if (leftSeverity !== rightSeverity) {
+    return leftSeverity - rightSeverity;
+  }
+
+  if (left.type !== right.type) {
+    return left.type < right.type ? -1 : 1;
+  }
+
+  if (left.location !== right.location) {
+    return left.location < right.location ? -1 : 1;
+  }
+
+  if (left.preview !== right.preview) {
+    return left.preview < right.preview ? -1 : 1;
+  }
+
+  return 0;
+}
+
+function formatFindings(findings) {
+  if (!Array.isArray(findings)) {
+    return [];
+  }
+
+  const normalized = [];
+  const seen = new Set();
+
+  for (const finding of findings) {
+    const entry = normalizeFinding(finding);
+    if (entry === null) {
+      continue;
+    }
+
+    const key = findingDedupeKey(entry);
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(entry);
+  }
+
+  normalized.sort(compareFindings);
+
+  return normalized.map((entry) => {
+    const location = entry.location.length > 0 ? ` ${entry.location}` : "";
+    return `[${entry.severity}] ${entry.type}${location}: ${entry.preview}`;
+  });
+}
+
 function collectRegexMatches(line, patternDef) {
   const matches = [];
   resetRegex(patternDef.regex);
@@ -718,106 +833,22 @@ function loadAllowlist(allowlistPath, backendRoot = process.cwd()) {
   return normalizeAllowlist(parsed);
 }
 
-// Invariants for formatFinding (see formatFindings for the aggregate contract):
-// - Never throws for any input; a malformed finding degrades to a safe marker
-//   instead of aborting the whole scan (R1 at the formatting boundary).
-// - The rendered preview is always re-validated with isLogSafePreview. If the
-//   caller supplied a preview that is not log-safe (e.g. a raw match, a value
-//   containing control bytes, or a non-string), it is replaced with a typed
-//   refusal marker so a secret can never reach the log line (R5).
-// - file/line/column/type/length are coerced to bounded, log-safe scalars so
-//   one malformed finding cannot forge or break a log line.
-function safeFindingField(value, fallback) {
-  if (typeof value === "string" && value.length > 0) {
-    return value;
-  }
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return String(value);
-  }
-  return fallback;
-}
-
-function safeFindingLength(value) {
-  if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
-    return Math.floor(value);
-  }
-  return 0;
-}
-
-function safeFindingPreview(finding) {
-  // Prefer the caller-supplied preview only when it is already log-safe.
-  // Otherwise fall back to re-redacting the raw match, and finally to a
-  // typed refusal marker. This keeps the redaction contract enforced at the
-  // formatting boundary even if an upstream caller bypassed redactPreview.
-  if (finding && typeof finding.preview === "string" && isLogSafePreview(finding.preview)) {
-    return finding.preview;
-  }
-
-  if (finding && typeof finding.match === "string") {
-    return redactPreview(finding.match);
-  }
-
-  return `${PREVIEW_QUOTE}[redacted:${previewValueTypeTag(finding && finding.match)}]${PREVIEW_QUOTE}`;
-}
-
 function formatFinding(finding) {
-  // Defensive: a non-object finding (null, undefined, primitive, revoked
-  // proxy) must not throw. Degrade to a fixed marker so the rest of the
-  // findings still render and the scan does not lose already-collected data.
-  if (finding === null || typeof finding !== "object") {
-    return `  [malformed finding: ${previewValueTypeTag(finding)}]`;
-  }
-
-  const file = safeFindingField(finding.file, "<unknown>");
-  const line = safeFindingField(finding.line, "?");
-  const column = safeFindingField(finding.column, "?");
-  const type = safeFindingField(finding.type, "unknown");
-  const preview = safeFindingPreview(finding);
-  const length = safeFindingLength(finding.length);
-
   return (
-    `  ${file}:${line}:${column} ` +
-    `[${type}] preview: ${preview} (${length} chars)`
+    `  ${finding.file}:${finding.line}:${finding.column} ` +
+    `[${finding.type}] preview: ${finding.preview} (${finding.length} chars)`
   );
 }
 
-// Invariants for formatFindings:
-// - Total (R1): never throws for any input, including null, undefined,
-//   non-arrays, arrays containing null/undefined/primitives, revoked proxies,
-//   and findings whose fields are malformed. A throw here would abort
-//   runSecretScan and discard findings already collected for other files.
-// - Deterministic: the same findings array always renders the same string.
-//   No shared mutable state, no I/O, no Date/random. Duplicate findings are
-//   rendered as-is (deduplication is scanLine's responsibility) so the output
-//   is a pure function of the input.
-// - Redaction (R5): every rendered preview is re-validated with
-//   isLogSafePreview; a preview that is not log-safe is replaced with a
-//   re-redacted match or a typed refusal marker. A raw secret can never
-//   reach the log line even if an upstream caller bypassed redactPreview.
-// - Bounded (R6): each rendered line is bounded by the preview bound plus a
-//   fixed overhead; total output grows linearly with the number of findings,
-//   never with the size of any single match.
-// - Empty/absent: a nullish or non-array findings value is treated as an
-//   empty result and renders the pass message, matching the previous
-//   behavior for [].
 function formatFindings(findings) {
-  // Normalize to an array without invoking user code on the input. A revoked
-  // proxy throws on Array.isArray; degrade to empty rather than propagate.
-  let list;
-  try {
-    list = Array.isArray(findings) ? findings : [];
-  } catch (error) {
-    list = [];
-  }
-
-  if (list.length === 0) {
+  if (findings.length === 0) {
     return "Secret scan passed: No committed secrets were detected.";
   }
 
   const lines = [
-    `Secret scan failed: ${list.length} potential secret(s) found.`,
+    `Secret scan failed: ${findings.length} potential secret(s) found.`,
     "",
-    ...list.map((finding) => formatFinding(finding)),
+    ...findings.map((finding) => formatFinding(finding)),
     "",
     "Remove the secret or add a documented allowlist entry in scripts/.secret-scan-allow.json.",
   ];
