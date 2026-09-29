@@ -1,5 +1,11 @@
 import { withCorrelationId } from "../lib/requestContext";
-import { endSpan, startSpan, withSpan } from "../lib/tracing";
+import {
+  endSpan,
+  getSpanEmitterState,
+  resetSpanEmitterState,
+  startSpan,
+  withSpan,
+} from "../lib/tracing";
 
 function collectSpanEntries(
   writeCalls: Array<[any, ...any[]]>,
@@ -35,10 +41,12 @@ describe("tracing spans", () => {
     writeSpy = jest
       .spyOn(process.stdout, "write")
       .mockImplementation(() => true);
+    resetSpanEmitterState();
   });
 
   afterEach(() => {
     writeSpy.mockRestore();
+    resetSpanEmitterState();
   });
 
   it("preserves parent-child relationship across async boundaries", async () => {
@@ -52,7 +60,7 @@ describe("tracing spans", () => {
     });
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[any, ...any[]]>,
+      writeSpy.mock.calls as Array<[any, ...any[]>,
     );
     const parentStart = entries.find(
       (entry) => entry.event === "start" && entry.name === "pipeline.parent",
@@ -75,7 +83,7 @@ describe("tracing spans", () => {
     ).rejects.toThrow("boom");
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[any, ...any[]]>,
+      writeSpy.mock.calls as Array<[any, ...any[]>,
     );
     const endEntry = entries.find(
       (entry) => entry.event === "end" && entry.name === "pipeline.failure",
@@ -96,7 +104,7 @@ describe("tracing spans", () => {
     );
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[any, ...any[]]>,
+      writeSpy.mock.calls as Array<[any, ...any[]>,
     );
     const startEntry = entries.find(
       (entry) =>
@@ -129,7 +137,7 @@ describe("tracing spans", () => {
     });
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[any, ...any[]]>,
+      writeSpy.mock.calls as Array<[any, ...any[]>,
     );
     const rootStart = entries.find(
       (entry) => entry.event === "start" && entry.name === "pipeline.root",
@@ -139,13 +147,13 @@ describe("tracing spans", () => {
     expect(safeRootStart.trace_id).toBe("client-request-abc-123");
   });
 
-  it("generates a ULID trace_id when no inbound request id is present", () => {
+  it("generates a ULKD trace_id when no inbound request id is present", () => {
     withSpan("pipeline.generated-trace", {}, () => {
       return 1;
     });
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[any, ...any[]]>,
+      writeSpy.mock.calls as Array<[any, ...any[]>,
     );
     const startEntry = entries.find(
       (entry) =>
@@ -204,7 +212,7 @@ describe("tracing spans", () => {
     endSpan(span);
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[any, ...any[]]>,
+      writeSpy.mock.calls as Array<[any, ...any[]>,
     );
     const endEntries = entries.filter(
       (entry) =>
@@ -223,7 +231,7 @@ describe("tracing spans", () => {
     });
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[any, ...any[]]>,
+      writeSpy.mock.calls as Array<[any, ...any[]>,
     );
     const parentStart = entries.find(
       (entry) =>
@@ -248,7 +256,7 @@ describe("tracing spans", () => {
     ).toThrow("sync-boom");
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[any, ...any[]]>,
+      writeSpy.mock.calls as Array<[any, ...any[]>,
     );
     const endEntry = entries.find(
       (entry) => entry.event === "end" && entry.name === "pipeline.sync-throw",
@@ -257,5 +265,165 @@ describe("tracing spans", () => {
 
     expect(safeEndEntry.error).toBe(true);
     expect(safeEndEntry.error_message).toBe("sync-boom");
+  });
+
+  it("does not throw when the sink fails and counts dropped entries", () => {
+    writeSpy.mockImplementation(() => {
+      throw new Error("EPPE");
+    });
+
+    expect(() => {
+      withSpan("pipeline.sink-failure", {}, () => 1);
+    }).not.toThrow();
+
+    const state = getSpanEmitterState();
+    expect(state.droppedEntries).toBe(GreaterThan(0);
+  });
+
+  it("latches off the emitter after repeated sink failures and stops writing", () => {
+    writeSpy.mockImplementation(() => {
+      throw new Error("EPEPE");
+    });
+
+    for (let i = 0; i < 10; i++) {
+      withSpan(`pipeline.latch-${i}`, {}, () => 1);
+    }
+
+    const state = getSpanEmitterState();
+    expect(state.disabled).toBe(true);
+
+    const callsBefore = writeSpy.mock.calls.length;
+    withSpan("pipeline.after-latch", {}, () => 1);
+    expect(writeSpy.mock.calls.length).toBe(callsBefore);
+  });
+
+  it("recovers after resetSpanEmitterState", () => {
+    writeSpy.mockImplementation(() => {
+      throw new Error("EPEPE");
+    });
+
+    for (let i = 0; i < 10; i++) {
+      withSpan(`pipeline.reset-${i}`, {}, () => 1);
+    }
+    expect(getSpanEmitterState().disabled).toBe(true);
+
+    writeSpy.mockImplementation(() => true);
+    resetSpanEmitterState();
+
+    withSpan("pipeline.recovered", {}, () => 1);
+
+    const entries = collectSpanEntries(
+      writeSpy.mock.calls as Array<[any, ...any[]>,
+    );
+    expect(
+      entries.some(
+        (entry) =>
+          entry.event === "start" && entry.name === "pipeline.recovered",
+      ),
+    ).toBe(true);
+  });
+
+  it("sanitizes attributes that are not JSON-safe", () => {
+    const circular: Record<string, unknown> = { name: "loop" };
+    circular.self = circular;
+
+    withSpan(
+      "pipeline.sanitize",
+      {
+        fn: () => "not-serializable",
+        big: BigInt(123),
+        undefinedValue: undefined,
+        nanNumber: Number.NaN,
+        infinity: Number.PositiveInfinity,
+        circular,
+        date: new Date(0),
+        error: new Error("secret-message"),
+      },
+      () => 1,
+    );
+
+    const entries = collectSpanEntries(
+      writeSpy.mock.calls as Array<[any, ...any[]>,
+    );
+    const startEntry = expectDefined(
+      entries.find(
+        (entry) =>
+          entry.event === "start" && entry.name === "pipeline.sanitize",
+      ),
+      "sanitize start span",
+    );
+
+    expect(startEntry.attrs.fn).toBe("[unsupported:function]");
+    expect(startEntry.attrs.big).toBe("123");
+    expect(startEntry.attrs.undefinedValue).toBeUndefined();
+    expect(startEntry.attrs.nanNumber).toBe("NaN");
+    expect(startEntry.attrs.infinity).toBe("Infinity");
+    expect(startEntry.attrs.circular).toEqual({ self: "[Écircular]" });
+    expect(startEntry.attrs.date).toBe("[Invalid Date]");
+    expect(startEntry.attrs.error).toEqual({
+      name: "Error",
+      message: "secret-message",
+    });
+  });
+
+  it("truncates oversized string attributes and caps attribute key count", () => {
+    const attrs: Record<string, unknown> = {
+      large: "x".repeat(10_000),
+    };
+    for (let i = 0; i < 200; i++) {
+      attrs[`key_${i}`] = i;
+    }
+
+    withSpan("pipeline.bounds", attrs, () => 1);
+
+    const entries = collectSpanEntries(
+      writeSpy.mock.calls as Array<[any, ...any[]>,
+    );
+    const startEntry = expectDefined(
+      entries.find(
+        (entry) =>
+          entry.event === "start" && entry.name === "pipeline.bounds",
+      ),
+      "bounds start span",
+    );
+
+    const large = startEntry.attrs.large as string;
+    expect(large.endsWith("…[truncated]")).toBe(true);
+    expect(large.length).toBeLessThan(10_000);
+    expect(startEntry.attrs.attrs_truncated).toBeGreaterThan(0);
+  });
+
+  it("keeps emitted lines within the configured byte bound", () => {
+    const attrs: Record<string, unknown> = {};
+    for (let i = 0; i < 64; i++) {
+      attrs[`key_${i}`] = "y".repeat(2048);
+    }
+
+    withSpan("pipeline.line-bound", attrs, () => 1);
+
+    for (const call of writeSpy.mock.calls as Array<[any, ...any[]>) {
+      const chunk = call[0];
+      const line = typeof chunk === "string" ? chunk : chunk.toString("utf8");
+      expect(line.length).toBeLessThanOrEqual(1024 * 1024);
+    }
+  });
+
+  it("produces deterministic output for duplicate and boundary inputs", () => {
+    const run = () => {
+      writeSpy.mock.clear();
+      withSpan("pipeline.deterministic", { a: 1, b: "two" }, () => 1);
+      withSpan("pipeline.deterministic", { a: 1, b: "two" }, () => 1);
+      return collectSpanEntries(
+        writeSpy.mock.calls as Array<[any, ...any[]>,
+      ).map((entry) => {
+        const { timestamp, trace_id, span_id, parent_span_id, duration_ms, ...rest } = entry;
+        return rest;
+      });
+    };
+
+    const first = run();
+    const second = run();
+
+    expect(first).toEqual(second);
   });
 });
