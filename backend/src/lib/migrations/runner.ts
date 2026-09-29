@@ -25,7 +25,14 @@ const MIGRATIONS_TABLE = `
 `;
 
 const MIGRATIONS_DIR = path.resolve(process.cwd(), "src", "migrations");
-const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), ".hotfix-approvals");
+const HOTFIX_APPROVALS_DIR_NAME = ".hotfix-approvals";
+const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), HOTFIX_APPROVALS_DIR_NAME);
+
+// The only shape a migration name can legitimately have, per
+// parseMigrationFilename. Enforced again when building an approval path so a
+// ParsedMigration assembled by any other caller cannot point the approval
+// check outside HOTFIX_APPROVALS_DIR via "../" or an absolute path.
+const APPROVAL_NAME_PATTERN = /^[a-z0-9_]+$/;
 
 export function computeChecksum(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -70,15 +77,64 @@ export async function loadMigrationsFromFS(): Promise<ParsedMigration[]> {
   }
 }
 
-async function isHotfixApproved(migration: ParsedMigration): Promise<boolean> {
+// Hotfix approval contract. Every branch fails closed: the function only ever
+// returns true for a verified approval artifact, and anything it cannot
+// decide it reports rather than guessing. Pinned by
+// src/tests/migration-runner-hotfix.test.ts.
+//
+//   H1 A migration that is not a hotfix never needs approval.
+//   H2 A hotfix is approved only when <version>_<name>.approval exists AND is
+//      a regular file. A directory or any other node type is a broken
+//      deployment, not an approval, and is reported as such.
+//   H3 "No approval artifact" (ENOENT, ENOTDIR) is an expected outcome and
+//      returns false; the caller turns that into the user-facing error.
+//   H4 Any other filesystem failure (EACCES, EPERM, ELOOP, ...) is an
+//      operational fault, not a verdict. It throws carrying the errno so an
+//      operator is not sent hunting for a missing approval file that is
+//      actually present but unreadable.
+//   H5 The approval path is built from the filename-parsed version and name,
+//      never from content.name, and the name is re-validated, so a crafted
+//      migration name cannot redirect the check outside the approvals dir.
+//   H6 Approval is a read-only check: no shared state, so repeated and
+//      concurrent calls agree.
+export async function isHotfixApproved(migration: ParsedMigration): Promise<boolean> {
   if (!migration.content.meta?.hotfix) return true;
-  const approvalFile = path.join(HOTFIX_APPROVALS_DIR, `${migration.version}_${migration.name}.approval`);
-  try {
-    await fs.access(approvalFile);
-    return true;
-  } catch {
-    return false;
+
+  const label = `${migration.version}_${migration.name}`;
+
+  if (!APPROVAL_NAME_PATTERN.test(migration.name)) {
+    throw new Error(
+      `Refusing to evaluate hotfix approval for ${label}: migration name is not a valid identifier.`
+    );
   }
+
+  // Only the artifact's file name is reported in errors, never the absolute
+  // path, so deployment layout is not echoed into CI logs.
+  const approvalFileName = `${label}.approval`;
+
+  let stats: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stats = await fs.stat(path.join(HOTFIX_APPROVALS_DIR, approvalFileName));
+  } catch (error: any) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+      return false;
+    }
+
+    throw new Error(
+      `Unable to evaluate hotfix approval for ${label}: ` +
+      `${error?.code || error?.message || "unknown error"} reading ${approvalFileName}. ` +
+      `Verify the ${HOTFIX_APPROVALS_DIR_NAME} directory exists and is readable.`
+    );
+  }
+
+  if (!stats.isFile()) {
+    throw new Error(
+      `Hotfix approval ${approvalFileName} for ${label} is not a regular file. ` +
+      `Remove the entry and create it as a file.`
+    );
+  }
+
+  return true;
 }
 
 function buildContext(db: any, isProd: boolean): any {
