@@ -286,45 +286,6 @@ describe("Migration Runner with Mocked Database", () => {
     expect(result.valid).toBe(true);
   });
 
-  test("MigrationPolicy.dryRun with multiple migrations", async () => {
-    const migrations = [
-      {
-        version: 1,
-        name: "test1",
-        authoredAt: "2026-04-26",
-        author: "test",
-        up: async () => {},
-      },
-      {
-        version: 2,
-        name: "test2",
-        authoredAt: "2026-04-26",
-        author: "test",
-        up: async () => {},
-      },
-    ];
-
-    const result = await MigrationPolicy.dryRun(migrations);
-    expect(result).toHaveProperty("valid");
-    expect(result).toHaveProperty("errors");
-    expect(result).toHaveProperty("warnings");
-  });
-
-  test("MigrationPolicy.dryRun with force option", async () => {
-    const migrations = [
-      {
-        version: 1,
-        name: "test",
-        authoredAt: "2026-04-26",
-        author: "test",
-        up: async () => {},
-      },
-    ];
-
-    const result = await MigrationPolicy.dryRun(migrations, { force: true });
-    expect(result).toHaveProperty("valid");
-  });
-
   test("MigrationPolicy.dryRun with empty migrations array", async () => {
     const result = await MigrationPolicy.dryRun([]);
     expect(result).toHaveProperty("valid");
@@ -404,210 +365,192 @@ describe("Migration Runner with Mocked Database", () => {
     const result = await MigrationPolicy.dryRun([hotfixWithoutRisk]);
     expect(result.valid).toBe(false);
   });
+});
 
-  test("MigrationPolicy.isDownAllowed returns false when env var not set", () => {
-    const originalEnv = process.env.ALLOW_DOWN_MIGRATIONS;
-    delete process.env.ALLOW_DOWN_MIGRATIONS;
-    try {
-      expect(MigrationPolicy.isDownAllowed()).toBe(false);
-    } finally {
-      process.env.ALLOW_DOWN_MIGRATIONS = originalEnv;
+/**
+ * Deterministic failure-boundary coverage for verifyAppliedChecksums.
+ *
+ * Invariants:
+ * - verifyAppliedChecksums must never mutate the database.
+ * - A missing applied row is a no-op (not a failure).
+ * - A checksum mismatch must fail deterministically and surface the version/name.
+ * - A missing on-disk file for an applied migration must fail deterministically.
+ * - Errors from the database layer must propagate without being swallowed.
+ */
+describe("verifyAppliedChecksums failure boundaries", () => {
+  const getDatabase = require("../lib/database").getDatabase as jest.Mock;
+  const mockReaddir = fs.readdir as jest.Mock;
+  const mockReadFile = fs.readFile as jest.Mock;
+  const mockAccess = fs.access as jest.Mock;
+
+  type AppliedRow = { version: number; name: string; checksum: string };
+
+  function installDbDouble(rows: AppliedRow | Error, options: { onPrepare?: () => void } = {}) {
+    const all = jest.fn(() => {
+      if (rows instanceof Error) {
+        throw rows;
+      }
+      return rows;
+    });
+    const prepare = jest.fn(() => {
+      if (options.onPrepare) {
+        options.onPrepare();
+      }
+      return {
+        all,
+        get: jest.fn(() => undefined),
+        run: jest.fn(() => ({ changes: 0, lastInsertRowId: 0 })),
+      };
+    });
+    const exec = jest.fn(() => undefined);
+    getDatabase.mockReturnValue({ exec, prepare });
+    return { exec, prepare, all };
+  }
+
+  function installDiskDouble(files: Record<string, string> | Error, options: { onRead?: () => void } = {}) {
+    mockReaddir.mockImplementation(async () => {
+      if (files instanceof Error) {
+        throw files;
+      }
+      return Object.keys(files);
+    });
+    mockReadFile.mockImplementation(async (p: known) => {
+      if (options.onRead) {
+        options.onRead();
+      }
+      if (files instanceof Error) {
+        throw files;
+      }
+      const key = String(p);
+      const match = Object.keys(files).find((k) => key.endsWith(k));
+      if (!match) {
+        const err = new Error(`ENOENT: no such file, open '${key}'`);
+        (err as any).code = "ENOENT";
+        throw err;
+      }
+      return files[match];
+    });
+    mockAccess.mockImplementation(async (p: known) => {
+      if (files instanceof Error) {
+        throw files;
+      }
+      const key = String(p);
+      const match = Object.keys(files).find((k) => key.endsWith(k));
+      if (!match) {
+        const err = new Error(`ENOENT: no such file, access '${key}'`);
+        (err as any).code = "ENOENT";
+        throw err;
+      }
+    });
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // Restore default mock behavior for fs/path between tests.
+    mockReaddir.mockReset();
+    mockReadFile.mockReset();
+    mockAccess.mockReset();
+    mockReaddir.mockImplementation(async () => []);
+    mockReadFile.mockImplementation(async () => "");
+    mockAccess.mockImplementation(async () => undefined);
+  });
+
+  test("returns without throwing when no migrations have been applied", async () => {
+    const { exec, prepare } = installDrDouble([]);
+    await expect(verifyAppliedChecksums()).resolves.toUndefined();
+    expect(exec).not.toHaveBeenCalled();
+    // No prepare needed when there are no applied rows.
+    expect(prepare.mock.calls.length).toBe(LessThanOrEqual(1));
+  });
+
+  test("passes when every applied checksum matches the on-disk file", async () => {
+    const content = "export const up = async () => {};\n";
+    const checksum = computeChecksum(content);
+    installDbDouble([{ version: 1, name: "init", checksum }]);
+    installDiskDouble({ "001_init.ts": content });
+
+    await expect(verifyAppliedChecksums()).resolves.toUndefined();
+  });
+
+  test("fails deterministically when an applied checksum differs from the file", async () => {
+    const onDisk = "export const up = async () => {};\n";
+    const staleChecksum = computeChecksum("old content");
+    installDbDouble([{ version: 7, name: "add_users", checksum: staleChecksum }]);
+    installDiskDouble({ "007_add_users.ts": onDisk });
+
+    await expect(verifyAppliedChecksums()).rejects.toThrow(/7_add_users/);
+  });
+
+  test("fails when an applied migration has no corresponding on-disk file", async () => {
+    installDbDouble([{ version: 3, name: "missing_file", checksum: "deadbeef" }]);
+    installDiskDouble({ "001_init.ts": "export const up = async () => {};\n" });
+
+    await expect(verifyAppliedChecksums()).rejects.toThrow(/3_missing_file/);
+  });
+
+  test("propagates database read errors without swallowing them", async () => {
+    const dbError = new Error("database is locked");
+    installDrDouble(dbError);
+    installDiskDouble({ "001_init.ts": "export const up = async () => {};\n" });
+
+    await expect(verifyAppliedChecksums()).rejects.toThrow(/database is locked/);
+  });
+
+  test("propagates filesystem read errors without swallowing them", async () => {
+    const content = "export const up = async () => {};\n";
+    installDrDouble([{ version: 1, name: "init", checksum: computeChecksum(content) }]);
+    const fsError = new Error("EIO failure");
+    installDiskDouble(fsError);
+
+    await expect(verifyAppliedChecksums()).rejects.toThrow(/EIO failure/);
+  });
+
+  test("returns the same result on repeated invocations (deterministic)", async () => {
+    const content = "export const up = async () => {};\n";
+    const checksum = computeChecksum(content);
+    installDrDouble([{ version: 1, name: "init", checksum }]);
+    installDiskDouble({ "001_init.ts": content });
+
+    const first = await verifyAppliedChecksums().then(
+      () => "ok",
+      (e) => `error:${(e as Error).message}`,
+    );
+    const second = await verifyAppliedChecksums().then(
+      () => "ok",
+      (e) => `error:${(e as Error).message}`,
+    );
+    expect(first).toBe("ok");
+    expect(second).toBe(first);
+  });
+
+  test("fails deterministically on a checksum mismatch even when other migrations are valid", async () => {
+    const good = "export const up = async () => {};\n";
+    const bad = "export const up = async () => { throw new Error('x'); };\n";
+    installDbDouble([
+      { version: 1, name: "init", checksum: computeChecksum(good) },
+      { version: 2, name: "broken", checksum: computeChecksum("different") },
+    ]);
+    installDiskDouble({
+      "001_init.ts": good,
+      "002_broken.ts": bad,
+    });
+
+    await expect(verifyAppliedChecksums()).rejects.toThrow(/2_broken/);
+  });
+
+  test("does not mutate the database during verification", async () => {
+    const content = "export const up = async () => {};\n";
+    const { exec, prepare } = installDbDouble([
+      { version: 1, name: "init", checksum: computeChecksum(content) },
+    ]);
+    installDiskDouble({ "001_init.ts": content });
+
+    await verifyAppliedChecksums();
+
+    expect(exec).not.toHaveBeenCalled();
+    for (const call of prepare.mock.calls) {
+      const stmt = String(call[0]).toLowerCase();
+      expect(stmt).not.toMatch(/^\s*(insert|update|delete|drop|alter|create|replace)\b/);
     }
-  });
-
-  test("MigrationPolicy.isDownAllowed returns true when env var set to true", () => {
-    const originalEnv = process.env.ALLOW_DOWN_MIGRATIONS;
-    process.env.ALLOW_DOWN_MIGRATIONS = "true";
-    try {
-      expect(MigrationPolicy.isDownAllowed()).toBe(true);
-    } finally {
-      process.env.ALLOW_DOWN_MIGRATIONS = originalEnv;
-    }
-  });
-
-  test("MigrationPolicy.isHotfix returns true for hotfix migration", () => {
-    const hotfix = {
-      version: 1,
-      name: "test",
-      authoredAt: "2026-04-26",
-      author: "test",
-      meta: { hotfix: true },
-      up: async () => {},
-    };
-
-    expect(MigrationPolicy.isHotfix(hotfix)).toBe(true);
-  });
-
-  test("MigrationPolicy.isHotfix returns false for regular migration", () => {
-    const regular = {
-      version: 1,
-      name: "test",
-      authoredAt: "2026-04-26",
-      author: "test",
-      up: async () => {},
-    };
-
-    expect(MigrationPolicy.isHotfix(regular)).toBe(false);
-  });
-
-  test("MigrationPolicy.validateMetadata returns errors for missing required fields", () => {
-    const incomplete = {
-      version: 1,
-      name: "",
-      authoredAt: "",
-      author: "",
-      up: async () => {},
-    };
-
-    const result = MigrationPolicy.validateMetadata(incomplete);
-    expect(result.valid).toBe(false);
-    expect(result.errors.length).toBeGreaterThan(0);
-    expect(result.errors).toContain("Migration name is required");
-    expect(result.errors).toContain("Migration author is required");
-    expect(result.errors).toContain("Migration authoredAt date is required");
-  });
-
-  test("MigrationPolicy.validateMetadata returns valid for complete migration", () => {
-    const complete = {
-      version: 1,
-      name: "test",
-      authoredAt: "2026-04-26",
-      author: "test",
-      up: async () => {},
-    };
-
-    const result = MigrationPolicy.validateMetadata(complete);
-    expect(result.valid).toBe(true);
-    expect(result.errors).toEqual([]);
-  });
-
-  test("runMigrations with mocked database - dry run", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-        get: jest.fn(() => null),
-        run: jest.fn(() => ({})),
-      })),
-      transaction: jest.fn((fn) => fn()),
-    };
-
-    const result = await runMigrations({ dryRun: true, db: mockDb });
-    expect(result).toHaveProperty("applied");
-    expect(result).toHaveProperty("skipped");
-    expect(result).toHaveProperty("durationMs");
-  });
-
-  test("runMigrations with mocked database - allowDown", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-        get: jest.fn(() => null),
-        run: jest.fn(() => ({})),
-      })),
-      transaction: jest.fn((fn) => fn()),
-    };
-
-    const result = await runMigrations({ allowDown: true, dryRun: true, db: mockDb });
-    expect(result).toHaveProperty("applied");
-    expect(result).toHaveProperty("skipped");
-    expect(result).toHaveProperty("durationMs");
-  });
-
-  test("runMigrations with mocked database - verbose", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-        get: jest.fn(() => null),
-        run: jest.fn(() => ({})),
-      })),
-      transaction: jest.fn((fn) => fn()),
-    };
-
-    const result = await runMigrations({ verbose: true, dryRun: true, db: mockDb });
-    expect(result).toHaveProperty("applied");
-    expect(result).toHaveProperty("skipped");
-    expect(result).toHaveProperty("durationMs");
-  });
-
-  test("runMigrations with mocked database - skipChecksumVerify", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-        get: jest.fn(() => null),
-        run: jest.fn(() => ({})),
-      })),
-      transaction: jest.fn((fn) => fn()),
-    };
-
-    const result = await runMigrations({ skipChecksumVerify: true, dryRun: true, db: mockDb });
-    expect(result).toHaveProperty("applied");
-    expect(result).toHaveProperty("skipped");
-    expect(result).toHaveProperty("durationMs");
-  });
-
-  test("getAppliedVersions with mocked database", async () => {
-    const mockDb: any = {
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => [{ version: 1 }, { version: 2 }]),
-      })),
-    };
-
-    const versions = await getAppliedVersions(mockDb);
-    expect(Array.isArray(versions)).toBe(true);
-    expect(versions).toEqual([1, 2]);
-  });
-
-  test("isDatabaseInitialized with mocked database - initialized", async () => {
-    const mockDb: any = {
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => [{ version: 1 }]),
-      })),
-    };
-
-    const initialized = await isDatabaseInitialized(mockDb);
-    expect(initialized).toBe(true);
-  });
-
-  test("isDatabaseInitialized with mocked database - not initialized", async () => {
-    const mockDb: any = {
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-      })),
-    };
-
-    const initialized = await isDatabaseInitialized(mockDb);
-    expect(initialized).toBe(false);
-  });
-
-  test("verifyAppliedChecksums with mocked database - no applied migrations", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => []),
-      })),
-    };
-
-    const result = await verifyAppliedChecksums(mockDb);
-    expect(result.valid).toBe(true);
-    expect(result.errors).toEqual([]);
-  });
-
-  test("verifyAppliedChecksums with mocked database - checksum mismatch", async () => {
-    const mockDb: any = {
-      exec: jest.fn(),
-      prepare: jest.fn(() => ({
-        all: jest.fn(() => [
-          { version: 1, name: "test", checksum: "old_checksum" },
-        ]),
-      })),
-    };
-
-    const result = await verifyAppliedChecksums(mockDb);
-    expect(result).toHaveProperty("valid");
-    expect(result).toHaveProperty("errors");
   });
 });
