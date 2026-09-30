@@ -92,8 +92,28 @@ function isValidTraceId(value: unknown): value is string {
 
 const spanContextStorage = new AsyncLocalStorage<SpanContext>();
 
-function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
-  return !!value && typeof (value as Promise<T>).then === "function";
+/**
+ * Determines whether `value` should be treated as a promise by `withSpan`.
+ *
+ * Invariants:
+ * - Falsy values (`undefined`, `null`, `false`, `0`) are never promises, so the
+ *   synchronous path is taken without touching the value.
+ * - A promise-like is any value whose `then` is callable, including thenables
+ *   that are not real `Promise` instances.
+ * - This probe must never throw and must not invoke `then`. Accessing `then` on
+ *   a value with a hostile/broken accessor is caught and treated as
+ *   "not a promise" so tracing can never break the calling operation.
+ */
+export function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
+  if (!value) {
+    return false;
+  }
+
+  try {
+    return typeof (value as Promise<T>).then === "function";
+  } catch {
+    return false;
+  }
 }
 
 function emitSpanLog(entry: SpanLogEntry): void {
