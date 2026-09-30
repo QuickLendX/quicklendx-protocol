@@ -780,6 +780,29 @@ components:
       bearerFormat: opaque-token
 
   schemas:
+    HealthResponse:
+      type: object
+      description: Health check payload returned by GET /health.
+      required:
+        - status
+        - version
+        - timestamp
+      properties:
+        status:
+          type: string
+          description: Service health status.
+          enum:
+            - ok
+            - error
+        version:
+          type: string
+          description: Running service version.
+          example: 1.0.0
+        timestamp:
+          type: string
+          format: date-time
+          description: RFC 3339 timestamp of the health probe.
+
     FreshnessMetadata:
       type: object
       description: >
@@ -1090,6 +1113,25 @@ components:
             details:
               description: Optional extra details (omitted in production).
 
+    ErrorResponse:
+      type: object
+      description: Canonical error body for resource-level failures (404 responses).
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - message
+            - code
+          properties:
+            message:
+              type: string
+              description: Human-readable error description.
+            code:
+              type: string
+              description: Machine-readable error code (SCREAMING_SNAKE_CASE).
+
     NotificationType:
       type: string
       enum:
@@ -1164,3 +1206,14 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+
+    Unauthorized:
+      description: Missing or invalid API credentials.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              message: Authentication required
+              code: UNAUTHORIZED
