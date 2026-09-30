@@ -89,14 +89,9 @@ export interface EventBatchValidationResult {
 }
 
 export function validateEvent(event: unknown): EventValidationResult {
-  // Accept minimal event shapes used by some indexers/tests: an object
-  // with a `type` string (and optional `data`/`payload`). This keeps the
-  // ingestion endpoint permissive while still validating more complex
-  // Soroban event envelopes.
-  if (typeof event === "object" && event !== null && typeof (event as any).type === "string") {
-    return { success: true, data: event as SorobanEvent };
-  }
-
+  // INVARIANT: every event is validated against the discriminated Soroban
+  // schema — unknown types, missing fields, and malformed payloads always
+  // reject, and error messages never echo raw payload contents.
   const result = SorobanEventSchema.safeParse(event);
 
   if (result.success) {

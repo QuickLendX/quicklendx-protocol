@@ -161,9 +161,12 @@ export class EventProcessor {
         );
         break;
 
-      default:
+      default: {
         const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
-        console.log(`${correlationPrefix}Unhandled event type: ${event.type}`);
+        // Unknown event types must fail loudly instead of being silently
+        // dropped, so callers can surface the error without losing the event.
+        throw new Error(`${correlationPrefix}Unknown event type: ${event.type}`);
+      }
     }
   }
 }
