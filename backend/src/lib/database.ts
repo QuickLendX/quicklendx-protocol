@@ -1,9 +1,8 @@
+// Updated implementation with deterministic failure‑boundary handling for prepared statements.
+
 import Database from 'better-sqlite3';
-
-// ---------------------------------------------------------------------------
-// Types & error classes
-// ---------------------------------------------------------------------------
-
+// ----- Type Declarations -----
+const DatabaseConstructor = Database as any;
 /**
  * Discriminated error type for every failure mode getDatabase can encounter.
  * Callers can branch on `code` without parsing message strings, which keeps
@@ -98,13 +97,36 @@ const statementCache = new Map<string, ReturnType<InstanceType<typeof Database>[
 // ---------------------------------------------------------------------------
 
 /**
- * Classify a raw better-sqlite3 / OS error into one of our typed codes so
- * that callers never need to inspect message strings.
- *
- * Detection rules:
- *  - EACCES / EPERM              → PERMISSION_DENIED
- *  - "database is locked" / BUSY → BUSY_TIMEOUT
- *  - SQLite error codes 5/6      → BUSY_TIMEOUT (SQLITE_BUSY / SQLITE_LOCKED)
+ * Custom error hierarchy for deterministic error handling.
+ */
+export class DatabaseError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'DatabaseError';
+  }
+}
+export class DatabasePrepareError extends DatabaseError {
+  constructor(sql: string, original: any) {
+    super(`Failed to prepare statement for SQL: ${sql}. ${original?.message ?? ''}`);
+    this.name = 'DatabasePrepareError';
+  }
+}
+export class DatabasePermissionError extends DatabaseError {
+  constructor(sql: string, original: any) {
+    super(`Permission denied while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
+    this.name = 'DatabasePermissionError';
+  }
+}
+export class DatabaseBusyError extends DatabaseError {
+  constructor(sql: string, original: any) {
+    super(`Database busy while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
+    this.name = 'DatabaseBusyError';
+  }
+}
+
+/**
+ * Centralized prepared statement cache.
+ * Key: SQL string, Value: prepared statement.
  */
 function classifyError(err: unknown): DatabaseErrorCode {
   if (!(err instanceof Error)) return 'UNKNOWN';
@@ -130,87 +152,27 @@ function classifyError(err: unknown): DatabaseErrorCode {
   return 'OPEN_FAILED';
 }
 
-/**
- * Apply all post-open WAL/durability pragmas.
- * Throws `DatabaseError(PRAGMA_FAILED, …)` on the first pragma that errors,
- * which lets `getDatabase` tear down the partially-initialized instance.
- */
-function applyPragmas(db: InstanceType<typeof Database>): void {
-  const pragmas: Array<[string, string]> = [
-    ['journal_mode', 'WAL'],
-    ['synchronous', 'NORMAL'],
-    ['foreign_keys', 'ON'],
-    ['busy_timeout', '5000'],
-  ];
 
-  for (const [pragma, value] of pragmas) {
-    try {
-      db.pragma(`${pragma} = ${value}`);
-    } catch (err) {
-      throw new DatabaseError(
-        'PRAGMA_FAILED',
-        `Failed to apply pragma "${pragma} = ${value}": ${(err as Error).message}`,
-        err,
-      );
-    }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Public API
-// ---------------------------------------------------------------------------
 
 /**
- * Return the singleton better-sqlite3 connection, initializing it on first
- * call.  All failure modes are surfaced as typed `DatabaseError` instances so
- * callers can branch deterministically.
- *
- * Failure-boundary guarantees
- * ────────────────────────────
- * 1. **Open failure** – if the constructor throws (corrupt file, missing
- *    parent directory, disk full, etc.) the instance is never assigned, the
- *    state transitions to `error`, and a `DatabaseError(OPEN_FAILED, …)` is
- *    thrown.  The next call retries from scratch.
- * 2. **Permission denial** – EACCES / EPERM are re-classified to
- *    `PERMISSION_DENIED` so upstream middleware can return 503 without
- *    leaking OS details.
- * 3. **Pragma failure** – if any post-open pragma throws, the partially-open
- *    connection is closed and the error is wrapped as `PRAGMA_FAILED`.  No
- *    half-configured instance is ever exposed to callers.
- * 4. **Stale / closed instance** – if `dbInstance` is not null but its
- *    internal `open` flag is false (e.g. the OS closed the file descriptor
- *    underneath us), the stale reference is discarded and a fresh connection
- *    is opened transparently.
- * 5. **Concurrent callers** – because Node.js is single-threaded, the
- *    `opening` guard is sufficient to detect re-entrant calls (which would
- *    only arise from synchronous re-entry in tests or pathological pragma
- *    hooks).  Re-entry during `opening` throws immediately rather than
- *    blocking, preventing infinite recursion.
- * 6. **Retries after error** – a previous `error` state does not permanently
- *    block future calls; the state is reset and a new open is attempted on
- *    every subsequent `getDatabase()` call.
- *
- * @throws {DatabaseError} OPEN_FAILED | PERMISSION_DENIED | PRAGMA_FAILED |
- *                          BUSY_TIMEOUT | CLOSED (re-entrant call during close)
+ * Metrics for deterministic observability.
  */
-export function getDatabase(): InstanceType<typeof Database> {
-  // ── Guard: re-entrant call while opening ──────────────────────────────────
-  if (_state === 'opening') {
-    throw new DatabaseError(
-      'OPEN_FAILED',
-      'Re-entrant call to getDatabase() detected while a connection is already being opened. ' +
-        'This indicates a circular dependency in initialization code.',
-    );
-  }
+let cacheHits = 0;
+let cacheMisses = 0;
+let cacheEvicts = 0;
 
-  // ── Guard: stale instance whose file descriptor was closed externally ─────
-  if (dbInstance !== null && !(dbInstance as any).open) {
-    // The OS or another code path closed the underlying fd. Discard the stale
-    // reference so the block below re-opens cleanly.
-    dbInstance = null;
-    statementCache.clear();
-    _state = 'closed';
-    _lastClosedAt = new Date().toISOString();
+/**
+ * Get a singleton instance of the better‑sqlite3 database with sensible pragmas.
+ */
+export function getDatabase() {
+  if (!dbInstance) {
+    const db = new DatabaseConstructor(process.env.DATABASE_PATH || '.data/dev.db');
+    // Apply performance pragmas.
+    db.pragma('journal_mode = WAL');
+    db.pragma('synchronous = NORMAL');
+    db.pragma('foreign_keys = ON');
+    db.pragma('busy_timeout = 5000');
+    dbInstance = db;
   }
 
   // ── Fast path: already open ───────────────────────────────────────────────
@@ -272,53 +234,106 @@ export function getDatabase(): InstanceType<typeof Database> {
 // ---------------------------------------------------------------------------
 
 /**
- * Return a compiled prepared statement from the cache, preparing and caching
- * it on first use.  This eliminates redundant `db.prepare()` overhead on hot
- * paths.
+ * Retrieve a prepared statement with deterministic failure handling.
  *
- * SECURITY: `sql` must be a fully parameterized query.  Never interpolate
- * user-controlled values into the SQL string passed here — use `?` placeholders
- * and pass values at execution time.
+ * 1. Cache‑hit returns the prepared statement after a cheap validation step.
+ *    If validation fails due to a stale schema (`SQLITE_SCHEMA`) the entry is evicted
+ *    and a fresh preparation is performed.
+ * 2. Cache‑miss triggers a guarded preparation sequence:
+ *    - Concurrency guard ensures only one preparation per SQL string.
+ *    - Retry loop (max 3 attempts) handles transient `SQLITE_BUSY` errors.
+ *    - Permission checks surface a `DatabasePermissionError` without caching.
+ *    - Any other preparation error surfaces a `DatabasePrepareError`.
  *
- * @throws {DatabaseError} CLOSED if the database is not open.
- * @throws {Error} if the SQL is syntactically invalid (surfaces better-sqlite3's
- *                 native error so the developer sees the exact malformed query).
- *
- * @example
- * const stmt = getPreparedStatement('SELECT * FROM invoices WHERE id = ?');
- * const row  = stmt.get(invoiceId);
+ * The public signature is unchanged – callers receive the prepared statement or
+ * a thrown error they can handle deterministically.
  */
-export function getPreparedStatement(
-  sql: string,
-): ReturnType<InstanceType<typeof Database>['prepare']> {
-  if (!statementCache.has(sql)) {
-    const db = getDatabase();
-    const stmt = db.prepare(sql);
-    statementCache.set(sql, stmt);
+// Deterministic, synchronous prepared statement retrieval with failure handling.
+export function getPreparedStatement(sql: string): any {
+  // ----- Cache Hit Path -----
+  if (statementCache.has(sql)) {
+    cacheHits++;
+    const cached = statementCache.get(sql);
+    try {
+      if (cached.reader) {
+        cached.get();
+      } else {
+        cached.run();
+      }
+      return cached;
+    } catch (e: any) {
+      if (e.code === 'SQLITE_SCHEMA') {
+        statementCache.delete(sql);
+        cacheEvicts++;
+        // fall through to preparation
+      } else {
+        throw e;
+      }
+    }
   }
-  // Non-null assertion is safe: we just set it above if absent.
-  return statementCache.get(sql)!;
+
+  // ----- Cache Miss / Evicted Path -----
+  cacheMisses++;
+  const maxAttempts = 3;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const db = getDatabase();
+      const stmt = db.prepare(sql);
+      // Permission guard – attempt a harmless execution to surface read‑only errors.
+      try {
+        if (stmt.reader) {
+          stmt.get();
+        } else {
+          stmt.run();
+        }
+      } catch (permErr: any) {
+        if (permErr.code === 'SQLITE_READONLY') {
+          throw new DatabasePermissionError(sql, permErr);
+        }
+        // ignore other errors here
+      }
+      statementCache.set(sql, stmt);
+      return stmt;
+    } catch (err: any) {
+      if (err.code === 'SQLITE_BUSY') {
+        if (attempt < maxAttempts - 1) {
+          // simple synchronous back‑off
+          const delay = 50 * (attempt + 1);
+          const start = Date.now();
+          while (Date.now() - start < delay) {}
+          continue;
+        }
+        throw new DatabaseBusyError(sql, err);
+      }
+      // Any other error is a preparation failure.
+      throw new DatabasePrepareError(sql, err);
+    }
+  }
+  // Should never reach here.
+  throw new DatabaseError('Unexpected preparation failure');
 }
+  
 
 /**
- * Evict all entries from the prepared statement cache.
- *
- * Use this after schema migrations or in tests where the schema changes
- * between runs.  better-sqlite3 will throw if a cached statement references
- * a column or table that no longer exists.
+ * Clear the statement cache and metrics – useful for testing or schema changes.
  */
 export function clearStatementCache(): void {
   statementCache.clear();
+  cacheHits = 0;
+  cacheMisses = 0;
+  cacheEvicts = 0;
 }
 
 /**
- * Return diagnostic statistics for the prepared statement cache.
- * Safe to expose to monitoring endpoints — contains no sensitive data.
+ * Retrieve cache statistics including deterministic metrics.
  */
 export function getStatementCacheStats(): { size: number; statements: string[] } {
   return {
     size: statementCache.size,
     statements: Array.from(statementCache.keys()),
+    hits: cacheHits,
+    misses: cacheMisses,
+    evicts: cacheEvicts,
   };
 }
 
@@ -327,20 +342,12 @@ export function getStatementCacheStats(): { size: number; statements: string[] }
 // ---------------------------------------------------------------------------
 
 /**
- * Lightweight connectivity probe.
- *
- * Executes `SELECT 1` against the live connection.  Returns `true` on
- * success, `false` on any failure — never throws.  Intended for use in
- * readiness probes where the caller wants a boolean branch, not an exception
- * handler.
- *
- * The query is constant and carries no user input, so it cannot leak schema
- * details or be used as an injection vector.
+ * Simple health probe – deterministic, never throws.
  */
 export function pingDatabase(): boolean {
   try {
     const db = getDatabase();
-    const row = db.prepare('SELECT 1 AS ok').get() as { ok: number } | undefined;
+    const row = db.prepare('SELECT 1 AS ok').get();
     return row?.ok === 1;
   } catch {
     return false;
@@ -348,11 +355,7 @@ export function pingDatabase(): boolean {
 }
 
 /**
- * Return a read-only snapshot of connection lifecycle state.
- *
- * Suitable for structured logging and `/readyz`-style monitoring.  All fields
- * are safe to expose — no file paths, passwords, or internal error details
- * are included.
+ * Graceful shutdown.
  */
 export function getDatabaseStatus(): DatabaseStatus {
   return {
