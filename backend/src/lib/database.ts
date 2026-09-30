@@ -82,28 +82,17 @@ export function getDatabase() {
  * The public signature is unchanged – callers receive the prepared statement or
  * a thrown error they can handle deterministically.
  */
-// Deterministic, synchronous prepared statement retrieval with failure handling.
+let customGetDatabase: (() => any) | null = null;
+
+export function _setGetDatabaseForTesting(fn: (() => any) | null): void {
+  customGetDatabase = fn;
+}
+
 export function getPreparedStatement(sql: string): any {
   // ----- Cache Hit Path -----
   if (statementCache.has(sql)) {
     cacheHits++;
-    const cached = statementCache.get(sql);
-    try {
-      if (cached.reader) {
-        cached.get();
-      } else {
-        cached.run();
-      }
-      return cached;
-    } catch (e: any) {
-      if (e.code === 'SQLITE_SCHEMA') {
-        statementCache.delete(sql);
-        cacheEvicts++;
-        // fall through to preparation
-      } else {
-        throw e;
-      }
-    }
+    return statementCache.get(sql);
   }
 
   // ----- Cache Miss / Evicted Path -----
@@ -111,21 +100,8 @@ export function getPreparedStatement(sql: string): any {
   const maxAttempts = 3;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const db = getDatabase();
+      const db = customGetDatabase ? customGetDatabase() : getDatabase();
       const stmt = db.prepare(sql);
-      // Permission guard – attempt a harmless execution to surface read‑only errors.
-      try {
-        if (stmt.reader) {
-          stmt.get();
-        } else {
-          stmt.run();
-        }
-      } catch (permErr: any) {
-        if (permErr.code === 'SQLITE_READONLY') {
-          throw new DatabasePermissionError(sql, permErr);
-        }
-        // ignore other errors here
-      }
       statementCache.set(sql, stmt);
       return stmt;
     } catch (err: any) {
@@ -138,6 +114,9 @@ export function getPreparedStatement(sql: string): any {
           continue;
         }
         throw new DatabaseBusyError(sql, err);
+      }
+      if (err.code === 'SQLITE_READONLY' || err.code === 'SQLITE_AUTH') {
+        throw new DatabasePermissionError(sql, err);
       }
       // Any other error is a preparation failure.
       throw new DatabasePrepareError(sql, err);

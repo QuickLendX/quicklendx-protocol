@@ -96,25 +96,54 @@ initialisePolicy();
 
 // ── Expose policy for other modules ───────────────────────────────────────────
 
+export interface PolicyFieldEntry {
+  field: string;
+  tier: FieldTier;
+}
+
 /**
- * Return the list of fields registered under the given tier.
+ * Return policy fields.
  *
- * Behaviour is deterministic across all inputs:
- *   - Valid tier with a loaded policy → the registered field list.
- *   - Valid tier when the policy failed to load → an empty array (deny-by-
- *     default). Callers must not assume a non-empty result.
- *   - Unknown / invalid tier → an empty array. This is a boundary case and
- *     never throws, so logging call sites cannot crash on bad input.
- *
- * The returned array is a defensive copy: mutating it cannot corrupt the
- * cached policy state, and concurrent callers cannot observe each other's
- * mutations.
+ * Overloads:
+ * 1. `getPolicyFields(tier: FieldTier): string[]`
+ *    Returns the list of field names configured under the given tier.
+ * 2. `getPolicyFields(fields: string[]): PolicyFieldEntry[]`
+ *    Classifies each field in `fields` returning `{ field, tier }` objects.
  */
-export function getPolicyFields(tier: FieldTier): string[] {
-  if (tier !== FieldTier.PUBLIC && tier !== FieldTier.PRIVATE && tier !== FieldTier.SECRET) {
-    return [];
+export function getPolicyFields(tier: FieldTier): string[];
+export function getPolicyFields(fields: string[]): PolicyFieldEntry[];
+export function getPolicyFields(
+  arg: FieldTier | string[]
+): string[] | PolicyFieldEntry[] {
+  if (arg === null || arg === undefined) {
+    throw new TypeError("getPolicyFields: argument cannot be null or undefined");
   }
-  const fields = loadedPolicy[tier];
+
+  if (Array.isArray(arg)) {
+    for (const elem of arg) {
+      if (typeof elem !== "string") {
+        throw new TypeError("getPolicyFields: all array elements must be strings");
+      }
+    }
+    return arg.map((field) => ({
+      field,
+      tier: classifyField(field),
+    }));
+  }
+
+  if (typeof arg !== "string") {
+    throw new TypeError("getPolicyFields: expected a string[] or FieldTier");
+  }
+
+  if (
+    arg !== FieldTier.PUBLIC &&
+    arg !== FieldTier.PRIVATE &&
+    arg !== FieldTier.SECRET
+  ) {
+    throw new TypeError("getPolicyFields: expected an array of field names");
+  }
+
+  const fields = loadedPolicy[arg];
   return Array.isArray(fields) ? fields.slice() : [];
 }
 
@@ -189,20 +218,19 @@ function canonicalise(value: unknown): string {
   if (value === null) return "null";
   if (value === undefined) return "undefined";
   const t = typeof value;
-  if (t === "string") return `s:${value}`;
-  if (t === "number") return `n:${value}`;
-  if (t === "boolean") return `b:${value}`;
-  if (t === "bigint") return `i:${(value as bigint).toString()}`;
-  if (t === "symbol") return `y:${String(value)}`;
-  if (t === "function") return `f:${(value as Function).name ?? ""}`;
+  if (t === "string") return value as string;
+  if (t === "number") return String(value);
+  if (t === "boolean") return String(value);
+  if (t === "bigint") return (value as bigint).toString();
+  if (t === "symbol") return String(value);
+  if (t === "function") return (value as Function).name ?? "";
   if (Array.isArray(value)) {
-    return `a:[${value.map(canonicalise).join(",")}]`;
+    return `[${value.map(canonicalise).join(",")}]`;
   }
   const obj = value as Record<string, unknown>;
-  const ctor = (obj as { constructor?: { name?: string } }).constructor?.name ?? "Object";
   const keys = Object.keys(obj).sort();
   const body = keys.map((k) => `${JSON.stringify(k)}:${canonicalise(obj[k])}`).join(",");
-  return `o:${ctor}:{${body}}`;
+  return `{${body}}`;
 }
 
 /**

@@ -143,11 +143,13 @@ export function generateCorrelationId(): string {
     .slice(0, 26);
 }
 
+export const MAX_CORRELATION_ID_LENGTH = 128;
+
 /**
  * Sanitize a client-supplied correlation ID to prevent log injection.
  *
  * Leading/trailing whitespace is trimmed, then the value must consist solely
- * of alphanumerics, hyphens, and underscores and be 1–128 characters long.
+ * of alphanumerics, hyphens, underscores, dots, and colons and be 1–128 characters long.
  * Any other character (newlines, carriage returns, tabs, ANSI escapes, null
  * bytes, internal spaces, …) causes the value to be rejected. Returns null
  * when validation fails.
@@ -155,8 +157,8 @@ export function generateCorrelationId(): string {
 export function sanitizeCorrelationId(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
-  if (trimmed.length === 0 || trimmed.length > 128) return null;
-  if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) return null;
+  if (trimmed.length === 0 || trimmed.length > MAX_CORRELATION_ID_LENGTH) return null;
+  if (!/^[A-Za-z0-9_.:-]+$/.test(trimmed)) return null;
   return trimmed;
 }
 
