@@ -9,6 +9,7 @@
  *   • Request-logger middleware integration
  *   • Edge-cases: null, undefined, arrays, deeply nested objects
  *   • Deterministic failure-boundary coverage for getPolicyFields
+ *   • Deterministic failure-boundary coverage for sanitiseRequest
  */
 
 import { createHash } from "crypto";
@@ -418,6 +419,282 @@ describe("sanitiseRequest", () => {
     });
     expect(snap.headers["content-type"]).toMatch(/^sha256:/);
     expect(snap.headers["x-custom-header"]).toMatch(/^sha256:/);
+  });
+});
+
+// ── 4b. sanitiseRequest — deterministic failure-boundary coverage ────────────
+
+describe("sanitiseRequest — failure boundaries", () => {
+  const baseReq = {
+    method: "POST",
+    path: "/api/v1/invoices",
+    query: { status: "Pending" },
+    headers: { authorization: "Bearer tok", "x-trace": "abc" },
+    body: { invoice_id: "inv_1", amount: "500000", tax_id: "123-45-6789" },
+  };
+
+  describe("malformed request containers — never throws", () => {
+    it.each([
+      ["null request", null],
+      ["undefined request", undefined],
+      ["primitive request", "not-a-request"],
+    ])("returns an empty snapshot for a %s", (_label, bad) => {
+      const snap = sanitiseRequest(bad as any);
+      expect(snap).toEqual({
+        method: "",
+        path: "",
+        query: {},
+        headers: {},
+        body: null,
+      });
+    });
+
+    it.each([
+      ["null", null],
+      ["undefined", undefined],
+      ["a string", "a=1"],
+      ["a number", 42],
+      ["an array", ["a", "b"]],
+    ])("degrades %s query to an empty record", (_label, bad) => {
+      const snap = sanitiseRequest({ ...baseReq, query: bad as any });
+      expect(snap.query).toEqual({});
+      // the rest of the record is still produced
+      expect(snap.method).toBe("POST");
+      expect(snap.body!["invoice_id"]).toBe("inv_1");
+    });
+
+    it.each([
+      ["null", null],
+      ["undefined", undefined],
+      ["a string", "content-type: x"],
+      ["a number", 7],
+      ["an array", ["a"]],
+    ])("degrades %s headers to an empty record", (_label, bad) => {
+      const snap = sanitiseRequest({ ...baseReq, headers: bad as any });
+      expect(snap.headers).toEqual({});
+      expect(snap.body!["tax_id"]).toBe("[REDACTED]");
+    });
+
+    it("substitutes empty strings for non-string method and path", () => {
+      const snap = sanitiseRequest({
+        ...baseReq,
+        method: undefined as any,
+        path: null as any,
+      });
+      expect(snap.method).toBe("");
+      expect(snap.path).toBe("");
+    });
+
+    it("does not throw when a property getter throws", () => {
+      const hostile = {
+        method: "GET",
+        path: "/p",
+        get headers(): Record<string, unknown> {
+          throw new Error("boom");
+        },
+        query: {},
+      };
+      // Property access is not guarded per-field, so a throwing getter is
+      // surfaced rather than swallowed — the error stays observable instead of
+      // becoming a silently truncated log record.
+      expect(() => sanitiseRequest(hostile as any)).toThrow("boom");
+    });
+  });
+
+  describe("boundary inputs", () => {
+    it("treats a non-object body as absent", () => {
+      expect(sanitiseRequest({ ...baseReq, body: "text" }).body).toBeNull();
+      expect(sanitiseRequest({ ...baseReq, body: 0 }).body).toBeNull();
+      expect(sanitiseRequest({ ...baseReq, body: false }).body).toBeNull();
+      expect(sanitiseRequest({ ...baseReq, body: null }).body).toBeNull();
+    });
+
+    it("redacts an array body by index rather than dropping it", () => {
+      const snap = sanitiseRequest({ ...baseReq, body: ["a", "b"] });
+      expect(snap.body).toEqual({
+        "0": hashValue("a"),
+        "1": hashValue("b"),
+      });
+    });
+
+    it("keeps a Date body as an empty record (no enumerable own fields)", () => {
+      expect(sanitiseRequest({ ...baseReq, body: new Date(0) }).body).toEqual({});
+    });
+
+    it("resolves a case-colliding header identically regardless of spelling order", () => {
+      const a = sanitiseRequest({
+        ...baseReq,
+        headers: { "X-Trace": "first", "x-trace": "second" },
+      });
+      const b = sanitiseRequest({
+        ...baseReq,
+        headers: { "x-trace": "second", "X-Trace": "first" },
+      });
+      // Header names are case-insensitive, so both spellings collapse to one
+      // key and both orderings must converge on the same value.
+      expect(Object.keys(a.headers)).toEqual(["x-trace"]);
+      expect(a.headers).toEqual(b.headers);
+      // The merged pair is PRIVATE tier, so it is hashed as a whole. The hash
+      // covers both values, so neither spelling is silently dropped, and the
+      // value is order-independent because the merge sorts before hashing.
+      expect(a.headers["x-trace"]).toBe(hashValue(["first", "second"]));
+      expect(a.headers["x-trace"]).not.toBe(hashValue("first"));
+      expect(a.headers["x-trace"]).not.toBe(hashValue("second"));
+    });
+
+    it("keeps a single-value header scalar so existing snapshots are unchanged", () => {
+      const snap = sanitiseRequest({ ...baseReq, headers: { "X-Trace": "only" } });
+      expect(snap.headers["x-trace"]).toBe(hashValue("only"));
+    });
+
+    it("classifies a mixed-case SECRET header as SECRET after normalisation", () => {
+      const snap = sanitiseRequest({
+        ...baseReq,
+        headers: { "Authorization": "Bearer leak-me" },
+      });
+      expect(snap.headers["authorization"]).toBe("[REDACTED]");
+    });
+
+    it("treats a null-prototype header bag like a plain one", () => {
+      const bare = Object.create(null);
+      bare.authorization = "Bearer tok";
+      const snap = sanitiseRequest({ ...baseReq, headers: bare });
+      expect(snap.headers["authorization"]).toBe("[REDACTED]");
+    });
+  });
+
+  describe("hostile and cyclic structures", () => {
+    it("contains a cyclic body and still redacts sibling fields", () => {
+      const body: Record<string, unknown> = { amount: "1" };
+      body.self = body;
+      const snap = sanitiseRequest({ ...baseReq, body });
+      expect(snap.body!["amount"]).toBe(hashValue("1"));
+      expect(snap.body!["self"]).toBe("[REDACTED]");
+    });
+
+    it("contains a cyclic query and still redacts sibling fields", () => {
+      const query: Record<string, unknown> = { status: "open" };
+      query.loop = query;
+      const snap = sanitiseRequest({ ...baseReq, query });
+      expect(snap.query["status"]).toBe("open");
+      expect(snap.query["loop"]).toBe("[REDACTED]");
+    });
+
+    it("contains a cyclic header bag and still redacts sibling headers", () => {
+      const headers: Record<string, unknown> = { authorization: "Bearer tok" };
+      headers.loop = headers;
+      const snap = sanitiseRequest({ ...baseReq, headers });
+      expect(snap.headers["authorization"]).toBe("[REDACTED]");
+      expect(snap.headers["loop"]).toBe("[REDACTED]");
+    });
+
+    it("does not allow a __proto__ header to pollute the snapshot", () => {
+      const snap = sanitiseRequest({
+        ...baseReq,
+        headers: JSON.parse('{"__proto__":{"polluted":"yes"}}'),
+      });
+      expect((snap.headers as any).polluted).toBeUndefined();
+      expect(({} as any).polluted).toBeUndefined();
+    });
+  });
+
+  describe("purity, concurrency and retry", () => {
+    it("does not mutate the incoming request", () => {
+      const req = structuredClone(baseReq);
+      const before = JSON.parse(JSON.stringify(req));
+      sanitiseRequest(req);
+      expect(req).toEqual(before);
+    });
+
+    it("returns a fresh object on every call (no shared mutable state)", () => {
+      const a = sanitiseRequest(baseReq);
+      const b = sanitiseRequest(baseReq);
+      expect(a).not.toBe(b);
+      expect(a.query).not.toBe(b.query);
+      expect(a.headers).not.toBe(b.headers);
+      expect(a).toEqual(b);
+    });
+
+    it("mutating a returned snapshot cannot corrupt the next one", () => {
+      const first = sanitiseRequest(baseReq);
+      first.query.status = "TAMPERED";
+      first.headers["authorization"] = "leak";
+      const second = sanitiseRequest(baseReq);
+      expect(second.query.status).toBe("Pending");
+      expect(second.headers["authorization"]).toBe("[REDACTED]");
+    });
+
+    it("is deterministic across repeated calls (stable snapshot)", () => {
+      const first = sanitiseRequest(baseReq);
+      for (let i = 0; i < 25; i++) {
+        expect(sanitiseRequest(baseReq)).toEqual(first);
+      }
+    });
+
+    it("is deterministic under concurrent interleaved calls", async () => {
+      const runs = await Promise.all(
+        Array.from({ length: 25 }, () =>
+          Promise.resolve().then(() => sanitiseRequest(baseReq))
+        )
+      );
+      for (const r of runs) expect(r).toEqual(runs[0]);
+    });
+
+    it("is deterministic for key-order permutations of the same logical input", () => {
+      const a = sanitiseRequest({
+        ...baseReq,
+        body: { amount: "500000", invoice_id: "inv_1" },
+      });
+      const b = sanitiseRequest({
+        ...baseReq,
+        body: { invoice_id: "inv_1", amount: "500000" },
+      });
+      expect(a.body).toEqual(b.body);
+    });
+
+    it("recovers deterministically after a malformed request", () => {
+      expect(sanitiseRequest(null as any).body).toBeNull();
+      const after = sanitiseRequest(baseReq);
+      expect(after).toEqual(sanitiseRequest(baseReq));
+      expect(after.body!["tax_id"]).toBe("[REDACTED]");
+    });
+  });
+
+  describe("regression — no secret ever leaks", () => {
+    it("emits no secret for a payload with secrets in every position", () => {
+      // `path` is copied verbatim by design (it is PUBLIC tier and Express's
+      // `req.path` excludes the query string), so the secrets here live in the
+      // query, header and body sections that sanitiseRequest redacts.
+      const snap = sanitiseRequest({
+        method: "POST",
+        path: "/api/v1/bids",
+        query: { access_token: "leak", amount: "1" },
+        headers: { Authorization: "Bearer leak", "X-Api-Key": "leak" },
+        body: {
+          signature: "leak",
+          email: "leak@example.com",
+          password: "hunter2",
+          invoice_id: "inv_1",
+        },
+      });
+      expect(findSecretLeak(snap)).toBeNull();
+      expect(JSON.stringify(snap)).not.toContain("leak");
+      expect(JSON.stringify(snap)).not.toContain("hunter2");
+    });
+
+    it("serialises to JSON without throwing for every malformed shape", () => {
+      const cases: unknown[] = [
+        null,
+        undefined,
+        {},
+        { method: "GET", path: "/p", query: null, headers: null },
+        { method: "GET", path: "/p", query: [], headers: [] },
+        { method: "GET", path: "/p", query: "x", headers: "y" },
+      ];
+      for (const c of cases) {
+        expect(() => JSON.stringify(sanitiseRequest(c as any))).not.toThrow();
+      }
+    });
   });
 });
 
