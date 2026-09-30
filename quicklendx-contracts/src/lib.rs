@@ -14,6 +14,11 @@ pub mod invoice_amount;
 #[cfg(test)]
 mod test_invoice_amount_precision;
 
+/// Shared test utilities for contract regression coverage (issue #2711 CI
+/// fix). Public (not `#[cfg(test)]`) so integration tests under `tests/`
+/// can reach it via `quicklendx_contracts::test_utils`.
+pub mod test_utils;
+
 #[contract]
 pub struct QuickLendXContract;
 
