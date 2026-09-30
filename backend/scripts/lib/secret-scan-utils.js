@@ -89,23 +89,95 @@ const KNOWN_SECRET_PATTERNS = [
   },
 ];
 
+// Invariants for shannonEntropy:
+//
+//   E1 Total      - never throws, for any JavaScript value. A throw here
+//                   propagates out of isHighEntropyToken -> scanLine ->
+//                   scanTargets and aborts the whole scan, discarding the
+//                   findings already collected for every other file.
+//   E2 Typed      - only strings are measured. A primitive string is used
+//                   directly; a String object is unwrapped through the
+//                   internal slot, which cannot run user code and cannot
+//                   throw for a well-formed wrapper. Every other type,
+//                   including revoked proxies, returns 0. Nothing is coerced
+//                   with String(value): coercion runs user code, can throw,
+//                   and would manufacture an alphabet out of
+//                   "[object Object]" and return a meaningless score.
+//   E3 Normalised - probabilities sum to exactly 1. The symbol census is
+//                   taken by code point (for...of) and divided by that same
+//                   code-point count. Dividing by value.length (UTF-16 code
+//                   units) weights every astral character at 1/2, so the
+//                   probabilities sum to less than 1, entropy is
+//                   under-reported, and a genuine secret can fall below
+//                   MIN_HIGH_ENTROPY_SCORE and be missed without a trace.
+//   E4 Bounded    - the result is always a finite, non-negative number within
+//                   [0, log2(codePointCount)]. An all-uniform input yields
+//                   +0 rather than -0, so toBe(0) holds.
+//   E5 Pure       - no shared mutable state and no I/O, so repeated and
+//                   interleaved calls on equal input return equal doubles.
+//
+// Compatibility: for any input drawn entirely from the Basic Multilingual
+// Plane, codePointCount equals value.length, so this returns bit-identical
+// doubles to the previous implementation for every call that did not throw.
+// The observable changes are limited to inputs that previously threw
+// TypeError (now 0) and astral input (now correctly normalised).
+
 function shannonEntropy(value) {
-  if (!value) {
+  let text;
+
+  if (typeof value === "string") {
+    text = value;
+  } else {
+    text = unwrapStringObject(value);
+  }
+
+  if (text === null || text.length === 0) {
     return 0;
   }
 
   const counts = new Map();
-  for (const char of value) {
+  let codePoints = 0;
+  for (const char of text) {
     counts.set(char, (counts.get(char) || 0) + 1);
+    codePoints += 1;
   }
 
+  // The division below is safe by construction: text.length > 0 was already
+  // rejected above, and for...of yields at least one code point for any
+  // non-empty string, so codePoints >= 1 and no count is ever 0.
   let entropy = 0;
   for (const count of counts.values()) {
-    const probability = count / value.length;
+    const probability = count / codePoints;
     entropy -= probability * Math.log2(probability);
   }
 
+  // E4: collapse -0 and any non-finite residue to 0 so the result is always a
+  // plain non-negative number that compares consistently against
+  // MIN_HIGH_ENTROPY_SCORE.
+  if (!Number.isFinite(entropy) || entropy <= 0) {
+    return 0;
+  }
+
   return entropy;
+}
+
+// Accepts a String object and returns its primitive value; returns null for
+// every other input. String.prototype.valueOf is called directly on the
+// intrinsic so a hostile `valueOf`/`Symbol.toPrimitive` override on a wrapper
+// or proxy is never consulted, and the revoked-proxy TypeError is absorbed.
+function unwrapStringObject(value) {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+
+  let unwrapped;
+  try {
+    unwrapped = String.prototype.valueOf.call(value);
+  } catch {
+    return null;
+  }
+
+  return typeof unwrapped === "string" ? unwrapped : null;
 }
 
 function isHexString(value) {
