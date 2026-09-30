@@ -108,8 +108,68 @@ function shannonEntropy(value) {
   return entropy;
 }
 
+// Anchored hex shapes. Both are module-level literals deliberately created
+// without the g or y flag: RegExp.prototype.test only reads lastIndex for those
+// two flags, so the patterns are position-free and can be shared by every call
+// without leaking state between a scan line, a retry, and an interleaved call.
+const HEX_DIGITS_PATTERN = /^[0-9a-fA-F]+$/;
+const HEX_PREFIXED_PATTERN = /^0x[0-9a-fA-F]+$/;
+
+// Failure-boundary contract for isHexString. These invariants are pinned down
+// by tests/secret-scan-hex.test.ts, and every one of them is load-bearing
+// because isHexString sits on the *suppressor* side of secret classification:
+// isHighEntropyToken drops a candidate whenever isHexString reports true, so a
+// wrong true is a silently dropped finding, not a noisy one.
+//
+//   H1 Total          - never throws, for any JavaScript value, including
+//                       symbols, revoked proxies, and objects whose toString
+//                       or Symbol.toPrimitive throws. RegExp.prototype.test
+//                       coerces its argument with ToString, which runs
+//                       user-visible code; an uncaught throw escapes through
+//                       isHighEntropyToken -> collectHighEntropyMatches ->
+//                       scanLine -> scanTargets, aborts the scan, and discards
+//                       the findings already collected for other files. The one
+//                       current caller feeds it a regex-derived primitive
+//                       string, so this is defence in depth for the exported
+//                       helper and for any caller added later.
+//   H2 Type-exact     - only a string primitive can be hex. Numbers, bigints,
+//                       and String wrappers coerce to text that can be entirely
+//                       hex ("255", "0", "deadbeef"), and accepting that
+//                       coercion would let a non-string suppress a finding.
+//                       Refusing non-strings is the fail-closed direction: it
+//                       can only add findings, never remove one.
+//   H3 Full value     - the shape is matched end to end, so a padded, embedded,
+//                       or line-terminated value (" deadbeef ", "0xdeadbeefg",
+//                       "deadbeef\n") is not hex.
+//   H4 Minimal length - at least one hex digit is required, so neither the empty
+//                       string nor a bare "0x" prefix is hex.
+//   H5 Lowercase prefix only - exactly one optional "0x". "0X1f" is not hex:
+//                       widening the accepted set would suppress more findings,
+//                       i.e. weaken detection, so the conservative reading is
+//                       kept rather than "fixed".
+//   H6 Linear, pure   - the patterns are a single anchored character class with
+//                       no ambiguous quantifier, so matching is O(length) with
+//                       no catastrophic backtracking. No shared mutable state,
+//                       no I/O, and the value is never logged, so repeated
+//                       calls, retries, and interleaved execution are
+//                       deterministic and never disclose a candidate.
+//
+// Compatibility: for every string input the result is exactly what the
+// previous implementation returned, and the sole caller (isHighEntropyToken)
+// cannot observe the non-string change, because a non-string can never reach a
+// `true` from isHighEntropyToken anyway: isObviousPlaceholder fails closed to
+// true and hasMixedCharacterClasses returns false for non-strings. The only
+// observable change is for non-string inputs, which previously either threw a
+// TypeError (aborting the entire scan) or were misclassified as hex.
 function isHexString(value) {
-  return /^[0-9a-fA-F]+$/.test(value) || /^0x[0-9a-fA-F]+$/.test(value);
+  // H1/H2: refuse everything that is not a string primitive before a regex can
+  // coerce it. typeof reads an internal slot, so a hostile value cannot throw
+  // and cannot run a trap here.
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  return HEX_DIGITS_PATTERN.test(value) || HEX_PREFIXED_PATTERN.test(value);
 }
 
 function isIdentifierLikeString(value) {
@@ -205,6 +265,10 @@ function isHighEntropyToken(value) {
     return false;
   }
 
+  // A hex run is a commit SHA, a colour or a byte buffer, not a credential, so
+  // it is suppressed here. This is the reason isHexString is held to H1/H2 in
+  // its contract above: a spurious true from this branch silently drops the
+  // finding instead of raising a false alarm.
   if (isHexString(value)) {
     return false;
   }
@@ -799,6 +863,7 @@ module.exports = {
   hasMixedCharacterClasses,
   isAllowlisted,
   isHighEntropyToken,
+  isHexString,
   isIdentifierLikeString,
   isLogSafePreview,
   isObviousPlaceholder,
