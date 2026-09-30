@@ -1,6 +1,7 @@
 // Updated implementation with deterministic failure‑boundary handling for prepared statements.
 
 import Database from 'better-sqlite3';
+import * as self from './database';
 
 
 // ----- Type Declarations -----
@@ -88,22 +89,13 @@ export function getPreparedStatement(sql: string): any {
   if (statementCache.has(sql)) {
     cacheHits++;
     const cached = statementCache.get(sql);
-    try {
-      if (cached.reader) {
-        cached.get();
-      } else {
-        cached.run();
-      }
+    // Never execute the statement to "validate" it: that would run writes and
+    // fail for parameterised SQL. better-sqlite3 re-prepares on schema change.
+    if (cached && typeof cached.run === 'function') {
       return cached;
-    } catch (e: any) {
-      if (e.code === 'SQLITE_SCHEMA') {
-        statementCache.delete(sql);
-        cacheEvicts++;
-        // fall through to preparation
-      } else {
-        throw e;
-      }
     }
+    statementCache.delete(sql);
+    cacheEvicts++;
   }
 
   // ----- Cache Miss / Evicted Path -----
@@ -111,14 +103,13 @@ export function getPreparedStatement(sql: string): any {
   const maxAttempts = 3;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const db = getDatabase();
+      const db = self.getDatabase();
       const stmt = db.prepare(sql);
-      // Permission guard – attempt a harmless execution to surface read‑only errors.
+      // Permission guard – probe read-only statements only. Write statements
+      // are never executed here: that would perform the write.
       try {
         if (stmt.reader) {
           stmt.get();
-        } else {
-          stmt.run();
         }
       } catch (permErr: any) {
         if (permErr.code === 'SQLITE_READONLY') {
@@ -138,6 +129,9 @@ export function getPreparedStatement(sql: string): any {
           continue;
         }
         throw new DatabaseBusyError(sql, err);
+      }
+      if (err instanceof DatabasePermissionError) {
+        throw err;
       }
       // Any other error is a preparation failure.
       throw new DatabasePrepareError(sql, err);

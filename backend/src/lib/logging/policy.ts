@@ -110,12 +110,32 @@ initialisePolicy();
  * cached policy state, and concurrent callers cannot observe each other's
  * mutations.
  */
-export function getPolicyFields(tier: FieldTier): string[] {
+export function getPolicyFieldsForTier(tier: FieldTier): string[] {
   if (tier !== FieldTier.PUBLIC && tier !== FieldTier.PRIVATE && tier !== FieldTier.SECRET) {
     return [];
   }
   const fields = loadedPolicy[tier];
   return Array.isArray(fields) ? fields.slice() : [];
+}
+
+/**
+ * Classify a batch of field names.
+ *
+ * Deterministic and pure: returns one `{ field, tier }` entry per input, in
+ * input order, without deduplication. Unknown fields default to PRIVATE (see
+ * `classifyField`). The batch is validated up front, so any invalid input
+ * throws a `TypeError` and no partial output is ever produced.
+ */
+export function getPolicyFields(fields: string[]): { field: string; tier: FieldTier }[] {
+  if (!Array.isArray(fields)) {
+    throw new TypeError("getPolicyFields: expected an array of field names");
+  }
+  for (const field of fields) {
+    if (typeof field !== "string") {
+      throw new TypeError("getPolicyFields: every field name must be a string");
+    }
+  }
+  return fields.map((field) => ({ field, tier: classifyField(field) }));
 }
 
 /**
@@ -189,8 +209,8 @@ function canonicalise(value: unknown): string {
   if (value === null) return "null";
   if (value === undefined) return "undefined";
   const t = typeof value;
-  if (t === "string") return `s:${value}`;
-  if (t === "number") return `n:${value}`;
+  if (t === "string") return value as string; // raw: keeps existing log hashes stable
+  if (t === "number") return String(value);
   if (t === "boolean") return `b:${value}`;
   if (t === "bigint") return `i:${(value as bigint).toString()}`;
   if (t === "symbol") return `y:${String(value)}`;
