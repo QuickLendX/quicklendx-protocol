@@ -94,4 +94,8 @@ export const MigrationErrorCodes = {
   CHECKSUM_MISMATCH: "CHECKSUM_MISMATCH",
   HOTFIX_REQUIRES_APPROVAL: "HOTFIX_REQUIRES_APPROVAL",
   UNSUPPORTED_IN_PRODUCTION: "UNSUPPORTED_IN_PRODUCTION",
+  /** The applied-migration ledger could not be read or contained data that
+   *  violates ledger invariants. Raised by `getAppliedVersions` so callers
+   *  fail loudly instead of acting on corrupt migration state. */
+  MIGRATION_STATE_READ_FAILED: "MIGRATION_STATE_READ_FAILED",
 } as const;

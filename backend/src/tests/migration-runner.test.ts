@@ -1,4 +1,34 @@
+import * as path from "path";
+import * as fs from "fs";
+import * as crypto from "crypto";
 import { parseMigrationFilename, computeChecksum, verifyAppliedChecksums, validateMigrationFiles, getAppliedVersions, isDatabaseInitialized } from "../lib/migrations/runner";
+import { closeDatabase } from "../lib/database";
+
+// Isolate this suite from any state persisted in the shared dev database:
+// these assertions assume a database with no applied migrations.
+const TEST_DB_DIR = path.resolve(__dirname, "../../.data");
+const TEST_DB_PATH = path.join(TEST_DB_DIR, `test-mig-runner-${crypto.randomUUID()}.db`);
+const ORIGINAL_DATABASE_PATH = process.env.DATABASE_PATH;
+
+beforeAll(() => {
+  fs.mkdirSync(TEST_DB_DIR, { recursive: true });
+  process.env.DATABASE_PATH = TEST_DB_PATH;
+  closeDatabase();
+});
+
+afterAll(() => {
+  closeDatabase();
+  if (ORIGINAL_DATABASE_PATH === undefined) {
+    delete process.env.DATABASE_PATH;
+  } else {
+    process.env.DATABASE_PATH = ORIGINAL_DATABASE_PATH;
+  }
+  try {
+    fs.unlinkSync(TEST_DB_PATH);
+  } catch {
+    // best-effort cleanup
+  }
+});
 
 describe("Migration Runner Utilities", () => {
   describe("parseMigrationFilename", () => {
