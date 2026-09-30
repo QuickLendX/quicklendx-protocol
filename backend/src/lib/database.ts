@@ -46,6 +46,11 @@ const statementCache = new Map<string, any>();
 
 /**
  * Metrics for deterministic observability.
+ *
+ * Invariant: these counters describe the lifetime of the *current* cache
+ * generation. Every code path that empties `statementCache` must reset them,
+ * otherwise `getStatementCacheStats()` would report `size: 0` alongside
+ * non-zero counters that describe statements which no longer exist.
  */
 let cacheHits = 0;
 let cacheMisses = 0;
@@ -153,15 +158,49 @@ export function getPreparedStatement(sql: string): any {
  */
 export function clearStatementCache(): void {
   statementCache.clear();
+  resetCacheMetrics();
+}
+
+/**
+ * Reset the counters that describe the current cache generation.
+ *
+ * Must be called whenever `statementCache` is emptied so that
+ * `getStatementCacheStats()` never mixes an empty cache with live counters.
+ */
+function resetCacheMetrics(): void {
   cacheHits = 0;
   cacheMisses = 0;
   cacheEvicts = 0;
 }
 
 /**
- * Retrieve cache statistics including deterministic metrics.
+ * Shape returned by {@link getStatementCacheStats}.
+ *
+ * Returned snapshots are defensive copies: mutating `statements` cannot
+ * corrupt the cache, and each call is a self-consistent point-in-time view.
  */
-export function getStatementCacheStats() {
+export interface StatementCacheStats {
+  /** Number of cached prepared statements. */
+  size: number;
+  /** SQL strings currently cached, in insertion order. */
+  statements: string[];
+  /** Cache hits recorded for the current cache generation. */
+  hits: number;
+  /** Cache misses recorded for the current cache generation. */
+  misses: number;
+  /** Entries evicted due to `SQLITE_SCHEMA` in the current generation. */
+  evicts: number;
+}
+
+/**
+ * Retrieve cache statistics including deterministic metrics.
+ *
+ * Deterministic guarantees:
+ * - `statements` is a fresh array; callers cannot mutate internal state.
+ * - Repeated calls without intervening cache activity return deep-equal values.
+ * - Counters are non-negative integers and reset with the cache generation.
+ */
+export function getStatementCacheStats(): StatementCacheStats {
   return {
     size: statementCache.size,
     statements: Array.from(statementCache.keys()),
@@ -190,6 +229,9 @@ export function pingDatabase(): boolean {
 export function closeDatabase() {
   if (dbInstance) {
     statementCache.clear();
+    // Drop the metrics alongside the cache so the next generation starts from
+    // zeroed counters instead of inheriting a closed generation's hit counts.
+    resetCacheMetrics();
     dbInstance.close();
     dbInstance = null;
   }
