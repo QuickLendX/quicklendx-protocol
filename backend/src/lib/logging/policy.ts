@@ -284,11 +284,29 @@ export function redactByTier(value: unknown, tier: FieldTier): unknown {
  * deterministically.
  */
 export function redactObject(
-  obj: Record<string, unknown>
+  obj: Record<string, unknown>,
+  seen: WeakSet<object> = new WeakSet()
 ): Record<string, unknown> {
+  if (obj === null || typeof obj !== "object") {
+    return {};
+  }
+  if (seen.has(obj)) {
+    throw new Error("redactObject: cyclic structure is not supported");
+  }
+  seen.add(obj);
+
   const out: Record<string, unknown> = {};
 
-  for (const [key, value] of Object.entries(obj)) {
+  // We use Object.keys instead of Object.entries to safely catch throwing getters.
+  for (const key of Object.keys(obj)) {
+    let value: unknown;
+    try {
+      value = obj[key];
+    } catch {
+      out[key] = REDACTED_SENTINEL;
+      continue;
+    }
+
     const tier = classifyField(key);
     if (Array.isArray(value)) {
       // Redact each element if they are objects, otherwise apply tier to array
@@ -303,11 +321,16 @@ export function redactObject(
           }
         }
       } else {
-        out[key] = value.map((item) =>
-          item !== null && typeof item === "object"
-            ? redactObject(item as Record<string, unknown>)
-            : item
-        );
+        out[key] = value.map((item) => {
+          if (item !== null && typeof item === "object") {
+            try {
+              return redactObject(item as Record<string, unknown>, seen);
+            } catch {
+              return REDACTED_SENTINEL;
+            }
+          }
+          return item;
+        });
       }
     } else if (value !== null && typeof value === "object") {
       if (tier === FieldTier.SECRET) {
@@ -320,7 +343,11 @@ export function redactObject(
         }
       } else {
         // PUBLIC: recurse into nested objects
-        out[key] = redactObject(value as Record<string, unknown>);
+        try {
+          out[key] = redactObject(value as Record<string, unknown>, seen);
+        } catch {
+          out[key] = REDACTED_SENTINEL;
+        }
       }
     } else {
       out[key] = redactByTier(value, tier);
