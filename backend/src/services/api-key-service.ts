@@ -1,4 +1,4 @@
-import crypto from 'cypto';
+import crypto from 'crypto';
 import { db, DbApiKey } from '../db/database';
 import {
   ApiKey,
@@ -67,7 +67,7 @@ export class ApiKeyService {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    const dbkey: DbApiKey = {
+    const dbKey: DbApiKey = {
       id,
       key_hash: hash,
       signing_secret_hash: signingSecretHash,
