@@ -109,7 +109,11 @@ function shannonEntropy(value) {
 }
 
 function isHexString(value) {
-  return /^[0-9a-fA-F]+$/.test(value) || /^0x[0-9a-fA-F]+$/.test(value);
+  if (typeof value !== "string" && !(value instanceof String)) {
+    return false;
+  }
+  const str = String(value);
+  return /^[0-9a-fA-F]+$/.test(str) || /^0x[0-9a-fA-F]+$/.test(str);
 }
 
 function isIdentifierLikeString(value) {
@@ -193,39 +197,85 @@ function hasMixedCharacterClasses(value) {
 }
 
 function isStellarStrKeyLike(value) {
-  return /^[GX][A-Z2-7]{55}$/.test(value);
+  if (typeof value !== "string" && !(value instanceof String)) {
+    return false;
+  }
+  return /^[GX][A-Z2-7]{55}$/.test(String(value));
 }
 
+// High-entropy token detection invariants enforced by isHighEntropyToken:
+//
+//   H1 Total (Fail closed) - Never throws for any JavaScript value (null, undefined,
+//                            numbers, booleans, objects, arrays, symbols, bigints,
+//                            functions, or revoked/throwing proxies). Fails closed
+//                            by returning false.
+//   H2 Type boundary       - Accepts string primitives and String wrapper objects.
+//                            Any other type immediately returns false.
+//   H3 Length boundary     - Strictly requires length >= MIN_HIGH_ENTROPY_LENGTH (32).
+//                            Values of length 0..31 immediately return false.
+//   H4 Character set       - Tokens must consist exclusively of valid base64 / base64url /
+//                            safe token characters (/^[A-Za-z0-9+/=_-]+$/). Whitespace,
+//                            control characters, non-ASCII Unicode, and symbols return false.
+//   H5 Hex exclusion       - Pure hexadecimal strings (isHexString) representing commit hashes,
+//                            SHA digests, Ethereum addresses, etc., return false.
+//   H6 Stellar StrKey      - Stellar public keys or muxed accounts (isStellarStrKeyLike)
+//                            return false.
+//   H7 Obvious placeholder - Common development/test placeholders, repeated strings,
+//                            and code identifiers (isObviousPlaceholder) return false.
+//   H8 Unique characters   - Requires new Set(str).size >= MIN_UNIQUE_CHARACTERS (10).
+//                            Low character variety returns false.
+//   H9 Character classes   - Requires at least two character classes (hasMixedCharacterClasses).
+//                            Single-class tokens (e.g. only lowercase or only digits) return false.
+//   H10 Shannon entropy    - Computes Shannon entropy; requires score >= MIN_HIGH_ENTROPY_SCORE (4.5).
+//   H11 Non-leakage        - Strictly returns boolean true or false; never logs or includes
+//                            token content in exceptions or outputs.
+//   H12 Determinism        - Fully pure and idempotent across repeated and concurrent calls,
+//                            with no regex lastIndex or shared mutable state side-effects.
 function isHighEntropyToken(value) {
-  if (value.length < MIN_HIGH_ENTROPY_LENGTH) {
+  // Input validation: fail closed on null and undefined
+  if (value === null || value === undefined) {
     return false;
   }
 
-  if (!/^[A-Za-z0-9+/=_-]+$/.test(value)) {
+  try {
+    if (typeof value !== "string" && !(value instanceof String)) {
+      return false;
+    }
+
+    const str = typeof value === "string" ? value : String(value);
+
+    if (str.length < MIN_HIGH_ENTROPY_LENGTH) {
+      return false;
+    }
+
+    if (!/^[A-Za-z0-9+/=_-]+$/.test(str)) {
+      return false;
+    }
+
+    if (isHexString(str)) {
+      return false;
+    }
+
+    if (isStellarStrKeyLike(str)) {
+      return false;
+    }
+
+    if (isObviousPlaceholder(str)) {
+      return false;
+    }
+
+    if (new Set(str).size < MIN_UNIQUE_CHARACTERS) {
+      return false;
+    }
+
+    if (!hasMixedCharacterClasses(str)) {
+      return false;
+    }
+
+    return shannonEntropy(str) >= MIN_HIGH_ENTROPY_SCORE;
+  } catch {
     return false;
   }
-
-  if (isHexString(value)) {
-    return false;
-  }
-
-  if (isStellarStrKeyLike(value)) {
-    return false;
-  }
-
-  if (isObviousPlaceholder(value)) {
-    return false;
-  }
-
-  if (new Set(value).size < MIN_UNIQUE_CHARACTERS) {
-    return false;
-  }
-
-  if (!hasMixedCharacterClasses(value)) {
-    return false;
-  }
-
-  return shannonEntropy(value) >= MIN_HIGH_ENTROPY_SCORE;
 }
 
 // Redaction contract enforced by redactPreview. These are the invariants the
@@ -798,6 +848,7 @@ module.exports = {
   formatFindings,
   hasMixedCharacterClasses,
   isAllowlisted,
+  isHexString,
   isHighEntropyToken,
   isIdentifierLikeString,
   isLogSafePreview,

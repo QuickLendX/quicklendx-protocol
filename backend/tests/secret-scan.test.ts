@@ -849,6 +849,363 @@ describe("isAllowlisted failure boundaries (issue 2610)", () => {
   });
 });
 
+describe("isHighEntropyToken failure boundaries (issue 2603)", () => {
+  const joinParts = (parts: string[]): string => parts.join("");
+
+  const VALID_32_TOKEN = joinParts(["K9b+", "V2mZ8", "_xP1w", "L7yQ4", "tN0jR", "3sU6v", "E8a"]);
+  const VALID_48_TOKEN = joinParts(["Wj9_", "kLm7N", "p2Qr5", "Tv8Xy", "1Bz4C", "d6Gh0", "Js3La", "8Po9U", "i3Yt6", "Re2W"]);
+  const VALID_64_TOKEN = joinParts(["dGhp", "cy1p", "cy1h", "LXZl", "cnkt", "c2Vj", "cmV0", "LXRv", "a2Vu", "LXZh", "bHVl", "LTEy", "MzQt", "NTY3", "ODkw", "Kz0v"]);
+
+  describe("non-string and adverse inputs (failure boundary)", () => {
+    it("fails closed on null and undefined without throwing", () => {
+      expect(() => secretScanUtils.isHighEntropyToken(null)).not.toThrow();
+      expect(secretScanUtils.isHighEntropyToken(null)).toBe(false);
+
+      expect(() => secretScanUtils.isHighEntropyToken(undefined)).not.toThrow();
+      expect(secretScanUtils.isHighEntropyToken(undefined)).toBe(false);
+    });
+
+    it("fails closed on numeric inputs without throwing", () => {
+      const numbers = [0, 1, 42, -1, -999, NaN, Infinity, -Infinity, 1e40];
+      for (const num of numbers) {
+        expect(() => secretScanUtils.isHighEntropyToken(num)).not.toThrow();
+        expect(secretScanUtils.isHighEntropyToken(num)).toBe(false);
+      }
+    });
+
+    it("fails closed on boolean inputs without throwing", () => {
+      expect(() => secretScanUtils.isHighEntropyToken(true)).not.toThrow();
+      expect(secretScanUtils.isHighEntropyToken(true)).toBe(false);
+
+      expect(() => secretScanUtils.isHighEntropyToken(false)).not.toThrow();
+      expect(secretScanUtils.isHighEntropyToken(false)).toBe(false);
+    });
+
+    it("fails closed on BigInt and Symbol inputs without throwing", () => {
+      const bigIntVal = BigInt("1234567890123456789012345678901234567890");
+      expect(() => secretScanUtils.isHighEntropyToken(bigIntVal)).not.toThrow();
+      expect(secretScanUtils.isHighEntropyToken(bigIntVal)).toBe(false);
+
+      const sym = Symbol(VALID_32_TOKEN);
+      expect(() => secretScanUtils.isHighEntropyToken(sym)).not.toThrow();
+      expect(secretScanUtils.isHighEntropyToken(sym)).toBe(false);
+    });
+
+    it("fails closed on complex objects, arrays, functions, and buffers without throwing", () => {
+      const badObjects = [
+        {},
+        { length: 40 },
+        { token: VALID_32_TOKEN },
+        [],
+        [VALID_32_TOKEN],
+        new Array(40).fill("a"),
+        () => VALID_32_TOKEN,
+        Buffer.from(VALID_32_TOKEN),
+      ];
+
+      for (const obj of badObjects) {
+        expect(() => secretScanUtils.isHighEntropyToken(obj)).not.toThrow();
+        expect(secretScanUtils.isHighEntropyToken(obj)).toBe(false);
+      }
+    });
+
+    it("fails closed on throwing getters and hostile prototypes without throwing", () => {
+      const hostileLength = {
+        get length(): number {
+          throw new Error("poisoned length property");
+        },
+      };
+      expect(() => secretScanUtils.isHighEntropyToken(hostileLength)).not.toThrow();
+      expect(secretScanUtils.isHighEntropyToken(hostileLength)).toBe(false);
+
+      const hostileToString = {
+        length: 40,
+        toString() {
+          throw new Error("poisoned toString method");
+        },
+      };
+      expect(() => secretScanUtils.isHighEntropyToken(hostileToString)).not.toThrow();
+      expect(secretScanUtils.isHighEntropyToken(hostileToString)).toBe(false);
+    });
+
+    it("fails closed on revoked Proxies without throwing", () => {
+      const revocable = Proxy.revocable({}, {});
+      revocable.revoke();
+      expect(() => secretScanUtils.isHighEntropyToken(revocable.proxy)).not.toThrow();
+      expect(secretScanUtils.isHighEntropyToken(revocable.proxy)).toBe(false);
+    });
+
+    it("unwraps String wrapper objects identically to string primitives", () => {
+      // eslint-disable-next-line no-new-wrappers
+      const wrappedValid = new String(VALID_32_TOKEN);
+      // eslint-disable-next-line no-new-wrappers
+      const wrappedShort = new String("short");
+      expect(secretScanUtils.isHighEntropyToken(wrappedValid)).toBe(true);
+      expect(secretScanUtils.isHighEntropyToken(wrappedShort)).toBe(false);
+    });
+  });
+
+  describe("length boundary conditions", () => {
+    it("rejects empty string and short strings below threshold", () => {
+      expect(secretScanUtils.isHighEntropyToken("")).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("a")).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("a".repeat(16))).toBe(false);
+    });
+
+    it("rejects boundary length at exactly MIN_HIGH_ENTROPY_LENGTH - 1 (31 chars)", () => {
+      const token31 = VALID_32_TOKEN.slice(0, 31);
+      expect(token31.length).toBe(31);
+      expect(secretScanUtils.isHighEntropyToken(token31)).toBe(false);
+    });
+
+    it("accepts boundary length at exactly MIN_HIGH_ENTROPY_LENGTH (32 chars) when valid", () => {
+      expect(VALID_32_TOKEN.length).toBe(32);
+      expect(secretScanUtils.isHighEntropyToken(VALID_32_TOKEN)).toBe(true);
+    });
+
+    it("evaluates very long strings safely without performance or stack issues", () => {
+      const longValidToken = VALID_32_TOKEN.repeat(50);
+      expect(secretScanUtils.isHighEntropyToken(longValidToken)).toBe(true);
+
+      const longLowEntropy = "abc123XYZ".repeat(1000);
+      expect(secretScanUtils.isHighEntropyToken(longLowEntropy)).toBe(false);
+
+      const hugeString = "A".repeat(100000);
+      expect(secretScanUtils.isHighEntropyToken(hugeString)).toBe(false);
+    });
+  });
+
+  describe("character set and alphabet boundaries", () => {
+    it("accepts valid base64 and base64url characters [A-Za-z0-9+/=_-]", () => {
+      expect(secretScanUtils.isHighEntropyToken(VALID_32_TOKEN)).toBe(true);
+      expect(secretScanUtils.isHighEntropyToken(VALID_48_TOKEN)).toBe(true);
+      expect(secretScanUtils.isHighEntropyToken(VALID_64_TOKEN)).toBe(true);
+    });
+
+    it("rejects whitespace and strings with leading, trailing, or internal spaces", () => {
+      expect(secretScanUtils.isHighEntropyToken(" ".repeat(32))).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("\t".repeat(32))).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("\n".repeat(32))).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("\r\n".repeat(16))).toBe(false);
+
+      expect(secretScanUtils.isHighEntropyToken(` ${VALID_32_TOKEN}`)).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken(`${VALID_32_TOKEN} `)).toBe(false);
+      expect(
+        secretScanUtils.isHighEntropyToken(
+          `${VALID_32_TOKEN.slice(0, 16)} ${VALID_32_TOKEN.slice(17)}`
+        )
+      ).toBe(false);
+    });
+
+    it("rejects control characters and unapproved symbols", () => {
+      const unapprovedChars = ["\x00", "\x07", "\x1b", "@", "#", "$", "%", "^", "&", "*", "(", ")", "{", "}", "[", "]", ":", ";", '"', "'", "<", ">", "?", "\\", "|", "~", ",", "."];
+      for (const ch of unapprovedChars) {
+        const corrupted = `${ch}${VALID_32_TOKEN.slice(1)}`;
+        expect(secretScanUtils.isHighEntropyToken(corrupted)).toBe(false);
+      }
+    });
+
+    it("rejects unicode lookalikes, emojis, and accented characters", () => {
+      const unicodeReplacements = ["\u200b", "🔒", "é", "ñ", "中", "😀"];
+      for (const u of unicodeReplacements) {
+        const head = `${u}${VALID_32_TOKEN.slice(u.length)}`;
+        const mid = `${VALID_32_TOKEN.slice(0, 15)}${u}${VALID_32_TOKEN.slice(15 + u.length)}`;
+        const tail = `${VALID_32_TOKEN.slice(0, 32 - u.length)}${u}`;
+        expect(secretScanUtils.isHighEntropyToken(head)).toBe(false);
+        expect(secretScanUtils.isHighEntropyToken(mid)).toBe(false);
+        expect(secretScanUtils.isHighEntropyToken(tail)).toBe(false);
+      }
+    });
+  });
+
+  describe("structured non-secret exclusions", () => {
+    it("excludes hexadecimal digests (MD5, SHA-1, SHA-256) of various lengths", () => {
+      expect(secretScanUtils.isHighEntropyToken("5d41402abc4b2a76b9719d911017c592")).toBe(false); // 32 hex chars (MD5)
+      expect(secretScanUtils.isHighEntropyToken("2aae6c35c94fcfb415dbe95f408b9ce91ee846ed")).toBe(false); // 40 hex chars (SHA-1)
+      expect(secretScanUtils.isHighEntropyToken("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")).toBe(false); // 64 hex chars (SHA-256)
+      expect(secretScanUtils.isHighEntropyToken("0x5d41402abc4b2a76b9719d911017c592")).toBe(false); // 0x-prefixed
+      expect(secretScanUtils.isHighEntropyToken("0x2AAE6C35C94FCFB415DBE95F408B9CE91EE846ED")).toBe(false); // uppercase 0x
+    });
+
+    it("does not exclude tokens that contain non-hex characters like g..z or symbols", () => {
+      expect(secretScanUtils.isHexString("5d41402abc4b2a76b9719d911017c59g")).toBe(false);
+      // Valid high-entropy token contains non-hex characters (K, V, Z, _, +, w, y, etc.)
+      expect(secretScanUtils.isHexString(VALID_32_TOKEN)).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken(VALID_32_TOKEN)).toBe(true);
+    });
+
+    it("excludes Stellar public keys (G...) and muxed keys (X...)", () => {
+      expect(
+        secretScanUtils.isHighEntropyToken("GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B")
+      ).toBe(false);
+      expect(
+        secretScanUtils.isHighEntropyToken("XDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B")
+      ).toBe(false);
+    });
+  });
+
+  describe("obvious placeholder exclusions", () => {
+    it("rejects single character repetitions", () => {
+      expect(secretScanUtils.isHighEntropyToken("x".repeat(32))).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("y".repeat(32))).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("z".repeat(32))).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("A".repeat(32))).toBe(false);
+    });
+
+    it("rejects tokens with two or fewer unique characters of length >= 32", () => {
+      expect(secretScanUtils.isHighEntropyToken("abababababababababababababababab")).toBe(false);
+    });
+
+    it("rejects known development and test placeholder prefixes", () => {
+      expect(secretScanUtils.isHighEntropyToken("your_secret_key_1234567890abcdef")).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("example_token_1234567890abcdef123")).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("placeholder_secret_value_12345678")).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("changeme_secret_value_12345678901")).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("test-secret-value-1234567890abcdef")).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("test_secret_value_1234567890abcdef")).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("development-only-export-secret-32-chars")).toBe(false);
+      expect(secretScanUtils.isHighEntropyToken("fallback-secret-for-signing-links-123")).toBe(false);
+    });
+
+    it("rejects camelCase and PascalCase code identifiers and URLs", () => {
+      expect(
+        secretScanUtils.isHighEntropyToken("myVeryLongCamelCaseIdentifierWithoutDigits")
+      ).toBe(false);
+      expect(
+        secretScanUtils.isHighEntropyToken("https://api.quicklendx.io/v1/auth/tokens/generate")
+      ).toBe(false);
+      expect(
+        secretScanUtils.isHighEntropyToken("/api/v1/borrowers/loans/repayments/schedule")
+      ).toBe(false);
+    });
+  });
+
+  describe("character class diversity and unique count boundaries", () => {
+    it("rejects tokens with fewer than MIN_UNIQUE_CHARACTERS (10) unique characters", () => {
+      // 9 unique characters repeated across 32 length
+      const nineChars = "abcdefghiabcdefghiabcdefghiabcde";
+      expect(new Set(nineChars).size).toBe(9);
+      expect(secretScanUtils.isHighEntropyToken(nineChars)).toBe(false);
+    });
+
+    it("rejects single character class tokens regardless of length", () => {
+      expect(secretScanUtils.isHighEntropyToken("abcdefghijklmnopqrstuvwxyzabcdef")).toBe(false); // lowercase only
+      expect(secretScanUtils.isHighEntropyToken("ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF")).toBe(false); // uppercase only
+      expect(secretScanUtils.isHighEntropyToken("01234567890123456789012345678901")).toBe(false); // digits only
+    });
+
+    it("requires at least two distinct character classes", () => {
+      const lowerAndDigits = joinParts(["abcdefghijklm", "nopqrstuvwxyz", "123456"]);
+      expect(secretScanUtils.hasMixedCharacterClasses(lowerAndDigits)).toBe(true);
+      expect(secretScanUtils.hasMixedCharacterClasses("abcdefghijklmnopqrstuvwxyzABCDEF")).toBe(true);
+    });
+  });
+
+  describe("Shannon entropy threshold boundary (MIN_HIGH_ENTROPY_SCORE = 4.5)", () => {
+    it("rejects patterned strings with low Shannon entropy (< 4.5)", () => {
+      const patterned = "a1b2c3d4e5a1b2c3d4e5a1b2c3d4e5a1";
+      expect(secretScanUtils.shannonEntropy(patterned)).toBeLessThan(4.5);
+      expect(secretScanUtils.isHighEntropyToken(patterned)).toBe(false);
+    });
+
+    it("strictly evaluates the mathematical boundary at 4.5 entropy score", () => {
+      // 14 chars once + 9 chars twice = 32 chars, entropy = 142/32 = 4.4375 (< 4.5)
+      const belowBoundary = joinParts(["ABCDEFG", "HIJKLMN", "Oabcdef0_", "Oabcdef0_"]);
+      expect(belowBoundary.length).toBe(32);
+      expect(secretScanUtils.shannonEntropy(belowBoundary)).toBe(4.4375);
+      expect(secretScanUtils.isHighEntropyToken(belowBoundary)).toBe(false);
+
+      // 16 chars once + 8 chars twice = 32 chars, entropy = 144/32 = 4.5000 (>= 4.5)
+      const atBoundary = joinParts(["ABCDEFGH", "IJKLMNOP", "abcdef0_", "abcdef0_"]);
+      expect(atBoundary.length).toBe(32);
+      expect(secretScanUtils.shannonEntropy(atBoundary)).toBe(4.5);
+      expect(secretScanUtils.isHighEntropyToken(atBoundary)).toBe(true);
+    });
+  });
+
+  describe("determinism, concurrency, and idempotence", () => {
+    it("returns identical results across 100 repeated calls for diverse inputs", () => {
+      const testInputs = [
+        VALID_32_TOKEN,
+        VALID_48_TOKEN,
+        "short",
+        "5d41402abc4b2a76b9719d911017c592",
+        "GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B",
+        "",
+        null,
+        undefined,
+      ];
+
+      for (const input of testInputs) {
+        const first = secretScanUtils.isHighEntropyToken(input);
+        for (let i = 0; i < 100; i += 1) {
+          expect(secretScanUtils.isHighEntropyToken(input)).toBe(first);
+        }
+      }
+    });
+
+    it("produces consistent results under concurrent execution", async () => {
+      const candidates = [
+        { value: VALID_32_TOKEN, expected: true },
+        { value: VALID_48_TOKEN, expected: true },
+        { value: "5d41402abc4b2a76b9719d911017c592", expected: false },
+        { value: "short", expected: false },
+        { value: "x".repeat(32), expected: false },
+        { value: null, expected: false },
+        { value: undefined, expected: false },
+        { value: 12345, expected: false },
+      ];
+
+      await Promise.all(
+        Array.from({ length: 50 }, () =>
+          Promise.all(
+            candidates.map(async ({ value, expected }) => {
+              expect(secretScanUtils.isHighEntropyToken(value)).toBe(expected);
+            })
+          )
+        )
+      );
+    });
+
+    it("produces results independent of call order (no shared regex state)", () => {
+      const list = [VALID_32_TOKEN, "short", VALID_48_TOKEN, "5d41402abc4b2a76b9719d911017c592"];
+      const forward = list.map((val) => secretScanUtils.isHighEntropyToken(val));
+      const backward = [...list].reverse().map((val) => secretScanUtils.isHighEntropyToken(val));
+      expect(forward).toEqual(backward.reverse());
+    });
+  });
+
+  describe("security and non-leakage invariant", () => {
+    it("returns strictly boolean type and never leaks token content in outputs", () => {
+      const secret = joinParts(["SUPER_SECRET_", "TOKEN_VALUE_FOR_", "LEAK_TEST_1234="]);
+      const result = secretScanUtils.isHighEntropyToken(secret);
+      expect(typeof result).toBe("boolean");
+      expect(String(result)).not.toContain(secret);
+    });
+  });
+
+  describe("caller compatibility with collectHighEntropyMatches and scanLine", () => {
+    it("identifies high-entropy quoted string matches in scanLine", () => {
+      const line = joinParts(['const secret = "', VALID_32_TOKEN, '";']);
+      const findings = secretScanUtils.scanLine(
+        line,
+        10,
+        "src/auth.ts"
+      );
+      expect(findings.some((f: { type: string }) => f.type === "high-entropy")).toBe(true);
+    });
+
+    it("ignores non-high-entropy tokens and hex strings in scanLine", () => {
+      const findings = secretScanUtils.scanLine(
+        'const hash = "5d41402abc4b2a76b9719d911017c592";',
+        11,
+        "src/hash.ts"
+      );
+      expect(findings.some((f: { type: string }) => f.type === "high-entropy")).toBe(false);
+    });
+  });
+});
+
 describe("backend security:scan integration", () => {
   const repoRoot = path.resolve(__dirname, "..");
 
