@@ -353,7 +353,7 @@ describe("sanitiseRequest", () => {
 
   it("hashes private body fields", () => {
     const snap = sanitiseRequest(baseReq);
-    expect(snap.body!["amount"]).toBe(sha256Prefix("500000"));
+    expect(snap.body!["amount"]).toBe(hashValue("500000"));
   });
 
   it("preserves public body fields", () => {
@@ -369,6 +369,55 @@ describe("sanitiseRequest", () => {
   it("handles undefined body gracefully", () => {
     const snap = sanitiseRequest({ ...baseReq, body: undefined });
     expect(snap.body).toBeNull();
+  });
+
+  it("handles body as a string gracefully", () => {
+    const snap = sanitiseRequest({
+      method: "POST",
+      path: "/api/test",
+      query: {},
+      headers: {},
+      body: "raw body",
+    });
+    expect(snap.body).toBeNull();
+  });
+
+  it("handles body as a number gracefully", () => {
+    const snap = sanitiseRequest({
+      method: "POST",
+      path: "/api/test",
+      query: {},
+      headers: {},
+      body: 42,
+    });
+    expect(snap.body).toBeNull();
+  });
+
+  it("handles body as an array", () => {
+    const snap = sanitiseRequest({
+      method: "POST",
+      path: "/api/test",
+      query: {},
+      headers: {},
+      body: ["item1", "item2"],
+    });
+    expect(snap.body).toEqual(
+      expect.objectContaining({
+        "0": expect.stringMatching(/^sha256:/),
+        "1": expect.stringMatching(/^sha256:/),
+      })
+    );
+  });
+
+  it("lowercases header keys before redaction", () => {
+    const snap = sanitiseRequest({
+      method: "GET",
+      path: "/api/test",
+      query: {},
+      headers: { "Content-Type": "application/json", "X-Custom-Header": "value" },
+    });
+    expect(snap.headers["content-type"]).toMatch(/^sha256:/);
+    expect(snap.headers["x-custom-header"]).toMatch(/^sha256:/);
   });
 });
 
