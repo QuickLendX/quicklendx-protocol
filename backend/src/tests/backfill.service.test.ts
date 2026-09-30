@@ -11,6 +11,9 @@ let mockDb: any;
 
 jest.mock("../lib/database", () => ({
   getDatabase: () => mockDb,
+  // backfillService reads through the prepared-statement cache; route it to
+  // the same per-test in-memory database (resolved lazily at call time).
+  getPreparedStatement: (sql: string) => mockDb.prepare(sql),
   closeDatabase: jest.fn(),
 }));
 

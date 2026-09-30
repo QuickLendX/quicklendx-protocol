@@ -1,3 +1,4 @@
+import Database from "better-sqlite3";
 import { ReconciliationWorker } from "../services/reconciliationWorker";
 import { MockDataProviders } from "../services/mockDataProviders";
 import { rpcClient } from "../services/rpcClient";
@@ -11,15 +12,59 @@ jest.mock("../services/replayService", () => ({
   derivedTableStore: { listInvoices: jest.fn() },
 }));
 
+// Route the drift-backfill persistence through a per-test in-memory database
+// so these tests never depend on (or mutate) the shared dev database, which
+// may not have the backfill tables created.
+let mockDb: any;
+
+jest.mock("../lib/database", () => ({
+  getDatabase: () => mockDb,
+  getPreparedStatement: (sql: string) => mockDb.prepare(sql),
+  closeDatabase: jest.fn(),
+}));
+
 describe("ReconciliationWorker", () => {
   beforeEach(() => {
     // Reset internal state if needed (static members are shared)
     (ReconciliationWorker as any).reports = [];
     (ReconciliationWorker as any).isRunning = false;
 
+    // Fresh in-memory database with the tables the backfill path writes to.
+    mockDb = new (Database as any)(":memory:");
+    mockDb.exec(`
+      CREATE TABLE IF NOT EXISTS backfill_progress (
+        id TEXT PRIMARY KEY,
+        audit_id INTEGER,
+        run_id TEXT NOT NULL,
+        last_processed_id TEXT,
+        remaining_count INTEGER NOT NULL,
+        total_count INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('running','paused','completed','failed')),
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE IF NOT EXISTS backfill_audit (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        run_id TEXT NOT NULL,
+        timestamp TEXT NOT NULL,
+        event_type TEXT NOT NULL,
+        actor TEXT NOT NULL,
+        metadata TEXT DEFAULT '{}',
+        invoice_id TEXT
+      );
+    `);
+
     // Wire mock data sources
     (rpcClient.call as jest.Mock).mockResolvedValue(MockDataProviders.getOnChainInvoices());
     (derivedTableStore.listInvoices as jest.Mock).mockResolvedValue(MockDataProviders.getIndexedInvoices());
+  });
+
+  afterEach(() => {
+    if (mockDb) {
+      mockDb.close();
+      mockDb = null;
+    }
   });
 
   test("should detect drift accurately", async () => {

@@ -35,6 +35,8 @@ beforeAll(() => {
       created_at TEXT NOT NULL,
       last_used_at TEXT,
       expires_at TEXT,
+      prev_signing_secret_hash TEXT,
+      prev_secret_expires_at TEXT,
       revoked INTEGER NOT NULL DEFAULT 0,
       created_by TEXT NOT NULL
     )

@@ -1,6 +1,6 @@
 import express from 'express';
 import request from 'supertest';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdtemp, rm, mkdir } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { afterEach, describe, it, expect, jest } from '@jest/globals';
@@ -155,6 +155,9 @@ describe('POST /events validation and idempotency', () => {
   ) {
     tempDir = await mkdtemp(join(tmpdir(), 'quicklendx-events-'));
     process.chdir(tempDir);
+    // getDatabase() resolves its file relative to cwd; the temp directory
+    // needs the data folder to exist before routes are imported.
+    await mkdir(join(tempDir, '.data'), { recursive: true });
     jest.resetModules();
     jest.doMock('../src/services/notificationService', () => ({
       notificationService: {

@@ -11,10 +11,11 @@ describe('API Key Rotation Endpoint (Integration)', () => {
   let adminId: string;
   let superAdminKey: string;
 
-  const TEST_DB_DIR = path.resolve(__dirname, '../../../.data');
+  const TEST_DB_DIR = path.resolve(__dirname, '../../.data');
   const TEST_DB_PATH = path.join(TEST_DB_DIR, `test-rotation-int-${crypto.randomUUID()}.db`);
 
   beforeAll(async () => {
+    fs.mkdirSync(TEST_DB_DIR, { recursive: true });
     process.env.DATABASE_PATH = TEST_DB_PATH;
     closeDatabase();
     const conn = getDatabase();

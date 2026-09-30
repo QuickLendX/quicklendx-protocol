@@ -5,6 +5,9 @@
  * provide measurable performance improvements over naive implementations.
  */
 
+import path from 'path';
+import fs from 'fs';
+import crypto from 'crypto';
 import { getDatabase, getPreparedStatement, closeDatabase, clearStatementCache, getStatementCacheStats } from '../../lib/database';
 import { invoiceStore } from '../../services/invoiceStore';
 import { db as apiKeyDb } from '../../db/database';
@@ -12,10 +15,29 @@ import { Invoice, InvoiceStatus } from '../../types/contract';
 import { ulid } from 'ulid';
 
 describe('Database Performance Tests', () => {
-  const TEST_DB = ':memory:';
-  
+  // File-backed temp database: SQLite cannot enable WAL on `:memory:`
+  // databases (they always report journal_mode=memory), so a real file is
+  // required to verify the WAL pragma invariant.
+  const TEST_DB = path.resolve(__dirname, '../../../.data', `perf-${crypto.randomUUID()}.db`);
+  const ORIGINAL_DATABASE_PATH = process.env.DATABASE_PATH;
+
   beforeAll(() => {
+    fs.mkdirSync(path.dirname(TEST_DB), { recursive: true });
     process.env.DATABASE_PATH = TEST_DB;
+  });
+
+  afterAll(() => {
+    closeDatabase();
+    if (ORIGINAL_DATABASE_PATH === undefined) {
+      delete process.env.DATABASE_PATH;
+    } else {
+      process.env.DATABASE_PATH = ORIGINAL_DATABASE_PATH;
+    }
+    try {
+      fs.unlinkSync(TEST_DB);
+    } catch {
+      // best-effort cleanup
+    }
   });
 
   beforeEach(() => {
@@ -57,6 +79,8 @@ describe('Database Performance Tests', () => {
         created_at TEXT NOT NULL,
         last_used_at TEXT,
         expires_at TEXT,
+        prev_signing_secret_hash TEXT,
+        prev_secret_expires_at TEXT,
         revoked INTEGER DEFAULT 0,
         created_by TEXT NOT NULL
       );
