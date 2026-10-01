@@ -310,6 +310,51 @@ describe("redactObject", () => {
     const out = redactObject({ password: "hunter2" });
     expect(out.password).toBe("[REDACTED]");
   });
+
+  describe("failure boundaries", () => {
+    it("gracefully handles null or non-object input", () => {
+      // @ts-expect-error forcing invalid input
+      expect(redactObject(null)).toEqual({});
+      // @ts-expect-error forcing invalid input
+      expect(redactObject("string")).toEqual({});
+    });
+
+    it("safely redacts cyclic objects in PRIVATE fields", () => {
+      const cyclic: any = { amount: "100" };
+      cyclic.self = cyclic; // 'self' is PRIVATE
+      const out = redactObject(cyclic);
+      expect(typeof out.amount).toBe("string");
+      expect(out.self).toBe("[REDACTED]");
+    });
+
+    it("safely redacts cyclic objects in PUBLIC fields", () => {
+      const cyclic: any = { id: "1" };
+      cyclic.id = cyclic; // 'id' is PUBLIC
+      const out = redactObject(cyclic);
+      expect(out.id).toBe("[REDACTED]");
+    });
+
+    it("safely redacts cyclic objects in PUBLIC arrays", () => {
+      const arr: any[] = [];
+      const item = { status: "pending" };
+      (item as any).self = item; // cycle within array element
+      arr.push(item);
+      const payload = { id: arr }; // 'id' is PUBLIC
+      const out = redactObject(payload);
+      expect((out.id as any[])[0].self).toBe("[REDACTED]");
+    });
+
+    it("handles throwing getters safely", () => {
+      const obj = { id: "safe" };
+      Object.defineProperty(obj, "amount", {
+        get() { throw new Error("Boom"); },
+        enumerable: true
+      });
+      const out = redactObject(obj as Record<string, unknown>);
+      expect(out.id).toBe("safe");
+      expect(out.amount).toBe("[REDACTED]");
+    });
+  });
 });
 
 // ── 4. Request sanitisation ───────────────────────────────────────────────────
