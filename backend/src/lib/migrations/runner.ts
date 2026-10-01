@@ -408,20 +408,127 @@ export async function isDatabaseInitialized(db?: DatabaseClient): Promise<boolea
   return applied.length > 0;
 }
 
+/**
+ * validateMigrationFiles — deterministic failure-boundary validation for the
+ * migration file set loaded from the filesystem.
+ *
+ * Invariants enforced (in order):
+ *  1. No duplicate version numbers (reports each duplicated version explicitly).
+ *  2. Versions must start at 1 (version 0 is never valid).
+ *  3. No gaps in the version sequence (every integer between 1 and max must exist).
+ *  4. No duplicate migration names (a name collision causes split-brain in logs/metrics).
+ *  5. Every migration must have the required fields: version (number > 0), name
+ *     (non-empty string), author (non-empty string), authoredAt (non-empty string),
+ *     and an `up` function.
+ *  6. Hotfix migrations must additionally carry meta.reason, meta.rollback_risk,
+ *     and a `down` function (delegated to MigrationPolicy.validateMetadata).
+ *
+ * Design notes:
+ *  - All errors are collected before returning so callers receive a complete
+ *    diagnostic list rather than failing on the first error (fail-complete, not
+ *    fail-fast).
+ *  - loadMigrationsFromFS already guards the filename/export-version mismatch
+ *    and propagates filesystem errors; this function focuses on the logical
+ *    consistency of the loaded set.
+ *  - No database I/O is performed — this is a pure in-memory validation so it
+ *    is safe to run at startup, in CI, and during dry-run without a connected DB.
+ */
 export async function validateMigrationFiles(): Promise<{ valid: boolean; errors: string[] }> {
   const errors: string[] = [];
+
+  // loadMigrationsFromFS propagates hard filesystem errors (permissions, corrupt
+  // files) and throws on filename/export version mismatches. We let those bubble
+  // up as-is because they are unrecoverable and need operator attention.
   const migrations = await loadMigrationsFromFS();
 
-  const versions = migrations.map((m) => m.version).sort((a, b) => a - b);
-  for (let i = 0; i < versions.length; i++) {
-    if (i > 0 && versions[i] !== versions[i - 1] + 1) {
-      errors.push(`Gap detected: migration ${versions[i - 1] + 1} is missing`);
+  // ── 1. Duplicate version detection ───────────────────────────────────────────
+  // Collect every version number, then find which ones appear more than once so
+  // the error message names each offending version explicitly.
+  const versionCounts = new Map<number, number>();
+  for (const m of migrations) {
+    versionCounts.set(m.version, (versionCounts.get(m.version) ?? 0) + 1);
+  }
+  for (const [version, count] of versionCounts) {
+    if (count > 1) {
+      errors.push(
+        `Duplicate version ${version}: found ${count} migration files with the same version number`
+      );
     }
   }
 
-  const uniqueVersions = new Set(versions);
-  if (uniqueVersions.size !== versions.length) {
-    errors.push("Duplicate version numbers detected");
+  // Work on the deduplicated, sorted version list for sequence checks.
+  const versions = Array.from(new Set(migrations.map((m) => m.version))).sort((a, b) => a - b);
+
+  // ── 2. Version-zero guard ─────────────────────────────────────────────────────
+  // Version 0 is explicitly prohibited; the sequence must begin at 1.
+  if (versions.length > 0 && versions[0] === 0) {
+    errors.push(
+      "Version 0 is not allowed: migration versions must start at 1"
+    );
+  }
+
+  // ── 3. Gap detection ──────────────────────────────────────────────────────────
+  // After deduplication, every integer from 1 to max must be present.
+  // Report each missing version individually so operators can act on all gaps
+  // at once without having to re-run validation iteratively.
+  for (let i = 0; i < versions.length; i++) {
+    if (i === 0) {
+      // The first version should be 1 (unless 0 was already reported above).
+      if (versions[i] !== 0 && versions[i] !== 1) {
+        errors.push(
+          `Version sequence must start at 1, but the first migration found is version ${versions[i]}`
+        );
+      }
+    } else {
+      const expected = versions[i - 1] + 1;
+      if (versions[i] !== expected) {
+        // There may be multiple missing versions between two adjacent entries.
+        for (let missing = expected; missing < versions[i]; missing++) {
+          errors.push(`Gap detected: migration version ${missing} is missing`);
+        }
+      }
+    }
+  }
+
+  // ── 4. Duplicate name detection ───────────────────────────────────────────────
+  // Migration names are used in logs, metrics, and the _migrations table. A
+  // collision causes ambiguity that cannot be resolved at runtime without
+  // reading version numbers, which operators frequently do not do under pressure.
+  const nameCounts = new Map<string, number[]>();
+  for (const m of migrations) {
+    if (!nameCounts.has(m.name)) nameCounts.set(m.name, []);
+    nameCounts.get(m.name)!.push(m.version);
+  }
+  for (const [name, usedByVersions] of nameCounts) {
+    if (usedByVersions.length > 1) {
+      errors.push(
+        `Duplicate migration name "${name}" used by versions: ${usedByVersions.sort((a, b) => a - b).join(", ")}`
+      );
+    }
+  }
+
+  // ── 5 & 6. Per-migration required-field and hotfix validation ─────────────────
+  // MigrationPolicy.validateMetadata covers:
+  //   - name non-empty
+  //   - author non-empty
+  //   - authoredAt non-empty
+  //   - up function present
+  //   - hotfix-specific fields (meta.reason, meta.rollback_risk, down function)
+  //
+  // We import lazily via require to avoid a circular dependency at module load time
+  // (policy imports from runner, runner would import from policy). The dynamic
+  // import is safe here because validateMigrationFiles is always async.
+  //
+  // Each error is prefixed with the migration identifier so the caller can
+  // display them as a flat list without needing to group by migration.
+  const { MigrationPolicy } = await import("./policy");
+  for (const m of migrations) {
+    const metaCheck = MigrationPolicy.validateMetadata(m.content);
+    if (!metaCheck.valid) {
+      for (const err of metaCheck.errors) {
+        errors.push(`Migration ${m.version}_${m.name}: ${err}`);
+      }
+    }
   }
 
   return { valid: errors.length === 0, errors };
