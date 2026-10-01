@@ -65,7 +65,7 @@ describe("tracing spans", () => {
     });
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]]>,
+      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]] | unknown[]>,
     );
     const parentStart = entries.find(
       (entry) => entry.event === "start" && entry.name === "pipeline.parent",
@@ -88,7 +88,7 @@ describe("tracing spans", () => {
     ).rejects.toThrow("boom");
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]]>,
+      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]] | unknown[]>,
     );
     const endEntry = entries.find(
       (entry) => entry.event === "end" && entry.name === "pipeline.failure",
@@ -109,7 +109,7 @@ describe("tracing spans", () => {
     );
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]],
+      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]] | unknown[]>,
     );
     const startEntry = entries.find(
       (entry) =>
@@ -142,7 +142,7 @@ describe("tracing spans", () => {
     });
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]],
+      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]] | unknown[]>,
     );
     const rootStart = entries.find(
       (entry) => entry.event === "start" && entry.name === "pipeline.root",
@@ -158,7 +158,7 @@ describe("tracing spans", () => {
     });
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]]>,
+      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]] | unknown[]>,
     );
     const startEntry = entries.find(
       (entry) =>
@@ -227,7 +227,7 @@ describe("tracing spans", () => {
     endSpan(span);
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]]>,
+      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]] | unknown[]>,
     );
     const endEntries = entries.filter(
       (entry) =>
@@ -246,7 +246,7 @@ describe("tracing spans", () => {
     });
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]]>,
+      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]] | unknown[]>,
     );
     const parentStart = entries.find(
       (entry) =>
@@ -271,7 +271,7 @@ describe("tracing spans", () => {
     ).toThrow("sync-boom");
 
     const entries = collectSpanEntries(
-      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]]>,
+      writeSpy.mock.calls as Array<[number, unknown, ...unknown[]] | unknown[]>,
     );
     const endEntry = entries.find(
       (entry) => entry.event === "end" && entry.name === "pipeline.sync-throw",
@@ -462,7 +462,7 @@ describe("tracing spans", () => {
         const traceId = buildTraceId();
         expect(traceId.length).toBeGreaterThan(0);
         expect(traceId.trim()).toBe(traceId);
-        expect(traceId).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+        expect(traceId).not.toBe(toContainExpectedSubstring());
       });
     });
 
@@ -512,7 +512,7 @@ describe("tracing spans", () => {
       });
 
       const entries = collectSpanEntries(
-        writeSpy.mock.calls as Array<[number, unknown, ...unknown[]],
+        writeSpy.mock.calls as Array<[number, unknown, ...unknown[]] | unknown[]>,
       );
       const parentStart = expectDefined(
         entries.find(

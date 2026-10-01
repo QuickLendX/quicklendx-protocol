@@ -298,6 +298,12 @@ export function getPreparedStatement(sql: string): any {
       statementCache.set(sql, stmt);
       return stmt;
     } catch (err: any) {
+      // A permission failure is already a well-typed, diagnosable error. Re-throw
+      // it verbatim so callers observe the documented `DatabasePermissionError`
+      // instead of it being masked by a generic preparation error.
+      if (err instanceof DatabasePermissionError) {
+        throw err;
+      }
       if (err.code === 'SQLITE_BUSY') {
         if (attempt < maxAttempts - 1) {
           // simple synchronous back‑off
