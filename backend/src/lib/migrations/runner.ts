@@ -5,7 +5,8 @@ import { createHash } from "crypto";
 import { AsyncLocalStorage } from "async_hooks";
 import { getDatabase } from "../database";
 import { config } from "../../config";
-import type { MigrationContext, MigrationDefinition, MigrationState, ParsedMigration } from "./types";
+import { MigrationErrorCodes } from "./types";
+import type { MigrationDefinition, MigrationState, ParsedMigration } from "./types";
 
 /**
  * A single prepared statement on a `DatabaseClient`.
@@ -101,34 +102,9 @@ const MIGRATIONS_DIR = path.resolve(process.cwd(), "src", "migrations");
 const HOTFIX_APPROVALS_DIR_NAME = ".hotfix-approvals";
 const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), HOTFIX_APPROVALS_DIR_NAME);
 
-// The only shape a migration name can legitimately have, per
-// parseMigrationFilename. Enforced again when building an approval path so a
-// ParsedMigration assembled by any other caller cannot point the approval
-// check outside HOTFIX_APPROVALS_DIR via "../" or an absolute path.
-const APPROVAL_NAME_PATTERN = /^[a-z0-9_]+$/;
+/** Read-only query backing `getAppliedVersions`. Never interpolates input. */
+const APPLIED_VERSIONS_SQL = "SELECT version FROM _migrations ORDER BY version ASC";
 
-export class MigrationLoadError extends Error {
-  code: string;
-  constructor(code: string, message: string) {
-    super(message);
-    this.name = "MigrationLoadError";
-    this.code = code;
-  }
-}
-
-export const MigrationLoadErrorCodes = {
-  ENO_ENT: "ENOENT",
-  NOT_A_DIRECTORY: "NOT_A_DIRECTORY",
-  PERMISSION_DENIED: "PERMISSION_DENIED",
-  INVALID_FILENAME: "INVALID_FILENAME",
-  DUPLICATE_VERSION: "DUPLICATE_VERSION",
-  VERSION_MISMATCH: "VERSION_MISMATCH",
-  MISSING_DEFAULT_EXPORT: "MISSING_DEFAULT_EXPORT",
-  INVALID_DEFINITION: "INVALID_DEFINITION",
-  FILE_READ_FAILED: "FILE_READ_FAILED",
-} as const;
-
-export type MigrationLoadErrorCode = (typeof MigrationLoadErrorCodes)[keyof typeof MigrationLoadErrorCodes];
 export function computeChecksum(content: string): string {
   if (typeof content !== "string") {
     throw new TypeError(
@@ -922,19 +898,219 @@ if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (
 }
 
 /**
- * Versions recorded in `_migrations`, ascending.
+ * Deterministic failure-boundary error for reads of the `_migrations` ledger.
  *
- * The bookkeeping table is created first (`CREATE TABLE IF NOT EXISTS`), so a
- * database that has never been migrated resolves to `[]` instead of failing
- * with `no such table`. That matters because {@link isDatabaseInitialized} uses
- * this to answer "has this database been migrated yet?" — it must be able to
- * answer "no" rather than throw on a fresh install.
+ * Invariants:
+ * - Every failure path in `getAppliedVersions` rejects with this error rather
+ *   than returning a partial or malformed version list, so callers can never
+ *   mis-order, skip, or re-apply migrations based on corrupt state.
+ * - `message` is single-line and length-capped: diagnosable in logs and
+ *   user-facing output without echoing raw driver payloads or ledger rows.
+ * - `cause` preserves the original driver error for programmatic diagnosis.
+ * - `retryable` reports whether a retry can succeed without any state change
+ *   (the read itself is side-effect free apart from idempotent table DDL).
+ */
+export class MigrationStateReadError extends Error {
+  /** Stable machine-readable code (see `MigrationErrorCodes`). */
+  readonly code: string;
+  /** True when the underlying failure is transient (e.g. SQLITE_BUSY). */
+  readonly retryable: boolean;
+  /** Original, unsanitized driver error for programmatic diagnosis. */
+  cause?: unknown;
+
+  constructor(message: string, options: { retryable?: boolean; cause?: unknown } = {}) {
+    super(message);
+    this.name = "MigrationStateReadError";
+    this.code = MigrationErrorCodes.MIGRATION_STATE_READ_FAILED;
+    this.retryable = options.retryable ?? false;
+    this.cause = options.cause;
+  }
+}
+
+/**
+ * Collapse a driver error into a single-line, length-capped summary.
+ *
+ * Driver messages can be multi-line and may embed SQL, filesystem paths, or
+ * row payloads, so callers and logs only receive a sanitized summary while the
+ * untouched original stays available on `MigrationStateReadError.cause`.
+ */
+function sanitizeDriverMessage(err: unknown): string {
+  let raw: string;
+  if (err instanceof Error) {
+    raw = err.message;
+  } else if (err !== null && typeof err === "object" && typeof (err as { message?: unknown }).message === "string") {
+    raw = (err as { message: string }).message;
+  } else {
+    raw = String(err);
+  }
+  const flattened = raw.replace(/\s+/g, " ").trim();
+  if (flattened.length === 0) return "unknown error";
+  return flattened.length > 200 ? `${flattened.slice(0, 200)}...` : flattened;
+}
+
+/** Driver codes that indicate a transient condition a retry may resolve. */
+const RETRYABLE_DRIVER_CODES = new Set(["SQLITE_BUSY", "SQLITE_LOCKED", "SQLITE_TIMEOUT", "EBUSY", "EAGAIN", "ETIMEDOUT"]);
+/** SQLite primary result codes: 5 = SQLITE_BUSY, 6 = SQLITE_LOCKED. */
+const RETRYABLE_SQLITE_PRIMARY_CODES = new Set([5, 6]);
+
+/**
+ * Decide whether a driver failure is transient. Matches the driver `code`,
+ * the numeric `errcode` masked to its primary SQLite result code (so extended
+ * codes such as 0x105 SQLITE_BUSY_SNAPSHOT also match), or well-known lock
+ * message text. Reads are idempotent, so `retryable` failures are always safe
+ * to retry — retries can never produce an inconsistent result here.
+ */
+function isRetryableDbError(err: unknown): boolean {
+  if (err === null || typeof err !== "object") return false;
+  const { code, errcode, message } = err as { code?: unknown; errcode?: unknown; message?: unknown };
+  if (typeof code === "string" && RETRYABLE_DRIVER_CODES.has(code)) return true;
+  if (typeof errcode === "number" && RETRYABLE_SQLITE_PRIMARY_CODES.has(errcode & 0xff)) return true;
+  if (typeof message === "string") {
+    const lower = message.toLowerCase();
+    if (lower.includes("database is locked") || lower.includes("database is busy")) return true;
+  }
+  return false;
+}
+
+/**
+ * Describe a value for diagnostics without dumping raw row payloads.
+ * Primitive values are included (truncated) because they identify the bad
+ * column cheaply; structured values are reported by type only so ledger
+ * contents can never leak into logs or user-facing errors.
+ */
+function describeValue(value: unknown): string {
+  if (value === null) return "null";
+  if (Array.isArray(value)) return "array";
+  const type = typeof value;
+  if (type === "string" || type === "number" || type === "boolean" || type === "bigint") {
+    const repr = String(value as string | number | boolean | bigint);
+    return repr.length > 64 ? `${type}(${repr.slice(0, 64)}...)` : `${type}(${repr})`;
+  }
+  return type; // undefined, object, function, symbol
+}
+
+/**
+ * Convert a stored `_migrations.version` cell to a safe integer.
+ *
+ * Accepts integers and integer-valued strings (drivers differ in how they
+ * serialize INTEGER columns). Anything else is a hard failure: returning a
+ * bogus version could make callers mis-order or re-apply migrations.
+ * Boundary cases: version 0 is valid (the filename regex allows `v000`);
+ * negative, fractional, unsafe-integer, and empty values are rejected.
+ *
+ * @param value    raw `version` cell from the ledger row
+ * @param rowIndex zero-based row index, used for diagnostics only
+ * @throws {MigrationStateReadError} when the cell is not a valid version
+ */
+function toMigrationVersion(value: unknown, rowIndex: number): number {
+  let version: number;
+  if (typeof value === "number") {
+    version = value;
+  } else if (typeof value === "string" && value.trim() !== "") {
+    version = Number(value);
+  } else {
+    throw new MigrationStateReadError(
+      `Invalid _migrations row: version at index ${rowIndex} must be an integer, received ${describeValue(value)}.`
+    );
+  }
+  if (!Number.isSafeInteger(version) || version < 0) {
+    throw new MigrationStateReadError(
+      `Invalid _migrations row: version at index ${rowIndex} must be a non-negative safe integer, received ${describeValue(value)}.`
+    );
+  }
+  return version;
+}
+
+/**
+ * Read the applied migration versions from the `_migrations` ledger.
+ *
+ * Deterministic failure-boundary invariants:
+ * - Output contract: an ascending, de-duplicated array of non-negative safe
+ *   integers, or a rejected promise. A partial or malformed list is never
+ *   returned, so callers cannot act on corrupt migration state.
+ * - Fresh database: the ledger table is bootstrapped with the same idempotent
+ *   `CREATE TABLE IF NOT EXISTS` used by `runMigrations()` and
+ *   `verifyAppliedChecksums()` (when the adapter exposes `exec`), so an
+ *   uninitialized database deterministically yields `[]` instead of throwing.
+ * - Errors: every failure path (connection acquisition, permission denied,
+ *   table bootstrap, statement preparation, execution, malformed rows) rejects
+ *   with `MigrationStateReadError` (`code: MIGRATION_STATE_READ_FAILED`) whose
+ *   message is sanitized for logs and whose `cause` carries the raw error.
+ * - Retry & concurrency: the call is read-only apart from the idempotent DDL
+ *   above, so retries and concurrent invocations are safe and yield identical
+ *   results; transient lock/busy failures are flagged `retryable === true`.
+ * - Compatibility: `db` remains optional, legacy adapters that implement only
+ *   `prepare` keep working, and nullish query results still mean an empty
+ *   ledger (preserves the previous `|| []` behavior).
+ *
+ * @param db optional injected client; defaults to the shared connection
+ * @throws {MigrationStateReadError} on any failure or malformed ledger row
  */
 export async function getAppliedVersions(db?: DatabaseClient): Promise<number[]> {
-  const database = db || toDatabaseClient(getDatabase());
-  database.exec(MIGRATIONS_TABLE);
-  const rows = database.prepare("SELECT version FROM _migrations ORDER BY version ASC").all() || [];
-  return rows.map((r: any) => r.version);
+  let database: DatabaseClient;
+  try {
+    database = db || getDatabase();
+  } catch (err) {
+    throw new MigrationStateReadError(
+      `Unable to acquire database handle for migration state read: ${sanitizeDriverMessage(err)}`,
+      { cause: err, retryable: isRetryableDbError(err) }
+    );
+  }
+  if (!database) {
+    throw new MigrationStateReadError(
+      "Unable to acquire database handle for migration state read: no database handle available."
+    );
+  }
+
+  // Legacy adapters may implement only `prepare` (existing callers in this
+  // repo do); the real better-sqlite3 handle always exposes `exec`.
+  try {
+    if (typeof database.exec === "function") {
+      database.exec(MIGRATIONS_TABLE);
+    }
+  } catch (err) {
+    throw new MigrationStateReadError(
+      `Failed to ensure _migrations ledger exists: ${sanitizeDriverMessage(err)}`,
+      { cause: err, retryable: isRetryableDbError(err) }
+    );
+  }
+
+  let rows: unknown;
+  try {
+    rows = database.prepare(APPLIED_VERSIONS_SQL).all();
+  } catch (err) {
+    throw new MigrationStateReadError(
+      `Failed to read applied migration ledger: ${sanitizeDriverMessage(err)}`,
+      { cause: err, retryable: isRetryableDbError(err) }
+    );
+  }
+
+  // Legacy contract: adapters may signal "no rows" with a nullish result.
+  if (rows === null || rows === undefined) return [];
+
+  if (!Array.isArray(rows)) {
+    throw new MigrationStateReadError(
+      `Failed to read applied migration ledger: expected an array of rows, received ${describeValue(rows)}.`,
+      { cause: rows }
+    );
+  }
+
+  // Validate every row before returning anything: a failure mid-way throws
+  // before any partial result can escape to the caller.
+  const versions = new Set<number>();
+  rows.forEach((row: unknown, index: number) => {
+    if (row === null || typeof row !== "object" || Array.isArray(row)) {
+      throw new MigrationStateReadError(
+        `Failed to read applied migration ledger: row at index ${index} must be an object, received ${describeValue(row)}.`,
+        { cause: row }
+      );
+    }
+    versions.add(toMigrationVersion((row as { version?: unknown }).version, index));
+  });
+
+  // Numeric (not lexicographic) ascending order, guaranteed even if an adapter
+  // ignores ORDER BY; the Set collapses duplicate ledger rows defensively.
+  return [...versions].sort((a, b) => a - b);
 }
 
 /** True when at least one migration has been recorded as applied. */

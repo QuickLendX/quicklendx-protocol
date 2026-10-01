@@ -1114,113 +1114,28 @@ components:
       bearerFormat: opaque-token
 
   schemas:
-    RateLimitPolicy:
+    HealthResponse:
       type: object
-      description: Public rate-limit policy metadata. Runtime bucket state is intentionally not exposed.
-      required:
-        - id
-        - scope
-        - limit
-        - windowSeconds
-        - blockSeconds
-        - key
-        - headers
-      properties:
-        id:
-          type: string
-          enum: [global, perKey, strict, reconciliation, export]
-        scope:
-          type: string
-        limit:
-          type: integer
-          minimum: 1
-        windowSeconds:
-          type: integer
-          minimum: 1
-        blockSeconds:
-          type: integer
-          minimum: 0
-        key:
-          type: string
-          enum: [client-ip, api-key-or-client-ip]
-        headers:
-          type: array
-          items:
-            type: string
-
-    RateLimitPolicies:
-      type: object
-      required:
-        - global
-        - perKey
-        - strict
-        - reconciliation
-        - export
-      properties:
-        global:
-          $ref: '#/components/schemas/RateLimitPolicy'
-        perKey:
-          $ref: '#/components/schemas/RateLimitPolicy'
-        strict:
-          $ref: '#/components/schemas/RateLimitPolicy'
-        reconciliation:
-          $ref: '#/components/schemas/RateLimitPolicy'
-        export:
-          $ref: '#/components/schemas/RateLimitPolicy'
-
-    StatusResponse:
-      type: object
-      required:
-        - lag
-        - warnThreshold
-        - criticalThreshold
-        - level
-        - isDegraded
-        - isCritical
-        - checkedAt
-        - rateLimits
-        - _system
-      properties:
-        lag:
-          type: integer
-        warnThreshold:
-          type: integer
-        criticalThreshold:
-          type: integer
-        level:
-          type: string
-          enum: [none, warn, critical]
-        isDegraded:
-          type: boolean
-        isCritical:
-          type: boolean
-        checkedAt:
-          type: string
-          format: date-time
-        rateLimits:
-          $ref: '#/components/schemas/RateLimitPolicies'
-        _system:
-          $ref: '#/components/schemas/SystemStatusMetadata'
-
-    SystemStatusMetadata:
-      type: object
-      description: Additive system-health metadata injected into JSON responses.
+      description: Health check payload returned by GET /health.
       required:
         - status
-        - degraded
-        - lag
-        - level
+        - version
+        - timestamp
       properties:
         status:
           type: string
-          enum: [operational, degraded, maintenance]
-        degraded:
-          type: boolean
-        lag:
-          type: integer
-        level:
+          description: Service health status.
+          enum:
+            - ok
+            - error
+        version:
           type: string
-          enum: [none, warn, critical]
+          description: Running service version.
+          example: 1.0.0
+        timestamp:
+          type: string
+          format: date-time
+          description: RFC 3339 timestamp of the health probe.
 
     FreshnessMetadata:
       type: object
@@ -1578,6 +1493,25 @@ components:
             lag: { type: integer }
             level: { type: string }
 
+    ErrorResponse:
+      type: object
+      description: Canonical error body for resource-level failures (404 responses).
+      required:
+        - error
+      properties:
+        error:
+          type: object
+          required:
+            - message
+            - code
+          properties:
+            message:
+              type: string
+              description: Human-readable error description.
+            code:
+              type: string
+              description: Machine-readable error code (SCREAMING_SNAKE_CASE).
+
     NotificationType:
       type: string
       enum:
@@ -1652,3 +1586,14 @@ components:
         application/json:
           schema:
             $ref: '#/components/schemas/ErrorEnvelope'
+
+    Unauthorized:
+      description: Missing or invalid API credentials.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            error:
+              message: Authentication required
+              code: UNAUTHORIZED

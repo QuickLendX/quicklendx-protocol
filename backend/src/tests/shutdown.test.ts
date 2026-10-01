@@ -71,8 +71,7 @@ jest.mock('../services/statusService', () => ({
 // Imports — after mocks
 // ---------------------------------------------------------------------------
 import http from 'http';
-import path from 'path';
-import crypto from 'crypto';
+import Database from 'better-sqlite3';
 import {
   createShutdownHandler,
   resetShuttingDown,
@@ -639,6 +638,41 @@ describe('WebhookQueueService.flush (real implementation)', () => {
     return WebhookQueueService.getInstance();
   }
 
+  // The suite runs with ../lib/database mocked, but the real service needs a
+  // real connection: back the mock with an in-memory SQLite instance that has
+  // the queue schema so flush/enqueue/mark run against actual SQL.
+  let queueDb: any;
+
+  beforeAll(() => {
+    queueDb = new (Database as any)(':memory:');
+    queueDb.exec(`
+      CREATE TABLE IF NOT EXISTS webhook_queue (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending','processing','success','failed')),
+        enqueued_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    queueDb.exec(`
+      CREATE TABLE IF NOT EXISTS queue_metadata (
+        key TEXT PRIMARY KEY,
+        value INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    queueDb.exec("INSERT OR IGNORE INTO queue_metadata (key, value) VALUES ('overflow_count', 0)");
+    (getDatabase as jest.Mock).mockReturnValue(queueDb);
+  });
+
+  beforeEach(() => {
+    queueDb.exec('DELETE FROM webhook_queue');
+  });
+
+  afterAll(() => {
+    (getDatabase as jest.Mock).mockReset();
+    if (queueDb) queueDb.close();
+  });
+
   it('returns an empty array when the queue is empty', () => {
     const q = freshQueue();
     expect(q.flush()).toEqual([]);
@@ -719,6 +753,22 @@ describe('WebhookQueueService.flush (real implementation)', () => {
     (copy as any).status = 'success';
 
     expect(q.flush()).toEqual([]);
+  });
+
+  it('returns correct events for every enqueue until capacity is reached', () => {
+    const q = freshQueue();
+    q.enqueue('first');
+    q.enqueue('second');
+    q.enqueue('third');
+    q.enqueue('fourth');
+
+    // The durable queue retains every event until flushed (overflow past the
+    // 5000-event capacity rejects with 503 — covered in webhookQueue.persist).
+    expect(q.getDepth()).toBe(4);
+
+    const flushed = q.flush();
+    expect(flushed).toHaveLength(4);
+    expect(q.getDepth()).toBe(0);
   });
 
   it('queue is reusable after flush', () => {
