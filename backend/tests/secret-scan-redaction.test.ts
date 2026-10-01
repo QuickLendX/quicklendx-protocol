@@ -18,6 +18,7 @@
 const secretScanUtils = require("../scripts/lib/secret-scan-utils");
 
 const {
+  collectQuotedStringMatches,
   PREVIEW_EDGE_LENGTH,
   PREVIEW_ELLIPSIS,
   PREVIEW_MASK_CHARACTER,
@@ -581,5 +582,67 @@ describe("redactPreview: existing callers stay compatible", () => {
     expect(() =>
       secretScanUtils.assertNoSecretsPrinted(secretScanUtils.formatFinding(finding), [finding])
     ).toThrow(/leaked a matched value/);
+  });
+});
+
+describe("assertNoSecretsPrinted: deterministic failure boundaries", () => {
+  it("accepts clean output and findings without a matched value", () => {
+    expect(() => secretScanUtils.assertNoSecretsPrinted("clean output", [])).not.toThrow();
+    expect(() =>
+      secretScanUtils.assertNoSecretsPrinted("clean output", [
+        { file: "src/example.ts", line: 1, match: "" },
+        { file: "src/example.ts", line: 2 },
+      ])
+    ).not.toThrow();
+  });
+
+  it("rejects exact matches at output boundaries without echoing the match", () => {
+    const secret = buildValue(48);
+    const finding = makeFinding(secret);
+    const expectedMessage =
+      "Secret scan output leaked a matched value for src/leaked.ts:4";
+
+    for (const output of [secret, `prefix ${secret}`, `${secret} suffix`]) {
+      let thrown: unknown;
+      try {
+        secretScanUtils.assertNoSecretsPrinted(output, [finding]);
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).toBe(expectedMessage);
+      expect((thrown as Error).message).not.toContain(secret);
+    }
+  });
+
+  it("reports the first leaking finding consistently when matches are duplicated", () => {
+    const secret = buildValue(48);
+    const first = makeFinding(secret);
+    const second = { ...makeFinding(secret), file: "src/second.ts", line: 9 };
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      expect(() => secretScanUtils.assertNoSecretsPrinted(secret, [first, second])).toThrow(
+        "Secret scan output leaked a matched value for src/leaked.ts:4"
+      );
+    }
+  });
+
+  it.each([
+    [null, [], "Secret scan output must be a string"],
+    ["output", null, "Secret scan findings must be an array"],
+    ["output", [null], "Secret scan findings must contain objects"],
+    ["output", [{ match: Symbol("sensitive") }], "Secret scan finding matches must be strings"],
+  ])("rejects invalid inputs with a fixed diagnostic", (output, findings, message) => {
+    let thrown: unknown;
+    try {
+      secretScanUtils.assertNoSecretsPrinted(output, findings);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(TypeError);
+    expect((thrown as Error).message).toBe(message);
+    expect((thrown as Error).message).not.toContain("sensitive");
   });
 });

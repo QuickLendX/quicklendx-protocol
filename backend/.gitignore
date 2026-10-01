@@ -1,8 +1,5 @@
-node_modules
-dist
-coverage
-.env
+node_modules/
+dist/
+coverage/
 *.log
-audit-report.json
-sbom/
-.data/
+.DS_Store
