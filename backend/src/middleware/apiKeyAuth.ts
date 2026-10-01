@@ -9,15 +9,28 @@ interface KeyMap {
 }
 
 let keyMap: KeyMap = {};
+let isLoaded: boolean = false;
 
 export function loadApiKeys(): void {
-  const envValue = process.env.ADMIN_API_KEYS || "";
-  keyMap = {};
-  for (const entry of envValue.split(",")) {
-    const [key, actor] = entry.trim().split(":");
-    if (key && actor) {
-      keyMap[key] = actor;
+  try {
+    const envValue = process.env.ADMIN_API_KEYS || "";
+    keyMap = {};
+    for (const entry of envValue.split(",")) {
+      const trimmed = entry.trim();
+      if (!trimmed) continue;
+      const colonIdx = trimmed.indexOf(":");
+      if (colonIdx > 0) {
+        const key = trimmed.slice(0, colonIdx).trim();
+        const actor = trimmed.slice(colonIdx + 1).trim();
+        if (key && actor) {
+          keyMap[key] = actor;
+        }
+      }
     }
+    isLoaded = true;
+  } catch (_err) {
+    keyMap = {};
+    isLoaded = true;
   }
 }
 
@@ -26,42 +39,56 @@ export function apiKeyAuth(
   res: Response,
   next: NextFunction
 ): void {
-  if (process.env.SKIP_API_KEY_AUTH === "true") {
-    req.actor = process.env.TEST_ACTOR || "test-actor";
+  try {
+    if (process.env.SKIP_API_KEY_AUTH === "true") {
+      req.actor = process.env.TEST_ACTOR || "test-actor";
+      next();
+      return;
+    }
+
+    if (!isLoaded) {
+      loadApiKeys();
+    }
+
+    const rawKey = req.header ? req.header("X-API-Key") : undefined;
+    if (!rawKey) {
+      res.status(401).json({
+        error: {
+          message: "Missing X-API-Key header",
+          code: "UNAUTHORIZED",
+        },
+      });
+      return;
+    }
+
+    const actor = keyMap[rawKey];
+    if (!actor) {
+      res.status(401).json({
+        error: {
+          message: "Invalid API key",
+          code: "UNAUTHORIZED",
+        },
+      });
+      return;
+    }
+
+    req.actor = actor;
     next();
-    return;
-  }
-
-  if (Object.keys(keyMap).length === 0) {
-    loadApiKeys();
-  }
-
-  const rawKey = req.header("X-API-Key");
-  if (!rawKey) {
-    res.status(401).json({
+  } catch (_err) {
+    res.status(500).json({
       error: {
-        message: "Missing X-API-Key header",
-        code: "UNAUTHORIZED",
+        message: "Internal authentication error",
+        code: "INTERNAL_ERROR",
       },
     });
-    return;
   }
-
-  const actor = keyMap[rawKey];
-  if (!actor) {
-    res.status(401).json({
-      error: {
-        message: "Invalid API key",
-        code: "UNAUTHORIZED",
-      },
-    });
-    return;
-  }
-
-  req.actor = actor;
-  next();
 }
 
 export function resetApiKeys(): void {
   keyMap = {};
+  isLoaded = false;
+}
+
+export function getKeyMapSize(): number {
+  return Object.keys(keyMap).length;
 }
