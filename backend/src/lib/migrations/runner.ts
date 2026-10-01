@@ -637,11 +637,7 @@ export function buildContext(db: DatabaseClient, isProd: boolean): MigrationCont
   };
 }
 
-function toCount(value: unknown): number {
-  return typeof value === "number" && Number.isFinite(value) ? value : 0;
-}
-
-export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
+export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; to?: string; all?: boolean; db?: DatabaseClient } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
   const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb } = options;
   const isProd = config.NODE_ENV === "production";
   const startTime = Date.now();
@@ -735,9 +731,8 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
           const meta = fileMig.content.meta || {};
           const appliedAt = new Date().toISOString();
           const migStart = Date.now();
-          // `durationMs` is assigned inside the transaction callback, so it is
-          // declared out here — otherwise the verbose log below would read an
-          // out-of-scope binding *after* the migration had already committed.
+          let durationMs = 0;
+          let state!: MigrationState;
           let durationMs = 0;
           let state!: MigrationState;
           let appliedInTransaction = false;

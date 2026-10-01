@@ -230,13 +230,16 @@ export function parseMigrateFlags(
     return { ok: false, message: "Migration arguments must be an object of boolean flags." };
   }
 
-  const seen = new Map<MigrateFlag, boolean>();
-  for (const [key, value] of Object.entries(args as Record<string, unknown>)) {
-    if (key === "_") continue;
-    const normalized = normalizeFlagKey(key);
-
-    if (DOWN_ONLY_KEYS.has(normalized)) {
-      return { ok: false, message: `--${displayKey(key)} only applies to "migrate down".` };
+  if (validateOnly) {
+    const migrations = await loadMigrationsFromFS();
+    const result = await MigrationPolicy.dryRun(
+      migrations.map((migration) => migration.content),
+      { force: emergency }
+    );
+    if (!result.valid) {
+      console.error("❌ Migration validation failed:");
+      result.errors.forEach((e) => console.error(`   ${e}`));
+      return { success: false, message: "Validation errors" };
     }
 
     const flag = FLAG_BY_KEY.get(normalized);
@@ -496,7 +499,14 @@ async function migrateDownCommandUnlocked(args: Record<string, unknown>): Promis
   }
 
   try {
-    const result = await runMigrations({ dryRun, allowDown: true, verbose, skipChecksumVerify, to, all });
+    const result = await runMigrations({
+      dryRun,
+      allowDown: true,
+      verbose,
+      skipChecksumVerify,
+      to,
+      all,
+    });
     console.log(`\n✅ Migration rollback complete in ${result.durationMs}ms`);
     console.log(`   Rolled back: ${result.applied.length}, Skipped: ${result.skipped}`);
 
