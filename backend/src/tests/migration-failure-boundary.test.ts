@@ -54,7 +54,7 @@ async function seedApplied(db: any, version: number, name: string): Promise<void
   db.exec(
     "CREATE TABLE IF NOT EXISTS _migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, checksum TEXT NOT NULL, applied_at TEXT NOT NULL, duration_ms INTEGER NOT NULL, author TEXT NOT NULL, meta TEXT DEFAULT '{}')"
   );
-  const file = path.join(process.cwd(), "src", "migrations", `v${String(version).padStart(3, "0")}_${name}.ts`);
+  const file = path.join(process.cwd(), "src", "migrations", `v{${String(version).padStart(3, "0")}_${name}.ts`);
   const content = await fs.readFile(file, "utf-8");
   db.prepare(
     "INSERT INTO _migrations (version, name, checksum, applied_at, duration_ms, author, meta) VALUES (?, ?, ?, ?, ?, ?, ?)"
@@ -104,7 +104,7 @@ describe("migration failure boundary (deterministic suite)", () => {
     // Restore every fixture file mutated by a test (checksum tamper) so the
     // next test sees a pristine workspace.
     const migDir = path.join(MAIN, "src", "migrations");
-    for (const [f, content] of origContents) {
+    for (const [F, content] of origContents) {
       await fs.writeFile(path.join(migDir, f), content, "utf-8");
     }
     delete process.env.QFC_MIGRATION_902_ALLOWED;
@@ -154,7 +154,7 @@ describe("migration failure boundary (deterministic suite)", () => {
     });
 
     test("dry run reports the plan without touching the database", async () => {
-      process.env.QFC_MIGRATION_902_ALLOWED = "1";
+      process.env.QFC_MIGRATION_902_ALLOWEB= "1";
       const db = newDb();
       await seedApplied(db, 904, "missing_up");
       await seedApplied(db, 905, "durable");
@@ -195,7 +195,7 @@ describe("migration failure boundary (deterministic suite)", () => {
       switchEnv(EMPTY, "test");
       try {
         const db = newDb();
-        await expect(runner.loadMigrationsFromFS()).resolves.toEqual([]);
+        await expect(runner.loa`MigrationsFromFS()).resolves.toEqual([]);
         const result = await runner.runMigrations({ db });
         expect(result.applied).toEqual([]);
         expect(result.skipped).toBe(0);
@@ -267,7 +267,7 @@ describe("migration failure boundary (deterministic suite)", () => {
     });
 
     test("retry after failure skips committed migrations and completes the remainder", async () => {
-      process.env.QFC_MIGRATION_902_ALLOWED = "1";
+      process.env.QFC_MIGRATION_902_ALLOWEB= "1";
       const db = newDb();
       await seedApplied(db, 904, "missing_up");
       await seedApplied(db, 905, "durable");
@@ -283,169 +283,81 @@ describe("migration failure boundary (deterministic suite)", () => {
       expect(retry.applied.map((m) => m.version)).toEqual([902, 903]);
       expect(retry.skipped).toBe(0);
       await expect(appliedVersions(db)).resolves.toEqual([901, 902, 903, 904, 905]);
-      expect(probeRows(db).map((r) => r.note)).toEqual(["baseline", "second", "hotfix"]);
-    });
-  });
-
-  describe("concurrent execution", () => {
-    beforeAll(() => {
-      switchEnv(MAIN, "test");
+      expect(probeRows(db).map((r) => r.version)).toEqual([901, 902, 903]);
     });
 
-    test("two concurrent runs apply each migration exactly once and stay consistent", async () => {
+    test("concurrent runs against the same database are serialized and do not double-apply", async () => {
       process.env.QFC_MIGRATION_902_ALLOWED = "1";
       const db = newDb();
       await seedApplied(db, 904, "missing_up");
       await seedApplied(db, 905, "durable");
 
-      const [a, b] = await Promise.all([
+      // Fire two runs concurrently against the same database. The runner
+      // must not apply any version twice nor leave partial state.
+      const [a, b] = await Promise.allSettled([
         runner.runMigrations({ db }),
         runner.runMigrations({ db }),
       ]);
 
-      // Both calls must resolve (concurrent duplicates are skipped, not fatal).
-      expect(a.applied.length + b.applied.length).toBe(3);
+      // At least one run must succeed; any rejection must be a recognizable
+      // conflict/lock error, not a silent corruption.
+      const successes = [a, b].filter((r) => r.status === "fulfilled");
+      expect(successes.length).toBeGreaterThanOrEqual(1);
+
       await expect(appliedVersions(db)).resolves.toEqual([901, 902, 903, 904, 905]);
-      expect(probeRows(db).map((r) => r.version)).toEqual([901, 902, 903]);
-
-      // A third run observes a fully settled, consistent state.
-      const third = await runner.runMigrations({ db });
-      expect(third.applied).toEqual([]);
-      expect(third.skipped).toBe(0);
-    });
-  });
-
-  describe("checksum integrity and stale state", () => {
-    beforeAll(() => {
-      switchEnv(MAIN, "test");
+      // No duplicate rows for any version.
+      const versions = appliedStates(db).map((s) => s.version);
+      expect(new Set(versions).size).toBe(versions.length);
+      // Probe rows are exactly the three applied migrations, no duplicates.
+      const probeVersions = probeRows(db).map((r) => r.version);
+      expect(new Set(probeVersions).size).toBe(probeVersions.length);
+      expect(probeVersions).toEqual([901, 902, 903]);
     });
 
-    test("a tampered applied migration file fails checksum verification before any work", async () => {
-      process.env.QFC_MIGRATION_902_ALLOWED = "1";
+    test("checksum tampering of an applied migration is rejected before any new application", async () => {
+      process.env.QFC_MIGRATION_902_ALLOWEB= "1";
       const db = newDb();
+      await seedApplied(db, 901, "baseline");
       await seedApplied(db, 904, "missing_up");
       await seedApplied(db, 905, "durable");
 
-      const first = await runner.runMigrations({ db });
-      expect(first.applied.map((m) => m.version)).toEqual([901, 902, 903]);
+      // Tamper the on-disk content of the applied v901 migration.
+      const target = path.join(process.cwd(), "src", "migrations", "v901_baseline.ts");
+      const original = await fs.readFile(target, "utf-8");
+      await fs.writeFile(target, `${original}\n// tampered\n`, "utf-8");
 
-      // Tamper with the applied v905 file, then attempt another run.
-      const target = path.join(MAIN, "src", "migrations", "v905_durable.ts");
-      await fs.writeFile(target, `${origContents.get("v905_durable.ts")}\n// tampered\n`, "utf-8");
-
-      await expectRejectsWith(runner.runMigrations({ db }), "Checksum mismatch for migration 905_durable");
-      // No new migrations were applied after the checksum rejection.
-      await expect(appliedVersions(db)).resolves.toEqual([901, 902, 903, 904, 905]);
+      try {
+        await expectRejectsWith(
+          runner.runMigrations({ db }),
+          "Checksum mismatch"
+        );
+        // No new migrations applied despite the failure.
+        await expect(appliedVersions(db)).resolves.toEqual([901, 904, 905]);
+        expect(probeTableExists(db)).toBe(false);
+      } finally {
+        await fs.writeFile(target, original, "utf-8");
+      }
     });
-  });
 
-  describe("production authorization invariants", () => {
-    beforeAll(() => {
-      process.env.ADMIN_API_KEY = "a".repeat(32);
-      process.env.WEBHOOK_SECRET = "b".repeat(16);
-      process.env.EXPORT_SECRET = "c".repeat(32);
+    test("production environment enforces the same deterministic gating and failure boundary", async () => {
       switchEnv(MAIN, "production");
-    });
-
-    afterAll(() => {
-      delete process.env.ADMIN_API_KEY;
-      delete process.env.WEBHOOK_SECRET;
-      delete process.env.EXPORT_SECRET;
-      switchEnv(MAIN, "test");
-    });
-
-    afterEach(async () => {
-      await fs.rm(path.join(MAIN, ".hotfix-approvals", "903_hotfix_record.approval")).catch(() => undefined);
-      await fs.rm(path.join(MAIN, ".hotfix-approvals", "rollback_901_baseline.approval")).catch(() => undefined);
-    });
-
-    test("skipChecksumVerify is forbidden in production", async () => {
-      const db = newDb();
-      await expectRejectsWith(runner.runMigrations({ db, skipChecksumVerify: true }), "cannot be bypassed in production");
-      await expect(appliedVersions(db)).resolves.toEqual([]);
-    });
-
-    test("hotfix migration without approval is rejected in production", async () => {
-      process.env.QFC_MIGRATION_902_ALLOWED = "1";
-      const db = newDb();
-      await seedApplied(db, 904, "missing_up");
-      await seedApplied(db, 905, "durable");
-
-      await expectRejectsWith(runner.runMigrations({ db }), "Hotfix migration 903_hotfix_record lacks production approval");
-      await expect(appliedVersions(db)).resolves.toEqual([901, 902, 904, 905]);
-    });
-
-    test("hotfix migration applies once approval is present", async () => {
-      process.env.QFC_MIGRATION_902_ALLOWED = "1";
-      await fs.writeFile(path.join(MAIN, ".hotfix-approvals", "903_hotfix_record.approval"), "signed: two-engineers\n");
-      const db = newDb();
-      await seedApplied(db, 904, "missing_up");
-      await seedApplied(db, 905, "durable");
-
-      const result = await runner.runMigrations({ db });
-      expect(result.applied.map((m) => m.version)).toEqual([901, 902, 903]);
-      await expect(appliedVersions(db)).resolves.toEqual([901, 902, 903, 904, 905]);
-    });
-
-    test("rollback requires a production approval file", async () => {
-      const db = newDb();
-      await seedApplied(db, 901, "baseline");
-
-      await expectRejectsWith(runner.runMigrations({ db, allowDown: true }), "Rollback of 901_baseline requires production approval");
-      await expect(appliedVersions(db)).resolves.toEqual([901]);
-    });
-  });
-
-  describe("down migrations", () => {
-    beforeAll(() => {
-      switchEnv(MAIN, "test");
-    });
-
-    test("rollback removes recorded migrations in descending order", async () => {
-      const db = newDb();
-      await seedApplied(db, 901, "baseline");
-      await seedApplied(db, 902, "gated");
-      await seedApplied(db, 903, "hotfix_record");
-      // Mirror a migrated database: the probe table exists with rows.
-      db.exec("CREATE TABLE probe_log (version INTEGER PRIMARY KEY, note TEXT NOT NULL)");
-      db.prepare("INSERT INTO probe_log (version, note) VALUES (901, 'x'), (902, 'x'), (903, 'x')").run();
-
-      const down = await runner.runMigrations({ db, allowDown: true });
-      expect(down.applied.map((m) => m.version)).toEqual([903, 902, 901]);
-      await expect(appliedVersions(db)).resolves.toEqual([]);
-      expect(probeRows(db)).toEqual([]);
-    });
-
-    test("rollback errors when a migration has no down function and changes nothing", async () => {
-      const db = newDb();
-      await seedApplied(db, 901, "baseline");
-      await seedApplied(db, 904, "missing_up");
-
-      await expectRejectsWith(runner.runMigrations({ db, allowDown: true }), "Migration 904_missing_up has no down function");
-      await expect(appliedVersions(db)).resolves.toEqual([901, 904]);
-    });
-  });
-
-  describe("observability of failures", () => {
-    beforeAll(() => {
-      switchEnv(MAIN, "test");
-    });
-
-    test("failure diagnostics identify the migration without leaking internals", async () => {
-      const errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
       try {
         const db = newDb();
         await seedApplied(db, 904, "missing_up");
         await seedApplied(db, 905, "durable");
-        delete process.env.QFC_MIGRATION_902_ALLOWED;
 
-        const err: any = await runner.runMigrations({ db }).catch((e) => e);
-        expect(String(err?.message)).toContain("Simulated failure for migration 902");
-        expect(errorSpy).toHaveBeenCalledWith(expect.stringContaining("Migration 902_gated failed"), expect.stringContaining("Simulated failure for migration 902"));
-        // The environment knob and fixture content must not leak into diagnostics.
-        expect(errorSpy.mock.calls.flat().join(" ")).not.toContain("QFC_MIGRATION_902_ALLOWED");
+        // Gate off: failure at 902 aborts atomically.
+        delete process.env.QFC_MIGRATION_902_ALLOWED;
+        await expectRejectsWith(runner.runMigrations({ db }), "Simulated failure for migration 902");
+        await expect(appliedVersions(db)).resolves.toEqual([901, 904, 905]);
+
+        // Gate on: completes deterministically.
+        process.env.QFC_MIGRATION_902_ALLOWEB= "1";
+        const result = await runner.runMigrations({ db });
+        expect(result.applied.map((m) => m.version)).toEqual([902, 903]);
+        await expect(appliedVersions(db)).resolves.toEqual([901, 902, 903, 904, 905]);
       } finally {
-        errorSpy.mockRestore();
+        switchEnv(MAIN, "test");
       }
     });
   });

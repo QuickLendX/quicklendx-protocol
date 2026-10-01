@@ -19,6 +19,21 @@ function handleError(
   res: Response,
   next: NextFunction
 ): void {
+  // A caught value must enter Express's error path, never its next()/route
+  // control flow. Do not stringify arbitrary values, which may contain secrets.
+  const forwardedError = !err || err === "route" || err === "router"
+    ? Object.assign(new Error("Unexpected webhook controller failure"), {
+        code: "WEBHOOK_CONTROLLER_ERROR",
+      })
+    : err;
+
+  // Let Express close an already-started response; writing JSON here would
+  // replace the original failure with ERR_HTTP_HEADERS_SENT.
+  if (res.headersSent) {
+    next(forwardedError);
+    return;
+  }
+
   if (err instanceof WebhookSecretError) {
     res.status(err.status).json({
       error: {
@@ -28,7 +43,7 @@ function handleError(
     });
     return;
   }
-  next(err);
+  next(forwardedError);
 }
 
 // ---------------------------------------------------------------------------
@@ -194,6 +209,6 @@ export const ingestWebhook = async (
       matched_secret: req.webhookMatchedSecret,
     });
   } catch (err) {
-    next(err);
+    handleError(err, res, next);
   }
 };
