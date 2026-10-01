@@ -80,6 +80,14 @@ function loadPolicy(): void {
  * we fall back to a deny-by-default empty policy (every field classifies as
  * PRIVATE) and record the failure so `getPolicyFields` can surface it
  * deterministically instead of throwing at import time.
+ *
+ * The fallback must reproduce the *deny-by-default* half of the policy, and it
+ * may only do that if the replacement map has a null prototype for exactly the
+ * reason `loadPolicy` does: a name that collides with an `Object.prototype`
+ * member would otherwise resolve through the prototype chain, and
+ * `isPrivate("constructor")` would answer false for a field that has to be
+ * masked. The failure path is the one place where that was previously wrong,
+ * which made the most sensitive boundary the least protected.
  */
 function initialisePolicy(): void {
   try {
@@ -88,7 +96,7 @@ function initialisePolicy(): void {
   } catch (err) {
     policyLoadError = err instanceof Error ? err : new Error(String(err));
     loadedPolicy = { public: [], private: [], secret: [] };
-    fieldTierMap = {};
+    fieldTierMap = Object.create(null) as Record<string, FieldTier>;
   }
 }
 
@@ -172,9 +180,33 @@ export function getPolicyLoadError(): Error | null {
 /**
  * Return the tier for a given field name.
  * Unknown fields default to PRIVATE (deny-by-default).
+ *
+ * Invariant: for every input exactly one of `isPublic` / `isPrivate` /
+ * `isSecret` is true, and a name that is not an own key of `fieldTierMap` is
+ * always PRIVATE. Callers use those three predicates to decide whether a value
+ * may be logged verbatim, so an unclassified name that answers "none of the
+ * three" is a leak.
+ *
+ * The own-property guard is what makes that hold independently of how
+ * `fieldTierMap` was built. Relying on a null prototype alone left the invariant
+ * one `fieldTierMap = {}` away from being false again — and that is exactly what
+ * the policy-load failure path used to do, so `isPrivate("constructor")` and
+ * `isPrivate("toString")` answered false whenever the policy file was
+ * unreadable. A field explicitly registered under such a name is still honoured;
+ * only prototype lookups are rejected.
+ *
+ * A non-string input is rejected before the lookup. Property access would coerce
+ * it to a key, so `classifyField(undefined)` would resolve to the tier of a field
+ * literally named `"undefined"` — letting a caller that passes the wrong type
+ * classify a value as PUBLIC, and log it verbatim. The `string` type is only a
+ * compile-time promise; this makes it hold at runtime too.
  */
 export function classifyField(name: string): FieldTier {
-  return (fieldTierMap[name] as FieldTier | undefined) ?? FieldTier.PRIVATE;
+  if (typeof name !== "string") return FieldTier.PRIVATE;
+  const tier = Object.prototype.hasOwnProperty.call(fieldTierMap, name)
+    ? (fieldTierMap[name] as FieldTier | undefined)
+    : undefined;
+  return tier ?? FieldTier.PRIVATE;
 }
 
 /** True when a field must never appear in any log output. */
