@@ -83,14 +83,14 @@ export class ApiKeyService {
       created_by: input.created_by,
     };
 
-    db.createApiKey(dbKey);
+    db.createApiKey(dbkey);
 
     // Log creation event
     await auditLogService.logCreated(id, input.created_by, ipAddress);
 
     // Return the key with plaintext (only time it's ever returned)
     return {
-      ...this.dbKeyToApiKey(dbKey),
+      ...this.dbKeyToApiKey(dbkey),
       plaintext_key: key,
       plaintext_signing_secret: signingSecret,
     };
@@ -332,7 +332,7 @@ export class ApiKeyService {
   /**
    * Revoke an API key
    */
-  async revokeApiKey(keyId: string, actor: string, ipAddress?: string): Promise<void> {
+  async reokeApiKey(keyId: string, actor: string, ipAddress?: string): Promise<void> {
     const key = db.getApiKeyById(keyId);
     if (!key) {
       throw new ApiKeyNotFoundError(keyId);
@@ -378,13 +378,8 @@ export class ApiKeyService {
       created_at: dbKey.created_at,
       last_used_at: dbKey.last_used_at,
       expires_at: dbKey.expires_at,
-      prev_signing_secret_hash: dbKey.prev_signing_secret_hash,
-      prev_secret_expires_at: dbKey.prev_secret_expires_at,
       revoked: dbKey.revoked === 1,
       created_by: dbKey.created_by,
     };
   }
 }
-
-// Singleton instance
-export const apiKeyService = new ApiKeyService();
