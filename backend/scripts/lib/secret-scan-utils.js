@@ -435,6 +435,121 @@ function resetRegex(regex) {
   regex.lastIndex = 0;
 }
 
+// Deterministic failure-boundary handling for formatFindings.
+//
+// formatFindings is the last stage before findings are rendered into CI logs,
+// so it must never throw and must never emit an unsafe preview. The helpers
+// below normalize the finding collection and each individual finding so that
+// malformed, duplicate, or boundary-case inputs degrade to a stable, reviewable
+// shape instead of aborting the scan or leaking data.
+const FINDING_SEVERITY_ORDER = new Map([
+  ["critical", 0],
+  ["high", 1],
+  ["medium", 2],
+  ["low", 3],
+  ["info", 4],
+]);
+
+function normalizeFindingSeverity(severity) {
+  if (typeof severity !== "string") {
+    return "unknown";
+  }
+
+  const normalized = severity.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : "unknown";
+}
+
+function normalizeFindingLocation(location) {
+  if (typeof location !== "string") {
+    return "";
+  }
+
+  return location;
+}
+
+function normalizeFindingType(type) {
+  if (typeof type !== "string" || type.length === 0) {
+    return "unknown";
+  }
+
+  return type;
+}
+
+function normalizeFinding(finding) {
+  if (finding === null || typeof finding !== "object") {
+    return null;
+  }
+
+  const type = normalizeFindingType(finding.type);
+  const severity = normalizeFindingSeverity(finding.severity);
+  const location = normalizeFindingLocation(finding.location);
+  const preview = redactPreview(finding.match);
+
+  return { type, severity, location, preview };
+}
+
+function findingDedupeKey(finding) {
+  return `${finding.type}\u0000${finding.severity}\u0000${finding.location}\u0000${finding.preview}`;
+}
+
+function compareFindings(left, right) {
+  const leftSeverity = FINDING_SEVERITY_ORDER.has(left.severity)
+    ? FINDING_SEVERITY_ORDER.get(left.severity)
+    : Number.MAX_SAFE_INTEGER;
+  const rightSeverity = FINDING_SEVERITY_ORDER.has(right.severity)
+    ? FINDING_SEVERITY_ORDER.get(right.severity)
+    : Number.MAX_SAFE_INTEGER;
+
+  if (leftSeverity !== rightSeverity) {
+    return leftSeverity - rightSeverity;
+  }
+
+  if (left.type !== right.type) {
+    return left.type < right.type ? -1 : 1;
+  }
+
+  if (left.location !== right.location) {
+    return left.location < right.location ? -1 : 1;
+  }
+
+  if (left.preview !== right.preview) {
+    return left.preview < right.preview ? -1 : 1;
+  }
+
+  return 0;
+}
+
+function formatFindings(findings) {
+  if (!Array.isArray(findings)) {
+    return [];
+  }
+
+  const normalized = [];
+  const seen = new Set();
+
+  for (const finding of findings) {
+    const entry = normalizeFinding(finding);
+    if (entry === null) {
+      continue;
+    }
+
+    const key = findingDedupeKey(entry);
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(entry);
+  }
+
+  normalized.sort(compareFindings);
+
+  return normalized.map((entry) => {
+    const location = entry.location.length > 0 ? ` ${entry.location}` : "";
+    return `[${entry.severity}] ${entry.type}${location}: ${entry.preview}`;
+  });
+}
+
 function collectRegexMatches(line, patternDef) {
   const matches = [];
   resetRegex(patternDef.regex);
