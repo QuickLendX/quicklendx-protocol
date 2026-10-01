@@ -166,7 +166,19 @@ export function resetShuttingDown(): void {
   _runAllInProgress = false;
 }
 
-/** True once a shutdown signal has been received. */
+/**
+ * True once a shutdown signal has been received.
+ *
+ * Failure-boundary invariants (Issue #2709):
+ *  - Deterministic: returns the exact boolean state of `_shuttingDown` with
+ *    no side effects, no I/O, and no dependency on the step registry.
+ *  - Never throws: safe to call from signal handlers, readiness probes, and
+ *    request middleware even during a partial or failed drain.
+ *  - Monotonic within a process lifetime: once `true`, only an explicit
+ *    `resetShuttingDown()` (test/recovery path) can flip it back to `false`.
+ *  - Concurrent reads are safe: the flag is a single boolean assignment, so
+ *    callers observe either the pre- or post-signal value, never a torn read.
+ */
 export function isShuttingDown(): boolean {
   return _shuttingDown;
 }
