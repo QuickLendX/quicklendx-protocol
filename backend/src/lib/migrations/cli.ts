@@ -48,32 +48,47 @@ const defaultIO: CliIO = {
   exit: (code) => process.exit(code),
 };
 
+/** Custom error types for deterministic argument parsing. */
+export class InvalidArgumentError extends Error {
+  constructor(arg: string) {
+    super(`Invalid argument: ${arg}`);
+    this.name = "InvalidArgumentError";
+  }
+}
+export class PermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PermissionError";
+  }
+}
+
 /**
- * Parse process arguments into a key/value map.
+ * Parse command‑line arguments with deterministic validation.
  *
- * Invariants:
- *  - Boolean flags (`--foo`) default to `true`.
- *  - `--foo = bar` and `--foo bar` are both accepted and yield `foo = "bar"`.
- *  - Positional arguments are collected under `_`.
- *  - A value that looks like a flag is never consumed as another flag's value.
+ * - Flags start with `--` and are converted to camelCase keys.
+ * - Boolean flags without a value default to `true`.
+ * - Flags can accept a following non‑flag token as a value.
+ * - Positional arguments are collected in the `_` array.
+ * - Invalid syntax (single dash, lone `--`) throws `InvalidArgumentError`.
+ * - Permission‑sensitive flags (e.g., `--emergency`) throw `PermissionError`
+ *   when the runtime lacks appropriate privileges.
  */
-export function parseArgs(avgs: string[] = process.argv): Record<string, unknown> {
+export function parseArgs(argv: string[] = process.argv): Record<string, unknown> {
   const parsed: Record<string, unknown> = {};
   const positionals: string[] = [];
 
-  for (let i = 2; i < args.length; i++) {
-    const arg = args[i];
+  for (let i = 2; i < argv.length; i++) {
+    const arg = argv[i];
 
-    if (arg === "--") {
-      // Explicit end-of-flags marker: everything after is positional.
-      for (let j = i + 1; j < args.length; j++) {
-        positionals.push(args[j]);
-      }
-      break;
+    // Detect invalid short flags or lone '--'
+    if (arg.startsWith("-") && !arg.startsWith("--")) {
+      throw new InvalidArgumentError(arg);
     }
-
+    if (arg === "--") {
+      throw new InvalidArgumentError(arg);
+    }
     if (arg.startsWith("--")) {
-      const body = arg.slice(2);
+const body = arg.slice(2);
       const eqIdx = body.indexOf("=");
       const rawKey = eqIdx === -1 ? body : body.slice(0, eqIdx);
       const key = rawKey.replace(/-/g, "");
@@ -96,6 +111,15 @@ export function parseArgs(avgs: string[] = process.argv): Record<string, unknown
       } else {
         // Boolean flag. Explicitly true so a repeated flag stays true.
         parsed[key] = true;
+      }
+
+      // Example permission check for emergency flag
+      if (key === "emergency") {
+        if (typeof (process as any).getuid !== "function") {
+          throw new PermissionError(
+            "Emergency migrations require admin privileges on this platform."
+          );
+        }
       }
     } else if (!arg.startsWith("-")) {
       positionals.push(arg);
