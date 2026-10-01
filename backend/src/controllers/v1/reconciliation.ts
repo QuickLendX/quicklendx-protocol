@@ -68,8 +68,37 @@ export const getDriftReports = async (req: Request, res: Response, next: NextFun
 
 export const runReconciliation = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    res.json(await ReconciliationWorker.runReconciliation());
-  } catch (e) {
+    if (ReconciliationWorker.isReconciliationRunning()) {
+      return res.status(409).json({
+        error: {
+          code: "CONFLICT",
+          message: "Reconciliation already in progress",
+        },
+      });
+    }
+    
+    const report = await ReconciliationWorker.runReconciliation();
+    
+    if ('error' in report && report.error) {
+      return res.status(502).json({
+        error: {
+          code: "BAD_GATEWAY",
+          message: "Reconciliation failed due to downstream error",
+          details: report.error,
+        },
+      });
+    }
+    
+    res.json(report);
+  } catch (e: any) {
+    if (e.message === "Reconciliation already in progress") {
+      return res.status(409).json({
+        error: {
+          code: "CONFLICT",
+          message: "Reconciliation already in progress",
+        },
+      });
+    }
     next(e);
   }
 };

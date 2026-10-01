@@ -1,4 +1,4 @@
-import crypto from 'cypto';
+import crypto from 'crypto';
 import { db, DbApiKey } from '../db/database';
 import {
   ApiKey,
@@ -15,6 +15,29 @@ import {
   ApiKeyRevokedError,
   ApiKeyRotationConflictError,
 } from './api-key-errors';
+
+/**
+ * Error class for ApiKeyService failures that carry a stable code
+ * so callers and logs can distinguish validation failures from internal errors.
+ */
+export class ApiKeyServiceError extends Error {
+  public readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'ApiKeyServiceError';
+    this.code = code;
+  }
+}
+
+export const API_KEY_ERROR_CODES = {
+  NOT_FOUND: 'API_KEY_NOT_FOUND',
+  ALREADY_REVOKED: 'API_KEY_ALREADY_REVOKED',
+  REVOKED: 'API_KEY_REVOKED',
+  INVALID_SCOPES: 'API_KEY_INVALID_SCOPES',
+  INVALID_EXPIRES: 'API_KEY_INVALID_EXPIRES',
+  INVALID_INPUT: 'API_KEY_INVALID_INPUT',
+  CORRUPT_DATA: 'API_KEY_CORRUPT_DATA',
+} as const;
 
 /**
  * Options for rotation that allow callers to enforce optimistic concurrency
@@ -38,6 +61,15 @@ export class ApiKeyService {
 
   /**
    * Create a new API key
+   *
+   * Invariants:
+   *  - The key is persisted exactly once. If persistence fails, no key
+   *    record is left behind and the caller receives the error.
+   *  - Audit logging is best-effort: a failure to record the audit event
+   *    must not roll back a successfully created key, but it must be
+   *    observable through logging.
+   *  - Validation (scopes, expiration) is performed before any state is
+   *    mutated, so invalid input never produces a partial key.
    */
   async createApiKey(
     input: ApiKeyCreateInput,
@@ -46,7 +78,8 @@ export class ApiKeyService {
     // Validate scopes
     const scopeValidation = validateScopes(input.scopes);
     if (!scopeValidation.valid) {
-      throw new Error(
+      throw new ApiKeyServiceError(
+        API_KEY_ERROR_CODES.INVALID_SCOPES,
         `Invalid scopes: ${scopeValidation.invalid.join(', ')}`
       );
     }
@@ -55,10 +88,16 @@ export class ApiKeyService {
     if (input.expires_at) {
       const expiresAt = new Date(input.expires_at);
       if (isNaN(expiresAt.getTime())) {
-        throw new Error('Invalid expires_at date format');
+        throw new ApiKeyServiceError(
+          API_KEY_ERROR_CODES.INVALID_EXPIRES,
+          'Invalid expires_at date format'
+        );
       }
       if (expiresAt <= new Date()) {
-        throw new Error('expires_at must be in the future');
+        throw new ApiKeyServiceError(
+          API_KEY_ERROR_CODES.INVALID_EXPIRES,
+          'expires_at must be in the future'
+        );
       }
     }
 
@@ -67,7 +106,7 @@ export class ApiKeyService {
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
 
-    const dbkey: DbApiKey = {
+    const dbKey: DbApiKey = {
       id,
       key_hash: hash,
       signing_secret_hash: signingSecretHash,
@@ -83,10 +122,17 @@ export class ApiKeyService {
       created_by: input.created_by,
     };
 
+    // Persist the key first. If this throws, no audit event is written and
+    // the caller sees the failure - the system remains consistent.
     db.createApiKey(dbKey);
 
-    // Log creation event
-    await auditLogService.logCreated(id, input.created_by, ipAddress);
+    // Audit logging is best-effort and must not roll back a successfully
+    // persisted key. A failure here is logged so it remains diagnosable.
+    try {
+      await auditLogService.logCreated(id, input.created_by, ipAddress);
+    } catch (auditErr) {
+      console.error('[ApiKeyService] Failed to record creation audit log:', auditErr);
+    }
 
     // Return the key with plaintext (only time it's ever returned)
     return {
@@ -339,7 +385,7 @@ export class ApiKeyService {
     }
 
     if (key.revoked === 1) {
-      throw new Error('API key is already revoked');
+      throw new ApiKeyServiceError(API_KEY_ERROR_CODES.ALREADY_REVOKED, 'API key is already revoked');
     }
 
     db.updateApiKey(keyId, { revoked: 1 });
@@ -358,10 +404,73 @@ export class ApiKeyService {
 
   /**
    * List API keys
+*
+   * Deterministic failure-boundary behavior:
+   * - Validates filters before touching the database so invalid input fails fast and
+   *   consistently with a stable error code.
+   * - Normalizes the `key` field to `key_hash` so the public shape is stable.
+   * - Returns a deterministic ordering (created_at desc, then id desc) so consumers
+   *   and tests can rely on a stable order even when timestamps collide.
+   * - Wraps database failures in a coded error without leaking sensitive data.
+   * - Never mutates state; retries are safe and idempotent.
    */
   async listApiKeys(filters?: { created_by?: string; revoked?: boolean }): Promise<ApiKey[]> {
-    const dbKeys = db.listApiKeys(filters);
-    return dbKeys.map(k => this.dbKeyToApiKey(k));
+    // Validate filters up front so invalid input fails fast and deterministically.
+    if (filters !== undefined) {
+      if (filters === null || typeof filters !== 'object' || Array.isArray(filters)) {
+        throw new ApiKeyServiceError(
+          API_KEY_ERROR_CODES.INVALID_INPUT,
+          'filters must be an object when provided'
+        );
+      }
+
+      if (
+        filters.created_by !== undefined &&
+        (typeof filters.created_by !== 'string' || filters.created_by === '')
+      ) {
+        throw new ApiKeyServiceError(
+          API_KEY_ERROR_CODES.INVALID_INPUT,
+          'created_by must be a non-empty string'
+        );
+      }
+
+      if (filters.revoked !== undefined && typeof filters.revoked !== 'boolean') {
+        throw new ApiKeyServiceError(
+          API_KEY_ERROR_CODES.INVALID_INPUT,
+          'revoked must be a boolean when provided'
+        );
+      }
+    }
+
+    let dbKeys: DbApiKey[];
+    try {
+      dbKeys = db.listApiKeys(filters);
+    } catch (error) {
+      // Never leak raw database errors to callers.
+      console.error('[ApiKeyService] db.listApiKeys failed:', error);
+      throw new ApiKeyServiceError(
+        API_KEY_ERROR_CODES.CORRUPT_DATA,
+        'Failed to list API keys'
+      );
+    }
+
+    if (!Array.isArray(dbKeys)) {
+      throw new ApiKeyServiceError(
+        API_KEY_ERROR_CODES.CORRUPT_DATA,
+        'Failed to list API keys'
+      );
+    }
+
+    const apiKeys = dbKeys.map((k) => this.dbKeyToApiKey(k));
+
+    // Deterministic ordering: newest first, tie-break by id desc.
+    apiKeys.sort((a, b) => {
+      const createdCmp = b.created_at.localeCompare(a.created_at);
+      if (createdCmp !== 0) return createdCmp;
+      return b.id.localeCompare(a.id);
+    });
+
+    return apiKeys;
   }
 
   /**
@@ -378,13 +487,10 @@ export class ApiKeyService {
       created_at: dbKey.created_at,
       last_used_at: dbKey.last_used_at,
       expires_at: dbKey.expires_at,
-      prev_signing_secret_hash: dbKey.prev_signing_secret_hash,
-      prev_secret_expires_at: dbKey.prev_secret_expires_at,
       revoked: dbKey.revoked === 1,
       created_by: dbKey.created_by,
     };
   }
 }
-
 // Singleton instance
 export const apiKeyService = new ApiKeyService();
