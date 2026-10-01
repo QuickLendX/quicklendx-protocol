@@ -34,7 +34,7 @@ async function runInTransaction(
     for (const statement of statements) {
       await db.exec(statement);
     }
-    await db.exec(`RELEASE ${SAVEPOINT}`);
+      await db.exec(`RELEASE ${SAVEPOINT}`);
   } catch (err) {
     try {
       await db.exec(`ROLLBACK TO ${SAVEPOINT}`);
@@ -54,8 +54,8 @@ export default {
   up: async (ctx: MigrationContext): Promise<void> => {
     const statements = schema
       .split(";")
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith("--"));
+      .map((statement) => statement.trim())
+      .filter((statement) => statement.length > 0);
     await runInTransaction(ctx.db, statements);
   },
   down: async (ctx: MigrationContext): Promise<void> => {

@@ -119,6 +119,10 @@ export class MigrationPolicy {
   static validateMetadata(migration: MigrationDefinition): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
+    if (!migration || typeof migration !== "object") {
+      return { valid: false, errors: ["Migration definition is required"] };
+    }
+
     if (!migration.name) errors.push("Migration name is required");
     if (!migration.author) errors.push("Migration author is required");
     if (!migration.authoredAt) errors.push("Migration authoredAt date is required");
@@ -150,14 +154,24 @@ export class MigrationPolicy {
     const errors: string[] = [];
     const warnings: string[] = [];
 
+    if (!Array.isArray(migrations)) {
+      return { valid: false, errors: ["Migrations must be an array"], warnings };
+    }
+
     const seenVersions = new Set<number>();
     for (const mig of migrations) {
+      const label = mig && typeof mig === "object" ? `${(mig as MigrationDefinition).version}_${(mig as MigrationDefinition).name}` : "<unknown>";
       const metaCheck = this.validateMetadata(mig);
       if (!metaCheck.valid) {
-        errors.push(...metaCheck.errors.map((e) => `${mig.version}_${mig.name}: ${e}`));
+        errors.push(...metaCheck.errors.map((e) => `${label}: ${e}`));
       }
-      if (seenVersions.has(mig.version)) {
-        errors.push(`Duplicate migration version ${mig.version}`);
+      if (mig && typeof mig === "object" && typeof mig.version === "number") {
+        if (seenVersions.has(mig.version)) {
+          errors.push(`Duplicate migration version ${mig.version}`);
+        }
+        seenVersions.add(mig.version);
+      } else {
+        errors.push(`${label}: Migration version is required and must be a number`);
       }
       seenVersions.add(mig.version);
 
@@ -226,37 +240,80 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
     skipChecksumVerify = false,
   } = args as MigrateArgs;
 
-  if (check) {
-    const fileValid = await validateMigrationFiles();
-    const fileMigs = await loadMigrationsFromFS();
-    const appliedVersions = await getAppliedVersions();
-    const missing = fileMigs.filter((m) => !appliedVersions.includes(m.version));
-    const valid = fileValid.valid && missing.length === 0;
-    const errors = [
-      ...fileValid.errors,
-      ...missing.map((m) => `Migration ${m.version}_${m.name} is not applied`),
-    ];
+/** Stable reason for a failed `migrateCommand` / `migrateDownCommand` result. */
+//
+// Codes shared with the upstream implementation (#2684/#2832) keep upstream's
+// names: DOWN_REQUIRES_EMERGENCY, DOWN_GLOBALLY_DISABLED, DOWN_NOT_ALLOWED,
+// CONFLICTING_FLAGS, MIGRATION_OUT_OF_SYNC, MIGRATION_VALIDATION_FAILED.
+export type MigrateFailureCode =
+  | "INVALID_ARGS"
+  | "CONFLICTING_FLAGS"
+  | "BUSY"
+  | "DOWN_REQUIRES_EMERGENCY"
+  | "DOWN_GLOBALLY_DISABLED"
+  | "DOWN_NOT_ALLOWED"
+  | "MIGRATION_OUT_OF_SYNC"
+  | "MIGRATION_VALIDATION_FAILED"
+  | "LOAD_FAILED"
+  | "RUN_FAILED";
 
-    if (!valid) {
-      console.error("❌ Migration check failed:");
-      errors.forEach((e) => console.error(`   ${e}`));
-      return { success: false, message: "Migrations out of sync or invalid" };
-    }
-    console.log("✅ Migrations are in sync");
-    return { success: true, message: "Migrations valid" };
+/** `MigrationCommandResult` narrowed to the stable failure codes above. */
+export interface MigrateCommandResult extends MigrationCommandResult {
+  /** Set on every failure; absent on success. */
+  code?: MigrateFailureCode;
+  /** Migrations committed by a failed (non-dry) run before it stopped, when known. */
+  appliedBeforeFailure?: number;
+}
+
+const MIGRATE_FLAGS = [
+  "dryRun",
+  "allowDown",
+  "emergency",
+  "verbose",
+  "validateOnly",
+  "check",
+  "skipChecksumVerify",
+] as const;
+
+type MigrateFlag = (typeof MIGRATE_FLAGS)[number];
+export type MigrateFlags = Record<MigrateFlag, boolean>;
+
+const normalizeFlagKey = (key: string): string => key.replace(/[-_]/g, "").toLowerCase();
+const FLAG_BY_KEY = new Map<string, MigrateFlag>(MIGRATE_FLAGS.map((flag) => [normalizeFlagKey(flag), flag]));
+/** Flags that only make sense for `migrate down`. */
+const DOWN_ONLY_KEYS = new Set(["to", "all"]);
+
+/** Render a caller-supplied key safely in an error message. */
+function displayKey(key: string): string {
+  const cleaned = key.replace(/[^A-Za-z0-9_-]/g, "?");
+  return cleaned.length > 40 ? `${cleaned.slice(0, 40)}…` : cleaned;
+}
+
+/**
+ * Parse and validate `migrateCommand` arguments. Keys are matched
+ * case/dash/underscore-insensitively (`dryRun`, `dryrun`, `dry-run`, `dry_run`);
+ * `_` holds CLI positional arguments and is ignored. Values are never echoed.
+ */
+export function parseMigrateFlags(
+  args: unknown,
+): { ok: true; flags: MigrateFlags } | { ok: false; message: string } {
+  const flags = Object.fromEntries(MIGRATE_FLAGS.map((flag) => [flag, false])) as MigrateFlags;
+  if (args === undefined || args === null) return { ok: true, flags };
+  if (typeof args !== "object" || Array.isArray(args)) {
+    return { ok: false, message: "Migration arguments must be an object of boolean flags." };
   }
 
   if (validateOnly) {
-    const migrations = (await loadMigrationsFromFS()).map((m) => m.content);
-    const result = await MigrationPolicy.dryRun(migrations, { force: emergency });
+    const migrations = await loadMigrationsFromFS();
+    const result = await MigrationPolicy.dryRun(
+      migrations.map((migration) => migration.content),
+      { force: emergency }
+    );
     if (!result.valid) {
       console.error("❌ Migration validation failed:");
       result.errors.forEach((e) => console.error(`   ${e}`));
       return { success: false, message: "Validation errors" };
     }
-    console.log("✅ All migration files are valid");
-    return { success: true, message: "Validation passed" };
-  }
 
   // ── allowDown safety gate ─────────────────────────────────────────────────
   if (allowDown && !emergency) {
@@ -282,16 +339,66 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<{
       console.log("\n[DRY-RUN] The following migrations would be applied:");
       result.applied.forEach((m) => console.log(`   ${m.version} ${m.name} by ${m.author}`));
     }
+    if (value === undefined) continue;
+    if (typeof value !== "boolean") {
+      return { ok: false, message: `Flag ${flag} must be a boolean (got ${typeof value}).` };
+    }
+    if (seen.has(flag) && seen.get(flag) !== value) {
+      return { ok: false, message: `Flag ${flag} was given more than once with different values.` };
+    }
+    seen.set(flag, value);
+    flags[flag] = value;
+  }
 
+  return { ok: true, flags };
+}
+
+/** Strip credentials from text before it is logged or returned. */
+export function redactSensitive(text: string): string {
+  return text
+    .replace(/([a-z][a-z0-9+.-]*:\/\/)[^\s/@]+@/gi, "$1***@")
+    .replace(
+      /\b(password|passwd|pwd|secret|token|api[_-]?key)(\s*[=:]\s*)("[^"]*"|'[^']*'|[^\s,;]+)/gi,
+      "$1$2***",
+    );
+}
+
+/** A redacted, never-empty message for any thrown value. */
+export function describeFailure(err: unknown): string {
+  let message = "";
+  if (err instanceof Error) message = err.message;
+  else if (typeof err === "string") message = err;
+  return redactSensitive(message.trim() || "Unknown error");
+}
+
+function normalizeArgs(value: unknown): MigrateArgs {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as MigrateArgs;
+}
+
+let activeMigrationCommand: string | null = null;
+
+/** Run `fn` while holding the single per-process migration slot. */
+async function withMigrationLock(
+  command: string,
+  fn: () => Promise<MigrateCommandResult>,
+): Promise<MigrateCommandResult> {
+  // Checked and taken synchronously, before any await, so two calls started
+  // in the same tick cannot both acquire it.
+  if (activeMigrationCommand !== null) {
     return {
-      success: true,
-      message: `Applied ${result.applied.length} migrations`,
-      applied: result.applied.length,
-      skipped: result.skipped,
+      success: false,
+      code: "BUSY",
+      message: `Another migration command ("${activeMigrationCommand}") is already running in this process; retry when it finishes.`,
     };
-  } catch (err: any) {
-    console.error("❌ Migration failed:", err.message);
-    return { success: false, message: `Migration error: ${err.message}` };
+  }
+  activeMigrationCommand = command;
+  try {
+    return await fn();
+  } finally {
+    activeMigrationCommand = null;
   }
 }
 
@@ -355,10 +462,12 @@ export async function migrateDownCommand(args: Record<string, unknown>): Promise
     dryRun = false,
     emergency = false,
     verbose = false,
-    to,
+    to: rawTo,
     all = false,
     skipChecksumVerify = false,
-  } = args as MigrateArgs;
+  } = normalizeArgs(args) as Omit<MigrateArgs, "to"> & { to?: unknown };
+  // The CLI parser yields strings, programmatic callers may pass a number.
+  const to = typeof rawTo === "number" ? String(rawTo) : typeof rawTo === "string" ? rawTo : undefined;
 
   // ── 1. Emergency / env-var gate ───────────────────────────────────────────
   if (!emergency && !MigrationPolicy.isDownAllowed()) {
