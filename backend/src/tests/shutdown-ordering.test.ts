@@ -11,6 +11,7 @@
  *  - runAll() accumulates results in priority order
  *  - createShutdownHandler registers the canonical 7-step sequence in order
  *  - Backward-compatible handler still calls server.close / flush / closeDatabase
+ *  - Deterministic failure-boundary coverage for register()
  */
 
 // ---------------------------------------------------------------------------
@@ -91,8 +92,8 @@ function makeStep(
 // ---------------------------------------------------------------------------
 describe('registry API', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('getRegisteredSteps returns steps sorted by priority ascending', () => {
@@ -122,12 +123,123 @@ describe('registry API', () => {
 });
 
 // ---------------------------------------------------------------------------
+// Suite: register — deterministic failure boundaries
+// ---------------------------------------------------------------------------
+describe('register — failure boundaries', () => {
+  beforeEach(() => {
+    clearRegistry();
+    resetShuttingDown();
+  });
+
+  it('rejects an empty name deterministically', () => {
+    expect(() => register({ name: '', priority: 1, fn: async () => {} })).toThrow();
+    expect(getRegisteredSteps()).toHaveLength(0);
+  });
+
+  it('rejects a whitespace-only name deterministically', () => {
+    expect(() => register({ name: '   ', priority: 1, fn: async () => {} })).toThrow();
+    expect(getRegisteredSteps()).toHaveLength(0);
+  });
+
+  it('rejects a non-function fn deterministically', () => {
+    expect(() =>
+      register({ name: 'bad-fn', priority: 1, fn: undefined as unknown as () => Promise<void> }),
+    ).toThrow();
+    expect(getRegisteredSteps()).toHaveLength(0);
+  });
+
+  it('rejects a non-finite priority deterministically', () => {
+    expect(() => register({ name: 'nan', priority: Number.NaN, fn: async () => {} })).toThrow();
+    expect(() =>
+      register({ name: 'inf', priority: Number.POSITIVE_INFINITY, fn: async () => {} }),
+    ).toThrow();
+    expect(getRegisteredSteps()).toHaveLength(0);
+  });
+
+  it('rejects a non-integer priority deterministically', () => {
+    expect(() => register({ name: 'frac', priority: 1.5, fn: async () => {} })).toThrow();
+    expect(getRegisteredSteps()).toHaveLength(0);
+  });
+
+  it('rejects a negative priority deterministically', () => {
+    expect(() => register({ name: 'neg', priority: -1, fn: async () => {} })).toThrow();
+    expect(getRegisteredSteps()).toHaveLength(0);
+  });
+
+  it('accepts boundary priority 0', () => {
+    register({ name: 'zero', priority: 0, fn: async () => {} });
+    expect(getRegisteredSteps().map((s) => s.name)).toEqual(['zero']);
+  });
+
+  it('accepts a large but finite integer priority', () => {
+    register({ name: 'big', priority: Number.MAX_SAFE_INTEGER, fn: async () => {} });
+    expect(getRegisteredSteps().map((s) => s.name)).toEqual(['big']);
+  });
+
+  it('is atomic: a rejected registration does not mutate the registry', () => {
+    register({ name: 'keep', priority: 1, fn: async () => {} });
+    const before = getRegisteredSteps();
+    expect(() => register({ name: 'bad', priority: Number.NaN, fn: async () => {} })).toThrow();
+    const after = getRegisteredSteps();
+    expect(after).toHaveLength(before.length);
+    expect(after.map((s) => s.name)).toEqual(before.map((s) => s.name));
+  });
+
+  it('duplicate registration replaces atomically and preserves priority ordering', () => {
+    const fn1 = jest.fn();
+    const fn2 = jest.fn();
+    register({ name: 'dup', priority: 5, fn: fn1 });
+    register({ name: 'other', priority: 1, fn: async () => {} });
+    register({ name: 'dup', priority: 3, fn: fn2 });
+
+    const steps = getRegisteredSteps();
+    expect(steps.map((s) => s.name)).toEqual(['other', 'dup']);
+    expect(steps[1].fn).toBe(fn2);
+    expect(steps[1].priority).toBe(3);
+  });
+
+  it('rejects a duplicate registration that would introduce an invalid step, leaving prior intact', () => {
+    const fn1 = jest.fn();
+    register({ name: 'dup', priority: 2, fn: fn1 });
+    expect(() => register({ name: 'dup', priority: Number.NaN, fn: async () => {} })).toThrow();
+    const steps = getRegisteredSteps();
+    expect(steps).toHaveLength(1);
+    expect(steps[0].fn).toBe(fn1);
+    expect(steps[0].priority).toBe(2);
+  });
+
+  it('concurrent registrations of the same name resolve to a single deterministic entry', async () => {
+    const fns = Array.from({ length: 10 }, () => jest.fn());
+    await Promise.all(
+      fns.map((fn, i) =>
+        Promise.resolve().then(() => register({ name: 'race', priority: 1, fn })),
+      ),
+    );
+    const steps = getRegisteredSteps();
+    expect(steps).toHaveLength(1);
+    expect(steps[0].name).toBe('race');
+    expect(fns).toContain(steps[0].fn);
+  });
+
+  it('does not leak partial state when registration throws mid-batch', () => {
+    register({ name: 'stable', priority: 1, fn: async () => {} });
+    const snapshot = getRegisteredSteps().map((s) => s.name);
+    for (let i = 0; i < 5; i++) {
+      expect(() =>
+        register({ name: `bad-${i}`, priority: Number.NaN, fn: async () => {} }),
+      ).toThrow();
+    }
+    expect(getRegisteredSteps().map((s) => s.name)).toEqual(snapshot);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // Suite: runAll — priority ordering
 // ---------------------------------------------------------------------------
 describe('runAll — priority ordering', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('executes steps in ascending priority order regardless of registration order', async () => {
@@ -166,8 +278,8 @@ describe('runAll — priority ordering', () => {
 // ---------------------------------------------------------------------------
 describe('runAll — errors in one step do not block later steps', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('continues to subsequent steps when an earlier step throws', async () => {
@@ -214,8 +326,8 @@ describe('runAll — errors in one step do not block later steps', () => {
 // ---------------------------------------------------------------------------
 describe('runAll — total timeout honored', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('skips remaining steps when the total timeout is exceeded', async () => {
@@ -251,8 +363,8 @@ describe('createShutdownHandler — second signal', () => {
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -297,8 +409,8 @@ describe('createShutdownHandler — second signal', () => {
 // ---------------------------------------------------------------------------
 describe('isShuttingDown guard', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -344,8 +456,8 @@ describe('createShutdownHandler — canonical step sequence', () => {
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -407,22 +519,22 @@ describe('createShutdownHandler — canonical step sequence', () => {
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 
-  it('exits 0 even when flush() throws', async () => {
+  it('exits 1 when flush() throws', async () => {
     (webhookQueueService.flush as jest.Mock).mockImplementation(() => {
       throw new Error('flush boom');
     });
     const server = makeMockServer();
     await createShutdownHandler(server, 100)('SIGTERM');
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
-  it('exits 0 even when closeDatabase() throws', async () => {
+  it('exits 1 when closeDatabase() throws', async () => {
     (closeDatabase as jest.Mock).mockImplementation(() => {
       throw new Error('db boom');
     });
     const server = makeMockServer();
     await createShutdownHandler(server, 100)('SIGTERM');
-    expect(exitSpy).toHaveBeenCalledWith(0);
+    expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
   it('handles SIGINT identically to SIGTERM', async () => {
@@ -470,8 +582,8 @@ describe('shutdown constants', () => {
 // ---------------------------------------------------------------------------
 describe('resetShuttingDown — failure boundaries', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
