@@ -2,7 +2,6 @@ import crypto from 'cypto';
 import { apiKeyService } from '../services/api-key-service';
 import { auditLogService } from '../services/audit-log';
 import { db } from '../db/database';
-import { generateApiKey, hashApiKey } from '../models/api-key';
 
 // Mock auditLogService to avoid writing actual logs during tests or assert on them
 jest.mock('../services/audit-log', () => ({
@@ -240,6 +239,87 @@ describe('API Key Signing Secret Rotation', () => {
     expect(a).not.toBeNull();
     expect(b).not.toBeNull();
     expect(a!.id).toBe(b!.id);
+  });
+it('rotation fails atomically when the database write fails', async () => {
+    const created = await apiKeyService.createApiKey({
+      name: 'Test Key',
+      scopes: ['read:'],
+      created_by: adminId,
+    });
+
+    const originalPlaintext = created.plaintext_key;
+
+    // Force the underlying update to throw once, simulating a partial failure.
+    const spy = jest.spyOn(db, 'run').mockImplementationOnce(() => {
+      throw new Error('simulated database failure');
+    });
+
+    await expect(apiKeyService.rotateSigningSecret(created.id, adminId, '127.0.0.1', 24))
+      .rejects.toThrow('simulated database failure');
+
+    spy.mockRestore();
+
+    // The original secret must still verify: the failed rotation must not corrupt state.
+    const verifyOriginal = await apiKeyService.verifyApiKey(originalPlaintext);
+    expect(verifyOriginal).not.toBeNull();
+    expect(verifyOriginal!.id).toBe(created.id);
+  });
+
+  it('rotation is idempotent when retried after a transient failure', async () => {
+    const created = await apiKeyService.createApiKey({
+      name: 'Test Key',
+      scopes: ['read:'],
+      created_by: adminId,
+    });
+
+    const originalPlaintext = created.plaintext_key;
+
+    // Fail the first attempt.
+    const spy = jest.spyOn(db, 'run').mockImplementationOnce(() => {
+      throw new Error('simulated transient failure');
+    });
+
+    await expect(apiKeyService.rotateSigningSecret(created.id, adminId, '127.0.0.1', 24))
+      .rejects.toThrow('simulated transient failure');
+
+    spy.mockRestore();
+
+    // Retry succeeds and produces a consistent state.
+    const retried = await apiKeyService.rotateSigningSecret(created.id, adminId, '127.0.0.1', 24);
+    expect(retried.id).toBe(created.id);
+
+    // Original secret is still within the grace window and must verify.
+    expect(await apiKeyService.verifyApiKey(originalPlaintext)).not.toBeNull();
+    expect(await apiKeyService.verifyApiKey(retried.plaintext_key)).not.toBeNull();
+  });
+
+  it('rotation with a grace window of zero invalidates the old secret immediately', async () => {
+    const created = await apiKeyService.createApiKey({
+      name: 'Test Key',
+      scopes: ['read:'],
+      created_by: adminId,
+    });
+
+    const oldPlaintext = created.plaintext_key;
+    const rotated = await apiKeyService.rotateSigningSecret(created.id, adminId, '127.0.0.1', 0);
+
+    expect(await apiKeyService.verifyApiKey(oldPlaintext)).toBeNull();
+    expect(await apiKeyService.verifyApiKey(rotated.plaintext_key)).not.toBeNull();
+  });
+
+  it('rotation does not leak the plaintext secret into the audit log', async () => {
+    const created = await apiKeyService.createApiKey({
+      name: 'Test Key',
+      scopes: ['read:'],
+      created_by: adminId,
+    });
+
+    const rotated = await apiKeyService.rotateSigningSecret(created.id, adminId, '127.0.0.1', 24);
+
+    const calls = (auditLogService.logRotated as jest.Mock).mock.calls;
+    const serialized = JSON.stringify(calls);
+    expect(serialized).not.toContain(rotated.plaintext_key);
+    expect(serialized).not.toContain(created.plaintext_key);
   });
 
   // -----------------------------------------------------------------------------

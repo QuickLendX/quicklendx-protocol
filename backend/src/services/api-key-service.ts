@@ -61,6 +61,15 @@ export class ApiKeyService {
 
   /**
    * Create a new API key
+   *
+   * Invariants:
+   *  - The key is persisted exactly once. If persistence fails, no key
+   *    record is left behind and the caller receives the error.
+   *  - Audit logging is best-effort: a failure to record the audit event
+   *    must not roll back a successfully created key, but it must be
+   *    observable through logging.
+   *  - Validation (scopes, expiration) is performed before any state is
+   *    mutated, so invalid input never produces a partial key.
    */
   async createApiKey(
     input: ApiKeyCreateInput,
@@ -113,10 +122,17 @@ export class ApiKeyService {
       created_by: input.created_by,
     };
 
+    // Persist the key first. If this throws, no audit event is written and
+    // the caller sees the failure - the system remains consistent.
     db.createApiKey(dbKey);
 
-    // Log creation event
-    await auditLogService.logCreated(id, input.created_by, ipAddress);
+    // Audit logging is best-effort and must not roll back a successfully
+    // persisted key. A failure here is logged so it remains diagnosable.
+    try {
+      await auditLogService.logCreated(id, input.created_by, ipAddress);
+    } catch (auditErr) {
+      console.error('[ApiKeyService] Failed to record creation audit log:', auditErr);
+    }
 
     // Return the key with plaintext (only time it's ever returned)
     return {
@@ -471,13 +487,10 @@ export class ApiKeyService {
       created_at: dbKey.created_at,
       last_used_at: dbKey.last_used_at,
       expires_at: dbKey.expires_at,
-      prev_signing_secret_hash: dbKey.prev_signing_secret_hash,
-      prev_secret_expires_at: dbKey.prev_secret_expires_at,
       revoked: dbKey.revoked === 1,
       created_by: dbKey.created_by,
     };
   }
 }
-
 // Singleton instance
 export const apiKeyService = new ApiKeyService();

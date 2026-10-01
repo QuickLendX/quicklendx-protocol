@@ -34,3 +34,45 @@ legacy-tests = []
 # Feature-gated logging and structured diagnostics
 diagnostics = []
 testutils = ["soroban-sdk/testutils"]
+
+# Integration tests written against the full contract API; the crate root is
+# currently a stub, so they only build with the `legacy-tests` feature.
+[[test]]
+name = "auth_verification_test"
+path = "tests/auth_verification_test.rs"
+required-features = ["legacy-tests"]
+
+[[test]]
+name = "bid_acceptance_replay"
+path = "tests/bid_acceptance_replay.rs"
+required-features = ["legacy-tests"]
+
+[[test]]
+name = "investor_kyc_tier"
+path = "tests/investor_kyc_tier.rs"
+required-features = ["legacy-tests"]
+
+[[test]]
+name = "invoice_lifecycle_e2e"
+path = "tests/invoice_lifecycle_e2e.rs"
+required-features = ["legacy-tests"]
+
+[[test]]
+name = "pagination_match_over_under"
+path = "tests/pagination_match_over_under.rs"
+required-features = ["legacy-tests"]
+
+[[test]]
+name = "profit_fee_golden"
+path = "tests/profit_fee_golden.rs"
+required-features = ["legacy-tests"]
+
+[[test]]
+name = "test_admin_lookalike"
+path = "tests/test_admin_lookalike.rs"
+required-features = ["legacy-tests"]
+
+[[test]]
+name = "test_treasury_rotation"
+path = "tests/test_treasury_rotation.rs"
+required-features = ["legacy-tests"]

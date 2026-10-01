@@ -15,6 +15,21 @@ const EXIT_CODES = Object.freeze({
 });
 
 /**
+ * Entry point for the secret scanner.
+ *
+ * Invariants:
+ *   - The process exit code is deterministic for a given input:
+ *       0 => clean, 1 => findings or failure.
+ *   - No secret material is ever written to stdout/stderr.
+ *   - Failures are reported with a stable, non-sensitive message.
+ */
+function main() {
+  const backendRoot = process.cwd();
+  const allowlistPath = process.argv[2]
+    ? path.resolve(backendRoot, process.argv[2])
+    : undefined;
+
+/**
  * Resolve the backend root from an explicit argument or the current working
  * directory. The root is always normalized to an absolute path so the
  * scanner is deterministic regardless of where it is invoked from.
@@ -83,9 +98,16 @@ function main(argv = process.argv.slice(2)) {
 }
 
 if (require.main === module) {
-  const exitCode = main();
-  process.exitCode = exitCode;
-  process.exit(exitCode);
+  try {
+    const exitCode = main();
+    process.exitCode = exitCode;
+    process.exit(exitCode);
+  } catch (error) {
+    const message = error && typeof error.message === "string" ? error.message : "unknown error";
+    console.error(`Secret scan failed: ${message}`);
+    process.exit(1);
+  }
+}
 }
 
 module.exports = { main, EXIT_CODES };

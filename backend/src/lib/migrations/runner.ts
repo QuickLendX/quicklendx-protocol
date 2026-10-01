@@ -1,3 +1,4 @@
+import { pathToFileURL } from "url";
 import * as fs from "fs/promises";
 import * as path from "path";
 import { createHash } from "crypto";
@@ -77,7 +78,7 @@ export async function loadMigrationsFromFS(): Promise<ParsedMigration[]> {
 
       let def: MigrationDefinition;
       try {
-        def = require(filePath).default as MigrationDefinition;
+        def = (await import(pathToFileURL(filePath).href)).default as MigrationDefinition;
       } catch (err: any) {
         throw new Error(`Failed to load migration ${file}: ${err.message}`);
       }

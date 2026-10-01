@@ -132,9 +132,15 @@ describe('createShutdownHandler', () => {
     resetShuttingDown();
     // Mock process.exit so it does not terminate the test runner.
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    // jest.clearAllMocks() above only clears call history, not
+    // .mockImplementation() bodies a previous test may have installed
+    // (e.g. one of the failure-boundary tests below making a mock throw).
+    // Reset every mock used across this suite to its safe default here so
+    // no test can silently inherit a throw it never configured itself.
     mockGetActiveRequests.mockReturnValue(0);
     mockFlush.mockReturnValue([]);
-    mockGetRegisteredSteps.mockReturnValue([]);
+    mockSetMaintenanceMode.mockImplementation(() => {});
+    mockCloseDatabase.mockImplementation(() => {});
   });
 
   afterEach(() => {
@@ -413,6 +419,198 @@ describe('createShutdownHandler', () => {
     await createShutdownHandler(server, 100)('SIGTERM');
 
     expect(callOrder.indexOf('maintenance')).toBeLessThan(callOrder.indexOf('close'));
+  });
+
+  // ── Early-step failure boundaries ────────────────────────────────────────
+  //
+  // Steps 4-5 (webhook flush, database close) were already individually
+  // guarded. These cases cover the same guarantee for steps 1-3
+  // (setMaintenanceMode, server.close, the drain loop's getActiveRequests
+  // reads): a throw from any single step must not prevent the later steps
+  // from running or block the eventual process.exit(0).
+
+  it('reaches process.exit(0) even when setMaintenanceMode() throws', async () => {
+    mockSetMaintenanceMode.mockImplementation(() => {
+      throw new Error('status store unreachable');
+    });
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('still closes the server, flushes webhooks, and closes the database when setMaintenanceMode() throws', async () => {
+    mockSetMaintenanceMode.mockImplementation(() => {
+      throw new Error('status store unreachable');
+    });
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(server.close).toHaveBeenCalledTimes(1);
+    expect(mockFlush).toHaveBeenCalledTimes(1);
+    expect(mockCloseDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs an error when setMaintenanceMode() throws', async () => {
+    const statusError = new Error('status store unreachable');
+    mockSetMaintenanceMode.mockImplementation(() => { throw statusError; });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to set maintenance mode'),
+      statusError,
+    );
+    errorSpy.mockRestore();
+  });
+
+  it('reaches process.exit(0) even when server.close() throws', async () => {
+    const server = {
+      close: jest.fn(() => {
+        throw new Error('listener already closed');
+      }),
+    } as unknown as http.Server;
+
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('still flushes webhooks and closes the database when server.close() throws', async () => {
+    const server = {
+      close: jest.fn(() => {
+        throw new Error('listener already closed');
+      }),
+    } as unknown as http.Server;
+
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(mockFlush).toHaveBeenCalledTimes(1);
+    expect(mockCloseDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs an error when server.close() throws', async () => {
+    const closeError = new Error('listener already closed');
+    const server = { close: jest.fn(() => { throw closeError; }) } as unknown as http.Server;
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('server.close() failed'),
+      closeError,
+    );
+    errorSpy.mockRestore();
+  });
+
+  it('reaches process.exit(0) even when getActiveRequests() throws during drain', async () => {
+    mockGetActiveRequests.mockImplementation(() => {
+      throw new Error('counter unavailable');
+    });
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('still flushes webhooks and closes the database when getActiveRequests() throws', async () => {
+    mockGetActiveRequests.mockImplementation(() => {
+      throw new Error('counter unavailable');
+    });
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(mockFlush).toHaveBeenCalledTimes(1);
+    expect(mockCloseDatabase).toHaveBeenCalledTimes(1);
+  });
+
+  it('logs an error, and does not log a fabricated drain-timeout warning, when getActiveRequests() throws', async () => {
+    const counterError = new Error('counter unavailable');
+    mockGetActiveRequests.mockImplementation(() => { throw counterError; });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Failed to read active request count during drain'),
+      counterError,
+    );
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Proceeding without a reliable in-flight request count'),
+    );
+    const fabricatedDrainWarning = warnSpy.mock.calls.find((args) =>
+      String(args[0]).includes('Drain timeout') && String(args[0]).includes('request(s)'),
+    );
+    expect(fabricatedDrainWarning).toBeUndefined();
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  it('exits 0 when every one of the five steps throws', async () => {
+    mockSetMaintenanceMode.mockImplementation(() => { throw new Error('1'); });
+    const server = { close: jest.fn(() => { throw new Error('2'); }) } as unknown as http.Server;
+    mockGetActiveRequests.mockImplementation(() => { throw new Error('3'); });
+    mockFlush.mockImplementation(() => { throw new Error('4'); });
+    mockCloseDatabase.mockImplementation(() => { throw new Error('5'); });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    errorSpy.mockRestore();
+    warnSpy.mockRestore();
+  });
+
+  // ── Boundary and concurrency cases ───────────────────────────────────────
+
+  it('exits immediately with a drainTimeoutMs of 0 when requests are still active', async () => {
+    mockGetActiveRequests.mockReturnValue(5); // never drains
+
+    const server = makeMockServer();
+    const start = Date.now();
+    await createShutdownHandler(server, 0)('SIGTERM');
+    const elapsed = Date.now() - start;
+
+    // The deadline is already in the past on entry, so the drain loop's
+    // condition must fail on its first check rather than sleeping even one
+    // DRAIN_POLL_MS tick.
+    expect(elapsed).toBeLessThan(DRAIN_POLL_MS);
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('runs the full sequence exactly once under two genuinely concurrent invocations of the same handler', async () => {
+    // Unlike the sequential "second signal" tests above, neither call here
+    // is awaited before the other starts: this exercises the _shuttingDown
+    // guard's actual race-safety, which holds only because the guard is set
+    // synchronously before the function's first await, not because the
+    // caller happens to serialize the two signals.
+    const server = makeMockServer();
+    const handler = createShutdownHandler(server, 100);
+
+    const [firstResult, secondResult] = await Promise.allSettled([
+      handler('SIGTERM'),
+      handler('SIGINT'),
+    ]);
+
+    expect(firstResult.status).toBe('fulfilled');
+    expect(secondResult.status).toBe('fulfilled');
+    // Exactly one call ran the real sequence (exit(0)) and the other was
+    // rejected by the guard as a second signal (exit(1)) — never both
+    // exit(0), which would mean the guard let the sequence run twice.
+    const exitCodes = exitSpy.mock.calls.map((args) => args[0]).sort();
+    expect(exitCodes).toEqual([0, 1]);
+    expect(mockSetMaintenanceMode).toHaveBeenCalledTimes(1);
+    expect(mockFlush).toHaveBeenCalledTimes(1);
+    expect(mockCloseDatabase).toHaveBeenCalledTimes(1);
   });
 });
 
