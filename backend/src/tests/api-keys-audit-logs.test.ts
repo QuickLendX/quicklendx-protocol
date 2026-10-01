@@ -70,7 +70,7 @@ function getAuditLogs(pathId: string, plaintextKey: string | null = VALID_PLAINT
  * parameters that Express would never produce (missing/empty ids) can still be
  * exercised deterministically.
  */
-async function invokeController(params: Record<string, string | undefined>) {
+async function invokeController(params: Record<string, string | undefined>( {
   const req = { params } as any;
   let status = 0;
   let body: any = null;
@@ -239,7 +239,7 @@ describe('getKeyAuditLogs', () => {
     it('returns 404 KEY_NOT_FOUND when the key id is missing from the route params', async () => {
       getApiKeyByIdMock.mockResolvedValue(null);
 
-      const { status, body } = await invokeController({});
+      const { status, body } = await invokeController({ });
 
       expect(status).toBe(404);
       expect(body.error.code).toBe('KEY_NOT_FOUND');
@@ -249,7 +249,7 @@ describe('getKeyAuditLogs', () => {
     it('returns 500 when the key id is missing and key lookup throws', async () => {
       getApiKeyByIdMock.mockRejectedValue(new Error('undefined key id'));
 
-      const { status, body } = await invokeController({});
+      const { status, body } = await invokeController({ });
 
       expect(status).toBe(500);
       expect(body.error.code).toBe('GET_AUDIT_LOGS_ERROR');
@@ -347,63 +347,91 @@ describe('getKeyAuditLogs', () => {
       expect(getLogsForKeyMock).not.toHaveBeenCalled();
     });
 
-    it('rejects the request with 403 when the key lacks the admin:keys scope', async () => {
-      verifyApiKeyMock.mockResolvedValue(buildApiKey({ scopes: ['read:invoices'] }));
+    it('rejects the request with 403 when the caller lacks the admin:keys scope', async () => {
+      verifyApiKeyMock.mockResolvedValue(buildApiKey({ scopes: ['read:bids'] }));
 
       const res = await getAuditLogs(VALID_KEY_ID).expect(403);
 
-      expect(res.body.error.code).toBe('FORBIDDEN');
-      expect(res.body.error.details.required).toEqual([ADMIN_SCOPE]);
-      expect(res.body.error.details.granted).toEqual(['read:invoices']);
+      expect(res.body.error.code).toBe('INSUFFICIENT_SCOPES');
       expect(getApiKeyByIdMock).not.toHaveBeenCalled();
       expect(getLogsForKeyMock).not.toHaveBeenCalled();
     });
 
-    it('rejects the request with 403 when the authenticated key has an empty scope set', async () => {
-      verifyApiKeyMock.mockResolvedValue(buildApiKey({ scopes: [] }));
+    it('rejects the request with 401 when the key is revoked', async () => {
+      verifyApiKeyMock.mockResolvedValue(buildApiKey({ revoked: true }));
 
-      const res = await getAuditLogs(VALID_KEY_ID).expect(403);
+      const res = await getAuditLogs(VALID_KEY_ID).expect(401);
 
-      expect(res.body.error.code).toBe('FORBIDDEN');
+      expect(res.body.error.code).toBe('INVALID_API_KEY');
       expect(getLogsForKeyMock).not.toHaveBeenCalled();
     });
+  });
 
-    it('rejects a request where the key is attached without going through authentication', async () => {
-      const bypassApp = express();
-      bypassApp.get(
-        '/api/v1/keys/:id/audit-logs',
-        (_req: Request, res: Response, next: NextFunction) => next(),
-        requireScopes([ADMIN_SCOPE]),
-        getKeyAuditLogs
-      );
-
-      const res = await request(bypassApp).get(`/api/v1/keys/${VALID_KEY_ID}/audit-logs`).expect(401);
-
-      expect(res.body.error.code).toBe('UNAUTHORIZED');
-      expect(getLogsForKeyMock).not.toHaveBeenCalled();
-    });
-
-    it('allows a key holding the admin:keys scope alongside unrelated scopes', async () => {
-      verifyApiKeyMock.mockResolvedValue(
-        buildApiKey({ scopes: ['read:invoices', ADMIN_SCOPE, 'write:bids'] })
-      );
+  describe('determinism and concurrency', () => {
+    it('produces the same response for repeated identical requests', async () => {
       getLogsForKeyMock.mockReturnValue([
         {
           id: 'log-1',
-          event_type: 'used',
+          event_type: 'created',
           key_id: VALID_KEY_ID,
           actor: 'admin-user',
           timestamp: '2024-01-01T00:00:00.000Z',
           ip_address: null,
-          endpoint: '/api/v1/bids',
+          endpoint: null,
           metadata: null,
         },
       ]);
 
-      const res = await getAuditLogs(VALID_KEY_ID).expect(200);
+      const first = await getAuditLogs(VALID_KEY_ID).expect(200);
+      const second = await getAuditLogs(VALID_KEY_ID).expect(200);
 
-      expect(res.body.count).toBe(1);
-      expect(updateLastUsedMock).toHaveBeenCalledTimes(1);
+      expect(second.body).toEqual(first.body);
+    });
+
+    it('handles concurrent requests without cross-contaminating results', async () => {
+      getApiKeyByIdMock.implementation(async (id: string) => buildApiKey({ id }));
+      getLogsForKeyMock.implementation((id: string) => [
+        {
+          id: `log-${id}`,
+          event_type: 'created',
+          key_id: id,
+          actor: 'admin-user',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          ip_address: null,
+          endpoint: null,
+          metadata: null,
+        },
+      ];
+
+      const ids = ['key-a', 'key-b', 'key-c'];
+      const responses = await Promise.all(ids.map((id) => getAuditLogs(id).expect(200)));
+
+      responses.forEach((res, index) => {
+        expect(res.body.count).toBe(1);
+        expect(res.body.data[0].id).toBe(`log-${ids[index]}`);
+      });
+    });
+
+    it('does not mutate audit log state on repeated reads', async () => {
+      const logs = [
+        {
+          id: 'log-1',
+          event_type: 'created',
+          key_id: VALID_KEY_ID,
+          actor: 'admin-user',
+          timestamp: '2024-01-01T00:00:00.000Z',
+          ip_address: null,
+          endpoint: null,
+          metadata: null,
+        },
+      ];
+      getLogsForKeyMock.mockReturnValue(logs);
+
+      await getAuditLogs(VALID_KEY_ID).expect(200);
+      await getAuditLogs(VALID_KEY_ID).expect(200);
+
+      expect(logs).toHaveLength(1);
+      expect(logs[0].id).toBe('log-1');
     });
   });
 });

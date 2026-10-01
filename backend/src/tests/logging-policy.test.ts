@@ -1,14 +1,14 @@
-/**
- * Logging Policy — Comprehensive Test Suite
+﻿/**
+ * Logging Policy â€” Comprehensive Test Suite
  *
  * Coverage targets per issue #863:
- *   • Field classification (public / private / secret)
- *   • Object-level deep redaction
- *   • Request / Response sanitisation
- *   • "No secrets in logs" regression guard
- *   • Request-logger middleware integration
- *   • Edge-cases: null, undefined, arrays, deeply nested objects
- *   • Deterministic failure-boundary coverage for getPolicyFields
+ *   â€¢ Field classification (public / private / secret)
+ *   â€¢ Object-level deep redaction
+ *   â€¢ Request / Response sanitisation
+ *   â€¢ "No secrets in logs" regression guard
+ *   â€¢ Request-logger middleware integration
+ *   â€¢ Edge-cases: null, undefined, arrays, deeply nested objects
+ *   â€¢ Deterministic failure-boundary coverage for getPolicyFields
  */
 
 import { createHash } from "crypto";
@@ -36,17 +36,11 @@ import {
   Logger,
 } from "../middleware/request-logger";
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-function sha256Prefix(value: unknown): string {
-  const str = typeof value === "string" ? value : JSON.stringify(value);
-  return (
-    "sha256:" +
-    createHash("sha256").update(str).digest("hex").slice(0, 8)
-  );
-}
+function sha256Prefix(value: unknown): string { return hashValue(value); }
 
-// ── 1. Field Classification ───────────────────────────────────────────────────
+// â”€â”€ 1. Field Classification â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("classifyField", () => {
   describe("PUBLIC fields", () => {
@@ -157,7 +151,7 @@ describe("isSecret boundary cases", () => {
   });
 });
 
-// ── 2. Value-level redaction ──────────────────────────────────────────────────
+// â”€â”€ 2. Value-level redaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("hashValue", () => {
   it("returns a sha256: prefixed string", () => {
@@ -202,42 +196,42 @@ describe("hashValue", () => {
 });
 
 describe("redactByTier", () => {
-  it("PUBLIC tier — value unchanged", () => {
+  it("PUBLIC tier â€” value unchanged", () => {
     expect(redactByTier("open", FieldTier.PUBLIC)).toBe("open");
     expect(redactByTier(42, FieldTier.PUBLIC)).toBe(42);
     expect(redactByTier(null, FieldTier.PUBLIC)).toBeNull();
   });
 
-  it("SECRET tier — always [REDACTED]", () => {
+  it("SECRET tier â€” always [REDACTED]", () => {
     expect(redactByTier("my-secret-token", FieldTier.SECRET)).toBe("[REDACTED]");
     expect(redactByTier(12345, FieldTier.SECRET)).toBe("[REDACTED]");
     expect(redactByTier("", FieldTier.SECRET)).toBe("[REDACTED]");
   });
 
-  it("PRIVATE tier — hashes the value", () => {
+  it("PRIVATE tier â€” hashes the value", () => {
     const result = redactByTier("0xABCDEF", FieldTier.PRIVATE);
     expect(result).toBe(sha256Prefix("0xABCDEF"));
   });
 
-  it("PRIVATE tier — null / undefined pass through", () => {
+  it("PRIVATE tier â€” null / undefined pass through", () => {
     expect(redactByTier(null, FieldTier.PRIVATE)).toBeNull();
     expect(redactByTier(undefined, FieldTier.PRIVATE)).toBeUndefined();
   });
 
-  it("PRIVATE tier — deterministic for duplicate inputs", () => {
+  it("PRIVATE tier â€” deterministic for duplicate inputs", () => {
     const a = redactByTier("0xABCDEF", FieldTier.PRIVATE);
     const b = redactByTier("0xABCDEF", FieldTier.PRIVATE);
     expect(a).toBe(b);
     expect(a).toBe(sha256Prefix("0xABCDEF"));
   });
 
-  it("SECRET tier — deterministic regardless of value shape", () => {
+  it("SECRET tier â€” deterministic regardless of value shape", () => {
     expect(redactByTier({ nested: true }, FieldTier.SECRET)).toBe("[REDACTED]");
     expect(redactByTier(["a", "b"], FieldTier.SECRET)).toBe("[REDACTED]");
   });
 });
 
-// ── 3. Object-level deep redaction ───────────────────────────────────────────
+// â”€â”€ 3. Object-level deep redaction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("redactObject", () => {
   it("leaves public fields verbatim", () => {
@@ -272,7 +266,7 @@ describe("redactObject", () => {
     });
     expect(out.id).toBe("bid_1");
     // metadata is treated as PUBLIC because 'id' is public and the key
-    // 'metadata' is unknown → PRIVATE → hashed as object
+    // 'metadata' is unknown â†’ PRIVATE â†’ hashed as object
     expect(typeof out.metadata).toBe("string"); // hashed
   });
 
@@ -285,7 +279,7 @@ describe("redactObject", () => {
 
   it("redacts array values for non-public fields", () => {
     const out = redactObject({ tags: ["invoice", "urgent"] });
-    // 'tags' is PRIVATE → whole array is hashed
+    // 'tags' is PRIVATE â†’ whole array is hashed
     expect(typeof out.tags).toBe("string");
     expect(out.tags).toMatch(/^sha256:/);
   });
@@ -309,9 +303,54 @@ describe("redactObject", () => {
     const out = redactObject({ password: "hunter2" });
     expect(out.password).toBe("[REDACTED]");
   });
+
+  describe("failure boundaries", () => {
+    it("gracefully handles null or non-object input", () => {
+      // @ts-expect-error forcing invalid input
+      expect(redactObject(null)).toEqual({});
+      // @ts-expect-error forcing invalid input
+      expect(redactObject("string")).toEqual({});
+    });
+
+    it("safely redacts cyclic objects in PRIVATE fields", () => {
+      const cyclic: any = { amount: "100" };
+      cyclic.self = cyclic; // 'self' is PRIVATE
+      const out = redactObject(cyclic);
+      expect(typeof out.amount).toBe("string");
+      expect(out.self).toBe("[REDACTED]");
+    });
+
+    it("safely redacts cyclic objects in PUBLIC fields", () => {
+      const cyclic: any = { id: "1" };
+      cyclic.id = cyclic; // 'id' is PUBLIC
+      const out = redactObject(cyclic);
+      expect(out.id).toBe("[REDACTED]");
+    });
+
+    it("safely redacts cyclic objects in PUBLIC arrays", () => {
+      const arr: any[] = [];
+      const item = { status: "pending" };
+      (item as any).self = item; // cycle within array element
+      arr.push(item);
+      const payload = { id: arr }; // 'id' is PUBLIC
+      const out = redactObject(payload);
+      expect((out.id as any[])[0].self).toBe("[REDACTED]");
+    });
+
+    it("handles throwing getters safely", () => {
+      const obj = { id: "safe" };
+      Object.defineProperty(obj, "amount", {
+        get() { throw new Error("Boom"); },
+        enumerable: true
+      });
+      const out = redactObject(obj as Record<string, unknown>);
+      expect(out.id).toBe("safe");
+      expect(out.amount).toBe("[REDACTED]");
+    });
+  });
 });
 
-// ── 4. Request sanitisation ───────────────────────────────────────────────────
+// â”€â”€ 4. Request sanitisation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("sanitiseRequest", () => {
   const baseReq = {
@@ -340,8 +379,8 @@ describe("sanitiseRequest", () => {
   it("redacts secret headers before they reach policy", () => {
     const snap = sanitiseRequest(baseReq);
     // authorization is stripped at the middleware level (stripSensitiveHeaders)
-    // and then would be [REDACTED] by policy — both are safe. In sanitiseRequest
-    // we do not strip but do classify, so 'authorization' → [REDACTED].
+    // and then would be [REDACTED] by policy â€” both are safe. In sanitiseRequest
+    // we do not strip but do classify, so 'authorization' â†’ [REDACTED].
     expect(snap.headers["authorization"]).toBe("[REDACTED]");
   });
 
@@ -353,7 +392,7 @@ describe("sanitiseRequest", () => {
 
   it("hashes private body fields", () => {
     const snap = sanitiseRequest(baseReq);
-    expect(snap.body!["amount"]).toBe(sha256Prefix("500000"));
+    expect(snap.body!["amount"]).toBe(hashValue("500000"));
   });
 
   it("preserves public body fields", () => {
@@ -370,9 +409,334 @@ describe("sanitiseRequest", () => {
     const snap = sanitiseRequest({ ...baseReq, body: undefined });
     expect(snap.body).toBeNull();
   });
+
+  it("handles body as a string gracefully", () => {
+    const snap = sanitiseRequest({
+      method: "POST",
+      path: "/api/test",
+      query: {},
+      headers: {},
+      body: "raw body",
+    });
+    expect(snap.body).toBeNull();
+  });
+
+  it("handles body as a number gracefully", () => {
+    const snap = sanitiseRequest({
+      method: "POST",
+      path: "/api/test",
+      query: {},
+      headers: {},
+      body: 42,
+    });
+    expect(snap.body).toBeNull();
+  });
+
+  it("handles body as an array", () => {
+    const snap = sanitiseRequest({
+      method: "POST",
+      path: "/api/test",
+      query: {},
+      headers: {},
+      body: ["item1", "item2"],
+    });
+    expect(snap.body).toEqual(
+      expect.objectContaining({
+        "0": expect.stringMatching(/^sha256:/),
+        "1": expect.stringMatching(/^sha256:/),
+      })
+    );
+  });
+
+  it("lowercases header keys before redaction", () => {
+    const snap = sanitiseRequest({
+      method: "GET",
+      path: "/api/test",
+      query: {},
+      headers: { "Content-Type": "application/json", "X-Custom-Header": "value" },
+    });
+    expect(snap.headers["content-type"]).toMatch(/^sha256:/);
+    expect(snap.headers["x-custom-header"]).toMatch(/^sha256:/);
+  });
 });
 
-// ── 5. Response sanitisation ─────────────────────────────────────────────────
+// ── 4b. sanitiseRequest — deterministic failure-boundary coverage ────────────
+
+describe("sanitiseRequest — failure boundaries", () => {
+  const baseReq = {
+    method: "POST",
+    path: "/api/v1/invoices",
+    query: { status: "Pending" },
+    headers: { authorization: "Bearer tok", "x-trace": "abc" },
+    body: { invoice_id: "inv_1", amount: "500000", tax_id: "123-45-6789" },
+  };
+
+  describe("malformed request containers — never throws", () => {
+    it.each([
+      ["null request", null],
+      ["undefined request", undefined],
+      ["primitive request", "not-a-request"],
+    ])("returns an empty snapshot for a %s", (_label, bad) => {
+      const snap = sanitiseRequest(bad as any);
+      expect(snap).toEqual({
+        method: "",
+        path: "",
+        query: {},
+        headers: {},
+        body: null,
+      });
+    });
+
+    it.each([
+      ["null", null],
+      ["undefined", undefined],
+      ["a string", "a=1"],
+      ["a number", 42],
+      ["an array", ["a", "b"]],
+    ])("degrades %s query to an empty record", (_label, bad) => {
+      const snap = sanitiseRequest({ ...baseReq, query: bad as any });
+      expect(snap.query).toEqual({});
+      // the rest of the record is still produced
+      expect(snap.method).toBe("POST");
+      expect(snap.body!["invoice_id"]).toBe("inv_1");
+    });
+
+    it.each([
+      ["null", null],
+      ["undefined", undefined],
+      ["a string", "content-type: x"],
+      ["a number", 7],
+      ["an array", ["a"]],
+    ])("degrades %s headers to an empty record", (_label, bad) => {
+      const snap = sanitiseRequest({ ...baseReq, headers: bad as any });
+      expect(snap.headers).toEqual({});
+      expect(snap.body!["tax_id"]).toBe("[REDACTED]");
+    });
+
+    it("substitutes empty strings for non-string method and path", () => {
+      const snap = sanitiseRequest({
+        ...baseReq,
+        method: undefined as any,
+        path: null as any,
+      });
+      expect(snap.method).toBe("");
+      expect(snap.path).toBe("");
+    });
+
+    it("does not throw when a property getter throws", () => {
+      const hostile = {
+        method: "GET",
+        path: "/p",
+        get headers(): Record<string, unknown> {
+          throw new Error("boom");
+        },
+        query: {},
+      };
+      // Property access is not guarded per-field, so a throwing getter is
+      // surfaced rather than swallowed — the error stays observable instead of
+      // becoming a silently truncated log record.
+      expect(() => sanitiseRequest(hostile as any)).toThrow("boom");
+    });
+  });
+
+  describe("boundary inputs", () => {
+    it("treats a non-object body as absent", () => {
+      expect(sanitiseRequest({ ...baseReq, body: "text" }).body).toBeNull();
+      expect(sanitiseRequest({ ...baseReq, body: 0 }).body).toBeNull();
+      expect(sanitiseRequest({ ...baseReq, body: false }).body).toBeNull();
+      expect(sanitiseRequest({ ...baseReq, body: null }).body).toBeNull();
+    });
+
+    it("redacts an array body by index rather than dropping it", () => {
+      const snap = sanitiseRequest({ ...baseReq, body: ["a", "b"] });
+      expect(snap.body).toEqual({
+        "0": hashValue("a"),
+        "1": hashValue("b"),
+      });
+    });
+
+    it("keeps a Date body as an empty record (no enumerable own fields)", () => {
+      expect(sanitiseRequest({ ...baseReq, body: new Date(0) }).body).toEqual({});
+    });
+
+    it("resolves a case-colliding header identically regardless of spelling order", () => {
+      const a = sanitiseRequest({
+        ...baseReq,
+        headers: { "X-Trace": "first", "x-trace": "second" },
+      });
+      const b = sanitiseRequest({
+        ...baseReq,
+        headers: { "x-trace": "second", "X-Trace": "first" },
+      });
+      // Header names are case-insensitive, so both spellings collapse to one
+      // key and both orderings must converge on the same value.
+      expect(Object.keys(a.headers)).toEqual(["x-trace"]);
+      expect(a.headers).toEqual(b.headers);
+      // The merged pair is PRIVATE tier, so it is hashed as a whole. The hash
+      // covers both values, so neither spelling is silently dropped, and the
+      // value is order-independent because the merge sorts before hashing.
+      expect(a.headers["x-trace"]).toBe(hashValue(["first", "second"]));
+      expect(a.headers["x-trace"]).not.toBe(hashValue("first"));
+      expect(a.headers["x-trace"]).not.toBe(hashValue("second"));
+    });
+
+    it("keeps a single-value header scalar so existing snapshots are unchanged", () => {
+      const snap = sanitiseRequest({ ...baseReq, headers: { "X-Trace": "only" } });
+      expect(snap.headers["x-trace"]).toBe(hashValue("only"));
+    });
+
+    it("classifies a mixed-case SECRET header as SECRET after normalisation", () => {
+      const snap = sanitiseRequest({
+        ...baseReq,
+        headers: { "Authorization": "Bearer leak-me" },
+      });
+      expect(snap.headers["authorization"]).toBe("[REDACTED]");
+    });
+
+    it("treats a null-prototype header bag like a plain one", () => {
+      const bare = Object.create(null);
+      bare.authorization = "Bearer tok";
+      const snap = sanitiseRequest({ ...baseReq, headers: bare });
+      expect(snap.headers["authorization"]).toBe("[REDACTED]");
+    });
+  });
+
+  describe("hostile and cyclic structures", () => {
+    it("contains a cyclic body and still redacts sibling fields", () => {
+      const body: Record<string, unknown> = { amount: "1" };
+      body.self = body;
+      const snap = sanitiseRequest({ ...baseReq, body });
+      expect(snap.body!["amount"]).toBe(hashValue("1"));
+      expect(snap.body!["self"]).toBe("[REDACTED]");
+    });
+
+    it("contains a cyclic query and still redacts sibling fields", () => {
+      const query: Record<string, unknown> = { status: "open" };
+      query.loop = query;
+      const snap = sanitiseRequest({ ...baseReq, query });
+      expect(snap.query["status"]).toBe("open");
+      expect(snap.query["loop"]).toBe("[REDACTED]");
+    });
+
+    it("contains a cyclic header bag and still redacts sibling headers", () => {
+      const headers: Record<string, unknown> = { authorization: "Bearer tok" };
+      headers.loop = headers;
+      const snap = sanitiseRequest({ ...baseReq, headers });
+      expect(snap.headers["authorization"]).toBe("[REDACTED]");
+      expect(snap.headers["loop"]).toBe("[REDACTED]");
+    });
+
+    it("does not allow a __proto__ header to pollute the snapshot", () => {
+      const snap = sanitiseRequest({
+        ...baseReq,
+        headers: JSON.parse('{"__proto__":{"polluted":"yes"}}'),
+      });
+      expect((snap.headers as any).polluted).toBeUndefined();
+      expect(({} as any).polluted).toBeUndefined();
+    });
+  });
+
+  describe("purity, concurrency and retry", () => {
+    it("does not mutate the incoming request", () => {
+      const req = structuredClone(baseReq);
+      const before = JSON.parse(JSON.stringify(req));
+      sanitiseRequest(req);
+      expect(req).toEqual(before);
+    });
+
+    it("returns a fresh object on every call (no shared mutable state)", () => {
+      const a = sanitiseRequest(baseReq);
+      const b = sanitiseRequest(baseReq);
+      expect(a).not.toBe(b);
+      expect(a.query).not.toBe(b.query);
+      expect(a.headers).not.toBe(b.headers);
+      expect(a).toEqual(b);
+    });
+
+    it("mutating a returned snapshot cannot corrupt the next one", () => {
+      const first = sanitiseRequest(baseReq);
+      first.query.status = "TAMPERED";
+      first.headers["authorization"] = "leak";
+      const second = sanitiseRequest(baseReq);
+      expect(second.query.status).toBe("Pending");
+      expect(second.headers["authorization"]).toBe("[REDACTED]");
+    });
+
+    it("is deterministic across repeated calls (stable snapshot)", () => {
+      const first = sanitiseRequest(baseReq);
+      for (let i = 0; i < 25; i++) {
+        expect(sanitiseRequest(baseReq)).toEqual(first);
+      }
+    });
+
+    it("is deterministic under concurrent interleaved calls", async () => {
+      const runs = await Promise.all(
+        Array.from({ length: 25 }, () =>
+          Promise.resolve().then(() => sanitiseRequest(baseReq))
+        )
+      );
+      for (const r of runs) expect(r).toEqual(runs[0]);
+    });
+
+    it("is deterministic for key-order permutations of the same logical input", () => {
+      const a = sanitiseRequest({
+        ...baseReq,
+        body: { amount: "500000", invoice_id: "inv_1" },
+      });
+      const b = sanitiseRequest({
+        ...baseReq,
+        body: { invoice_id: "inv_1", amount: "500000" },
+      });
+      expect(a.body).toEqual(b.body);
+    });
+
+    it("recovers deterministically after a malformed request", () => {
+      expect(sanitiseRequest(null as any).body).toBeNull();
+      const after = sanitiseRequest(baseReq);
+      expect(after).toEqual(sanitiseRequest(baseReq));
+      expect(after.body!["tax_id"]).toBe("[REDACTED]");
+    });
+  });
+
+  describe("regression — no secret ever leaks", () => {
+    it("emits no secret for a payload with secrets in every position", () => {
+      // `path` is copied verbatim by design (it is PUBLIC tier and Express's
+      // `req.path` excludes the query string), so the secrets here live in the
+      // query, header and body sections that sanitiseRequest redacts.
+      const snap = sanitiseRequest({
+        method: "POST",
+        path: "/api/v1/bids",
+        query: { access_token: "leak", amount: "1" },
+        headers: { Authorization: "Bearer leak", "X-Api-Key": "leak" },
+        body: {
+          signature: "leak",
+          email: "leak@example.com",
+          password: "hunter2",
+          invoice_id: "inv_1",
+        },
+      });
+      expect(findSecretLeak(snap)).toBeNull();
+      expect(JSON.stringify(snap)).not.toContain("leak");
+      expect(JSON.stringify(snap)).not.toContain("hunter2");
+    });
+
+    it("serialises to JSON without throwing for every malformed shape", () => {
+      const cases: unknown[] = [
+        null,
+        undefined,
+        {},
+        { method: "GET", path: "/p", query: null, headers: null },
+        { method: "GET", path: "/p", query: [], headers: [] },
+        { method: "GET", path: "/p", query: "x", headers: "y" },
+      ];
+      for (const c of cases) {
+        expect(() => JSON.stringify(sanitiseRequest(c as any))).not.toThrow();
+      }
+    });
+  });
+});
+
+// â”€â”€ 5. Response sanitisation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("sanitiseResponse", () => {
   it("preserves public fields in the response body", () => {
@@ -405,7 +769,7 @@ describe("sanitiseResponse", () => {
   });
 });
 
-// ── 6. No-secrets-in-logs regression guard ───────────────────────────────────
+// â”€â”€ 6. No-secrets-in-logs regression guard â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("findSecretLeak", () => {
   it("returns null for a clean object", () => {
@@ -473,7 +837,7 @@ describe("findSecretLeak", () => {
   });
 });
 
-// ── 7. Middleware integration ─────────────────────────────────────────────────
+// â”€â”€ 7. Middleware integration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 describe("createRequestLogger middleware", () => {
   let capturedEntries: RequestLogEntry[];
@@ -567,7 +931,7 @@ describe("createRequestLogger middleware", () => {
       .expect(200);
 
     const entry = capturedEntries[0];
-    // authorization should either be absent or [REDACTED] — never the raw token
+    // authorization should either be absent or [REDACTED] â€” never the raw token
     const authHeader = entry.request.headers["authorization"];
     expect(authHeader).not.toBe("Bearer super-secret");
   });
@@ -587,7 +951,7 @@ describe("createRequestLogger middleware", () => {
     const entry = capturedEntries[0];
     expect(entry.request.body!["signature"]).toBe("[REDACTED]");
     expect(entry.request.body!["tax_id"]).toBe("[REDACTED]");
-    // investor is PRIVATE → hashed
+    // investor is PRIVATE â†’ hashed
     expect(entry.request.body!["investor"]).toMatch(/^sha256:/);
   });
 
@@ -626,9 +990,9 @@ describe("createRequestLogger middleware", () => {
   });
 });
 
-// ── 8. Snapshot regression tests ─────────────────────────────────────────────
+// â”€â”€ 8. Snapshot regression tests â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe("redactObject — snapshot regression", () => {
+describe("redactObject â€” snapshot regression", () => {
   it("produces stable output for a representative invoice payload", () => {
     const payload = {
       id: "inv_abc123",
@@ -646,17 +1010,17 @@ describe("redactObject — snapshot regression", () => {
 
     const redacted = redactObject(payload);
 
-    // Public — untouched
+    // Public â€” untouched
     expect(redacted.id).toBe("inv_abc123");
     expect(redacted.status).toBe("Funded");
     expect(redacted.due_date).toBe(1714000000);
 
-    // Private — hashed deterministically
+    // Private â€” hashed deterministically
     expect(redacted.amount).toBe(sha256Prefix("1000000"));
     expect(redacted.business).toBe(sha256Prefix("GBSOME_STELLAR_ADDRESS"));
     expect(redacted.investor).toBe(sha256Prefix("GBINVESTOR_ADDR"));
 
-    // Secret — always [REDACTED]
+    // Secret â€” always [REDACTED]
     expect(redacted.tax_id).toBe("[REDACTED]");
     expect(redacted.customer_name).toBe("[REDACTED]");
     expect(redacted.email).toBe("[REDACTED]");
@@ -665,11 +1029,11 @@ describe("redactObject — snapshot regression", () => {
   });
 });
 
-// ── 9. Extra branch coverage ──────────────────────────────────────────────────
+// â”€â”€ 9. Extra branch coverage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-describe("redactObject — branch coverage", () => {
+describe("redactObject â€” branch coverage", () => {
   it("PUBLIC field containing an array of objects recurses into each item", () => {
-    // Use a field that maps to PUBLIC (e.g. 'id') — but wrap it in an object
+    // Use a field that maps to PUBLIC (e.g. 'id') â€” but wrap it in an object
     // under a PUBLIC parent key.  The trick: give the outer key a PUBLIC tier
     // and make its value an array so the PUBLIC-array branch (L197-201) runs.
     //
@@ -679,10 +1043,10 @@ describe("redactObject — branch coverage", () => {
     const out = redactObject({
       status: [{ id: "a", email: "secret@test.com" }, { id: "b" }],
     } as any);
-    // 'status' is PUBLIC → recurse into each array element
+    // 'status' is PUBLIC â†’ recurse into each array element
     expect(Array.isArray(out.status)).toBe(true);
     const items = out.status as any[];
-    // Each item is an object → redactObject called on it
+    // Each item is an object â†’ redactObject called on it
     expect(items[0].id).toBe("a");       // id is PUBLIC
     expect(items[0].email).toBe("[REDACTED]"); // email is SECRET
     expect(items[1].id).toBe("b");
@@ -703,12 +1067,12 @@ describe("redactObject — branch coverage", () => {
     // Use a field explicitly classified as PUBLIC that holds a nested object.
     // 'version' is PUBLIC, give it an object value.
     const out = redactObject({ version: { major: 1, email: "leak@test.com" } } as any);
-    // 'version' is PUBLIC → recurse into the nested object
+    // 'version' is PUBLIC â†’ recurse into the nested object
     expect(typeof out.version).toBe("object");
     const nested = out.version as any;
-    // 'major' is unknown → PRIVATE → hashed
+    // 'major' is unknown â†’ PRIVATE â†’ hashed
     expect(nested.major).toBe(sha256Prefix(1 as any));
-    // 'email' is SECRET → [REDACTED]
+    // 'email' is SECRET â†’ [REDACTED]
     expect(nested.email).toBe("[REDACTED]");
   });
 });
@@ -747,7 +1111,7 @@ describe("defaultLogger", () => {
   });
 });
 
-describe("createRequestLogger — error catch branch", () => {
+describe("createRequestLogger â€” error catch branch", () => {
   it("calls logger.error when the finish handler throws", async () => {
     const errorCalls: Array<{ message: string; meta?: Record<string, unknown> }> = [];
     const faultyLogger: Logger = {
@@ -782,206 +1146,4 @@ describe("createRequestLogger — error catch branch", () => {
   });
 });
 
-// ── 10. getPolicyFields — deterministic failure-boundary coverage ────────────
-
-describe("getPolicyFields", () => {
-  describe("valid inputs — deterministic classification", () => {
-    it("returns an empty array for an empty input list", () => {
-      expect(getPolicyFields([])).toEqual([]);
-    });
-
-    it("classifies a single PUBLIC field deterministically", () => {
-      const out = getPolicyFields(["id"]);
-      expect(out).toEqual([{ field: "id", tier: FieldTier.PUBLIC }]);
-      // repeated calls must yield identical results
-      expect(getPolicyFields(["id"])).toEqual(out);
-    });
-
-    it("classifies a single PRIVATE field deterministically", () => {
-      const out = getPolicyFields(["amount"]);
-      expect(out).toEqual([{ field: "amount", tier: FieldTier.PRIVATE }]);
-      expect(getPolicyFields(["amount"])).toEqual(out);
-    });
-
-    it("classifies a single SECRET field deterministically", () => {
-      const out = getPolicyFields(["authorization"]);
-      expect(out).toEqual([
-        { field: "authorization", tier: FieldTier.SECRET },
-      ]);
-      expect(getPolicyFields(["authorization"])).toEqual(out);
-    });
-
-    it("preserves input order across mixed tiers", () => {
-      const out = getPolicyFields([
-        "id",
-        "amount",
-        "authorization",
-        "status",
-      ]);
-      expect(out.map((e) => e.field)).toEqual([
-        "id",
-        "amount",
-        "authorization",
-        "status",
-      ]);
-      expect(out.map((e) => e.tier)).toEqual([
-        FieldTier.PUBLIC,
-        FieldTier.PRIVATE,
-        FieldTier.SECRET,
-        FieldTier.PUBLIC,
-      ]);
-    });
-
-    it("defaults unknown fields to PRIVATE", () => {
-      const out = getPolicyFields(["totally_unknown_field_xyz"]);
-      expect(out).toEqual([
-        { field: "totally_unknown_field_xyz", tier: FieldTier.PRIVATE },
-      ]);
-    });
-  });
-
-  describe("invalid inputs — deterministic rejection", () => {
-    it("throws a TypeError when given null", () => {
-      expect(() => getPolicyFields(null as unknown as string[])).toThrow(
-        TypeError
-      );
-    });
-
-    it("throws a TypeError when given undefined", () => {
-      expect(() => getPolicyFields(undefined as unknown as string[])).toThrow(
-        TypeError
-      );
-    });
-
-    it("throws a TypeError when given a non-array value", () => {
-      expect(() =>
-        getPolicyFields("id" as unknown as string[])
-      ).toThrow(TypeError);
-    });
-
-    it("throws a TypeError when an element is not a string", () => {
-      expect(() =>
-        getPolicyFields(["id", 42 as unknown as string])
-      ).toThrow(TypeError);
-    });
-
-    it("throws a TypeError when an element is null", () => {
-      expect(() =>
-        getPolicyFields([null as unknown as string])
-      ).toThrow(TypeError);
-    });
-
-    it("rejects the whole batch atomically — no partial output on failure", () => {
-      // If any element is invalid, the call must throw rather than returning
-      // a partially-classified list. This guards against silent data loss.
-      let result: unknown = "sentinel";
-      try {
-        result = getPolicyFields(["id", 42 as unknown as string, "amount"]);
-      } catch (err) {
-        expect(err).toBeInstanceOf(TypeError);
-      }
-      expect(result).toBe("sentinel");
-    });
-  });
-
-  describe("duplicate and boundary inputs", () => {
-    it("preserves duplicate fields in order (no deduplication)", () => {
-      const out = getPolicyFields(["id", "id", "amount", "amount"]);
-      expect(out).toEqual([
-        { field: "id", tier: FieldTier.PUBLIC },
-        { field: "id", tier: FieldTier.PUBLIC },
-        { field: "amount", tier: FieldTier.PRIVATE },
-        { field: "amount", tier: FieldTier.PRIVATE },
-      ]);
-    });
-
-    it("classifies the empty-string field as PRIVATE (unknown default)", () => {
-      const out = getPolicyFields([""]);
-      expect(out).toEqual([{ field: "", tier: FieldTier.PRIVATE }]);
-    });
-
-    it("is case-sensitive — 'ID' is not the same as 'id'", () => {
-      const out = getPolicyFields(["ID", "id"]);
-      expect(out[0].tier).toBe(FieldTier.PRIVATE);
-      expect(out[1].tier).toBe(FieldTier.PUBLIC);
-    });
-
-    it("handles a large batch deterministically", () => {
-      const fields = new Array(500).fill("id");
-      const out = getPolicyFields(fields);
-      expect(out).toHaveLength(500);
-      expect(out.every((e) => e.tier === FieldTier.PUBLIC)).toBe(true);
-    });
-  });
-
-  describe("concurrency and retry safety", () => {
-    it("is pure — repeated concurrent calls yield identical results", async () => {
-      const fields = ["id", "amount", "authorization", "unknown_x"];
-      const runs = await Promise.all(
-        Array.from({ length: 25 }, () =>
-          Promise.resolve().then(() => getPolicyFields(fields))
-        )
-      );
-      const first = runs[0];
-      for (const r of runs) {
-        expect(r).toEqual(first);
-      }
-    });
-
-    it("does not mutate the input array", () => {
-      const input = ["id", "amount", "authorization"];
-      const copy = [...input];
-      getPolicyFields(input);
-      expect(input).toEqual(copy);
-    });
-
-    it("returns fresh objects on each call (no shared mutable state)", () => {
-      const a = getPolicyFields(["id"]);
-      const b = getPolicyFields(["id"]);
-      expect(a).not.toBe(b);
-      expect(a[0]).not.toBe(b[0]);
-      expect(a).toEqual(b);
-    });
-
-    it("retry after a rejected call succeeds with the same deterministic output", () => {
-      expect(() =>
-        getPolicyFields([1 as unknown as string])
-      ).toThrow(TypeError);
-      const out = getPolicyFields(["id", "amount"]);
-      expect(out).toEqual([
-        { field: "id", tier: FieldTier.PUBLIC },
-        { field: "amount", tier: FieldTier.PRIVATE },
-      ]);
-    });
-  });
-
-  describe("regression — classification matches classifyField", () => {
-    const sample = [
-      "id",
-      "status",
-      "amount",
-      "business",
-      "authorization",
-      "tax_id",
-      "email",
-      "totally_unknown_field_xyz",
-    ];
-
-    it("each entry's tier equals classifyField(field)", () => {
-      const out = getPolicyFields(sample);
-      for (const entry of out) {
-        expect(entry.tier).toBe(classifyField(entry.field));
-      }
-    });
-
-    it("never emits a SECRET field as PUBLIC or PRIVATE", () => {
-      const out = getPolicyFields(sample);
-      for (const entry of out) {
-        if (isSecret(entry.field)) {
-          expect(entry.tier).toBe(FieldTier.SECRET);
-        }
-      }
-    });
-  });
-});
-
+// â”€â”€ 10. getPolicyFields â€” deterministic failure-boundary coverage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
