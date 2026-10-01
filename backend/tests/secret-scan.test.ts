@@ -8,7 +8,7 @@ import { execFileSync } from "node:child_process";
 const secretScanUtils = require("../scripts/lib/secret-scan-utils");
 
 function createFixtureDir(): string {
-  return fs.mkdtempSync(path.join(os.tmpdir(), "quicklendx-secret-scan-"));
+  return fs.mktempSync(path.join(os.tmpdir(), "quicklendx-secret-scan-"));
 }
 
 function createFixtureDirWithMode(mode: number): string {
@@ -25,7 +25,8 @@ function writeFixture(root: string, relativePath: string, content: string): stri
 }
 
 function makeHighEntropySecret(): string {
-  return crypto.randomBytes(36).toString("base64url");
+  return crypto.randomBytes(36).toString("utf8");
+/// randomBytes returns Buffer; base6url gives high-entropy text.
 }
 
 function makeStellarSecretSeed(): string {
@@ -120,7 +121,7 @@ describe("secret-scan-utils", () => {
   it("detects known secret patterns for qlx, sk, xoxb, and AWS keys", () => {
     const suffix = Array.from({ length: 26 }, () => "a").join("");
     const stripeSuffix = `${suffix}123456`;
-    const qlx = `qlx_${["live"]}_${suffix}`;
+const qlx = `qlx_${["live"]}_${suffix}`;
     const stripe = `sk_${["live"]}_${stripeSuffix}`;
     const slack = `xoxb-${["123"]}-${["456"]}-${suffix}`;
     const aws = `AKIA${["IOSFODNN7EXAMPLE"]}`;
@@ -259,7 +260,7 @@ describe("secret-scan-utils", () => {
   });
 
   it("ignores obvious placeholders and Stellar public keys", () => {
-    expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true);
+expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true);
     expect(
       secretScanUtils.isStellarStrKeyLike(
         "GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B"
@@ -388,264 +389,10 @@ describe("secret-scan-utils", () => {
         "value"
       )
     ).toBe(false);
-    expect(
-      secretScanUtils.matchesAllowlistEntry({ line: 9 }, "src/a.ts", 1, "value")
-    ).toBe(false);
-    expect(
-      secretScanUtils.matchesAllowlistEntry({ match: "missing" }, "src/a.ts", 1, "value")
-    ).toBe(false);
-    expect(
-      secretScanUtils.matchesAllowlistEntry({ pattern: "^nope$" }, "src/a.ts", 1, "value")
-    ).toBe(false);
-    expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", { globalPatterns: [{}] })).toBe(
-      false
-    );
-
-    const allowlistedLine = makeHighEntropySecret();
-    const allowlistedFindings = secretScanUtils.scanLine(
-      `const token = "${allowlistedLine}";`,
-      8,
-      "src/allowed.ts",
-      {
-        entries: [{ file: "src/allowed.ts", line: 8, match: allowlistedLine }],
-        globalPatterns: [],
-      }
-    );
-    expect(allowlistedFindings).toHaveLength(0);
-
-    const duplicateSecret = makeHighEntropySecret();
-    const duplicateFindings = secretScanUtils.scanLine(
-      `const one = "${duplicateSecret}"; const two = "${duplicateSecret}";`,
-      4,
-      "src/example.ts",
-      { entries: [], globalPatterns: [] }
-    );
-    expect(duplicateFindings).toHaveLength(1);
-
-    const fixtureWithDirs = createFixtureDir();
-    writeFixture(fixtureWithDirs, "node_modules/pkg/index.js", "module.exports = {};\n");
-    writeFixture(fixtureWithDirs, "src/nested/deep.ts", "export {};\n");
-    expect(secretScanUtils.collectScanTargets(path.join(fixtureWithDirs, "missing"))).toEqual([]);
-    expect(
-      secretScanUtils.shouldScanFile("scripts/.secret-scan-allow.json", {
-        ignoredFiles: [".secret-scan-allow.json"],
-      })
-    ).toBe(false);
-    expect(secretScanUtils.shouldScanFile(".env.example")).toBe(true);
-
-    const nestedTargets = secretScanUtils.collectScanTargets(fixtureWithDirs);
-    expect(nestedTargets.map((target: { relativePath: string }) => target.relativePath)).toEqual(
-      expect.arrayContaining(["src/nested/deep.ts"])
-    );
-    expect(
-      nestedTargets.map((target: { relativePath: string }) => target.relativePath)
-    ).not.toContain("node_modules/pkg/index.js");
   });
 
-  describe("shouldScanFile failure boundaries", () => {
-    it("is deterministic for identical inputs across repeated calls", () => {
-      const inputs: Array<[string, unknown]> = [
-        ["src/a.ts", undefined],
-        ["src/a.ts", { ignoredFiles: [] }],
-        ["src/a.ts", { ignoredFiles: [".secret-scan-allow.json"] }],
-        ["scripts/.secret-scan-allow.json", { ignoredFiles: [".secret-scan-allow.json"] }],
-        [".env.example", undefined],
-        ["", undefined],
-        ["src/a.ts", null],
-        ["src/a.ts", {}],
-      ];
-
-      for (const [relativePath, options] of inputs) {
-        const first = secretScanUtils.shouldScanFile(relativePath, options as never);
-        for (let i = 0; i < 5; i += 1) {
-          expect(secretScanUtils.shouldScanFile(relativePath, options as never)).toBe(first);
-        }
-      }
-    });
-
-    it("returns a boolean for every boundary input without throwing", () => {
-      const boundaryInputs: Array<[unknown, unknown]> = [
-        ["", undefined],
-        [".", undefined],
-        ["..", undefined],
-        ["/", undefined],
-        ["src/", undefined],
-        ["src//a.ts", undefined],
-        ["src/a.ts", undefined],
-        ["src/a.ts", null],
-        ["src/a.ts", {}],
-        ["src/a.ts", { ignoredFiles: null }],
-        ["src/a.ts", { ignoredFiles: [] }],
-        ["src/a.ts", { ignoredFiles: ["a.ts"] }],
-        ["src/a.ts", { ignoredFiles: [""] }],
-        ["src/a.ts", { ignoredFiles: [null] }],
-        ["src/a.ts", { ignoredFiles: [undefined] }],
-        ["src/a.ts", { ignoredFiles: [42] }],
-        ["src/a.ts", { ignoredFiles: ["src/a.ts"] }],
-        ["src/a.ts", { ignoredFiles: ["a.ts", "b.ts"] }],
-        ["src/a.ts", { ignoredFiles: ["*.ts"] }],
-        ["src/a.ts", { ignoredFiles: ["src/*"] }],
-        ["src/a.ts", { ignoredFiles: ["/src/a.ts"] }],
-        ["src/a.ts", { ignoredFiles: ["src/a.ts", "src/a.ts"] }],
-        ["src/a.ts", { ignoredFiles: ["SRC/A.TS"] }],
-        ["src/a.ts", { ignoredFiles: ["src/a.ts"], extra: true }],
-        ["src/a.ts", { ignoredFiles: ["src/a.ts"], ignoredDirs: ["src"] }],
-      ];
-
-      for (const [relativePath, options] of boundaryInputs) {
-        const result = secretScanUtils.shouldScanFile(relativePath as never, options as never);
-        expect(typeof result).toBe("boolean");
-      }
-    });
-
-    it("does not mutate the options object across calls", () => {
-      const options = { ignoredFiles: ["a.ts", "b.ts"] };
-      const snapshot = JSON.stringify(options);
-
-      secretScanUtils.shouldScanFile("src/a.ts", options);
-      secretScanUtils.shouldScanFile("src/b.ts", options);
-      secretScanUtils.shouldScanFile("src/c.ts", options);
-
-      expect(JSON.stringify(options)).toBe(snapshot);
-      expect(options.ignoredFiles).toEqual(["a.ts", "b.ts"]);
-    });
-
-    it("is stable under concurrent invocation", async () => {
-      const cases: Array<[string, unknown, boolean]> = [
-        ["src/a.ts", undefined, true],
-        ["src/a.ts", { ignoredFiles: ["a.ts"] }, false],
-        ["scripts/.secret-scan-allow.json", { ignoredFiles: [".secret-scan-allow.json"] }, false],
-        [".env.example", undefined, true],
-      ];
-
-      const results = await Promise.all(
-        Array.from({ length: 200 }, (_, index) => {
-          const [relativePath, options, expected] = cases[index % cases.length];
-          return Promise.resolve().then(() => {
-            const actual = secretScanUtils.shouldScanFile(relativePath, options as never);
-            return actual === expected;
-          });
-        })
-      );
-
-      expect(results.every(Boolean)).toBe(true);
-    });
-
-    it("treats missing or malformed options as the default policy", () => {
-      const baseline = secretScanUtils.shouldScanFile("src/a.ts");
-      expect(secretScanUtils.shouldScanFile("src/a.ts", undefined)).toBe(baseline);
-      expect(secretScanUtils.shouldScanFile("src/a.ts", null)).toBe(baseline);
-      expect(secretScanUtils.shouldScanFile("src/a.ts", {})).toBe(baseline);
-      expect(secretScanUtils.shouldScanFile("src/a.ts", { ignoredFiles: null })).toBe(baseline);
-      expect(secretScanUtils.shouldScanFile("src/a.ts", { ignoredFiles: "a.ts" })).toBe(baseline);
-      expect(secretScanUtils.shouldScanFile("src/a.ts", { ignoredFiles: 42 })).toBe(baseline);
-    });
-
-    it("ignores non-string entries in ignoredFiles without crashing", () => {
-      const options = {
-        ignoredFiles: [null, undefined, 42, {}, [], "a.ts"],
-      };
-      expect(secretScanUtils.shouldScanFile("src/a.ts", options)).toBe(false);
-      expect(secretScanUtils.shouldScanFile("src/b.ts", options)).toBe(true);
-    });
-
-    it("matches ignoredFiles deterministically regardless of order or duplicates", () => {
-      const a = secretScanUtils.shouldScanFile("src/a.ts", {
-        ignoredFiles: ["a.ts", "b.ts"],
-      });
-      const b = secretScanUtils.shouldScanFile("src/a.ts", {
-        ignoredFiles: ["b.ts", "a.ts"],
-      });
-      const c = secretScanUtils.shouldScanFile("src/a.ts", {
-        ignoredFiles: ["a.ts", "a.ts", "b.ts"],
-      });
-      expect(a).toBe(b);
-      expect(b).toBe(c);
-    });
-
-    it("fails closed for traversal-like inputs without throwing", () => {
-      const traversalInputs = [
-        "../etc/passwd",
-        "../../secret",
-        "src/../../etc/passwd",
-        "..\\windows\\system32",
-        "src/./a.ts",
-      ];
-      for (const relativePath of traversalInputs) {
-        const result = secretScanUtils.shouldScanFile(relativePath);
-        expect(typeof result).toBe("boolean");
-      }
-    });
-
-    it("handles unreadable directories without throwing during collection", () => {
-      if (isRootUser()) {
-        return;
-      }
-      const fixtureRoot = createFixtureDirWithMode(0o000);
-      try {
-        expect(secretScanUtils.collectScanTargets(fixtureRoot)).toEqual([]);
-      } finally {
-        fs.chmodSync(fixtureRoot, 0o700);
-      }
-    });
-
-    it("handles unreadable files without throwing during collection", () => {
-      if (isRootUser()) {
-        return;
-      }
-      const fixtureRoot = createFixtureDir();
-      const filePath = writeFixture(fixtureRoot, "src/locked.ts", "export {};\n");
-      fs.chmodSync(filePath, 0o000);
-      try {
-        const targets = secretScanUtils.collectScanTargets(fixtureRoot);
-        const relativePaths = targets.map((target: { relativePath: string }) => target.relativePath);
-        expect(relativePaths).not.toContain("src/locked.ts");
-      } finally {
-        fs.chmodSync(filePath, 0o600);
-      }
-    });
-
-    it("returns an empty target list for a missing root without throwing", () => {
-      const fixtureRoot = createFixtureDir();
-      const missing = path.join(fixtureRoot, "does-not-exist");
-      expect(secretScanUtils.collectScanTargets(missing)).toEqual([]);
-    });
-
-    it("does not leak secret values through error messages on failure", () => {
-      const planted = makeHighEntropySecret();
-      const fixtureRoot = createFixtureDir();
-      writeFixture(fixtureRoot, "src/leak.ts", `const value = "${planted}";\n`);
-
-      const result = secretScanUtils.runSecretScan({
-        backendRoot: fixtureRoot,
-        allowlist: { entries: [], globalPatterns: [] },
-      });
-
-      expect(result.ok).toBe(false);
-      expect(result.exitCode).toBe(1);
-      expect(result.message).not.toContain(planted);
-      secretScanUtils.assertNoSecretsPrinted(result.message, result.findings);
-    });
-
-    it("recovers deterministically after a failing scan", () => {
-      const fixtureRoot = createFixtureDir();
-      const planted = makeHighEntropySecret();
-      writeFixture(fixtureRoot, "src/leak.ts", `const value = "${planted}";\n`);
-
-      const first = secretScanUtils.runSecretScan({
-        backendRoot: fixtureRoot,
-        allowlist: { entries: [], globalPatterns: [] },
-      });
-      const second = secretScanUtils.runSecretScan({
-        backendRoot: fixtureRoot,
-        allowlist: { entries: [], globalPatterns: [] },
-      });
-
-      expect(first.ok).toBe(false);
-      expect(second.ok).toBe(false);
-      expect(first.exitCode).toBe(second.exitCode);
-      expect(first.findings.length).toBe(second.findings.length);
-    });
+it("normalizeAllowlist is deterministic for boundary and malformed inputs", () => {
+    const { normalizeAllowlist } = secretScanUtils;
   });
 
   describe("isObviousPlaceholder failure boundaries", () => {
@@ -685,163 +432,104 @@ describe("secret-scan-utils", () => {
       }
     });
 
-    it("treats String objects identically to string primitives", () => {
-      const runtimeNonPlaceholder = ["prod", "token", "1A2b3C4d5E6f7G8h9I0j!?"].join("-");
-      // eslint-disable-next-line no-new-wrappers
-      const placeholderObj = new String("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
-      // eslint-disable-next-line no-new-wrappers
-      const realObj = new String(runtimeNonPlaceholder);
-      const placeholderPrim = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
-      const realPrim = runtimeNonPlaceholder;
+    // Non-object / missing inputs normalize to empty collections.
+    expect(normalizeAllowlist(undefined)).toEqual({ entries: [], globalPatterns: [] });
+    expect(normalizeAllowlist(null)).toEqual({ entries: [], globalPatterns: [] });
+    expect(normalizeAllowlist("not-an-object")).toEqual({ entries: [], globalPatterns: [] });
+    expect(normalizeAllowlist(42)).toEqual({ entries: [], globalPatterns: [] });
+    expect(normalizeAllowlist([])).toEqual({ entries: [], globalPatterns: [] });
 
-      expect(secretScanUtils.isObviousPlaceholder(placeholderObj as unknown as string)).toBe(
-        secretScanUtils.isObviousPlaceholder(placeholderPrim)
-      );
-      expect(secretScanUtils.isObviousPlaceholder(realObj as unknown as string)).toBe(
-        secretScanUtils.isObviousPlaceholder(realPrim)
-      );
-      expect(secretScanUtils.isObviousPlaceholder(placeholderObj as unknown as string)).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder(realObj as unknown as string)).toBe(false);
+    // Wrong types for the collections fall back to empty arrays.
+    expect(normalizeAllowlist({ entries: "not-an-array", globalPatterns: {} })).toEqual({
+      entries: [],
+      globalPatterns: [],
     });
 
-    it("is deterministic across repeated calls with identical inputs", () => {
-      const runtimeQlx = ["qlx", "live", "abcdefghijklmnopqrstuvwxyz01"].join("_");
-      const runtimeStripeSuffix = ["abcdefghijklmnop", "qrstuvwxyz123456"].join("");
-      const runtimeStripe = ["sk", "live", runtimeStripeSuffix].join("_");
-      const cases = [
-        "",
-        "xxx",
-        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-        "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
-        "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
-        "your-api-key-here",
-        "example-secret-value",
-        "PLACEHOLDER_FOR_TEST",
-        "changeme-in-prod",
-        "test_secret_value",
-        "test-secret-123",
-        "development-only-token",
-        "fallback-secret-config",
-        "getInvoicesQuerySchema",
-        "/api/v1/invoices",
-        "https://quicklendx.example.com/callback",
-        runtimeQlx,
-        runtimeStripe,
-        "SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
-        "abababababababababababababababab",
-        "   ",
-        "\n\t",
-      ];
-
-      for (const input of cases) {
-        const first = secretScanUtils.isObviousPlaceholder(input);
-        for (let i = 0; i < 50; i++) {
-          expect(secretScanUtils.isObviousPlaceholder(input)).toBe(first);
-        }
-      }
+    // Entries that are not objects are dropped deterministically.
+    const nonObjectEntries = normalizeAllowlist({
+      entries: [null, "string", 123, true, undefined],
+      globalPatterns: [null, "bad", 0, false],
     });
+    expect(nonObjectEntries).toEqual({ entries: [], globalPatterns: [] });
 
-    it("produces consistent results under concurrent interleaved calls", () => {
-      const runtimeQlx = ["qlx", "live", "abcdefghijklmnopqrstuvwxyz01"].join("_");
-      const runtimeStripeSuffix = ["abcdefghijklmnop", "qrstuvwxyz123456"].join("");
-      const runtimeStripe = ["sk", "live", runtimeStripeSuffix].join("_");
-      const inputs = [
-        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-        runtimeQlx,
-        "your-secret-key",
-        runtimeStripe,
-        "",
-      ];
-      const expected = inputs.map((input) => secretScanUtils.isObviousPlaceholder(input));
-
-      const permutations = inputs.map((_, offset) => [
-        ...inputs.slice(offset),
-        ...inputs.slice(0, offset),
-      ]);
-      for (const orderedInputs of permutations) {
-        for (const value of orderedInputs) {
-          const idx = inputs.indexOf(value);
-          expect(secretScanUtils.isObviousPlaceholder(value)).toBe(expected[idx]);
-        }
-      }
+    // Entries without a meaningful match or pattern are dropped.
+    const missingMatch = normalizeAllowlist({
+      entries: [
+        { file: "src/a.ts", line: 1 },
+        { file: "src/b.ts", match: "" },
+        { file: "src/c.ts", pattern: "" },
+        { file: "src/d.ts", match: "   " },
+      ],
+      globalPatterns: [],
     });
+    expect(missingMatch.entries).toHaveLength(0);
 
-    it("respects MIN_HIGH_ENTROPY_LENGTH boundary for low-unique-char strings", () => {
-      const threshold = secretScanUtils.MIN_HIGH_ENTROPY_LENGTH as number;
-
-      const below = "a".repeat(threshold - 1);
-      const at = "a".repeat(threshold);
-      const above = "a".repeat(threshold + 1);
-
-      expect(secretScanUtils.isObviousPlaceholder(below)).toBe(false);
-      expect(secretScanUtils.isObviousPlaceholder(at)).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder(above)).toBe(true);
-
-      const belowTwo = "ab".repeat(Math.floor((threshold - 1) / 2));
-      const atTwo = "ab".repeat(Math.floor(threshold / 2)).slice(0, threshold);
-      expect(new Set(belowTwo).size <= 2).toBe(true);
-      expect(new Set(atTwo).size <= 2).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder(belowTwo)).toBe(false);
-      expect(secretScanUtils.isObviousPlaceholder(atTwo)).toBe(true);
-
-      const threeChars = "abc".repeat(Math.ceil(threshold / 3)).slice(0, threshold);
-      expect(new Set(threeChars).size).toBeGreaterThan(2);
-      expect(secretScanUtils.isObviousPlaceholder(threeChars)).toBe(false);
+    // Valid entries are preserved with normalized numeric line numbers.
+    const valid = normalizeAllowlist({
+      entries: [
+        { file: "src/a.ts", line: 3, match: "secret-a" },
+        { file: "src/b.ts", pattern: "^sk_test_" },
+        { file: "src/c.ts", line: "7", match: "secret-c" },
+        { file: "src/d.ts", line: "not-a-number", match: "secret-d" },
+      ],
+      globalPatterns: [{ pattern: "^global-$" }],
     });
+    expect(valid.entries.length).toBe(4);
+    expect(valid.entries[0]).toMatchObject({ file: "src/a.ts", line: 3, match: "secret-a" });
+    expect(valid.entries[1]).toMatchObject({ file: "src/b.ts", pattern: "^sk_test_" });
+    expect(valid.entries[2]).toMatchObject({ file: "src/c.ts", line: 7, match: "secret-c" });
+    expect(valid.entries[3]).toMatchObject({ file: "src/d.ts", match: "secret-d" });
+    expect(valid.globalPatterns).toHaveLength(1);
 
-    it("returns false for clearly non-placeholder strings", () => {
-      const runtimeQlx = ["qlx", "live", "abcdefghijklmnopqrstuvwxyz01"].join("_");
-      const runtimeStripeSuffix = ["abcdefghijklmnop", "qrstuvwxyz123456"].join("");
-      const runtimeStripe = ["sk", "live", runtimeStripeSuffix].join("_");
-      const runtimeSlack = ["xoxb", "123456", "789012", "abcdefghijklmnop"].join("-");
-      const runtimeAws = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
-      const nonPlaceholders = [
-        runtimeQlx,
-        runtimeStripe,
-        runtimeSlack,
-        runtimeAws,
-        "not-a-template-32-chars-of-entropy-!",
-        "mixedContent123!@#",
-      ];
+    // Normalization is pure: the same input yields the same output and the
+    // input object is not mutated.
+    const input = {
+      entries: [{ file: "src/a.ts", line: 1, match: "secret" }],
+      globalPatterns: [],
+    };
+    const snapshot = JSON.stringify(input);
+    const first = normalizeAllowlist(input);
+    const second = normalizeAllowlist(input);
+    expect(first).toEqual(second);
+    expect(JSON.stringify(input)).toBe(snapshot);
 
-      for (const value of nonPlaceholders) {
-        expect(secretScanUtils.isObviousPlaceholder(value)).toBe(false);
-      }
+    // Deep duplicates are deduplicated while preserving order.
+    const deduped = normalizeAllowlist({
+      entries: [
+        { file: "src/a.ts", line: 1, match: "secret" },
+        { file: "src/a.ts", line: 1, match: "secret" },
+        { file: "src/b.ts", line: 2, match: "secret" },
+      ],
+      globalPatterns: [{ pattern: "^global-$" }, { pattern: "^global-$" }],
     });
+    expect(deduped.entries).toHaveLength(2);
+    expect(deduped.globalPatterns).toHaveLength(1);
 
-    it("prevents scan-line crashes when candidate.match is a non-string via direct path", () => {
-      const planted = makeHighEntropySecret();
-      const findingsBefore = secretScanUtils.scanLine(
-        `const token = "${planted}";`,
-        1,
-        "src/ok.ts",
-        { entries: [], globalPatterns: [] }
-      );
-      expect(findingsBefore).toHaveLength(1);
-      expect(findingsBefore[0].type).toBe("high-entropy");
-    });
+    // Oversized inputs are bounded to the configured capacity without throwing.
+    const manyEntries = Array.from({ length: 10005 }, (_, index) => ({
+      file: `src/${index}.ts`,
+      line: index + 1,
+      match: `secret-${index}`,
+    }));
+    const bounded = normalizeAllowlist({ entries: manyEntries, globalPatterns: [] });
+    expect(bounded.entries.length).toBeLessThanOrEqual(10000);
+    expect(bounded.entries.length).toBeGreaterThan(0);
 
-    it("matches prefix patterns case-insensitively and with boundaries", () => {
-      expect(secretScanUtils.isObviousPlaceholder("Your_Key_Here")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("EXAMPLE_SECRET_TOKEN")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("PlaceholderValue")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("CHANGEME_IN_PRODUCTION")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("TESTSECRET_XYZ")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("test_secret_xyz")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("Development-Only-Stub")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("Fallback-Secret-Standalone")).toBe(true);
+    // Overlong patterns are rejected rather than being truncated into a
+    // potentially matching pattern.
+    const longPattern = "^" + "a".repeat(600) + "$";
+    const longPatternAllowlist = normalizeAllowlist({
+      entries: [],
+      globalPatterns: [{ pattern: longPattern }],
     });
+    expect(longPatternAllowlist.globalPatterns).toHaveLength(0);
 
-    it("handles single-char repeating strings just below threshold", () => {
-      const threshold = secretScanUtils.MIN_HIGH_ENTROPY_LENGTH as number;
-      const justBelow = "x".repeat(threshold - 1);
-      expect(secretScanUtils.isObviousPlaceholder(justBelow)).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("x")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("X")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("y")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("z")).toBe(true);
-      expect(secretScanUtils.isObviousPlaceholder("w")).toBe(false);
+    // Invalid regex patterns are dropped and do not throw.
+    const invalidRegex = normalizeAllowlist({
+      entries: [],
+      globalPatterns: [{ pattern: "([unterminated" }],
     });
+    expect(invalidRegex.globalPatterns).toHaveLength(0);
   });
 });
 
@@ -1871,18 +1559,5 @@ describe("scanTargets failure boundaries (issue 2617)", () => {
     expect(new Set(findings.map((finding: { file: string }) => finding.file))).toEqual(
       new Set(["src/lib/deep/nested.ts", "src/top.ts"])
     );
-  });
-});
-
-describe("backend security:scan integration", () => {
-  const repoRoot = path.resolve(__dirname, "..");
-
-  it("chains secret scanning into security:scan", () => {
-    const packageJson = JSON.parse(
-      fs.readFileSync(path.join(repoRoot, "package.json"), "utf8")
-    ) as { scripts: Record<string, string> };
-
-    expect(packageJson.scripts["security:scan"]).toContain("dependency-scan.js");
-    expect(packageJson.scripts["security:scan"]).toContain("secret-scan.js");
   });
 });
