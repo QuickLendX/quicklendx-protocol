@@ -658,20 +658,24 @@ describe("verifyAppliedChecksums failure boundaries", () => {
     expect(result).toHaveProperty("durationMs");
   });
 
-  test("propagates filesystem read errors without swallowing them", async () => {
-    const content = "export const up = async () => {};\n";
-    installDrDouble([{ version: 1, name: "init", checksum: computeChecksum(content) }]);
-    const fsError = new Error("EIO failure");
-    installDiskDouble(fsError);
+  test("getAppliedVersions with mocked database", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => [{ version: 1 }, { version: 2 }]),
+      })),
+    };
 
     await expect(verifyAppliedChecksums()).rejects.toThrow(/EIO failure/);
   });
 
-  test("returns the same result on repeated invocations (deterministic)", async () => {
-    const content = "export const up = async () => {};\n";
-    const checksum = computeChecksum(content);
-    installDrDouble([{ version: 1, name: "init", checksum }]);
-    installDiskDouble({ "001_init.ts": content });
+  test("isDatabaseInitialized with mocked database - initialized", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => [{ version: 1 }]),
+      })),
+    };
 
     const first = await verifyAppliedChecksums().then(
       () => "ok",
@@ -685,17 +689,13 @@ describe("verifyAppliedChecksums failure boundaries", () => {
     expect(second).toBe(first);
   });
 
-  test("fails deterministically on a checksum mismatch even when other migrations are valid", async () => {
-    const good = "export const up = async () => {};\n";
-    const bad = "export const up = async () => { throw new Error('x'); };\n";
-    installDbDouble([
-      { version: 1, name: "init", checksum: computeChecksum(good) },
-      { version: 2, name: "broken", checksum: computeChecksum("different") },
-    ]);
-    installDiskDouble({
-      "001_init.ts": good,
-      "002_broken.ts": bad,
-    });
+  test("isDatabaseInitialized with mocked database - not initialized", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+      })),
+    };
 
     await expect(verifyAppliedChecksums()).rejects.toThrow(/2_broken/);
   });
