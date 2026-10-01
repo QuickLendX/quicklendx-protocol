@@ -158,12 +158,20 @@ describe('createPending', () => {
     expect(s2.id).toBe(s1.id);
   });
 
-  test('custom contract_version and event_schema_version are respected', () => {
+  test('rejects contract_version and event_schema_version above the supported maximum', () => {
     const input = makeInput({ contract_version: 2, event_schema_version: 3 });
+
+    expect(() => settlementOrchestrator.createPending(input)).toThrow(
+      /Unsupported settlement version/
+    );
+  });
+
+  test('accepts the supported contract_version and event_schema_version', () => {
+    const input = makeInput({ contract_version: 1, event_schema_version: 1 });
     const s = settlementOrchestrator.createPending(input);
 
-    expect(s.contract_version).toBe(2);
-    expect(s.event_schema_version).toBe(3);
+    expect(s.contract_version).toBe(1);
+    expect(s.event_schema_version).toBe(1);
   });
 });
 
