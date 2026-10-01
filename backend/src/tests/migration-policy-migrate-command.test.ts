@@ -6,6 +6,7 @@
  * permission and concurrency — is reproduced deterministically without a
  * database or migration files.
  */
+import { vi, type MockedFunction, type MockInstance } from "vitest";
 import {
   describeFailure,
   migrateCommand,
@@ -20,17 +21,17 @@ import {
   validateMigrationFiles,
 } from "../lib/migrations/runner";
 
-jest.mock("../lib/migrations/runner", () => ({
-  runMigrations: jest.fn(),
-  loadMigrationsFromFS: jest.fn(),
-  getAppliedVersions: jest.fn(),
-  validateMigrationFiles: jest.fn(),
+vi.mock("../lib/migrations/runner", () => ({
+  runMigrations: vi.fn(),
+  loadMigrationsFromFS: vi.fn(),
+  getAppliedVersions: vi.fn(),
+  validateMigrationFiles: vi.fn(),
 }));
 
-const mockRun = runMigrations as jest.MockedFunction<typeof runMigrations>;
-const mockLoad = loadMigrationsFromFS as jest.MockedFunction<typeof loadMigrationsFromFS>;
-const mockApplied = getAppliedVersions as jest.MockedFunction<typeof getAppliedVersions>;
-const mockValidateFiles = validateMigrationFiles as jest.MockedFunction<typeof validateMigrationFiles>;
+const mockRun = runMigrations as MockedFunction<typeof runMigrations>;
+const mockLoad = loadMigrationsFromFS as MockedFunction<typeof loadMigrationsFromFS>;
+const mockApplied = getAppliedVersions as MockedFunction<typeof getAppliedVersions>;
+const mockValidateFiles = validateMigrationFiles as MockedFunction<typeof validateMigrationFiles>;
 
 type RunResult = Awaited<ReturnType<typeof runMigrations>>;
 type FileMigration = Awaited<ReturnType<typeof loadMigrationsFromFS>>[number];
@@ -78,14 +79,14 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-let errorSpy: jest.SpyInstance;
-let logSpy: jest.SpyInstance;
+let errorSpy: MockInstance;
+let logSpy: MockInstance;
 const ORIGINAL_ALLOW_DOWN = process.env.ALLOW_DOWN_MIGRATIONS;
 
 beforeEach(() => {
-  jest.resetAllMocks();
-  errorSpy = jest.spyOn(console, "error").mockImplementation(() => undefined);
-  logSpy = jest.spyOn(console, "log").mockImplementation(() => undefined);
+  vi.resetAllMocks();
+  errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+  logSpy = vi.spyOn(console, "log").mockImplementation(() => undefined);
   delete process.env.ALLOW_DOWN_MIGRATIONS;
   mockApplied.mockResolvedValue([]);
   mockRun.mockResolvedValue(runResult(0));
@@ -217,7 +218,7 @@ describe("migrateCommand — rejection", () => {
     const result = await migrateCommand({ allowDown: true });
     expect(result).toEqual({
       success: false,
-      code: "DOWN_REFUSED",
+      code: "DOWN_REQUIRES_EMERGENCY",
       message: "Refusing to run down migrations without --emergency flag. This is a safety guard.",
     });
     expect(mockRun).not.toHaveBeenCalled();
@@ -225,7 +226,7 @@ describe("migrateCommand — rejection", () => {
 
   test("permission: allow-down is refused while ALLOW_DOWN_MIGRATIONS is unset", async () => {
     const result = await migrateCommand({ allowDown: true, emergency: true });
-    expect(result).toMatchObject({ success: false, code: "DOWN_REFUSED" });
+    expect(result).toMatchObject({ success: false, code: "DOWN_GLOBALLY_DISABLED" });
     expect(result.message).toMatch(/globally disabled/);
     expect(mockRun).not.toHaveBeenCalled();
   });
@@ -233,7 +234,7 @@ describe("migrateCommand — rejection", () => {
   test("permission: ALLOW_DOWN_MIGRATIONS must be exactly \"true\"", async () => {
     process.env.ALLOW_DOWN_MIGRATIONS = "TRUE";
     const result = await migrateCommand({ allowDown: true, emergency: true });
-    expect(result.code).toBe("DOWN_REFUSED");
+    expect(result.code).toBe("DOWN_GLOBALLY_DISABLED");
   });
 });
 
@@ -255,7 +256,7 @@ describe("migrateCommand --check", () => {
     mockApplied.mockResolvedValue([1]);
 
     const result = await migrateCommand({ check: true });
-    expect(result).toMatchObject({ success: false, code: "CHECK_FAILED" });
+    expect(result).toMatchObject({ success: false, code: "MIGRATION_OUT_OF_SYNC" });
     expect(loggedErrors()).toContain("Migration 2_m2 is not applied");
   });
 
@@ -265,7 +266,7 @@ describe("migrateCommand --check", () => {
     mockApplied.mockResolvedValue([1, 2]);
 
     const result = await migrateCommand({ check: true });
-    expect(result).toMatchObject({ success: false, code: "CHECK_FAILED" });
+    expect(result).toMatchObject({ success: false, code: "MIGRATION_OUT_OF_SYNC" });
     expect(loggedErrors()).toContain("Applied migration 2 has no file in this checkout");
   });
 
@@ -275,7 +276,7 @@ describe("migrateCommand --check", () => {
     mockApplied.mockResolvedValue([1, 3]);
 
     const result = await migrateCommand({ check: true });
-    expect(result.code).toBe("CHECK_FAILED");
+    expect(result.code).toBe("MIGRATION_OUT_OF_SYNC");
     expect(loggedErrors()).toContain("Gap detected");
   });
 
@@ -298,6 +299,7 @@ describe("migrateCommand --validate-only", () => {
     await expect(migrateCommand({ validateOnly: true })).resolves.toEqual({
       success: true,
       message: "Validation passed",
+      warnings: [],
     });
   });
 
@@ -320,7 +322,7 @@ describe("migrateCommand --validate-only", () => {
   test("fails on duplicate versions and missing metadata", async () => {
     mockLoad.mockResolvedValue([fileMigration(1), fileMigration(1, { author: "" })]);
     const result = await migrateCommand({ "validate-only": true });
-    expect(result).toMatchObject({ success: false, code: "VALIDATION_FAILED" });
+    expect(result).toMatchObject({ success: false, code: "MIGRATION_VALIDATION_FAILED" });
     expect(loggedErrors()).toContain("Duplicate migration version 1");
     expect(loggedErrors()).toContain("Migration author is required");
   });
@@ -471,14 +473,32 @@ describe("migrateCommand — concurrency", () => {
 describe("migrateDownCommand — existing guards", () => {
   test("still requires --emergency or ALLOW_DOWN_MIGRATIONS", async () => {
     const result = await migrateDownCommand({});
-    expect(result.success).toBe(false);
+    expect(result).toMatchObject({ success: false, code: "DOWN_NOT_ALLOWED" });
     expect(result.message).toMatch(/require --emergency flag or ALLOW_DOWN_MIGRATIONS=true/);
     expect(mockRun).not.toHaveBeenCalled();
   });
 
   test("still rejects --to together with --all", async () => {
     const result = await migrateDownCommand({ emergency: true, to: "3", all: true });
-    expect(result).toEqual({ success: false, message: "Cannot specify both --to and --all flags." });
+    expect(result).toEqual({
+      success: false,
+      code: "CONFLICTING_FLAGS",
+      message: "Cannot specify both --to and --all flags.",
+    });
+  });
+
+  test("accepts a numeric --to and forwards it to the runner as a string", async () => {
+    process.env.ALLOW_DOWN_MIGRATIONS = "true";
+    const result = await migrateDownCommand({ to: 3 });
+    expect(result.success).toBe(true);
+    expect(mockRun).toHaveBeenCalledWith(expect.objectContaining({ allowDown: true, to: "3" }));
+  });
+
+  test("runner failures resolve to RUN_FAILED with a redacted message", async () => {
+    mockRun.mockRejectedValueOnce(new Error("connect postgres://admin:hunter2@db/app failed"));
+    const result = await migrateDownCommand({ emergency: true });
+    expect(result).toMatchObject({ success: false, code: "RUN_FAILED" });
+    expect(result.message).not.toContain("hunter2");
   });
 });
 
