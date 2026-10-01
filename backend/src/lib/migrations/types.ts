@@ -94,38 +94,38 @@ export const MigrationErrorCodes = {
   CHECKSUM_MISMATCH: "CHECKSUM_MISMATCH",
   HOTFIX_REQUIRES_APPROVAL: "HOTFIX_REQUIRES_APPROVAL",
   UNSUPPORTED_IN_PRODUCTION: "UNSUPPORTED_IN_PRODUCTION",
+  /** The migrations directory could not be read (missing, not a directory, or permission denied). */
+  MIGRATIONS_DIRECTORY_UNREADABLE: "MIGRATIONS_DIRECTORY_UNREADABLE",
+  /** A migration file failed to parse or export a valid definition. */
+  MIGRATION_FILE_INVALID: "MIGRATION_FILE_INVALID",
+  /** Two migration files declare the same version. */
+  MIGRATION_DUPLICATE_VERSION: "MIGRATION_DUPLICATE_VERSION",
+} as const;
+
 export type MigrationErrorCode = (typeof MigrationErrorCodes)[keyof typeof MigrationErrorCodes];
 
 /**
- * Constructor for a typed migration error that carries a stable error code.
+ * Structured error thrown by the migration runner.
  *
- * The cli entry point must be able to distinguish between a known failure boundary
- * (e.g. checksum mismatch, missing migration, unapproved hotfix) and an
- * unexpected internal error. This keeps exit codes and log output deterministic
- * and avoids exposing raw driver messages to users.
+ * Invariants:
+ *  - `code` is always one of {@link MigrationErrorCodes}.
+ *  - `context` must never contain secrets (passwords, tokens, SQL parameters).
+ *  - `message` is safe to log and to surface to operators.
  */
 export class MigrationError extends Error {
-  public readonly code: string;
-  public readonly cause?: unknown;
+  public readonly code: MigrationErrorCode;
+  public readonly context?: Record<string, unknown>;
 
-  constructor(code: string, message: string, options?: { cause?: unknown }) {
+  constructor(
+    code: MigrationErrorCode,
+    message: string,
+    context?: Record<string, unknown>,
+  ) {
     super(message);
     this.name = "MigrationError";
     this.code = code;
-    this.cause = options?.cause;
+    this.context = context;
   }
-}
-
-/**
- * Result of a single migration attempt (success or failure).
- * Used by the cli to render deterministic summaries and exit codes.
- */
-export interface MigrationResult {
-  version: number;
-  name: string;
-  status: "applied" | "skipped" | "failed";
-  durationMs: number;
-  error?: { code: string; message: string };
 }
 
 /*
