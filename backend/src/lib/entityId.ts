@@ -19,7 +19,7 @@ class BadRequestError extends Error {
   }
 }
 
-function assertEntityId(prefix: string, value: unknown): asserts value is string {
+export function assertEntityId(prefix: string, value: unknown): asserts value is string {
   if (typeof value !== "string") {
     throw new BadRequestError("Invalid entity ID", "INVALID_ENTITY_ID");
   }

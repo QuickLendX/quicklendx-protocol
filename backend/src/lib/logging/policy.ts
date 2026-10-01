@@ -214,9 +214,20 @@ export function isSecret(name: string): boolean {
   return classifyField(name) === FieldTier.SECRET;
 }
 
-/** True when a field is safe to log verbatim. */
+/** 
+ * True when a field is safe to log verbatim. 
+ * Failure boundary: invalid inputs (null, objects, non-strings) fail closed (return false)
+ * rather than throwing.
+ */
 export function isPublic(name: string): boolean {
-  return classifyField(name) === FieldTier.PUBLIC;
+  if (typeof name !== "string") {
+    return false;
+  }
+  try {
+    return classifyField(name) === FieldTier.PUBLIC;
+  } catch {
+    return false;
+  }
 }
 
 /** True when a field should be hashed before logging. */
