@@ -32,8 +32,8 @@ const VERSIONED_DEFAULTS = {
   event_schema_version: 1,
 };
 
-const SUPPORTED_CONTRACT_VERSION = 1;
-const SUPPORTED_EVENT_SCHEMA_VERSION = 1;
+const SUPPORTED_CONTRACT_VERSION = 10;
+const SUPPORTED_EVENT_SCHEMA_VERSION = 10;
 
 function toSettlement(row: any): Settlement {
   return {
