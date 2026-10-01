@@ -1,3 +1,4 @@
+
 /**
  * Unit tests for the SQLite-backed Database class (src/db/database.ts).
  *
@@ -12,6 +13,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { getDatabase, closeDatabase } from '../lib/database';
 import { db, DbApiKey, DbAuditLog } from '../db/database';
+import { getApiKey } from '../controllers/v1/api-keys';
 
 // ---------------------------------------------------------------------------
 // Test database lifecycle – isolated temp file per run
@@ -454,5 +456,87 @@ describe('Audit log event_type constraints', () => {
   ] as const)('accepts valid event_type: %s', (eventType) => {
     const log = makeAuditLog({ key_id: keyId, event_type: eventType });
     expect(() => db.createAuditLog(log)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getApiKey failure-boundary coverage
+// ---------------------------------------------------------------------------
+
+describe('getApiKey failure boundaries', () => {
+  function makeReq(overrides: Record<string, unknown> = {}) {
+    return {
+      params: {},
+      query: {},
+      headers: {},
+      user: { id: 'test-user', scopes: ['read:*'] },
+      ...overrides,
+    } as any;
+  }
+
+  function makeRes() {
+    const res: any = {};
+    res.status = jest.fn().mockReturnValue(res);
+    res.json = jest.fn().mockReturnValue(res);
+    return res;
+  }
+
+  test('returns 400 for missing id', async () => {
+    const req = makeReq({ params: {} });
+    const res = makeRes();
+    await getApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('returns 404 for unknown id', async () => {
+    const req = makeReq({ params: { id: 'missing-id' } });
+    const res = makeRes();
+    await getApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  test('returns 403 when caller lacks ownership', async () => {
+    const key = makeKey({ created_by: 'someone-else' });
+    db.createApiKey(key);
+    const req = makeReq({
+      params: { id: key.id },
+      user: { id: 'test-user', scopes: ['read:*'] },
+    });
+    const res = makeRes();
+    await getApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  test('returns 200 for owner', async () => {
+    const key = makeKey({ created_by: 'test-user' });
+    db.createApiKey(key);
+    const req = makeReq({ params: { id: key.id } });
+    const res = makeRes();
+    await getApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.json).toHaveBeenCalled();
+  });
+
+  test('does not expose key_hash in response', async () => {
+    const key = makeKey({ created_by: 'test-user' });
+    db.createApiKey(key);
+    const req = makeReq({ params: { id: key.id } });
+    const res = makeRes();
+    await getApiKey(req, res);
+    const payload = res.json.mock.calls[0][0];
+    expect(JSON.stringify(payload)).not.toContain(key.key_hash);
+  });
+
+  test('deterministic across repeated calls', async () => {
+    const key = makeKey({ created_by: 'test-user' });
+    db.createApiKey(key);
+    const req = makeReq({ params: { id: key.id } });
+    const res1 = makeRes();
+    const res2 = makeRes();
+    await getApiKey(req, res1);
+    await getApiKey(req, res2);
+    expect(res1.status).toHaveBeenCalledWith(200);
+    expect(res2.status).toHaveBeenCalledWith(200);
+    expect(res1.json.mock.calls[0][0]).toEqual(res2.json.mock.calls[0][0]);
   });
 });
