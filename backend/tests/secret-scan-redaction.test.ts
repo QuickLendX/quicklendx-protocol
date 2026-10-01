@@ -18,6 +18,7 @@
 const secretScanUtils = require("../scripts/lib/secret-scan-utils");
 
 const {
+  collectQuotedStringMatches,
   PREVIEW_EDGE_LENGTH,
   PREVIEW_ELLIPSIS,
   PREVIEW_MASK_CHARACTER,
@@ -581,5 +582,21 @@ describe("redactPreview: existing callers stay compatible", () => {
     expect(() =>
       secretScanUtils.assertNoSecretsPrinted(secretScanUtils.formatFinding(finding), [finding])
     ).toThrow(/leaked a matched value/);
+  });
+});
+
+describe("collectQuotedStringMatches: failure boundaries", () => {
+  it("returns no matches for nullish and non-string input without throwing", () => {
+    for (const value of [null, undefined, 42, {}, Symbol("line")] as unknown[]) {
+      expect(() => collectQuotedStringMatches(value)).not.toThrow();
+      expect(collectQuotedStringMatches(value)).toEqual([]);
+    }
+  });
+
+  it("preserves deterministic ordering and columns for valid quoted strings", () => {
+    expect(collectQuotedStringMatches('a = "first"; b = \'second\';')).toEqual([
+      { literal: '"first"', value: "first", column: 5 },
+      { literal: "'second'", value: "second", column: 18 },
+    ]);
   });
 });
