@@ -104,8 +104,8 @@ function makeStep(
 // ============================================================================
 describe('registry API — register / clearRegistry / getRegisteredSteps', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('getRegisteredSteps returns steps sorted ascending by priority', () => {
@@ -172,8 +172,8 @@ describe('registry API — register / clearRegistry / getRegisteredSteps', () =>
 // ============================================================================
 describe('runAll — priority ordering', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('executes steps in ascending priority order regardless of registration order', async () => {
@@ -227,8 +227,8 @@ describe('runAll — priority ordering', () => {
 // ============================================================================
 describe('runAll — error isolation: a failing step does not block subsequent steps', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('continues to subsequent steps when an earlier step throws', async () => {
@@ -310,8 +310,8 @@ describe('runAll — error isolation: a failing step does not block subsequent s
 // ============================================================================
 describe('runAll — total timeout boundary', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('skips remaining steps when the total timeout is exceeded by a slow step', async () => {
@@ -371,8 +371,8 @@ describe('runAll — total timeout boundary', () => {
 // ============================================================================
 describe('runAll — non-reentrance guard', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('a concurrent call while runAll is in progress returns immediately with empty outcomes', async () => {
@@ -413,8 +413,8 @@ describe('isShuttingDown state transitions', () => {
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -458,8 +458,8 @@ describe('createShutdownHandler — second signal forces immediate exit(1)', () 
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -515,8 +515,8 @@ describe('createShutdownHandler — HTTP drain boundary', () => {
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (webhookQueueService.flush as jest.Mock).mockReturnValue([]);
@@ -594,8 +594,8 @@ describe('createShutdownHandler — webhook flush failure boundaries', () => {
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -672,8 +672,8 @@ describe('createShutdownHandler — database close failure boundaries', () => {
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -747,8 +747,8 @@ describe('createShutdownHandler — canonical step sequence and ordering', () =>
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);
@@ -816,8 +816,8 @@ describe('createShutdownHandler — canonical step sequence and ordering', () =>
 // ============================================================================
 describe('ShutdownResult observability', () => {
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
   });
 
   it('result.signal matches the argument passed to runAll', async () => {
@@ -901,8 +901,8 @@ describe('regression — concurrent handler invocations', () => {
   let exitSpy: jest.SpyInstance;
 
   beforeEach(() => {
-    clearRegistry();
     resetShuttingDown();
+    clearRegistry();
     jest.clearAllMocks();
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
     (getActiveRequests as jest.Mock).mockReturnValue(0);

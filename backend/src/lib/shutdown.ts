@@ -98,6 +98,12 @@ export function getRegisteredStep(name: string): ShutdownStep | undefined {
 
 /** Remove all registered steps — used in tests between cases. */
 export function clearRegistry(): void {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('Permission denied: clearRegistry cannot be called in production');
+  }
+  if (_shuttingDown || _runAllInProgress) {
+    throw new Error('Invalid state: cannot clear registry while shutdown is in progress');
+  }
   _steps.length = 0;
 }
 
