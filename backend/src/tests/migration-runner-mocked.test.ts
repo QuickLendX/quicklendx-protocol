@@ -771,6 +771,26 @@ test("runMigrations with mocked database - skipChecksumVerify", async () => {
     await expect(isDatabaseInitialized(mockDb)).resolves.toBe(false);
   });
 
+  test("isDatabaseInitialized treats missing migrations table as uninitialized", async () => {
+    const mockDb: any = {
+      prepare: jest.fn(() => {
+        throw new Error("SQLITE_ERROR: no such table: _migrations");
+      }),
+    };
+
+    await expect(isDatabaseInitialized(mockDb)).resolves.toBe(false);
+  });
+
+  test("isDatabaseInitialized treats malformed query results as uninitialized", async () => {
+    const mockDb: any = {
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => null),
+      })),
+    };
+
+    await expect(isDatabaseInitialized(mockDb)).resolves.toBe(false);
+  });
+
   test("verifyAppliedChecksums with mocked database - no applied migrations", async () => {
     const mockDb: any = {
       exec: jest.fn(),
