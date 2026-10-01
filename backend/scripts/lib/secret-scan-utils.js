@@ -462,6 +462,14 @@ function unquoteString(literal) {
 }
 
 function collectQuotedStringMatches(line) {
+  // Scan callers process file lines, but keeping this helper total makes the
+  // failure boundary deterministic when a malformed caller supplies a
+  // non-string value. Returning no matches is safer than coercing arbitrary
+  // objects (which may execute user code or disclose sensitive data).
+  if (typeof line !== "string") {
+    return [];
+  }
+
   const matches = [];
   resetRegex(PLAIN_STRING_REGEX);
 
