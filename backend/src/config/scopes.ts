@@ -1,5 +1,13 @@
 /**
  * Scope Registry - Defines all valid API key scopes
+ *
+ * Invariants relied upon by `isValidScope` / `validateScopes`:
+ * - `scope` values are unique across the registry (an entry is valid iff it
+ *   appears here; duplicates would silently broaden matching).
+ * - Matching is an exact, case-sensitive literal comparison. Scopes are
+ *   never normalized: whitespace, case, and unicode variants are invalid.
+ * - The registry is a static compile-time constant; runtime code must not
+ *   add or remove entries (tests pin its contents to catch drift).
  */
 
 export interface ScopeDefinition {
@@ -110,6 +118,9 @@ export const SCOPE_REGISTRY: ScopeDefinition[] = [
 
 /**
  * Get all valid scope names
+ *
+ * Returns a fresh array on every call; callers may reorder or filter their
+ * copy without affecting later validations (no shared mutable state).
  */
 export function getValidScopes(): string[] {
   return SCOPE_REGISTRY.map(s => s.scope);
@@ -117,20 +128,56 @@ export function getValidScopes(): string[] {
 
 /**
  * Check if a scope is valid
+ *
+ * Exact, case-sensitive literal match against the registry. Non-string
+ * inputs (null, undefined, numbers, objects, ...) are rejected with `false`
+ * rather than throwing, so transport-layer junk cannot crash validation.
  */
 export function isValidScope(scope: string): boolean {
   return SCOPE_REGISTRY.some(s => s.scope === scope);
 }
 
+/** Result of validating a scope list. Frozen on return. */
+export interface ScopeValidationResult {
+  /** True only when every entry is a registered scope. */
+  readonly valid: boolean;
+  /**
+   * Rejected entries in input order, duplicates preserved, reported
+   * verbatim (no trimming, case-folding, or deduplication).
+   */
+  readonly invalid: readonly string[];
+}
+
+function describeValueType(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return 'array';
+  return typeof value;
+}
+
 /**
- * Validate an array of scopes
+ * Validate an array of scopes against the registry.
+ *
+ * Deterministic failure boundary:
+ * - Pure function: never mutates the input array or the registry, performs
+ *   no I/O, and depends on nothing but its input, so repeated or concurrent
+ *   calls with equal input always yield equal results.
+ * - `invalid` preserves input order and duplicates for precise attribution.
+ * - No normalization: `" READ:users "` is rejected, not silently fixed.
+ * - An empty list is valid (no scopes = no grants); whether an empty grant
+ *   set is acceptable is a caller policy decision.
+ * - The report is frozen; callers cannot mutate their way to a different
+ *   validation outcome.
+ * - Non-array input is a programming error and throws a TypeError naming
+ *   the received type (never a misleading "valid" result).
  */
-export function validateScopes(scopes: string[]): { valid: boolean; invalid: string[] } {
-  const invalid = scopes.filter(scope => !isValidScope(scope));
-  return {
-    valid: invalid.length === 0,
-    invalid,
-  };
+export function validateScopes(scopes: string[]): ScopeValidationResult {
+  if (!Array.isArray(scopes)) {
+    throw new TypeError(
+      `validateScopes expects an array of scope strings, received ${describeValueType(scopes)}`
+    );
+  }
+  const invalid = Object.freeze(scopes.filter(scope => !isValidScope(scope)));
+  return Object.freeze({ valid: invalid.length === 0, invalid });
 }
 
 /**
