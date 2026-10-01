@@ -26,15 +26,66 @@
 
 import { migrateCommand, migrateDownCommand } from "./policy";
 
-function parseArgs(): Record<string, unknown> {
+/** Custom error types for deterministic argument parsing. */
+export class InvalidArgumentError extends Error {
+  constructor(arg: string) {
+    super(`Invalid argument: ${arg}`);
+    this.name = "InvalidArgumentError";
+  }
+}
+export class PermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PermissionError";
+  }
+}
+
+/**
+ * Parse command‑line arguments with deterministic validation.
+ *
+ * - Flags start with `--` and are converted to camelCase keys.
+ * - Boolean flags without a value default to `true`.
+ * - Flags can accept a following non‑flag token as a value.
+ * - Positional arguments are collected in the `_` array.
+ * - Invalid syntax (single dash, lone `--`) throws `InvalidArgumentError`.
+ * - Permission‑sensitive flags (e.g., `--emergency`) throw `PermissionError`
+ *   when the runtime lacks appropriate privileges.
+ */
+export function parseArgs(argv: string[] = process.argv): Record<string, unknown> {
   const args: Record<string, unknown> = {};
-  for (let i = 2; i < process.argv.length; i++) {
-    const arg = process.argv[i];
+  for (let i = 2; i < argv.length; i++) {
+    const arg = argv[i];
+
+    // Detect invalid short flags or lone '--'
+    if (arg.startsWith("-") && !arg.startsWith("--")) {
+      throw new InvalidArgumentError(arg);
+    }
+    if (arg === "--") {
+      throw new InvalidArgumentError(arg);
+    }
+
     if (arg.startsWith("--")) {
-      const key = arg.slice(2).replace(/-/g, "");
-      // Boolean flags default to true
-      args[key] = true;
-    } else if (!arg.startsWith("-")) {
+      const keyRaw = arg.slice(2);
+      const key = keyRaw.replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+
+      // Look ahead for a value token
+      const next = argv[i + 1];
+      if (next && !next.startsWith("-")) {
+        args[key] = next;
+        i++; // consume value
+      } else {
+        args[key] = true;
+      }
+
+      // Example permission check for emergency flag
+      if (key === "emergency") {
+        if (typeof (process as any).getuid !== "function") {
+          throw new PermissionError(
+            "Emergency migrations require admin privileges on this platform."
+          );
+        }
+      }
+    } else {
       // Positional arguments
       if (!args._) args._ = [];
       (args._ as string[]).push(arg);

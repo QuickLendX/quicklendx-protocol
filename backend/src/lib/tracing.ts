@@ -39,14 +39,14 @@ interface SpanLogEntry {
  * Maximum length of a trace identifier accepted from an inbound correlation id.
  * This bounds the amount of untrusted data that can be propagated into every span log.
  */
-export const MAX_TRACE_ID_LENGTH = 256;
+export const MAX_TRACE_ID_LENGTH = 128;
 
 /**
  * Allowed characters for an inbound trace id: alphanumeric plus a conservative set of
  * separators commonly used by request id formats (e.g. UUIDs, W3 trace parents, request ids).
  * Whitespace, control characters, and log-injection sequences are rejected.
  */
-const TRACE_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,256}$/;
+const TRACE_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 /**
  * Deterministically derive a trace id from the current span context or the inbound
@@ -135,29 +135,42 @@ export function startSpan(name: string, attrs: SpanAttributes = {}): Span {
 }
 
 export function endSpan(span: Span, err?: unknown): void {
-  if (span.ended) {
-    return;
+  try {
+    if (!span || typeof span !== "object" || span.ended) {
+      return;
+    }
+
+    span.ended = true;
+    
+    let durationMs: number | undefined;
+    try {
+      if (typeof span.startedAtNs === "bigint") {
+        const endedAtNs = process.hrtime.bigint();
+        durationMs = Number(endedAtNs - span.startedAtNs) / 1_000_000;
+      }
+    } catch {
+      // Ignore duration calculation errors
+    }
+
+    emitSpanLog({
+      level: "INFO",
+      type: "TRACE_SPAN",
+      event: "end",
+      timestamp: new Date().toISOString(),
+      name: span.name || "unknown",
+      trace_id: span.traceId || "unknown",
+      span_id: span.spanId || "unknown",
+      parent_span_id: span.parentSpanId ?? null,
+      duration_ms: durationMs,
+      error: err !== undefined,
+      error_message:
+        err instanceof Error ? err.message : err ? String(err) : undefined,
+      attrs: span.attrs || {},
+    });
+  } catch {
+    // Tracing must never break the calling operation. If the span processing fails,
+    // swallow the error so the business path continues deterministically.
   }
-
-  span.ended = true;
-  const endedAtNs = process.hrtime.bigint();
-  const durationMs = Number(endedAtNs - span.startedAtNs) / 1_000_000;
-
-  emitSpanLog( {
-    level: "INFO",
-    type: "TRACE_SPAN",
-    event: "end",
-    timestamp: new Date().toISOString(),
-    name: span.name,
-    trace_id: span.traceId,
-    span_id: span.spanId,
-    parent_span_id: span.parentSpanId,
-    duration_ms: durationMs,
-    error: err !== undefined,
-    error_message:
-      err instanceof Error ? err.message : err ? String(err) : undefined,
-    attrs: span.attrs,
-  });
 }
 
 export function withSpan<T>(

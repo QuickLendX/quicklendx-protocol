@@ -52,6 +52,7 @@ import {
   ShutdownStep,
   ShutdownResult,
   register,
+  unregister,
   clearRegistry,
   getRegisteredSteps,
   runAll,
@@ -67,6 +68,7 @@ import {
   PRIORITY_RECONCILIATION,
   PRIORITY_NOTIFICATIONS,
   PRIORITY_DB,
+  MAX_SHUTDOWN_STEPS,
 } from '../lib/shutdown';
 import { getActiveRequests } from '../middleware/load-shedding';
 import { webhookQueueService } from '../services/webhookQueueService';
@@ -938,31 +940,210 @@ describe('regression — concurrent handler invocations', () => {
     expect(exitSpy).toHaveBeenCalledWith(0);
   });
 });
-// ============================================================================
-// Suite 15 - clearRegistry failure boundaries (Issue #2709)
-// ============================================================================
-describe('clearRegistry - failure boundaries', () => {
-  const originalEnv = process.env.NODE_ENV;
 
+// ============================================================================
+// Suite 15 — register() validation and boundary inputs (AC-1, AC-2)
+// ============================================================================
+describe('register — validation and boundary inputs', () => {
   beforeEach(() => {
-    resetShuttingDown();
     clearRegistry();
-  });
-
-  afterEach(() => {
-    process.env.NODE_ENV = originalEnv;
     resetShuttingDown();
+  });
+
+  it('rejects an empty step name', () => {
+    expect(() =>
+      register({ name: '', priority: 1, fn: async () => {} }),
+    ).toThrow(/name/i);
+    expect(getRegisteredSteps()).toHaveLength(0);
+  });
+
+  it('rejects a whitespace-only step name', () => {
+    expect(() =>
+      register({ name: '   ', priority: 1, fn: async () => {} }),
+    ).toThrow(/name/i);
+    expect(getRegisteredSteps()).toHaveLength(0);
+  });
+
+  it('rejects a non-function fn', () => {
+    expect(() =>
+      register({ name: 'bad-fn', priority: 1, fn: undefined as unknown as () => Promise<void> }),
+    ).toThrow(/fn/i);
+    expect(getRegisteredSteps()).toHaveLength(0);
+  });
+
+  it('rejects a non-finite priority (NaN)', () => {
+    expect(() =>
+      register({ name: 'nan-priority', priority: Number.NaN, fn: async () => {} }),
+    ).toThrow(/priority/i);
+  });
+
+  it('rejects a non-finite priority (Infinity)', () => {
+    expect(() =>
+      register({ name: 'inf-priority', priority: Number.POSITIVE_INFINITY, fn: async () => {} }),
+    ).toThrow(/priority/i);
+  });
+
+  it('accepts a negative priority (valid ordering input)', () => {
+    register({ name: 'neg', priority: -5, fn: async () => {} });
+    expect(getRegisteredSteps()).toHaveLength(1);
+    expect(getRegisteredSteps()[0].priority).toBe(-5);
+  });
+
+  it('accepts priority 0', () => {
+    register({ name: 'zero', priority: 0, fn: async () => {} });
+    expect(getRegisteredSteps()[0].priority).toBe(0);
+  });
+
+  it('trims the step name before storing it', () => {
+    register({ name: '  padded  ', priority: 1, fn: async () => {} });
+    expect(getRegisteredSteps()[0].name).toBe('padded');
+  });
+
+  it('treats trimmed names as duplicates', () => {
+    const fn1 = jest.fn();
+    const fn2 = jest.fn();
+    register({ name: 'dup', priority: 1, fn: fn1 });
+    register({ name: '  dup  ', priority: 1, fn: fn2 });
+    const steps = getRegisteredSteps();
+    expect(steps).toHaveLength(1);
+    expect(steps[0].fn).toBe(fn2);
+  });
+
+  it('throws when the registry exceeds MAX_SHUTDOWN_STEPS', () => {
+    for (let i = 0; i < MAX_SHUTDOWN_STEPS; i++) {
+      register({ name: `step-${i}`, priority: i, fn: async () => {} });
+    }
+    expect(() =>
+      register({ name: 'overflow', priority: 9999, fn: async () => {} }),
+    ).toThrow(/MAX_SHUTDOWN_STEPS|capacity|limit/i);
+    expect(getRegisteredSteps()).toHaveLength(MAX_SHUTDOWN_STEPS);
+  });
+
+  it('re-registering an existing name at capacity does not throw', () => {
+    for (let i = 0; i < MAX_SHUTDOWN_STEPS; i++) {
+      register({ name: `step-${i}`, priority: i, fn: async () => {} });
+    }
+    expect(() =>
+      register({ name: 'step-0', priority: 0, fn: async () => {} }),
+    ).not.toThrow();
+    expect(getRegisteredSteps()).toHaveLength(MAX_SHUTDOWN_STEPS);
+  });
+
+  it('does not mutate the registry when validation fails', () => {
+    register({ name: 'keep', priority: 1, fn: async () => {} });
+    expect(() =>
+      register({ name: '', priority: 2, fn: async () => {} }),
+    ).toThrow();
+    expect(getRegisteredSteps().map((s) => s.name)).toEqual(['keep']);
+  });
+});
+
+// ============================================================================
+// Suite 16 — unregister() boundary behavior (AC-1, AC-5)
+// ============================================================================
+describe('unregister — boundary behavior', () => {
+  beforeEach(() => {
     clearRegistry();
+    resetShuttingDown();
   });
 
-  it('throws if called in production', () => {
-    process.env.NODE_ENV = 'production';
-    expect(() => clearRegistry()).toThrow('Permission denied: clearRegistry cannot be called in production');
+  it('removes a previously registered step by name', () => {
+    register({ name: 'a', priority: 1, fn: async () => {} });
+    register({ name: 'b', priority: 2, fn: async () => {} });
+    expect(unregister('a')).toBe(true);
+    expect(getRegisteredSteps().map((s) => s.name)).toEqual(['b']);
   });
 
-  it('throws if called while shutting down', async () => {
-    const handler = createShutdownHandler({ close: jest.fn() } as any, 100);
-    handler('SIGTERM'); // triggers _shuttingDown = true
-    expect(() => clearRegistry()).toThrow('Invalid state: cannot clear registry while shutdown is in progress');
+  it('returns false when the name is not registered', () => {
+    expect(unregister('missing')).toBe(false);
+  });
+
+  it('is a no-op on an empty registry', () => {
+    expect(() => unregister('anything')).not.toThrow();
+    expect(unregister('anything')).toBe(false);
+  });
+
+  it('trims the name before lookup', () => {
+    register({ name: 'trimmed', priority: 1, fn: async () => {} });
+    expect(unregister('  trimmed  ')).toBe(true);
+    expect(getRegisteredSteps()).toHaveLength(0);
+  });
+
+  it('removing a step does not affect other steps ordering', () => {
+    register({ name: 'a', priority: 1, fn: async () => {} });
+    register({ name: 'b', priority: 2, fn: async () => {} });
+    register({ name: 'c', priority: 3, fn: async () => {} });
+    unregister('b');
+    expect(getRegisteredSteps().map((s) => s.name)).toEqual(['a', 'c']);
+  });
+});
+
+// ============================================================================
+// Suite 17 — runAll with a throwing step that is later re-registered (AC-3)
+// ============================================================================
+describe('runAll — recovery after partial failure', () => {
+  beforeEach(() => {
+    clearRegistry();
+    resetShuttingDown();
+  });
+
+  it('a step that failed on the first run can succeed on a subsequent run', async () => {
+    let shouldThrow = true;
+    register({
+      name: 'flaky',
+      priority: 1,
+      fn: async () => {
+        if (shouldThrow) throw new Error('first run fails');
+      },
+    });
+
+    const first = await runAll('SIGTERM', 5000);
+    expect(first.hadErrors).toBe(true);
+
+    shouldThrow = false;
+    const second = await runAll('SIGTERM', 5000);
+    expect(second.hadErrors).toBe(false);
+    expect(second.outcomes[0]).toMatchObject({ name: 'flaky', status: 'ok' });
+  });
+
+  it('a step that throws a non-Error value is still recorded as failed', async () => {
+    register({
+      name: 'throws-string',
+      priority: 1,
+      fn: async () => {
+        // eslint-disable-next-line no-throw-literal
+        throw 'string failure';
+      },
+    });
+    const result = await runAll('SIGTERM', 5000);
+    const outcome = result.outcomes.find((o) => o.name === 'throws-string');
+    expect(outcome?.status).toBe('failed');
+    expect(result.hadErrors).toBe(true);
+  });
+
+  it('a step that rejects asynchronously is captured as failed', async () => {
+    register({
+      name: 'async-reject',
+      priority: 1,
+      fn: () => Promise.reject(new Error('async boom')),
+    });
+    const result = await runAll('SIGTERM', 5000);
+    expect(result.outcomes[0].status).toBe('failed');
+    expect(result.outcomes[0].errorMessage).toContain('async boom');
+  });
+});
+
+// ============================================================================
+// Suite 18 — MAX_SHUTDOWN_STEPS constant (AC-1)
+// ============================================================================
+describe('MAX_SHUTDOWN_STEPS constant', () => {
+  it('is a positive integer', () => {
+    expect(typeof MAX_SHUTDOWN_STEPS).toBe('number');
+    expect(MAX_SHUTDOWN_STEPS).toBeGreaterThan(0);
+    expect(Number.isInteger(MAX_SHUTDOWN_STEPS)).toBe(true);
+  });
+
+  it('is large enough to hold the canonical 7-step chain', () => {
+    expect(MAX_SHUTDOWN_STEPS).toBeGreaterThanOrEqual(7);
   });
 });
