@@ -16,7 +16,8 @@ function normalizeThreshold(threshold) {
 function parseAuditReport(jsonText) {
   let parsed;
   try {
-    parsed = JSON.parse(jsonText);
+    const sanitized = String(jsonText).replace(/^\uFEFF/, "");
+    parsed = JSON.parse(sanitized);
   } catch (error) {
     throw new Error(`Failed to parse npm audit JSON: ${error.message}`);
   }

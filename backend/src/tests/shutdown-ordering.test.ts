@@ -44,6 +44,7 @@ import {
   getRegisteredSteps,
   runAll,
   resetShuttingDown,
+  resetShuttingDown as _resetShuttingDownAlias,
   isShuttingDown,
   createShutdownHandler,
   DEFAULT_DRAIN_TIMEOUT_MS,
@@ -461,5 +462,65 @@ describe('shutdown constants', () => {
       expect(all[i]).toBeLessThan(all[i + 1]);
     }
     expect(new Set(all).size).toBe(all.length); // all distinct
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Suite: resetShuttingDown — deterministic failure-boundary coverage
+// ---------------------------------------------------------------------------
+describe('resetShuttingDown — failure boundaries', () => {
+  beforeEach(() => {
+    clearRegistry();
+    resetShuttingDown();
+    jest.clearAllMocks();
+    jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    (getActiveRequests as jest.Mock).mockReturnValue(0);
+    (webhookQueueService.flush as jest.Mock).mockReturnValue([]);
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('is idempotent: repeated calls leave isShuttingDown() false', () => {
+    resetShuttingDown();
+    resetShuttingDown();
+    resetShuttingDown();
+    expect(isShuttingDown()).toBe(false);
+  });
+
+  it('clears the shutting-down flag after a completed shutdown', async () => {
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+    expect(isShuttingDown()).toBe(true);
+
+    resetShuttingDown();
+    expect(isShuttingDown()).toBe(false);
+  });
+
+  it('allows a fresh shutdown to run after reset', async () => {
+    const server1 = makeMockServer();
+    await createShutdownHandler(server1, 100)('SIGTERM');
+    resetShuttingDown();
+
+    const server2 = makeMockServer();
+    await createShutdownHandler(server2, 100)('SIGTERM');
+
+    expect(server2.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('reset during an in-flight shutdown does not corrupt subsequent runs', async () => {
+    const log: string[] = [];
+    register(makeStep('slow-reset', 1, log, { delayMs: 30 }));
+    const server = makeMockServer();
+    const handler = createShutdownHandler(server, 500);
+
+    const inFlight = handler('SIGTERM');
+    resetShuttingDown();
+    await inFlight;
+
+    // After the in-flight run completes, a fresh reset must still work.
+    resetShuttingDown();
+    expect(isShuttingDown()).toBe(false);
   });
 });
