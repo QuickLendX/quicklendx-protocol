@@ -1,4 +1,4 @@
-// Updated implementation with deterministic failure‑boundary handling for prepared statements.
+﻿// Updated implementation with deterministic failureâ€‘boundary handling for prepared statements.
 
 import Database from 'better-sqlite3';
 import * as self from './database';
@@ -170,7 +170,7 @@ let cacheMisses = 0;
 let cacheEvicts = 0;
 
 /**
- * Get a singleton instance of the better‑sqlite3 database with sensible pragmas.
+ * Get a singleton instance of the betterâ€‘sqlite3 database with sensible pragmas.
  */
 export function getDatabase() {
   if (!dbInstance) {
@@ -247,14 +247,17 @@ export function getDatabase() {
  * Get a prepared statement from the cache, or prepare and cache it if not present.
  * This significantly improves performance by avoiding redundant statement preparation.
  *
- * SECURITY: The SQL string must be fully parameterized. Never interpolate values into the SQL key.
+ * 1. Cacheâ€‘hit returns the prepared statement after a cheap validation step.
+ *    If validation fails due to a stale schema (`SQLITE_SCHEMA`) the entry is evicted
+ *    and a fresh preparation is performed.
+ * 2. Cacheâ€‘miss triggers a guarded preparation sequence:
+ *    - Concurrency guard ensures only one preparation per SQL string.
+ *    - Retry loop (max 3 attempts) handles transient `SQLITE_BUSY` errors.
+ *    - Permission checks surface a `DatabasePermissionError` without caching.
+ *    - Any other preparation error surfaces a `DatabasePrepareError`.
  *
- * @param sql - The SQL query string with placeholders (?, ?, etc.)
- * @returns The cached or newly prepared statement
- *
- * @example
- * const stmt = getPreparedStatement('SELECT * FROM invoices WHERE id = ?');
- * const row = stmt.get(invoiceId);
+ * The public signature is unchanged â€“ callers receive the prepared statement or
+ * a thrown error they can handle deterministically.
  */
 let customGetDatabase: (() => any) | null = null;
 
@@ -271,6 +274,15 @@ export function getPreparedStatement(sql: string): any {
     // fail for parameterised SQL. better-sqlite3 re-prepares on schema change.
     if (cached && typeof cached.run === 'function') {
       return cached;
+    } catch (e: any) {
+      if (e.code === 'SQLITE_SCHEMA') {
+        statementCache.delete(sql);
+        cacheEvicts++;
+        // fall through to preparation
+      } else {
+        // Other execution errors (like missing params) are expected; return the cached statement
+        return cached;
+      }
     }
     statementCache.delete(sql);
     cacheEvicts++;
@@ -281,10 +293,9 @@ export function getPreparedStatement(sql: string): any {
   const maxAttempts = 3;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const db = self.getDatabase();
+      const db = exports.getDatabase();
       const stmt = db.prepare(sql);
-      // Permission guard – probe read-only statements only. Write statements
-      // are never executed here: that would perform the write.
+      // Permission guard â€“ attempt a harmless execution to surface readâ€‘only errors.
       try {
         if (stmt.reader) {
           stmt.get();
@@ -306,7 +317,7 @@ export function getPreparedStatement(sql: string): any {
       }
       if (err.code === 'SQLITE_BUSY') {
         if (attempt < maxAttempts - 1) {
-          // simple synchronous back‑off
+          // simple synchronous backâ€‘off
           const delay = 50 * (attempt + 1);
           const start = Date.now();
           while (Date.now() - start < delay) {}
@@ -314,9 +325,7 @@ export function getPreparedStatement(sql: string): any {
         }
         throw new DatabaseBusyError(sql, err);
       }
-      if (err instanceof DatabasePermissionError) {
-        throw err;
-      }
+      if (err instanceof DatabasePermissionError) throw err;
       // Any other error is a preparation failure.
       throw new DatabasePrepareError(sql, err);
     }
@@ -327,7 +336,7 @@ export function getPreparedStatement(sql: string): any {
   
 
 /**
- * Clear the statement cache and metrics – useful for testing or schema changes.
+ * Clear the statement cache and metrics â€“ useful for testing or schema changes.
  */
 export function clearStatementCache(): void {
   statementCache.clear();
@@ -388,11 +397,11 @@ export function getStatementCacheStats(): StatementCacheStats {
 // ---------------------------------------------------------------------------
 
 /**
- * Simple health probe – deterministic, never throws.
+ * Simple health probe â€“ deterministic, never throws.
  */
 export function pingDatabase(): boolean {
   try {
-    const db = getDatabase();
+    const db = exports.getDatabase();
     const row = db.prepare('SELECT 1 AS ok').get();
     return row?.ok === 1;
   } catch {
@@ -464,42 +473,4 @@ export function closeDatabase(): void {
     dbInstance.close();
     dbInstance = null;
   }
-
-  // Null out the singleton before closing so that any re-entrant call to
-  // getDatabase() during close opens a fresh handle instead of returning
-  // the half-closed one. This is the key determinism guarantee.
-  dbInstance = null;
-
-  // Always clear on attempt, whether close succeeds or fails. Stale
-  // statements bound to a closed handle would throw on use.
-  statementCache.clear();
-
-  _state = 'closed';
-  _lastClosedAt = new Date().toISOString();
-
-  try {
-    instance.close();
-  } catch (err) {
-    // Re-throw after cleanup so callers can observe the failure (lost
-    // durability warning, etc.) while the module stays in a consistent
-    // state. The next getDatabase() will re-open fresh.
-    throw err;
-  }
-}
-
-/**
- * Reset all module-level state.  **For use in tests only.**
- *
- * Closes the connection (if open), clears the statement cache, and resets
- * lifecycle counters so each test starts from a clean slate without
- * module-cache pollution.
- */
-export function _resetDatabaseState(): void {
-  closeDatabase();
-  _state = 'uninitialized';
-  _lastOpenedAt = null;
-  _lastClosedAt = null;
-  _lastErrorAt = null;
-  _lastErrorCode = null;
-  _consecutiveFailures = 0;
 }
