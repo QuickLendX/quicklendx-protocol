@@ -1,43 +1,33 @@
-import {
-  parseMigrationFilename,
-  computeChecksum,
-  verifyAppliedChecksums,
-  validateMigrationFiles,
-  getAppliedVersions,
-  isDatabaseInitialized,
-} from "../lib/migrations/runner";
+import * as path from "path";
+import * as fs from "fs";
+import * as crypto from "crypto";
+import { parseMigrationFilename, computeChecksum, verifyAppliedChecksums, validateMigrationFiles, getAppliedVersions, isDatabaseInitialized } from "../lib/migrations/runner";
+import { closeDatabase } from "../lib/database";
 
-const originalFetch = global.fetch;
-const originalEnv = { ...process.env };
+// Isolate this suite from any state persisted in the shared dev database:
+// these assertions assume a database with no applied migrations.
+const TEST_DB_DIR = path.resolve(__dirname, "../../.data");
+const TEST_DB_PATH = path.join(TEST_DB_DIR, `test-mig-runner-${crypto.randomUUID()}.db`);
+const ORIGINAL_DATABASE_PATH = process.env.DATABASE_PATH;
 
-function jsonResponse(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { "content-type": "application/json" },
-  });
-}
-
-function installFetchMock(handler: (url: string, init?: RequestInit) => Promise<Response>) {
-  const mock = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === "string" ? input : input.toString();
-    return handler(url, init);
-  });
-  global.fetch = mock as unknown as typeof fetch;
-  return mock;
-}
-
-beforeEach(() => {
-  process.env = { ...originalEnv };
-  {
-    delete process.env.SUPABASE_URL;
-    delete process.env.SUPABASE_ANON_KEY;   
-    delete process.env.DATABASE_URL;
-  }
+beforeAll(() => {
+  fs.mkdirSync(TEST_DB_DIR, { recursive: true });
+  process.env.DATABASE_PATH = TEST_DB_PATH;
+  closeDatabase();
 });
 
 afterAll(() => {
-  global.fetch = originalFetch;
-  process.env = { ...originalEnv };
+  closeDatabase();
+  if (ORIGINAL_DATABASE_PATH === undefined) {
+    delete process.env.DATABASE_PATH;
+  } else {
+    process.env.DATABASE_PATH = ORIGINAL_DATABASE_PATH;
+  }
+  try {
+    fs.unlinkSync(TEST_DB_PATH);
+  } catch {
+    // best-effort cleanup
+  }
 });
 
 describe("Migration Runner Utilities", () => {
