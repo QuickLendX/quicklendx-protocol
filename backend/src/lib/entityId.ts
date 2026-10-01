@@ -19,7 +19,7 @@ class BadRequestError extends Error {
   }
 }
 
-function assertEntityId(prefix: string, value: unknown): asserts value is string {
+export function assertEntityId(prefix: string, value: unknown): asserts value is string {
   if (typeof value !== "string") {
     throw new BadRequestError("Invalid entity ID", "INVALID_ENTITY_ID");
   }
@@ -63,9 +63,20 @@ export function assertBidId(value: unknown): asserts value is string {
 
 /**
  * Asserts that `value` is a valid settlement ID (`stl_` + 26-char ULID).
+ * Case-insensitive ULID suffixes and outer whitespace remain accepted. This
+ * assertion only validates; callers must trim explicitly before using the ID.
+ * Validation is stateless and never coerces non-string inputs or grants access.
  */
 export function assertSettlementId(value: unknown): asserts value is string {
   assertEntityId(ENTITY_PREFIXES.SETTLEMENT, value);
+
+  // 26 Base32 characters encode 130 bits, but ULIDs contain only 128 bits.
+  // Reject overflow rather than accepting identifiers that no ULID can encode.
+  // https://github.com/ulid/spec#overflow-errors-when-parsing-base32-strings
+  const ulidPart = value.trim().slice(ENTITY_PREFIXES.SETTLEMENT.length);
+  if (!/^[0-7]/.test(ulidPart)) {
+    throw new BadRequestError("Invalid entity ID", "INVALID_ENTITY_ID");
+  }
 }
 
 /**
