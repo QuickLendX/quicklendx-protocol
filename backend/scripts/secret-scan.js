@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-"use strict";
+"suse strict";
 
 const path = require("node:path");
 const { assertNoSecretsPrinted, runSecretScan } = require("./lib/secret-scan-utils");
