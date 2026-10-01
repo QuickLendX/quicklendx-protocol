@@ -585,18 +585,64 @@ describe("redactPreview: existing callers stay compatible", () => {
   });
 });
 
-describe("collectQuotedStringMatches: failure boundaries", () => {
-  it("returns no matches for nullish and non-string input without throwing", () => {
-    for (const value of [null, undefined, 42, {}, Symbol("line")] as unknown[]) {
-      expect(() => collectQuotedStringMatches(value)).not.toThrow();
-      expect(collectQuotedStringMatches(value)).toEqual([]);
+describe("assertNoSecretsPrinted: deterministic failure boundaries", () => {
+  it("accepts clean output and findings without a matched value", () => {
+    expect(() => secretScanUtils.assertNoSecretsPrinted("clean output", [])).not.toThrow();
+    expect(() =>
+      secretScanUtils.assertNoSecretsPrinted("clean output", [
+        { file: "src/example.ts", line: 1, match: "" },
+        { file: "src/example.ts", line: 2 },
+      ])
+    ).not.toThrow();
+  });
+
+  it("rejects exact matches at output boundaries without echoing the match", () => {
+    const secret = buildValue(48);
+    const finding = makeFinding(secret);
+    const expectedMessage =
+      "Secret scan output leaked a matched value for src/leaked.ts:4";
+
+    for (const output of [secret, `prefix ${secret}`, `${secret} suffix`]) {
+      let thrown: unknown;
+      try {
+        secretScanUtils.assertNoSecretsPrinted(output, [finding]);
+      } catch (error) {
+        thrown = error;
+      }
+
+      expect(thrown).toBeInstanceOf(Error);
+      expect((thrown as Error).message).toBe(expectedMessage);
+      expect((thrown as Error).message).not.toContain(secret);
     }
   });
 
-  it("preserves deterministic ordering and columns for valid quoted strings", () => {
-    expect(collectQuotedStringMatches('a = "first"; b = \'second\';')).toEqual([
-      { literal: '"first"', value: "first", column: 5 },
-      { literal: "'second'", value: "second", column: 18 },
-    ]);
+  it("reports the first leaking finding consistently when matches are duplicated", () => {
+    const secret = buildValue(48);
+    const first = makeFinding(secret);
+    const second = { ...makeFinding(secret), file: "src/second.ts", line: 9 };
+
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      expect(() => secretScanUtils.assertNoSecretsPrinted(secret, [first, second])).toThrow(
+        "Secret scan output leaked a matched value for src/leaked.ts:4"
+      );
+    }
+  });
+
+  it.each([
+    [null, [], "Secret scan output must be a string"],
+    ["output", null, "Secret scan findings must be an array"],
+    ["output", [null], "Secret scan findings must contain objects"],
+    ["output", [{ match: Symbol("sensitive") }], "Secret scan finding matches must be strings"],
+  ])("rejects invalid inputs with a fixed diagnostic", (output, findings, message) => {
+    let thrown: unknown;
+    try {
+      secretScanUtils.assertNoSecretsPrinted(output, findings);
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(TypeError);
+    expect((thrown as Error).message).toBe(message);
+    expect((thrown as Error).message).not.toContain("sensitive");
   });
 });

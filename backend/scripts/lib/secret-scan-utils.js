@@ -1453,8 +1453,29 @@ function formatFindings(findings, failures = []) {
 }
 
 function assertNoSecretsPrinted(output, findings) {
+  if (typeof output !== "string") {
+    throw new TypeError("Secret scan output must be a string");
+  }
+
+  if (!Array.isArray(findings)) {
+    throw new TypeError("Secret scan findings must be an array");
+  }
+
   for (const finding of findings) {
-    if (finding.match && output.includes(finding.match)) {
+    if (!finding || typeof finding !== "object") {
+      throw new TypeError("Secret scan findings must contain objects");
+    }
+
+    const match = finding.match;
+    if (!match) {
+      continue;
+    }
+
+    if (typeof match !== "string") {
+      throw new TypeError("Secret scan finding matches must be strings");
+    }
+
+    if (output.includes(match)) {
       throw new Error(
         `Secret scan output leaked a matched value for ${finding.file}:${finding.line}`
       );
