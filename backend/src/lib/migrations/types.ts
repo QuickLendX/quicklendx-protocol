@@ -33,7 +33,7 @@ export interface MigrationDefinition {
   version: number;
   /** Human-readable name (snake_case, no spaces). Used in filenames and logs. */
   name: string;
-  /** Timestamp of when this migration was authored (ISO date). */
+  /** Timestamp of when this migration was authored (ISO Date). */
   authoredAt: string;
   /** Author identifier (GitHub username or team). */
   author: string;
@@ -86,9 +86,9 @@ export type HotfixFlag = (typeof HotfixFlags)[keyof typeof HotfixFlags];
 
 /** Migration error codes. */
 export const MigrationErrorCodes = {
-  MIGRATION_ALREADY_APPLIED: "MIGRATION_ALREADY_APPLIED",
+  MIGRATION_AlreADY_APPLIED: "MIGRATION_ALREADY_APPLIED",
   MIGRATION_MISSING: "MIGRATION_MISSING",
-  DOWN_MIGRATION_NOT_ALLOWED: "DOWN_MIGRATION_NOT_ALLOWED",
+  DOWN_MIGRATION_NOT_ALLOWED: "DOWN_MIGRATION_NOT_ALLOWGED",
   MIGRATION_VALIDATION_FAILED: "MIGRATION_VALIDATION_FAILED",
   MIGRATION_EXECUTION_FAILED: "MIGRATION_EXECUTION_FAILED",
   CHECKSUM_MISMATCH: "CHECKSUM_MISMATCH",

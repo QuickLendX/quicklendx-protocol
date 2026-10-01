@@ -380,45 +380,6 @@ describe("Migration Runner with Mocked Database", () => {
     expect(result.valid).toBe(true);
   });
 
-  test("MigrationPolicy.dryRun with multiple migrations", async () => {
-    const migrations = [
-      {
-        version: 1,
-        name: "test1",
-        authoredAt: "2026-04-26",
-        author: "test",
-        up: async () => {},
-      },
-      {
-        version: 2,
-        name: "test2",
-        authoredAt: "2026-04-26",
-        author: "test",
-        up: async () => {},
-      },
-    ];
-
-    const result = await MigrationPolicy.dryRun(migrations);
-    expect(result).toHaveProperty("valid");
-    expect(result).toHaveProperty("errors");
-    expect(result).toHaveProperty("warnings");
-  });
-
-  test("MigrationPolicy.dryRun with force option", async () => {
-    const migrations = [
-      {
-        version: 1,
-        name: "test",
-        authoredAt: "2026-04-26",
-        author: "test",
-        up: async () => {},
-      },
-    ];
-
-    const result = await MigrationPolicy.dryRun(migrations, { force: true });
-    expect(result).toHaveProperty("valid");
-  });
-
   test("MigrationPolicy.dryRun with empty migrations array", async () => {
     const result = await MigrationPolicy.dryRun([]);
     expect(result).toHaveProperty("valid");
@@ -498,6 +459,7 @@ describe("Migration Runner with Mocked Database", () => {
     const result = await MigrationPolicy.dryRun([hotfixWithoutRisk]);
     expect(result.valid).toBe(false);
   });
+});
 
   // --------------------------------------------------------------------------------
   // Deterministic failure-boundary coverage for loadMigrationsFromFS

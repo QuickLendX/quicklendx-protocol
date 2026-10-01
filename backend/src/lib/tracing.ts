@@ -93,87 +93,27 @@ function isValidTraceId(value: unknown): value is string {
 const spanContextStorage = new AsyncLocalStorage<SpanContext>();
 
 /**
- * Maximum length of a single emitted span log line. This bounds the
- * working memory used by the spank emitter and keeps the line atomic from
- * the perspective of line-oriented log consumers. It is deliberately
- * generous enough to preserve normal span payloads while preventing an
- * adversarial or accidentally large attribute bag from causing an unbounded
- * write.
- */
-const MAX_SPAN_LOG_BYTES = 1024 * 1024;
-
-/**
- * Maximum length of a string value within a span attribute. Values longer
- * than this are truncated with an explicit marker so consumers can tell
- * the data was clipped rather than corrupted.
- */
-const MAX_ATTR_STRING_LENGTH = 2048;
-
-/**
- * Maximum number of attribute keys preserved on a span. Excess keys are
- * dropped and reported via a deterministic counter attribute.
- */
-const MAX_ATTR_KEYS = 64;
-
-/**
- * Maximum depth of attribute values that are walked when sanitizing.
- * Deeper structures are replaced with a marker to avoid infinite recursion on
- * cyclic or pathologically deep objects.
- */
-const MAX_ATTR_DEPTH = 6;
-
-const TRUNCATION_MARKER = "…[truncated]";
-
-const CIRCULAR_MARKER = "[Écircular]";
-
-const DEPTH_MARKER = "[Édepth limit]";
-
-/**
- * State of the spank log emitter. This is the only mutable state in this
- * module and it is used to enforce deterministic failure-boundary behavior:
+ * Determines whether `value` should be treated as a promise by `withSpan`.
  *
- * - `disabled` is latched when the underlying sink fails repeatedly. Once
- *   latched, further emits are skipped with out attempting to write, so a
- *   broken sink cannot cause a tight loop of failed writes.
- * - `consecutiveFailures` counts failures since the last successful write.
- * - `droppedEntries` counts entries that were not written because of a
- *   failure or because the emitter was latched off. It is exposed through
- *   `getSpanEmitterState` for observability and testing.
+ * Invariants:
+ * - Falsy values (`undefined`, `null`, `false`, `0`) are never promises, so the
+ *   synchronous path is taken without touching the value.
+ * - A promise-like is any value whose `then` is callable, including thenables
+ *   that are not real `Promise` instances.
+ * - This probe must never throw and must not invoke `then`. Accessing `then` on
+ *   a value with a hostile/broken accessor is caught and treated as
+ *   "not a promise" so tracing can never break the calling operation.
  */
-interface SpanEmitterState {
-  disabled: boolean;
-  consecutiveFailures: number;
-  droppedEntries: number;
-}
+export function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
+  if (!value) {
+    return false;
+  }
 
-const MAX_CONSECUTIVE_FAILURES = 5;
-
-const emitterState: SpanEmitterState = {
-  disabled: false,
-  consecutiveFailures: 0,
-  droppedEntries: 0,
-};
-
-/**
- * Returns a snapshot of the emitter state. This is useful for tests and
- * operational telemetry that needs to detect lost span logs.
- */
-export function getSpanEmitterState(): Readonly<SpanEmitterState> {
-  return { ...emitterState };
-}
-
-/**
- * Resets the emitter state. This is intended for test isolation and for
- * operational recovery hooks (e.g. after a rotation of the log sink).
- */
-export function resetSpanEmitterState(): void {
-  emitterState.disabled = false;
-  emitterState.consecutiveFailures = 0;
-  emitterState.droppedEntries = 0;
-}
-
-function isPromise<T>(value: T | Promise<T>): value is Promise<T> {
-  return !!value && typeof (value as Promise<T>).then === "function";
+  try {
+    return typeof (value as Promise<T>).then === "function";
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -373,6 +313,13 @@ function emitSpanLog(entry: SpanLogEntry): void {
   }
 }
 
+/**
+ * Start a tracing span. This function is deterministic and must not throw for
+ * any input, including invalid names or attributes that cannot be serialized.
+ * If log emission fails (throttled stdout, closed pipe, etc.), the span is
+ * still returned so the caller can continue working; the failure is swallowed
+ * to preserve the invariant that tracing never breaks business logic.
+ */
 export function startSpan(name: string, attrs: SpanAttributes = {}): Span {
   const parent = spanContextStorage.getStore();
 
@@ -383,23 +330,27 @@ export function startSpan(name: string, attrs: SpanAttributes = {}): Span {
     traceId: buildTraceId(parent),
     spanId: ulid(),
     parentSpanId: parent ? parent.spanId : null,
-    attrs: sanitizedAttrs,
+    attrs: attrs ?? {},
     startedAtMs: Date.now(),
     startedAtNs: process.hrtime.bigint(),
     ended: false,
   };
 
-  emitSpanLog({
-    level: "INFO",
-    type: "TRACE_SPAN",
-    event: "start",
-    timestamp: new Date(span.startedAtMs).toISOString(),
-    name: span.name,
-    trace_id: span.traceId,
-    span_id: span.spanId,
-    parent_span_id: span.parentSpanId,
-    attrs: span.attrs,
-  });
+  try {
+    emitSpanLog({
+      level: "INFO",
+      type: "TRACE_SPAN",
+      event: "start",
+      timestamp: new Date(span.startedAtMs).toISOString(),
+      name: span.name,
+      trace_id: span.traceId,
+      span_id: span.spanId,
+      parent_span_id: span.parentSpanId,
+      attrs: span.attrs,
+    });
+  } catch {
+    // Tracing must never interrupt the caller. Swallow emission failures.
+  }
 
   return span;
 }
@@ -411,7 +362,7 @@ export function endSpan(span: Span, err?: unknown): void {
     }
 
     span.ended = true;
-    
+
     let durationMs: number | undefined;
     try {
       if (typeof span.startedAtNs === "bigint") {

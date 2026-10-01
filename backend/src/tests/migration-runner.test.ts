@@ -7,6 +7,39 @@ import {
   isDatabaseInitialized,
 } from "../lib/migrations/runner";
 
+const originalFetch = global.fetch;
+const originalEnv = { ...process.env };
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function installFetchMock(handler: (url: string, init?: RequestInit) => Promise<Response>) {
+  const mock = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input.toString();
+    return handler(url, init);
+  });
+  global.fetch = mock as unknown as typeof fetch;
+  return mock;
+}
+
+beforeEach(() => {
+  process.env = { ...originalEnv };
+  {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_ANON_KEY;   
+    delete process.env.DATABASE_URL;
+  }
+});
+
+afterAll(() => {
+  global.fetch = originalFetch;
+  process.env = { ...originalEnv };
+});
+
 describe("Migration Runner Utilities", () => {
   describe("parseMigrationFilename", () => {
     test("parses v001_foo.ts correctly", () => {
@@ -130,6 +163,7 @@ test("produces a stable known digest for a fixed input", () => {
 
   describe("verifyAppliedChecksums", () => {
     test("returns valid when no migrations are applied", async () => {
+      installFetchMock(async () => jsonResponse([]));
       const result = await verifyAppliedChecksums();
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
@@ -199,8 +233,22 @@ test("validation is deterministic across repeated invocations", async () => {
 
   describe("getAppliedVersions", () => {
     test("returns empty array when no migrations applied", async () => {
+      installFetchMock(async () => jsonResponse([]));
       const versions = await getAppliedVersions();
       expect(Array.isArray(versions)).toBe(true);
+      expect(versions).toEqual([]);
+    });
+
+    test("returns sorted applied versions", async () => {
+      installFetchMock(async () =>
+        jsonResponse([
+          { version: 2, name: "b", checksum: "2" },
+          { version: 1, name: "a", checksum: "1" },
+        ],
+      ),
+      );
+      const versions = await getAppliedVersions();
+      expect(versions).toEqual([1, 2]);
     });
 test("returns numeric versions in ascending order", async () => {
       const versions = await getAppliedVersions();
@@ -225,8 +273,18 @@ test("returns numeric versions in ascending order", async () => {
 
   describe("isDatabaseInitialized", () => {
     test("returns false when no migrations applied", async () => {
+      installFetchMock(async () => jsonResponse([]));
       const initialized = await isDatabaseInitialized();
       expect(typeof initialized).toBe("boolean");
+      expect(initialized).toBe(false);
+    });
+
+    test("returns true when at least one migration is applied", async () => {
+      installFetchMock(async () =>
+        jsonResponse([{ version: 1, name: "a", checksum: "1" }]),
+      );
+      const initialized = await isDatabaseInitialized();
+      expect(initialized).toBe(true);
     });
 test("is consistent with getAppliedVersions", async () => {
       const versions = await getAppliedVersions();

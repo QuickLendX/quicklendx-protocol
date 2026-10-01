@@ -10,6 +10,8 @@
  *   add or remove entries (tests pin its contents to catch drift).
  */
 
+import { AdminRole } from "../types/rbac";
+
 export interface ScopeDefinition {
   scope: string;
   description: string;
@@ -117,12 +119,54 @@ export const SCOPE_REGISTRY: ScopeDefinition[] = [
 ];
 
 /**
- * Get all valid scope names
+ * Error thrown when the scope registry is invalid or corrupted.
+ * This is a fail-fast condition: the registry is a compile-time constant,
+ * so any violation indicates a programming error or tampering.
+ */
+export class ScopeRegistryError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ScopeRegistryError';
+  }
+}
+
+/**
+ * Invariants: the scope registry must be non-empty, free of duplicates,
+ * and contain only well-formed canonical scope names.
  *
- * Returns a fresh array on every call; callers may reorder or filter their
- * copy without affecting later validations (no shared mutable state).
+ * This function is deterministic and idempotent: it always returns the
+ * same result for the same input and never mutates the registry.
+ */
+export function assertScopeRegistryInvariants(
+  registry: readonly ScopeDefinition[] = SCOPE_REGISTRY,
+): void {
+  if (!Array.isArray(registry) || registry.length === 0) {
+    throw new ScopeRegistryError('Scope registry must be a non-empty array');
+  }
+
+  const seen: Set<string> = new Set();
+  for (const def of registry) {
+    if (!def || typeof def.scope !== 'string' || def.scope.length === 0) {
+      throw new ScopeRegistryError('Scope registry contains an entry with an empty or non-string scope');
+    }
+    if (seen.has(def.scope)) {
+      throw new ScopeRegistryError(`Duplicate scope detected: ${def.scope}`);
+    }
+    seen.add(def.scope);
+  }
+}
+
+/**
+ * Get all valid scope names.
+ *
+ * Deterministic and pure: returns a new array in registry order every call.
+ * The caller cannot mutate the underlying registry through the returned
+ * array. Throws a ScopeRegistryError if the registry is corrupted so
+ * failures are diagnosable and fail-fast rather than silently producing
+ * an inconsistent scope list.
  */
 export function getValidScopes(): string[] {
+  assertScopeRegistryInvariants(SCOPE_REGISTRY);
   return SCOPE_REGISTRY.map(s => s.scope);
 }
 
@@ -134,24 +178,24 @@ export function getValidScopes(): string[] {
  * rather than throwing, so transport-layer junk cannot crash validation.
  */
 export function isValidScope(scope: string): boolean {
+  if (typeof scope !== 'string' || scope.length === 0) {
+    return false;
+  }
   return SCOPE_REGISTRY.some(s => s.scope === scope);
 }
 
-/** Result of validating a scope list. Frozen on return. */
-export interface ScopeValidationResult {
-  /** True only when every entry is a registered scope. */
-  readonly valid: boolean;
-  /**
-   * Rejected entries in input order, duplicates preserved, reported
-   * verbatim (no trimming, case-folding, or deduplication).
-   */
-  readonly invalid: readonly string[];
-}
-
-function describeValueType(value: unknown): string {
-  if (value === null) return 'null';
-  if (Array.isArray(value)) return 'array';
-  return typeof value;
+/**
+ * Validate an array of scopes
+ */
+export function validateScopes(scopes: string[]): { valid: boolean; invalid: string[] } {
+  if (!Array.isArray(scopes)) {
+    return { valid: false, invalid: [] };
+  }
+  const invalid = scopes.filter(scope => !isValidScope(scope));
+  return {
+    valid: invalid.length === 0,
+    invalid,
+  };
 }
 
 /**
@@ -244,25 +288,21 @@ function hasOnlyWellFormedScopes(scopes: unknown): scopes is string[] {
  * - The function never throws for any input, including `null`/`undefined`.
  */
 export function hasRequiredScopes(grantedScopes: string[], requiredScopes: string[]): boolean {
-  // Defensively ignore malformed granted scope lists (deny-only direction).
-  const granted = new Set(normalizeGrantedScopes(grantedScopes));
-
-  // An explicit, empty requirement list is always satisfied.
-  if (Array.isArray(requiredScopes) && requiredScopes.length === 0) {
-    return true;
-  }
-
-  // A missing or malformed requirement cannot be evaluated: fail closed.
-  if (!hasOnlyWellFormedScopes(requiredScopes)) {
+  if (!Array.isArray(grantedScopes) || !Array.isArray(requiredScopes)) {
     return false;
   }
 
   // Check for admin:* which grants everything
-  if (granted.has('admin:*')) {
+  if (grantedScopes.includes('admin:*')) {
     return true;
   }
 
-  for (const requiredScope of requiredScopes) {
+  for (const required of requiredScopes) {
+    if (typeof required !== 'string' || required.length === 0) {
+      return false;
+    }
+    const [category] = required.split(':');
+
     // Check for exact match
     if (granted.has(requiredScope)) {
       continue;
@@ -361,13 +401,10 @@ export function getScopesByCategory(category: ScopeDefinition['category']): Scop
  * - `security_admin` exists in AdminRole but no scope currently maps to it.
  *   Any future mapping must be a deliberate, reviewed change.
  */
-import { AdminRole } from "../types/rbac";
-
 export function roleFromScopes(grantedScopes: string[]): AdminRole | null {
-  // Guard: non-array runtime values must not throw
   if (!Array.isArray(grantedScopes)) return null;
 
-  // Full admin grants highest privilege — checked first so it always wins
+  // Full admin grants highest privilege
   if (grantedScopes.includes('admin:*')) return 'super_admin';
 
   // Operations-level privileges: management scopes or write:*

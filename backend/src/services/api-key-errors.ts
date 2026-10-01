@@ -1,45 +1,41 @@
-import { ApiKeyErrorCode } from './api-key-error-codes';
-
 export class ApiKeyError extends Error {
-  public readonly code: string;
-
-  constructor(message: string, code: string = ApiKeyErrorCode.VALIDATION) {
+  constructor(message: string) {
     super(message);
     this.name = 'ApiKeyError';
-    this.code = code;
-    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 
 export class ApiKeyNotFoundError extends ApiKeyError {
-  public readonly keyId?: string;
-
   constructor(keyId?: string) {
-    super(keyId ? `API key not found: ${keyId}` : 'API key not found', ApiKeyErrorCode.NOT_FOUND);
+    super(`API key not found${keyId ? ` with id: ${keyId}` : ''}`);
     this.name = 'ApiKeyNotFoundError';
-    this.keyId = keyId;
-    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
+export class ApiKeyExpiredError extends ApiKeyError {
+  constructor() {
+    super('API key has expired');
+    this.name = 'ApiKeyExpiredError';
+  }
+}
+
+export class ApiKeyInvalidError extends ApiKeyError {
+  constructor() {
+    super('Invalid API key format');
+    this.name = 'ApiKeyInvalidError';
   }
 }
 
 export class ApiKeyRevokedError extends ApiKeyError {
-  public readonly keyId?: string;
-
   constructor(keyId?: string) {
-    super(keyId ? `API key is revoked: ${keyId}` : 'API key is revoked', ApiKeyErrorCode.REVOKED);
+    super(`API key has been revoked${keyId ? ` (key ID: ${keyId})` : ''}`);
     this.name = 'ApiKeyRevokedError';
-    this.keyId = keyId;
-    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
 
 export class ApiKeyRotationConflictError extends ApiKeyError {
-  public readonly keyId?: string;
-
-  constructor(message: string, keyId?: string) {
-    super(message, ApiKeyErrorCode.ROTATION_CONFLICT);
+  constructor(message?: string, keyId?: string) {
+    super(message || `API key rotation conflict${keyId ? ` (key ID: ${keyId})` : ''}`);
     this.name = 'ApiKeyRotationConflictError';
-    this.keyId = keyId;
-    Object.setPrototypeOf(this, new.target.prototype);
   }
 }
