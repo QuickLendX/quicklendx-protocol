@@ -186,7 +186,7 @@ export function createRequestContextMiddleware() {
       headers?: Record<string, unknown>;
     },
     _res: unknown,
-    next: () => void
+    next: (err?: any) => void
   ): void {
     try {
       const rawId =
