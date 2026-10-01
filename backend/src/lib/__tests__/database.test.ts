@@ -4,6 +4,11 @@ import { getPreparedStatement, getDatabase, clearStatementCache, closeDatabase, 
 // Helper to reset environment and cache between tests
 beforeEach(() => {
   clearStatementCache();
+  _setGetDatabaseForTesting(null);
+});
+
+afterEach(() => {
+  _setGetDatabaseForTesting(null);
 });
 
 describe('getPreparedStatement success and caching', () => {
@@ -37,7 +42,7 @@ describe('failure boundaries', () => {
         run: () => ({}) as any,
       }));
 
-    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
+    _setGetDatabaseForTesting(() => ({
       prepare: mockPrepare,
     } as any));
 
@@ -52,7 +57,7 @@ describe('failure boundaries', () => {
       err.code = 'SQLITE_BUSY';
       throw err;
     });
-    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
+    _setGetDatabaseForTesting(() => ({
       prepare: mockPrepare,
     } as any));
 
@@ -61,17 +66,12 @@ describe('failure boundaries', () => {
   });
 
   test('throws DatabasePermissionError on read‑only error', () => {
-    const stmtMock = {
-      reader: true,
-      get: () => {
-        const err: any = new Error('readonly');
-        err.code = 'SQLITE_READONLY';
-        throw err;
-      },
-      run: () => ({}),
-    };
-    const mockPrepare = jest.fn(() => stmtMock);
-    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
+    const mockPrepare = jest.fn(() => {
+      const err: any = new Error('readonly');
+      err.code = 'SQLITE_READONLY';
+      throw err;
+    });
+    _setGetDatabaseForTesting(() => ({
       prepare: mockPrepare,
     } as any));
 
@@ -87,7 +87,7 @@ describe('failure boundaries', () => {
       err.code = 'SQLITE_ERROR';
       throw err;
     });
-    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
+    _setGetDatabaseForTesting(() => ({
       prepare: mockPrepare,
     } as any));
 
