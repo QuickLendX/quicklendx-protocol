@@ -25,9 +25,17 @@ const storage = new AsyncLocalStorage<RequestContext>();
  * Run a callback within a new request context.
  * The correlationId is available to all async code called within
  * the callback without needing to thread it through every function.
+ *
+ * Invariants:
+ * - Sanitizes the correlation ID before storing. If invalid or empty, falls back to generating a valid ULID.
+ * - Context is strictly bound to the execution scope of `fn` and automatically cleaned up upon completion or failure.
  */
 export function runWithContext<T>(correlationId: string, fn: () => T): T {
-  return storage.run({ correlationId }, fn);
+  const sanitized =
+    (typeof correlationId === "string"
+      ? sanitizeCorrelationId(correlationId)
+      : null) ?? generateCorrelationId();
+  return storage.run({ correlationId: sanitized }, fn);
 }
 
 /**
@@ -37,8 +45,8 @@ export function runWithContext<T>(correlationId: string, fn: () => T): T {
  * Failure-boundary guarantees:
  * - Deterministic: always returns a non-empty string or null. Never throws.
  * - If the underlying store is missing, empty, or corrupted (e.g. a non-string
- *   value injected by a bug or a partially constructed context), this returns
- *   null rather than propagating a tainted value downstream.
+ *   value injected by a bug, unvalidated input, or a partially constructed context),
+ *   this returns null rather than propagating a tainted value downstream.
  * - Concurrency: AsyncLocalStorage isolates stores per async chain, so a failure
  *   in one request cannot leak into another.
  */
@@ -48,7 +56,7 @@ export function getCorrelationId(): string | null {
     if (!store) return null;
     const id = store.correlationId;
     if (typeof id !== "string" || id.length === 0) return null;
-    return id;
+    return sanitizeCorrelationId(id);
   } catch {
     // AsyncLocalStorage.getStore() is synchronous and non-throwing in normal
     // operation, but defensively guard against host environment failures so a
@@ -61,6 +69,18 @@ export function getCorrelationId(): string | null {
  * Return the correlation ID for the current async context, or generate a new
  * ULID when no context is active. Useful for code paths (background workers,
  * scheduled jobs) that may run with or without an inbound request.
+ *
+ * Failure-boundary guarantees:
+ * - Deterministic: Always returns a valid, non-empty, sanitized correlation ID string. Never throws.
+ * - Context Fallback: When no context is active or when getCorrelationId() returns null,
+ *   generates and returns a fresh ULID.
+ * - Corruption Recovery: If the active context is corrupt, empty, non-string, or
+ *   contains log-injectable characters, falls back to generating a valid ULID.
+ * - Host / PRNG Failure Safety: In the event of storage retrieval failure or ULID generator
+ *   failure, safely falls back to a deterministic entropy-backed identifier.
+ * - Idempotency: Repeated calls within the same valid context return the identical correlation ID.
+ * - Concurrency & Isolation: Multiple concurrent operations maintain isolated contexts or
+ *   generate distinct IDs without cross-talk or race conditions.
  */
 export function getOrGenerateCorrelationId(): string {
   return getCorrelationId() ?? generateCorrelationId();
@@ -72,6 +92,24 @@ export function getOrGenerateCorrelationId(): string {
  */
 export function withCorrelationId<T>(correlationId: string, fn: () => T): T {
   return runWithContext(correlationId, fn);
+}
+
+let ulidGenerator: () => string = ulid;
+
+/**
+ * Hook for testing failure boundaries when ULID generation fails.
+ * Internal only.
+ */
+export function _setUlidGeneratorForTesting(fn: () => string): void {
+  ulidGenerator = fn;
+}
+
+/**
+ * Reset ULID generator hook to standard implementation.
+ * Internal only.
+ */
+export function _resetUlidGeneratorForTesting(): void {
+  ulidGenerator = ulid;
 }
 
 /**
@@ -178,11 +216,13 @@ export function generateCorrelationId(): string {
   return generateDegradedCorrelationId();
 }
 
+export const MAX_CORRELATION_ID_LENGTH = 128;
+
 /**
  * Sanitize a client-supplied correlation ID to prevent log injection.
  *
  * Leading/trailing whitespace is trimmed, then the value must consist solely
- * of alphanumerics, hyphens, and underscrores and be 1–128 characters long.
+ * of alphanumerics, hyphens, underscores, dots, and colons and be 1–128 characters long.
  * Any other character (newlines, carriage returns, tabs, ANSI escapes, null
  * bytes, internal spaces, …) causes the value to be rejected. Returns null
  * when validation fails.
@@ -190,38 +230,84 @@ export function generateCorrelationId(): string {
 export function sanitizeCorrelationId(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const trimmed = raw.trim();
-  if (trimmed.length === 0 || trimmed.length > 128) return null;
-  if (!/^[A-Za-z0-9_-]+$/.test(trimmed)) return null;
+  if (trimmed.length === 0 || trimmed.length > MAX_CORRELATION_ID_LENGTH) return null;
+  if (!/^[A-Za-z0-9_.:-]+$/.test(trimmed)) return null;
   return trimmed;
+}
+
+/**
+ * Resolve a candidate correlation id down to a value that is safe to place in
+ * the context, or null when the candidate must not be used.
+ *
+ * Only a string can qualify, and it must additionally survive
+ * `sanitizeCorrelationId`. Rejecting here — rather than at the point of use —
+ * is what keeps an empty, oversized or unparseable value from masking the
+ * fallback field, and keeps a value carrying newlines, terminal escapes or a
+ * null byte out of every log line that reads the context.
+ */
+function resolveContextId(candidate: unknown): string | null {
+  if (typeof candidate !== "string") return null;
+  return sanitizeCorrelationId(candidate);
 }
 
 /**
  * Express middleware that establishes the async-local-storage request context
  * from an already-resolved correlation/request id on the request object.
  *
- * It prefers `req.correlationId`, falling back to `req.requestId`. When neither
- * is present the request proceeds without a context (downstream callers fall
- * back to generating their own id). All downstream async work — audit writes,
- * outbound RPC calls, event processing — can read the id via getCorrelationId().
+ * It takes the first *usable* of `req.correlationId`, `req.requestId` and the
+ * `x-request-id` request header, in that order. "Usable" means a string that
+ * passes `sanitizeCorrelationId`, so a blank, oversized or unparseable
+ * correlationId no longer masks a valid requestId or header. When no source
+ * yields a usable id the request proceeds without a context (downstream callers
+ * fall back to generating their own id). All downstream async work — audit
+ * writes, outbound RPC calls, event processing — can read the id via
+ * getCorrelationId().
  *
  * Invariants:
  * - The context is only established for the duration of `next()`, so it cannot
  *   leak into subsequent requests on the same event-loop tick.
- * - A missing or empty id never creates a context with an undefined value.
+ * - A missing or empty id never creates a context with an undefined value, and a
+ *   value that would be unsafe to log never creates a context at all.
+ * - `next()` runs exactly once on every path, including the rejected ones: an
+ *   unusable id degrades observability, it must never stall or drop a request.
+ * - A missing or non-object `req` is treated as "no id" instead of throwing, so
+ *   a malformed request cannot take the chain down before `next()` is reached.
  * - `next()` errors are propagated to the caller unchanged; the context is still
  *   torn down correctly by AsyncLocalStorage.
  */
 export function createRequestContextMiddleware() {
   return function requestContextMiddleware(
-    req: { correlationId?: string; requestId?: string },
+    req: {
+      correlationId?: unknown;
+      requestId?: unknown;
+      headers?: Record<string, unknown>;
+    } | null | undefined,
     _res: unknown,
-    next: () => void
+    next: (err?: any) => void
   ): void {
-    const id = req.correlationId ?? req.requestId;
-    if (typeof id === "string" && id.length > 0) {
-      runWithContext(id, next);
-    } else {
-      next();
+    // Every candidate source is resolved through resolveContextId rather than
+    // `??`, because `??` short-circuits on a present-but-unusable value: a blank,
+    // oversized or unparseable correlationId would otherwise mask a perfectly
+    // usable requestId or x-request-id header. Resolving each source in turn
+    // means the first *usable* id wins and an unusable one falls through.
+    //
+    // The try/catch wraps only the resolution, never the next() call, so a
+    // throwing property access on a malformed `req` degrades to "no context"
+    // while a genuine downstream failure still propagates to the caller instead
+    // of being swallowed and the request silently stalling.
+    let id: string | null = null;
+    try {
+      id =
+        resolveContextId(req?.correlationId) ??
+        resolveContextId(req?.requestId) ??
+        resolveContextId(req?.headers?.["x-request-id"]);
+    } catch {
+      id = null;
     }
+    if (id === null) {
+      next();
+      return;
+    }
+    runWithContext(id, next);
   };
 }

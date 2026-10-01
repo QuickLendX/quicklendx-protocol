@@ -88,15 +88,89 @@ export interface AlertRoutes {
   routes?: AlertRoute[];
 }
 
-function parseAlertRoutes(): AlertRoutes {
-  if (!config.ALERT_ROUTES_JSON) {
+const ALERT_SEVERITIES = new Set<AlertRoute["severity"]>(["LOW", "MEDIUM", "HIGH"]);
+const ALERT_CHANNELS = new Set<AlertRoute["channels"][number]>([
+  "email",
+  "slack",
+  "pagerduty",
+]);
+
+function invalidAlertRoutes(): never {
+  throw new Error("Invalid ALERT_ROUTES_JSON configuration");
+}
+
+export function parseAlertRoutes(raw: string | undefined): AlertRoutes {
+  if (!raw) {
     return { routes: undefined };
   }
+
   try {
-    return JSON.parse(config.ALERT_ROUTES_JSON);
+    const parsed: unknown = JSON.parse(raw);
+
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return invalidAlertRoutes();
+    }
+
+    const routes = (parsed as { routes?: unknown }).routes;
+    if (routes === undefined) {
+      return { routes: undefined };
+    }
+    if (!Array.isArray(routes)) {
+      return invalidAlertRoutes();
+    }
+
+    const seenSeverities = new Set<string>();
+    const normalizedRoutes: AlertRoute[] = [];
+
+    routes.forEach((route, index) => {
+      if (route === null || typeof route !== "object" || Array.isArray(route)) {
+        throw new Error(`route ${index} must be an object`);
+      }
+
+      const candidate = route as { severity?: unknown; channels?: unknown };
+      if (
+        typeof candidate.severity !== "string" ||
+        !ALERT_SEVERITIES.has(candidate.severity as AlertRoute["severity"])
+      ) {
+        throw new Error(`route ${index} has an unsupported severity`);
+      }
+      if (seenSeverities.has(candidate.severity)) {
+        throw new Error(`route ${index} duplicates severity ${candidate.severity}`);
+      }
+      if (!Array.isArray(candidate.channels) || candidate.channels.length === 0) {
+        throw new Error(`route ${index} must define at least one channel`);
+      }
+
+      const channels = candidate.channels.map((channel, channelIndex) => {
+        if (
+          typeof channel !== "string" ||
+          !ALERT_CHANNELS.has(channel as AlertRoute["channels"][number])
+        ) {
+          throw new Error(`route ${index} has an unsupported channel at index ${channelIndex}`);
+        }
+        return channel as AlertRoute["channels"][number];
+      });
+
+      if (new Set(channels).size !== channels.length) {
+        throw new Error(`route ${index} contains duplicate channels`);
+      }
+
+      seenSeverities.add(candidate.severity);
+      normalizedRoutes.push({
+        severity: candidate.severity as AlertRoute["severity"],
+        channels,
+      });
+    });
+
+    return { routes: normalizedRoutes };
   } catch (err) {
-    console.error("Failed to parse ALERT_ROUTES_JSON:", err);
-    throw new Error("Invalid ALERT_ROUTES_JSON configuration");
+    // Do not echo the raw environment value: configuration may contain secrets
+    // in future route metadata, and startup errors must remain log-safe.
+    console.error("Failed to parse ALERT_ROUTES_JSON configuration");
+    if (err instanceof Error && err.message === "Invalid ALERT_ROUTES_JSON configuration") {
+      throw err;
+    }
+    return invalidAlertRoutes();
   }
 }
 
@@ -105,7 +179,7 @@ export const alertConfig = {
   pagerdutyIntegrationKey: config.PAGERDUTY_INTEGRATION_KEY,
   slackWebhookUrl: config.SLACK_WEBHOOK_URL,
   emailRecipients: config.ALERT_EMAIL_RECIPIENTS?.split(",").map((e) => e.trim()) || [],
-  routes: parseAlertRoutes().routes || [
+  routes: parseAlertRoutes(config.ALERT_ROUTES_JSON).routes || [
     { severity: "HIGH", channels: ["pagerduty", "slack"] },
     { severity: "MEDIUM", channels: ["slack", "email"] },
     { severity: "LOW", channels: ["email"] },
