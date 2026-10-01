@@ -682,12 +682,204 @@ function collectScanTargets(backendRoot, options = {}) {
   return targets.filter((target) => shouldScanFile(target.relativePath, options));
 }
 
-function scanTargets(targets, allowlist) {
+// Invariants for scanTargets:
+//
+//   T1 Total        - never throws because of a per-target problem. Every
+//                      target in the list is attempted, so one unreadable file
+//                      can no longer abort the loop and discard the findings
+//                      already collected for the files ahead of it.
+//   T2 Fail closed  - a target that could not be scanned is never silently
+//                      dropped. Every failure is handed to
+//                      options.onTargetError, and when no reporter is supplied
+//                      the aggregated failures are rethrown once the loop has
+//                      finished. runSecretScan always supplies a reporter, so a
+//                      partial scan exits non-zero instead of reporting
+//                      "clean". The scan is never weakened by this isolation.
+//   T3 Deduped      - an absolutePath is scanned at most once even when it
+//                      appears repeatedly in targets. Overlapping scanRoots
+//                      used to emit the same finding once per covering root.
+//   T4 Typed        - an entry that is not an object, or that has no string
+//                      absolutePath, is recorded as a structural failure
+//                      instead of crashing the loop.
+//   T5 Redacted     - a failure record carries only the target relativePath, a
+//                      filesystem errno code, and a bounded message. File
+//                      content and matched values never enter a record, so
+//                      diagnostics cannot leak the string that was scanned.
+//   T6 Pure         - no shared mutable state; the same list always yields the
+//                      same findings and the same failures in the same order.
+//
+// Argument-shape violations (a non-array `targets`) still throw, as they did
+// before, but with an explicit message naming the received type. That is a
+// caller bug rather than a per-target condition, and silently scanning nothing
+// would be the unsafe answer.
+
+const TARGET_FAILURE_MAX_MESSAGE_LENGTH = 200;
+const TARGET_FAILURE_UNKNOWN_PATH = "<unknown>";
+const TARGET_FAILURE_UNKNOWN_REASON = "unknown reason";
+
+function targetFailureKindTag(value) {
+  if (value === null) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return "array";
+  }
+  return typeof value;
+}
+
+// Builds the redacted, bounded failure record described by T5. error.code is
+// a filesystem errno such as ENOENT or EACCES and is the useful triage signal;
+// the message is truncated because a path or an OS message can be arbitrarily
+// long. A hostile error is reduced to a constant rather than stringified,
+// because String(error) would run user code and can throw.
+function describeTargetFailure(error) {
+  let code = TARGET_FAILURE_UNKNOWN_REASON;
+  let message = "";
+
+  if (typeof error === "object" && error !== null) {
+    try {
+      if (typeof error.code === "string") {
+        code = error.code;
+      }
+      if (typeof error.message === "string") {
+        message = error.message;
+      }
+    } catch {
+      // A throwing getter on a hostile error object degrades to the defaults.
+      code = TARGET_FAILURE_UNKNOWN_REASON;
+      message = "";
+    }
+  }
+
+  if (message.length === 0) {
+    message = code;
+  }
+
+  return {
+    code,
+    message: message.slice(0, TARGET_FAILURE_MAX_MESSAGE_LENGTH),
+  };
+}
+
+// Reads one property without letting a hostile getter escape. A revoked proxy
+// or a booby-trapped accessor yields undefined instead of propagating, which is
+// what keeps T1 total for target descriptors built by callers.
+function safeReadProperty(target, property) {
+  try {
+    return target[property];
+  } catch {
+    return undefined;
+  }
+}
+
+// Returns the { absolutePath, relativePath } pair for a usable target, or null
+// when the entry is structurally invalid (T4). relativePath is optional: when
+// it is absent or not a string the absolutePath is reported instead, so a
+// finding is still attributable to a file rather than rendered as "undefined".
+function resolveScanTarget(target) {
+  if (typeof target !== "object" || target === null) {
+    return null;
+  }
+
+  const absolutePath = safeReadProperty(target, "absolutePath");
+  if (typeof absolutePath !== "string" || absolutePath.length === 0) {
+    return null;
+  }
+
+  const relativePath = safeReadProperty(target, "relativePath");
+
+  return {
+    absolutePath,
+    relativePath:
+      typeof relativePath === "string" && relativePath.length > 0
+        ? relativePath
+        : absolutePath,
+  };
+}
+
+function recordTargetFailure(failures, report, target, reason, code, message) {
+  const failure = {
+    target: typeof target === "string" && target.length > 0 ? target : TARGET_FAILURE_UNKNOWN_PATH,
+    reason,
+    code,
+    message: message.slice(0, TARGET_FAILURE_MAX_MESSAGE_LENGTH),
+  };
+
+  failures.push(failure);
+
+  if (report !== null) {
+    report(failure);
+  }
+
+  return failure;
+}
+
+function scanTargets(targets, allowlist, options = {}) {
+  if (!Array.isArray(targets)) {
+    throw new TypeError(
+      `scanTargets requires an array of targets, received ${targetFailureKindTag(targets)}`
+    );
+  }
+
+  const report = typeof options.onTargetError === "function" ? options.onTargetError : null;
   const findings = [];
+  const failures = [];
+  const scanned = new Set();
 
   for (const target of targets) {
-    const content = fs.readFileSync(target.absolutePath, "utf8");
-    findings.push(...scanFileContent(content, target.relativePath, allowlist));
+    const resolved = resolveScanTarget(target);
+
+    if (resolved === null) {
+      // T4: a structurally invalid entry is a recorded failure, never a crash.
+      // The relativePath read is guarded too: a hostile getter must not turn a
+      // structural failure into an unhandled throw.
+      recordTargetFailure(
+        failures,
+        report,
+        typeof target === "object" && target !== null
+          ? safeReadProperty(target, "relativePath")
+          : undefined,
+        "invalid-target",
+        "EINVAL",
+        `target is not an object with a string absolutePath (received ${targetFailureKindTag(target)})`
+      );
+      continue;
+    }
+
+    // T3: scan each file once no matter how many roots or duplicates cover it.
+    if (scanned.has(resolved.absolutePath)) {
+      continue;
+    }
+    scanned.add(resolved.absolutePath);
+
+    let content;
+    try {
+      content = fs.readFileSync(resolved.absolutePath, "utf8");
+    } catch (error) {
+      // T1/T2: isolate the failure so the remaining targets are still scanned
+      // and the findings collected so far survive.
+      const described = describeTargetFailure(error);
+      recordTargetFailure(
+        failures,
+        report,
+        resolved.relativePath,
+        "unreadable-target",
+        described.code,
+        described.message
+      );
+      continue;
+    }
+
+    findings.push(...scanFileContent(content, resolved.relativePath, allowlist));
+  }
+
+  if (failures.length > 0 && report === null) {
+    const summary = failures
+      .map((failure) => `${failure.target} (${failure.code})`)
+      .join(", ");
+    throw new Error(
+      `Secret scan could not read ${failures.length} of ${targets.length} target(s): ${summary}`
+    );
   }
 
   return findings;
@@ -696,7 +888,7 @@ function scanTargets(targets, allowlist) {
 function scanBackend(backendRoot, options = {}) {
   const allowlist = options.allowlist || loadAllowlist(options.allowlistPath, backendRoot);
   const targets = collectScanTargets(backendRoot, options);
-  return scanTargets(targets, allowlist);
+  return scanTargets(targets, allowlist, options);
 }
 
 function loadAllowlist(allowlistPath, backendRoot = process.cwd()) {
@@ -725,18 +917,41 @@ function formatFinding(finding) {
   );
 }
 
-function formatFindings(findings) {
-  if (findings.length === 0) {
-    return "Secret scan passed: No committed secrets were detected.";
+// Renders one failure record. Only the target path, the reason, the errno code
+// and the bounded message are emitted, per T5: no file content and no matched
+// value can reach the log line.
+function formatTargetFailure(failure) {
+  return `  ${failure.target} [${failure.reason}] ${failure.code}: ${failure.message}`;
+}
+
+function formatFindings(findings, failures = []) {
+  const lines = [];
+
+  if (findings.length > 0) {
+    lines.push(
+      `Secret scan failed: ${findings.length} potential secret(s) found.`,
+      "",
+      ...findings.map((finding) => formatFinding(finding)),
+      "",
+      "Remove the secret or add a documented allowlist entry in scripts/.secret-scan-allow.json."
+    );
   }
 
-  const lines = [
-    `Secret scan failed: ${findings.length} potential secret(s) found.`,
-    "",
-    ...findings.map((finding) => formatFinding(finding)),
-    "",
-    "Remove the secret or add a documented allowlist entry in scripts/.secret-scan-allow.json.",
-  ];
+  if (failures.length > 0) {
+    if (lines.length > 0) {
+      lines.push("");
+    }
+
+    lines.push(
+      `Secret scan failed: ${failures.length} target(s) could not be scanned.`,
+      ...failures.map((failure) => formatTargetFailure(failure)),
+      "An unreadable target is never treated as clean. Fix the path or permission and re-run the scan."
+    );
+  }
+
+  if (lines.length === 0) {
+    return "Secret scan passed: No committed secrets were detected.";
+  }
 
   return lines.join("\n");
 }
@@ -753,14 +968,26 @@ function assertNoSecretsPrinted(output, findings) {
 
 function runSecretScan(options = {}) {
   const backendRoot = options.backendRoot || process.cwd();
-  const findings = scanBackend(backendRoot, options);
-  const message = formatFindings(findings);
 
-  if (findings.length > 0) {
+  // T2: the reporter is what lets scanTargets isolate a per-target failure and
+  // keep going. The recorded failures are what make the run fail closed, so a
+  // partial scan never reports "clean".
+  const failures = [];
+  const findings = scanBackend(backendRoot, {
+    ...options,
+    onTargetError: (failure) => {
+      failures.push(failure);
+    },
+  });
+
+  const message = formatFindings(findings, failures);
+
+  if (findings.length > 0 || failures.length > 0) {
     return {
       ok: false,
       exitCode: 1,
       findings,
+      failures,
       message,
     };
   }
@@ -769,6 +996,7 @@ function runSecretScan(options = {}) {
     ok: true,
     exitCode: 0,
     findings,
+    failures,
     message,
   };
 }
@@ -796,6 +1024,7 @@ module.exports = {
   escapePreviewText,
   formatFinding,
   formatFindings,
+  formatTargetFailure,
   hasMixedCharacterClasses,
   isAllowlisted,
   isHighEntropyToken,
