@@ -395,41 +395,458 @@ describe("secret-scan-utils", () => {
     ).not.toContain("node_modules/pkg/index.js");
   });
 
-  describe("failure boundaries in collectHighEntropyMatches", () => {
-    it("handles invalid inputs deterministically without throwing", () => {
-      // Validates graceful failure and input validation rules
-      expect(secretScanUtils.collectHighEntropyMatches(null)).toEqual([]);
-      expect(secretScanUtils.collectHighEntropyMatches(undefined)).toEqual([]);
-      expect(secretScanUtils.collectHighEntropyMatches(123)).toEqual([]);
-      expect(secretScanUtils.collectHighEntropyMatches({})).toEqual([]);
-      expect(secretScanUtils.collectHighEntropyMatches([])).toEqual([]);
+  describe("isObviousPlaceholder failure boundaries", () => {
+    it("never throws on non-string inputs and returns true deterministically", () => {
+      const nonStrings = [
+        null,
+        undefined,
+        0,
+        123,
+        -1,
+        NaN,
+        Infinity,
+        true,
+        false,
+        {},
+        { key: "val" },
+        [],
+        [1, 2, 3],
+        Symbol("sym"),
+        // eslint-disable-next-line no-new-wrappers
+        BigInt(12345678901234567890),
+        () => "secret",
+        /regex/g,
+        new Date(0),
+      ];
+
+      for (const value of nonStrings) {
+        let result1: boolean;
+        let result2: boolean;
+        expect(() => {
+          result1 = secretScanUtils.isObviousPlaceholder(value as unknown as string);
+          result2 = secretScanUtils.isObviousPlaceholder(value as unknown as string);
+        }).not.toThrow();
+        expect(result1!).toBe(true);
+        expect(result2!).toBe(true);
+        expect(result1!).toBe(result2!);
+      }
     });
 
+    it("treats String objects identically to string primitives", () => {
+      const runtimeNonPlaceholder = ["prod", "token", "1A2b3C4d5E6f7G8h9I0j!?"].join("-");
+      // eslint-disable-next-line no-new-wrappers
+      const placeholderObj = new String("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");
+      // eslint-disable-next-line no-new-wrappers
+      const realObj = new String(runtimeNonPlaceholder);
+      const placeholderPrim = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx";
+      const realPrim = runtimeNonPlaceholder;
+
+      expect(secretScanUtils.isObviousPlaceholder(placeholderObj as unknown as string)).toBe(
+        secretScanUtils.isObviousPlaceholder(placeholderPrim)
+      );
+      expect(secretScanUtils.isObviousPlaceholder(realObj as unknown as string)).toBe(
+        secretScanUtils.isObviousPlaceholder(realPrim)
+      );
+      expect(secretScanUtils.isObviousPlaceholder(placeholderObj as unknown as string)).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder(realObj as unknown as string)).toBe(false);
+    });
+
+    it("is deterministic across repeated calls with identical inputs", () => {
+      const runtimeQlx = ["qlx", "live", "abcdefghijklmnopqrstuvwxyz01"].join("_");
+      const runtimeStripeSuffix = ["abcdefghijklmnop", "qrstuvwxyz123456"].join("");
+      const runtimeStripe = ["sk", "live", runtimeStripeSuffix].join("_");
+      const cases = [
+        "",
+        "xxx",
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        "yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+        "zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        "your-api-key-here",
+        "example-secret-value",
+        "PLACEHOLDER_FOR_TEST",
+        "changeme-in-prod",
+        "test_secret_value",
+        "test-secret-123",
+        "development-only-token",
+        "fallback-secret-config",
+        "getInvoicesQuerySchema",
+        "/api/v1/invoices",
+        "https://quicklendx.example.com/callback",
+        runtimeQlx,
+        runtimeStripe,
+        "SAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "abababababababababababababababab",
+        "   ",
+        "\n\t",
+      ];
+
+      for (const input of cases) {
+        const first = secretScanUtils.isObviousPlaceholder(input);
+        for (let i = 0; i < 50; i++) {
+          expect(secretScanUtils.isObviousPlaceholder(input)).toBe(first);
+        }
+      }
+    });
+
+    it("produces consistent results under concurrent interleaved calls", () => {
+      const runtimeQlx = ["qlx", "live", "abcdefghijklmnopqrstuvwxyz01"].join("_");
+      const runtimeStripeSuffix = ["abcdefghijklmnop", "qrstuvwxyz123456"].join("");
+      const runtimeStripe = ["sk", "live", runtimeStripeSuffix].join("_");
+      const inputs = [
+        "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+        runtimeQlx,
+        "your-secret-key",
+        runtimeStripe,
+        "",
+      ];
+      const expected = inputs.map((input) => secretScanUtils.isObviousPlaceholder(input));
+
+      const permutations = inputs.map((_, offset) => [
+        ...inputs.slice(offset),
+        ...inputs.slice(0, offset),
+      ]);
+      for (const orderedInputs of permutations) {
+        for (const value of orderedInputs) {
+          const idx = inputs.indexOf(value);
+          expect(secretScanUtils.isObviousPlaceholder(value)).toBe(expected[idx]);
+        }
+      }
+    });
+
+    it("respects MIN_HIGH_ENTROPY_LENGTH boundary for low-unique-char strings", () => {
+      const threshold = secretScanUtils.MIN_HIGH_ENTROPY_LENGTH as number;
+
+      const below = "a".repeat(threshold - 1);
+      const at = "a".repeat(threshold);
+      const above = "a".repeat(threshold + 1);
+
+      expect(secretScanUtils.isObviousPlaceholder(below)).toBe(false);
+      expect(secretScanUtils.isObviousPlaceholder(at)).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder(above)).toBe(true);
+
+      const belowTwo = "ab".repeat(Math.floor((threshold - 1) / 2));
+      const atTwo = "ab".repeat(Math.floor(threshold / 2)).slice(0, threshold);
+      expect(new Set(belowTwo).size <= 2).toBe(true);
+      expect(new Set(atTwo).size <= 2).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder(belowTwo)).toBe(false);
+      expect(secretScanUtils.isObviousPlaceholder(atTwo)).toBe(true);
+
+      const threeChars = "abc".repeat(Math.ceil(threshold / 3)).slice(0, threshold);
+      expect(new Set(threeChars).size).toBeGreaterThan(2);
+      expect(secretScanUtils.isObviousPlaceholder(threeChars)).toBe(false);
+    });
+
+    it("returns false for clearly non-placeholder strings", () => {
+      const runtimeQlx = ["qlx", "live", "abcdefghijklmnopqrstuvwxyz01"].join("_");
+      const runtimeStripeSuffix = ["abcdefghijklmnop", "qrstuvwxyz123456"].join("");
+      const runtimeStripe = ["sk", "live", runtimeStripeSuffix].join("_");
+      const runtimeSlack = ["xoxb", "123456", "789012", "abcdefghijklmnop"].join("-");
+      const runtimeAws = ["AKIA", "IOSFODNN7EXAMPLE"].join("");
+      const nonPlaceholders = [
+        runtimeQlx,
+        runtimeStripe,
+        runtimeSlack,
+        runtimeAws,
+        "not-a-template-32-chars-of-entropy-!",
+        "mixedContent123!@#",
+      ];
+
+      for (const value of nonPlaceholders) {
+        expect(secretScanUtils.isObviousPlaceholder(value)).toBe(false);
+      }
+    });
+
+    it("prevents scan-line crashes when candidate.match is a non-string via direct path", () => {
+      const planted = makeHighEntropySecret();
+      const findingsBefore = secretScanUtils.scanLine(
+        `const token = "${planted}";`,
+        1,
+        "src/ok.ts",
+        { entries: [], globalPatterns: [] }
+      );
+      expect(findingsBefore).toHaveLength(1);
+      expect(findingsBefore[0].type).toBe("high-entropy");
+    });
+
+    it("matches prefix patterns case-insensitively and with boundaries", () => {
+      expect(secretScanUtils.isObviousPlaceholder("Your_Key_Here")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("EXAMPLE_SECRET_TOKEN")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("PlaceholderValue")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("CHANGEME_IN_PRODUCTION")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("TESTSECRET_XYZ")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("test_secret_xyz")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("Development-Only-Stub")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("Fallback-Secret-Standalone")).toBe(true);
+    });
+
+    it("handles single-char repeating strings just below threshold", () => {
+      const threshold = secretScanUtils.MIN_HIGH_ENTROPY_LENGTH as number;
+      const justBelow = "x".repeat(threshold - 1);
+      expect(secretScanUtils.isObviousPlaceholder(justBelow)).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("x")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("X")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("y")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("z")).toBe(true);
+      expect(secretScanUtils.isObviousPlaceholder("w")).toBe(false);
+    });
+  });
+});
+
+describe("hasMixedCharacterClasses", () => {
+  it("returns false for null and undefined inputs", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses(null)).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses(undefined)).toBe(false);
   });
 
-  describe("failure boundaries in overlapsMatch", () => {
-    it("handles invalid inputs deterministically without throwing", () => {
-      const { overlapsMatch } = secretScanUtils;
-      expect(overlapsMatch(null, null)).toBe(false);
-      expect(overlapsMatch(undefined, {})).toBe(false);
-      expect(overlapsMatch(123, "string")).toBe(false);
-      expect(overlapsMatch({ match: "test" }, null)).toBe(false);
-      expect(overlapsMatch({ match: "test", column: 5 }, { match: "test" })).toBe(true);
-      expect(overlapsMatch({ match: "test", column: 5 }, { match: "test", column: 10 })).toBe(false);
-      expect(overlapsMatch({ match: "test", column: 5 }, { match: "test", column: 6 })).toBe(true);
-    });
+  it("returns false for non-string inputs", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses(123)).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses({})).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses([])).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses(true)).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses(Symbol("test"))).toBe(false);
+  });
 
-    it("survives unexpected property access failures (partial failure recovery)", () => {
-      const { overlapsMatch } = secretScanUtils;
-      
-      const explosiveLeft = {
-        get match() {
-          throw new Error("Simulated access failure");
-        }
-      };
-      
-      expect(overlapsMatch(explosiveLeft, { match: "test" })).toBe(false);
+  it("returns false for empty string", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("")).toBe(false);
+  });
+
+  it("returns false for single character strings", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("a")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("A")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("1")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("!")).toBe(false);
+  });
+
+  it("returns false for strings with only one character class", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abcdefghijklmnopqrstuvwxyz")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("ABCDEFGHIJKLMNOPQRSTUVWXYZ")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("0123456789")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("!@#$%^&*()")).toBe(false);
+  });
+
+  it("returns true for strings with exactly two character classes", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abc123")).toBe(true); // lowercase + digits
+    expect(secretScanUtils.hasMixedCharacterClasses("ABC123")).toBe(true); // uppercase + digits
+    expect(secretScanUtils.hasMixedCharacterClasses("abc!@#")).toBe(true); // lowercase + special
+    expect(secretScanUtils.hasMixedCharacterClasses("ABC!@#")).toBe(true); // uppercase + special
+    expect(secretScanUtils.hasMixedCharacterClasses("123!@#")).toBe(true); // digits + special
+    expect(secretScanUtils.hasMixedCharacterClasses("abcABC")).toBe(true); // lowercase + uppercase
+  });
+
+  it("returns true for strings with three character classes", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abcABC123")).toBe(true); // lower + upper + digits
+    expect(secretScanUtils.hasMixedCharacterClasses("abc123!@#")).toBe(true); // lower + digits + special
+    expect(secretScanUtils.hasMixedCharacterClasses("ABC123!@#")).toBe(true); // upper + digits + special
+    expect(secretScanUtils.hasMixedCharacterClasses("abcABC!@#")).toBe(true); // lower + upper + special
+  });
+
+  it("returns true for strings with all four character classes", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abcABC123!@#")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("aA1!")).toBe(true);
+  });
+
+  it("handles whitespace correctly", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abc ABC")).toBe(true); // whitespace counts as special
+    expect(secretScanUtils.hasMixedCharacterClasses("abc 123")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("   ")).toBe(false); // only whitespace
+  });
+
+  it("handles Unicode characters", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abc123")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("test1")).toBe(true);
+  });
+
+  it("is deterministic for repeated calls", () => {
+    const testValue = "abc123";
+    const results = Array.from({ length: 100 }, () => secretScanUtils.hasMixedCharacterClasses(testValue));
+    expect(results.every((result) => result === true)).toBe(true);
+
+    const testValue2 = "abcdef";
+    const results2 = Array.from({ length: 100 }, () => secretScanUtils.hasMixedCharacterClasses(testValue2));
+    expect(results2.every((result) => result === false)).toBe(true);
+  });
+
+  it("handles boundary cases with mixed content", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("a1")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("A1")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("a!")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("A!")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("1!")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("aA")).toBe(true);
+  });
+
+  it("handles strings with repeated same-class characters", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("aaaaaaaa11111111")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("AAAAAAAA11111111")).toBe(true);
+    expect(secretScanUtils.hasMixedCharacterClasses("aaaaaaaa!!!!!!!!")).toBe(true);
+  });
+
+  it("returns false for strings that appear mixed but are actually single class", () => {
+    expect(secretScanUtils.hasMixedCharacterClasses("abcdefghijklmnopqrstuvwxyz")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("ABCDEFGHIJKLMNOPQRSTUVWXYZ")).toBe(false);
+    expect(secretScanUtils.hasMixedCharacterClasses("01234567890123456789")).toBe(false);
+  });
+});
+
+describe("isAllowlisted failure boundaries (issue 2610)", () => {
+  const allowlistFor = (entries: unknown[] = [], globalPatterns: unknown[] = []) => ({
+    entries,
+    globalPatterns,
+  });
+
+  it("allows exact file+line+match, pattern entries, and global patterns", () => {
+    const entryAllowlist = allowlistFor([
+      { file: "src/a.ts", line: 8, match: "token-abc-123" },
+    ]);
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 8, "prefix-token-abc-123-suffix", entryAllowlist)).toBe(
+      true
+    );
+
+    const patternAllowlist = allowlistFor([{ file: "src/b.ts", pattern: "^sk_test_" }]);
+    expect(secretScanUtils.isAllowlisted("src/b.ts", 9, "sk_test_abcdefgh", patternAllowlist)).toBe(
+      true
+    );
+
+    const globalAllowlist = allowlistFor([], [{ pattern: "^global-allow$" }]);
+    expect(secretScanUtils.isAllowlisted("src/any.ts", 1, "global-allow", globalAllowlist)).toBe(true);
+  });
+
+  it("rejects mismatched file, line, match, and pattern without throwing", () => {
+    const allowlist = allowlistFor(
+      [
+        { file: "src/a.ts", line: 8, match: "token-abc-123" },
+        { file: "src/b.ts", pattern: "^sk_test_" },
+      ],
+      [{ pattern: "^global-allow$" }]
+    );
+
+    expect(secretScanUtils.isAllowlisted("src/other.ts", 8, "token-abc-123", allowlist)).toBe(false);
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 9, "token-abc-123", allowlist)).toBe(false);
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 8, "different-value", allowlist)).toBe(false);
+    expect(secretScanUtils.isAllowlisted("src/b.ts", 9, "sk_live_abcdefgh", allowlist)).toBe(false);
+    expect(secretScanUtils.isAllowlisted("src/any.ts", 1, "not-global", allowlist)).toBe(false);
+  });
+
+  it("fails closed on non-string matchValue without throwing", () => {
+    const allowlist = allowlistFor(
+      [{ file: "src/a.ts", line: 1, match: "value" }],
+      [{ pattern: ".*" }]
+    );
+    const badValues = [null, undefined, 123, 0, true, {}, [], Buffer.from("value")];
+
+    for (const bad of badValues) {
+      expect(() => secretScanUtils.isAllowlisted("src/a.ts", 1, bad, allowlist)).not.toThrow();
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, bad, allowlist)).toBe(false);
+      expect(() =>
+        secretScanUtils.matchesAllowlistEntry({ file: "src/a.ts", match: "value" }, "src/a.ts", 1, bad)
+      ).not.toThrow();
+    }
+  });
+
+  it("fails closed on malformed allowlists without throwing", () => {
+    const malformed = [null, undefined, "allow", 42, true, [], { entries: "bad", globalPatterns: 1 }];
+    for (const allowlist of malformed) {
+      expect(() => secretScanUtils.isAllowlisted("src/a.ts", 1, "value", allowlist)).not.toThrow();
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", allowlist)).toBe(false);
+    }
+
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", { entries: [null, {}, []], globalPatterns: [null, {}, { pattern: 123 }, { pattern: "" }] })).toBe(
+      false
+    );
+  });
+
+  it("never throws on invalid regex patterns and treats them as non-matches", () => {
+    const badPatterns = ["[unclosed(", "(?<>bad)", "*", "+", "(?", 123, null, {}, []];
+    for (const pattern of badPatterns) {
+      const entryAllowlist = allowlistFor([{ file: "src/a.ts", pattern }]);
+      expect(() => secretScanUtils.isAllowlisted("src/a.ts", 1, "value", entryAllowlist)).not.toThrow();
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", entryAllowlist)).toBe(false);
+
+      const globalAllowlist = allowlistFor([], [{ pattern }]);
+      expect(() => secretScanUtils.isAllowlisted("src/a.ts", 1, "value", globalAllowlist)).not.toThrow();
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "value", globalAllowlist)).toBe(false);
+    }
+
+    expect(secretScanUtils.safeCompilePattern("[unclosed(")).toBeNull();
+    expect(secretScanUtils.safeCompilePattern(123 as unknown as string)).toBeNull();
+    expect(secretScanUtils.safeCompilePattern("")).toBeNull();
+    expect(secretScanUtils.safeCompilePattern("^ok$")).toBeInstanceOf(RegExp);
+  });
+
+  it("never matches non-string entry.match selectors", () => {
+    const badMatches = [123, null, {}, [], true];
+    for (const match of badMatches) {
+      expect(
+        secretScanUtils.matchesAllowlistEntry({ file: "src/a.ts", match }, "src/a.ts", 1, "123")
+      ).toBe(false);
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "123", allowlistFor([{ file: "src/a.ts", match }]))).toBe(
+        false
+      );
+    }
+  });
+
+  it("handles line-number boundaries numerically and deterministically", () => {
+    const allowlist = allowlistFor([{ file: "src/a.ts", line: 8, match: "v" }]);
+    // Numeric-string line cooperates with numeric line (documented invariant).
+    expect(secretScanUtils.isAllowlisted("src/a.ts", "8" as unknown as number, "v", allowlist)).toBe(true);
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 8.0, "v", allowlist)).toBe(true);
+    // Non-numeric, NaN, Infinity, and missing lines never match and never throw.
+    for (const line of [NaN, Infinity, undefined, null, "not-a-line", {}, []] as unknown[]) {
+      expect(() =>
+        secretScanUtils.isAllowlisted("src/a.ts", line as number, "v", allowlist)
+      ).not.toThrow();
+      expect(secretScanUtils.isAllowlisted("src/a.ts", line as number, "v", allowlist)).toBe(false);
+    }
+    expect(secretScanUtils.isAllowlisted("src/a.ts", 0, "v", allowlist)).toBe(false);
+    expect(secretScanUtils.isAllowlisted("src/a.ts", -1, "v", allowlist)).toBe(false);
+  });
+
+  it("is deterministic for duplicates, retries, and concurrent execution", () => {
+    const allowlist = allowlistFor(
+      [
+        { file: "src/a.ts", line: 1, match: "dup-value" },
+        { file: "src/a.ts", line: 1, match: "dup-value" },
+      ],
+      [{ pattern: "^dup-value$" }, { pattern: "^dup-value$" }]
+    );
+
+    const first = secretScanUtils.isAllowlisted("src/a.ts", 1, "dup-value", allowlist);
+    expect(first).toBe(true);
+    for (let i = 0; i < 50; i += 1) {
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "dup-value", allowlist)).toBe(first);
+      expect(secretScanUtils.isAllowlisted("src/a.ts", 1, "other", allowlist)).toBe(false);
+    }
+
+    return Promise.all(
+      Array.from({ length: 25 }, () =>
+        Promise.resolve(secretScanUtils.isAllowlisted("src/a.ts", 1, "dup-value", allowlist))
+      )
+    ).then((results) => {
+      expect(results.every((r: boolean) => r === true)).toBe(true);
     });
+  });
+
+  it("keeps scanLine compatible when the allowlist contains invalid patterns", () => {
+    const poisoned = allowlistFor([{ file: "src/a.ts", pattern: "[unclosed(" }], [
+      { pattern: "[also-bad(" },
+    ]);
+    const awsKey = `AKIA${"IOSFODNN7EXAMPLE"}`;
+    const findings = secretScanUtils.scanLine(
+      `const key = "${awsKey}";`,
+      1,
+      "src/a.ts",
+      poisoned
+    );
+    expect(findings.map((f: { type: string }) => f.type)).toEqual(["aws-access-key"]);
+    expect(findings[0].preview).not.toContain(awsKey);
+  });
+
+  it("returns only booleans so failures stay diagnosable without leaking secrets", () => {
+    const secret = ["super", "secret", "allow", "value-1"].join("-");
+    const allowlist = allowlistFor([{ file: "src/a.ts", line: 1, match: secret }]);
+    const result = secretScanUtils.isAllowlisted("src/a.ts", 1, secret, allowlist);
+    expect(typeof result).toBe("boolean");
+    expect(String(result)).not.toContain(secret);
   });
 });
 

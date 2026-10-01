@@ -8,7 +8,12 @@ import type { MigrationDefinition, MigrationState, ParsedMigration } from "./typ
 export interface DatabaseClient {
   exec: (sql: string) => void;
   prepare: (sql: string) => { all: (params?: unknown[]) => unknown[]; get: (params?: unknown[]) => unknown; run: (params?: unknown[]) => unknown };
-  transaction: (fn: () => void) => void;
+  /**
+   * Returns a transaction-wrapped function (better-sqlite3 semantics). The
+   * caller must invoke the returned function; calling `db.transaction(fn)`
+   * alone does NOT execute `fn`.
+   */
+  transaction: (fn: () => void) => () => void;
 }
 
 const MIGRATIONS_TABLE = `
@@ -25,7 +30,14 @@ const MIGRATIONS_TABLE = `
 `;
 
 const MIGRATIONS_DIR = path.resolve(process.cwd(), "src", "migrations");
-const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), ".hotfix-approvals");
+const HOTFIX_APPROVALS_DIR_NAME = ".hotfix-approvals";
+const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), HOTFIX_APPROVALS_DIR_NAME);
+
+// The only shape a migration name can legitimately have, per
+// parseMigrationFilename. Enforced again when building an approval path so a
+// ParsedMigration assembled by any other caller cannot point the approval
+// check outside HOTFIX_APPROVALS_DIR via "../" or an absolute path.
+const APPROVAL_NAME_PATTERN = /^[a-z0-9_]+$/;
 
 export function computeChecksum(content: string): string {
   return createHash("sha256").update(content).digest("hex");
@@ -70,24 +82,76 @@ export async function loadMigrationsFromFS(): Promise<ParsedMigration[]> {
   }
 }
 
-async function isHotfixApproved(migration: ParsedMigration): Promise<boolean> {
+// Hotfix approval contract. Every branch fails closed: the function only ever
+// returns true for a verified approval artifact, and anything it cannot
+// decide it reports rather than guessing. Pinned by
+// src/tests/migration-runner-hotfix.test.ts.
+//
+//   H1 A migration that is not a hotfix never needs approval.
+//   H2 A hotfix is approved only when <version>_<name>.approval exists AND is
+//      a regular file. A directory or any other node type is a broken
+//      deployment, not an approval, and is reported as such.
+//   H3 "No approval artifact" (ENOENT, ENOTDIR) is an expected outcome and
+//      returns false; the caller turns that into the user-facing error.
+//   H4 Any other filesystem failure (EACCES, EPERM, ELOOP, ...) is an
+//      operational fault, not a verdict. It throws carrying the errno so an
+//      operator is not sent hunting for a missing approval file that is
+//      actually present but unreadable.
+//   H5 The approval path is built from the filename-parsed version and name,
+//      never from content.name, and the name is re-validated, so a crafted
+//      migration name cannot redirect the check outside the approvals dir.
+//   H6 Approval is a read-only check: no shared state, so repeated and
+//      concurrent calls agree.
+export async function isHotfixApproved(migration: ParsedMigration): Promise<boolean> {
   if (!migration.content.meta?.hotfix) return true;
-  const approvalFile = path.join(HOTFIX_APPROVALS_DIR, `${migration.version}_${migration.name}.approval`);
-  try {
-    await fs.access(approvalFile);
-    return true;
-  } catch {
-    return false;
+
+  const label = `${migration.version}_${migration.name}`;
+
+  if (!APPROVAL_NAME_PATTERN.test(migration.name)) {
+    throw new Error(
+      `Refusing to evaluate hotfix approval for ${label}: migration name is not a valid identifier.`
+    );
   }
+
+  // Only the artifact's file name is reported in errors, never the absolute
+  // path, so deployment layout is not echoed into CI logs.
+  const approvalFileName = `${label}.approval`;
+
+  let stats: Awaited<ReturnType<typeof fs.stat>>;
+  try {
+    stats = await fs.stat(path.join(HOTFIX_APPROVALS_DIR, approvalFileName));
+  } catch (error: any) {
+    if (error?.code === "ENOENT" || error?.code === "ENOTDIR") {
+      return false;
+    }
+
+    throw new Error(
+      `Unable to evaluate hotfix approval for ${label}: ` +
+      `${error?.code || error?.message || "unknown error"} reading ${approvalFileName}. ` +
+      `Verify the ${HOTFIX_APPROVALS_DIR_NAME} directory exists and is readable.`
+    );
+  }
+
+  if (!stats.isFile()) {
+    throw new Error(
+      `Hotfix approval ${approvalFileName} for ${label} is not a regular file. ` +
+      `Remove the entry and create it as a file.`
+    );
+  }
+
+  return true;
 }
 
 function buildContext(db: any, isProd: boolean): any {
   return {
     db: {
-      exec: (sql: string, params?: unknown[]) => db.all(sql, params),
-      get: (sql: string, params?: unknown[]) => db.get(sql, params),
-      run: (sql: string, params?: unknown[]) => db.run(sql, params),
-      transaction: (fn: (db: any) => void) => db.transaction(() => fn(db)),
+      exec: (sql: string, params?: unknown[]) => db.exec(sql),
+      get: (sql: string, params?: unknown[]) => db.prepare(sql).get(...(params || [])),
+      run: (sql: string, params?: unknown[]) => db.prepare(sql).run(...(params || [])),
+      transaction: (fn: (db: any) => void) => {
+        const wrapped = db.transaction(() => fn(db));
+        return wrapped();
+      },
     },
     env: process.env,
     isProduction: isProd,
@@ -95,7 +159,7 @@ function buildContext(db: any, isProd: boolean): any {
   };
 }
 
-export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
+export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient; to?: string; all?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
   const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb } = options;
   const isProd = config.NODE_ENV === "production";
   const startTime = Date.now();
@@ -187,14 +251,27 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
           const appliedAt = new Date().toISOString();
           const migStart = Date.now();
           let state!: MigrationState;
+          let durationMs = 0;
 
-          db.transaction(() => {
+          let concurrentlyApplied = false;
+          const applyTx = db.transaction(() => {
             const txCtx = buildContext(db, isProd);
             const upFn = fileMig.content.up;
             if (!upFn) throw new Error(`Migration ${fileMig.file} missing up function`);
+            // Re-check inside the transaction: a concurrent run may have applied
+            // this version after our initial snapshot. better-sqlite3 executes
+            // statements synchronously on one connection, so this select-then-apply
+            // sequence is atomic per worker. INSERT OR IGNORE is a backstop so a
+            // duplicate version is treated as "already applied" (skipped) instead of
+            // aborting the whole run with a UNIQUE constraint error.
+            const alreadyAppliedRow = db.prepare("SELECT 1 AS present FROM _migrations WHERE version = ?").get(version);
+            if (alreadyAppliedRow) {
+              concurrentlyApplied = true;
+              return;
+            }
             upFn(txCtx);
 
-            const durationMs = Date.now() - migStart;
+            durationMs = Date.now() - migStart;
             state = {
               version,
               name: fileMig.name,
@@ -205,13 +282,20 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
               meta,
             };
 
-            db.prepare(
-              "INSERT INTO _migrations (version, name, checksum, applied_at, duration_ms, author, meta) VALUES (?, ?, ?, ?, ?, ?, ?)"
+            const inserted = db.prepare(
+              "INSERT OR IGNORE INTO _migrations (version, name, checksum, applied_at, duration_ms, author, meta) VALUES (?, ?, ?, ?, ?, ?, ?)"
             ).run(state.version, state.name, state.checksum, state.appliedAt, state.durationMs, state.author, JSON.stringify(state.meta));
+            if ((inserted as any).changes === 0) concurrentlyApplied = true;
           });
+          applyTx();
+
+          if (concurrentlyApplied) {
+            skipped++;
+            continue;
+          }
 
           appliedThisRun.push(state);
-          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${durationMs}ms)`);
+          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${state.durationMs}ms)`);
         } catch (err: any) {
           console.error(`❌ Migration ${version}_${fileMig.name} failed:`, err.message);
           throw err;
@@ -256,7 +340,15 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
         const migStart = Date.now();
         try {
           let durationMs = 0;
-          db.transaction(() => {
+          let concurrentlyApplied = false;
+          const rollbackTx = db.transaction(() => {
+            // Re-check inside the transaction: a concurrent run may have already
+            // rolled this version back after our initial snapshot.
+            const existingRow = db.prepare("SELECT 1 AS present FROM _migrations WHERE version = ?").get(version);
+            if (!existingRow) {
+              concurrentlyApplied = true;
+              return;
+            }
             const txCtx = buildContext(db, isProd);
             const downFn = fileMig.content.down;
             if (!downFn) throw new Error(`Migration ${fileMig.file} missing down function`);
@@ -265,6 +357,12 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             durationMs = Date.now() - migStart;
             db.prepare("DELETE FROM _migrations WHERE version = ?").run(version);
           });
+          rollbackTx();
+
+          if (concurrentlyApplied) {
+            skipped++;
+            continue;
+          }
 
           appliedThisRun.push({
             version,
@@ -341,7 +439,12 @@ export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ val
   ).all() || [];
   
   const fileMigrations = await loadMigrationsFromFS();
-  const fileMigrationMap = new Map(fileMigrations.map((m) => [m.version, m]));
+  // First-match semantics (matching loadMigrationsFromFS ordering) so duplicate
+  // version numbers resolve deterministically the same way the runner applies them.
+  const fileMigrationMap = new Map<number, ParsedMigration>();
+  for (const m of fileMigrations) {
+    if (!fileMigrationMap.has(m.version)) fileMigrationMap.set(m.version, m);
+  }
   
   for (const row of appliedRows) {
     const fileMig = fileMigrationMap.get(row.version);
