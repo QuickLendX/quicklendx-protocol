@@ -1,21 +1,3 @@
-import crypto from 'crypto';
-import { db, DbApiKey } from '../db/database';
-import {
-  ApiKey,
-  ApiKeyCreateInput,
-  ApiKeyWithPlaintext,
-  generateApiKey,
-  hashApiKey,
-  timingSafeCompare,
-} from '../models/api-key';
-import { validateScopes } from '../config/scopes';
-import { auditLogService } from './audit-log';
-import {
-  ApiKeyNotFoundError,
-  ApiKeyRevokedError,
-  ApiKeyRotationConflictError,
-} from './api-key-errors';
-
 /**
  * In-memory, single-process implementation of `ApiKeyService`.
  *
@@ -47,27 +29,12 @@ export class InMemoryApiKeyService implements ApiKeyService {
     this.clock = clock;
   }
 
-    // Validate expiration date if provided
-    if (input.expires_at) {
-      const expiresAt = new Date(input.expires_at);
-      if (isNaN(expiresAt.getTime())) {
-        throw new Error('Invalid expires_at date format');
-      }
-      if (expiresAt <= new Date()) {
-        throw new Error('expires_at must be in the future');
-      }
-    }
-
-    // Generate key
-    const { key, prefix, hash, signingSecret, signingSecretHash } = generateApiKey();
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
-
-    const dbKey: DbApiKey = {
-      id,
-      key_hash: hash,
-      signing_secret_hash: signingSecretHash,
-      prefix,
+  /** Seed a key for a test/seed scenario. */
+  create(input: CreateApiKeyInput): void {
+    const now = input.createdAt ?? this.clock.now();
+    const status: ApiKey["status"] = input.status ?? "active";
+    const key: ApiKey = {
+      id: input.id,
       name: input.name,
       ownerId: input.ownerId,
       permissions: input.permissions ?? [],
