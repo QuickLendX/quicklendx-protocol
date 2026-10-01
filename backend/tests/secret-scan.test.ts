@@ -1,3 +1,4 @@
+import { describe, expect, it } from "@jest/globals";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -8,6 +9,12 @@ const secretScanUtils = require("../scripts/lib/secret-scan-utils");
 
 function createFixtureDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "quicklendx-secret-scan-"));
+}
+
+function createFixtureDirWithMode(mode: number): string {
+  const dir = createFixtureDir();
+  fs.chmodSync(dir, mode);
+  return dir;
 }
 
 function writeFixture(root: string, relativePath: string, content: string): string {
@@ -31,6 +38,10 @@ function makeStellarSecretSeed(): string {
     seed += alphabet[crypto.randomInt(0, alphabet.length)];
   }
   return seed;
+}
+
+function isRootUser(): boolean {
+  return typeof process.getuid === "function" && process.getuid() === 0;
 }
 
 describe("secret-scan-utils", () => {
@@ -109,10 +120,10 @@ describe("secret-scan-utils", () => {
   it("detects known secret patterns for qlx, sk, xoxb, and AWS keys", () => {
     const suffix = Array.from({ length: 26 }, () => "a").join("");
     const stripeSuffix = `${suffix}123456`;
-    const qlx = `qlx_${"live"}_${suffix}`;
-    const stripe = `sk_${"live"}_${stripeSuffix}`;
-    const slack = `xoxb-${"123"}-${"456"}-${suffix}`;
-    const aws = `AKIA${"IOSFODNN7EXAMPLE"}`;
+    const qlx = `qlx_${["live"]}_${suffix}`;
+    const stripe = `sk_${["live"]}_${stripeSuffix}`;
+    const slack = `xoxb-${["123"]}-${["456"]}-${suffix}`;
+    const aws = `AKIA${["IOSFODNN7EXAMPLE"]}`;
     const line = `${qlx} ${stripe} ${slack} ${aws}`;
 
     const findings = secretScanUtils.scanLine(line, 10, "src/example.ts", {
@@ -211,8 +222,44 @@ describe("secret-scan-utils", () => {
     );
   });
 
+  it("loadAllowlist returns empty allowlist for missing, empty, and null-byte files", () => {
+    const fixtureRoot = createFixtureDir();
+
+    expect(
+      secretScanUtils.loadAllowlist(path.join(fixtureRoot, "does-not-exist.json"), fixtureRoot)
+    ).toEqual({ entries: [], globalPatterns: [] });
+
+    const emptyPath = path.join(fixtureRoot, "empty.json");
+    fs.writeFileSync(emptyPath, "", "utf8");
+    expect(secretScanUtils.loadAllowlist(emptyPath, fixtureRoot)).toEqual({
+      entries: [],
+      globalPatterns: [],
+    });
+
+    const nullBytePath = path.join(fixtureRoot, "null-byte.json");
+    fs.writeFileSync(nullBytePath, "\u0000", "utf8");
+    expect(() => secretScanUtils.loadAllowlist(nullBytePath, fixtureRoot)).toThrow(
+      /Failed to parse secret scan allowlist/
+    );
+  });
+
+  it("loadAllowlist is deterministic across repeated invocations", () => {
+    const first = secretScanUtils.loadAllowlist(allowlistPath, repoRoot);
+    const second = secretScanUtils.loadAllowlist(allowlistPath, repoRoot);
+    expect(second).toEqual(first);
+    expect(second.entries).not.toBe(first.entries);
+  });
+
+  it("loadAllowlist rejects directory paths without losing caller state", () => {
+    const fixtureRoot = createFixtureDir();
+    const dirPath = path.join(fixtureRoot, "allowlist-dir");
+    fs.mkdirSync(dirPath, { recursive: true });
+
+    expect(() => secretScanUtils.loadAllowlist(dirPath, fixtureRoot)).toThrow();
+  });
+
   it("ignores obvious placeholders and Stellar public keys", () => {
-    expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true);
+    expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true);
     expect(
       secretScanUtils.isStellarStrKeyLike(
         "GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B"
@@ -313,7 +360,7 @@ describe("secret-scan-utils", () => {
     expect(failed.ok).toBe(true);
 
     writeFixture(fixtureRoot, "src/leak.ts", `const value = "${leaked}";\n`);
-    const failedAfterWrite = secretScanUtils.runSecretScan({
+    const failedAfterWrite = secretScanUtils.runSecretScan( {
       backendRoot: fixtureRoot,
       allowlist: { entries: [], globalPatterns: [] },
     });
@@ -328,8 +375,8 @@ describe("secret-scan-utils", () => {
     ).toThrow(/leaked a matched value/);
 
     expect(secretScanUtils.isHighEntropyToken("a".repeat(32))).toBe(false);
-    expect(secretScanUtils.isHighEntropyToken("ABCDEFGHIJKLMNOPQRSTUVWXYZABCD")).toBe(false);
-    expect(secretScanUtils.isHighEntropyToken("aaaaaaaaaaaaaaaaaaaa1234567890ab")).toBe(false);
+    expect(secretScanUtils.isHighEntropyToken("ABCDEFGHIJKLMNOPQRSTUVWXYZABCCD")).toBe(false);
+    expect(secretScanUtils.isHighEntropyToken("aaaaaaaaaaaaaaaaaaaaa1234567890ab")).toBe(false);
     expect(secretScanUtils.redactPreview("")).toBe('""');
     expect(secretScanUtils.unquoteString("not-quoted")).toBe("not-quoted");
 
@@ -393,6 +440,212 @@ describe("secret-scan-utils", () => {
     expect(
       nestedTargets.map((target: { relativePath: string }) => target.relativePath)
     ).not.toContain("node_modules/pkg/index.js");
+  });
+
+  describe("shouldScanFile failure boundaries", () => {
+    it("is deterministic for identical inputs across repeated calls", () => {
+      const inputs: Array<[string, unknown]> = [
+        ["src/a.ts", undefined],
+        ["src/a.ts", { ignoredFiles: [] }],
+        ["src/a.ts", { ignoredFiles: [".secret-scan-allow.json"] }],
+        ["scripts/.secret-scan-allow.json", { ignoredFiles: [".secret-scan-allow.json"] }],
+        [".env.example", undefined],
+        ["", undefined],
+        ["src/a.ts", null],
+        ["src/a.ts", {}],
+      ];
+
+      for (const [relativePath, options] of inputs) {
+        const first = secretScanUtils.shouldScanFile(relativePath, options as never);
+        for (let i = 0; i < 5; i += 1) {
+          expect(secretScanUtils.shouldScanFile(relativePath, options as never)).toBe(first);
+        }
+      }
+    });
+
+    it("returns a boolean for every boundary input without throwing", () => {
+      const boundaryInputs: Array<[unknown, unknown]> = [
+        ["", undefined],
+        [".", undefined],
+        ["..", undefined],
+        ["/", undefined],
+        ["src/", undefined],
+        ["src//a.ts", undefined],
+        ["src/a.ts", undefined],
+        ["src/a.ts", null],
+        ["src/a.ts", {}],
+        ["src/a.ts", { ignoredFiles: null }],
+        ["src/a.ts", { ignoredFiles: [] }],
+        ["src/a.ts", { ignoredFiles: ["a.ts"] }],
+        ["src/a.ts", { ignoredFiles: [""] }],
+        ["src/a.ts", { ignoredFiles: [null] }],
+        ["src/a.ts", { ignoredFiles: [undefined] }],
+        ["src/a.ts", { ignoredFiles: [42] }],
+        ["src/a.ts", { ignoredFiles: ["src/a.ts"] }],
+        ["src/a.ts", { ignoredFiles: ["a.ts", "b.ts"] }],
+        ["src/a.ts", { ignoredFiles: ["*.ts"] }],
+        ["src/a.ts", { ignoredFiles: ["src/*"] }],
+        ["src/a.ts", { ignoredFiles: ["/src/a.ts"] }],
+        ["src/a.ts", { ignoredFiles: ["src/a.ts", "src/a.ts"] }],
+        ["src/a.ts", { ignoredFiles: ["SRC/A.TS"] }],
+        ["src/a.ts", { ignoredFiles: ["src/a.ts"], extra: true }],
+        ["src/a.ts", { ignoredFiles: ["src/a.ts"], ignoredDirs: ["src"] }],
+      ];
+
+      for (const [relativePath, options] of boundaryInputs) {
+        const result = secretScanUtils.shouldScanFile(relativePath as never, options as never);
+        expect(typeof result).toBe("boolean");
+      }
+    });
+
+    it("does not mutate the options object across calls", () => {
+      const options = { ignoredFiles: ["a.ts", "b.ts"] };
+      const snapshot = JSON.stringify(options);
+
+      secretScanUtils.shouldScanFile("src/a.ts", options);
+      secretScanUtils.shouldScanFile("src/b.ts", options);
+      secretScanUtils.shouldScanFile("src/c.ts", options);
+
+      expect(JSON.stringify(options)).toBe(snapshot);
+      expect(options.ignoredFiles).toEqual(["a.ts", "b.ts"]);
+    });
+
+    it("is stable under concurrent invocation", async () => {
+      const cases: Array<[string, unknown, boolean]> = [
+        ["src/a.ts", undefined, true],
+        ["src/a.ts", { ignoredFiles: ["a.ts"] }, false],
+        ["scripts/.secret-scan-allow.json", { ignoredFiles: [".secret-scan-allow.json"] }, false],
+        [".env.example", undefined, true],
+      ];
+
+      const results = await Promise.all(
+        Array.from({ length: 200 }, (_, index) => {
+          const [relativePath, options, expected] = cases[index % cases.length];
+          return Promise.resolve().then(() => {
+            const actual = secretScanUtils.shouldScanFile(relativePath, options as never);
+            return actual === expected;
+          });
+        })
+      );
+
+      expect(results.every(Boolean)).toBe(true);
+    });
+
+    it("treats missing or malformed options as the default policy", () => {
+      const baseline = secretScanUtils.shouldScanFile("src/a.ts");
+      expect(secretScanUtils.shouldScanFile("src/a.ts", undefined)).toBe(baseline);
+      expect(secretScanUtils.shouldScanFile("src/a.ts", null)).toBe(baseline);
+      expect(secretScanUtils.shouldScanFile("src/a.ts", {})).toBe(baseline);
+      expect(secretScanUtils.shouldScanFile("src/a.ts", { ignoredFiles: null })).toBe(baseline);
+      expect(secretScanUtils.shouldScanFile("src/a.ts", { ignoredFiles: "a.ts" })).toBe(baseline);
+      expect(secretScanUtils.shouldScanFile("src/a.ts", { ignoredFiles: 42 })).toBe(baseline);
+    });
+
+    it("ignores non-string entries in ignoredFiles without crashing", () => {
+      const options = {
+        ignoredFiles: [null, undefined, 42, {}, [], "a.ts"],
+      };
+      expect(secretScanUtils.shouldScanFile("src/a.ts", options)).toBe(false);
+      expect(secretScanUtils.shouldScanFile("src/b.ts", options)).toBe(true);
+    });
+
+    it("matches ignoredFiles deterministically regardless of order or duplicates", () => {
+      const a = secretScanUtils.shouldScanFile("src/a.ts", {
+        ignoredFiles: ["a.ts", "b.ts"],
+      });
+      const b = secretScanUtils.shouldScanFile("src/a.ts", {
+        ignoredFiles: ["b.ts", "a.ts"],
+      });
+      const c = secretScanUtils.shouldScanFile("src/a.ts", {
+        ignoredFiles: ["a.ts", "a.ts", "b.ts"],
+      });
+      expect(a).toBe(b);
+      expect(b).toBe(c);
+    });
+
+    it("fails closed for traversal-like inputs without throwing", () => {
+      const traversalInputs = [
+        "../etc/passwd",
+        "../../secret",
+        "src/../../etc/passwd",
+        "..\\windows\\system32",
+        "src/./a.ts",
+      ];
+      for (const relativePath of traversalInputs) {
+        const result = secretScanUtils.shouldScanFile(relativePath);
+        expect(typeof result).toBe("boolean");
+      }
+    });
+
+    it("handles unreadable directories without throwing during collection", () => {
+      if (isRootUser()) {
+        return;
+      }
+      const fixtureRoot = createFixtureDirWithMode(0o000);
+      try {
+        expect(secretScanUtils.collectScanTargets(fixtureRoot)).toEqual([]);
+      } finally {
+        fs.chmodSync(fixtureRoot, 0o700);
+      }
+    });
+
+    it("handles unreadable files without throwing during collection", () => {
+      if (isRootUser()) {
+        return;
+      }
+      const fixtureRoot = createFixtureDir();
+      const filePath = writeFixture(fixtureRoot, "src/locked.ts", "export {};\n");
+      fs.chmodSync(filePath, 0o000);
+      try {
+        const targets = secretScanUtils.collectScanTargets(fixtureRoot);
+        const relativePaths = targets.map((target: { relativePath: string }) => target.relativePath);
+        expect(relativePaths).not.toContain("src/locked.ts");
+      } finally {
+        fs.chmodSync(filePath, 0o600);
+      }
+    });
+
+    it("returns an empty target list for a missing root without throwing", () => {
+      const fixtureRoot = createFixtureDir();
+      const missing = path.join(fixtureRoot, "does-not-exist");
+      expect(secretScanUtils.collectScanTargets(missing)).toEqual([]);
+    });
+
+    it("does not leak secret values through error messages on failure", () => {
+      const planted = makeHighEntropySecret();
+      const fixtureRoot = createFixtureDir();
+      writeFixture(fixtureRoot, "src/leak.ts", `const value = "${planted}";\n`);
+
+      const result = secretScanUtils.runSecretScan({
+        backendRoot: fixtureRoot,
+        allowlist: { entries: [], globalPatterns: [] },
+      });
+
+      expect(result.ok).toBe(false);
+      expect(result.exitCode).toBe(1);
+      expect(result.message).not.toContain(planted);
+      secretScanUtils.assertNoSecretsPrinted(result.message, result.findings);
+    });
+
+    it("recovers deterministically after a failing scan", () => {
+      const fixtureRoot = createFixtureDir();
+      const planted = makeHighEntropySecret();
+      writeFixture(fixtureRoot, "src/leak.ts", `const value = "${planted}";\n`);
+
+      const first = secretScanUtils.runSecretScan({
+        backendRoot: fixtureRoot,
+        allowlist: { entries: [], globalPatterns: [] },
+      });
+      const second = secretScanUtils.runSecretScan({
+        backendRoot: fixtureRoot,
+        allowlist: { entries: [], globalPatterns: [] },
+      });
+
+      expect(first.ok).toBe(false);
+      expect(second.ok).toBe(false);
+      expect(first.exitCode).toBe(second.exitCode);
+      expect(first.findings.length).toBe(second.findings.length);
+    });
   });
 
   describe("isObviousPlaceholder failure boundaries", () => {
@@ -847,6 +1100,162 @@ describe("isAllowlisted failure boundaries (issue 2610)", () => {
     const result = secretScanUtils.isAllowlisted("src/a.ts", 1, secret, allowlist);
     expect(typeof result).toBe("boolean");
     expect(String(result)).not.toContain(secret);
+  });
+
+  describe("isStellarStrKeyLike failure-boundary and determinism coverage", () => {
+    const validGKey = "GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B";
+    const validXKey = `X${"A".repeat(55)}`;
+    const validBoundaryKeys = [
+      `G${"2".repeat(55)}`,
+      `G${"7".repeat(55)}`,
+      `G${"A".repeat(55)}`,
+      `G${"Z".repeat(55)}`,
+      `X${"2".repeat(55)}`,
+      `X${"7".repeat(55)}`,
+      `X${"A".repeat(55)}`,
+      `X${"Z".repeat(55)}`,
+    ];
+
+    it("accepts valid Stellar public keys and hash signers (G... and X...)", () => {
+      expect(secretScanUtils.isStellarStrKeyLike(validGKey)).toBe(true);
+      expect(secretScanUtils.isStellarStrKeyLike(validXKey)).toBe(true);
+      for (const key of validBoundaryKeys) {
+        expect(secretScanUtils.isStellarStrKeyLike(key)).toBe(true);
+      }
+    });
+
+    it("rejects Stellar secret seeds (S...) to enforce security invariants", () => {
+      const secretSeed = makeStellarSecretSeed();
+      const seedAllB = `S${"B".repeat(55)}`;
+      expect(secretScanUtils.isStellarStrKeyLike(secretSeed)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(seedAllB)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(makeStellarSecretSeed())).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`S${"A".repeat(55)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`S${"7".repeat(55)}`)).toBe(false);
+    });
+
+    it("rejects other disallowed prefix characters", () => {
+      const disallowedPrefixes = "ABCDEFHIJKLMNOPQRTUVWYZ";
+      for (const prefix of disallowedPrefixes) {
+        expect(secretScanUtils.isStellarStrKeyLike(`${prefix}${"A".repeat(55)}`)).toBe(false);
+      }
+    });
+
+    it("rejects lowercase prefixes and lowercase base32 characters", () => {
+      expect(secretScanUtils.isStellarStrKeyLike(`g${"A".repeat(55)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`x${"A".repeat(55)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(validGKey.toLowerCase())).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"a".repeat(55)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(54)}b`)).toBe(false);
+    });
+
+    it("rejects non-base32 characters (0, 1, 8, 9) and special characters", () => {
+      for (const invalidChar of ["0", "1", "8", "9"]) {
+        expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(54)}${invalidChar}`)).toBe(false);
+        expect(secretScanUtils.isStellarStrKeyLike(`X${invalidChar}${"A".repeat(54)}`)).toBe(false);
+      }
+
+      const symbols = [" ", "\t", "\n", "\r", "\0", "-", "_", "/", "+", "=", "@", "!", "$", ".", ":"];
+      for (const sym of symbols) {
+        expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(54)}${sym}`)).toBe(false);
+        expect(secretScanUtils.isStellarStrKeyLike(`${sym}G${"A".repeat(54)}`)).toBe(false);
+      }
+    });
+
+    it("enforces strict 56-character length boundary", () => {
+      expect(secretScanUtils.isStellarStrKeyLike("")).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike("G")).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike("X")).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(53)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(54)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(55)}`)).toBe(true);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(56)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(100)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(1000)}`)).toBe(false);
+    });
+
+    it("safely handles non-string inputs and failure-boundary types without throwing", () => {
+      const nonStringInputs = [
+        null,
+        undefined,
+        42,
+        0,
+        -1,
+        NaN,
+        Infinity,
+        -Infinity,
+        true,
+        false,
+        BigInt(123456789),
+        Symbol("GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B"),
+        Symbol.for("stellar"),
+        {},
+        { validGKey },
+        { toString: () => validGKey },
+        { toString() { throw new Error("poisoned toString"); } },
+        { valueOf() { throw new Error("poisoned valueOf"); } },
+        Object.create(null),
+        [validGKey],
+        [],
+        () => validGKey,
+        Buffer.from(validGKey),
+      ];
+
+      for (const input of nonStringInputs) {
+        expect(() => {
+          const result = secretScanUtils.isStellarStrKeyLike(input);
+          expect(result).toBe(false);
+        }).not.toThrow();
+      }
+    });
+
+    it("is strictly deterministic and idempotent across repeated, alternating, and concurrent calls", async () => {
+      const testCases = [
+        { input: validGKey, expected: true },
+        { input: validXKey, expected: true },
+        { input: `S${"A".repeat(55)}`, expected: false },
+        { input: null, expected: false },
+        { input: undefined, expected: false },
+        { input: "", expected: false },
+        { input: `G${"A".repeat(54)}0`, expected: false },
+        { input: Symbol("boundary"), expected: false },
+        { input: `G${"A".repeat(56)}`, expected: false },
+      ];
+
+      for (let i = 0; i < 100; i++) {
+        for (const { input, expected } of testCases) {
+          expect(secretScanUtils.isStellarStrKeyLike(input)).toBe(expected);
+        }
+      }
+
+      const concurrentRuns = Array.from({ length: 200 }, (_, index) => {
+        const item = testCases[index % testCases.length];
+        return Promise.resolve().then(() => {
+          const result = secretScanUtils.isStellarStrKeyLike(item.input);
+          return { result, expected: item.expected };
+        });
+      });
+
+      const results = await Promise.all(concurrentRuns);
+      for (const { result, expected } of results) {
+        expect(result).toBe(expected);
+      }
+    });
+
+    it("preserves secret detection invariants when integrated with scanner", () => {
+      expect(secretScanUtils.isHighEntropyToken(validGKey)).toBe(false);
+
+      const plantedSecretSeed = makeStellarSecretSeed();
+      const findings = secretScanUtils.scanLine(
+        `const secret = "${plantedSecretSeed}";`,
+        1,
+        "src/wallet.ts",
+        { entries: [], globalPatterns: [] }
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0].type).toBe("stellar-secret-seed");
+      expect(secretScanUtils.isStellarStrKeyLike(plantedSecretSeed)).toBe(false);
+    });
   });
 });
 

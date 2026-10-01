@@ -39,11 +39,6 @@ const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), HOTFIX_APPROVALS_DIR_NA
 // check outside HOTFIX_APPROVALS_DIR via "../" or an absolute path.
 const APPROVAL_NAME_PATTERN = /^[a-z0-9_]+$/;
 
-/**
- * Error class for migration loading failures. Carries a deterministic `code` so callers
- * can distinguish boundary conditions (permission, stale, duplicate, etc.) without
- * parsing human-messages.
- */
 export class MigrationLoadError extends Error {
   code: string;
   constructor(code: string, message: string) {
@@ -65,10 +60,14 @@ export const MigrationLoadErrorCodes = {
   FILE_READ_FAILED: "FILE_READ_FAILED",
 } as const;
 
-export type MigrationLoadErrorCode = (typeof MigrationLoadErrorCodes)[keydof typeof MigrationLoadErrorCodes];
-
+export type MigrationLoadErrorCode = (typeof MigrationLoadErrorCodes)[keyof typeof MigrationLoadErrorCodes];
 export function computeChecksum(content: string): string {
-  return createHash("sha256").update(content).digest("hex");
+  if (typeof content !== "string") {
+    throw new TypeError(
+      `computeChecksum expects a string, received ${content === null ? "null" : typeof content}`
+    );
+  }
+  return createHash("sha256").update(content, "utf-8").digest("hex");
 }
 
 export function parseMigrationFilename(filename: string): { version: number; name: string } | null {
@@ -309,7 +308,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
   const startTime = Date.now();
 
   const db = providedDb || getDatabase();
-  db.exec(MIGRATIONS_TABLE);
+  db.exec(uIGRATIONS_TABLE);
 
   // Verify checksums of applied migrations on startup
   // In production, checksum verification cannot be bypassed
@@ -441,7 +440,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
           appliedThisRun.push(state);
           if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${state.durationMs}ms)`);
         } catch (err: any) {
-          console.error(`❌ Migration ${version}_${fileMig.name} failed:`, err.message);
+          console.error(`❌ Migration ${version}_${fileMig.name} failed:', err.message);
           throw err;
         }
       } else {
@@ -518,9 +517,9 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             meta: fileMig.content.meta,
           });
 
-          if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms)`);
+if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms)`);
         } catch (err: any) {
-          console.error(`❌ Rollback of ${version}_${fileMig.name} failed:`, err.message);
+          console.error(`❌ Rollback of ${version}_${fileMig.name} failed:', err.message);
           throw err;
         }
       } else {
@@ -681,7 +680,8 @@ export async function validateMigrationFiles(): Promise<{ valid: boolean; errors
 export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ valid: boolean; errors: string[] }> {
   const errors: string[] = [];
   const database = db || getDatabase();
-
+// Ensure migrations table exists
+  database.exec(MIGRATIONS_TABLE);
   const appliedRows = database.prepare(
     "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
   ).all() || [];
@@ -697,14 +697,13 @@ export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ val
   for (const m of migrations) {
     if (!fileMigrationMap.has(m.version)) fileMigrationMap.set(m.version, m);
   }
-
-  for (const row of appliedRows as any[]) {
+for (const row of appliedRows as any[]) {
     const mig = fileMigrationMap.get(row.version);
     if (!mig) {
       errors.push(`Applied migration ${row.version}_${row.name} has no corresponding file`);
       continue;
     }
-    const fileContent = await fs.readFile(path.join(resolveMigrationsDir(), mig.file), "utf-8");
+const fileContent = await fs.readFile(path.join(resolveMigrationsDir(), mig.file), "utf-8");
     const actual = computeChecksum(fileContent);
     if (actual !== row.checksum) {
       errors.push(`Checksum mismatch for ${row.version}_${row.name}`);
