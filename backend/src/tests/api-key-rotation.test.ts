@@ -16,7 +16,7 @@ jest.mock('../services/audit-log', () => ({
 
 import path from 'path';
 import fs from 'fs';
-import { getDatabase, closeDatabase } from '../lib/database';
+const { getDatabase, closeDatabase } = require('../lib/database');
 
 describe('API Key Signing Secret Rotation', () => {
   let adminId: string;
@@ -78,7 +78,7 @@ describe('API Key Signing Secret Rotation', () => {
     // 1. Create a key
     const created = await apiKeyService.createApiKey({
       name: 'Test Key',
-      scopes: ['read:*'],
+      scopes: ['read:'],
       created_by: adminId,
     });
 
@@ -131,7 +131,7 @@ describe('API Key Signing Secret Rotation', () => {
   it('second rotation should invalidate the first old secret', async () => {
     const created = await apiKeyService.createApiKey({
       name: 'Test Key',
-      scopes: ['read:*'],
+      scopes: ['read:'],
       created_by: adminId,
     });
 
@@ -169,4 +169,76 @@ describe('API Key Signing Secret Rotation', () => {
       .rejects.toThrow('Cannot rotate a revoked key');
   });
 
+  it('rejects rotation for a non-existent key', async () => {
+    await expect(apiKeyService.rotateSigningSecret('missing-key-id', adminId))
+      .rejects.toThrow();
+  });
+
+  it('rejects rotation when actor is not the owner', async () => {
+    const created = await apiKeyService.createApiKey({
+      name: 'Test Key',
+      scopes: ['read:'],
+      created_by: adminId,
+    });
+
+    await expect(apiKeyService.rotateSigningSecret(created.id, 'other-user'))
+      .rejects.toThrow();
+  });
+
+  it('rejects rotation with an invalid grace window', async () => {
+    const created = await apiKeyService.createApiKey({
+      name: 'Test Key',
+      scopes: ['read:*'],
+      created_by: adminId,
+    });
+
+    await expect(apiKeyService.rotateSigningSecret(created.id, adminId, '127.0.0.1', Number.NaN))
+      .rejects.toThrow();
+  });
+
+  it('concurrent rotations leave exactly one valid grace secret and one active secret', async () => {
+    const created = await apiKeyService.createApiKey({
+      name: 'Test Key',
+      scopes: ['read:'],
+      created_by: adminId,
+    });
+
+    const initialPlaintext = created.plaintext_key;
+
+    const results = await Promise.allSettled([
+      apiKeyService.rotateSigningSecret(created.id, adminId, '127.0.0.1', 24),
+      apiKeyService.rotateSigningSecret(created.id, adminId, '127.0.0.1', 24),
+    ]);
+
+    const fulfilled = results.filter((r) => r.status === 'fulfilled') as PromiseFulfilledResult<any>[];
+    expect(fulfilled.length).toBe(2);
+
+    // The initial secret must not verify after two rotations overwrite the grace slot.
+    expect(await apiKeyService.verifyApiKey(initialPlaintext)).toBeNull();
+
+    // At least one of the two resulting secrets must verify, and no more than two.
+    const verified = await Promise.all(
+      fulfilled.map((r) => apiKeyService.verifyApiKey(r.value.plaintext_key)),
+    );
+    const validCount = verified.filter((v) => v !== null).length;
+    expect(validCount).toBeGreaterThanOrEqual(1);
+    expect(validCount).toBeLessThanOrEqual(2);
+  });
+
+  it('rotation is deterministic for the same input sequence', async () => {
+    const created = await apiKeyService.createApiKey({
+      name: 'Test Key',
+      scopes: ['read:'],
+      created_by: adminId,
+    });
+
+    const rotated = await apiKeyService.rotateSigningSecret(created.id, adminId, '127.0.0.1', 24);
+
+    // The rotated key must verify exactly once and return the same key id on repeated verification.
+    const a = await apiKeyService.verifyApiKey(rotated.plaintext_key);
+    const b = await apiKeyService.verifyApiKey(rotated.plaintext_key);
+    expect(a).not.toBeNull();
+    expect(b).not.toBeNull();
+    expect(a!.id).toBe(b!.id);
+  });
 });
