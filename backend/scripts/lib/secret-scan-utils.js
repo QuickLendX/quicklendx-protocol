@@ -23,15 +23,6 @@
  * 4. OUTPUT NEVER CONTAINS A SECRET. Error messages identify findings by
  *    repo-relative path, line, and allowlist index. They never embed matched
  *    secret text, nor absolute filesystem paths from the scanning machine.
- * 5. UNQUOTING IS VALIDATED, NEVER REINTERPRETED. `unquoteString` only strips
- *    a surrounding quote pair when the input is a string that opens and closes
- *    with the same quote character. Non-string input and unbalanced literals
- *    throw a `TypeError` instead of being rewritten, because `slice(1, -1)`
- *    used to turn the unterminated literal `"abc` into `ab` and a lone `"` into
- *    `""` -- silent data loss on inputs the scanner cannot positively evaluate
- *    (invariant 1). Like invariant 4, these errors name the failure condition
- *    (and, for a wrong type, the received type), never the literal text, which
- *    may itself be a secret.
  */
 
 const fs = require("node:fs");
@@ -413,121 +404,6 @@ function isHighEntropyToken(value) {
   }
 }
 
-// Redaction contract enforced by redactPreview. These are the invariants the
-// focused tests in tests/secret-scan-redaction.test.ts pin down, and every one
-// of them must hold for CI output to stay diagnosable without leaking a secret:
-//
-//   R1 Total          - never throws, for any JavaScript value, including
-//                       revoked proxies and values whose coercion throws.
-//                       A throw here would abort scanLine/scanTargets and
-//                       discard findings already collected for other files.
-//   R2 Empty          - nullish and "" render as '""'.
-//   R3 Short values   - 1..PREVIEW_MASK_LENGTH characters render as a uniform
-//                       mask of the same length: no position carries
-//                       information about which character sat there.
-//   R4 Edge only      - longer values render the first and last
-//                       PREVIEW_EDGE_LENGTH characters joined by an ellipsis.
-//                       The value.length - 2 * PREVIEW_EDGE_LENGTH middle
-//                       characters are never emitted, so the preview can never
-//                       contain the whole value.
-//   R5 Log safe       - only PREVIEW_SAFE_CHARACTER, the quote and the mask
-//                       character appear literally. Quotes, backslashes,
-//                       control bytes, ANSI escapes, Unicode line separators
-//                       and non-ASCII/surrogate code units are escaped, so one
-//                       finding can never forge or break a log line.
-//   R6 Bounded        - output length never exceeds PREVIEW_MAX_LENGTH and
-//                       does not grow with the input.
-//   R7 Pure           - no shared mutable state, so repeated and interleaved
-//                       calls are deterministic.
-//   R8 Typed refusal  - a non-string, non-nullish value is reported by type
-//                       only ("[redacted:<type>]"). It is never coerced:
-//                       String(value) can run user code, can throw, and can
-//                       disclose far more than an edge.
-//
-// Compatibility: every string input that contains only PREVIEW_SAFE_CHARACTER
-// renders exactly as before ('""', '"*****"', '"abcd...wxyz"'). The only
-// observable change is for non-string inputs, which previously threw a
-// TypeError (aborting the entire scan) or were silently mis-masked by array
-// length.
-
-function escapePreviewText(text) {
-  let escaped = "";
-
-  // Iterated by UTF-16 code unit on purpose: a slice taken at a fixed offset
-  // can split a surrogate pair, and escaping each half keeps the output
-  // losslessly decodable instead of emitting a lone surrogate.
-  for (let index = 0; index < text.length; index += 1) {
-    const character = text[index];
-
-    const shortEscape = PREVIEW_SHORT_ESCAPES.get(character);
-    if (shortEscape !== undefined) {
-      escaped += shortEscape;
-      continue;
-    }
-
-    if (PREVIEW_SAFE_CHARACTER.test(character)) {
-      escaped += character;
-      continue;
-    }
-
-    const codeUnit = text.charCodeAt(index);
-    escaped += `\\u${codeUnit.toString(16).padStart(4, "0")}`;
-  }
-
-  return escaped;
-}
-
-function previewValueTypeTag(value) {
-  if (value === null) {
-    return "null";
-  }
-
-  // Array.isArray reads the internal slot without invoking user code, but it
-  // still throws for a revoked proxy. The type tag is diagnostic only, so a
-  // failed check degrades to the plain typeof instead of propagating.
-  try {
-    if (Array.isArray(value)) {
-      return "array";
-    }
-  } catch (error) {
-    return "object";
-  }
-
-  return typeof value;
-}
-
-function isLogSafePreview(text) {
-  if (typeof text !== "string") {
-    return false;
-  }
-
-  let index = 0;
-  while (index < text.length) {
-    const character = text[index];
-
-    if (character === "\\") {
-      const escape = text.slice(index + 1, index + 7).match(PREVIEW_ESCAPE_SEQUENCE);
-      if (!escape) {
-        return false;
-      }
-      index += 1 + escape[0].length;
-      continue;
-    }
-
-    if (
-      !PREVIEW_SAFE_CHARACTER.test(character) &&
-      character !== PREVIEW_QUOTE &&
-      character !== PREVIEW_MASK_CHARACTER
-    ) {
-      return false;
-    }
-
-    index += 1;
-  }
-
-  return true;
-}
-
 /**
  * Renders a bounded, non-reconstructable preview of a matched value.
  *
@@ -537,8 +413,8 @@ function isLogSafePreview(text) {
  * shorter values are masked completely.
  */
 function redactPreview(value) {
-  if (value === null || value === undefined) {
-    return `${PREVIEW_QUOTE}${PREVIEW_QUOTE}`;
+  if (!value) {
+    return '""';
   }
 
   if (value.length < MIN_PARTIAL_PREVIEW_LENGTH) {
@@ -574,6 +450,18 @@ function cloneScanRegex(regex, label) {
   }
 
   return new RegExp(regex.source, regex.flags);
+}
+
+function describeType(value) {
+  if (value === null) {
+    return "null";
+  }
+
+  if (Array.isArray(value)) {
+    return "array";
+  }
+
+  return typeof value;
 }
 
 function describeType(value) {
@@ -781,14 +669,6 @@ function unquoteString(literal) {
 }
 
 function collectQuotedStringMatches(line) {
-  // Scan callers process file lines, but keeping this helper total makes the
-  // failure boundary deterministic when a malformed caller supplies a
-  // non-string value. Returning no matches is safer than coercing arbitrary
-  // objects (which may execute user code or disclose sensitive data).
-  if (typeof line !== "string") {
-    return [];
-  }
-
   const matches = [];
 
   for (const match of line.matchAll(cloneScanRegex(PLAIN_STRING_REGEX, "plain-string"))) {
@@ -959,32 +839,7 @@ function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
  * its most specific rule.
  */
 function overlapsMatch(left, right) {
-  try {
-    if (!left || typeof left !== "object" || !right || typeof right !== "object") {
-      return false;
-    }
-
-    const leftMatch = typeof left.match === "string" ? left.match : "";
-    const rightMatch = typeof right.match === "string" ? right.match : "";
-
-    if (!leftMatch || !rightMatch) {
-      return false;
-    }
-
-    const leftStart = typeof left.column === "number" ? left.column : -1;
-    const rightStart = typeof right.column === "number" ? right.column : -1;
-
-    if (leftStart === -1 || rightStart === -1) {
-      return leftMatch === rightMatch;
-    }
-
-    const leftEnd = leftStart + leftMatch.length;
-    const rightEnd = rightStart + rightMatch.length;
-
-    return leftStart < rightEnd && rightStart < leftEnd;
-  } catch (error) {
-    return false;
-  }
+  return left.match === right.match;
 }
 
 /**
@@ -1172,6 +1027,20 @@ function describeFileSystemError(error) {
 }
 
 function collectScanTargets(backendRoot, options = {}) {
+  const scanRoots = options.scanRoots || DEFAULT_SCAN_ROOTS;
+  const exampleFiles = options.exampleFiles || DEFAULT_EXAMPLE_FILES;
+  const targets = [];
+
+  for (const root of scanRoots) {
+    const absoluteRoot = path.join(backendRoot, root);
+    const relativeRoot = root.replace(/\\/g, "/");
+    targets.push(...walkDirectory(absoluteRoot, relativeRoot));
+  }
+
+  return "unknown error";
+}
+
+function collectScanTargets(backendRoot, options = {}) {
   if (typeof backendRoot !== "string" || backendRoot.trim().length === 0) {
     return [];
   }
@@ -1311,6 +1180,37 @@ function scanBackend(backendRoot, options = {}) {
 
   const targets = collectScanTargets(root, opts);
   return scanTargets(targets, allowlist, opts);
+}
+
+/**
+ * Validates allowlist patterns at the configuration boundary.
+ *
+ * Runtime matching already fails closed on an uncompilable pattern, but that
+ * degrades silently into "not allowlisted" and would show up only as a flood of
+ * findings. Rejecting the file at load time turns a typo into one actionable
+ * error. The message names only the entry's index and field, never the pattern
+ * text, so a pattern copied from a leaked secret is not echoed to CI logs.
+ */
+function assertAllowlistPatternsCompilable(normalized, source) {
+  const groups = [
+    ["entries", normalized.entries],
+    ["globalPatterns", normalized.globalPatterns],
+  ];
+
+  for (const [groupName, items] of groups) {
+    items.forEach((item, index) => {
+      if (!item || typeof item !== "object" || item.pattern === undefined) {
+        return;
+      }
+
+      if (compilePattern(item.pattern) === null) {
+        throw new Error(
+          `Failed to parse secret scan allowlist: ${source}.${groupName}[${index}].pattern ` +
+            "must be a non-empty regular expression that compiles."
+        );
+      }
+    });
+  }
 }
 
 /**
