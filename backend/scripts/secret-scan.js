@@ -87,10 +87,9 @@ function main(argv = process.argv.slice(2)) {
     return EXIT_CODES.OK;
   }
 
-  console.error(result.message);
-  // Defensive: ensure no secret material leaks into the logs even if the
-  // scanner returns a malformed result object.
+  // Guard before emitting any failure output so secrets cannot leak.
   assertNoSecretsPrinted(result.message, result.findings);
+  console.error(result.message);
 
   const exitCode = Number.isInteger(result.exitCode)
     ? result.exitCode
