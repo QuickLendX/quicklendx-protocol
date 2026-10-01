@@ -10,8 +10,55 @@ import {
 } from '../models/api-key';
 import { validateScopes } from '../config/scopes';
 import { auditLogService } from './audit-log';
+import {
+  ApiKeyNotFoundError,
+  ApiKeyRevokedError,
+  ApiKeyRotationConflictError,
+} from './api-key-errors';
+
+/**
+ * Error class for ApiKeyService failures that carry a stable code
+ * so callers and logs can distinguish validation failures from internal errors.
+ */
+export class ApiKeyServiceError extends Error {
+  public readonly code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = 'ApiKeyServiceError';
+    this.code = code;
+  }
+}
+
+export const API_KEY_ERROR_CODES = {
+  NOT_FOUND: 'API_KEY_NOT_FOUND',
+  ALREADY_REVOKED: 'API_KEY_ALREADY_REVOKED',
+  REVOKED: 'API_KEY_REVOKED',
+  INVALID_SCOPES: 'API_KEY_INVALID_SCOPES',
+  INVALID_EXPIRES: 'API_KEY_INVALID_EXPIRES',
+  INVALID_INPUT: 'API_KEY_INVALID_INPUT',
+  CORRUPT_DATA: 'API_KEY_CORRUPT_DATA',
+} as const;
+
+/**
+ * Options for rotation that allow callers to enforce optimistic concurrency
+ * control. When `expectedPrefix` is provided, the rotation fails with a
+ * conflict error if the current key prefix no longer matches - this prevents
+ * a stale client from silently invalidating a key that was already rotated.
+ */
+export interface RotateApiKeyOptions {
+  expectedPrefix?: string;
+}
 
 export class ApiKeyService {
+  /**
+   * In-process mutex that serializes rotation critical sections. This is
+   * sufficient for the single-process Node deployment model and guarantees
+   * that two concurrent rotation requests for the same key id never both
+   * succeed. The critical section is synchronous (between await points)
+   * so it cannot be interrupted by another request on the event loop.
+   */
+  private rotationLocks: Map<string, boolean> = new Map();
+
   /**
    * Create a new API key
    */
@@ -22,7 +69,8 @@ export class ApiKeyService {
     // Validate scopes
     const scopeValidation = validateScopes(input.scopes);
     if (!scopeValidation.valid) {
-      throw new Error(
+      throw new ApiKeyServiceError(
+        API_KEY_ERROR_CODES.INVALID_SCOPES,
         `Invalid scopes: ${scopeValidation.invalid.join(', ')}`
       );
     }
@@ -31,10 +79,16 @@ export class ApiKeyService {
     if (input.expires_at) {
       const expiresAt = new Date(input.expires_at);
       if (isNaN(expiresAt.getTime())) {
-        throw new Error('Invalid expires_at date format');
+        throw new ApiKeyServiceError(
+          API_KEY_ERROR_CODES.INVALID_EXPIRES,
+          'Invalid expires_at date format'
+        );
       }
       if (expiresAt <= new Date()) {
-        throw new Error('expires_at must be in the future');
+        throw new ApiKeyServiceError(
+          API_KEY_ERROR_CODES.INVALID_EXPIRES,
+          'expires_at must be in the future'
+        );
       }
     }
 
@@ -140,59 +194,113 @@ export class ApiKeyService {
   }
 
   /**
-   * Rotate an API key
+   * Rotate an API key.
+   *
+   * Invariants:
+   *  - Exactly one key is active after a successful rotation: the new key
+   *    is created and the old key is revoked as a single critical section.
+   *  - If the new key cannot be persisted, the old key is left untouched
+   *    (no partial state).
+   *  - Concurrent rotations for the same key id are serialized; the loser receives
+   *    an ApiKeyRotationConflictError rather than a second active key.
+   *  - A `expectedPrefix` provided by the caller is validated against the
+   *    current key state to detect stale clients.
    */
   async rotateApiKey(
     keyId: string,
     actor: string,
-    ipAddress?: string
+    ipAddress?: string,
+    options: RotateApiKeyOptions = {}
   ): Promise<ApiKeyWithPlaintext> {
-    const oldKey = db.getApiKeyById(keyId);
-    if (!oldKey) {
-      throw new Error('API key not found');
+    // Acquire the per-key lock. The check and set are synchronous, so two
+    // concurrent callers cannot both observe an unlocked key.
+    if (this.rotationLocks.get(keyId)) {
+      throw new ApiKeyRotationConflictError(
+        'A rotation is already in progress for this key',
+        keyId
+      );
     }
+    this.rotationLocks.set(keyId, true);
 
-    if (oldKey.revoked === 1) {
-      throw new Error('Cannot rotate a revoked key');
+    try {
+      const oldKey = db.getApiKeyById(keyId);
+      if (!oldKey) {
+        throw new ApiKeyNotFoundError(keyId);
+      }
+
+      if (oldKey.revoked === 1) {
+        throw new ApiKeyRevokedError(keyId);
+      }
+
+      // Optimistic concurrency guard: if the caller expected a specific
+      // prefix and the current key no longer matches, the client is stale.
+      if (options.expectedPrefix !== undefined && options.expectedPrefix !== oldKey.prefix) {
+        throw new ApiKeyRotationConflictError(
+          'Key state has changed since the rotation was requested; refetch and retry',
+          keyId
+        );
+      }
+
+      // Generate new key
+      const { key, prefix, hash, signingSecret, signingSecretHash } = generateApiKey();
+      const newId = crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      const newDbKey: DbApiKey = {
+        id: newId,
+        key_hash: hash,
+        signing_secret_hash: signingSecretHash,
+        prefix,
+        name: oldKey.name,
+        scopes: oldKey.scopes,
+        created_at: now,
+        last_used_at: null,
+        expires_at: oldKey.expires_at,
+        prev_signing_secret_hash: null,
+        prev_secret_expires_at: null,
+        revoked: 0,
+        created_by: oldKey.created_by,
+      };
+
+      // Critical section: create the new key and revoke the old one
+      // without yielding to the event loop. If either operation throws,
+      // the catch below rolls back the new key so the old key remains
+      // active and the system is consistent.
+      let newKeyPersisted = false;
+      try {
+        db.createApiKey(newDbKey);
+        newKeyPersisted = true;
+        db.updateApiKey(keyId, { revoked: 1 });
+      } catch (err) {
+        // Rollback the new key if it was created but the revoke failed.
+        // This preserves the invariant that at most one key is active.
+        if (newKeyPersisted) {
+          try {
+            db.deleteApiKey(newId);
+          } catch (cleanupErr) {
+            console.error('[ApiKeyService] Failed to rollback rotated key:', cleanupErr);
+          }
+        }
+        throw err;
+      }
+
+      // Audit logging happens outside the critical section. A failure here
+      // must not roll back a successful rotation - the state transition is
+      // already committed and the audit log is best-effort.
+      try {
+        await auditLogService.logRotated(keyId, newId, actor, ipAddress);
+      } catch (auditErr) {
+        console.error('[ApiKeyService] Failed to record rotation audit log:', auditErr);
+      }
+
+      return {
+        ...this.dbKeyToApiKey(newDbKey),
+        plaintext_key: key,
+        plaintext_signing_secret: signingSecret,
+      };
+    } finally {
+      this.rotationLocks.delete(keyId);
     }
-
-    // Generate new key
-    const { key, prefix, hash, signingSecret, signingSecretHash } = generateApiKey();
-    const newId = crypto.randomUUID();
-    const now = new Date().toISOString();
-
-    const scopes = JSON.parse(oldKey.scopes);
-
-    const newDbKey: DbApiKey = {
-      id: newId,
-      key_hash: hash,
-      signing_secret_hash: signingSecretHash,
-      prefix,
-      name: oldKey.name,
-      scopes: oldKey.scopes,
-      created_at: now,
-      last_used_at: null,
-      expires_at: oldKey.expires_at,
-      prev_signing_secret_hash: null,
-      prev_secret_expires_at: null,
-      revoked: 0,
-      created_by: oldKey.created_by,
-    };
-
-    // Create new key
-    db.createApiKey(newDbKey);
-
-    // Revoke old key immediately
-    db.updateApiKey(keyId, { revoked: 1 });
-
-    // Log rotation event
-    await auditLogService.logRotated(keyId, newId, actor, ipAddress);
-
-    return {
-      ...this.dbKeyToApiKey(newDbKey),
-      plaintext_key: key,
-      plaintext_signing_secret: signingSecret,
-    };
   }
 
   /**
@@ -207,11 +315,11 @@ export class ApiKeyService {
   ): Promise<ApiKeyWithPlaintext> {
     const oldKey = db.getApiKeyById(keyId);
     if (!oldKey) {
-      throw new Error('API key not found');
+      throw new ApiKeyNotFoundError(keyId);
     }
 
     if (oldKey.revoked === 1) {
-      throw new Error('Cannot rotate a revoked key');
+      throw new ApiKeyRevokedError(keyId);
     }
 
     // Generate new key bytes but retain the same prefix so existing prefixes are stable
@@ -257,11 +365,11 @@ export class ApiKeyService {
   async revokeApiKey(keyId: string, actor: string, ipAddress?: string): Promise<void> {
     const key = db.getApiKeyById(keyId);
     if (!key) {
-      throw new Error('API key not found');
+      throw new ApiKeyNotFoundError(keyId);
     }
 
     if (key.revoked === 1) {
-      throw new Error('API key is already revoked');
+      throw new ApiKeyServiceError(API_KEY_ERROR_CODES.ALREADY_REVOKED, 'API key is already revoked');
     }
 
     db.updateApiKey(keyId, { revoked: 1 });
@@ -280,10 +388,73 @@ export class ApiKeyService {
 
   /**
    * List API keys
+*
+   * Deterministic failure-boundary behavior:
+   * - Validates filters before touching the database so invalid input fails fast and
+   *   consistently with a stable error code.
+   * - Normalizes the `key` field to `key_hash` so the public shape is stable.
+   * - Returns a deterministic ordering (created_at desc, then id desc) so consumers
+   *   and tests can rely on a stable order even when timestamps collide.
+   * - Wraps database failures in a coded error without leaking sensitive data.
+   * - Never mutates state; retries are safe and idempotent.
    */
   async listApiKeys(filters?: { created_by?: string; revoked?: boolean }): Promise<ApiKey[]> {
-    const dbKeys = db.listApiKeys(filters);
-    return dbKeys.map(k => this.dbKeyToApiKey(k));
+    // Validate filters up front so invalid input fails fast and deterministically.
+    if (filters !== undefined) {
+      if (filters === null || typeof filters !== 'object' || Array.isArray(filters)) {
+        throw new ApiKeyServiceError(
+          API_KEY_ERROR_CODES.INVALID_INPUT,
+          'filters must be an object when provided'
+        );
+      }
+
+      if (
+        filters.created_by !== undefined &&
+        (typeof filters.created_by !== 'string' || filters.created_by === '')
+      ) {
+        throw new ApiKeyServiceError(
+          API_KEY_ERROR_CODES.INVALID_INPUT,
+          'created_by must be a non-empty string'
+        );
+      }
+
+      if (filters.revoked !== undefined && typeof filters.revoked !== 'boolean') {
+        throw new ApiKeyServiceError(
+          API_KEY_ERROR_CODES.INVALID_INPUT,
+          'revoked must be a boolean when provided'
+        );
+      }
+    }
+
+    let dbKeys: DbApiKey[];
+    try {
+      dbKeys = db.listApiKeys(filters);
+    } catch (error) {
+      // Never leak raw database errors to callers.
+      console.error('[ApiKeyService] db.listApiKeys failed:', error);
+      throw new ApiKeyServiceError(
+        API_KEY_ERROR_CODES.CORRUPT_DATA,
+        'Failed to list API keys'
+      );
+    }
+
+    if (!Array.isArray(dbKeys)) {
+      throw new ApiKeyServiceError(
+        API_KEY_ERROR_CODES.CORRUPT_DATA,
+        'Failed to list API keys'
+      );
+    }
+
+    const apiKeys = dbKeys.map((k) => this.dbKeyToApiKey(k));
+
+    // Deterministic ordering: newest first, tie-break by id desc.
+    apiKeys.sort((a, b) => {
+      const createdCmp = b.created_at.localeCompare(a.created_at);
+      if (createdCmp !== 0) return createdCmp;
+      return b.id.localeCompare(a.id);
+    });
+
+    return apiKeys;
   }
 
   /**
