@@ -39,8 +39,22 @@ const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), HOTFIX_APPROVALS_DIR_NA
 // check outside HOTFIX_APPROVALS_DIR via "../" or an absolute path.
 const APPROVAL_NAME_PATTERN = /^[a-z0-9_]+$/;
 
+/**
+ * Computes a deterministic SHA-256 checksum for migration content.
+ *
+ * Invariants:
+ * - The output is always a 64-character lowercase hex string.
+ * - The same input always produces the same output (deterministic).
+ * - No normalization is applied; bytes are hashed as-provided.
+ * - Non-string inputs are rejected with a TypeError to avoid silent coercion.
+ */
 export function computeChecksum(content: string): string {
-  return createHash("sha256").update(content).digest("hex");
+  if (typeof content !== "string") {
+    throw new TypeError(
+      `computeChecksum expects a string, received ${content === null ? "null" : typeof content}`
+    );
+  }
+  return createHash("sha256").update(content, "utf-8").digest("hex");
 }
 
 export function parseMigrationFilename(filename: string): { version: number; name: string } | null {
@@ -165,7 +179,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
   const startTime = Date.now();
 
   const db = providedDb || getDatabase();
-  db.exec(MIGRATIONS_TABLE);
+  db.exec(uIGRATIONS_TABLE);
 
   // Verify checksums of applied migrations on startup
   // In production, checksum verification cannot be bypassed
@@ -297,7 +311,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
           appliedThisRun.push(state);
           if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${state.durationMs}ms)`);
         } catch (err: any) {
-          console.error(`❌ Migration ${version}_${fileMig.name} failed:`, err.message);
+          console.error(`❌ Migration ${version}_${fileMig.name} failed:', err.message);
           throw err;
         }
       } else {
@@ -374,9 +388,9 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             meta: fileMig.content.meta,
           });
 
-          if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms`);
+if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms`);
         } catch (err: any) {
-          console.error(`❌ Rollback of ${version}_${fileMig.name} failed:`, err.message);
+          console.error(`❌ Rollback of ${version}_${fileMig.name} failed:', err.message);
           throw err;
         }
       } else {
@@ -571,7 +585,7 @@ export async function verifyAppliedChecksums(
   options: VerifyAppliedChecksumsOptions = {},
 ): Promise<ChecksumVerificationResult> {
   const errors: string[] = [];
-  const migrationsDir = options.migrationsDir ?? MIGRATIONS_DIR;
+const migrationsDir = options.migrationsDir ?? MIGRATIONS_DIR;
 
   // Load applied rows. Prefer explicit override (tests), then the provided
   // database client, and finally the global database.
@@ -645,32 +659,20 @@ export async function verifyAppliedChecksums(
   }
 
   for (const row of appliedRows) {
-    const on = fileByVersion.get(row.version);
+const on = fileByVersion.get(row.version);
     if (!on) {
-      errors.push(`Missing migration file for applied version ${row.version}`);
+      errors.push(`Applied migration ${row.version}_${row.name} has no corresponding file`);
       continue;
     }
+const filePath = path.join(MIGRATIONS_DIR, fileMig.file);
+    const fileContent = await fs.readFile(filePath, "utf-8");
+    const actualChecksum = computeChecksum(fileContent);
 
     // Name must match the applied record. This catches renames that would
     // otherwise silently shift the meaning of a version.
     if (on.name !== row.name) {
       errors.push(
-        `Name mismatch for version ${row.version}: applied ${row.name} but found ${on.name}`
-      );
-    }
-
-    let content: string;
-    try {
-      content = await fs.readFile(path.join(migrationsDir, on.file), "utf-8");
-    } catch (err: any) {
-      errors.push(`Unable to read migration file for version ${row.version}: ${err.message}`);
-      continue;
-    }
-
-    const actual = computeChecksum(content);
-    if (actual !== row.checksum) {
-      errors.push(
-        `Checksum mismatch for ${row.version}_${row.name}: expected ${row.checksum} but got ${actual}`
+`Checksum mismatch for ${row.version}_${row.name}: expected ${row.checksum} but got ${actual}`
       );
     }
   }

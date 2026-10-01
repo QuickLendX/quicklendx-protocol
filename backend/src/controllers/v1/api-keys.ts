@@ -37,6 +37,21 @@ const rotateSigningSecretSchema = z.object({
 });
 
 /**
+ * List query validation schema.
+ *
+ * Invariants:
+ * - `created_by`, when present, must be a non-empty string (no silent coercion of arrays/numbers).
+ * - `revoked`, when present, must be the exact literal 'true' or 'false'.
+ *   Any other value is rejected with 400 rather than being coerced to `false`,
+ *   which would silently change the result set.
+ * - Unknown query parameters are stripped so they cannot influence filtering.
+ */
+const listApiKeysQuerySchema = z.object({
+  created_by: z.string().min(1).max(256).optional(),
+  revoked: z.enum(['true', 'false']).optional(),
+}).strict();
+
+/**
  * Map a typed API key error to a deterministic HTTP status code.
  *
  * Invariants:
@@ -159,19 +174,37 @@ export async function createApiKey(req: Request, res: Response): Promise<void> {
 /**
  * List API keys
  * GET /api/v1/keys
+*
+ * Failure-boundary contract:
+ * - Invalid query parameters return 400 VALIDATION_ERROR and never touch the service.
+ * - Service failures return 500 LIST_KEYS_ERROR with a stable message;
+ *   the raw error is logged server-side only so no sensitive data leaks.
+ * - Successful responses always include `data` (array) and `count` (number)
+ *   and never expose key hashes or signing secrets.
  */
 export async function listApiKeys(req: Request, res: Response): Promise<void> {
+  // Validate query parameters before doing any work.
+  const validation = listApiKeysQuerySchema.safeParse(req.query);
+  if (!validation.success) {
+    res.status(400).json({
+      error: {
+        message: 'Invalid query parameters',
+        code: 'VALIDATION_ERROR',
+        details: validation.error.errors,
+      },
+    });
+    return;
+  }
+
+  const filters: { created_by?: string; revoked?: boolean } = {};
+  if (validation.data.created_by !== undefined) {
+    filters.created_by = validation.data.created_by;
+  }
+  if (validation.data.revoked !== undefined) {
+    filters.revoked = validation.data.revoked === 'true';
+  }
+
   try {
-    const filters: any = {};
-
-    if (req.query.created_by) {
-      filters.created_by = req.query.created_by as string;
-    }
-
-    if (req.query.revoked !== undefined) {
-      filters.revoked = req.query.revoked === 'true';
-    }
-
     const keys = await apiKeyService.listApiKeys(filters);
 
     // Don't return key_hash in the response
@@ -180,9 +213,9 @@ export async function listApiKeys(req: Request, res: Response): Promise<void> {
       name: k.name,
       prefix: k.prefix,
       scopes: k.scopes,
-      created_at: k.created_at,
+      created_at: ks.created_at,
       last_used_at: k.last_used_at,
-      expires_at: k.expires_at,
+      expires_at: ks.expires_at,
       revoked: k.revoked,
       created_by: k.created_by,
     }));
