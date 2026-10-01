@@ -604,18 +604,36 @@ function collectQuotedStringMatches(line) {
 }
 
 function collectHighEntropyMatches(line) {
+  if (typeof line !== "string") {
+    return [];
+  }
+
   const matches = [];
 
-  for (const quoted of collectQuotedStringMatches(line)) {
-    if (!isHighEntropyToken(quoted.value)) {
-      continue;
-    }
+  try {
+    for (const quoted of module.exports.collectQuotedStringMatches(line)) {
+      try {
+        if (!quoted || typeof quoted.value !== "string") {
+          continue;
+        }
 
-    matches.push({
-      type: "high-entropy",
-      match: quoted.value,
-      column: quoted.column,
-    });
+        if (!module.exports.isHighEntropyToken(quoted.value)) {
+          continue;
+        }
+
+        matches.push({
+          type: "high-entropy",
+          match: quoted.value,
+          column: typeof quoted.column === "number" ? quoted.column : 0,
+        });
+      } catch (innerError) {
+        // Deterministic partial failure recovery: skip this match but continue processing.
+        continue;
+      }
+    }
+  } catch (error) {
+    // Deterministic failure boundary: return accumulated matches on unexpected iterator/regex error.
+    return matches;
   }
 
   return matches;
@@ -746,7 +764,32 @@ function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
 }
 
 function overlapsMatch(left, right) {
-  return left.match === right.match;
+  try {
+    if (!left || typeof left !== "object" || !right || typeof right !== "object") {
+      return false;
+    }
+
+    const leftMatch = typeof left.match === "string" ? left.match : "";
+    const rightMatch = typeof right.match === "string" ? right.match : "";
+
+    if (!leftMatch || !rightMatch) {
+      return false;
+    }
+
+    const leftStart = typeof left.column === "number" ? left.column : -1;
+    const rightStart = typeof right.column === "number" ? right.column : -1;
+
+    if (leftStart === -1 || rightStart === -1) {
+      return leftMatch === rightMatch;
+    }
+
+    const leftEnd = leftStart + leftMatch.length;
+    const rightEnd = rightStart + rightMatch.length;
+
+    return leftStart < rightEnd && rightStart < leftEnd;
+  } catch (error) {
+    return false;
+  }
 }
 
 function scanLine(line, lineNumber, relativePath, allowlist) {

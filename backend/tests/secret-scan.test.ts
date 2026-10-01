@@ -290,8 +290,9 @@ describe("secret-scan-utils", () => {
     const qlxSuffix = Array.from({ length: 26 }, (_, index) =>
       String.fromCharCode(97 + (index % 26))
     ).join("");
+    const qlxToken = "qlx_live_" + qlxSuffix;
     const deduped = secretScanUtils.scanLine(
-      `const token = "${`qlx_${"live"}_${qlxSuffix}`}";`,
+      `const token = "${qlxToken}";`,
       2,
       "src/example.ts",
       { entries: [], globalPatterns: [] }
