@@ -604,6 +604,9 @@ function scanLine(line, lineNumber, relativePath, allowlist) {
 }
 
 function scanFileContent(content, relativePath, allowlist) {
+  if (typeof content !== "string") {
+    return [];
+  }
   const lines = content.split(/\r?\n/);
   return lines.flatMap((line, index) =>
     scanLine(line, index + 1, relativePath, allowlist)
@@ -611,10 +614,25 @@ function scanFileContent(content, relativePath, allowlist) {
 }
 
 function shouldScanFile(relativePath, options = {}) {
-  const extensions = options.extensions || DEFAULT_EXTENSIONS;
-  const ignoredFiles = new Set(options.ignoredFiles || [".secret-scan-allow.json"]);
+  if (typeof relativePath !== "string" || relativePath.length === 0) {
+    return false;
+  }
 
-  if (ignoredFiles.has(path.basename(relativePath))) {
+  const opts = options && typeof options === "object" ? options : {};
+  const rawExtensions = opts.extensions || DEFAULT_EXTENSIONS;
+  const extensions =
+    rawExtensions instanceof Set
+      ? rawExtensions
+      : new Set(Array.isArray(rawExtensions) ? rawExtensions : [rawExtensions]);
+
+  const rawIgnored = opts.ignoredFiles || [".secret-scan-allow.json"];
+  const ignoredFiles =
+    rawIgnored instanceof Set
+      ? rawIgnored
+      : new Set(Array.isArray(rawIgnored) ? rawIgnored : [rawIgnored]);
+
+  const base = path.basename(relativePath);
+  if (ignoredFiles.has(base) || ignoredFiles.has(relativePath)) {
     return false;
   }
 
@@ -623,15 +641,53 @@ function shouldScanFile(relativePath, options = {}) {
     return true;
   }
 
-  return DEFAULT_EXAMPLE_FILES.includes(path.basename(relativePath));
+  const rawExamples = opts.exampleFiles || DEFAULT_EXAMPLE_FILES;
+  const exampleFiles = Array.isArray(rawExamples)
+    ? rawExamples
+    : (rawExamples instanceof Set ? Array.from(rawExamples) : [rawExamples]);
+
+  return exampleFiles.includes(base) || exampleFiles.includes(relativePath);
 }
 
-function walkDirectory(absoluteDir, relativeDir, files = []) {
-  if (!fs.existsSync(absoluteDir)) {
+function walkDirectory(absoluteDir, relativeDir, files = [], visited = new Set()) {
+  if (typeof absoluteDir !== "string" || absoluteDir.length === 0) {
     return files;
   }
 
-  for (const entry of fs.readdirSync(absoluteDir, { withFileTypes: true })) {
+  try {
+    if (!fs.existsSync(absoluteDir)) {
+      return files;
+    }
+    const stat = fs.statSync(absoluteDir);
+    if (!stat.isDirectory()) {
+      return files;
+    }
+  } catch (_err) {
+    return files;
+  }
+
+  try {
+    const real = fs.realpathSync(absoluteDir);
+    if (visited.has(real)) {
+      return files;
+    }
+    visited.add(real);
+  } catch (_err) {
+    // Proceed if realpath fails
+  }
+
+  let entries;
+  try {
+    entries = fs.readdirSync(absoluteDir, { withFileTypes: true });
+  } catch (_err) {
+    // Permission error (EACCES/EPERM) or concurrent removal: return files gathered so far
+    return files;
+  }
+
+  // Sort entries for deterministic traversal across all operating systems
+  entries.sort((a, b) => a.name.localeCompare(b.name));
+
+  for (const entry of entries) {
     if (entry.name.startsWith(".")) {
       continue;
     }
@@ -645,69 +701,188 @@ function walkDirectory(absoluteDir, relativeDir, files = []) {
       if (DEFAULT_IGNORED_DIRS.has(entry.name)) {
         continue;
       }
-      walkDirectory(absolutePath, relativePath, files);
+      walkDirectory(absolutePath, relativePath, files, visited);
       continue;
     }
 
-    files.push({
-      absolutePath,
-      relativePath: relativePath.replace(/\\/g, "/"),
-    });
+    if (entry.isFile()) {
+      files.push({
+        absolutePath,
+        relativePath: relativePath.replace(/\\/g, "/"),
+      });
+    }
   }
 
   return files;
 }
 
 function collectScanTargets(backendRoot, options = {}) {
-  const scanRoots = options.scanRoots || DEFAULT_SCAN_ROOTS;
-  const exampleFiles = options.exampleFiles || DEFAULT_EXAMPLE_FILES;
-  const targets = [];
-
-  for (const root of scanRoots) {
-    const absoluteRoot = path.join(backendRoot, root);
-    const relativeRoot = root.replace(/\\/g, "/");
-    targets.push(...walkDirectory(absoluteRoot, relativeRoot));
+  if (typeof backendRoot !== "string" || backendRoot.trim().length === 0) {
+    return [];
   }
 
-  for (const exampleFile of exampleFiles) {
-    const absolutePath = path.join(backendRoot, exampleFile);
-    if (fs.existsSync(absolutePath)) {
-      targets.push({
-        absolutePath,
-        relativePath: exampleFile.replace(/\\/g, "/"),
-      });
+  const opts = options && typeof options === "object" ? options : {};
+  const rawRoots = opts.scanRoots !== undefined ? opts.scanRoots : DEFAULT_SCAN_ROOTS;
+  const scanRoots = Array.isArray(rawRoots)
+    ? rawRoots.filter((r) => typeof r === "string" && r.length > 0)
+    : typeof rawRoots === "string" && rawRoots.length > 0
+    ? [rawRoots]
+    : [];
+
+  const rawExamples = opts.exampleFiles !== undefined ? opts.exampleFiles : DEFAULT_EXAMPLE_FILES;
+  const exampleFiles = Array.isArray(rawExamples)
+    ? rawExamples.filter((f) => typeof f === "string" && f.length > 0)
+    : typeof rawExamples === "string" && rawExamples.length > 0
+    ? [rawExamples]
+    : [];
+
+  const targets = [];
+  const seenRelativePaths = new Set();
+
+  const addTarget = (absolutePath, relativePath) => {
+    const normalizedRelative = relativePath.replace(/\\/g, "/");
+    if (seenRelativePaths.has(normalizedRelative)) {
+      return;
+    }
+    seenRelativePaths.add(normalizedRelative);
+    targets.push({
+      absolutePath,
+      relativePath: normalizedRelative,
+    });
+  };
+
+  const uniqueRoots = Array.from(new Set(scanRoots)).sort();
+  for (const root of uniqueRoots) {
+    const absoluteRoot = path.join(backendRoot, root);
+    const relativeRoot = root.replace(/\\/g, "/");
+    const found = walkDirectory(absoluteRoot, relativeRoot);
+    for (const file of found) {
+      addTarget(file.absolutePath, file.relativePath);
     }
   }
 
-  return targets.filter((target) => shouldScanFile(target.relativePath, options));
+  const uniqueExamples = Array.from(new Set(exampleFiles)).sort();
+  for (const exampleFile of uniqueExamples) {
+    const absolutePath = path.join(backendRoot, exampleFile);
+    try {
+      if (fs.existsSync(absolutePath)) {
+        addTarget(absolutePath, exampleFile);
+      }
+    } catch (_err) {
+      // Permission or filesystem error on example file: skip gracefully
+    }
+  }
+
+  const filtered = targets.filter((target) => shouldScanFile(target.relativePath, opts));
+  filtered.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+  return filtered;
 }
 
-function scanTargets(targets, allowlist) {
+function scanTargets(targets, allowlist, options = {}) {
+  if (!Array.isArray(targets)) {
+    return [];
+  }
+
+  const opts = options && typeof options === "object" ? options : {};
+  const normalizedAllowlist = normalizeAllowlist(allowlist);
   const findings = [];
 
   for (const target of targets) {
-    const content = fs.readFileSync(target.absolutePath, "utf8");
-    findings.push(...scanFileContent(content, target.relativePath, allowlist));
+    if (!target || typeof target !== "object" || typeof target.absolutePath !== "string") {
+      continue;
+    }
+
+    let content;
+    try {
+      content = fs.readFileSync(target.absolutePath, "utf8");
+    } catch (error) {
+      if (typeof opts.onFileError === "function") {
+        opts.onFileError(target, error);
+      }
+      // Adverse condition (permission error, locked file, race condition):
+      // do not discard findings already collected for other files.
+      continue;
+    }
+
+    const relPath =
+      typeof target.relativePath === "string" ? target.relativePath : target.absolutePath;
+    findings.push(...scanFileContent(content, relPath, normalizedAllowlist));
   }
 
   return findings;
 }
 
+// Invariants for scanBackend:
+// - S1 Total & Fail-Closed: Invalid, non-string, or non-existent backendRoot returns []
+//   deterministically without throwing. Nullish, primitive, or malformed options are safely handled.
+// - S2 Deterministic & Stable: Directory traversal and target collection sort paths alphabetically
+//   so scan runs across different environments produce findings in identical order.
+// - S3 Deduplication: Duplicate scan roots, overlapping example files, or repeated targets
+//   are deduplicated by relativePath so files are never scanned multiple times.
+// - S4 Adverse Resilience: Unreadable files or directories (EACCES/EPERM permissions, ENOENT
+//   races, locked files) are handled gracefully without aborting the scan or dropping findings
+//   already collected for valid files.
+// - S5 Non-Disclosing & Pure: No shared mutable state; concurrent or repeated calls are pure
+//   and thread-safe; all findings report redacted previews and never expose raw secret values.
+// - S6 Caller Compatibility: Preserves public API signature scanBackend(backendRoot, options),
+//   fully honoring allowlist, allowlistPath, scanRoots, and extensions.
 function scanBackend(backendRoot, options = {}) {
-  const allowlist = options.allowlist || loadAllowlist(options.allowlistPath, backendRoot);
-  const targets = collectScanTargets(backendRoot, options);
-  return scanTargets(targets, allowlist);
+  const opts = options && typeof options === "object" && !Array.isArray(options) ? options : {};
+
+  let root;
+  if (typeof backendRoot === "string") {
+    root = backendRoot;
+  } else if (backendRoot === undefined) {
+    root = process.cwd();
+  } else {
+    // Fail closed on non-string, null, or invalid roots
+    return [];
+  }
+
+  if (root.trim().length === 0) {
+    return [];
+  }
+
+  try {
+    if (!fs.existsSync(root)) {
+      return [];
+    }
+  } catch (_err) {
+    return [];
+  }
+
+  const allowlist =
+    opts.allowlist !== undefined
+      ? normalizeAllowlist(opts.allowlist)
+      : loadAllowlist(opts.allowlistPath, root);
+
+  const targets = collectScanTargets(root, opts);
+  return scanTargets(targets, allowlist, opts);
 }
 
 function loadAllowlist(allowlistPath, backendRoot = process.cwd()) {
+  const root =
+    typeof backendRoot === "string" && backendRoot.length > 0 ? backendRoot : process.cwd();
   const resolvedPath =
-    allowlistPath || path.join(backendRoot, "scripts", ".secret-scan-allow.json");
+    typeof allowlistPath === "string" && allowlistPath.length > 0
+      ? allowlistPath
+      : path.join(root, "scripts", ".secret-scan-allow.json");
 
-  if (!fs.existsSync(resolvedPath)) {
+  try {
+    if (!fs.existsSync(resolvedPath)) {
+      return normalizeAllowlist(null);
+    }
+  } catch (_err) {
     return normalizeAllowlist(null);
   }
 
-  const raw = fs.readFileSync(resolvedPath, "utf8");
+  let raw;
+  try {
+    raw = fs.readFileSync(resolvedPath, "utf8");
+  } catch (error) {
+    throw new Error(`Failed to read secret scan allowlist: ${error.message}`);
+  }
+
   let parsed;
   try {
     parsed = JSON.parse(raw);

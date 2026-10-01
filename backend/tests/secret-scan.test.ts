@@ -849,6 +849,330 @@ describe("isAllowlisted failure boundaries (issue 2610)", () => {
   });
 });
 
+describe("scanBackend failure boundaries", () => {
+  it("fails closed on non-string backendRoot inputs without throwing", () => {
+    const invalidRoots = [
+      null,
+      0,
+      123,
+      -1,
+      NaN,
+      Infinity,
+      true,
+      false,
+      {},
+      { root: "/path" },
+      [],
+      ["src"],
+      () => "/tmp",
+      Symbol("root"),
+      BigInt(42),
+    ];
+
+    for (const badRoot of invalidRoots) {
+      let findings: unknown;
+      expect(() => {
+        findings = secretScanUtils.scanBackend(badRoot as unknown as string);
+      }).not.toThrow();
+      expect(findings).toEqual([]);
+    }
+  });
+
+  it("returns an empty findings array for empty, whitespace, and non-existent roots", () => {
+    expect(secretScanUtils.scanBackend("")).toEqual([]);
+    expect(secretScanUtils.scanBackend("   ")).toEqual([]);
+    expect(secretScanUtils.scanBackend("\t\n")).toEqual([]);
+
+    const nonExistent = path.join(os.tmpdir(), `non-existent-dir-${Date.now()}-${Math.random()}`);
+    expect(secretScanUtils.scanBackend(nonExistent)).toEqual([]);
+  });
+
+  it("returns an empty findings array when backendRoot points to a file rather than a directory", () => {
+    const fixtureRoot = createFixtureDir();
+    const filePath = writeFixture(fixtureRoot, "src/not-a-dir.txt", "some content\n");
+    expect(secretScanUtils.scanBackend(filePath)).toEqual([]);
+  });
+
+  it("handles null, primitive, and malformed options gracefully without throwing", () => {
+    const fixtureRoot = createFixtureDir();
+    writeFixture(fixtureRoot, "src/clean.ts", "export const clean = true;\n");
+
+    const badOptions = [
+      null,
+      undefined,
+      0,
+      123,
+      "options-string",
+      true,
+      false,
+      [],
+      [1, 2, 3],
+      Symbol("options"),
+      BigInt(100),
+    ];
+
+    for (const badOpt of badOptions) {
+      let findings: unknown;
+      expect(() => {
+        findings = secretScanUtils.scanBackend(
+          fixtureRoot,
+          badOpt as unknown as Record<string, unknown>
+        );
+      }).not.toThrow();
+      expect(findings).toEqual([]);
+    }
+  });
+
+  it("handles empty and malformed scanRoots in options", () => {
+    const fixtureRoot = createFixtureDir();
+    const secret = makeHighEntropySecret();
+    writeFixture(fixtureRoot, "src/leaked.ts", `const token = "${secret}";\n`);
+
+    // Empty scanRoots array: scans nothing, returns []
+    const emptyScan = secretScanUtils.scanBackend(fixtureRoot, {
+      scanRoots: [],
+      allowlist: { entries: [], globalPatterns: [] },
+    });
+    expect(emptyScan).toEqual([]);
+
+    // scanRoots with non-string, null, or undefined elements: filters them safely and still scans valid root
+    const mixedScan = secretScanUtils.scanBackend(fixtureRoot, {
+      scanRoots: [null, undefined, 123, true, {}, "src"],
+      allowlist: { entries: [], globalPatterns: [] },
+    });
+    expect(mixedScan).toHaveLength(1);
+    expect(mixedScan[0].file).toBe("src/leaked.ts");
+
+    // scanRoots with non-existent subdirectory: skips missing directory gracefully
+    const missingSubdirScan = secretScanUtils.scanBackend(fixtureRoot, {
+      scanRoots: ["does-not-exist", "src"],
+      allowlist: { entries: [], globalPatterns: [] },
+    });
+    expect(missingSubdirScan).toHaveLength(1);
+    expect(missingSubdirScan[0].file).toBe("src/leaked.ts");
+  });
+
+  it("deduplicates scan targets so duplicate roots or example files do not multiply findings", () => {
+    const fixtureRoot = createFixtureDir();
+    const secret = makeHighEntropySecret();
+    writeFixture(fixtureRoot, "src/leaked.ts", `const token = "${secret}";\n`);
+    writeFixture(fixtureRoot, ".env.example", `EXAMPLE_KEY="${secret}"\n`);
+
+    // Duplicate "src" roots and duplicate example files
+    const findings = secretScanUtils.scanBackend(fixtureRoot, {
+      scanRoots: ["src", "src", "src"],
+      exampleFiles: [".env.example", ".env.example"],
+      allowlist: { entries: [], globalPatterns: [] },
+    });
+
+    expect(findings).toHaveLength(2);
+    const files = findings.map((f: { file: string }) => f.file);
+    expect(files).toContain("src/leaked.ts");
+    expect(files).toContain(".env.example");
+  });
+
+  it("accepts extensions and ignoredFiles as Array, Set, or single string", () => {
+    const fixtureRoot = createFixtureDir();
+    const secret = makeHighEntropySecret();
+    writeFixture(fixtureRoot, "src/file.ts", `const t = "${secret}";\n`);
+    writeFixture(fixtureRoot, "src/file.custom", `const t = "${secret}";\n`);
+    writeFixture(fixtureRoot, "src/skip.ts", `const t = "${secret}";\n`);
+
+    // Array extensions and ignoredFiles
+    const findingsArray = secretScanUtils.scanBackend(fixtureRoot, {
+      extensions: [".custom"],
+      ignoredFiles: ["file.ts"],
+      allowlist: { entries: [], globalPatterns: [] },
+    });
+    expect(findingsArray).toHaveLength(1);
+    expect(findingsArray[0].file).toBe("src/file.custom");
+
+    // Set extensions and ignoredFiles
+    const findingsSet = secretScanUtils.scanBackend(fixtureRoot, {
+      extensions: new Set([".ts"]),
+      ignoredFiles: new Set(["skip.ts"]),
+      allowlist: { entries: [], globalPatterns: [] },
+    });
+    expect(findingsSet).toHaveLength(1);
+    expect(findingsSet[0].file).toBe("src/file.ts");
+  });
+
+  it("preserves findings from valid files when partial failure occurs on an unreadable target", () => {
+    const fixtureRoot = createFixtureDir();
+    const secret1 = makeHighEntropySecret();
+    const secret2 = makeHighEntropySecret();
+    writeFixture(fixtureRoot, "src/good1.ts", `const key1 = "${secret1}";\n`);
+    writeFixture(fixtureRoot, "src/bad.ts", "some content\n");
+    writeFixture(fixtureRoot, "src/good2.ts", `const key2 = "${secret2}";\n`);
+
+    // Mock readFileSync to simulate permission/I/O failure on bad.ts only
+    const originalReadFileSync = fs.readFileSync;
+    const errorsReported: Array<{ file: string; error: Error }> = [];
+    jest.spyOn(fs, "readFileSync").mockImplementation(((targetPath: fs.PathOrFileDescriptor, options: any) => {
+      if (typeof targetPath === "string" && targetPath.includes("bad.ts")) {
+        const err = new Error("EACCES: permission denied, open 'bad.ts'") as NodeJS.ErrnoException;
+        err.code = "EACCES";
+        throw err;
+      }
+      return originalReadFileSync(targetPath, options);
+    }) as any);
+
+    try {
+      const findings = secretScanUtils.scanBackend(fixtureRoot, {
+        allowlist: { entries: [], globalPatterns: [] },
+        onFileError: (target: { relativePath: string }, error: Error) => {
+          errorsReported.push({ file: target.relativePath, error });
+        },
+      });
+
+      // Partial failure: findings from good1 and good2 are preserved!
+      expect(findings).toHaveLength(2);
+      const files = findings.map((f: { file: string }) => f.file);
+      expect(files).toContain("src/good1.ts");
+      expect(files).toContain("src/good2.ts");
+      expect(files).not.toContain("src/bad.ts");
+
+      // onFileError was invoked for the unreadable target
+      expect(errorsReported).toHaveLength(1);
+      expect(errorsReported[0].file).toBe("src/bad.ts");
+      expect(errorsReported[0].error.message).toContain("EACCES");
+    } finally {
+      jest.restoreAllMocks();
+    }
+  });
+
+  it("handles directory traversal permission failure gracefully without aborting the entire scan", () => {
+    const fixtureRoot = createFixtureDir();
+    const secret = makeHighEntropySecret();
+    writeFixture(fixtureRoot, "src/accessible/leak.ts", `const key = "${secret}";\n`);
+    writeFixture(fixtureRoot, "src/forbidden/leak.ts", `const key = "${secret}";\n`);
+
+    const originalReaddirSync = fs.readdirSync;
+    jest.spyOn(fs, "readdirSync").mockImplementation(((dirPath: fs.PathLike, options: any) => {
+      if (typeof dirPath === "string" && dirPath.includes("forbidden")) {
+        const err = new Error("EACCES: permission denied, scandir 'forbidden'") as NodeJS.ErrnoException;
+        err.code = "EACCES";
+        throw err;
+      }
+      return originalReaddirSync(dirPath, options);
+    }) as any);
+
+    try {
+      const findings = secretScanUtils.scanBackend(fixtureRoot, {
+        allowlist: { entries: [], globalPatterns: [] },
+      });
+
+      // Finding from accessible directory is retained
+      expect(findings).toHaveLength(1);
+      expect(findings[0].file).toBe("src/accessible/leak.ts");
+    } finally {
+      jest.restoreAllMocks();
+    }
+  });
+
+  it("is deterministic across repeated calls with identical fixture trees", () => {
+    const fixtureRoot = createFixtureDir();
+    const secret = makeHighEntropySecret();
+    writeFixture(fixtureRoot, "src/b_leak.ts", `const b = "${secret}";\n`);
+    writeFixture(fixtureRoot, "src/a_leak.ts", `const a = "${secret}";\n`);
+    writeFixture(fixtureRoot, ".env.example", `KEY="${secret}"\n`);
+
+    const options = { allowlist: { entries: [], globalPatterns: [] } };
+    const firstRun = secretScanUtils.scanBackend(fixtureRoot, options);
+    expect(firstRun).toHaveLength(3);
+
+    for (let i = 0; i < 50; i += 1) {
+      const repeatRun = secretScanUtils.scanBackend(fixtureRoot, options);
+      expect(repeatRun).toEqual(firstRun);
+    }
+  });
+
+  it("produces consistent and isolated results under concurrent executions", () => {
+    const fixtureRoot1 = createFixtureDir();
+    const fixtureRoot2 = createFixtureDir();
+    const secret1 = makeHighEntropySecret();
+    const secret2 = makeHighEntropySecret();
+
+    writeFixture(fixtureRoot1, "src/leak1.ts", `const key1 = "${secret1}";\n`);
+    writeFixture(fixtureRoot2, "src/leak2.ts", `const key2 = "${secret2}";\n`);
+
+    const runScan1 = () =>
+      secretScanUtils.scanBackend(fixtureRoot1, { allowlist: { entries: [], globalPatterns: [] } });
+    const runScan2 = () =>
+      secretScanUtils.scanBackend(fixtureRoot2, { allowlist: { entries: [], globalPatterns: [] } });
+
+    const expected1 = runScan1();
+    const expected2 = runScan2();
+
+    const tasks = Array.from({ length: 30 }, (_, index) =>
+      Promise.resolve().then(() => (index % 2 === 0 ? runScan1() : runScan2()))
+    );
+
+    return Promise.all(tasks).then((results) => {
+      results.forEach((res, index) => {
+        if (index % 2 === 0) {
+          expect(res).toEqual(expected1);
+        } else {
+          expect(res).toEqual(expected2);
+        }
+      });
+    });
+  });
+
+  it("handles malformed options.allowlist and missing allowlistPath safely", () => {
+    const fixtureRoot = createFixtureDir();
+    const secret = makeHighEntropySecret();
+    writeFixture(fixtureRoot, "src/leak.ts", `const key = "${secret}";\n`);
+
+    // Malformed allowlist (non-object or bad entries) fails closed without throwing
+    const malformedAllowlists = [null, undefined, "not-allowlist", 123, true, { entries: "bad" }];
+    for (const badAllow of malformedAllowlists) {
+      const findings = secretScanUtils.scanBackend(fixtureRoot, {
+        allowlist: badAllow,
+      });
+      expect(findings).toHaveLength(1);
+      expect(findings[0].file).toBe("src/leak.ts");
+    }
+
+    // Missing allowlistPath does not throw and defaults to empty allowlist
+    const missingAllowPath = path.join(fixtureRoot, "non-existent-allow.json");
+    const findingsMissing = secretScanUtils.scanBackend(fixtureRoot, {
+      allowlistPath: missingAllowPath,
+    });
+    expect(findingsMissing).toHaveLength(1);
+  });
+
+  it("propagates allowlist JSON parse errors with clear diagnosable message", () => {
+    const fixtureRoot = createFixtureDir();
+    const corruptedAllowlist = path.join(fixtureRoot, "corrupted-allow.json");
+    fs.writeFileSync(corruptedAllowlist, "{broken json", "utf8");
+
+    expect(() =>
+      secretScanUtils.scanBackend(fixtureRoot, { allowlistPath: corruptedAllowlist })
+    ).toThrow(/Failed to parse secret scan allowlist/);
+  });
+
+  it("ensures all findings satisfy assertNoSecretsPrinted and never expose raw secret values", () => {
+    const fixtureRoot = createFixtureDir();
+    const secret = makeHighEntropySecret();
+    writeFixture(fixtureRoot, "src/leak.ts", `const token = "${secret}";\n`);
+
+    const findings = secretScanUtils.scanBackend(fixtureRoot, {
+      allowlist: { entries: [], globalPatterns: [] },
+    });
+    expect(findings).toHaveLength(1);
+
+    const finding = findings[0];
+    expect(finding.preview).not.toContain(secret);
+    expect(finding.preview).toContain("...");
+    expect(secretScanUtils.isLogSafePreview(finding.preview)).toBe(true);
+
+    const formatted = secretScanUtils.formatFindings(findings);
+    expect(formatted).not.toContain(secret);
+    expect(() => secretScanUtils.assertNoSecretsPrinted(formatted, findings)).not.toThrow();
+  });
+});
+
 describe("backend security:scan integration", () => {
   const repoRoot = path.resolve(__dirname, "..");
 
