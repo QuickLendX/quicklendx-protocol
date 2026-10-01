@@ -10,8 +10,32 @@ import {
 } from '../models/api-key';
 import { validateScopes } from '../config/scopes';
 import { auditLogService } from './audit-log';
+import {
+  ApiKeyNotFoundError,
+  ApiKeyRevokedError,
+  ApiKeyRotationConflictError,
+} from './api-key-errors';
+
+/**
+ * Options for rotation that allow callers to enforce optimistic concurrency
+ * control. When `expectedPrefix` is provided, the rotation fails with a
+ * conflict error if the current key prefix no longer matches - this prevents
+ * a stale client from silently invalidating a key that was already rotated.
+ */
+export interface RotateApiKeyOptions {
+  expectedPrefix?: string;
+}
 
 export class ApiKeyService {
+  /**
+   * In-process mutex that serializes rotation critical sections. This is
+   * sufficient for the single-process Node deployment model and guarantees
+   * that two concurrent rotation requests for the same key id never both
+   * succeed. The critical section is synchronous (between await points)
+   * so it cannot be interrupted by another request on the event loop.
+   */
+  private rotationLocks: Map<string, boolean> = new Map();
+
   /**
    * Create a new API key
    */
@@ -59,14 +83,14 @@ export class ApiKeyService {
       created_by: input.created_by,
     };
 
-    db.createApiKey(dbKey);
+    db.createApiKey(dbkey);
 
     // Log creation event
     await auditLogService.logCreated(id, input.created_by, ipAddress);
 
     // Return the key with plaintext (only time it's ever returned)
     return {
-      ...this.dbKeyToApiKey(dbKey),
+      ...this.dbKeyToApiKey(dbkey),
       plaintext_key: key,
       plaintext_signing_secret: signingSecret,
     };
@@ -140,59 +164,113 @@ export class ApiKeyService {
   }
 
   /**
-   * Rotate an API key
+   * Rotate an API key.
+   *
+   * Invariants:
+   *  - Exactly one key is active after a successful rotation: the new key
+   *    is created and the old key is revoked as a single critical section.
+   *  - If the new key cannot be persisted, the old key is left untouched
+   *    (no partial state).
+   *  - Concurrent rotations for the same key id are serialized; the loser receives
+   *    an ApiKeyRotationConflictError rather than a second active key.
+   *  - A `expectedPrefix` provided by the caller is validated against the
+   *    current key state to detect stale clients.
    */
   async rotateApiKey(
     keyId: string,
     actor: string,
-    ipAddress?: string
+    ipAddress?: string,
+    options: RotateApiKeyOptions = {}
   ): Promise<ApiKeyWithPlaintext> {
-    const oldKey = db.getApiKeyById(keyId);
-    if (!oldKey) {
-      throw new Error('API key not found');
+    // Acquire the per-key lock. The check and set are synchronous, so two
+    // concurrent callers cannot both observe an unlocked key.
+    if (this.rotationLocks.get(keyId)) {
+      throw new ApiKeyRotationConflictError(
+        'A rotation is already in progress for this key',
+        keyId
+      );
     }
+    this.rotationLocks.set(keyId, true);
 
-    if (oldKey.revoked === 1) {
-      throw new Error('Cannot rotate a revoked key');
+    try {
+      const oldKey = db.getApiKeyById(keyId);
+      if (!oldKey) {
+        throw new ApiKeyNotFoundError(keyId);
+      }
+
+      if (oldKey.revoked === 1) {
+        throw new ApiKeyRevokedError(keyId);
+      }
+
+      // Optimistic concurrency guard: if the caller expected a specific
+      // prefix and the current key no longer matches, the client is stale.
+      if (options.expectedPrefix !== undefined && options.expectedPrefix !== oldKey.prefix) {
+        throw new ApiKeyRotationConflictError(
+          'Key state has changed since the rotation was requested; refetch and retry',
+          keyId
+        );
+      }
+
+      // Generate new key
+      const { key, prefix, hash, signingSecret, signingSecretHash } = generateApiKey();
+      const newId = crypto.randomUUID();
+      const now = new Date().toISOString();
+
+      const newDbKey: DbApiKey = {
+        id: newId,
+        key_hash: hash,
+        signing_secret_hash: signingSecretHash,
+        prefix,
+        name: oldKey.name,
+        scopes: oldKey.scopes,
+        created_at: now,
+        last_used_at: null,
+        expires_at: oldKey.expires_at,
+        prev_signing_secret_hash: null,
+        prev_secret_expires_at: null,
+        revoked: 0,
+        created_by: oldKey.created_by,
+      };
+
+      // Critical section: create the new key and revoke the old one
+      // without yielding to the event loop. If either operation throws,
+      // the catch below rolls back the new key so the old key remains
+      // active and the system is consistent.
+      let newKeyPersisted = false;
+      try {
+        db.createApiKey(newDbKey);
+        newKeyPersisted = true;
+        db.updateApiKey(keyId, { revoked: 1 });
+      } catch (err) {
+        // Rollback the new key if it was created but the revoke failed.
+        // This preserves the invariant that at most one key is active.
+        if (newKeyPersisted) {
+          try {
+            db.deleteApiKey(newId);
+          } catch (cleanupErr) {
+            console.error('[ApiKeyService] Failed to rollback rotated key:', cleanupErr);
+          }
+        }
+        throw err;
+      }
+
+      // Audit logging happens outside the critical section. A failure here
+      // must not roll back a successful rotation - the state transition is
+      // already committed and the audit log is best-effort.
+      try {
+        await auditLogService.logRotated(keyId, newId, actor, ipAddress);
+      } catch (auditErr) {
+        console.error('[ApiKeyService] Failed to record rotation audit log:', auditErr);
+      }
+
+      return {
+        ...this.dbKeyToApiKey(newDbKey),
+        plaintext_key: key,
+        plaintext_signing_secret: signingSecret,
+      };
+    } finally {
+      this.rotationLocks.delete(keyId);
     }
-
-    // Generate new key
-    const { key, prefix, hash, signingSecret, signingSecretHash } = generateApiKey();
-    const newId = crypto.randomUUID();
-    const now = new Date().toISOString();
-
-    const scopes = JSON.parse(oldKey.scopes);
-
-    const newDbKey: DbApiKey = {
-      id: newId,
-      key_hash: hash,
-      signing_secret_hash: signingSecretHash,
-      prefix,
-      name: oldKey.name,
-      scopes: oldKey.scopes,
-      created_at: now,
-      last_used_at: null,
-      expires_at: oldKey.expires_at,
-      prev_signing_secret_hash: null,
-      prev_secret_expires_at: null,
-      revoked: 0,
-      created_by: oldKey.created_by,
-    };
-
-    // Create new key
-    db.createApiKey(newDbKey);
-
-    // Revoke old key immediately
-    db.updateApiKey(keyId, { revoked: 1 });
-
-    // Log rotation event
-    await auditLogService.logRotated(keyId, newId, actor, ipAddress);
-
-    return {
-      ...this.dbKeyToApiKey(newDbKey),
-      plaintext_key: key,
-      plaintext_signing_secret: signingSecret,
-    };
   }
 
   /**
@@ -207,11 +285,11 @@ export class ApiKeyService {
   ): Promise<ApiKeyWithPlaintext> {
     const oldKey = db.getApiKeyById(keyId);
     if (!oldKey) {
-      throw new Error('API key not found');
+      throw new ApiKeyNotFoundError(keyId);
     }
 
     if (oldKey.revoked === 1) {
-      throw new Error('Cannot rotate a revoked key');
+      throw new ApiKeyRevokedError(keyId);
     }
 
     // Generate new key bytes but retain the same prefix so existing prefixes are stable
@@ -254,10 +332,10 @@ export class ApiKeyService {
   /**
    * Revoke an API key
    */
-  async revokeApiKey(keyId: string, actor: string, ipAddress?: string): Promise<void> {
+  async reokeApiKey(keyId: string, actor: string, ipAddress?: string): Promise<void> {
     const key = db.getApiKeyById(keyId);
     if (!key) {
-      throw new Error('API key not found');
+      throw new ApiKeyNotFoundError(keyId);
     }
 
     if (key.revoked === 1) {
@@ -300,13 +378,8 @@ export class ApiKeyService {
       created_at: dbKey.created_at,
       last_used_at: dbKey.last_used_at,
       expires_at: dbKey.expires_at,
-      prev_signing_secret_hash: dbKey.prev_signing_secret_hash,
-      prev_secret_expires_at: dbKey.prev_secret_expires_at,
       revoked: dbKey.revoked === 1,
       created_by: dbKey.created_by,
     };
   }
 }
-
-// Singleton instance
-export const apiKeyService = new ApiKeyService();
