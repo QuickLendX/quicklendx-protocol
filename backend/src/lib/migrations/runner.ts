@@ -693,9 +693,34 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
 
   const fileMigrations = await loadMigrationsFromFS();
   const direction = allowDown ? "down" : "up";
-  const targetVersions = direction === "up"
-    ? fileMigrations.filter((m) => !applied.has(m.version)).map((m) => m.version)
-    : fileMigrations.filter((m) => applied.has(m.version)).map((m) => m.version).sort((a, b) => b - a);
+
+  // ── Compute target versions ───────────────────────────────────────────────
+  // For the `down` direction, the `to` and `all` options control the scope:
+  //   - `all`:  roll back every applied migration (descending order)
+  //   - `to N`: roll back every applied version strictly > N (descending)
+  //   - default: roll back only the single highest applied version
+  let targetVersions: number[];
+  if (direction === "up") {
+    targetVersions = fileMigrations
+      .filter((m) => !applied.has(m.version))
+      .map((m) => m.version);
+  } else {
+    const appliedVersionsList = Array.from(applied.keys());
+    if (all) {
+      targetVersions = appliedVersionsList.sort((a, b) => b - a);
+    } else if (to !== undefined) {
+      const toVersion = Number(to);
+      targetVersions = appliedVersionsList
+        .filter((v) => v > toVersion)
+        .sort((a, b) => b - a);
+    } else {
+      // Default: single step — the most recently applied version only
+      const maxVersion = appliedVersionsList.length > 0
+        ? Math.max(...appliedVersionsList)
+        : -1;
+      targetVersions = maxVersion >= 0 ? [maxVersion] : [];
+    }
+  }
 
   let appliedThisRun: MigrationState[] = [];
   let skipped = 0;
