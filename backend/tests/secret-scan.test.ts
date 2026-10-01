@@ -190,6 +190,51 @@ const qlx = `qlx_${["live"]}_${suffix}`;
     expect(stderr).not.toContain(plantedHighEntropy);
   });
 
+  it("returns a failed result when scanning cannot read its root", () => {
+    const fixtureRoot = createFixtureDir();
+    fs.writeFileSync(path.join(fixtureRoot, "src"), "fixture", "utf8");
+
+    const result = secretScanUtils.runSecretScan({
+      backendRoot: fixtureRoot,
+      allowlist: { entries: [], globalPatterns: [] },
+    });
+
+    expect(result).toMatchObject({
+      ok: false,
+      exitCode: 1,
+      findings: [],
+    });
+    expect(result.message).toContain("Secret scan could not complete");
+    expect(result.message).not.toContain("\n");
+  });
+
+  it("fails closed when the allowlist cannot be parsed", () => {
+    const fixtureRoot = createFixtureDir();
+    const brokenAllowlist = path.join(fixtureRoot, "broken-allowlist.json");
+    fs.writeFileSync(brokenAllowlist, "{not-json", "utf8");
+
+    const result = secretScanUtils.runSecretScan({
+      backendRoot: fixtureRoot,
+      allowlistPath: brokenAllowlist,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.exitCode).toBe(1);
+    expect(result.findings).toEqual([]);
+    expect(result.message).toContain("Secret scan could not complete");
+  });
+
+  it("rejects invalid options without throwing or reporting a clean scan", () => {
+    const result = secretScanUtils.runSecretScan(null);
+
+    expect(result).toEqual({
+      ok: false,
+      exitCode: 1,
+      findings: [],
+      message: "Secret scan could not complete: invalid scan options.",
+    });
+  });
+
   it("passes on clean fixture trees", () => {
     const fixtureRoot = createFixtureDir();
     writeFixture(
