@@ -138,6 +138,18 @@ describe("isNotModified — If-Modified-Since", () => {
 // ---------------------------------------------------------------------------
 
 describe("isNotModified — determinism", () => {
+  it("keeps the empty-body boundary deterministic", () => {
+    expect(computeETag("")).toBe(computeETag(""));
+    expect(computeETag("")).toMatch(/^"[0-9a-f]{40}"$/);
+  });
+
+  it("rejects non-string input consistently at the runtime boundary", () => {
+    const invalidBody = null as unknown as string;
+
+    expect(() => computeETag(invalidBody)).toThrow(/data.*argument/i);
+    expect(() => computeETag(invalidBody)).toThrow(/data.*argument/i);
+  });
+
   it("derives a stable ETag for an identical body", () => {
     expect(computeETag('{"a":1}')).toBe(computeETag('{"a":1}'));
   });

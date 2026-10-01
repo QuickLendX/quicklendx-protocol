@@ -58,6 +58,33 @@ describe("Dependency scan gate script", () => {
     }).toThrow();
   });
 
+  it("allows AUDIT_SEVERITY environment variable to override argv threshold", () => {
+    const report = writeAuditReport({
+      metadata: {
+        vulnerabilities: {
+          info: 0,
+          low: 0,
+          moderate: 0,
+          high: 1,
+          critical: 0,
+          total: 1,
+        },
+      },
+    });
+
+    // argv passes "high" (which would fail), but AUDIT_SEVERITY='critical' overrides it to pass
+    expect(() => {
+      execFileSync("node", [scriptPath, report, "high"], {
+        cwd: repoRoot,
+        stdio: "pipe",
+        env: {
+          ...process.env,
+          AUDIT_SEVERITY: "critical",
+        },
+      });
+    }).not.toThrow();
+  });
+
   it("fails when threshold value is invalid", () => {
     const report = writeAuditReport({
       metadata: {
