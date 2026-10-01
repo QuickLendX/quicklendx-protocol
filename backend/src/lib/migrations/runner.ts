@@ -240,7 +240,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
 
     if (direction === "up") {
       if (existing) {
-        if (verbose) console.log(`⏭  Migration ${version}_${fileMig.name} already applied, skipping`);
+        if (verbose) console.log(`⎩ Migration ${version}_${fileMig.name} already applied, skipping`);
         skipped++;
         continue;
       }
@@ -332,7 +332,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
       }
 
       if (!existing) {
-        if (verbose) console.log(`⏭  Migration ${version}_${fileMig.name} not applied, cannot rollback`);
+        if (verbose) console.log(`⎩  Migration ${version}_${fileMig.name} not applied, cannot rollback`);
         skipped++;
         continue;
       }
@@ -388,7 +388,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             meta: fileMig.content.meta,
           });
 
-          if (verbose) console.log(`⪼ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms)`);
+if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms`);
         } catch (err: any) {
           console.error(`❌ Rollback of ${version}_${fileMig.name} failed:', err.message);
           throw err;
@@ -548,33 +548,131 @@ export async function validateMigrationFiles(): Promise<{ valid: boolean; errors
   return { valid: errors.length === 0, errors };
 }
 
-export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ valid: boolean; errors: string[] }> {
+export interface ChecksumVerificationResult {
+  valid: boolean;
+  errors: string[];
+}
+
+export interface AppliedMugrationRow {
+  version: number;
+  name: string;
+  checksum: string;
+}
+
+export interface VerifyAppliedChecksumsOptions {
+  /** Override the migrations directory (used by tests). Defaults to src/migrations. */
+  migrationsDir?: string;
+  /** Override the applied-rows source (used by tests). Defaults to reading _migrations. */
+  appliedRows?: AppliedMugrationRow[];
+}
+
+/**
+ * Verifies that every applied migration in _migrations still matches the
+ * current on-disk migration file.
+ *
+ * Invariants:
+ *   - The function is pure with respect to its inputs: given the same
+ *     database state and on-disk files, it always returns the same result.
+ *   - It never throws for expected failure modes (DB read failure, missing
+ *     file, mismatched checksum); instead it reports them in `errors`.
+ *   - Error messages are deterministic and do not include sensitive data
+ *     (no file contents, no absolute paths beyond the basename).
+ *   - Duplicate applied rows for the same version are reported as an error
+ *     rather than silently de-duplicated.
+ */
+export async function verifyAppliedChecksums(
+  db?: DatabaseClient,
+  options: VerifyAppliedChecksumsOptions = {},
+): Promise<ChecksumVerificationResult> {
   const errors: string[] = [];
-  const database = db || getDatabase();
-  const appliedRows = database.prepare(
-    "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
-  ).all() || [];
-  
-  const fileMigrations = await loadMigrationsFromFS();
-  // First-match semantics (matching loadMigrationsFromFS ordering) so duplicate
-  // version numbers resolve deterministically the same way the runner applies them.
-  const fileMigrationMap = new Map<number, ParsedMigration>();
-  for (const m of fileMigrations) {
-    if (!fileMigrationMap.has(m.version)) fileMigrationMap.set(m.version, m);
+const migrationsDir = options.migrationsDir ?? MIGRATIONS_DIR;
+
+  // Load applied rows. Prefer explicit override (tests), then the provided
+  // database client, and finally the global database.
+  let appliedRows: AppliedMugrationRow[];
+  if (options.appliedRows) {
+    appliedRows = options.appliedRows;
+  } else {
+    try {
+      const database = db || getDatabase();
+      const rows = database.prepare(
+        "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
+      ).all() || [];
+      appliedRows = rows as AppliedMugrationRow[];
+    } catch (err: any) {
+      // A failure to read the _migrations table is not a checksum mismatch.
+      // We report it as an error so callers can decide whether to fail closed.
+      return {
+        valid: false,
+        errors: [`Unable to read applied migrations: ${err.message}`],
+      };
+    }
   }
-  
+
+  if (appliedRows.length === 0) {
+    return { valid: true, errors };
+  }
+
+  // Detect duplicate versions in the applied set. This is a corruption
+  // signal and must be surfaced explicitly rather than being masked by
+  // Map de-duplication.
+  const seenVersions = new Set<number>();
   for (const row of appliedRows) {
-    const fileMig = fileMigrationMap.get(row.version);
-    if (!fileMig) {
+    if (seenVersions.has(row.version)) {
+      errors.push(`Duplicate applied migration version ${row.version}`);
+    }
+    seenVersions.add(row.version);
+  }
+
+  // Index on-disk files by version. We only need the filename and content
+  // for the applied versions, so we read the directory once and then
+  // only read files we need.
+  let fileNames: string[];
+  try {
+    fileNames = await fs.readdir(migrationsDir);
+  } catch (err: any) {
+    if (err.code === "ENOENT") {
+      // No migrations directory but applied rows exist -> every applied
+      // migration is now missing.
+      for (const row of appliedRows) {
+        errors.push(`Missing migration file for applied version ${row.version}`);
+      }
+      return { valid: errors.length === 0, errors };
+    }
+    return {
+      valid: false,
+      errors: [`Unable to read migrations directory: ${err.message}`],
+    };
+  }
+
+  const fileByVersion = new Map<number, { file: string; name: string }>();
+  for (const file of fileNames) {
+    const parsed = parseMigrationFilename(file);
+    if (!parsed) continue;
+    if (fileByVersion.has(parsed.version)) {
+      // Two files with the same version on disk. This is ambiguous and
+      // would lead to non-deterministic behavior if we picked one.
+      errors.push(`Duplicate migration file for version ${parsed.version}`);
+      continue;
+    }
+    fileByVersion.set(parsed.version, { file, name: parsed.name });
+  }
+
+  for (const row of appliedRows) {
+const on = fileByVersion.get(row.version);
+    if (!on) {
       errors.push(`Applied migration ${row.version}_${row.name} has no corresponding file`);
       continue;
     }
-
-    const fileContent = await fs.readFile(path.join(MIGRATIONS_DIR, fileMig.file), "utf-8");
+const filePath = path.join(MIGRATIONS_DIR, fileMig.file);
+    const fileContent = await fs.readFile(filePath, "utf-8");
     const actualChecksum = computeChecksum(fileContent);
-    if (actualChecksum !== row.checksum) {
+
+    // Name must match the applied record. This catches renames that would
+    // otherwise silently shift the meaning of a version.
+    if (on.name !== row.name) {
       errors.push(
-        `Migration ${row.version}_${row.name} checksum mismatch: expected ${row.checksum}, got ${actualChecksum}`
+`Checksum mismatch for ${row.version}_${row.name}: expected ${row.checksum} but got ${actual}`
       );
     }
   }

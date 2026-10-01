@@ -7,6 +7,39 @@ import {
   isDatabaseInitialized,
 } from "../lib/migrations/runner";
 
+const originalFetch = global.fetch;
+const originalEnv = { ...process.env };
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function installFetchMock(handler: (url: string, init?: RequestInit) => Promise<Response>) {
+  const mock = jest.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input.toString();
+    return handler(url, init);
+  });
+  global.fetch = mock as unknown as typeof fetch;
+  return mock;
+}
+
+beforeEach(() => {
+  process.env = { ...originalEnv };
+  {
+    delete process.env.SUPABASE_URL;
+    delete process.env.SUPABASE_ANON_KEY;   
+    delete process.env.DATABASE_URL;
+  }
+});
+
+afterAll(() => {
+  global.fetch = originalFetch;
+  process.env = { ...originalEnv };
+});
+
 describe("Migration Runner Utilities", () => {
   describe("parseMigrationFilename", () => {
     test("parses v001_foo.ts correctly", () => {
@@ -92,6 +125,7 @@ describe("Migration Runner Utilities", () => {
 
   describe("verifyAppliedChecksums", () => {
     test("returns valid when no migrations are applied", async () => {
+      installFetchMock(async () => jsonResponse([]));
       const result = await verifyAppliedChecksums();
       expect(result.valid).toBe(true);
       expect(result.errors).toEqual([]);
@@ -117,22 +151,91 @@ describe("Migration Runner Utilities", () => {
     });
 
     test("detects missing migration files", async () => {
-      // This test would require mocking the database and filesystem
-      // For now, we'll skip the actual implementation
-      expect(true).toBe(true);
+      installFetchMock(async () =>
+        jsonResponse([
+          {
+            version: 1,
+            name: "initial_schema",
+            checksum: computeChecksum("v001_initial_schema.ts"),
+          },
+        ]),
+      );
+      const result = await verifyAppliedChecksums();
+      expect(result.valid).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+      expect(result.errors.join("\n")).toMatch(/missing/i);
     });
 
     test("detects checksum mismatches", async () => {
-      // This test would require mocking the database and filesystem
-      // For now, we'll skip the actual implementation
-      expect(true).toBe(true);
+      installFetchMock(async () =>
+        jsonResponse([
+          {
+            version: 1,
+            name: "initial_schema",
+            checksum: "00000000000000000000000000000000000000000000000000000000000000000",
+          },
+        ]),
+      );
+      const result = await verifyAppliedChecksums();
+      expect(result.valid).toBe(false);
+      expect(result.errors.join("\n")).toMatch(/checksum/i);
+    });
+
+    test("treats duplicate applied versions as invalid", async () => {
+      installFetchMock(async () =>
+        jsonResponse([
+          {
+            version: 1,
+            name: "initial_schema",
+            checksum: computeChecksum("v001_initial_schema.ts"),
+          },
+          {
+            version: 1,
+            name: "initial_schema",
+            checksum: computeChecksum("v001_initial_schema.ts"),
+          },
+        ],
+      ),
+      );
+      const result = await verifyAppliedChecksums();
+      expect(result.valid).toBe(false);
+      expect(result.errors.join("\n")).toMatch(/duplicate/i);
+    });
+
+    test("surfaces database errors as invalid results", async () => {
+      installFetchMock(async () => jsonResponse({ message: "permission denied" }, 403));
+      const result = await verifyAppliedChecksums();
+      expect(result.valid).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
+    });
+
+    test("retries transient failures and eventually succeeds", async () => {
+      let attempts = 0;
+      installFetchMock(async () => {
+        attempts += 1;
+        if (attempts < 2) {
+          throw new Error("econnreset");
+        }
+        return jsonResponse([]);
+      });
+      const result = await verifyAppliedChecksums();
+      expect(result.valid).toBe(true);
+      expect(attempts).toBeGreaterThanOrEqual(2);
+    });
+
+    test("returns invalid when database configuration is missing", async () => {
+      delete process.env.SUPABASE_URL;
+      delete process.env.SUPABASE_ANON_KEY;
+      delete process.env.DATABASE_URL;
+      const result = await verifyAppliedChecksums();
+      expect(result.valid).toBe(false);
+      expect(result.errors.length).toBeGreaterThan(0);
     });
   });
 
   describe("validateMigrationFiles", () => {
     test("validates migration files structure", async () => {
       const result = await validateMigrationFiles();
-      // Check that it returns a result object
       expect(result).toHaveProperty("valid");
       expect(result).toHaveProperty("errors");
       expect(Array.isArray(result.errors)).toBe(true);
@@ -148,8 +251,22 @@ describe("Migration Runner Utilities", () => {
 
   describe("getAppliedVersions", () => {
     test("returns empty array when no migrations applied", async () => {
+      installFetchMock(async () => jsonResponse([]));
       const versions = await getAppliedVersions();
       expect(Array.isArray(versions)).toBe(true);
+      expect(versions).toEqual([]);
+    });
+
+    test("returns sorted applied versions", async () => {
+      installFetchMock(async () =>
+        jsonResponse([
+          { version: 2, name: "b", checksum: "2" },
+          { version: 1, name: "a", checksum: "1" },
+        ],
+      ),
+      );
+      const versions = await getAppliedVersions();
+      expect(versions).toEqual([1, 2]);
     });
 
     test("returns a stable array across repeated calls", async () => {
@@ -161,8 +278,18 @@ describe("Migration Runner Utilities", () => {
 
   describe("isDatabaseInitialized", () => {
     test("returns false when no migrations applied", async () => {
+      installFetchMock(async () => jsonResponse([]));
       const initialized = await isDatabaseInitialized();
       expect(typeof initialized).toBe("boolean");
+      expect(initialized).toBe(false);
+    });
+
+    test("returns true when at least one migration is applied", async () => {
+      installFetchMock(async () =>
+        jsonResponse([{ version: 1, name: "a", checksum: "1" }]),
+      );
+      const initialized = await isDatabaseInitialized();
+      expect(initialized).toBe(true);
     });
 
     test("is consistent across repeated calls", async () => {
