@@ -18,6 +18,7 @@
 const secretScanUtils = require("../scripts/lib/secret-scan-utils");
 
 const {
+  collectQuotedStringMatches,
   PREVIEW_EDGE_LENGTH,
   PREVIEW_ELLIPSIS,
   PREVIEW_MASK_CHARACTER,
