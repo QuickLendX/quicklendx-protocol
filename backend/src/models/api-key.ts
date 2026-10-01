@@ -1,67 +1,57 @@
-import crypto from 'crypto';
+/**
+ * API key domain models for the QuickLendX backend.
+ *
+ * Invariants:
+ * - `id` is a non-secret, opaque identifier (UUIDv4). It is safe to log.
+ * - `secret` (the credential material) is NEVER persisted or returned by the
+ *   service layer. The controller never logs or includes it in errors.
+ * - `version` is an optimistic-concurrency token (monotonically increasing).
+ *   Every successful mutation bumps it so stale clients can be detected.
+ */
+export type ApiKeyStatus = "active" | "revoked" | "expired";
 
 export interface ApiKey {
-  id: string;
-  key_hash: string;
-  prev_signing_secret_hash: string | null;
-  prefix: string;
-  name: string;
-  scopes: string[];
-  created_at: string;
-  last_used_at: string | null;
-  expires_at: string | null;
-  prev_secret_expires_at: string | null;
-  revoked: boolean;
-  created_by: string;
+  readonly id: string;
+  readonly name: string;
+  readonly ownerId: string;
+  readonly permissions: readonly string[];
+  readonly status: ApiKeyStatus;
+  /** Optimistic-concurrency version. Incremented on each mutation. */
+  readonly version: number;
+  readonly createdAt: number;
+  readonly revokedAt: number | null;
+  readonly revokedBy: string | null;
 }
 
-export interface ApiKeyCreateInput {
-  name: string;
-  scopes: string[];
-  created_by: string;
-  expires_at?: string | null;
-}
-
-export interface ApiKeyWithPlaintext extends ApiKey {
-  plaintext_key: string;
+/** A key that has been revoked. `revokedAt`/`revokedBy` are always present. */
+export interface RevokedApiKey extends ApiKey {
+  readonly status: "revoked";
+  readonly revokedAt: number;
+  readonly revokedBy: string;
 }
 
 /**
- * Generate a cryptographically secure API key
- * Format: qlx_<env>_<random>
+ * Service contract for API key persistence.
+ *
+ * `revokeApiKey` is atomic with respect to the provided `expectedVersion`:
+ * if the stored key's version has advanced since the caller read it, the call
+ * MUST be rejected with an `ApiKeyError` (code `"CONFLICT"`) so the caller can
+ * re-read and recover (see `ApiKeysController.revokeApiKey`).
  */
-export function generateApiKey(): { key: string; prefix: string; hash: string } {
-  const env = process.env.NODE_ENV === 'production' ? 'live' : 'test';
-  const randomBytes = crypto.randomBytes(32);
-  const randomPart = randomBytes.toString('base64url');
-  const key = `qlx_${env}_${randomPart}`;
-  
-  // Extract prefix (first 15 characters for display)
-  const prefix = key.substring(0, 15); // qlx_live_xxxxx or qlx_test_xxxxx
-  
-  // Hash the key using SHA-256
-  const hash = hashApiKey(key);
-  
-  return { key, prefix, hash };
-}
-
-/**
- * Hash an API key using SHA-256
- */
-export function hashApiKey(key: string): string {
-  return crypto.createHash('sha256').update(key).digest('hex');
-}
-
-/**
- * Timing-safe comparison to prevent timing attacks
- */
-export function timingSafeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  
-  const bufferA = Buffer.from(a, 'hex');
-  const bufferB = Buffer.from(b, 'hex');
-  
-  return crypto.timingSafeEqual(bufferA, bufferB);
+export interface ApiKeyService {
+  /** Returns the key by id, or `null` when absent. Never returns secret material. */
+  getApiKey(id: string): Promise<ApiKey | null>;
+  /**
+   * Atomically revokes the key owned by `revokedBy`.
+   * @throws {ApiKeyError} code `"CONFLICT"` when `expectedVersion` is supplied
+   *   and no longer matches the stored version (stale read).
+   * @throws {ApiKeyError} code `"NOT_FOUND"` when the key does not exist.
+   * Idempotent: revoking an already-revoked/expired key returns the current
+   * record without error.
+   */
+  revokeApiKey(
+    id: string,
+    revokedBy: string,
+    expectedVersion?: number
+  ): Promise<RevokedApiKey>;
 }

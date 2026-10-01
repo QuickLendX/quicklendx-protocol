@@ -19,6 +19,12 @@ const schema = z.object({
   RATE_LIMIT_PER_KEY_POINTS: z.coerce.number().int().min(1).default(60),
   RATE_LIMIT_RECONCILIATION_POINTS: z.coerce.number().int().min(1).default(10),
   RATE_LIMIT_EXPORT_POINTS: z.coerce.number().int().min(1).default(5),
+  EXPORT_MAX_CONCURRENT_PER_KEY: z.coerce.number().int().min(1).default(2),
+  EXPORT_DIR: z.string().default(".data/exports"),
+  EXPORT_TTL_MS: z.coerce.number().int().min(1).default(3600000), // 1 hour
+  ARCHIVE_DIR: z.string().default(".data/archives"),
+  ARCHIVE_ENABLED: z.coerce.boolean().default(false),
+  EXPOSURE_CAP_PER_INVESTOR_USD: z.coerce.number().int().min(0).default(10000000000), // 10B default
 
   // Database configuration
   DATABASE_PATH: z.string().default(function () {
@@ -45,6 +51,19 @@ const schema = z.object({
   RETENTION_INTERVAL_MS: z.coerce.number().int().min(60000).default(24 * 60 * 60 * 1000),
   RETENTION_ARCHIVE_DIR: z.string().default(".data/retention-archives"),
   RETENTION_AUDIT_ACTOR: z.string().min(1).default("system:retention-worker"),
+
+  // Alert routing configuration
+  ALERT_ROUTES_JSON: z.string().optional(),
+  ALERT_DEDUPE_WINDOW_MS: z.coerce.number().int().min(0).default(15 * 60 * 1000), // 15 minutes
+  MAX_NOTIFICATION_DEDUP_ENTRIES: z.coerce.number().int().min(1).default(10_000),
+  NOTIFICATION_DEDUP_TTL_MS: z.coerce.number().int().min(1).default(24 * 60 * 60 * 1000),
+  PAGERDUTY_INTEGRATION_KEY: isProduction
+    ? z.string().min(1).optional()
+    : z.string().min(1).optional(),
+  SLACK_WEBHOOK_URL: isProduction
+    ? z.string().url().optional()
+    : z.string().url().optional(),
+  ALERT_EMAIL_RECIPIENTS: z.string().optional(), // comma-separated emails
 });
 
 export type Config = z.infer<typeof schema>;
@@ -60,6 +79,113 @@ function load(): Config {
 
 export const config = load();
 
+export interface AlertRoute {
+  severity: "LOW" | "MEDIUM" | "HIGH";
+  channels: ("email" | "slack" | "pagerduty")[];
+}
+
+export interface AlertRoutes {
+  routes?: AlertRoute[];
+}
+
+const ALERT_SEVERITIES = new Set<AlertRoute["severity"]>(["LOW", "MEDIUM", "HIGH"]);
+const ALERT_CHANNELS = new Set<AlertRoute["channels"][number]>([
+  "email",
+  "slack",
+  "pagerduty",
+]);
+
+function invalidAlertRoutes(): never {
+  throw new Error("Invalid ALERT_ROUTES_JSON configuration");
+}
+
+export function parseAlertRoutes(raw: string | undefined): AlertRoutes {
+  if (!raw) {
+    return { routes: undefined };
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      return invalidAlertRoutes();
+    }
+
+    const routes = (parsed as { routes?: unknown }).routes;
+    if (routes === undefined) {
+      return { routes: undefined };
+    }
+    if (!Array.isArray(routes)) {
+      return invalidAlertRoutes();
+    }
+
+    const seenSeverities = new Set<string>();
+    const normalizedRoutes: AlertRoute[] = [];
+
+    routes.forEach((route, index) => {
+      if (route === null || typeof route !== "object" || Array.isArray(route)) {
+        throw new Error(`route ${index} must be an object`);
+      }
+
+      const candidate = route as { severity?: unknown; channels?: unknown };
+      if (
+        typeof candidate.severity !== "string" ||
+        !ALERT_SEVERITIES.has(candidate.severity as AlertRoute["severity"])
+      ) {
+        throw new Error(`route ${index} has an unsupported severity`);
+      }
+      if (seenSeverities.has(candidate.severity)) {
+        throw new Error(`route ${index} duplicates severity ${candidate.severity}`);
+      }
+      if (!Array.isArray(candidate.channels) || candidate.channels.length === 0) {
+        throw new Error(`route ${index} must define at least one channel`);
+      }
+
+      const channels = candidate.channels.map((channel, channelIndex) => {
+        if (
+          typeof channel !== "string" ||
+          !ALERT_CHANNELS.has(channel as AlertRoute["channels"][number])
+        ) {
+          throw new Error(`route ${index} has an unsupported channel at index ${channelIndex}`);
+        }
+        return channel as AlertRoute["channels"][number];
+      });
+
+      if (new Set(channels).size !== channels.length) {
+        throw new Error(`route ${index} contains duplicate channels`);
+      }
+
+      seenSeverities.add(candidate.severity);
+      normalizedRoutes.push({
+        severity: candidate.severity as AlertRoute["severity"],
+        channels,
+      });
+    });
+
+    return { routes: normalizedRoutes };
+  } catch (err) {
+    // Do not echo the raw environment value: configuration may contain secrets
+    // in future route metadata, and startup errors must remain log-safe.
+    console.error("Failed to parse ALERT_ROUTES_JSON configuration");
+    if (err instanceof Error && err.message === "Invalid ALERT_ROUTES_JSON configuration") {
+      throw err;
+    }
+    return invalidAlertRoutes();
+  }
+}
+
+export const alertConfig = {
+  dedupeWindowMs: config.ALERT_DEDUPE_WINDOW_MS,
+  pagerdutyIntegrationKey: config.PAGERDUTY_INTEGRATION_KEY,
+  slackWebhookUrl: config.SLACK_WEBHOOK_URL,
+  emailRecipients: config.ALERT_EMAIL_RECIPIENTS?.split(",").map((e) => e.trim()) || [],
+  routes: parseAlertRoutes(config.ALERT_ROUTES_JSON).routes || [
+    { severity: "HIGH", channels: ["pagerduty", "slack"] },
+    { severity: "MEDIUM", channels: ["slack", "email"] },
+    { severity: "LOW", channels: ["email"] },
+  ],
+} as const;
+
 export const retentionConfig = {
   rawEventsMs: config.RETENTION_RAW_EVENTS_DAYS * 24 * 60 * 60 * 1000,
   auditLogsMs: config.RETENTION_AUDIT_LOG_DAYS * 24 * 60 * 60 * 1000,
@@ -68,4 +194,5 @@ export const retentionConfig = {
   intervalMs: config.RETENTION_INTERVAL_MS,
   archiveDir: config.RETENTION_ARCHIVE_DIR,
   actor: config.RETENTION_AUDIT_ACTOR,
+  archiveEnabled: false, // We'll use false as default for now
 } as const;

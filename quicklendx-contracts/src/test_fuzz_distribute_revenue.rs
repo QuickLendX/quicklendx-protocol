@@ -40,14 +40,12 @@
 //! PROPTEST_CASES=50000 cargo test --features fuzz-tests test_fuzz_distribute_revenue
 //! ```
 
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::fees::{FeeManager, FeeType, RevenueConfig, RevenueData};
 use crate::QuickLendXContract;
-use crate::admin::AdminStorage;
 use proptest::prelude::*;
-use soroban_sdk::{
-    symbol_short, testutils::Address as _, Address, Env, Map,
-};
+use soroban_sdk::{symbol_short, testutils::Address as _, Address, Env, Map};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -559,9 +557,15 @@ fn distribute_edge(
     let (env, admin) = make_env_with_admin();
     let contract_id = env.register(QuickLendXContract, ());
     run_distribute(
-        &env, &contract_id, &admin,
-        treasury_bps, developer_bps, platform_bps,
-        pending, min_dist, 0,
+        &env,
+        &contract_id,
+        &admin,
+        treasury_bps,
+        developer_bps,
+        platform_bps,
+        pending,
+        min_dist,
+        0,
     )
 }
 
@@ -586,7 +590,9 @@ fn distribute_revenue_zero_pending_rejected() {
             auto_distribution: false,
             min_distribution_amount: 0,
         };
-        env.storage().instance().set(&symbol_short!("rev_cfg"), &config);
+        env.storage()
+            .instance()
+            .set(&symbol_short!("rev_cfg"), &config);
 
         let revenue_key = (symbol_short!("revenue"), 0u64);
         let revenue_data = RevenueData {
@@ -704,9 +710,13 @@ fn distribute_revenue_large_amount_even_split() {
     let result = distribute_edge(5000, 2500, 2500, amount, 0);
     let (t, d, p) = result.expect("should succeed for large amount");
     assert_eq!(
-        t + d + p, amount,
+        t + d + p,
+        amount,
         "conservation violated for large amount={}: t={}, d={}, p={}",
-        amount, t, d, p
+        amount,
+        t,
+        d,
+        p
     );
     assert!(t >= 0 && d >= 0 && p >= 0);
 }
@@ -745,7 +755,9 @@ fn distribute_revenue_bps_over_10000_rejected() {
             auto_distribution: false,
             min_distribution_amount: 0,
         };
-        env.storage().instance().set(&symbol_short!("rev_cfg"), &config);
+        env.storage()
+            .instance()
+            .set(&symbol_short!("rev_cfg"), &config);
 
         let revenue_key = (symbol_short!("revenue"), 0u64);
         let revenue_data = RevenueData {
@@ -759,10 +771,7 @@ fn distribute_revenue_bps_over_10000_rejected() {
         env.storage().instance().set(&revenue_key, &revenue_data);
 
         let result = FeeManager::distribute_revenue(&env, &admin, 0);
-        assert!(
-            result.is_err(),
-            "bps sum > 10_000 must be rejected, got Ok"
-        );
+        assert!(result.is_err(), "bps sum > 10_000 must be rejected, got Ok");
     });
 }
 
@@ -785,7 +794,9 @@ fn distribute_revenue_bps_under_10000_rejected() {
             auto_distribution: false,
             min_distribution_amount: 0,
         };
-        env.storage().instance().set(&symbol_short!("rev_cfg"), &config);
+        env.storage()
+            .instance()
+            .set(&symbol_short!("rev_cfg"), &config);
 
         let revenue_key = (symbol_short!("revenue"), 0u64);
         let revenue_data = RevenueData {
@@ -799,10 +810,7 @@ fn distribute_revenue_bps_under_10000_rejected() {
         env.storage().instance().set(&revenue_key, &revenue_data);
 
         let result = FeeManager::distribute_revenue(&env, &admin, 0);
-        assert!(
-            result.is_err(),
-            "bps sum < 10_000 must be rejected, got Ok"
-        );
+        assert!(result.is_err(), "bps sum < 10_000 must be rejected, got Ok");
     });
 }
 
@@ -826,7 +834,9 @@ fn distribute_revenue_idempotent_second_call_rejected() {
             auto_distribution: false,
             min_distribution_amount: 0,
         };
-        env.storage().instance().set(&symbol_short!("rev_cfg"), &config);
+        env.storage()
+            .instance()
+            .set(&symbol_short!("rev_cfg"), &config);
 
         let revenue_key = (symbol_short!("revenue"), 0u64);
         let revenue_data = RevenueData {
@@ -841,7 +851,11 @@ fn distribute_revenue_idempotent_second_call_rejected() {
 
         // First call must succeed
         let r1 = FeeManager::distribute_revenue(&env, &admin, 0);
-        assert!(r1.is_ok(), "first distribute_revenue must succeed: {:?}", r1);
+        assert!(
+            r1.is_ok(),
+            "first distribute_revenue must succeed: {:?}",
+            r1
+        );
 
         // Second call on same period must fail (pending_distribution == 0 now)
         let r2 = FeeManager::distribute_revenue(&env, &admin, 0);

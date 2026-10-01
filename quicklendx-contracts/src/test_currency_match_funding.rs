@@ -28,20 +28,38 @@ fn test_accept_bid_and_fund_uses_invoice_currency_for_escrow_and_release() {
         &String::from_str(&env, "Invoice currency match test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 500),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     let investor_balance_before = token::Client::new(&env, &currency).balance(&investor);
     let contract_balance_before = token::Client::new(&env, &currency).balance(&contract_id);
 
     client.accept_bid_and_fund(&invoice_id, &bid_id);
 
-    let escrow = client.get_escrow_details(&invoice_id).expect("Escrow should exist after funding");
-    assert_eq!(escrow.currency, currency, "Escrow currency must match invoice currency");
-    assert_eq!(escrow.amount, amount, "Escrow amount should equal accepted bid amount");
-    assert_eq!(escrow.business, business, "Escrow business should match invoice business");
+    let escrow = client
+        .get_escrow_details(&invoice_id)
+        .expect("Escrow should exist after funding");
+    assert_eq!(
+        escrow.currency, currency,
+        "Escrow currency must match invoice currency"
+    );
+    assert_eq!(
+        escrow.amount, amount,
+        "Escrow amount should equal accepted bid amount"
+    );
+    assert_eq!(
+        escrow.business, business,
+        "Escrow business should match invoice business"
+    );
     assert_eq!(escrow.status, payments::EscrowStatus::Held);
 
     assert_eq!(
@@ -55,10 +73,16 @@ fn test_accept_bid_and_fund_uses_invoice_currency_for_escrow_and_release() {
         "Contract balance should increase by funded amount"
     );
 
-    client.release_escrow_funds(&invoice_id).expect("Release should succeed");
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
+    client
+        .release_escrow_funds(&invoice_id)
+        .expect("Release should succeed");
 
     assert_eq!(
-        client.get_escrow_status(&invoice_id).expect("Escrow status query must succeed"),
+        client
+            .get_escrow_status(&invoice_id)
+            .expect("Escrow status query must succeed"),
         payments::EscrowStatus::Released,
         "Released escrow should reflect final release state"
     );
@@ -89,12 +113,25 @@ fn test_place_bid_rejected_when_invoice_currency_removed_from_whitelist() {
         &String::from_str(&env, "Whitelist removal regression test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
     client.remove_currency(&admin, &currency);
 
-    let result = client.try_place_bid(&investor, &invoice_id, &amount, &(amount + 500));
-    assert!(result.is_err(), "Bid placement must be rejected when invoice currency is no longer whitelisted");
-    assert!(client.try_get_escrow_details(&invoice_id).is_err(), "No escrow should exist after a rejected bid placement");
+    let result = client.try_place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 500),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+    assert!(
+        result.is_err(),
+        "Bid placement must be rejected when invoice currency is no longer whitelisted"
+    );
+    assert!(
+        client.try_get_escrow_details(&invoice_id).is_err(),
+        "No escrow should exist after a rejected bid placement"
+    );
 }

@@ -1,20 +1,15 @@
 import { z } from 'zod';
 
-/**
- * Environment profile types
- */
 export const ProfileSchema = z.enum(['development', 'test', 'production']);
 export type Profile = z.infer<typeof ProfileSchema>;
 
-/**
- * Log level types
- */
 export const LogLevelSchema = z.enum(['debug', 'info', 'warn', 'error']);
 export type LogLevel = z.infer<typeof LogLevelSchema>;
 
-/**
- * Base configuration schema with strict validation
- */
+function hotReloadable<T extends z.ZodTypeAny>(schema: T): T {
+  return schema.describe('hotReloadable:true');
+}
+
 export const ConfigSchema = z.object({
   // Application
   NODE_ENV: ProfileSchema.default('development'),
@@ -25,7 +20,7 @@ export const ConfigSchema = z.object({
   DATABASE_URL: z.string().url().min(1),
   DATABASE_POOL_SIZE: z.coerce.number().int().min(1).max(100).default(10),
 
-  // Authentication & Security
+  // Authentication & Security (immutable post-boot)
   JWT_SECRET: z.string().min(32),
   API_KEY: z.string().min(16),
   ENCRYPTION_KEY: z.string().min(32),
@@ -34,17 +29,30 @@ export const ConfigSchema = z.object({
   STELLAR_NETWORK_URL: z.string().url(),
   STELLAR_NETWORK_PASSPHRASE: z.string().min(1),
 
-  // Feature Flags
-  ENABLE_RATE_LIMITING: z.coerce.boolean().default(true),
-  MAX_REQUESTS_PER_MINUTE: z.coerce.number().int().min(1).max(10000).default(100),
+  // Feature Flags (hot-reloadable)
+  ENABLE_RATE_LIMITING: z.coerce.boolean().default(true).describe('hotReloadable:true'),
+  MAX_REQUESTS_PER_MINUTE: z.coerce.number().int().min(1).max(10000).default(100).describe('hotReloadable:true'),
+  RATE_LIMIT_POINTS: hotReloadable(z.coerce.number().int().min(1).max(100000).default(1000)),
+  RPC_ALLOWED_HOSTS: hotReloadable(
+    z.preprocess(
+      (val) => {
+        if (typeof val === 'string') {
+          return val.split(',').map((s) => s.trim()).filter(Boolean);
+        }
+        return val;
+      },
+      z.array(z.string()).default(['*']),
+    )
+  ),
+
+  // Lag thresholds (hot-reloadable)
+  LAG_WARN_THRESHOLD: hotReloadable(z.coerce.number().int().min(0).default(10)),
+  LAG_CRITICAL_THRESHOLD: hotReloadable(z.coerce.number().int().min(0).default(100)),
 
   // Monitoring (optional)
   SENTRY_DSN: z.string().url().optional(),
 });
 
-/**
- * Production-specific schema with stricter validation
- */
 export const ProductionConfigSchema = ConfigSchema.extend({
   JWT_SECRET: z.string().min(64),
   API_KEY: z.string().min(32),

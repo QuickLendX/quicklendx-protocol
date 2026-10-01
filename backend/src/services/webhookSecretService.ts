@@ -1,4 +1,13 @@
-import { createHmac, randomBytes, timingSafeEqual } from "crypto";
+import {
+  createHmac,
+  randomBytes,
+  timingSafeEqual,
+  generateKeyPairSync,
+  createPrivateKey,
+  createPublicKey,
+  sign,
+  verify,
+} from "crypto";
 import {
   WebhookSubscriberSecret,
   WebhookSecretStatus,
@@ -20,6 +29,14 @@ const HMAC_ALGORITHM = "sha256";
 
 /** Prefix used in the X-Webhook-Signature header value. */
 const SIGNATURE_PREFIX = "sha256=";
+
+/** Regex for validating base64url Ed25519 signatures (exactly 86 characters). */
+const BASE64URL_REGEX = /^[A-Za-z0-9_-]{86}$/;
+
+/** Pre-generated static dummy keypair for timing-safe dummy Ed25519 checks. */
+const DUMMY_KEY_PAIR = generateKeyPairSync("ed25519");
+const DUMMY_PUBLIC_KEY = DUMMY_KEY_PAIR.publicKey.export({ type: "spki", format: "pem" }) as string;
+const DUMMY_SIGNATURE = Buffer.alloc(64);
 
 // ---------------------------------------------------------------------------
 // Errors
@@ -119,7 +136,8 @@ export class WebhookSecretService {
    */
   public registerSubscriber(
     subscriberId: string,
-    gracePeriodSeconds: number = 3600
+    gracePeriodSeconds: number = 3600,
+    algorithm: "hmac-sha256" | "ed25519" = "hmac-sha256"
   ): { view: SubscriberSecretPublicView; initial_secret: string } {
     if (this.store.has(subscriberId)) {
       throw new WebhookSecretError(
@@ -130,15 +148,26 @@ export class WebhookSecretService {
     }
 
     const now = new Date().toISOString();
-    const secret = this.generateSecret();
+    let primarySecret: string;
+    let initialSecret: string;
+
+    if (algorithm === "ed25519") {
+      const keys = this.generateEd25519KeyPair();
+      primarySecret = keys.privateKey;
+      initialSecret = keys.publicKey;
+    } else {
+      primarySecret = this.generateSecret();
+      initialSecret = primarySecret;
+    }
 
     const record: WebhookSubscriberSecret = {
       subscriber_id: subscriberId,
-      primary_secret: secret,
+      primary_secret: primarySecret,
       pending_secret: null,
       pending_created_at: null,
       grace_period_seconds: gracePeriodSeconds,
       status: WebhookSecretStatus.Active,
+      algorithm,
       created_at: now,
       updated_at: now,
     };
@@ -147,7 +176,7 @@ export class WebhookSecretService {
 
     return {
       view: this.toPublicView(record),
-      initial_secret: secret,
+      initial_secret: initialSecret,
     };
   }
 
@@ -190,7 +219,17 @@ export class WebhookSecretService {
     }
 
     const now = new Date().toISOString();
-    const newSecret = this.generateSecret();
+    let newSecret: string;
+    let returnedSecret: string;
+
+    if (record.algorithm === "ed25519") {
+      const keys = this.generateEd25519KeyPair();
+      newSecret = keys.privateKey;
+      returnedSecret = keys.publicKey;
+    } else {
+      newSecret = this.generateSecret();
+      returnedSecret = newSecret;
+    }
     const effectiveGrace = gracePeriodSeconds ?? record.grace_period_seconds;
 
     const updated: WebhookSubscriberSecret = {
@@ -207,7 +246,7 @@ export class WebhookSecretService {
     return {
       subscriber_id: subscriberId,
       status: WebhookSecretStatus.Rotating,
-      new_secret: newSecret,
+      new_secret: returnedSecret,
       grace_period_seconds: effectiveGrace,
       pending_created_at: now,
     };
@@ -320,7 +359,8 @@ export class WebhookSecretService {
   public verifySignature(
     subscriberId: string,
     payload: Buffer | string,
-    signature: string
+    signature: string,
+    negotiatedAlgorithm: "hmac-sha256" | "ed25519" = "hmac-sha256"
   ): WebhookVerificationResult {
     const record = this.requireRecord(subscriberId);
 
@@ -332,36 +372,79 @@ export class WebhookSecretService {
       matched_secret: null,
     };
 
-    if (!signature || !signature.startsWith(SIGNATURE_PREFIX)) {
+    // If there is a mismatch between database algorithm and negotiated algorithm, it must fail.
+    if (effectiveRecord.algorithm !== negotiatedAlgorithm) {
+      if (negotiatedAlgorithm === "ed25519") {
+        this.dummyVerifyEd25519(payload);
+      } else {
+        this.dummyVerifyHmac(payload);
+      }
       return invalid;
     }
 
-    const incomingSig = Buffer.from(signature);
+    if (negotiatedAlgorithm === "hmac-sha256") {
+      if (!signature || !signature.startsWith(SIGNATURE_PREFIX)) {
+        return invalid;
+      }
 
-    // Check primary secret.
-    const primarySig = Buffer.from(
-      this.computeSignature(payload, effectiveRecord.primary_secret)
-    );
-    if (
-      incomingSig.length === primarySig.length &&
-      timingSafeEqual(incomingSig, primarySig)
-    ) {
-      return { valid: true, matched_secret: "primary" };
-    }
+      const incomingSig = Buffer.from(signature);
 
-    // Check pending secret (only during rotation window).
-    if (
-      effectiveRecord.status === WebhookSecretStatus.Rotating &&
-      effectiveRecord.pending_secret
-    ) {
-      const pendingSig = Buffer.from(
-        this.computeSignature(payload, effectiveRecord.pending_secret)
+      // Check primary secret.
+      const primarySig = Buffer.from(
+        this.computeSignature(payload, effectiveRecord.primary_secret)
       );
       if (
-        incomingSig.length === pendingSig.length &&
-        timingSafeEqual(incomingSig, pendingSig)
+        incomingSig.length === primarySig.length &&
+        timingSafeEqual(incomingSig, primarySig)
       ) {
-        return { valid: true, matched_secret: "pending" };
+        return { valid: true, matched_secret: "primary" };
+      }
+
+      // Check pending secret (only during rotation window).
+      if (
+        effectiveRecord.status === WebhookSecretStatus.Rotating &&
+        effectiveRecord.pending_secret
+      ) {
+        const pendingSig = Buffer.from(
+          this.computeSignature(payload, effectiveRecord.pending_secret)
+        );
+        if (
+          incomingSig.length === pendingSig.length &&
+          timingSafeEqual(incomingSig, pendingSig)
+        ) {
+          return { valid: true, matched_secret: "pending" };
+        }
+      }
+    } else if (negotiatedAlgorithm === "ed25519") {
+      // Validate that signature is a valid base64url string of 86 chars
+      if (!signature || !BASE64URL_REGEX.test(signature)) {
+        this.dummyVerifyEd25519(payload);
+        return invalid;
+      }
+
+      // Verify against primary key (which stores the private key PEM)
+      const primaryValid = this.verifyEd25519(
+        payload,
+        signature,
+        effectiveRecord.primary_secret
+      );
+      if (primaryValid) {
+        return { valid: true, matched_secret: "primary" };
+      }
+
+      // Verify against pending key (only during rotation window)
+      if (
+        effectiveRecord.status === WebhookSecretStatus.Rotating &&
+        effectiveRecord.pending_secret
+      ) {
+        const pendingValid = this.verifyEd25519(
+          payload,
+          signature,
+          effectiveRecord.pending_secret
+        );
+        if (pendingValid) {
+          return { valid: true, matched_secret: "pending" };
+        }
       }
     }
 
@@ -431,9 +514,134 @@ export class WebhookSecretService {
       has_pending_secret: record.pending_secret !== null,
       pending_created_at: record.pending_created_at,
       grace_period_seconds: record.grace_period_seconds,
+      algorithm: record.algorithm,
       created_at: record.created_at,
       updated_at: record.updated_at,
     };
+  }
+
+  // -------------------------------------------------------------------------
+  // Ed25519 & JWKS helpers
+  // -------------------------------------------------------------------------
+
+  /**
+   * Generates a new Ed25519 private/public key pair in PEM format.
+   */
+  public generateEd25519KeyPair(): { privateKey: string; publicKey: string } {
+    const { publicKey, privateKey } = generateKeyPairSync("ed25519");
+    return {
+      privateKey: privateKey.export({ type: "pkcs8", format: "pem" }) as string,
+      publicKey: publicKey.export({ type: "spki", format: "pem" }) as string,
+    };
+  }
+
+  /**
+   * Signs a payload using an Ed25519 private key in PEM format.
+   * Returns a base64url-encoded signature.
+   */
+  public signEd25519(payload: Buffer | string, privateKeyPem: string): string {
+    const privateKey = createPrivateKey(privateKeyPem);
+    const data = typeof payload === "string" ? Buffer.from(payload) : payload;
+    const signature = sign(null, data, privateKey);
+    return signature.toString("base64url");
+  }
+
+  /**
+   * Verifies an Ed25519 signature (base64url-encoded) against a PEM private key
+   * by extracting the public key.
+   */
+  public verifyEd25519(
+    payload: Buffer | string,
+    signatureBase64Url: string,
+    privateKeyPem: string
+  ): boolean {
+    try {
+      const privateKey = createPrivateKey(privateKeyPem);
+      const publicKey = createPublicKey(privateKey);
+      const data = typeof payload === "string" ? Buffer.from(payload) : payload;
+      const sigBuf = Buffer.from(signatureBase64Url, "base64url");
+      return verify(null, data, publicKey, sigBuf);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Runs a dummy Ed25519 verification to match execution time (timing-safe).
+   */
+  public dummyVerifyEd25519(payload: Buffer | string): boolean {
+    try {
+      const data = typeof payload === "string" ? Buffer.from(payload) : payload;
+      return verify(null, data, DUMMY_PUBLIC_KEY, DUMMY_SIGNATURE);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Runs a dummy HMAC verification to match execution time (timing-safe).
+   */
+  public dummyVerifyHmac(payload: Buffer | string): boolean {
+    const dummyHmac = createHmac("sha256", Buffer.from("dummy-secret"));
+    dummyHmac.update(typeof payload === "string" ? Buffer.from(payload) : payload);
+    const dummySig = dummyHmac.digest();
+    return timingSafeEqual(Buffer.alloc(dummySig.length), dummySig);
+  }
+
+  /**
+   * Exposes the active public key set in JWKS-style format.
+   */
+  public getActiveJWKs(): any[] {
+    const records = this.store._all();
+    const keys: any[] = [];
+
+    for (const record of records) {
+      if (record.algorithm !== "ed25519") {
+        continue;
+      }
+
+      // Export primary key
+      try {
+        const privateKey = createPrivateKey(record.primary_secret);
+        const publicKey = createPublicKey(privateKey);
+        const jwk = publicKey.export({ format: "jwk" });
+        keys.push({
+          kty: jwk.kty,
+          crv: jwk.crv,
+          x: jwk.x,
+          kid: record.subscriber_id,
+          use: "sig",
+          alg: "EdDSA",
+        });
+      } catch (err) {
+        // Ignore malformed keys
+      }
+
+      // Export pending key if rotating
+      const effectiveRecord = this.maybeExpirePending(record);
+      if (
+        effectiveRecord.status === WebhookSecretStatus.Rotating &&
+        effectiveRecord.pending_secret
+      ) {
+        try {
+          const privateKey = createPrivateKey(effectiveRecord.pending_secret);
+          const publicKey = createPublicKey(privateKey);
+          const jwk = publicKey.export({ format: "jwk" });
+          keys.push({
+            kty: jwk.kty,
+            crv: jwk.crv,
+            x: jwk.x,
+            kid: `${effectiveRecord.subscriber_id}:pending`,
+            use: "sig",
+            alg: "EdDSA",
+          });
+        } catch (err) {
+          // Ignore malformed keys
+        }
+      }
+    }
+
+    return keys;
   }
 }
 

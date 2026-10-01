@@ -14,7 +14,7 @@
 
 set -euo pipefail
 
-WASM_TARGET="wasm32-unknown-unknown"
+WASM_TARGET="wasm32v1-none"
 PACKAGE_NAME="quicklendx-contracts"
 WASM_PATH="target/${WASM_TARGET}/release/${PACKAGE_NAME//-/_}.wasm"
 SIZE_LIMIT_BYTES=$((256 * 1024))   # 256 KB

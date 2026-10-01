@@ -76,9 +76,9 @@ fn create_and_fund_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
     invoice_id
 }
@@ -236,7 +236,7 @@ fn test_check_overdue_invoices_skips_non_funded() {
         &String::from_str(&env, "Unfunded invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     env.ledger()
         .set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
@@ -338,7 +338,7 @@ fn test_check_invoice_expiration_returns_false_for_non_funded() {
         &String::from_str(&env, "Unfunded"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     env.ledger()
@@ -728,18 +728,18 @@ fn test_cleanup_expired_bids_integration() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // Place 3 bids at different times
-    let _bid1 = client.place_bid(&investor, &invoice_id, &1000, &1100);
+    let _bid1 = client.place_bid(&investor, &invoice_id, &1000, &1100, &BytesN::from_array(&env, &[0u8; 32]));
 
     env.ledger().set_timestamp(env.ledger().timestamp() + 86400); // +1 day
-    let _bid2 = client.place_bid(&investor, &invoice_id, &2000, &2200);
+    let _bid2 = client.place_bid(&investor, &invoice_id, &2000, &2200, &BytesN::from_array(&env, &[0u8; 32]));
 
     env.ledger()
         .set_timestamp(env.ledger().timestamp() + 86400 * 5); // +5 days (total 6 days)
-    let _bid3 = client.place_bid(&investor, &invoice_id, &3000, &3300);
+    let _bid3 = client.place_bid(&investor, &invoice_id, &3000, &3300, &BytesN::from_array(&env, &[0u8; 32]));
 
     // After 2 more days, bid 1 and 2 should be expired (7 days TTL)
     env.ledger()
@@ -781,10 +781,10 @@ fn test_cleanup_expired_bids_exact_boundary_and_off_by_one() {
         &String::from_str(&env, "TTL boundary invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &4000, &4300);
+    let bid_id = client.place_bid(&investor, &invoice_id, &4000, &4300, &BytesN::from_array(&env, &[0u8; 32]));
     let bid = client.get_bid(&bid_id).unwrap();
 
     env.ledger().set_timestamp(bid.expiration_timestamp);

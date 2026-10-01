@@ -51,6 +51,34 @@ Opt-out paths (no preferences row, `email_enabled = false`, `email_address = NUL
 
 ---
 
+## In-Memory Deduplication Cache
+
+An LRU cache with TTL sits in front of the database to avoid a SQLite query on every hot-path notification.
+
+| Env var                          | Default | Description                           |
+|----------------------------------|---------|---------------------------------------|
+| `MAX_NOTIFICATION_DEDUP_ENTRIES` | `10000` | Max cache entries before LRU eviction |
+| `NOTIFICATION_DEDUP_TTL_MS`     | `86400000` (24h) | Time-to-live for each entry |
+
+### Behaviour
+
+- **LRU eviction**: When the cache exceeds `MAX_NOTIFICATION_DEDUP_ENTRIES`, the least-recently-used entry is evicted.
+- **TTL expiry**: Entries older than `NOTIFICATION_DEDUP_TTL_MS` are removed lazily on `has()`.
+- **Eviction metric**: `notificationService.dedupCacheEvictions` exposes the total number of max-size evictions (planned for consumption by the `/metrics` endpoint in #1054).
+- **Not persisted**: The cache is in-memory only; durability is provided by the `notifications` table. A process restart resets the cache, which will be repopulated on the first DB-backed check.
+
+### Integration
+
+```typescript
+// In NotificationService.processNotification():
+// 1. Check in-memory cache (fastest path)
+// 2. Check SQLite if cache miss
+// 3. On confirmation of "sent" → populate cache
+// 4. On send failure → do NOT cache (retryable)
+```
+
+---
+
 ## User Notification Preferences
 
 Preferences are stored in the `user_notification_preferences` table (created by migration `v008`).
@@ -135,9 +163,13 @@ Both tables are created by migration `v008_create_notifications` (forward-only).
 
 ## Retry Behaviour
 
-A `failed` row is retried automatically the next time the same event is replayed (e.g., via the backfill/replay service). There is no built-in exponential back-off at the notification layer; back-off is the responsibility of the upstream event replay scheduler.
+A structured retry budget with circuit-breaker behavior is implemented around outbound notification delivery.
+- Transient SMTP failures are retried automatically with an exponential backoff and jittered window.
+- A `failed` row is marked as such only after the in-process retry budget is exhausted (permanent drop).
+- On a permanent drop, the failure is persisted to the audit log and surfaced as a `HIGH` severity alert via `alertRouter`.
+- After a permanent drop, the row is stored as `failed` and is retryable the next time the same event is replayed (e.g., via the backfill/replay service).
 
-To manually trigger a retry, replay the originating on-chain event through `EventProcessor.processEvent()`.
+To manually trigger a retry of a permanent drop, replay the originating on-chain event through `EventProcessor.processEvent()`.
 
 ---
 

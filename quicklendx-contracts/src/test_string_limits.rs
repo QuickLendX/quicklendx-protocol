@@ -6,10 +6,7 @@ use crate::{
     types::{InvoiceMetadata, LineItemRecord},
     QuickLendXContract, QuickLendXContractClient,
 };
-use soroban_sdk::{
-    testutils::Address as _,
-    Address, Env, String, Vec,
-};
+use soroban_sdk::{testutils::Address as _, Address, Env, String, Vec};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let env = Env::default();
@@ -18,11 +15,11 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     let business = Address::generate(&env);
-    
+
     client.set_admin(&admin);
     client.submit_kyc_application(&business, &String::from_str(&env, "KYC"));
     client.verify_business(&admin, &business);
-    
+
     (env, client, admin, business)
 }
 
@@ -57,7 +54,7 @@ fn test_metadata_customer_name_limits() {
     let (env, client, _admin, business) = setup();
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-    
+
     let invoice_id = client.upload_invoice(
         &business,
         &1000,
@@ -66,6 +63,7 @@ fn test_metadata_customer_name_limits() {
         &String::from_str(&env, "test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     // At limit (150 bytes)
@@ -76,20 +74,30 @@ fn test_metadata_customer_name_limits() {
         line_items: valid_line_items(&env),
         notes: String::from_str(&env, "Notes"),
     };
-    assert!(client.try_update_invoice_metadata(&invoice_id, &meta).is_ok());
+    assert!(client
+        .try_update_invoice_metadata(&invoice_id, &meta)
+        .is_ok());
 
     // Over limit (151 bytes)
     meta.customer_name = create_string(&env, 151);
-    let err = client.try_update_invoice_metadata(&invoice_id, &meta).unwrap_err().unwrap();
+    let err = client
+        .try_update_invoice_metadata(&invoice_id, &meta)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::InvalidDescription);
 
     // Unicode strings at boundary limit
     meta.customer_name = create_unicode_string(&env, 150);
-    assert!(client.try_update_invoice_metadata(&invoice_id, &meta).is_ok());
+    assert!(client
+        .try_update_invoice_metadata(&invoice_id, &meta)
+        .is_ok());
 
     // Empty string rejection
     meta.customer_name = String::from_str(&env, "");
-    let err = client.try_update_invoice_metadata(&invoice_id, &meta).unwrap_err().unwrap();
+    let err = client
+        .try_update_invoice_metadata(&invoice_id, &meta)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::InvalidDescription);
 }
 
@@ -98,7 +106,7 @@ fn test_metadata_customer_address_limits() {
     let (env, client, _admin, business) = setup();
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-    
+
     let invoice_id = client.upload_invoice(
         &business,
         &1000,
@@ -107,6 +115,7 @@ fn test_metadata_customer_address_limits() {
         &String::from_str(&env, "test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     let mut meta = InvoiceMetadata {
@@ -116,11 +125,16 @@ fn test_metadata_customer_address_limits() {
         line_items: valid_line_items(&env),
         notes: String::from_str(&env, "Notes"),
     };
-    assert!(client.try_update_invoice_metadata(&invoice_id, &meta).is_ok());
+    assert!(client
+        .try_update_invoice_metadata(&invoice_id, &meta)
+        .is_ok());
 
     // Over limit (301 bytes)
     meta.customer_address = create_string(&env, 301);
-    let err = client.try_update_invoice_metadata(&invoice_id, &meta).unwrap_err().unwrap();
+    let err = client
+        .try_update_invoice_metadata(&invoice_id, &meta)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::InvalidDescription);
 }
 
@@ -129,7 +143,7 @@ fn test_metadata_tax_id_limits() {
     let (env, client, _admin, business) = setup();
     let currency = Address::generate(&env);
     let due_date = env.ledger().timestamp() + 86400;
-    
+
     let invoice_id = client.upload_invoice(
         &business,
         &1000,
@@ -138,6 +152,7 @@ fn test_metadata_tax_id_limits() {
         &String::from_str(&env, "test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     let mut meta = InvoiceMetadata {
@@ -147,10 +162,15 @@ fn test_metadata_tax_id_limits() {
         line_items: valid_line_items(&env),
         notes: String::from_str(&env, "Notes"),
     };
-    assert!(client.try_update_invoice_metadata(&invoice_id, &meta).is_ok());
+    assert!(client
+        .try_update_invoice_metadata(&invoice_id, &meta)
+        .is_ok());
 
     // Over limit (51 bytes)
     meta.tax_id = create_string(&env, 51);
-    let err = client.try_update_invoice_metadata(&invoice_id, &meta).unwrap_err().unwrap();
+    let err = client
+        .try_update_invoice_metadata(&invoice_id, &meta)
+        .unwrap_err()
+        .unwrap();
     assert_eq!(err, QuickLendXError::InvalidDescription);
 }

@@ -5,6 +5,7 @@ import { labelRecord } from "../../services/versioningService";
 import { freshnessService } from "../../services/freshnessService";
 import { parsePaginationParams, PaginationError } from "../../utils/pagination";
 import { settlementOrchestrator } from "../../services/settlementOrchestrator";
+import { assertSettlementId, assertInvoiceId } from "../../lib/entityId";
 
 export const MOCK_SETTLEMENTS: any[] = [
   labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
@@ -39,7 +40,10 @@ export const getSettlements = async (
       status?: SettlementStatus;
     } = {};
 
-    if (invoice_id) filters.invoice_id = invoice_id as string;
+    if (invoice_id) {
+      filters.invoice_id = invoice_id as string;
+      assertInvoiceId(invoice_id as string);
+    }
 
     if (status) filters.status = status as SettlementStatus;
 
@@ -102,11 +106,14 @@ export const getSettlementById = async (
   next: NextFunction
 ) => {
   try {
-   const id = Array.isArray(req.params.id)
-  ? req.params.id[0]
-  : req.params.id;
+    const rawId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    assertSettlementId(rawId);
+    // Use the same whitespace-normalized identifier that the assertion checks.
+    const id = rawId.trim();
 
-const settlement = settlementOrchestrator.getById(id);
+    const settlement = settlementOrchestrator.getById(id);
 
     if (!settlement) {
       return res.status(404).json({

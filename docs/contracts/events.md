@@ -247,8 +247,10 @@ This document is the canonical reference for every Soroban event emitted by Quic
 #### `aud_qry`
 
 ```
-(query_type: String, result_count: u32)
+(query_type: OpType, result_count: u32)
 ```
+
+`OpType` is a `#[contracttype]` enum defined in `audit.rs` with variants: `InvoiceCreated`, `InvoiceUploaded`, `InvoiceVerified`, `InvoiceFunded`, `InvoicePaid`, `InvoiceDefaulted`, `InvoiceStatusChanged`, `InvoiceRated`, `BidPlaced`, `BidAccepted`, `BidWithdrawn`, `EscrowCreated`, `EscrowReleased`, `EscrowRefunded`, `PaymentProcessed`, `SettlementCompleted`.
 
 ---
 

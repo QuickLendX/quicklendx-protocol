@@ -70,9 +70,8 @@ fn iso8601_from_unix_timestamp(env: &Env, timestamp: u64) -> String {
     let minute = (secs_of_day % 3_600) / 60;
     let second = secs_of_day % 60;
 
-    let rendered: RustString = format!(
-        "{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z"
-    );
+    let rendered: RustString =
+        format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}Z");
     String::from_str(env, &rendered)
 }
 

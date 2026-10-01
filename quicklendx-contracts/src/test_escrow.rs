@@ -103,6 +103,7 @@ fn create_verified_invoice(
         &String::from_str(env, "Test Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
     invoice_id
@@ -116,7 +117,13 @@ fn place_test_bid(
     bid_amount: i128,
     expected_return: i128,
 ) -> BytesN<32> {
-    client.place_bid(investor, invoice_id, &bid_amount, &expected_return)
+    client.place_bid(
+        investor,
+        invoice_id,
+        &bid_amount,
+        &expected_return,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    )
 }
 
 // ============================================================================
@@ -172,10 +179,17 @@ fn test_only_verified_invoice_can_be_funded() {
         &String::from_str(&env, "Unverified Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     // Attempt to place bid on unverified invoice - should fail
-    let result = client.try_place_bid(&investor, &invoice_id, &amount, &(amount + 1000));
+    let result = client.try_place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 1000),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     assert!(
         result.is_err(),
         "Should not be able to bid on unverified invoice"
@@ -185,7 +199,13 @@ fn test_only_verified_invoice_can_be_funded() {
     client.verify_invoice(&invoice_id);
 
     // Now bidding should work
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1000));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 1000),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // Accepting bid should work on verified invoice
     let result = client.try_accept_bid(&invoice_id, &bid_id);
@@ -298,7 +318,13 @@ fn test_rejects_double_accept() {
     token_client.approve(&investor2, &contract_id, &initial_balance, &expiration);
 
     // Try to place another bid on funded invoice
-    let result = client.try_place_bid(&investor2, &invoice_id, &amount, &(amount + 500));
+    let result = client.try_place_bid(
+        &investor2,
+        &invoice_id,
+        &amount,
+        &(amount + 500),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     assert!(
         result.is_err(),
         "Should not be able to bid on funded invoice"
@@ -731,6 +757,8 @@ fn test_release_escrow_funds_success() {
     let escrow_before = client.get_escrow_details(&invoice_id);
     assert_eq!(escrow_before.status, EscrowStatus::Held);
 
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
     assert!(result.is_ok(), "release_escrow_funds should succeed");
 
@@ -764,6 +792,8 @@ fn test_release_escrow_funds_idempotency_blocked() {
     let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1000);
 
     client.accept_bid(&invoice_id, &bid_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let result = client.try_release_escrow_funds(&invoice_id);
@@ -1559,6 +1589,155 @@ fn test_accept_bid_and_fund_partial_allowance_leaves_state_unchanged() {
     assert!(client.try_get_escrow_details(&invoice_id).is_err());
 }
 
+/// accept_bid_and_fund with origination fee succeeds and escrow amount
+/// correctly reflects the fee-adjusted value (not the full bid amount).
+///
+/// Ensures that the single-transfer approach correctly funds the escrow
+/// and collects the fee without leaving stale state or double-spending.
+#[test]
+fn test_accept_bid_and_fund_with_origination_fee_succeeds() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    let amount = 10_000i128;
+    let fee_bps: u32 = 500; // 5%
+    let expected_fee = amount * (fee_bps as i128) / 10_000; // 500
+    let expected_escrow = amount - expected_fee; // 9500
+
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    sac_client.mint(&business, &(amount * 10));
+    sac_client.mint(&investor, &(amount * 2)); // enough for the full bid amount
+    let expiration = env.ledger().sequence() + 10_000;
+    token_client.approve(&business, &contract_id, &(amount * 10), &expiration);
+    token_client.approve(&investor, &contract_id, &(amount * 10), &expiration);
+
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "fee test invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &Some(fee_bps),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 500);
+
+    let investor_before = token_client.balance(&investor);
+    let contract_before = token_client.balance(&contract_id);
+
+    let escrow_id = client.accept_bid_and_fund(&invoice_id, &bid_id);
+
+    let investor_after = token_client.balance(&investor);
+    let contract_after = token_client.balance(&contract_id);
+
+    // Total amount transferred = full bid amount
+    assert_eq!(investor_before - investor_after, amount);
+    assert_eq!(contract_after - contract_before, amount);
+
+    // Escrow record reflects the fee-adjusted amount
+    let escrow = client.get_escrow_details(&invoice_id);
+    assert_eq!(escrow.amount, expected_escrow);
+    assert_eq!(escrow.status, EscrowStatus::Held);
+
+    // Invoice is Funded with the full bid amount
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Funded);
+    assert_eq!(invoice.funded_amount, amount);
+    assert_eq!(invoice.investor, Some(investor.clone()));
+
+    // Bid is Accepted
+    let bid = client.get_bid(&bid_id).unwrap();
+    assert_eq!(bid.status, BidStatus::Accepted);
+
+    // Investment exists with the full amount
+    let investments = client.get_investments_by_investor(&investor);
+    assert_eq!(investments.len(), 1);
+    assert_eq!(investments.get_unchecked(0).amount, amount);
+}
+
+/// accept_bid_and_fund with origination fee fails cleanly when the investor
+/// has insufficient balance for the full bid amount.
+#[test]
+fn test_accept_bid_and_fund_origination_fee_insufficient_balance() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+
+    let business = setup_verified_business(&env, &client, &admin);
+    let investor = setup_verified_investor(&env, &client, 50_000);
+
+    let amount = 10_000i128;
+    let fee_bps: u32 = 500; // 5%
+
+    let token_admin = Address::generate(&env);
+    let currency = env
+        .register_stellar_asset_contract_v2(token_admin.clone())
+        .address();
+    let token_client = token::Client::new(&env, &currency);
+    let sac_client = token::StellarAssetClient::new(&env, &currency);
+    sac_client.mint(&business, &(amount * 10));
+    // Investor only has fee amount, NOT the full bid amount
+    sac_client.mint(&investor, &(amount - 1));
+    let expiration = env.ledger().sequence() + 10_000;
+    token_client.approve(&business, &contract_id, &(amount * 10), &expiration);
+    token_client.approve(&investor, &contract_id, &(amount * 10), &expiration);
+
+    let due_date = env.ledger().timestamp() + 86400;
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &String::from_str(&env, "fee fail test"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &Some(fee_bps),
+    );
+    client.verify_invoice(&invoice_id);
+
+    let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 500);
+
+    let investor_before = token_client.balance(&investor);
+    let contract_before = token_client.balance(&contract_id);
+
+    let result = client.try_accept_bid_and_fund(&invoice_id, &bid_id);
+    assert!(
+        result.is_err(),
+        "must fail with insufficient balance for the full bid amount"
+    );
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::InsufficientFunds,
+    );
+
+    // No funds moved.
+    assert_eq!(token_client.balance(&investor), investor_before);
+    assert_eq!(token_client.balance(&contract_id), contract_before);
+
+    // Invoice untouched.
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.status, InvoiceStatus::Verified);
+    assert_eq!(invoice.funded_amount, 0);
+    assert!(invoice.investor.is_none());
+
+    // Bid untouched.
+    assert_eq!(client.get_bid(&bid_id).unwrap().status, BidStatus::Placed);
+
+    // No orphan escrow.
+    assert!(client.try_get_escrow_details(&invoice_id).is_err());
+}
+
 /// After a failed accept_bid_and_fund, the bid can be retried once the
 /// investor provides sufficient balance and allowance. No permanent corruption.
 #[test]
@@ -1785,19 +1964,31 @@ fn test_release_escrow_funds_insufficient_contract_balance() {
 
     // Fund the invoice (creates escrow and moves tokens to contract)
     client.accept_bid_and_fund(&invoice_id, &bid_id);
-    assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Funded);
+    assert_eq!(
+        client.get_invoice(&invoice_id).status,
+        InvoiceStatus::Funded
+    );
     assert_eq!(token_client.balance(&contract_id), amount);
 
     // Drain the contract's token balance to simulate an invariant violation.
     let contract_balance = token_client.balance(&contract_id);
     sac_client.burn(&contract_id, &contract_balance);
-    assert_eq!(token_client.balance(&contract_id), 0, "Contract balance should be zero after burn");
+    assert_eq!(
+        token_client.balance(&contract_id),
+        0,
+        "Contract balance should be zero after burn"
+    );
 
     let business_balance_before = token_client.balance(&business);
 
     // Release should fail because the contract has no balance to send.
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
-    assert!(result.is_err(), "release_escrow_funds must fail when contract has no balance");
+    assert!(
+        result.is_err(),
+        "release_escrow_funds must fail when contract has no balance"
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::InsufficientFunds,
@@ -1813,7 +2004,11 @@ fn test_release_escrow_funds_insufficient_contract_balance() {
 
     // Escrow status must remain Held (retryable).
     let escrow = client.get_escrow_details(&invoice_id);
-    assert_eq!(escrow.status, EscrowStatus::Held, "Escrow must remain Held after failed release");
+    assert_eq!(
+        escrow.status,
+        EscrowStatus::Held,
+        "Escrow must remain Held after failed release"
+    );
 
     // Invoice must remain Funded.
     let invoice = client.get_invoice(&invoice_id);
@@ -1852,6 +2047,8 @@ fn test_release_escrow_funds_retry_after_balance_restored() {
     sac_client.burn(&contract_id, &contract_balance);
 
     // First release attempt fails.
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let result = client.try_release_escrow_funds(&invoice_id);
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -1865,7 +2062,10 @@ fn test_release_escrow_funds_retry_after_balance_restored() {
 
     // Second release attempt succeeds.
     let result = client.try_release_escrow_funds(&invoice_id);
-    assert!(result.is_ok(), "release should succeed after balance restored");
+    assert!(
+        result.is_ok(),
+        "release should succeed after balance restored"
+    );
 
     // Business received funds.
     assert_eq!(
@@ -1913,7 +2113,10 @@ fn test_query_details_status_match_held() {
 
     assert_eq!(details.status, EscrowStatus::Held);
     assert_eq!(status, EscrowStatus::Held);
-    assert_eq!(details.status, status, "details.status must equal get_escrow_status()");
+    assert_eq!(
+        details.status, status,
+        "details.status must equal get_escrow_status()"
+    );
 }
 
 /// `get_escrow_details().status` and `get_escrow_status()` agree in Released state.
@@ -1930,6 +2133,8 @@ fn test_query_details_status_match_released() {
     let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
     let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 1_000);
     client.accept_bid(&invoice_id, &bid_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let details = client.get_escrow_details(&invoice_id);
@@ -1937,7 +2142,10 @@ fn test_query_details_status_match_released() {
 
     assert_eq!(details.status, EscrowStatus::Released);
     assert_eq!(status, EscrowStatus::Released);
-    assert_eq!(details.status, status, "details.status must equal get_escrow_status()");
+    assert_eq!(
+        details.status, status,
+        "details.status must equal get_escrow_status()"
+    );
 }
 
 /// `get_escrow_details().status` and `get_escrow_status()` agree in Refunded state.
@@ -1961,7 +2169,10 @@ fn test_query_details_status_match_refunded() {
 
     assert_eq!(details.status, EscrowStatus::Refunded);
     assert_eq!(status, EscrowStatus::Refunded);
-    assert_eq!(details.status, status, "details.status must equal get_escrow_status()");
+    assert_eq!(
+        details.status, status,
+        "details.status must equal get_escrow_status()"
+    );
 }
 
 /// Immutable fields (escrow_id, invoice_id, investor, business, amount, currency,
@@ -1981,16 +2192,27 @@ fn test_query_immutable_fields_stable_across_release() {
     client.accept_bid(&invoice_id, &bid_id);
 
     let before = client.get_escrow_details(&invoice_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
     let after = client.get_escrow_details(&invoice_id);
 
-    assert_eq!(before.escrow_id, after.escrow_id, "escrow_id must not change");
-    assert_eq!(before.invoice_id, after.invoice_id, "invoice_id must not change");
+    assert_eq!(
+        before.escrow_id, after.escrow_id,
+        "escrow_id must not change"
+    );
+    assert_eq!(
+        before.invoice_id, after.invoice_id,
+        "invoice_id must not change"
+    );
     assert_eq!(before.investor, after.investor, "investor must not change");
     assert_eq!(before.business, after.business, "business must not change");
     assert_eq!(before.amount, after.amount, "amount must not change");
     assert_eq!(before.currency, after.currency, "currency must not change");
-    assert_eq!(before.created_at, after.created_at, "created_at must not change");
+    assert_eq!(
+        before.created_at, after.created_at,
+        "created_at must not change"
+    );
     assert_ne!(before.status, after.status, "only status should differ");
 }
 
@@ -2031,8 +2253,14 @@ fn test_query_missing_record_both_surfaces_return_storage_key_not_found() {
 
     let ghost_id = BytesN::from_array(&env, &[0xAB; 32]);
 
-    let details_err = client.try_get_escrow_details(&ghost_id).unwrap_err().unwrap();
-    let status_err = client.try_get_escrow_status(&ghost_id).unwrap_err().unwrap();
+    let details_err = client
+        .try_get_escrow_details(&ghost_id)
+        .unwrap_err()
+        .unwrap();
+    let status_err = client
+        .try_get_escrow_status(&ghost_id)
+        .unwrap_err()
+        .unwrap();
 
     assert_eq!(
         details_err,
@@ -2058,15 +2286,30 @@ fn test_query_missing_record_error_is_deterministic() {
 
     let ghost_id = BytesN::from_array(&env, &[0xFF; 32]);
 
-    let err1 = client.try_get_escrow_details(&ghost_id).unwrap_err().unwrap();
-    let err2 = client.try_get_escrow_details(&ghost_id).unwrap_err().unwrap();
-    let err3 = client.try_get_escrow_status(&ghost_id).unwrap_err().unwrap();
-    let err4 = client.try_get_escrow_status(&ghost_id).unwrap_err().unwrap();
+    let err1 = client
+        .try_get_escrow_details(&ghost_id)
+        .unwrap_err()
+        .unwrap();
+    let err2 = client
+        .try_get_escrow_details(&ghost_id)
+        .unwrap_err()
+        .unwrap();
+    let err3 = client
+        .try_get_escrow_status(&ghost_id)
+        .unwrap_err()
+        .unwrap();
+    let err4 = client
+        .try_get_escrow_status(&ghost_id)
+        .unwrap_err()
+        .unwrap();
 
     assert_eq!(err1, QuickLendXError::StorageKeyNotFound);
     assert_eq!(err1, err2, "repeated calls must return the same error");
     assert_eq!(err3, QuickLendXError::StorageKeyNotFound);
-    assert_eq!(err3, err4, "repeated status calls must return the same error");
+    assert_eq!(
+        err3, err4,
+        "repeated status calls must return the same error"
+    );
 }
 
 /// Querying an invoice ID that exists but has no escrow also returns
@@ -2084,8 +2327,14 @@ fn test_query_verified_invoice_without_escrow_returns_storage_key_not_found() {
     // Invoice is created and verified but never funded — no escrow exists.
     let invoice_id = create_verified_invoice(&env, &client, &business, amount, &currency);
 
-    let details_err = client.try_get_escrow_details(&invoice_id).unwrap_err().unwrap();
-    let status_err = client.try_get_escrow_status(&invoice_id).unwrap_err().unwrap();
+    let details_err = client
+        .try_get_escrow_details(&invoice_id)
+        .unwrap_err()
+        .unwrap();
+    let status_err = client
+        .try_get_escrow_status(&invoice_id)
+        .unwrap_err()
+        .unwrap();
 
     assert_eq!(details_err, QuickLendXError::StorageKeyNotFound);
     assert_eq!(status_err, QuickLendXError::StorageKeyNotFound);
@@ -2142,6 +2391,8 @@ fn test_query_independent_escrows_do_not_cross_contaminate() {
     client.accept_bid(&invoice_b, &bid_b);
 
     // Release escrow A only.
+    client.approve_early_escrow_release(&invoice_a, &business);
+    client.approve_early_escrow_release(&invoice_a, &investor);
     client.release_escrow_funds(&invoice_a);
 
     let escrow_a = client.get_escrow_details(&invoice_a);
@@ -2151,7 +2402,11 @@ fn test_query_independent_escrows_do_not_cross_contaminate() {
 
     assert_eq!(escrow_a.status, EscrowStatus::Released);
     assert_eq!(status_a, EscrowStatus::Released);
-    assert_eq!(escrow_b.status, EscrowStatus::Held, "escrow B must stay Held");
+    assert_eq!(
+        escrow_b.status,
+        EscrowStatus::Held,
+        "escrow B must stay Held"
+    );
     assert_eq!(status_b, EscrowStatus::Held);
 
     assert_ne!(escrow_a.invoice_id, escrow_b.invoice_id);

@@ -106,10 +106,17 @@ fn create_funded_invoice(
         &String::from_str(env, "Default matrix invoice"),
         &crate::invoice::InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 1_000),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
 
     (invoice_id, business, investor, amount, currency)
@@ -344,7 +351,11 @@ fn prepare_case(
     case: MatrixCase,
 ) {
     if case.settlement_finalized {
-        client.settle_invoice(invoice_id, &amount);
+        client.settle_invoice(
+            invoice_id,
+            &amount,
+            &client.get_investment(invoice_id).unwrap(),
+        );
     }
 
     set_invoice_status_for_case(
@@ -387,14 +398,7 @@ fn test_default_finality_matrix_matches_contract_behavior() {
         let (invoice_id, _business, investor, amount, _currency) =
             create_funded_invoice(&env, &client, &admin);
 
-        prepare_case(
-            &env,
-            &client,
-            &invoice_id,
-            &investor,
-            amount,
-            case,
-        );
+        prepare_case(&env, &client, &invoice_id, &investor, amount, case);
 
         let invoice_before = client.get_invoice(&invoice_id);
         let finalized_before = is_invoice_finalized_via_module(&env, &client.address, &invoice_id);

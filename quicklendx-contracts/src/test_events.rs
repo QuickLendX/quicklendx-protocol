@@ -25,13 +25,12 @@ use super::*;
 use crate::audit::{AuditOperationFilter, AuditQueryFilter};
 use crate::errors::QuickLendXError;
 use crate::events::{
-    TOPIC_BID_ACCEPTED, TOPIC_BID_EXPIRED, TOPIC_BID_PLACED,
-    TOPIC_BID_WITHDRAWN, TOPIC_DISPUTE_CREATED, TOPIC_DISPUTE_RESOLVED,
-    TOPIC_DISPUTE_UNDER_REVIEW, TOPIC_ESCROW_CREATED, TOPIC_ESCROW_REFUNDED,
-    TOPIC_ESCROW_RELEASED, TOPIC_INVOICE_CANCELLED, TOPIC_INVOICE_DEFAULTED,
-    TOPIC_INVOICE_EXPIRED, TOPIC_INVOICE_FUNDED, TOPIC_INVOICE_SETTLED,
-    TOPIC_INVOICE_SETTLED_FINAL, TOPIC_INVOICE_UPLOADED, TOPIC_INVOICE_VERIFIED,
-    TOPIC_PARTIAL_PAYMENT, TOPIC_PAYMENT_RECORDED,
+    TOPIC_BID_ACCEPTED, TOPIC_BID_EXPIRED, TOPIC_BID_PLACED, TOPIC_BID_WITHDRAWN,
+    TOPIC_DISPUTE_CREATED, TOPIC_DISPUTE_REJECTED, TOPIC_DISPUTE_RESOLVED,
+    TOPIC_DISPUTE_UNDER_REVIEW, TOPIC_ESCROW_CREATED, TOPIC_ESCROW_REFUNDED, TOPIC_ESCROW_RELEASED,
+    TOPIC_INVOICE_CANCELLED, TOPIC_INVOICE_DEFAULTED, TOPIC_INVOICE_EXPIRED, TOPIC_INVOICE_FUNDED,
+    TOPIC_INVOICE_SETTLED, TOPIC_INVOICE_SETTLED_FINAL, TOPIC_INVOICE_UPLOADED,
+    TOPIC_INVOICE_VERIFIED, TOPIC_PARTIAL_PAYMENT, TOPIC_PAYMENT_RECORDED,
 };
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::payments::EscrowStatus;
@@ -111,6 +110,7 @@ fn upload_invoice(
         &String::from_str(env, desc),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     (id, due)
 }
@@ -135,7 +135,11 @@ fn latest_event_data(env: &Env, topic_str: &str) -> Map<Symbol, Val> {
             }
         }
     }
-    panic!("topic {:?} not found in {} events", topic_str, all.events().len());
+    panic!(
+        "topic {:?} not found in {} events",
+        topic_str,
+        all.events().len()
+    );
 }
 
 /// Extract a field from an event data map by field name.
@@ -144,7 +148,9 @@ where
     T: TryFromVal<Env, Val>,
 {
     let key = Symbol::new(env, field);
-    let val = map.get(key).unwrap_or_else(|| panic!("field '{}' not found in event data", field));
+    let val = map
+        .get(key)
+        .unwrap_or_else(|| panic!("field '{}' not found in event data", field));
     T::try_from_val(env, &val).unwrap_or_else(|_| panic!("failed to decode field '{}'", field))
 }
 
@@ -162,7 +168,11 @@ fn latest_payload_val(env: &Env, topic_str: &str) -> Val {
             }
         }
     }
-    panic!("topic {:?} not found in {} events", topic_str, all.events().len());
+    panic!(
+        "topic {:?} not found in {} events",
+        topic_str,
+        all.events().len()
+    );
 }
 
 fn count_events_with_topic(env: &Env, topic_str: &str) -> usize {
@@ -232,6 +242,7 @@ fn test_admin_update_invoice_status_requires_configured_admin() {
         &String::from_str(&env, "missing admin"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     let result = client.try_update_invoice_status(&id, &InvoiceStatus::Verified);
@@ -265,6 +276,7 @@ fn test_invoice_uploaded_field_order() {
         &String::from_str(&env, "upload field order"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     let p: InvoiceUploaded = latest_payload(&env, TOPIC_INVOICE_UPLOADED);
@@ -375,7 +387,13 @@ fn test_invoice_defaulted_field_order() {
 
     let (id, due) = upload_invoice(&env, &client, &biz, &currency, "default field order");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     let ts = due + 1;
@@ -504,7 +522,13 @@ fn test_invoice_settled_field_order() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "settle field order");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     let ts = env.ledger().timestamp() + 1;
@@ -518,6 +542,12 @@ fn test_invoice_settled_field_order() {
     assert!(p.investor_return >= 0);
     assert!(p.platform_fee >= 0);
     assert_eq!(p.timestamp, ts);
+    assert_eq!(p.amount, EXP_RETURN, "amount must equal total settled");
+    assert_eq!(
+        p.ledger,
+        env.ledger().sequence(),
+        "ledger sequence must be set"
+    );
 }
 
 // ============================================================================
@@ -569,7 +599,13 @@ fn test_partial_payment_field_order() {
         "partial payment field order",
     );
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     let pay_amount = EXP_RETURN / 2;
@@ -605,7 +641,13 @@ fn test_bid_placed_field_order() {
 
     let ts = 100u64;
     env.ledger().set_timestamp(ts);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     let p: BidPlaced = latest_payload(&env, TOPIC_BID_PLACED);
     assert_eq!(p.bid_id, bid_id);
@@ -634,7 +676,13 @@ fn test_bid_accepted_field_order() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "bid accepted field order");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     let ts = 200u64;
     env.ledger().set_timestamp(ts);
@@ -667,7 +715,13 @@ fn test_bid_withdrawn_field_order() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "bid withdraw field order");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     let ts = 120u64;
     env.ledger().set_timestamp(ts);
@@ -700,7 +754,13 @@ fn test_bid_expired_field_order() {
     client.verify_invoice(&id);
     client.set_bid_ttl_days(&1u64); // short TTL (admin mock)
     let placed_ts = env.ledger().timestamp();
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     let expiry = crate::bid::Bid::default_expiration(placed_ts);
 
     // Advance past expiry
@@ -732,7 +792,13 @@ fn test_escrow_created_field_order() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "escrow created field order");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     let escrow = client.get_escrow_details(&id);
@@ -767,10 +833,18 @@ fn test_escrow_released_field_order() {
         "escrow released field order",
     );
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     let escrow = client.get_escrow_details(&id);
+    client.approve_early_escrow_release(&id, &biz);
+    client.approve_early_escrow_release(&id, &inv);
     client.release_escrow_funds(&id);
 
     let p: EscrowReleased = latest_payload(&env, TOPIC_ESCROW_RELEASED);
@@ -798,7 +872,13 @@ fn test_escrow_refunded_field_order_on_cancellation() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "escrow refund field order");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     let escrow = client.get_escrow_details(&id);
@@ -829,7 +909,13 @@ fn test_dispute_lifecycle_field_orders() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "dispute field order");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     // DisputeCreated
@@ -980,7 +1066,13 @@ fn test_event_ordering_across_lifecycle() {
 
     // T=30: bid
     env.ledger().set_timestamp(30);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // T=40: accept -> escrow created
     env.ledger().set_timestamp(40);
@@ -1021,7 +1113,13 @@ fn test_funds_locked_event_schema() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "funds locked schema");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     // FundsLocked == EscrowCreated; topic is TOPIC_ESCROW_CREATED
@@ -1053,7 +1151,13 @@ fn test_loan_settled_event_schema() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "loan settled schema");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     let ts = env.ledger().timestamp() + 1;
@@ -1065,9 +1169,18 @@ fn test_loan_settled_event_schema() {
     assert_eq!(p.invoice_id, id, "invoice_id mismatch");
     assert_eq!(p.business, biz, "business mismatch");
     assert_eq!(p.investor, inv, "investor mismatch");
-    assert!(p.investor_return >= 0, "investor_return must be non-negative");
+    assert!(
+        p.investor_return >= 0,
+        "investor_return must be non-negative"
+    );
     assert!(p.platform_fee >= 0, "platform_fee must be non-negative");
     assert_eq!(p.timestamp, ts, "timestamp mismatch");
+    assert_eq!(p.amount, EXP_RETURN, "amount must equal total settled");
+    assert_eq!(
+        p.ledger,
+        env.ledger().sequence(),
+        "ledger sequence must be set"
+    );
 }
 
 // ============================================================================
@@ -1089,7 +1202,13 @@ fn test_dispute_opened_event_schema() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "dispute opened schema");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     let reason = String::from_str(&env, "REASON_CODE_001");
@@ -1132,7 +1251,13 @@ fn test_no_events_on_failed_bid_placement() {
     let event_count_before = env.events().all().events().len();
 
     // Attempt to place a bid with invalid amount (0) — must panic/fail
-    let result = client.try_place_bid(&inv, &id, &0i128, &EXP_RETURN);
+    let result = client.try_place_bid(
+        &inv,
+        &id,
+        &0i128,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     assert!(result.is_err(), "zero-amount bid must fail");
 
     // No new events should have been emitted
@@ -1157,16 +1282,17 @@ fn test_no_events_on_duplicate_dispute() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "no dup dispute events");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     let reason = String::from_str(&env, "First dispute");
-    client.create_dispute(
-        &id,
-        &biz,
-        &reason,
-        &String::from_str(&env, "Evidence A"),
-    );
+    client.create_dispute(&id, &biz, &reason, &String::from_str(&env, "Evidence A"));
 
     let event_count_after_first = env.events().all().events().len();
 
@@ -1201,7 +1327,13 @@ fn test_no_events_on_cancel_funded_invoice() {
 
     let (id, _) = upload_invoice(&env, &client, &biz, &currency, "no cancel funded");
     client.verify_invoice(&id);
-    let bid_id = client.place_bid(&inv, &id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&id, &bid_id);
 
     let event_count_funded = env.events().all().events().len();
@@ -1227,6 +1359,7 @@ fn test_topic_constants_include_funded_and_dispute() {
     assert_eq!(TOPIC_DISPUTE_CREATED, "dispute_created");
     assert_eq!(TOPIC_DISPUTE_UNDER_REVIEW, "dispute_under_review");
     assert_eq!(TOPIC_DISPUTE_RESOLVED, "dispute_resolved");
+    assert_eq!(TOPIC_DISPUTE_REJECTED, "dispute_rejected");
 }
 
 // ============================================================================
@@ -1254,6 +1387,7 @@ fn test_invoice_events_emit_correct_topics_and_payloads() {
         &String::from_str(&env, "Invoice event test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     let p_up: InvoiceUploaded = latest_payload(&env, TOPIC_INVOICE_UPLOADED);
@@ -1306,12 +1440,19 @@ fn test_bid_placed_and_withdrawn_events_emit_correct_payloads() {
         &String::from_str(&env, "Bid events test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
     let placed_ts = 100u64;
     env.ledger().set_timestamp(placed_ts);
-    let bid_id = client.place_bid(&investor, &invoice_id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     let p_bid: BidPlaced = latest_payload(&env, TOPIC_BID_PLACED);
     assert_eq!(p_bid.bid_id, bid_id);
@@ -1320,7 +1461,10 @@ fn test_bid_placed_and_withdrawn_events_emit_correct_payloads() {
     assert_eq!(p_bid.bid_amount, INV_AMOUNT);
     assert_eq!(p_bid.expected_return, EXP_RETURN);
     assert_eq!(p_bid.timestamp, placed_ts);
-    assert_eq!(p_bid.expiration_timestamp, crate::bid::Bid::default_expiration(placed_ts));
+    assert_eq!(
+        p_bid.expiration_timestamp,
+        crate::bid::Bid::default_expiration(placed_ts)
+    );
 
     let withdraw_ts = 120u64;
     env.ledger().set_timestamp(withdraw_ts);
@@ -1358,10 +1502,17 @@ fn test_bid_accepted_and_escrow_created_events_emit_correct_payloads() {
         &String::from_str(&env, "Bid accepted event test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     let accepted_ts = 200u64;
     env.ledger().set_timestamp(accepted_ts);
     client.accept_bid(&invoice_id, &bid_id);
@@ -1409,11 +1560,20 @@ fn test_escrow_released_event_emits_correct_topic_and_payload() {
         &String::from_str(&env, "Escrow release event test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
     let escrow = client.get_escrow_details(&invoice_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     let p_rel: EscrowReleased = latest_payload(&env, TOPIC_ESCROW_RELEASED);
@@ -1448,9 +1608,16 @@ fn test_invoice_defaulted_event_emits_correct_topic_and_payload() {
         &String::from_str(&env, "Default event test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
 
     let default_ts = due_date + 1;
@@ -1486,6 +1653,7 @@ fn test_audit_events_emit_correct_topics_and_payloads() {
         &String::from_str(&env, "Audit events test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     let filter = AuditQueryFilter {
@@ -1540,6 +1708,7 @@ fn test_event_timestamp_ordering() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
     );
 
     env.ledger().set_timestamp(time_upload + 1000);
@@ -1548,13 +1717,61 @@ fn test_event_timestamp_ordering() {
 
     env.ledger().set_timestamp(time_verify + 1000);
     let time_bid = env.ledger().timestamp();
-    let bid_id = client.place_bid(&investor, &invoice_id, &INV_AMOUNT, &EXP_RETURN);
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     let invoice = client.get_invoice(&invoice_id);
     let bid = client.get_bid(&bid_id).unwrap();
 
     assert!(invoice.created_at <= time_verify);
     assert!(bid.timestamp >= time_bid);
+}
+
+// ============================================================================
+// 25. InvoiceSettled — amount and ledger fields locked in
+// ============================================================================
+
+/// Verifies that every settlement emits `InvoiceSettled` with the correct
+/// `amount` (total settled) and `ledger` (ledger sequence number).
+#[test]
+fn test_invoice_settled_includes_amount_and_ledger() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let (client, admin, cid) = setup(&env);
+    let biz = Address::generate(&env);
+    let inv = Address::generate(&env);
+    let currency = mint_currency(&env, &cid, &biz, Some(&inv));
+    kyc_business(&env, &client, &admin, &biz);
+    kyc_investor(&env, &client, &inv, INV_LIMIT);
+
+    let (id, _) = upload_invoice(&env, &client, &biz, &currency, "amount ledger test");
+    client.verify_invoice(&id);
+    let bid_id = client.place_bid(
+        &inv,
+        &id,
+        &INV_AMOUNT,
+        &EXP_RETURN,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+    client.accept_bid(&id, &bid_id);
+
+    // Advance ledger sequence so we get a predictable non-zero value.
+    env.ledger().with_mut(|li| {
+        li.sequence_number += 5;
+    });
+    let expected_ledger = env.ledger().sequence();
+
+    client.make_payment(&id, &EXP_RETURN, &String::from_str(&env, "TX_AMT_LEDGER"));
+
+    let p: InvoiceSettled = latest_payload(&env, TOPIC_INVOICE_SETTLED);
+    assert_eq!(p.invoice_id, id, "invoice_id mismatch");
+    assert_eq!(p.amount, EXP_RETURN, "amount must equal total settled");
+    assert_eq!(p.ledger, expected_ledger, "ledger sequence mismatch");
 }
 
 // Helper used only in this test module - suppress unused warning

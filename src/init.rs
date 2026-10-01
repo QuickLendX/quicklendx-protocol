@@ -43,12 +43,8 @@ pub fn initialize_protocol(
     env.storage()
         .instance()
         .set(&DataKey::ProtocolConfig, &protocol_cfg);
-    env.storage()
-        .instance()
-        .set(&DataKey::FeeConfig, &fee_cfg);
-    env.storage()
-        .instance()
-        .set(&DataKey::Initialized, &true);
+    env.storage().instance().set(&DataKey::FeeConfig, &fee_cfg);
+    env.storage().instance().set(&DataKey::Initialized, &true);
 
     env.events()
         .publish((symbol_short!("proto_in"),), (protocol_cfg, fee_cfg));
@@ -61,7 +57,7 @@ pub fn initialize_protocol(
 // ---------------------------------------------------------------------------
 
 fn validate_protocol_config_init(cfg: &ProtocolConfig) -> Result<(), ContractError> {
-    if cfg.min_invoice_amount <= 0 {
+    if cfg.min_invoice_amount == 0 {
         return Err(ContractError::InvalidAmount);
     }
     if cfg.max_due_date_days == 0 || cfg.max_due_date_days > 730 {

@@ -4,9 +4,187 @@ import {
   RawEvent,
   RawEventStore,
   EventValidator,
-  ReplayAuditEntry,
 } from "../types/replay";
-import { auditLogService } from "./auditLogService";
+import { getDatabase, getPreparedStatement } from "../lib/database";
+
+/** Typed error when a duplicate (tx_hash, event_index) is detected at the DB layer. */
+export class RawEventDuplicateError extends Error {
+  readonly code = "RAW_EVENT_DUPLICATE";
+
+  constructor(
+    public readonly txHash: string,
+    public readonly eventIndex: number,
+  ) {
+    super(`Duplicate raw event for (${txHash}, ${eventIndex})`);
+    this.name = "RawEventDuplicateError";
+  }
+}
+
+/** Returns true when SQLite reports a UNIQUE constraint violation. */
+export function isSqliteUniqueViolation(err: unknown): boolean {
+  return (
+    err != null &&
+    typeof err === "object" &&
+    "code" in err &&
+    (err as { code: string }).code === "SQLITE_CONSTRAINT_UNIQUE"
+  );
+}
+
+export interface InsertRawEventResult {
+  inserted: boolean;
+  txHash: string;
+  eventIndex: number;
+}
+
+export interface RawEventRow {
+  id: string;
+  tx_hash: string;
+  event_index: number;
+  ledger: number;
+  type: string;
+  payload: string;
+  indexed_at: string;
+}
+
+function resolveEventIndex(event: Pick<RawEvent, "eventIndex">): number {
+  return event.eventIndex ?? 0;
+}
+
+/**
+ * Insert a raw event with deep-layer idempotency on (tx_hash, event_index).
+ * Duplicate deliveries are ignored (DO NOTHING) unless `replaceOnConflict` is set
+ * for reorg recovery, in which case the canonical row is replaced in place.
+ */
+export function insertRawEvent(
+  event: RawEvent,
+  options: { replaceOnConflict?: boolean } = {},
+): InsertRawEventResult {
+  const eventIndex = resolveEventIndex(event);
+  const payload = JSON.stringify(event.payload ?? {});
+  const indexedAt = event.indexedAt ?? new Date().toISOString();
+
+  const sql = options.replaceOnConflict
+    ? `
+      INSERT INTO raw_events (
+        id, tx_hash, event_index, ledger, type, payload, indexed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(tx_hash, event_index) DO UPDATE SET
+        id = excluded.id,
+        ledger = excluded.ledger,
+        type = excluded.type,
+        payload = excluded.payload,
+        indexed_at = excluded.indexed_at
+    `
+    : `
+      INSERT INTO raw_events (
+        id, tx_hash, event_index, ledger, type, payload, indexed_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(tx_hash, event_index) DO NOTHING
+    `;
+
+  try {
+    const result = getPreparedStatement(sql).run(
+      event.id,
+      event.txHash,
+      eventIndex,
+      event.ledger,
+      event.type,
+      payload,
+      indexedAt,
+    ) as { changes: number };
+
+    return {
+      inserted: result.changes > 0,
+      txHash: event.txHash,
+      eventIndex,
+    };
+  } catch (err) {
+    if (isSqliteUniqueViolation(err)) {
+      throw new RawEventDuplicateError(event.txHash, eventIndex);
+    }
+    throw err;
+  }
+}
+
+/** List all persisted raw events ordered by ledger for invariant checks. */
+export function listRawEventIdempotencyKeys(): Array<{
+  tx_hash: string;
+  event_index: number;
+}> {
+  const rows = getPreparedStatement(
+    "SELECT tx_hash, event_index FROM raw_events ORDER BY ledger, event_index",
+  ).all() as Array<{ tx_hash: string; event_index: number }>;
+  return rows;
+}
+
+/** Count rows sharing the same (tx_hash, event_index) — should always be 0 or 1. */
+export function countRawEventsByKey(
+  txHash: string,
+  eventIndex: number,
+): number {
+  const row = getPreparedStatement(
+    "SELECT COUNT(*) AS count FROM raw_events WHERE tx_hash = ? AND event_index = ?",
+  ).get(txHash, eventIndex) as { count: number };
+  return row.count;
+}
+
+export function ensureRawEventsSchema(db: ReturnType<typeof getDatabase>): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS raw_events (
+      id TEXT PRIMARY KEY,
+      tx_hash TEXT NOT NULL,
+      event_index INTEGER NOT NULL,
+      ledger INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      payload TEXT NOT NULL DEFAULT '{}',
+      indexed_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    )
+  `);
+  db.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS raw_events_idempotency
+      ON raw_events(tx_hash, event_index)
+  `);
+}
+
+export class SqliteRawEventStore {
+  insertEvent(
+    event: RawEvent,
+    options?: { replaceOnConflict?: boolean },
+  ): InsertRawEventResult {
+    return insertRawEvent(event, options);
+  }
+
+  insertEvents(
+    events: RawEvent[],
+    options?: { replaceOnConflict?: boolean },
+  ): InsertRawEventResult[] {
+    const db = getDatabase();
+    const tx = db.transaction((rows: RawEvent[]) => {
+      return rows.map((event) => insertRawEvent(event, options));
+    });
+    return tx(events);
+  }
+
+  deleteEventsAboveLedger(ledger: number): number {
+    const result = getPreparedStatement(
+      "DELETE FROM raw_events WHERE ledger > ?",
+    ).run(ledger) as { changes: number };
+    return result.changes;
+  }
+
+  getEventsByLedgerRange(
+    fromLedger: number,
+    toLedger: number,
+  ): RawEventRow[] {
+    return getPreparedStatement(
+      `SELECT id, tx_hash, event_index, ledger, type, payload, indexed_at
+       FROM raw_events
+       WHERE ledger >= ? AND ledger <= ?
+       ORDER BY ledger, event_index`,
+    ).all(fromLedger, toLedger) as RawEventRow[];
+  }
+}
 
 export class FileRawEventStore implements RawEventStore {
   private readonly dataDir: string;
@@ -223,10 +401,71 @@ export class FileRawEventStore implements RawEventStore {
     if (typeof cursor !== "number" || cursor < 0) {
       throw new Error("Invalid cursor for rollback");
     }
+    await fs.mkdir(this.dataDir, { recursive: true });
+
     const all = await this.getAllEvents();
     const kept = all.filter((e) => e.ledger <= cursor);
-    await this.replaceEvents(kept);
-    await this.setReplayCursor(cursor);
+    const eventsContent = kept.map((e) => JSON.stringify(e)).join("\n") + "\n";
+    const cursorContent = JSON.stringify({ ledger: cursor, updatedAt: new Date().toISOString() });
+
+    const eventsTmp = this.eventsFile + ".tmp";
+    const cursorTmp = this.cursorFile + ".tmp";
+    const eventsBak = this.eventsFile + ".bak";
+    const cursorBak = this.cursorFile + ".bak";
+
+    // Write new state to temporary files.
+    await fs.writeFile(eventsTmp, eventsContent, "utf8");
+    await fs.writeFile(cursorTmp, cursorContent, "utf8");
+
+    // Determine whether original files exist, and back them up.
+    const eventsExists = await this.fileExists(this.eventsFile);
+    const cursorExists = await this.fileExists(this.cursorFile);
+
+    try {
+      if (eventsExists) {
+        await fs.rename(this.eventsFile, eventsBak);
+      }
+      if (cursorExists) {
+        await fs.rename(this.cursorFile, cursorBak);
+      }
+
+      // Atomically move new files into place.
+      await fs.rename(eventsTmp, this.eventsFile);
+      try {
+        await fs.rename(cursorTmp, this.cursorFile);
+      } catch (err) {
+        // Try to restore events if cursor rename fails.
+        await fs.rename(this.eventsFile, eventsTmp);
+        if (eventsExists) await fs.rename(eventsBak, this.eventsFile);
+        if (cursorExists) await fs.rename(cursorBak, this.cursorFile);
+        throw err;
+      }
+
+      // Success: remove backups.
+      if (eventsExists) await fs.unlink(eventsBak).catch(() => {});
+      if (cursorExists) await fs.unlink(cursorBak).catch(() => {});
+    } catch (err) {
+      // Best-effort cleanup of temp files.
+      await fs.unlink(eventsTmp).catch(() => {});
+      await fs.unlink(cursorTmp).catch(() => {});
+      // If backups were created but not restored, attempt restore.
+      if (eventsExists && (await this.fileExists(eventsBak))) {
+        await fs.rename(eventsBak, this.eventsFile).catch(() => {});
+      }
+      if (cursorExists && (await this.fileExists(cursorBak))) {
+        await fs.rename(cursorBak, this.cursorFile).catch(() => {});
+      }
+      throw err;
+    }
+  }
+
+  private async fileExists(filePath: string): Promise<boolean> {
+    try {
+      await fs.access(filePath);
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   async getAllEvents(): Promise<RawEvent[]> {
@@ -341,7 +580,15 @@ export class InMemoryRawEventStore implements RawEventStore {
       }
 
       const sanitized = await this.validator.sanitizeEvent(event);
-      sanitizedEvents.push(sanitized);
+      const eventIndex = resolveEventIndex(sanitized);
+      const duplicate = this.events.some(
+        (existing) =>
+          existing.txHash === sanitized.txHash &&
+          resolveEventIndex(existing) === eventIndex,
+      );
+      if (!duplicate) {
+        sanitizedEvents.push(sanitized);
+      }
     }
 
     sanitizedEvents.sort((a, b) => a.ledger - b.ledger);
@@ -411,7 +658,18 @@ export class InMemoryRawEventStore implements RawEventStore {
   }
 
   async replaceEvents(events: RawEvent[]): Promise<void> {
-    this.events = [...events].sort((a, b) => a.ledger - b.ledger);
+    for (const event of events) {
+      const eventIndex = resolveEventIndex(event);
+      this.events = this.events.filter(
+        (existing) =>
+          !(
+            existing.txHash === event.txHash &&
+            resolveEventIndex(existing) === eventIndex
+          ),
+      );
+      this.events.push(event);
+    }
+    this.events = [...this.events].sort((a, b) => a.ledger - b.ledger);
   }
 
   reset(): void {

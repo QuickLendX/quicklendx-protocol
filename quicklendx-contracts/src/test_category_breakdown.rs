@@ -1,5 +1,5 @@
 //! Tests for the `get_category_breakdown` entrypoint
-//! 
+//!
 //! Covers:
 //! - Empty platform (no invoices)
 //! - Single category with invoices
@@ -54,8 +54,10 @@ mod tests {
             attachment_hash: None,
             settlement_amount: None,
             settlement_currency: None,
-            settlement_timestamp: None,
             dispute_status: DisputeStatus::None,
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
         }
     }
 
@@ -66,7 +68,8 @@ mod tests {
         let breakdown = InvoiceStorage::get_all_categories(&env)
             .iter()
             .map(|category| {
-                let count = InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
+                let count =
+                    InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
                 (category, count)
             })
             .filter(|(_cat, count)| *count > 0)
@@ -92,7 +95,8 @@ mod tests {
         let mut breakdown: Vec<(InvoiceCategory, u32)> = InvoiceStorage::get_all_categories(&env)
             .iter()
             .map(|category| {
-                let count = InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
+                let count =
+                    InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
                 (category, count)
             })
             .filter(|(_cat, count)| *count > 0)
@@ -130,7 +134,8 @@ mod tests {
         let breakdown: Vec<(InvoiceCategory, u32)> = InvoiceStorage::get_all_categories(&env)
             .iter()
             .map(|category| {
-                let count = InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
+                let count =
+                    InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
                 (category, count)
             })
             .filter(|(_cat, count)| *count > 0)
@@ -175,7 +180,8 @@ mod tests {
         let breakdown: Vec<(InvoiceCategory, u32)> = InvoiceStorage::get_all_categories(&env)
             .iter()
             .map(|category| {
-                let count = InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
+                let count =
+                    InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
                 (category, count)
             })
             .filter(|(_cat, count)| *count > 0)
@@ -186,10 +192,7 @@ mod tests {
 
         // Verify that only the non-zero categories are included
         for (cat, _count) in breakdown.iter() {
-            assert!(
-                *cat == InvoiceCategory::Healthcare
-                    || *cat == InvoiceCategory::Manufacturing
-            );
+            assert!(*cat == InvoiceCategory::Healthcare || *cat == InvoiceCategory::Manufacturing);
         }
     }
 
@@ -220,7 +223,8 @@ mod tests {
         let breakdown: Vec<(InvoiceCategory, u32)> = InvoiceStorage::get_all_categories(&env)
             .iter()
             .map(|category| {
-                let count = InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
+                let count =
+                    InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
                 (category, count)
             })
             .filter(|(_cat, count)| *count > 0)
@@ -257,7 +261,8 @@ mod tests {
         let breakdown: Vec<(InvoiceCategory, u32)> = InvoiceStorage::get_all_categories(&env)
             .iter()
             .map(|category| {
-                let count = InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
+                let count =
+                    InvoiceStorage::get_invoice_count_by_category_from_index(&env, &category);
                 (category, count)
             })
             .filter(|(_cat, count)| *count > 0)
@@ -280,16 +285,20 @@ mod tests {
             create_test_invoice(&env, &invoice_id, &business, InvoiceCategory::Services);
         InvoiceStorage::store(&env, &invoice);
 
-        let count1 =
-            InvoiceStorage::get_invoice_count_by_category_from_index(&env, &InvoiceCategory::Services);
+        let count1 = InvoiceStorage::get_invoice_count_by_category_from_index(
+            &env,
+            &InvoiceCategory::Services,
+        );
         assert_eq!(count1, 1);
 
         // Change the invoice status (should not affect category count)
         invoice.status = InvoiceStatus::Verified;
         InvoiceStorage::update(&env, &invoice);
 
-        let count2 =
-            InvoiceStorage::get_invoice_count_by_category_from_index(&env, &InvoiceCategory::Services);
+        let count2 = InvoiceStorage::get_invoice_count_by_category_from_index(
+            &env,
+            &InvoiceCategory::Services,
+        );
         assert_eq!(count2, 1); // Count should remain the same
     }
 
@@ -395,4 +404,3 @@ mod tests {
         assert_eq!(products_count, 20);
     }
 }
-

@@ -8,14 +8,18 @@ economic viability.
 
 ## Numeric Limits
 
-| Parameter | Default | Min | Max | Error |
-|-----------|---------|-----|-----|-------|
-| `min_invoice_amount` | 1,000,000 (prod) / 10 (test) | 1 | i128::MAX | `InvalidAmount` |
-| `max_due_date_days` | 365 | 1 | 730 | `InvoiceDueDateInvalid` |
-| `grace_period_seconds` | 604,800 | 0 | 2,592,000 | `InvalidTimestamp` |
-| `min_bid_amount` | 10 | 1 | — | `InvalidAmount` |
-| `min_bid_bps` | 100 | 0 | 10,000 | `InvalidAmount` |
-| `max_invoices_per_business` | 100 | 0 (unlimited) | u32::MAX | `MaxInvoicesPerBusinessExceeded` |
+| Parameter | Default constant | Default value | Min | Max | Error |
+|-----------|-----------------|---------------|-----|-----|-------|
+| `min_invoice_amount` | — | 1,000,000 (prod) / 10 (test) | 1 | i128::MAX | `InvalidAmount` |
+| `max_due_date_days` | — | 365 | 1 | 730 | `InvoiceDueDateInvalid` |
+| `grace_period_seconds` | — | 604,800 | 0 | 2,592,000 | `InvalidTimestamp` |
+| `min_bid_amount` | `DEFAULT_MIN_BID_AMOUNT` = 10 | 10 | 1 | — | `InvalidAmount` |
+| `min_bid_bps` | `DEFAULT_MIN_BID_BPS` = 100 | 100 (1 %) | 0 | 10,000 | `InvalidAmount` |
+| `max_invoices_per_business` | `DEFAULT_MAX_INVOICES_PER_BUSINESS` = 100 | 100 | 0 (unlimited) | u32::MAX | `MaxInvoicesPerBusinessExceeded` |
+
+The constants `DEFAULT_MIN_BID_AMOUNT`, `DEFAULT_MIN_BID_BPS`, and
+`DEFAULT_MAX_INVOICES_PER_BUSINESS` are defined in `src/protocol_limits.rs` and
+re-used everywhere defaults are applied, so there is a single source of truth.
 
 ### Grace period constraint
 
@@ -77,7 +81,49 @@ store_invoice / upload_invoice
 - The grace-period/horizon constraint prevents impossible configurations.
 - String limits prevent storage DoS from oversized payloads.
 
-## Test Coverage (Issue #826)
+## Admin API for Setting Limits
+
+### `set_protocol_limits_full` (preferred)
+
+Sets **all six** configurable protocol limits in a single transaction.  This is
+the recommended entrypoint for operators and admin dashboards that need to
+configure `min_bid_amount` or `min_bid_bps`.
+
+```
+set_protocol_limits_full(
+    admin: Address,
+    min_invoice_amount: i128,
+    min_bid_amount: i128,          // ← was previously hardcoded
+    min_bid_bps: u32,              // ← was previously hardcoded
+    max_due_date_days: u64,
+    grace_period_seconds: u64,
+    max_invoices_per_business: u32,
+) -> Result<(), QuickLendXError>
+```
+
+### Narrow helpers (backwards-compatible)
+
+The older, narrower helpers (`set_protocol_limits`, `update_protocol_limits`,
+`update_limits_max_invoices`, `initialize_protocol_limits`) **preserve** the
+currently-stored `min_bid_amount`, `min_bid_bps` (and where applicable
+`max_invoices_per_business`) rather than overwriting them with hardcoded
+defaults.  Existing callers are unaffected.
+
+### Bid-limit config
+
+| Entrypoint | Description |
+|-----------|-------------|
+| `get_bid_limit_config()` | Returns [`BidLimitConfig`] snapshot: active limit, compile-time default, `is_disabled`, `is_custom`. |
+| `set_max_active_bids_per_investor(limit)` | Set per-investor concurrent-bid cap. Pass `0` to disable. |
+| `reset_max_active_bids_per_investor()` | Reset to compile-time default (20) and clear `is_custom` flag. |
+| `get_bid_ttl_config()` | Returns [`BidTtlConfig`] snapshot including `is_custom` flag. |
+| `set_bid_ttl_days(days)` | Set bid TTL in days (1–30). |
+| `reset_bid_ttl_to_default()` | Reset to compile-time default (7 days). |
+
+All admin-mutating entrypoints require the caller to be the current admin
+(`AdminStorage::require_admin` is enforced inside the implementation).
+
+## Test Coverage
 
 `src/test_protocol_limits_boundary.rs` — 35 tests across 10 groups:
 
@@ -94,9 +140,25 @@ store_invoice / upload_invoice
 | check_string_length unit tests | 3 |
 | Consistency across store/upload | 3 |
 
+`src/test_protocol_limits.rs` also covers `set_protocol_limits_full`,
+`get_bid_limit_config`, and `reset_max_active_bids_per_investor`:
+
+| Test | What it verifies |
+|------|-----------------|
+| `test_set_protocol_limits_full_round_trips_all_fields` | All 6 fields written and read back correctly. |
+| `test_set_protocol_limits_full_non_admin_rejected` | Non-admin call returns `NotAdmin`. |
+| `test_set_protocol_limits_full_rejects_zero_min_bid_amount` | `min_bid_amount = 0` → `InvalidAmount`. |
+| `test_set_protocol_limits_full_rejects_min_bid_bps_above_10000` | `min_bid_bps > 10000` → `InvalidAmount`. |
+| `test_narrow_set_protocol_limits_preserves_bid_fields` | `set_protocol_limits` does not clobber previously-set `min_bid_amount`/`min_bid_bps`. |
+| `test_update_protocol_limits_preserves_bid_fields` | `update_protocol_limits` does not clobber bid fields. |
+| `test_get_bid_limit_config_returns_defaults_before_any_admin_set` | Default snapshot is correct before any override. |
+| `test_set_and_get_bid_limit_config_round_trip` | Custom limit written and read back with `is_custom = true`. |
+| `test_set_bid_limit_to_zero_marks_disabled` | `limit = 0` sets `is_disabled = true`. |
+| `test_reset_max_active_bids_per_investor_clears_custom_flag` | Reset restores default and clears `is_custom`. |
+
 Run with:
 
 ```bash
 cd quicklendx-contracts
-cargo test test_protocol_limits_boundary
+cargo test test_protocol_limits
 ```

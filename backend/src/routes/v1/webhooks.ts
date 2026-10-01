@@ -2,8 +2,14 @@ import { Router } from "express";
 import express from "express";
 import * as webhookController from "../../controllers/v1/webhooks";
 import { webhookVerifyMiddleware } from "../../middleware/webhook-verify";
+import jwksRouter from "./webhooks-jwks";
 
 const router = Router();
+
+// ---------------------------------------------------------------------------
+// JWKS endpoint
+// ---------------------------------------------------------------------------
+router.use("/jwks", jwksRouter);
 
 // ---------------------------------------------------------------------------
 // Subscriber management

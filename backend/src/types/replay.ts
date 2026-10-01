@@ -4,6 +4,7 @@ export const RawEventSchema = z.object({
   id: z.string().min(1),
   ledger: z.number().int().nonnegative(),
   txHash: z.string().min(1),
+  eventIndex: z.number().int().nonnegative().default(0),
   type: z.string().min(1),
   payload: z.record(z.string(), z.unknown()),
   timestamp: z.number().int().nonnegative(),

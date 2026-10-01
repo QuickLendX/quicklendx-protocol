@@ -31,7 +31,9 @@
 /// 25. re-generating a report yields identical computed summaries (idempotence)
 use super::*;
 use crate::analytics::{AnalyticsCalculator, TimePeriod};
+use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
+use proptest::prelude::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     Address, Env, String, Vec,
@@ -66,7 +68,40 @@ fn upload(
         &String::from_str(env, desc),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     )
+}
+
+proptest! {
+    #[test]
+    fn get_period_dates_saturates_underflow_for_small_timestamps(timestamp in 0u64..=86_399u64) {
+        for period in [
+            TimePeriod::Daily,
+            TimePeriod::Weekly,
+            TimePeriod::Monthly,
+            TimePeriod::Quarterly,
+            TimePeriod::Yearly,
+            TimePeriod::AllTime,
+        ]
+        .iter()
+        {
+            let (start_date, end_date) = AnalyticsCalculator::get_period_dates(timestamp, period.clone());
+            prop_assert!(start_date <= end_date);
+            prop_assert_eq!(end_date, timestamp);
+            if *period != TimePeriod::AllTime {
+                prop_assert_eq!(start_date, 0);
+            }
+        }
+    }
+}
+
+#[test]
+fn get_period_dates_all_time_keeps_full_history_window() {
+    let timestamp = 10_000u64;
+    let (start_date, end_date) =
+        AnalyticsCalculator::get_period_dates(timestamp, TimePeriod::AllTime);
+    assert_eq!(start_date, 0);
+    assert_eq!(end_date, timestamp);
 }
 
 // --- 1. generated_at correctness --------------------------------------------
@@ -566,4 +601,133 @@ fn test_investor_report_stored_matches_live() {
     assert_eq!(stored.investments_made, live.investments_made);
     assert_eq!(stored.total_invested, live.total_invested);
     assert_eq!(stored.generated_at, ts);
+}
+
+#[test]
+fn test_analytics_snapshot_empty_platform_version_and_timestamp() {
+    let env = Env::default();
+    let ts = 9_876_543u64;
+    env.ledger().set_timestamp(ts);
+    let (client, _, _) = setup(&env);
+
+    let snapshot = client.export_analytics_snapshot();
+
+    assert_eq!(
+        snapshot.schema_version,
+        crate::analytics::ANALYTICS_SCHEMA_VERSION
+    );
+    assert_eq!(snapshot.ledger_timestamp, ts);
+    assert_eq!(snapshot.platform_metrics.timestamp, ts);
+    assert_eq!(snapshot.performance_metrics.platform_uptime, ts);
+    assert_eq!(snapshot.platform_metrics.total_invoices, 0);
+    assert_eq!(snapshot.platform_metrics.total_volume, 0);
+    assert_eq!(snapshot.performance_metrics.transaction_success_rate, 0);
+}
+
+#[test]
+fn test_analytics_snapshot_matches_individual_calculators() {
+    let env = Env::default();
+    env.ledger().set_timestamp(12_345_678u64);
+    let (client, _, business) = setup(&env);
+    upload(&env, &client, &business, 1_000, "snap-1");
+    upload(&env, &client, &business, 2_000, "snap-2");
+
+    let snapshot = client.export_analytics_snapshot();
+    let platform = AnalyticsCalculator::calculate_platform_metrics(&env).unwrap();
+    let performance = AnalyticsCalculator::calculate_performance_metrics(&env).unwrap();
+
+    assert_eq!(snapshot.platform_metrics, platform);
+    assert_eq!(snapshot.performance_metrics, performance);
+}
+
+#[test]
+fn test_analytics_snapshot_entrypoint_matches_public_metric_calls() {
+    let env = Env::default();
+    env.ledger().set_timestamp(22_222_222u64);
+    let (client, _, business) = setup(&env);
+    upload(&env, &client, &business, 3_000, "snap-public");
+
+    let snapshot = client.export_analytics_snapshot();
+
+    assert_eq!(snapshot.platform_metrics, client.get_platform_metrics());
+    assert_eq!(
+        snapshot.performance_metrics,
+        client.get_performance_metrics()
+    );
+}
+
+// --- Dispute guard on report generation (Issue #2072) -----------------------
+//
+// A disputed invoice keeps its pre-dispute `InvoiceStatus` (e.g. `Funded`)
+// until the dispute resolves, so the snapshot calculators would otherwise
+// fold a contested invoice into `success_rate` / `default_rate` / volume
+// totals as if it were already settled. `export_analytics_snapshot` must
+// refuse to run while any invoice has an active (`Disputed` or
+// `UnderReview`) dispute.
+
+#[test]
+fn test_export_analytics_snapshot_blocks_while_dispute_active() {
+    let env = Env::default();
+    env.ledger().set_timestamp(30_000_000u64);
+    let (client, _admin, business) = setup(&env);
+    let invoice_id = upload(&env, &client, &business, 1_000, "dispute-guard");
+
+    // Baseline: no disputes yet, snapshot succeeds.
+    assert!(client.try_export_analytics_snapshot().is_ok());
+
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "goods not delivered"),
+        &String::from_str(&env, "tracking-evidence"),
+    );
+
+    let result = client.try_export_analytics_snapshot();
+    assert!(result.is_err());
+    let err = result.unwrap_err().expect("expected contract error");
+    assert_eq!(err, QuickLendXError::ActiveDisputeExists);
+}
+
+#[test]
+fn test_export_analytics_snapshot_blocks_while_dispute_under_review() {
+    let env = Env::default();
+    env.ledger().set_timestamp(31_000_000u64);
+    let (client, admin, business) = setup(&env);
+    let invoice_id = upload(&env, &client, &business, 1_000, "dispute-guard-review");
+
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "goods not delivered"),
+        &String::from_str(&env, "tracking-evidence"),
+    );
+    client.put_dispute_under_review(&invoice_id, &admin);
+
+    let result = client.try_export_analytics_snapshot();
+    assert!(result.is_err());
+    let err = result.unwrap_err().expect("expected contract error");
+    assert_eq!(err, QuickLendXError::ActiveDisputeExists);
+}
+
+#[test]
+fn test_export_analytics_snapshot_resumes_after_dispute_resolved() {
+    let env = Env::default();
+    env.ledger().set_timestamp(32_000_000u64);
+    let (client, admin, business) = setup(&env);
+    let invoice_id = upload(&env, &client, &business, 1_000, "dispute-guard-resolve");
+
+    client.create_dispute(
+        &invoice_id,
+        &business,
+        &String::from_str(&env, "goods not delivered"),
+        &String::from_str(&env, "tracking-evidence"),
+    );
+    client.put_dispute_under_review(&invoice_id, &admin);
+    client.resolve_dispute(
+        &invoice_id,
+        &admin,
+        &String::from_str(&env, "resolved in favor of business"),
+    );
+
+    assert!(client.try_export_analytics_snapshot().is_ok());
 }

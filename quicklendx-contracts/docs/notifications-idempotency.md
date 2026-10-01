@@ -280,6 +280,22 @@ Maintain an audit trail of:
 - Pruning operations
 - Storage usage over time
 
+## Wired triggers
+
+The following contract entrypoints now emit lifecycle notifications. Notification
+failures are isolated (`let _ = ...`) and never roll back fund-moving state.
+
+| Entrypoint | Helper | `NotificationType` | Recipients |
+|---|---|---|---|
+| `escrow::accept_bid_and_fund` | `notify_bid_accepted` | `BidAccepted` | Investor |
+| `settlement::process_partial_payment` | `notify_payment_received` | `PaymentReceived` | Business, investor |
+| `settlement::settle_invoice_internal` | `notify_invoice_status_changed` | `InvoiceStatusChanged` | Business, investor |
+| `defaults::handle_default` | `notify_invoice_defaulted` | `InvoiceDefaulted` | Business, investor |
+| `QuickLendXContract::create_dispute` | `notify_dispute_opened` | `SystemAlert` | Business, investor |
+| `QuickLendXContract::resolve_dispute` | `notify_dispute_resolved` | `SystemAlert` | Business, investor |
+
+Preference filtering and idempotency keys remain enforced inside `create_notification`.
+
 ## References
 
 - [Soroban SDK Documentation](https://docs.rs/soroban-sdk/)

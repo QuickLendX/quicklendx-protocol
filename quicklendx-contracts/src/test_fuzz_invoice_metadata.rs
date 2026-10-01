@@ -48,6 +48,9 @@ fn make_invoice_unit(env: &Env) -> (Invoice, Address) {
         SStr::from_str(env, "fuzz invoice"),
         InvoiceCategory::Services,
         SVec::new(env),
+        None,
+        None,
+        None,
     )
     .expect("baseline invoice creation must succeed");
     (inv, business)
@@ -61,12 +64,7 @@ fn make_invoice_unit(env: &Env) -> (Invoice, Address) {
 fn make_metadata_with_items(env: &Env, item_count: u32) -> (InvoiceMetadata, i128) {
     let mut items = SVec::new(env);
     for _ in 0..item_count {
-        items.push_back(LineItemRecord(
-            SStr::from_str(env, "item"),
-            1,
-            1,
-            1,
-        ));
+        items.push_back(LineItemRecord(SStr::from_str(env, "item"), 1, 1, 1));
     }
     let invoice_amount = item_count as i128;
     let metadata = InvoiceMetadata {
@@ -109,6 +107,9 @@ proptest! {
                 SStr::from_str(&env, "t"),
                 InvoiceCategory::Services,
                 tags,
+                None,
+                None,
+                None,
             );
             prop_assert!(result.is_ok(), "count={} should succeed", count);
             prop_assert_eq!(result.unwrap().tags.len(), count);
@@ -135,6 +136,9 @@ proptest! {
                 SStr::from_str(&env, "t"),
                 InvoiceCategory::Services,
                 tags,
+                None,
+                None,
+                None,
             );
             prop_assert_eq!(
                 result,
@@ -505,8 +509,7 @@ fn tag_index_no_orphan_after_remove() {
             .persistent()
             .get(&Indexes::invoices_by_tag(&tag));
         assert!(
-            ids_after
-                .map_or(true, |v| !v.iter().any(|id| id == inv.id)),
+            ids_after.map_or(true, |v| !v.iter().any(|id| id == inv.id)),
             "orphan: invoice still in tag index after removal"
         );
     });

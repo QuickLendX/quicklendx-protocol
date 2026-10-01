@@ -13,6 +13,37 @@
    ```
    The hook scans staged files for patterns that look like real secrets and blocks the commit if any are found.
 
+## Committed-secret scanning
+
+CI and local security checks run a committed-secret scanner as part of `npm run security:scan`.
+
+- Script: `backend/scripts/secret-scan.js`
+- Allowlist: `backend/scripts/.secret-scan-allow.json`
+- Coverage: `backend/src`, `backend/tests`, `backend/scripts`, and `backend/.env.example`
+
+The scanner flags:
+
+- High-entropy literals in quoted strings (for example random signing material or export tokens)
+- Known secret formats:
+  - QuickLendX API keys (`qlx_…`)
+  - Stripe-style keys (`sk_live_…`, `sk_test_…`)
+  - Slack bot tokens (`xoxb-…`)
+  - AWS access keys (`AKIA…`)
+  - Stellar secret seeds (`S…`, 56-character StrKey)
+
+When a match is found, the gate exits non-zero and prints file, line, column, rule name, and a **redacted preview**. Full secret values are never written to CI logs.
+
+To suppress a documented false positive, add an entry to `.secret-scan-allow.json` with the file, line, and reason. Do not use the allowlist for real secrets.
+
+Run locally:
+
+```bash
+cd backend
+node scripts/secret-scan.js
+```
+
+The scanner is also exercised by `backend/tests/secret-scan.test.ts` during `npm test`.
+
 ## Environment variables
 
 | Variable | Required in prod | Default | Notes |
@@ -23,6 +54,9 @@
 | `RATE_LIMIT_POINTS` | no | `100` | Requests per IP per minute |
 | `ADMIN_API_KEY` | yes | — | Min 32 chars; set via CI secret |
 | `WEBHOOK_SECRET` | yes | — | Min 16 chars; set via CI secret |
+| `KYC_ENCRYPTION_KEY` | no | — | Master key for KYC data encryption (single key mode) |
+| `KYC_ENCRYPTION_KEY_V1` | no | — | V1 master key for KYC data encryption (key ring mode) |
+| `KYC_ENCRYPTION_KEY_V2` | no | — | V2 master key for KYC data encryption (key ring mode) |
 
 Config is validated at startup via `src/config.ts` (zod). The app throws immediately if required vars are missing, listing field names only — values are never logged.
 
@@ -38,6 +72,23 @@ Set secrets through your CI/CD provider (GitHub Actions secrets, AWS SSM, etc.).
     WEBHOOK_SECRET: ${{ secrets.WEBHOOK_SECRET }}
     NODE_ENV: production
 ```
+
+## KYC Key Rotation
+
+To rotate KYC encryption keys:
+
+1. Generate a new secure master key (use a cryptographically secure random generator)
+2. Add the new key to your environment variables (e.g., `KYC_ENCRYPTION_KEY_V2`)
+3. Run the migration script in dry run mode to verify:
+   ```bash
+   cd backend
+   DRY_RUN=true ts-node scripts/rotate-kyc-keys.ts
+   ```
+4. If dry run succeeds, apply changes:
+   ```bash
+   DRY_RUN=false ts-node scripts/rotate-kyc-keys.ts
+   ```
+5. Update your application configuration to use the new key as active
 
 ## Safe overrides
 

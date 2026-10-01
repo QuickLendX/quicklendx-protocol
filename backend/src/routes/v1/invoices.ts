@@ -17,4 +17,6 @@ router.get("/", createQueryValidationMiddleware(getInvoicesQuerySchema), invoice
 router.get("/:id", createParamsValidationMiddleware(invoiceIdParamSchema), invoiceController.getInvoiceById);
 router.get("/:id/disputes", createParamsValidationMiddleware(invoiceIdParamForDisputesSchema), disputeController.getDisputes);
 
+router.post("/", invoiceController.createInvoice);
+
 export default router;

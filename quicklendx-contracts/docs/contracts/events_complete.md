@@ -224,6 +224,21 @@ Emitted when a payment record is durably stored.
 
 ---
 
+### `RepaymentAllocated`
+
+Additive versioned allocation for a committed repayment. Does **not** replace
+`PartialPayment` or `PaymentRecorded`.
+
+**Topic:** `"repayment_allocated"`  
+**Constant:** `TOPIC_REPAYMENT_ALLOCATED`
+
+Emitted only after payment storage commits. `operation_id` matches the
+`PaymentProcessed` audit entry. `phase` is always `Committed`.
+
+Ordering in a successful `process_partial_payment`: `pay_rec` → `partial_payment` → `repayment_allocated` → (if final) escrow / `invoice_settled` / `inv_stlf`.
+
+---
+
 ### `InvoiceMetadataUpdated`
 
 Emitted when structured metadata is updated on an invoice.
@@ -471,6 +486,47 @@ Emitted when platform fees are routed to the treasury.
 
 ---
 
+### `TreasuryRotationInitiated`
+
+Emitted when a treasury rotation is initiated (first step of a two-step process).
+
+**Topic:** `"treasury_rotation_initiated"`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `new_address` | `Address` | The proposed new treasury address |
+| `initiated_by` | `Address` | The admin who initiated the rotation |
+| `confirmation_deadline` | `u64` | The timestamp before which it must be confirmed |
+| `timestamp` | `u64` | Ledger timestamp at emission time |
+
+---
+
+### `TreasuryRotationConfirmed`
+
+Emitted when a treasury rotation is confirmed (second step of a two-step process).
+
+**Topic:** `"treasury_rotation_confirmed"`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `old_address` | `Address` | The previous treasury address |
+| `new_address` | `Address` | The confirmed new treasury address |
+| `timestamp` | `u64` | Ledger timestamp at emission time |
+
+---
+
+### `TreasuryRotationCancelled`
+
+Emitted when a pending treasury rotation is cancelled.
+
+**Topic:** `"treasury_rotation_cancelled"` (or `tr_rot_cn` for short)
+
+| Field | Type | Description |
+|-------|------|-------------|
+| (data topic) | `Address` | The admin who cancelled the rotation |
+
+---
+
 ## Admin Events
 
 ### `AdminSet`
@@ -611,6 +667,7 @@ pub const TOPIC_INVOICE_DEFAULTED: &str     = "invoice_defaulted";
 pub const TOPIC_INVOICE_EXPIRED: &str       = "invoice_expired";
 pub const TOPIC_PARTIAL_PAYMENT: &str       = "partial_payment";
 pub const TOPIC_PAYMENT_RECORDED: &str      = "payment_recorded";
+pub const TOPIC_REPAYMENT_ALLOCATED: &str   = "repayment_allocated";
 pub const TOPIC_INVOICE_SETTLED_FINAL: &str = "invoice_settled_final";
 pub const TOPIC_INVOICE_FUNDED: &str        = "invoice_funded";
 

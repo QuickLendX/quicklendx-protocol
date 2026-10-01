@@ -106,12 +106,22 @@ Only the contract admin or the invoice's business owner may call
 
 ## Query Surfaces
 
-Two read-only contract entry points expose escrow state:
+Three read-only contract entry points expose escrow state:
 
 | Function | Returns | Error when missing |
 |---|---|---|
 | `get_escrow_details(invoice_id)` | Full `Escrow` struct | `StorageKeyNotFound` |
 | `get_escrow_status(invoice_id)` | `EscrowStatus` enum | `StorageKeyNotFound` |
+| `admin_get_escrow(escrow_id)` | Full `Escrow` struct (admin-only) | `StorageKeyNotFound` / `NotAdmin` |
+
+### Admin Escrow Inspection
+
+`admin_get_escrow(escrow_id)` is an admin-gated endpoint that returns the full escrow record given an escrow ID directly. This is useful for support teams to inspect escrow state without requiring the invoice ID. The endpoint:
+
+- Requires admin authorization (returns `NotAdmin` for non-admin callers)
+- Returns `StorageKeyNotFound` if the escrow ID does not exist
+- Returns all escrow fields: `escrow_id`, `invoice_id`, `investor`, `business`, `amount`, `currency`, `created_at`, `status`
+- Is read-only and safe for monitoring and support tooling
 
 ### Consistency guarantee
 

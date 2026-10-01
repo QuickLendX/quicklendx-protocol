@@ -162,9 +162,11 @@ mod tests {
             grace_period_seconds: 604800,
             initial_currencies: {
                 let mut v = soroban_sdk::Vec::new(&env);
-                v.push_back(currency);
+                v.push_back(currency.clone());
                 v
             },
+            corridors: soroban_sdk::Vec::new(&env),
+            backfill_max_batch_size: 100,
         };
 
         ProtocolInitializer::initialize(&env, &params).expect("init failed");
@@ -222,8 +224,7 @@ mod tests {
         assert_eq!(health_before.fee_bps, 200);
 
         // Update fee config
-        ProtocolInitializer::set_fee_config(&env, &admin, 300)
-            .expect("set_fee_config failed");
+        ProtocolInitializer::set_fee_config(&env, &admin, 300).expect("set_fee_config failed");
 
         let health_after = ProtocolHealth::new(&env);
         assert_eq!(health_after.fee_bps, 300);
@@ -238,8 +239,7 @@ mod tests {
 
         // Add another currency
         let new_currency = Address::generate(&env);
-        CurrencyWhitelist::add_currency(&env, &admin, new_currency)
-            .expect("add_currency failed");
+        CurrencyWhitelist::add_currency(&env, &admin, new_currency).expect("add_currency failed");
 
         let health_after = ProtocolHealth::new(&env);
         assert_eq!(health_after.currency_count, 2);

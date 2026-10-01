@@ -14,7 +14,8 @@ import {
 function makeEvent(ledger: number, overrides: Partial<IndexedEvent> = {}): IndexedEvent {
   return {
     ledger,
-    txHash: `0x${ledger}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    txHash: overrides.txHash ?? `0x${ledger}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    eventIndex: overrides.eventIndex ?? 0,
     type: "test.Event",
     payload: { data: `event_${ledger}` },
     ...overrides,
@@ -252,7 +253,7 @@ describe("Rollback preserves existing ingestion guarantees", () => {
     await ingestBatch(store, [makeEvent(5)], 5);
     await store.rollbackTo(3);
 
-    const bad = { ledger: 10, txHash: "", type: "X", payload: {} };
+    const bad = { ledger: 10, txHash: "", eventIndex: 0, type: "X", payload: {} };
     await expect(ingestBatch(store, [bad], 4)).rejects.toThrow("txHash");
 
     // Store must be untouched by the rejected batch

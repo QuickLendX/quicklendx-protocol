@@ -1,4 +1,4 @@
-//! Tests for issue #556 - investment status transitions on settlement and default.
+﻿//! Tests for issue #556 - investment status transitions on settlement and default.
 //!
 //! Validates:
 //! - `Active -> Completed` on full settlement (no orphan)
@@ -85,9 +85,9 @@ fn funded_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount);
+    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     (business, investor, currency, invoice_id)
@@ -122,7 +122,7 @@ fn test_settlement_sets_investment_completed() {
         &4_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    client.settle_invoice(&invoice_id, &1_000i128);
+    client.settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
 
     // Investment must be Completed.
     assert_eq!(
@@ -160,7 +160,7 @@ fn test_settlement_invoice_status_paid() {
         &4_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    client.settle_invoice(&invoice_id, &1_000i128);
+    client.settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
 
     assert_eq!(client.get_invoice(&invoice_id).status, InvoiceStatus::Paid);
 }
@@ -331,9 +331,9 @@ fn test_double_settle_rejected() {
         &8_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    client.settle_invoice(&invoice_id, &1_000i128);
+    client.settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
 
-    let result = client.try_settle_invoice(&invoice_id, &1_000i128);
+    let result = client.try_settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err(), "second settle must fail");
 }
 
@@ -417,7 +417,7 @@ fn test_multiple_investments_independent_transitions() {
         &4_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    client.settle_invoice(&inv_id1, &1_000i128);
+    client.settle_invoice(&inv_id1, &1_000i128, &client.get_investment(&inv_id1).unwrap());
 
     // Invoice 1 investment Completed, invoice 2 still Active.
     assert_eq!(
@@ -478,7 +478,7 @@ fn test_active_index_grows_and_shrinks() {
         &4_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    client.settle_invoice(&invoice_id, &1_000i128);
+    client.settle_invoice(&invoice_id, &1_000i128, &client.get_investment(&invoice_id).unwrap());
 
     assert_eq!(client.get_active_investment_ids().len(), 0);
 }
@@ -500,3 +500,4 @@ fn test_validate_no_orphan_after_funding() {
     let _ = funded_invoice(&env, &client, &admin, 1_000, 900);
     assert!(client.validate_no_orphan_investments());
 }
+

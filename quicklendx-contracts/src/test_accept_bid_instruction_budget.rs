@@ -95,6 +95,7 @@ fn create_verified_invoice(
         &String::from_str(env, "Test invoice for instruction budget test"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
     invoice_id
@@ -106,7 +107,13 @@ fn place_bid(
     invoice_id: &BytesN<32>,
     amount: i128,
 ) -> BytesN<32> {
-    client.place_bid(investor, invoice_id, &amount, &(amount / 10))
+    client.place_bid(
+        investor,
+        invoice_id,
+        &amount,
+        &(amount / 10),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    )
 }
 
 fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
@@ -141,12 +148,12 @@ fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
 fn test_accept_bid_instruction_budget_full_capacity() {
     let (env, client, admin, contract_id) = setup();
     let business = verified_business(&env, &client, &admin);
-    
+
     // Create investor with high limit to place many bids
     let investor = verified_investor(&env, &client, &admin, 10_000_000_000);
-    
+
     let currency = setup_token(&env, &[&business, &investor], &contract_id, 1_000_000);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 500_000);
 
     // Place MAX_BIDS_PER_INVOICE bids to reach full capacity
@@ -172,12 +179,20 @@ fn test_accept_bid_instruction_budget_full_capacity() {
     let escrow_id = client.accept_bid(&invoice_id, &first_bid_id);
 
     // Verify the operation succeeded
-    assert_ne!(escrow_id, BytesN::from_array(&env, &[0u8; 32]), "Escrow ID should be non-zero");
+    assert_ne!(
+        escrow_id,
+        BytesN::from_array(&env, &[0u8; 32]),
+        "Escrow ID should be non-zero"
+    );
 
     // Verify invoice is now funded
     let invoice = crate::invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
         .expect("Invoice should exist");
-    assert_eq!(invoice.status, InvoiceStatus::Funded, "Invoice should be funded");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Invoice should be funded"
+    );
 
     // Verify bid is accepted
     let bid = BidStorage::get_bid(&env, &first_bid_id).expect("Bid should exist");
@@ -194,9 +209,9 @@ fn test_accept_bid_instruction_budget_quarter_capacity() {
     let (env, client, admin, contract_id) = setup();
     let business = verified_business(&env, &client, &admin);
     let investor = verified_investor(&env, &client, &admin, 1_000_000_000);
-    
+
     let currency = setup_token(&env, &[&business, &investor], &contract_id, 500_000);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 250_000);
 
     // Place 12 bids (25% of MAX_BIDS_PER_INVOICE)
@@ -217,11 +232,19 @@ fn test_accept_bid_instruction_budget_quarter_capacity() {
     // Accept the bid
     let escrow_id = client.accept_bid(&invoice_id, &first_bid_id);
 
-    assert_ne!(escrow_id, BytesN::from_array(&env, &[0u8; 32]), "Escrow ID should be non-zero");
+    assert_ne!(
+        escrow_id,
+        BytesN::from_array(&env, &[0u8; 32]),
+        "Escrow ID should be non-zero"
+    );
 
     let invoice = crate::invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
         .expect("Invoice should exist");
-    assert_eq!(invoice.status, InvoiceStatus::Funded, "Invoice should be funded");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Invoice should be funded"
+    );
 }
 
 /// Regression test: verify `accept_bid_and_fund` instruction cost is minimal
@@ -233,9 +256,9 @@ fn test_accept_bid_instruction_budget_single_bid() {
     let (env, client, admin, contract_id) = setup();
     let business = verified_business(&env, &client, &admin);
     let investor = verified_investor(&env, &client, &admin, 100_000_000);
-    
+
     let currency = setup_token(&env, &[&business, &investor], &contract_id, 100_000);
-    
+
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency, 50_000);
 
     // Place single bid
@@ -250,9 +273,17 @@ fn test_accept_bid_instruction_budget_single_bid() {
     // Accept the bid
     let escrow_id = client.accept_bid(&invoice_id, &bid_id);
 
-    assert_ne!(escrow_id, BytesN::from_array(&env, &[0u8; 32]), "Escrow ID should be non-zero");
+    assert_ne!(
+        escrow_id,
+        BytesN::from_array(&env, &[0u8; 32]),
+        "Escrow ID should be non-zero"
+    );
 
     let invoice = crate::invoice::InvoiceStorage::get_invoice(&env, &invoice_id)
         .expect("Invoice should exist");
-    assert_eq!(invoice.status, InvoiceStatus::Funded, "Invoice should be funded");
+    assert_eq!(
+        invoice.status,
+        InvoiceStatus::Funded,
+        "Invoice should be funded"
+    );
 }

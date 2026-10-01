@@ -2,7 +2,8 @@
 
 > **Modules**: `src/pause.rs`, `src/events.rs`  
 > **Test coverage**: `src/test_pause.rs`  
-> **Event schema**: [docs/events_complete.md](events_complete.md)
+> **Event schema**: [docs/events_complete.md](events_complete.md)  
+> **Pause Taxonomy & Guidance**: [docs/PAUSE_TAXONOMY.md](PAUSE_TAXONOMY.md)
 
 ---
 

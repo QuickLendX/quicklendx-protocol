@@ -20,6 +20,7 @@ This document verifies that the currency whitelist enforcement tests have been i
 | File | Status | Tests |
 |------|--------|-------|
 | [test_currency.rs](../quicklendx-contracts/src/test_currency.rs) | ✅ Complete | 25+ comprehensive tests |
+| [test_currency_batch.rs](../quicklendx-contracts/src/test_currency_batch.rs) | ✅ Complete | 22 batch API tests |
 
 ### 3. Documentation
 
@@ -37,7 +38,9 @@ This document verifies that the currency whitelist enforcement tests have been i
 ```rust
 // Admin-only operations
 pub fn add_currency(env: &Env, admin: &Address, currency: &Address)
+pub fn add_currencies_batch(env: &Env, admin: &Address, currencies: &Vec<Address>) -> Result<Vec<bool>, QuickLendXError>
 pub fn remove_currency(env: &Env, admin: &Address, currency: &Address)
+pub fn remove_currencies_batch(env: &Env, admin: &Address, currencies: &Vec<Address>) -> Result<Vec<bool>, QuickLendXError>
 pub fn set_currencies(env: &Env, admin: &Address, currencies: &Vec<Address>)
 pub fn clear_currencies(env: &Env, admin: &Address)
 
@@ -50,6 +53,54 @@ pub fn currency_count(env: &Env) -> u32
 // Enforcement
 pub fn require_allowed_currency(env: &Env, currency: &Address) -> Result<(), QuickLendXError>
 ```
+
+---
+
+## Batch API (Issue #1295)
+
+### `add_currencies_batch`
+
+```rust
+pub fn add_currencies_batch(
+    env: &Env,
+    admin: &Address,
+    currencies: &Vec<Address>,
+) -> Result<Vec<bool>, QuickLendXError>
+```
+
+Adds multiple token addresses to the whitelist in a single admin call. Returns a `Vec<bool>` of the same length as `currencies`:
+- `true` at index i — currency[i] was not present and was added.
+- `false` at index i — currency[i] was already whitelisted (idempotent, skipped).
+
+**Duplicate handling:** duplicates within the input are resolved against the evolving list — the first occurrence is added (`true`), subsequent occurrences are skipped (`false`).
+
+**Empty input:** returns an empty `Vec<bool>` with no storage write.
+
+**Auth:** admin is required before any mutation. Returns `NotAdmin` or `OperationNotAllowed` (if admin was never initialized) on failure.
+
+### `remove_currencies_batch`
+
+```rust
+pub fn remove_currencies_batch(
+    env: &Env,
+    admin: &Address,
+    currencies: &Vec<Address>,
+) -> Result<Vec<bool>, QuickLendXError>
+```
+
+Removes multiple token addresses from the whitelist in a single admin call. Returns a `Vec<bool>` of the same length as `currencies`:
+- `true` at index i — currency[i] was present and has been removed.
+- `false` at index i — currency[i] was not in the whitelist (no-op for that item).
+
+**Duplicate handling:** if the same address appears more than once in the input, all positions return `true` when the address was present (checked against the original list), but the physical removal happens only once.
+
+**Empty input:** returns an empty `Vec<bool>` with no storage write.
+
+**Auth:** admin is required before any mutation. Returns `NotAdmin` on failure.
+
+### Atomicity
+
+Both batch operations load and write the whitelist as a single `Vec<Address>` under the `curr_wl` storage key — the same layout used by all single-item operations. The Soroban transaction model guarantees that either all mutations in a call succeed or none are applied.
 
 ### Invoice Creation (store_invoice)
 - Calls `require_allowed_currency()` before storing
@@ -251,9 +302,11 @@ assert!(result.is_err());
 ## Assignment Checklist
 
 - [x] **Contract: currency.rs** - Multi-currency whitelist implementation
+- [x] **Contract: currency.rs** - `add_currencies_batch` / `remove_currencies_batch` (Issue #1295)
 - [x] **Contract: invoice.rs** - Invoice creation with currency validation  
 - [x] **Contract: escrow.rs** - Escrow funding with currency enforcement
 - [x] **Tests: test_currency.rs** - 25+ comprehensive tests (95%+ coverage)
+- [x] **Tests: test_currency_batch.rs** - 22 batch API tests (Issue #1295)
 - [x] **Documentation: docs/contracts/currency.md** - API documentation
 - [x] **NatSpec-style comments** - Rust doc comments on public items
 - [x] **Security assumptions validated** - Admin auth, currency address validation
