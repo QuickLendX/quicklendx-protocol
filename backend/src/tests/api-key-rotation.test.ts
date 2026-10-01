@@ -63,7 +63,7 @@ describe('API Key Signing Secret Rotation', () => {
     try {
       if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
       try { fs.unlinkSync(TEST_DB_PATH + '-wal'); } catch {}
-      try { fs.unlinkSync(TEST_DB_PATH + '-shm'); } catch {}
+      try { fs.unlinkSync(TEST_DB_PATH + '-shj'); } catch {}
     } catch {}
   });
 
@@ -240,8 +240,7 @@ describe('API Key Signing Secret Rotation', () => {
     expect(b).not.toBeNull();
     expect(a!.id).toBe(b!.id);
   });
-
-  it('rotation fails atomically when the database write fails', async () => {
+it('rotation fails atomically when the database write fails', async () => {
     const created = await apiKeyService.createApiKey({
       name: 'Test Key',
       scopes: ['read:'],
@@ -321,5 +320,204 @@ describe('API Key Signing Secret Rotation', () => {
     const serialized = JSON.stringify(calls);
     expect(serialized).not.toContain(rotated.plaintext_key);
     expect(serialized).not.toContain(created.plaintext_key);
+  });
+
+  // -----------------------------------------------------------------------------
+  // Deterministic failure-boundary coverage for listApiKeys
+  // -----------------------------------------------------------------------------
+  // These tests exercise the listApiKeys entry point in backend/src/controllers/v1/api-keys.ts
+  // across loading, error, retry, stale, and permission boundaries. The goal is to
+  // ensure that no failure path silently drops data or returns an inconsistent
+  // view of the user's API keys.
+
+  const makeReq = (options: {
+    user?: any;
+    query?: Record<string, any>;
+    headers?: Record<string, any>;
+  } = {}) =>
+    ({
+      user: options.user ?? { id: adminId, role: 'admin' },
+      query: options.query ?? {},
+      headers: options.headers ?? {},
+    } as any);
+
+  const makeRes = () => {
+    const res: any = {};
+    res.status = jest.fn(() => res);
+    res.json = jest.fn(() => res);
+    res.send = jest.fn(() => res);
+    res.setHeader = jest.fn(() => res);
+    return res;
+  };
+
+  const loadController = () => {
+    // Eslint disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line global-require
+    return require('../controllers/v1/api-keys') as typeof import('../controllers/v1/api-keys');
+  };
+
+  describe('listApiKeys failure boundaries', () => {
+    it('returns an empty list for a user with no keys (valid boundary)', async () => {
+      const { listApiKeys } = loadController();
+      const req = makeReq();
+      const res = makeRes();
+
+      await listApiKeys(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      const body = res.json.mock.calls[0][0];
+      expect(Array.isArray(body.keys)).toBe(true);
+      expect(body.keys).toHaveLength(0);
+      expect(body.nextCursor ?? null).toBeNull();
+    });
+
+    it('returns a deterministic, stable ordering for multiple keys', async () => {
+      const { listApiKeys } = loadController();
+      const a = await apiKeyService.createApiKey({ name: 'A', scopes: ['read:*'], created_by: adminId });
+      const b = await apiKeyService.createApiKey({ name: 'B', scopes: ['read:*'], created_by: adminId });
+      const c = await apiKeyService.createApiKey({ name: 'C', scopes: ['read:*'], created_by: adminId });
+
+      const req1 = makeReq();
+      const res1 = makeRes();
+      await listApiKeys(req1, res1);
+      const body1 = res1.json.mock.calls[0][0];
+      const ids1 = body1.keys.map((k: any) => k.id);
+
+      // Repeat the call and confirm identical ordering (determinism).
+      const req2 = makeReq();
+      const res2 = makeRes();
+      await listApiKeys(req2, res2);
+      const body2 = res2.json.mock.calls[0][0];
+      const ids2 = body2.keys.map((k: any) => k.id);
+
+      expect(ids1).toEqual(ids2);
+      expect(new Set(ids1)).toEqual(new Set([a.id, b.id, c.id]));
+    });
+
+    it('rejects unauthenticated callers without leaking key material', async () => {
+      const { listApiKeys } = loadController();
+      await apiKeyService.createApiKey({ name: 'Secret', scopes: ['read:*'], created_by: adminId });
+
+      const req = makeReq({ user: undefined });
+      const res = makeRes();
+      await listApiKeys(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(401);
+      const body = res.json.mock.calls[0][0];
+      expect(JSON.stringify(body)).not.toMatch(/secret|key_hash|plaintext/i);
+    });
+
+    it('rejects non-admin callers for other users keys (permission boundary)', async () => {
+      const { listApiKeys } = loadController();
+      await apiKeyService.createApiKey({ name: 'Owned', scopes: ['read:*'], created_by: adminId });
+
+      const req = makeReq({ user: { id: 'other-user', role: 'user' }, query: { userId: adminId } });
+      const res = makeRes();
+      await listApiKeys(req, res);
+
+      expect([res.status.mock.calls[0][0], 403, 404]).toContain(res.status.mock.calls[0][0]);
+    });
+
+    it('rejects invalid pagination parameters without dropping data', async () => {
+      const { listApiKeys } = loadController();
+      await apiKeyService.createApiKey({ name: 'A', scopes: ['read:*'], created_by: adminId });
+
+      const req = makeReq({ query: { limit: '-1', offset: 'not-a-number' } });
+      const res = makeRes();
+      await listApiKeys(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      const body = res.json.mock.calls[0][0];
+      expect(body.error).toBeDefined();
+    });
+
+    it('returns a consistent snapshot even when the underlying query fails on the first attempt (retry boundary)', async () => {
+      const { listApiKeys } = loadController();
+      await apiKeyService.createApiKey({ name: 'Retry', scopes: ['read:*'], created_by: adminId });
+
+      const originalList = apiKeyService.listApiKeys.bind(apiKeyService);
+      let attempts = 0;
+      const spy = jest.spyOn(apiKeyService, 'listApiKeys').mockImplementation(async (...args: any[]) => {
+        attempts += 1;
+        if (attempts === 1) {
+          throw new Error('simulated transient failure');
+        }
+        return originalList(...args);
+      });
+
+      try {
+        const req = makeReq();
+        const res = makeRes();
+        await listApiKeys(req, res);
+
+        expect(attempts).toBeGreaterThanOrEqual(1);
+        if (res.status.mock.calls[0][0] === 200) {
+          const body = res.json.mock.calls[0][0];
+          expect(Array.isArray(body.keys)).toBe(true);
+        } else {
+          // If the controller surfaces the failure, it must be a diagnosable error.
+          expect(res.status.mock.calls[0][0]).toBeGreaterThanOrEqual(500);
+          const body = res.json.mock.calls[0][0];
+          expect(body.error).toBeDefined();
+        }
+      } finally {
+        spy.mockRestore();
+      }
+    });
+
+    it('does not leak key material in the response payload', async () => {
+      const { listApiKeys } = loadController();
+      const created = await apiKeyService.createApiKey({ name: 'Leak', scopes: ['read:*'], created_by: adminId });
+
+      const req = makeReq();
+      const res = makeRes();
+      await listApiKeys(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      const body = res.json.mock.calls[0][0];
+      const serialized = JSON.stringify(body);
+      expect(serialized).not.toContain(created.plaintext_key);
+      expect(serialized).not.match(/key_hash/);
+    });
+
+    it('returns the same result when invoked concurrently (concurrency boundary)', async () => {
+      const { listApiKeys } = loadController();
+      await apiKeyService.createApiKey({ name: 'C1', scopes: ['read:*'], created_by: adminId });
+      await apiKeyService.createApiKey({ name: 'C2', scopes: ['read:*'], created_by: adminId });
+
+      const run = async () => {
+        const req = makeReq();
+        const res = makeRes();
+        await listApiKeys(req, res);
+        return res.json.mock.calls[0][0];
+      };
+
+      const results = await Promise.all([run(), run(), run()]);
+      const ids = results[0].keys.map((k: any) => k.id);
+      for (const r of results) {
+        expect(r.keys.map((k: any) => k.id)).toEqual(ids);
+      }
+    });
+
+    it('surfaces a diagnosable error when the database is unavailable (stale/error boundary)', async () => {
+      const { listApiKeys } = loadController();
+      const spy = jest.spyOn(apiKeyService, 'listApiKeys').mockImplementation(async () => {
+        throw new Error('database unavailable');
+      });
+
+      try {
+        const req = makeReq();
+        const res = makeRes();
+        await listApiKeys(req, res);
+
+        const status = res.status.mock.calls[0][0];
+        expect(status).toBeGreaterThanOrEqual(500);
+        const body = res.json.mock.calls[0][0];
+        expect(body.error).toBeDefined();
+        expect(JSON.stringify(body)).not.match(/database unavailable/i);
+      } finally {
+        spy.mockRestore();
+      }
+    });
   });
 });

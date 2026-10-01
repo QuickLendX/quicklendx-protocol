@@ -37,6 +37,21 @@ const rotateSigningSecretSchema = z.object({
 });
 
 /**
+ * List query validation schema.
+ *
+ * Invariants:
+ * - `created_by`, when present, must be a non-empty string (no silent coercion of arrays/numbers).
+ * - `revoked`, when present, must be the exact literal 'true' or 'false'.
+ *   Any other value is rejected with 400 rather than being coerced to `false`,
+ *   which would silently change the result set.
+ * - Unknown query parameters are stripped so they cannot influence filtering.
+ */
+const listApiKeysQuerySchema = z.object({
+  created_by: z.string().min(1).max(256).optional(),
+  revoked: z.enum(['true', 'false']).optional(),
+}).strict();
+
+/**
  * Map a typed API key error to a deterministic HTTP status code.
  *
  * Invariants:
@@ -51,7 +66,7 @@ const rotateSigningSecretSchema = z.object({
  */
 function mapApiKeyErrorToResponse(error: any): { status: number; code: string; message: string } {
   if (error instanceof ApiKeyNotFoundError) {
-    return { status: 404, code: ApiKeyErrorCode.NOT_FOUND, message: 'APIkey not found' };
+    return { status: 404, code: ApiKeyErrorCode.NOT_FOUND, message: 'APIKey not found' };
   }
   if (error instanceof ApiKeyRevokedError) {
     return { status: 409, code: ApiKeyErrorCode.REVOKED, message: 'Cannot rotate a revoked key' };
@@ -63,6 +78,36 @@ function mapApiKeyErrorToResponse(error: any): { status: number; code: string; m
     return { status: 400, code: error.code, message: error.message };
   }
   return { status: 500, code: ApiKeyErrorCode.INTERNAL, message: 'Failed to rotate API key' };
+}
+
+/**
+* Map an API key error to a deterministic HTTP status code for the
+ * read-only `getApiKey` endpoint.
+ *
+ * Invariants:
+ *  - Not found         -> 404
+ *  - Revoked          -> 409 (callers must be able to distinguish a revoked key)
+ *  - Rotation conflict -> 409
+ *  - Validation       -> 400
+ *  - Anything else     -> 500
+ *
+ * The response body always includes a stable `code` so clients can branch
+ * without parsing free-text messages. Sensitive data is never echoed.
+ */
+function mapGetApiKeyErrorToResponse(error: any): { status: number; code: string; message: string } {
+  if (error instanceof ApiKeyNotFoundError) {
+    return { status: 404, code: 'KEY_NOT_FOUND', message: 'APIKey not found' };
+  }
+  if (error instanceof ApiKeyRevokedError) {
+    return { status: 409, code: ApiKeyErrorCode.REVOKED, message: 'API key has been revoked' };
+  }
+  if (error instanceof ApiKeyRotationConflictError) {
+    return { status: 409, code: ApiKeyErrorCode.ROTATION_CONFLICT, message: error.message };
+  }
+  if (error instanceof ApiKeyError) {
+    return { status: 400, code: error.code, message: error.message };
+  }
+  return { status: 500, code: 'GET_KEY_ERROR', message: 'Failed to get API key' };
 }
 
 /**
@@ -199,19 +244,37 @@ export async function createApiKey(req: Request, res: Response): Promise<void> {
 /**
  * List API keys
  * GET /api/v1/keys
+*
+ * Failure-boundary contract:
+ * - Invalid query parameters return 400 VALIDATION_ERROR and never touch the service.
+ * - Service failures return 500 LIST_KEYS_ERROR with a stable message;
+ *   the raw error is logged server-side only so no sensitive data leaks.
+ * - Successful responses always include `data` (array) and `count` (number)
+ *   and never expose key hashes or signing secrets.
  */
 export async function listApiKeys(req: Request, res: Response): Promise<void> {
+  // Validate query parameters before doing any work.
+  const validation = listApiKeysQuerySchema.safeParse(req.query);
+  if (!validation.success) {
+    res.status(400).json({
+      error: {
+        message: 'Invalid query parameters',
+        code: 'VALIDATION_ERROR',
+        details: validation.error.errors,
+      },
+    });
+    return;
+  }
+
+  const filters: { created_by?: string; revoked?: boolean } = {};
+  if (validation.data.created_by !== undefined) {
+    filters.created_by = validation.data.created_by;
+  }
+  if (validation.data.revoked !== undefined) {
+    filters.revoked = validation.data.revoked === 'true';
+  }
+
   try {
-    const filters: any = {};
-
-    if (req.query.created_by) {
-      filters.created_by = req.query.created_by as string;
-    }
-
-    if (req.query.revoked !== undefined) {
-      filters.revoked = req.query.revoked === 'true';
-    }
-
     const keys = await apiKeyService.listApiKeys(filters);
 
     // Don't return key_hash in the response
@@ -220,9 +283,9 @@ export async function listApiKeys(req: Request, res: Response): Promise<void> {
       name: k.name,
       prefix: k.prefix,
       scopes: k.scopes,
-      created_at: k.created_at,
+      created_at: ks.created_at,
       last_used_at: k.last_used_at,
-      expires_at: k.expires_at,
+      expires_at: ks.expires_at,
       revoked: k.revoked,
       created_by: k.created_by,
     }));
@@ -245,10 +308,34 @@ export async function listApiKeys(req: Request, res: Response): Promise<void> {
 /**
  * Get a specific API key
  * GET /api/v1/keys/:id
+ *
+ * Failure boundaries (deterministic):
+ *  - 404 if the key does not exist (including missing/empty id).
+ *  - 409 if the key has been revoked.
+ *  - 500 for unexpected internal failures (e.g. database errors).
+ *
+ * Invariants:
+ *  - The response never contains key_hash, signing_secret_hash, or any
+ *    plaintext key material.
+ *  - The status code is deterministic for a given error class so clients
+ *    can branch without parsing free-text messages.
  */
 export async function getApiKey(req: Request, res: Response): Promise<void> {
   try {
     const { id } = req.params;
+
+    // Defensive guard: Express normally guarantees a non-empty id for this route,
+    // but the controller may be invoked directly (e.g. in tests or future routers).
+    // Treat a missing/empty id as a not-found rather than a database query.
+    if (!id || typeof id !== 'string' || id.length === 0) {
+      res.status(404).json({
+        error: {
+          message: 'APIKey not found',
+          code: 'KEY_NOT_FOUND',
+        },
+      });
+      return;
+    }
 
     const key = await apiKeyService.getApiKeyById(id);
 
@@ -262,7 +349,9 @@ export async function getApiKey(req: Request, res: Response): Promise<void> {
       return;
     }
 
-    // Don't return key_hash
+    // Revoked keys are still returned to authorized callers (list/audit
+    // need to see them), but the response must make the revoked status
+    // explicit and must not expose key material.
     res.json({
       data: {
         id: key.id,
@@ -277,11 +366,21 @@ export async function getApiKey(req: Request, res: Response): Promise<void> {
       },
     });
   } catch (error: any) {
-    console.error('[GetApiKey] Error:', error);
-    res.status(500).json({
+    const mapped = mapGetApiKeyErrorToResponse(error);
+    // 5xx errors are unexpected and warrant a full stack trace; 4xx errors
+    // are expected and are logged at warn. We never log the request body
+    // or key material.
+    if (mapped.status >= 500) {
+      console.error('[GetApiKey] Unexpected error:', error);
+    } else {
+      console.warn(
+        `[GetApiKey] Rejected lookup for key ${req.params.id}: ${mapped.code}`
+      );
+    }
+    res.status(mapped.status).json({
       error: {
-        message: 'Failed to get API key',
-        code: 'GET_KEY_ERROR',
+        message: mapped.message,
+        code: mapped.code,
       },
     });
   }
@@ -296,7 +395,7 @@ export async function getApiKey(req: Request, res: Response): Promise<void> {
  *    malformed `expected_prefix`).
  *  - 404 if the key does not exist.
  *  - 409 if the key is revoked or a concurrent/stale rotation is detected.
-  *  - 500 for unexpected internal failures (e.g. database errors).
+ *  - 500 for unexpected internal failures (e.g. database errors).
  *
  * On any failure the old key remains active and no partial state is
  * committed. On success exactly one key (the new one) is active.
@@ -399,11 +498,18 @@ export async function rotateApiKeySigningSecret(req: Request, res: Response): Pr
       },
     });
   } catch (error: any) {
-    console.error('[RotateApiKeySigningSecret] Error:', error);
-    res.status(400).json({
+    const mapped = mapApiKeyErrorToResponse(error);
+    if (mapped.status >= 500) {
+      console.error('[RotateApiKeySigningSecret] Unexpected error:', error);
+    } else {
+      console.warn(
+        `[RotateApiKeySigningSecret] Rejected rotation for key ${req.params.id}: ${mapped.code}`
+      );
+    }
+    res.status(mapped.status).json({
       error: {
-        message: error.message || 'Failed to rotate API key signing secret',
-        code: 'ROTATE_SECRET_ERROR',
+        message: mapped.message,
+        code: mapped.code,
       },
     });
   }
@@ -442,11 +548,18 @@ export async function revokeApiKey(req: Request, res: Response): Promise<void> {
       },
     });
   } catch (error: any) {
-    console.error('[RevokeApiKey] Error:', error);
-    res.status(400).json({
+    const mapped = mapApiKeyErrorToResponse(error);
+    if (mapped.status >= 500) {
+      console.error('[RevokeApiKey] Unexpected error:', error);
+    } else {
+      console.warn(
+        `[RevokeApiKey] Rejected revocation for key ${req.params.id}: ${mapped.code}`
+      );
+    }
+    res.status(mapped.status).json({
       error: {
-        message: error.message || 'Failed to revoke API key',
-        code: 'REVOKE_KEY_ERROR',
+        message: mapped.message,
+        code: mapped.code,
       },
     });
   }
@@ -501,12 +614,12 @@ export async function getKeyAuditLogs(req: Request, res: Response): Promise<void
  * Get available scopes
  * GET /api/v1/keys/scopes
  */
-export async function getAvailableScopes(req: Request, res: Response): Promise<void> {
+export async function getAvailableScopes(_req: Request, res: Response): Promise<void> {
   try {
     res.json({
-      data: Object.keys(SCOPE_REGISTRY).map((scope) => ({
-        scope,
-        description: (SCOPE_REGISTRY[scope] as any)?.description,
+data: Object.entries(SCOPE_REGISTRY).map(([key, value]) => ({
+        scope: key,
+        ...(value as object),
       })),
     });
   } catch (error: any) {
