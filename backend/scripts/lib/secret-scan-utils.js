@@ -68,6 +68,13 @@ const PREVIEW_MAX_LENGTH =
   PREVIEW_EDGE_LENGTH * 6 +
   PREVIEW_QUOTE.length;
 
+// Hard upper bound on matches collected from a single line. A pathological
+// pattern (or a caller-supplied regex with a zero-width match) must never be
+// able to make collectRegexMatches run unbounded, so the loop stops here and
+// returns what it has. The cap is far above any realistic secret density on
+// one line, so normal scans are unaffected.
+const MAX_MATCHES_PER_LINE = 10000;
+
 const KNOWN_SECRET_PATTERNS = [
   {
     name: "quicklendx-api-key",
@@ -460,6 +467,25 @@ function resetRegex(regex) {
   regex.lastIndex = 0;
 }
 
+// Deterministic, fail-closed collection of regex matches for a single line.
+//
+// Invariants enforced here (see tests/secret-scan-collect-regex-matches.test.ts):
+//   C1 Total        - never throws. A null/undefined line, a missing or
+//                     malformed patternDef, a regex whose exec throws, or a
+//                     revoked proxy all yield [] instead of aborting the scan
+//                     and discarding findings already collected for other
+//                     files.
+//   C2 Deterministic- the same (line, patternDef) always yields the same
+//                     matches, regardless of prior calls. lastIndex is reset
+//                     before and after the loop so a shared regex cannot leak
+//                     state across lines or across concurrent scans.
+//   C3 Bounded      - at most MAX_MATCHES_PER_LINE matches are returned, and
+//                     the loop always advances. Zero-length matches and
+//                     non-global regexes cannot spin forever.
+//   C4 Shape        - every returned entry is { type: string, match: string,
+//                     column: number >= 1 }. Non-string match[0] is skipped
+//                     rather than coerced.
+
 // Deterministic failure-boundary handling for formatFindings.
 //
 // formatFindings is the last stage before findings are rendered into CI logs,
@@ -574,19 +600,80 @@ function formatFindings(findings) {
     return `[${entry.severity}] ${entry.type}${location}: ${entry.preview}`;
   });
 }
-
 function collectRegexMatches(line, patternDef) {
   const matches = [];
-  resetRegex(patternDef.regex);
 
-  let match = patternDef.regex.exec(line);
-  while (match) {
-    matches.push({
-      type: patternDef.name,
-      match: match[0],
-      column: match.index + 1,
-    });
-    match = patternDef.regex.exec(line);
+  // C1: reject inputs that cannot be scanned without throwing.
+  if (typeof line !== "string") {
+    return matches;
+  }
+
+  if (!patternDef || typeof patternDef !== "object") {
+    return matches;
+  }
+
+  const regex = patternDef.regex;
+  if (!regex || typeof regex.exec !== "function") {
+    return matches;
+  }
+
+  const type = typeof patternDef.name === "string" ? patternDef.name : "unknown";
+
+  // C2: reset before scanning so a shared regex starts from a known state.
+  try {
+    resetRegex(regex);
+  } catch (error) {
+    return matches;
+  }
+
+  let match;
+  try {
+    match = regex.exec(line);
+  } catch (error) {
+    // C1: a throwing exec (revoked proxy, stateful getter) is a boundary,
+    // not a crash. Return what we have and leave the regex reset below.
+    return matches;
+  }
+
+  while (match && matches.length < MAX_MATCHES_PER_LINE) {
+    const value = match[0];
+    const index = match.index;
+
+    // C4: only string matches with a numeric index are emitted. Anything
+    // else is skipped rather than coerced, so a hostile match object cannot
+    // inject non-string data into downstream redaction.
+    if (typeof value === "string" && typeof index === "number" && index >= 0) {
+      matches.push({
+        type,
+        match: value,
+        column: index + 1,
+      });
+    }
+
+    // C3: guarantee forward progress. A zero-length match leaves lastIndex
+    // unchanged on a global regex, which would loop forever; advance it
+    // manually. A non-global regex also never advances lastIndex, so the
+    // same guard covers it.
+    if (value === "") {
+      if (regex.global || regex.sticky) {
+        regex.lastIndex = index + 1;
+      } else {
+        break;
+      }
+    }
+
+    try {
+      match = regex.exec(line);
+    } catch (error) {
+      break;
+    }
+  }
+
+  // C2: leave the regex in a clean state for the next caller.
+  try {
+    resetRegex(regex);
+  } catch (error) {
+    // Ignore: the regex is already unusable; callers get the matches we have.
   }
 
   return matches;
@@ -1369,6 +1456,7 @@ module.exports = {
   PLAIN_STRING_REGEX,
   MIN_HIGH_ENTROPY_LENGTH,
   MIN_HIGH_ENTROPY_SCORE,
+  MAX_MATCHES_PER_LINE,
   PREVIEW_EDGE_LENGTH,
   PREVIEW_ELLIPSIS,
   PREVIEW_MASK_CHARACTER,
