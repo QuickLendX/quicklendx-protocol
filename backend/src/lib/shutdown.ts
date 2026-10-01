@@ -372,6 +372,7 @@ export function createShutdownHandler(
           `[shutdown] Drain timeout (${drainTimeoutMs}ms) exceeded — ` +
             `${remaining} request(s) still in-flight`,
         );
+        throw new Error(`In-flight requests did not drain in time`);
       }
     },
   });
@@ -390,6 +391,7 @@ export function createShutdownHandler(
       }
       if (pending.length > 0) {
         console.warn(`[shutdown] ${pending.length} webhook event(s) not delivered`);
+        throw new Error(`${pending.length} webhook event(s) not delivered`);
       }
     },
   });
@@ -428,6 +430,6 @@ export function createShutdownHandler(
       );
     }
     console.log('[shutdown] Shutdown complete');
-    process.exit(0);
+    process.exit(success ? 0 : 1);
   };
 }
