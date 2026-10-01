@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from "express";
 import { ReconciliationWorker } from "../../services/reconciliationWorker";
+import { BackfillResult, DriftReport } from "../../types/reconciliation";
 
 const DEFAULT_LIMIT = 50;
 const MAX_LIMIT = 100;
