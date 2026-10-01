@@ -39,14 +39,14 @@ interface SpanLogEntry {
  * Maximum length of a trace identifier accepted from an inbound correlation id.
  * This bounds the amount of untrusted data that can be propagated into every span log.
  */
-export const MAX_TRACE_ID_LENGTH = 256;
+export const MAX_TRACE_ID_LENGTH = 128;
 
 /**
  * Allowed characters for an inbound trace id: alphanumeric plus a conservative set of
  * separators commonly used by request id formats (e.g. UUIDs, W3 trace parents, request ids).
  * Whitespace, control characters, and log-injection sequences are rejected.
  */
-const TRACE_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,256}$/;
+const TRACE_ID_PATTERN = /^[A-Za-z0-9_.:-]{1,128}$/;
 
 /**
  * Deterministically derive a trace id from the current span context or the inbound
