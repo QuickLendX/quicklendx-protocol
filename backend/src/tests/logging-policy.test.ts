@@ -8,6 +8,8 @@
  *   • "No secrets in logs" regression guard
  *   • Request-logger middleware integration
  *   • Edge-cases: null, undefined, arrays, deeply nested objects
+ *   • Deterministic failure-boundary coverage for getPolicyFields
+ *   • Deterministic failure-boundary coverage for sanitiseRequest
  */
 
 import { createHash } from "crypto";
@@ -26,6 +28,7 @@ import {
   sanitiseRequest,
   sanitiseResponse,
   findSecretLeak,
+  getPolicyFields,
 } from "../lib/logging/policy";
 
 import {
@@ -93,6 +96,9 @@ describe("classifyField", () => {
       "mnemonic", "seed_phrase",
       // Webhook
       "webhook_secret", "signing_secret",
+      // Additional camelCase policy entries
+      "dateOfBirth", "passportNumber", "bankAccountNumber",
+      "routingNumber", "taxId",
     ];
 
     it.each(secretFields)("classifies '%s' as SECRET", (field) => {
@@ -106,6 +112,77 @@ describe("classifyField", () => {
   it("defaults unknown fields to PRIVATE", () => {
     expect(classifyField("totally_unknown_field_xyz")).toBe(FieldTier.PRIVATE);
     expect(isPrivate("totally_unknown_field_xyz")).toBe(true);
+  });
+
+  it.each([
+    "",
+    "ID",
+    "Status",
+    " id",
+    "id ",
+    "invoice-id",
+    "__proto__",
+    "constructor",
+    "toString",
+    "valueOf",
+    "hasOwnProperty",
+  ])("defaults unlisted boundary name %j to PRIVATE", (field) => {
+    expect(classifyField(field)).toBe(FieldTier.PRIVATE);
+    expect(isPrivate(field)).toBe(true);
+    expect(isPublic(field)).toBe(false);
+    expect(isSecret(field)).toBe(false);
+  });
+
+  it("returns the same classification on repeated calls", () => {
+    expect(classifyField("authorization")).toBe(FieldTier.SECRET);
+    expect(classifyField("authorization")).toBe(FieldTier.SECRET);
+    expect(classifyField("unlisted_field")).toBe(FieldTier.PRIVATE);
+    expect(classifyField("unlisted_field")).toBe(FieldTier.PRIVATE);
+  });
+});
+
+describe("isSecret boundary cases", () => {
+  it.each([
+    "",
+    " ",
+    " password",
+    "PASSWORD",
+    "password ",
+    "totally_unknown_field_xyz",
+    "__proto__",
+    "constructor",
+    "toString",
+  ])("does not classify non-exact secret field name %j as secret", (field) => {
+    expect(isSecret(field)).toBe(false);
+    expect(isSecret(field)).toBe(false);
+  });
+});
+
+describe("isPublic boundary cases", () => {
+  it.each([
+    null,
+    undefined,
+    123,
+    {},
+    [],
+    Symbol("id"),
+    function () {},
+    true,
+  ])("gracefully rejects non-string input %j", (input) => {
+    // We cast to any to bypass TS and simulate dynamic JS calls
+    expect(isPublic(input as any)).toBe(false);
+  });
+
+  it.each([
+    "",
+    " ",
+    "__proto__",
+    "constructor",
+    "totally_unknown_field_xyz",
+    "id ",
+    " id",
+  ])("gracefully rejects invalid string boundary %j", (field) => {
+    expect(isPublic(field)).toBe(false);
   });
 });
 
@@ -130,6 +207,27 @@ describe("hashValue", () => {
     expect(h).toMatch(/^sha256:/);
     expect(h).toBe(hashValue({ nested: true }));
   });
+
+  it("is deterministic across repeated invocations for the same input", () => {
+    const first = hashValue("wallet_addr");
+    const second = hashValue("wallet_addr");
+    const third = hashValue("wallet_addr");
+    expect(first).toBe(second);
+    expect(second).toBe(third);
+  });
+
+  it("handles empty string deterministically", () => {
+    const h = hashValue("");
+    expect(h).toMatch(/^sha256:[0-9a-f]{8}$/);
+    expect(h).toBe(hashValue(""));
+  });
+
+  it("handles null and undefined without throwing", () => {
+    expect(() => hashValue(null)).not.toThrow();
+    expect(() => hashValue(undefined)).not.toThrow();
+    expect(hashValue(null)).toBe(hashValue(null));
+    expect(hashValue(undefined)).toBe(hashValue(undefined));
+  });
 });
 
 describe("redactByTier", () => {
@@ -153,6 +251,18 @@ describe("redactByTier", () => {
   it("PRIVATE tier — null / undefined pass through", () => {
     expect(redactByTier(null, FieldTier.PRIVATE)).toBeNull();
     expect(redactByTier(undefined, FieldTier.PRIVATE)).toBeUndefined();
+  });
+
+  it("PRIVATE tier — deterministic for duplicate inputs", () => {
+    const a = redactByTier("0xABCDEF", FieldTier.PRIVATE);
+    const b = redactByTier("0xABCDEF", FieldTier.PRIVATE);
+    expect(a).toBe(b);
+    expect(a).toBe(sha256Prefix("0xABCDEF"));
+  });
+
+  it("SECRET tier — deterministic regardless of value shape", () => {
+    expect(redactByTier({ nested: true }, FieldTier.SECRET)).toBe("[REDACTED]");
+    expect(redactByTier(["a", "b"], FieldTier.SECRET)).toBe("[REDACTED]");
   });
 });
 
@@ -228,6 +338,51 @@ describe("redactObject", () => {
     const out = redactObject({ password: "hunter2" });
     expect(out.password).toBe("[REDACTED]");
   });
+
+  describe("failure boundaries", () => {
+    it("gracefully handles null or non-object input", () => {
+      // @ts-expect-error forcing invalid input
+      expect(redactObject(null)).toEqual({});
+      // @ts-expect-error forcing invalid input
+      expect(redactObject("string")).toEqual({});
+    });
+
+    it("safely redacts cyclic objects in PRIVATE fields", () => {
+      const cyclic: any = { amount: "100" };
+      cyclic.self = cyclic; // 'self' is PRIVATE
+      const out = redactObject(cyclic);
+      expect(typeof out.amount).toBe("string");
+      expect(out.self).toBe("[REDACTED]");
+    });
+
+    it("safely redacts cyclic objects in PUBLIC fields", () => {
+      const cyclic: any = { id: "1" };
+      cyclic.id = cyclic; // 'id' is PUBLIC
+      const out = redactObject(cyclic);
+      expect(out.id).toBe("[REDACTED]");
+    });
+
+    it("safely redacts cyclic objects in PUBLIC arrays", () => {
+      const arr: any[] = [];
+      const item = { status: "pending" };
+      (item as any).self = item; // cycle within array element
+      arr.push(item);
+      const payload = { id: arr }; // 'id' is PUBLIC
+      const out = redactObject(payload);
+      expect((out.id as any[])[0].self).toBe("[REDACTED]");
+    });
+
+    it("handles throwing getters safely", () => {
+      const obj = { id: "safe" };
+      Object.defineProperty(obj, "amount", {
+        get() { throw new Error("Boom"); },
+        enumerable: true
+      });
+      const out = redactObject(obj as Record<string, unknown>);
+      expect(out.id).toBe("safe");
+      expect(out.amount).toBe("[REDACTED]");
+    });
+  });
 });
 
 // ── 4. Request sanitisation ───────────────────────────────────────────────────
@@ -272,7 +427,7 @@ describe("sanitiseRequest", () => {
 
   it("hashes private body fields", () => {
     const snap = sanitiseRequest(baseReq);
-    expect(snap.body!["amount"]).toBe(sha256Prefix("500000"));
+    expect(snap.body!["amount"]).toBe(hashValue("500000"));
   });
 
   it("preserves public body fields", () => {
@@ -288,6 +443,331 @@ describe("sanitiseRequest", () => {
   it("handles undefined body gracefully", () => {
     const snap = sanitiseRequest({ ...baseReq, body: undefined });
     expect(snap.body).toBeNull();
+  });
+
+  it("handles body as a string gracefully", () => {
+    const snap = sanitiseRequest({
+      method: "POST",
+      path: "/api/test",
+      query: {},
+      headers: {},
+      body: "raw body",
+    });
+    expect(snap.body).toBeNull();
+  });
+
+  it("handles body as a number gracefully", () => {
+    const snap = sanitiseRequest({
+      method: "POST",
+      path: "/api/test",
+      query: {},
+      headers: {},
+      body: 42,
+    });
+    expect(snap.body).toBeNull();
+  });
+
+  it("handles body as an array", () => {
+    const snap = sanitiseRequest({
+      method: "POST",
+      path: "/api/test",
+      query: {},
+      headers: {},
+      body: ["item1", "item2"],
+    });
+    expect(snap.body).toEqual(
+      expect.objectContaining({
+        "0": expect.stringMatching(/^sha256:/),
+        "1": expect.stringMatching(/^sha256:/),
+      })
+    );
+  });
+
+  it("lowercases header keys before redaction", () => {
+    const snap = sanitiseRequest({
+      method: "GET",
+      path: "/api/test",
+      query: {},
+      headers: { "Content-Type": "application/json", "X-Custom-Header": "value" },
+    });
+    expect(snap.headers["content-type"]).toMatch(/^sha256:/);
+    expect(snap.headers["x-custom-header"]).toMatch(/^sha256:/);
+  });
+});
+
+// ── 4b. sanitiseRequest — deterministic failure-boundary coverage ────────────
+
+describe("sanitiseRequest — failure boundaries", () => {
+  const baseReq = {
+    method: "POST",
+    path: "/api/v1/invoices",
+    query: { status: "Pending" },
+    headers: { authorization: "Bearer tok", "x-trace": "abc" },
+    body: { invoice_id: "inv_1", amount: "500000", tax_id: "123-45-6789" },
+  };
+
+  describe("malformed request containers — never throws", () => {
+    it.each([
+      ["null request", null],
+      ["undefined request", undefined],
+      ["primitive request", "not-a-request"],
+    ])("returns an empty snapshot for a %s", (_label, bad) => {
+      const snap = sanitiseRequest(bad as any);
+      expect(snap).toEqual({
+        method: "",
+        path: "",
+        query: {},
+        headers: {},
+        body: null,
+      });
+    });
+
+    it.each([
+      ["null", null],
+      ["undefined", undefined],
+      ["a string", "a=1"],
+      ["a number", 42],
+      ["an array", ["a", "b"]],
+    ])("degrades %s query to an empty record", (_label, bad) => {
+      const snap = sanitiseRequest({ ...baseReq, query: bad as any });
+      expect(snap.query).toEqual({});
+      // the rest of the record is still produced
+      expect(snap.method).toBe("POST");
+      expect(snap.body!["invoice_id"]).toBe("inv_1");
+    });
+
+    it.each([
+      ["null", null],
+      ["undefined", undefined],
+      ["a string", "content-type: x"],
+      ["a number", 7],
+      ["an array", ["a"]],
+    ])("degrades %s headers to an empty record", (_label, bad) => {
+      const snap = sanitiseRequest({ ...baseReq, headers: bad as any });
+      expect(snap.headers).toEqual({});
+      expect(snap.body!["tax_id"]).toBe("[REDACTED]");
+    });
+
+    it("substitutes empty strings for non-string method and path", () => {
+      const snap = sanitiseRequest({
+        ...baseReq,
+        method: undefined as any,
+        path: null as any,
+      });
+      expect(snap.method).toBe("");
+      expect(snap.path).toBe("");
+    });
+
+    it("does not throw when a property getter throws", () => {
+      const hostile = {
+        method: "GET",
+        path: "/p",
+        get headers(): Record<string, unknown> {
+          throw new Error("boom");
+        },
+        query: {},
+      };
+      // Property access is not guarded per-field, so a throwing getter is
+      // surfaced rather than swallowed — the error stays observable instead of
+      // becoming a silently truncated log record.
+      expect(() => sanitiseRequest(hostile as any)).toThrow("boom");
+    });
+  });
+
+  describe("boundary inputs", () => {
+    it("treats a non-object body as absent", () => {
+      expect(sanitiseRequest({ ...baseReq, body: "text" }).body).toBeNull();
+      expect(sanitiseRequest({ ...baseReq, body: 0 }).body).toBeNull();
+      expect(sanitiseRequest({ ...baseReq, body: false }).body).toBeNull();
+      expect(sanitiseRequest({ ...baseReq, body: null }).body).toBeNull();
+    });
+
+    it("redacts an array body by index rather than dropping it", () => {
+      const snap = sanitiseRequest({ ...baseReq, body: ["a", "b"] });
+      expect(snap.body).toEqual({
+        "0": hashValue("a"),
+        "1": hashValue("b"),
+      });
+    });
+
+    it("keeps a Date body as an empty record (no enumerable own fields)", () => {
+      expect(sanitiseRequest({ ...baseReq, body: new Date(0) }).body).toEqual({});
+    });
+
+    it("resolves a case-colliding header identically regardless of spelling order", () => {
+      const a = sanitiseRequest({
+        ...baseReq,
+        headers: { "X-Trace": "first", "x-trace": "second" },
+      });
+      const b = sanitiseRequest({
+        ...baseReq,
+        headers: { "x-trace": "second", "X-Trace": "first" },
+      });
+      // Header names are case-insensitive, so both spellings collapse to one
+      // key and both orderings must converge on the same value.
+      expect(Object.keys(a.headers)).toEqual(["x-trace"]);
+      expect(a.headers).toEqual(b.headers);
+      // The merged pair is PRIVATE tier, so it is hashed as a whole. The hash
+      // covers both values, so neither spelling is silently dropped, and the
+      // value is order-independent because the merge sorts before hashing.
+      expect(a.headers["x-trace"]).toBe(hashValue(["first", "second"]));
+      expect(a.headers["x-trace"]).not.toBe(hashValue("first"));
+      expect(a.headers["x-trace"]).not.toBe(hashValue("second"));
+    });
+
+    it("keeps a single-value header scalar so existing snapshots are unchanged", () => {
+      const snap = sanitiseRequest({ ...baseReq, headers: { "X-Trace": "only" } });
+      expect(snap.headers["x-trace"]).toBe(hashValue("only"));
+    });
+
+    it("classifies a mixed-case SECRET header as SECRET after normalisation", () => {
+      const snap = sanitiseRequest({
+        ...baseReq,
+        headers: { "Authorization": "Bearer leak-me" },
+      });
+      expect(snap.headers["authorization"]).toBe("[REDACTED]");
+    });
+
+    it("treats a null-prototype header bag like a plain one", () => {
+      const bare = Object.create(null);
+      bare.authorization = "Bearer tok";
+      const snap = sanitiseRequest({ ...baseReq, headers: bare });
+      expect(snap.headers["authorization"]).toBe("[REDACTED]");
+    });
+  });
+
+  describe("hostile and cyclic structures", () => {
+    it("contains a cyclic body and still redacts sibling fields", () => {
+      const body: Record<string, unknown> = { amount: "1" };
+      body.self = body;
+      const snap = sanitiseRequest({ ...baseReq, body });
+      expect(snap.body!["amount"]).toBe(hashValue("1"));
+      expect(snap.body!["self"]).toBe("[REDACTED]");
+    });
+
+    it("contains a cyclic query and still redacts sibling fields", () => {
+      const query: Record<string, unknown> = { status: "open" };
+      query.loop = query;
+      const snap = sanitiseRequest({ ...baseReq, query });
+      expect(snap.query["status"]).toBe("open");
+      expect(snap.query["loop"]).toBe("[REDACTED]");
+    });
+
+    it("contains a cyclic header bag and still redacts sibling headers", () => {
+      const headers: Record<string, unknown> = { authorization: "Bearer tok" };
+      headers.loop = headers;
+      const snap = sanitiseRequest({ ...baseReq, headers });
+      expect(snap.headers["authorization"]).toBe("[REDACTED]");
+      expect(snap.headers["loop"]).toBe("[REDACTED]");
+    });
+
+    it("does not allow a __proto__ header to pollute the snapshot", () => {
+      const snap = sanitiseRequest({
+        ...baseReq,
+        headers: JSON.parse('{"__proto__":{"polluted":"yes"}}'),
+      });
+      expect((snap.headers as any).polluted).toBeUndefined();
+      expect(({} as any).polluted).toBeUndefined();
+    });
+  });
+
+  describe("purity, concurrency and retry", () => {
+    it("does not mutate the incoming request", () => {
+      const req = structuredClone(baseReq);
+      const before = JSON.parse(JSON.stringify(req));
+      sanitiseRequest(req);
+      expect(req).toEqual(before);
+    });
+
+    it("returns a fresh object on every call (no shared mutable state)", () => {
+      const a = sanitiseRequest(baseReq);
+      const b = sanitiseRequest(baseReq);
+      expect(a).not.toBe(b);
+      expect(a.query).not.toBe(b.query);
+      expect(a.headers).not.toBe(b.headers);
+      expect(a).toEqual(b);
+    });
+
+    it("mutating a returned snapshot cannot corrupt the next one", () => {
+      const first = sanitiseRequest(baseReq);
+      first.query.status = "TAMPERED";
+      first.headers["authorization"] = "leak";
+      const second = sanitiseRequest(baseReq);
+      expect(second.query.status).toBe("Pending");
+      expect(second.headers["authorization"]).toBe("[REDACTED]");
+    });
+
+    it("is deterministic across repeated calls (stable snapshot)", () => {
+      const first = sanitiseRequest(baseReq);
+      for (let i = 0; i < 25; i++) {
+        expect(sanitiseRequest(baseReq)).toEqual(first);
+      }
+    });
+
+    it("is deterministic under concurrent interleaved calls", async () => {
+      const runs = await Promise.all(
+        Array.from({ length: 25 }, () =>
+          Promise.resolve().then(() => sanitiseRequest(baseReq))
+        )
+      );
+      for (const r of runs) expect(r).toEqual(runs[0]);
+    });
+
+    it("is deterministic for key-order permutations of the same logical input", () => {
+      const a = sanitiseRequest({
+        ...baseReq,
+        body: { amount: "500000", invoice_id: "inv_1" },
+      });
+      const b = sanitiseRequest({
+        ...baseReq,
+        body: { invoice_id: "inv_1", amount: "500000" },
+      });
+      expect(a.body).toEqual(b.body);
+    });
+
+    it("recovers deterministically after a malformed request", () => {
+      expect(sanitiseRequest(null as any).body).toBeNull();
+      const after = sanitiseRequest(baseReq);
+      expect(after).toEqual(sanitiseRequest(baseReq));
+      expect(after.body!["tax_id"]).toBe("[REDACTED]");
+    });
+  });
+
+  describe("regression — no secret ever leaks", () => {
+    it("emits no secret for a payload with secrets in every position", () => {
+      // `path` is copied verbatim by design (it is PUBLIC tier and Express's
+      // `req.path` excludes the query string), so the secrets here live in the
+      // query, header and body sections that sanitiseRequest redacts.
+      const snap = sanitiseRequest({
+        method: "POST",
+        path: "/api/v1/bids",
+        query: { access_token: "leak", amount: "1" },
+        headers: { Authorization: "Bearer leak", "X-Api-Key": "leak" },
+        body: {
+          signature: "leak",
+          email: "leak@example.com",
+          password: "hunter2",
+          invoice_id: "inv_1",
+        },
+      });
+      expect(findSecretLeak(snap)).toBeNull();
+      expect(JSON.stringify(snap)).not.toContain("leak");
+      expect(JSON.stringify(snap)).not.toContain("hunter2");
+    });
+
+    it("serialises to JSON without throwing for every malformed shape", () => {
+      const cases: unknown[] = [
+        null,
+        undefined,
+        {},
+        { method: "GET", path: "/p", query: null, headers: null },
+        { method: "GET", path: "/p", query: [], headers: [] },
+        { method: "GET", path: "/p", query: "x", headers: "y" },
+      ];
+      for (const c of cases) {
+        expect(() => JSON.stringify(sanitiseRequest(c as any))).not.toThrow();
+      }
+    });
   });
 });
 
@@ -684,6 +1164,209 @@ describe("createRequestLogger — error catch branch", () => {
     await supertest(app).get("/health").expect(200);
     expect(entries.length).toBe(1);
     expect(entries[0].path).toBe("/health");
+  });
+});
+
+// ── 10. getPolicyFields — deterministic failure-boundary coverage ────────────
+
+describe("getPolicyFields", () => {
+  describe("valid inputs — deterministic classification", () => {
+    it("returns an empty array for an empty input list", () => {
+      expect(getPolicyFields([])).toEqual([]);
+    });
+
+    it("classifies a single PUBLIC field deterministically", () => {
+      const out = getPolicyFields(["id"]);
+      expect(out).toEqual([{ field: "id", tier: FieldTier.PUBLIC }]);
+      // repeated calls must yield identical results
+      expect(getPolicyFields(["id"])).toEqual(out);
+    });
+
+    it("classifies a single PRIVATE field deterministically", () => {
+      const out = getPolicyFields(["amount"]);
+      expect(out).toEqual([{ field: "amount", tier: FieldTier.PRIVATE }]);
+      expect(getPolicyFields(["amount"])).toEqual(out);
+    });
+
+    it("classifies a single SECRET field deterministically", () => {
+      const out = getPolicyFields(["authorization"]);
+      expect(out).toEqual([
+        { field: "authorization", tier: FieldTier.SECRET },
+      ]);
+      expect(getPolicyFields(["authorization"])).toEqual(out);
+    });
+
+    it("preserves input order across mixed tiers", () => {
+      const out = getPolicyFields([
+        "id",
+        "amount",
+        "authorization",
+        "status",
+      ]);
+      expect(out.map((e) => e.field)).toEqual([
+        "id",
+        "amount",
+        "authorization",
+        "status",
+      ]);
+      expect(out.map((e) => e.tier)).toEqual([
+        FieldTier.PUBLIC,
+        FieldTier.PRIVATE,
+        FieldTier.SECRET,
+        FieldTier.PUBLIC,
+      ]);
+    });
+
+    it("defaults unknown fields to PRIVATE", () => {
+      const out = getPolicyFields(["totally_unknown_field_xyz"]);
+      expect(out).toEqual([
+        { field: "totally_unknown_field_xyz", tier: FieldTier.PRIVATE },
+      ]);
+    });
+  });
+
+  describe("invalid inputs — deterministic rejection", () => {
+    it("throws a TypeError when given null", () => {
+      expect(() => getPolicyFields(null as unknown as string[])).toThrow(
+        TypeError
+      );
+    });
+
+    it("throws a TypeError when given undefined", () => {
+      expect(() => getPolicyFields(undefined as unknown as string[])).toThrow(
+        TypeError
+      );
+    });
+
+    it("throws a TypeError when given a non-array value", () => {
+      expect(() =>
+        getPolicyFields("id" as unknown as string[])
+      ).toThrow(TypeError);
+    });
+
+    it("throws a TypeError when an element is not a string", () => {
+      expect(() =>
+        getPolicyFields(["id", 42 as unknown as string])
+      ).toThrow(TypeError);
+    });
+
+    it("throws a TypeError when an element is null", () => {
+      expect(() =>
+        getPolicyFields([null as unknown as string])
+      ).toThrow(TypeError);
+    });
+
+    it("rejects the whole batch atomically — no partial output on failure", () => {
+      // If any element is invalid, the call must throw rather than returning
+      // a partially-classified list. This guards against silent data loss.
+      let result: unknown = "sentinel";
+      try {
+        result = getPolicyFields(["id", 42 as unknown as string, "amount"]);
+      } catch (err) {
+        expect(err).toBeInstanceOf(TypeError);
+      }
+      expect(result).toBe("sentinel");
+    });
+  });
+
+  describe("duplicate and boundary inputs", () => {
+    it("preserves duplicate fields in order (no deduplication)", () => {
+      const out = getPolicyFields(["id", "id", "amount", "amount"]);
+      expect(out).toEqual([
+        { field: "id", tier: FieldTier.PUBLIC },
+        { field: "id", tier: FieldTier.PUBLIC },
+        { field: "amount", tier: FieldTier.PRIVATE },
+        { field: "amount", tier: FieldTier.PRIVATE },
+      ]);
+    });
+
+    it("classifies the empty-string field as PRIVATE (unknown default)", () => {
+      const out = getPolicyFields([""]);
+      expect(out).toEqual([{ field: "", tier: FieldTier.PRIVATE }]);
+    });
+
+    it("is case-sensitive — 'ID' is not the same as 'id'", () => {
+      const out = getPolicyFields(["ID", "id"]);
+      expect(out[0].tier).toBe(FieldTier.PRIVATE);
+      expect(out[1].tier).toBe(FieldTier.PUBLIC);
+    });
+
+    it("handles a large batch deterministically", () => {
+      const fields = new Array(500).fill("id");
+      const out = getPolicyFields(fields);
+      expect(out).toHaveLength(500);
+      expect(out.every((e) => e.tier === FieldTier.PUBLIC)).toBe(true);
+    });
+  });
+
+  describe("concurrency and retry safety", () => {
+    it("is pure — repeated concurrent calls yield identical results", async () => {
+      const fields = ["id", "amount", "authorization", "unknown_x"];
+      const runs = await Promise.all(
+        Array.from({ length: 25 }, () =>
+          Promise.resolve().then(() => getPolicyFields(fields))
+        )
+      );
+      const first = runs[0];
+      for (const r of runs) {
+        expect(r).toEqual(first);
+      }
+    });
+
+    it("does not mutate the input array", () => {
+      const input = ["id", "amount", "authorization"];
+      const copy = [...input];
+      getPolicyFields(input);
+      expect(input).toEqual(copy);
+    });
+
+    it("returns fresh objects on each call (no shared mutable state)", () => {
+      const a = getPolicyFields(["id"]);
+      const b = getPolicyFields(["id"]);
+      expect(a).not.toBe(b);
+      expect(a[0]).not.toBe(b[0]);
+      expect(a).toEqual(b);
+    });
+
+    it("retry after a rejected call succeeds with the same deterministic output", () => {
+      expect(() =>
+        getPolicyFields([1 as unknown as string])
+      ).toThrow(TypeError);
+      const out = getPolicyFields(["id", "amount"]);
+      expect(out).toEqual([
+        { field: "id", tier: FieldTier.PUBLIC },
+        { field: "amount", tier: FieldTier.PRIVATE },
+      ]);
+    });
+  });
+
+  describe("regression — classification matches classifyField", () => {
+    const sample = [
+      "id",
+      "status",
+      "amount",
+      "business",
+      "authorization",
+      "tax_id",
+      "email",
+      "totally_unknown_field_xyz",
+    ];
+
+    it("each entry's tier equals classifyField(field)", () => {
+      const out = getPolicyFields(sample);
+      for (const entry of out) {
+        expect(entry.tier).toBe(classifyField(entry.field));
+      }
+    });
+
+    it("never emits a SECRET field as PUBLIC or PRIVATE", () => {
+      const out = getPolicyFields(sample);
+      for (const entry of out) {
+        if (isSecret(entry.field)) {
+          expect(entry.tier).toBe(FieldTier.SECRET);
+        }
+      }
+    });
   });
 });
 

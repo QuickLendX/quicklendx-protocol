@@ -205,7 +205,50 @@ describe("assertConditionalWrite (unit)", () => {
           lastModified: new Date("2025-01-01"),
         })
       ).toBe(true);
+    it("should ignore If-Unmodified-Since when If-Match is present and matches (RFC 7232 §3.4)", () => {
+      const oldHeader = new Date("2020-01-01T00:00:00Z").toUTCString();
+      const req = mockReq({
+        "if-match": '"current"',
+        "if-unmodified-since": oldHeader,
+      });
+      const res = mockRes();
+      // If-Match passes, so If-Unmodified-Since is ignored even though it would fail
+      expect(
+        assertConditionalWrite(req, res, '"current"', {
+          lastModified: new Date("2026-06-01"),
+        })
+      ).toBe(false);
+    });
+
+    it("should reject weak ETags in If-Match per RFC 7232 §3.1", () => {
+      const req = mockReq({ "if-match": 'W/"weak-etag"' });
+      const res = mockRes();
+      expect(assertConditionalWrite(req, res, '"weak-etag"')).toBe(true);
       expect(res._status).toBe(412);
+    });
+
+    it("should match ETags with normalized quote handling", () => {
+      const req = mockReq({ "if-match": '"etag123"' });
+      const res = mockRes();
+      expect(assertConditionalWrite(req, res, "etag123")).toBe(false);
+    });
+
+    it("should return 400 PRECONDITION_REQUIRED on empty If-Match when required is true", () => {
+      const req = mockReq({ "if-match": "   " });
+      const res = mockRes();
+      expect(assertConditionalWrite(req, res, '"etag"', { required: true })).toBe(true);
+      expect(res._status).toBe(400);
+      expect(res._json.error.code).toBe("PRECONDITION_REQUIRED");
+    });
+
+    it("should gracefully handle invalid Date object in lastModified option", () => {
+      const req = mockReq({ "if-unmodified-since": new Date("2020-01-01").toUTCString() });
+      const res = mockRes();
+      expect(
+        assertConditionalWrite(req, res, '"etag"', {
+          lastModified: new Date("invalid date string"),
+        })
+      ).toBe(false);
     });
   });
 });
