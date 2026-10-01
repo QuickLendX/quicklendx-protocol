@@ -1,3 +1,4 @@
+
 /**
  * Tests for the graceful shutdown orchestrator (src/lib/shutdown.ts)
  * and the WebhookQueueService.flush() method.
@@ -79,6 +80,7 @@ import {
   markShuttingDown,
   DEFAULT_DRAIN_TIMEOUT_MS,
   DRAIN_POLL_MS,
+  getRegisteredSteps,
 } from '../lib/shutdown';
 import { getActiveRequests } from '../middleware/load-shedding';
 import { webhookQueueService } from '../services/webhookQueueService';
@@ -131,6 +133,11 @@ describe('createShutdownHandler', () => {
     resetShuttingDown();
     // Mock process.exit so it does not terminate the test runner.
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    // jest.clearAllMocks() above only clears call history, not
+    // .mockImplementation() bodies a previous test may have installed
+    // (e.g. one of the failure-boundary tests below making a mock throw).
+    // Reset every mock used across this suite to its safe default here so
+    // no test can silently inherit a throw it never configured itself.
     mockGetActiveRequests.mockReturnValue(0);
     mockFlush.mockReturnValue([]);
     mockMarkShuttingDown.mockClear();
@@ -724,5 +731,120 @@ describe('WebhookQueueService.flush (real implementation)', () => {
 
     expect(flushed).toHaveLength(1);
     expect(flushed[0].type).toBe('after-flush');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getRegisteredSteps — deterministic failure-boundary coverage
+// ---------------------------------------------------------------------------
+describe('getRegisteredSteps', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resetShuttingDown();
+    mockGetRegisteredSteps.mockReturnValue([]);
+  });
+
+  it('returns an empty array when no steps are registered', () => {
+    expect(getRegisteredSteps()).toEqual([]);
+  });
+
+  it('returns a stable snapshot of registered step names', () => {
+    const steps = ['drain', 'flush-webhooks', 'close-db'];
+    mockGetRegisteredSteps.mockReturnValue(steps);
+
+    const first = getRegisteredSteps();
+    const second = getRegisteredSteps();
+
+    expect(first).toEqual(steps);
+    expect(second).toEqual(steps);
+    expect(first).not.toBe(second);
+  });
+
+  it('is deterministic across repeated invocations with identical state', () => {
+    mockGetRegisteredSteps.mockReturnValue(['a', 'b', 'c']);
+
+    const results = Array.from({ length: 5 }, () => getRegisteredSteps());
+
+    for (const r of results) {
+      expect(r).toEqual(['a', 'b', 'c']);
+    }
+  });
+
+  it('preserves registration order', () => {
+    mockGetRegisteredSteps.mockReturnValue(['first', 'second', 'third']);
+    expect(getRegisteredSteps()).toEqual(['first', 'second', 'third']);
+  });
+
+  it('does not mutate the underlying registry when the result is mutated', () => {
+    mockGetRegisteredSteps.mockReturnValue(['x', 'y']);
+
+    const snapshot = getRegisteredSteps();
+    snapshot.push('z');
+    snapshot[0] = 'mutated';
+
+    expect(getRegisteredSteps()).toEqual(['x', 'y']);
+  });
+
+  it('returns a fresh array on each call (no shared reference)', () => {
+    mockGetRegisteredSteps.mockReturnValue(['only']);
+
+    const a = getRegisteredSteps();
+    const b = getRegisteredSteps();
+
+    expect(a).not.toBe(b);
+    expect(a).toEqual(b);
+  });
+
+  it('returns an empty array after the registry is cleared', () => {
+    mockGetRegisteredSteps.mockReturnValue(['temp']);
+    expect(getRegisteredSteps()).toEqual(['temp']);
+
+    mockGetRegisteredSteps.mockReturnValue([]);
+    expect(getRegisteredSteps()).toEqual([]);
+  });
+
+  it('does not throw when the registry is empty during shutdown', async () => {
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    mockGetRegisteredSteps.mockReturnValue([]);
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    exitSpy.mockRestore();
+  });
+
+  it('is safe to call concurrently without interleaving state', async () => {
+    mockGetRegisteredSteps.mockReturnValue(['s1', 's2']);
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, async () => getRegisteredSteps()),
+    );
+
+    for (const r of results) {
+      expect(r).toEqual(['s1', 's2']);
+    }
+  });
+
+  it('is safe to call after shutdown has been initiated', async () => {
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    mockGetRegisteredSteps.mockReturnValue(['post-shutdown']);
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(isShuttingDown()).toBe(true);
+    expect(getRegisteredSteps()).toEqual(['post-shutdown']);
+    exitSpy.mockRestore();
+  });
+
+  it('does not expose sensitive data in returned step identifiers', () => {
+    mockGetRegisteredSteps.mockReturnValue(['drain', 'flush-webhooks', 'close-db']);
+
+    const steps = getRegisteredSteps();
+
+    for (const step of steps) {
+      expect(step).not.toMatch(/password|secret|token|key/i);
+    }
   });
 });

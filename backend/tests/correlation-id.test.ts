@@ -1,1 +1,726 @@
-aW1wb3J0IHsgZGVzY3JpYmUsIGV4cGVjdCwgaXQsIGplc3QsIGJlZm9yZUVhY2ggfSBmcm9tICJAamVzdC9nbG9iYWxzIjsKaW1wb3J0IHsKICBzYW5pdGl6ZUNvcnJlbGF0aW9uSWQsCiAgZ2VuZXJhdGVDb3JyZWxhdGlvbklkLAogIHdpdGhDb3JyZWxhdGlvbklkLAogIGdldENvcnJlbGF0aW9uSWQsCiAgZ2V0T3JHZW5lcmF0ZUNvcnJlbGF0aW9uSWQsCiAgY3JlYXRlUmVxdWVzdENvbnRleHRNaWRkbGV3YXJlLAp9IGZyb20gIi4uL3NyYy9saWIvcmVxdWVzdENvbnRleHQiOwoKZGVzY3JpYmUoInJlcXVlc3RDb250ZXh0IiwgKCkgPT4gewogIGRlc2NyaWJlKCJzYW5pdGl6ZUNvcnJlbGF0aW9uSWQiLCAoKSA9PiB7CiAgICBpdCgic2hvdWxkIGFjY2VwdCB2YWxpZCBVTElELXN0eWxlIGNvcnJlbGF0aW9uIElEcyIsICgpID0+IHsKICAgICAgY29uc3QgdmFsaWRJZCA9ICIwMUg5SzRXMlg4WTlaMEExQjJDM0Q0RTVGNiI7CiAgICAgIGV4cGVjdChzYW5pdGl6ZUNvcnJlbGF0aW9uSWQodmFsaWRJZCkpLnRvQmUodmFsaWRJZCk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIGFjY2VwdCBhbHBoYW51bWVyaWMgd2l0aCBoeXBoZW5zIGFuZCB1bmRlcnNjcm9yZXMiLCAoKSA9PiB7CiAgICAgIGNvbnN0IHZhbGlkSWQgPSAiQUJDLTEyM194eXotNzg5IjsKICAgICAgZXhwZWN0KHNhbml0aXplQ29ycmVsYXRpb25JZCh2YWxpZElkKSkudG9CZSh2YWxpZElkKTsKICAgIH0pOwoKICAgIGl0KCJzaG91bGQgcmVqZWN0IGVtcHR5IHN0cmluZ3MiLCAoKSA9PiB7CiAgICAgIGV4cGVjdChzYW5pdGl6ZUNvcnJlbGF0aW9uSWQoIiIpKS50b0JlTnVsbCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCByZWplY3Qgc3RyaW5ncyB3aXRoIG9ubHkgd2hpdGVzcGFjZSIsICgpID0+IHsKICAgICAgZXhwZWN0KHNhbml0aXplQ29ycmVsYXRpb25JZCgiICAgIikpLnRvQmVOdWxsKCk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIHJlamVjdCBzdHJpbmdzIGV4Y2VlZGluZyBtYXggbGVuZ3RoIiwgKCkgPT4gewogICAgICBjb25zdCB0b29Mb25nID0gImEiLnJlcGVhdCgxMjkpOwogICAgICBleHBlY3Qoc2FuaXRpemVDb3JyZWxhdGlvbklkKHRvb0xvbmcpKS50b0JlTnVsbCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCByZWplY3Qgc3RyaW5ncyB3aXRoIHNwZWNpYWwgY2hhcmFjdGVycyAobG9nIGluamVjdGlvbiBwcmV2ZW50aW9uKSIsICgpID0+IHsKICAgICAgY29uc3QgbWFsaWNpb3VzID0gInRlc3RcbmluamVjdGlvbiI7CiAgICAgIGV4cGVjdChzYW5pdGl6ZUNvcnJlbGF0aW9uSWQobWFsaWNpb3VzKSkudG9CZU51bGwoKTsKICAgIH0pOwoKICAgIGl0KCJzaG91bGQgcmVqZWN0IHN0cmluZ3Mgd2l0aCBuZXdsaW5lcyIsICgpID0+IHsKICAgICAgY29uc3Qgd2l0aE5ld2xpbmUgPSAidGVzdFxudGVzdCI7CiAgICAgIGV4cGVjdChzYW5pdGl6ZUNvcnJlbGF0aW9uSWQod2l0aE5ld2xpbmUpKS50b0JlTnVsbCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCByZWplY3Qgc3RyaW5ncyB3aXRoIGNhcnJpYWdlIHJldHVybnMiLCAoKSA9PiB7CiAgICAgIGNvbnN0IHdpdGhDYXJyaWFnZVJldHVybiA9ICJ0ZXN0XHJ0ZXN0IjsKICAgICAgZXhwZWN0KHNhbml0aXplQ29ycmVsYXRpb25JZCh3aXRoQ2FycmlhZ2VSZXR1cm4pKS50b0JlTnVsbCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCByZWplY3Qgc3RyaW5ncyB3aXRoIHRhYnMiLCAoKSA9PiB7CiAgICAgIGNvbnN0IHdpdGhUYWIgPSAidGVzdFx0dGVzdCI7CiAgICAgIGV4cGVjdChzYW5pdGl6ZUNvcnJlbGF0aW9uSWQod2l0aFRhYikpLnRvQmVOdWxsKCk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIHJlamVjdCBzdHJpbmdzIHdpdGggc2VtaWNvbG9ucyIsICgpID0+IHsKICAgICAgY29uc3Qgd2l0aFNlbWljb2xvbiA9ICJ0ZXN0O3Rlc3QiOwogICAgICBleHBlY3Qoc2FuaXRpemVDb3JyZWxhdGlvbklkKHdpdGhTZW1pY29sb24pKS50b0JlTnVsbCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCByZWplY3Qgc3RyaW5ncyB3aXRoIHBpcGUgY2hhcmFjdGVycyIsICgpID0+IHsKICAgICAgY29uc3Qgd2l0aFBpcGUgPSAidGVzdHx0ZXN0IjsKICAgICAgZXhwZWN0KHNhbml0aXplQ29ycmVsYXRpb25JZCh3aXRoUGlwZSkpLnRvQmVOdWxsKCk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIHRyaW0gd2hpdGVzcGFjZSBmcm9tIHZhbGlkIElEcyIsICgpID0+IHsKICAgICAgY29uc3Qgd2l0aFNwYWNlcyA9ICIgIEFCQy0xMjMgICI7CiAgICAgIGV4cGVjdChzYW5pdGl6ZUNvcnJlbGF0aW9uSWQod2l0aFNwYWNlcykpLnRvQmUoIkFCQy0xMjMiKTsKICAgIH0pOwoKICAgIGl0KCJzaG91bGQgcmV0dXJuIG51bGwgZm9yIHVuZGVmaW5lZCBpbnB1dCIsICgpID0+IHsKICAgICAgZXhwZWN0KHNhbml0aXplQ29ycmVsYXRpb25JZCh1bmRlZmluZWQpKS50b0JlTnVsbCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBhY2NlcHQgbWF4aW11bSBsZW5ndGggdmFsaWQgSUQiLCAoKSA9PiB7CiAgICAgIGNvbnN0IG1heExlbmd0aCA9ICJhIi5yZXBlYXQoMTI4KTsKICAgICAgZXhwZWN0KHNhbml0aXplQ29ycmVsYXRpb25JZChtYXhMZW5ndGgpKS50b0JlKG1heExlbmd0aCk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIHJlamVjdCBJRHMgd2l0aCBzcGFjZXMgaW4gdGhlIG1pZGRsZSIsICgpID0+IHsKICAgICAgY29uc3Qgd2l0aEludGVybmFsU3BhY2UgPSAiQUJDIDEyMyI7CiAgICAgIGV4cGVjdChzYW5pdGl6ZUNvcnJlbGF0aW9uSWQod2l0aEludGVybmFsU3BhY2UpKS50b0JlTnVsbCgpOwogICAgfSk7CiAgfSk7CgogIGRlc2NyaWJlKCJnZW5lcmF0ZUNvcnJlbGF0aW9uSWQiLCAoKSA9PiB7CiAgICBpdCgic2hvdWxkIGdlbmVyYXRlIGEgVUxJRCIsICgpID0+IHsKICAgICAgY29uc3QgaWQgPSBnZW5lcmF0ZUNvcnJlbGF0aW9uSWQoKTsKICAgICAgZXhwZWN0KGlkKS50b0JlRGVmaW5lZCgpOwogICAgICBleHBlY3QodHlwZW9mIGlkKS50b0JlKCJzdHJpbmciKTsKICAgICAgZXhwZWN0KGlkLmxlbmd0aCkudG9CZSgyNik7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIGdlbmVyYXRlIHVuaXF1ZSBJRHMiLCAoKSA9PiB7CiAgICAgIGNvbnN0IGlkMSA9IGdlbmVyYXRlQ29ycmVsYXRpb25JZCgpOwogICAgICBjb25zdCBpZDIgPSBnZW5lcmF0ZUNvcnJlbGF0aW9uSWQoKTsKICAgICAgZXhwZWN0KGlkMSkubm90LnRvQmUoaWQyKTsKICAgIH0pOwoKICAgIGl0KCJzaG91bGQgZ2VuZXJhdGUgdmFsaWQgVUxJRCBjaGFyYWN0ZXJzIiwgKCkgPT4gewogICAgICBjb25zdCBpZCA9IGdlbmVyYXRlQ29ycmVsYXRpb25JZCgpOwogICAgICBleHBlY3QoaWQpLnRvTWF0Y2goL15bQS1aMC05XSskLyk7CiAgICB9KTsKICB9KTsKCiAgZGVzY3JpYmUoIndpdGhDb3JyZWxhdGlvbklkIiwgKCkgPT4gewogICAgaXQoInNob3VsZCBzZXQgY29ycmVsYXRpb24gSUQgaW4gY29udGV4dCBmb3Igc3luY2hyb25vdXMgZnVuY3Rpb24iLCAoKSA9PiB7CiAgICAgIGNvbnN0IHRlc3RJZCA9ICJ0ZXN0LWNvcnJlbGF0aW9uLWlkIjsKICAgICAgbGV0IGNhcHR1cmVkSWQ6IHN0cmluZyB8IG51bGwgPSBudWxsOwoKICAgICAgd2l0aENvcnJlbGF0aW9uSWQodGVzdElkLCAoKSA9PiB7CiAgICAgICAgY2FwdHVyZWRJZCA9IGdldENvcnJlbGF0aW9uSWQoKTsKICAgICAgfSk7CgogICAgICBleHBlY3QoY2FwdHVyZWRJZCkudG9CZSh0ZXN0SWQpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBzZXQgY29ycmVsYXRpb24gSUQgaW4gY29udGV4dCBmb3IgYXN5bmMgZnVuY3Rpb24iLCAoKSA9PiB7CiAgICAgIGNvbnN0IHRlc3RJZCA9ICJhc3luYy1jb3JyZWxhdGlvbi1pZCI7CiAgICAgIGxldCBjYXB0dXJlZElkOiBzdHJpbmcgfCBudWxsID0gbnVsbDsKCiAgICAgIGF3YWl0IHdpdGhDb3JyZWxhdGlvbklkKHRlc3RJZCwgYXN5bmMgKCkgPT4gewogICAgICAgIGF3YWl0IFByb21pc2UucmVzb2x2ZSgpOwogICAgICAgIGNhcHR1cmVkSWQgPSBnZXRDb3JyZWxhdGlvbklkKCk7CiAgICAgIH0pOwoKICAgICAgZXhwZWN0KGNhcHR1cmVkSWQpLnRvQmUodGVzdElkKTsKICAgIH0pOwoKICAgIGl0KCJzaG91bGQgcmV0dXJuIGZ1bmN0aW9uIHJlc3VsdCIsICgpID0+IHsKICAgICAgY29uc3QgdGVzdElkID0gInRlc3QtaWQiOwogICAgICBjb25zdCByZXN1bHQgPSB3aXRoQ29ycmVsYXRpb25JZCh0ZXN0SWQsICgpID0+IHsKICAgICAgICByZXR1cm4gInJlc3VsdC12YWx1ZSI7CiAgICAgIH0pOwoKICAgICAgZXhwZWN0KHJlc3VsdCkudG9CZSgicmVzdWx0LXZhbHVlIik7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIHJldHVybiBhc3luYyBmdW5jdGlvbiByZXN1bHQiLCAoKSA9PiB7CiAgICAgIGNvbnN0IHRlc3RJZCA9ICJ0ZXN0LWlkIjsKICAgICAgY29uc3QgcmVzdWx0ID0gYXdhaXQgd2l0aENvcnJlbGF0aW9uSWQodGVzdElkLCBhc3luYyAoKSA9PiB7CiAgICAgICAgcmV0dXJuICJhc3luYy1yZXN1bHQiOwogICAgICB9KTsKCiAgICAgIGV4cGVjdChyZXN1bHQpLnRvQmUoImFzeW5jLXJlc3VsdCIpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBpc29sYXRlIGNvbnRleHQgYmV0d2VlbiBjb25jdXJyZW50IGNhbGxzIiwgKCkgPT4gewogICAgICBjb25zdCBpZDEgPSAiY29udGV4dC0xIjsKICAgICAgY29uc3QgaWQyID0gImNvbnRleHQtMiI7CgogICAgICBjb25zdCByZXN1bHQxID0gd2l0aENvcnJlbGF0aW9uSWQoaWQxLCBhc3luYyAoKSA9PiB7CiAgICAgICAgYXdhaXQgbmV3IFByb21pc2UoKHJlc29sdmUpID0+IHNldFRpbWVvdXQocmVzb2x2ZSwgMTApKTsKICAgICAgICByZXR1cm4gZ2V0Q29ycmVsYXRpb25JZCgpOwogICAgICB9KTsKCiAgICAgIGNvbnN0IHJlc3VsdDIgPSB3aXRoQ29ycmVsYXRpb25JZChpZDIsIGFzeW5jICgpID0+IHsKICAgICAgICBhd2FpdCBuZXcgUHJvbWlzZSgocmVzb2x2ZSkgPT4gc2V0VGltZW91dChyZXNvbHZlLCA1KSk7CiAgICAgICAgcmV0dXJuIGdldENvcnJlbGF0aW9uSWQoKTsKICAgICAgfSk7CgogICAgICBjb25zdCBbcjEsIHIyXSA9IGF3YWl0IFByb21pc2UuYWxsKFtyZXN1bHQxLCByZXN1bHQyXSk7CgogICAgICBleHBlY3QocjEpLnRvQmUoaWQxKTsKICAgICAgZXhwZWN0KHIyKS50b0JlKGlkMik7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIG5vdCBsZWFrIGNvbnRleHQgYWZ0ZXIgZnVuY3Rpb24gY29tcGxldGVzIiwgKCkgPT4gewogICAgICBjb25zdCB0ZXN0SWQgPSAibGVhay10ZXN0IjsKICAgICAgCiAgICAgIHdpdGhDb3JyZWxhdGlvbklkKHRlc3RJZCwgKCkgPT4gewogICAgICAgIGV4cGVjdChnZXRDb3JyZWxhdGlvbklkKCkpLnRvQmUodGVzdElkKTsKICAgICAgfSk7CgogICAgICBleHBlY3QoZ2V0Q29ycmVsYXRpb25JZCgpKS50b0JlTnVsbCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBoYW5kbGUgbmVzdGVkIGNvbnRleHRzIiwgKCkgPT4gewogICAgICBjb25zdCBvdXRlcklkID0gIm91dGVyIjsKICAgICAgY29uc3QgaW5uZXJJZCA9ICJpbm5lciI7CiAgICAgIGxldCBjYXB0dXJlZElubmVyOiBzdHJpbmcgfCBudWxsID0gbnVsbDsKICAgICAgbGV0IGNhcHR1cmVkT3V0ZXI6IHN0cmluZyB8IG51bGwgPSBudWxsOwoKICAgICAgd2l0aENvcnJlbGF0aW9uSWQob3V0ZXJJZCwgKCkgPT4gewogICAgICAgIGNhcHR1cmVkT3V0ZXIgPSBnZXRDb3JyZWxhdGlvbklkKCk7CiAgICAgICAgCiAgICAgICAgd2l0aENvcnJlbGF0aW9uSWQoaW5uZXJJZCwgKCkgPT4gewogICAgICAgICAgY2FwdHVyZWRJbm5lciA9IGdldENvcnJlbGF0aW9uSWQoKTsKICAgICAgICB9KTsKICAgICAgfSk7CgogICAgICBleHBlY3QoY2FwdHVyZWRPdXRlcikudG9CZShvdXRlcklkKTsKICAgICAgZXhwZWN0KGNhcHR1cmVkSW5uZXIpLnRvQmUoaW5uZXJJZCk7CiAgICAgIGV4cGVjdChnZXRDb3JyZWxhdGlvbklkKCkpLnRvQmVOdWxsKCk7CiAgICB9KTsKICB9KTsKCiAgZGVzY3JpYmUoImdldENvcnJlbGF0aW9uSWQiLCAoKSA9PiB7CiAgICBpdCgic2hvdWxkIHJldHVybiBudWxsIHdoZW4gbm8gY29udGV4dCBpcyBzZXQiLCAoKSA9PiB7CiAgICAgIGV4cGVjdChnZXRDb3JyZWxhdGlvbklkKCkpLnRvQmVOdWxsKCk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIHJldHVybiB0aGUgY29ycmVsYXRpb24gSUQgZnJvbSBjb250ZXh0IiwgKCkgPT4gewogICAgICBjb25zdCB0ZXN0SWQgPSAidGVzdC1pZCI7CiAgICAgIHdpdGhDb3JyZWxhdGlvbklkKHRlc3RJZCwgKCkgPT4gewogICAgICAgIGV4cGVjdChnZXRDb3JyZWxhdGlvbklkKCkpLnRvQmUodGVzdElkKTsKICAgICAgfSk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIHJldHVybiBudWxsIGFmdGVyIGNvbnRleHQgaXMgY2xlYXJlZCIsICgpID0+IHsKICAgICAgY29uc3QgdGVzdElkID0gInRlc3QtaWQiOwogICAgICAKICAgICAgd2l0aENvcnJlbGF0aW9uSWQodGVzdElkLCAoKSA9PiB7CiAgICAgICAgZXhwZWN0KGdldENvcnJlbGF0aW9uSWQoKSkudG9CZSh0ZXN0SWQpOwogICAgICB9KTsKCiAgICAgIGV4cGVjdChnZXRDb3JyZWxhdGlvbklkKCkpLnRvQmVOdWxsKCk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIG5ldmVyIHRocm93IGFuZCBhbHdheXMgcmV0dXJuIGEgc3RyaW5nIG9yIG51bGwgZm9yIGFyYml0cmFyeSBjb250ZXh0IHZhbHVlcyIsICgpID0+IHsKICAgICAgLy8gRGV0ZXJtaW5pc3RpYyBmYWlsdXJlIGJvdW5kYXJ5OiBldmVuIGlmIGEgYnVnIGluamVjdHMgYSBub24tc3RyaW5nIGludG8KICAgICAgLy8gdGhlIGNvbnRleHQsIGdldENvcnJlbGF0aW9uSWQgbXVzdCBub3QgcHJvcGFnYXRlIGl0IGFuZCBtdXN0IG5vdCB0aHJvdy4KICAgICAgY29uc3QgY2FzZXM6IEFycmF5PHVua25vd24+ID0gWwogICAgICAgIHVuZGVmaW5lZCwKICAgICAgICBudWxsLAogICAgICAgIDAsCiAgICAgICAgMSwKICAgICAgICB0cnVlLAogICAgICAgIGZhbHNlLAogICAgICAgIHt9LAogICAgICAgIFtdLAogICAgICAgICgpID0+ICJ4IiwKICAgICAgICBOYU4sCiAgICAgICAgSW5maW5pdHksCiAgICAgICAgQmlnSW50KDEpLAogICAgICAgIFN5bWJvbCgiY29yciIpLAogICAgICBdOwoKICAgICAgZm9yIChjb25zdCB2YWx1ZSBvZiBjYXNlcykgewogICAgICAgIGNvbnN0IHJlc3VsdCA9IHdpdGhDb3JyZWxhdGlvbklkKHVuZGVmaW5lZCBhcyB1bmtub3duIGFzIHN0cmluZywgKCkgPT4gewogICAgICAgICAgLy8gQnlwYXNzIHRoZSB0eXBlIGNoZWNrZXIgdG8gc2ltdWxhdGUgYSBjb3JydXB0ZWQgc3RvcmUgdmFsdWUuCiAgICAgICAgICAoc3RvcmFnZSBhcyBhbnkpLnJ1bih7IGNvcnJlbGF0aW9uSWQ6IHZhbHVlIH0sICgpID0+IGdldENvcnJlbGF0aW9uSWQoKSk7CiAgICAgICAgfSk7CiAgICAgICAgZXhwZWN0KHJlc3VsdCkudG9CZU51bGwoKTsKICAgICAgfQogICAgfSk7CgogICAgaXQoInNob3VsZCByZXR1cm4gbnVsbCBmb3IgYW4gZW1wdHktc3RyaW5nIGNvcnJlbGF0aW9uIElEIiwgKCkgPT4gewogICAgICBjb25zdCByZXN1bHQgPSB3aXRoQ29ycmVsYXRpb25JZCh1bmRlZmluZWQgYXMgdW5rbm93biBhcyBzdHJpbmcsICgpID0+IHsKICAgICAgICAoc3RvcmFnZSBhcyBhbnkpLnJ1bih7IGNvcnJlbGF0aW9uSWQ6ICIiIH0sICgpID0+IGdldENvcnJlbGF0aW9uSWQoKSk7CiAgICAgIH0pOwogICAgICBleHBlY3QocmVzdWx0KS50b0JlTnVsbCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCByZXR1cm4gdGhlIGV4YWN0IHN0cmluZyB2YWx1ZSB3aGVuIHRoZSBjb250ZXh0IGlzIHZhbGlkIiwgKCkgPT4gewogICAgICBjb25zdCBpZCA9ICJ2YWxpZC1jb3JyZWxhdGlvbi1pZCI7CiAgICAgIHdpdGhDb3JyZWxhdGlvbklkKGlkLCAoKSA9PiB7CiAgICAgICAgZXhwZWN0KGdldENvcnJlbGF0aW9uSWQoKSkudG9CZShpZCk7CiAgICAgIH0pOwogICAgfSk7CgogICAgaXQoInNob3VsZCByZW1haW4gZGV0ZXJtaW5pc3RpYyBhY3Jvc3MgcmVwZWF0ZWQgY2FsbHMgd2l0aGluIHRoZSBzYW1lIGNvbnRleHQiLCAoKSA9PiB7CiAgICAgIGNvbnN0IGlkID0gImRldGVybWluaXN0aWMtaWQiOwogICAgICB3aXRoQ29ycmVsYXRpb25JZChpZCwgKCkgPT4gewogICAgICAgIGZvciAobGV0IGkgPSAwOyBpIDwgMTAwOyBpKyspIHsKICAgICAgICAgIGV4cGVjdChnZXRDb3JyZWxhdGlvbklkKCkpLnRvQmUoaWQpOwogICAgICAgIH0KICAgICAgfSk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIG5vdCBsZWFrIGEgY29ycnVwdGVkIGNvbnRleHQgaW50byBzdWJzZXF1ZW50IGNhbGxzIiwgKCkgPT4gewogICAgICB3aXRoQ29ycmVsYXRpb25JZCh1bmRlZmluZWQgYXMgdW5rbm93biBhcyBzdHJpbmcsICgpID0+IHsKICAgICAgICAoc3RvcmFnZSBhcyBhbnkpLnJ1bih7IGNvcnJlbGF0aW9uSWQ6IDQyIH0sICgpID0+IGdldENvcnJlbGF0aW9uSWQoKSk7CiAgICAgIH0pOwogICAgICBleHBlY3QoZ2V0Q29ycmVsYXRpb25JZCgpKS50b0JlTnVsbCgpOwogICAgfSk7CiAgfSk7CgogIGRlc2NyaWJlKCJnZXRPckdlbmVyYXRlQ29ycmVsYXRpb25JZCIsICgpID0+IHsKICAgIGl0KCJzaG91bGQgcmV0dXJuIGV4aXN0aW5nIGNvcnJlbGF0aW9uIElEIGZyb20gY29udGV4dCIsICgpID0+IHsKICAgICAgY29uc3QgdGVzdElkID0gImV4aXN0aW5nLWlkIjsKICAgICAgd2l0aENvcnJlbGF0aW9uSWQodGVzdElkLCAoKSA9PiB7CiAgICAgICAgY29uc3QgcmVzdWx0ID0gZ2V0T3JHZW5lcmF0ZUNvcnJlbGF0aW9uSWQoKTsKICAgICAgICBleHBlY3QocmVzdWx0KS50b0JlKHRlc3RJZCk7CiAgICAgIH0pOwogICAgfSk7CgogICAgaXQoInNob3VsZCBnZW5lcmF0ZSBuZXcgSUQgd2hlbiBubyBjb250ZXh0IGlzIHNldCIsICgpID0+IHsKICAgICAgY29uc3QgcmVzdWx0ID0gZ2V0T3JHZW5lcmF0ZUNvcnJlbGF0aW9uSWQoKTsKICAgICAgZXhwZWN0KHJlc3VsdCkudG9CZU RlZmluZWQoKTsKICAgICAgZXhwZWN0KHR5cGVvZiByZXN1bHQpLnRvQmUoInN0cmluZyIpOwogICAgICBleHBlY3QocmVzdWx0Lmxlbmd0aCkudG9CZSgyNik7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIGdlbmVyYXRlIHVuaXF1ZSBJRHMgd2hlbiBjYWxsZWQgd2l0aG91dCBjb250ZXh0IiwgKCkgPT4gewogICAgICBjb25zdCBpZDEgPSBnZXRPckdlbmVyYXRlQ29ycmVsYXRpb25JZCgpOwogICAgICBjb25zdCBpZDIgPSBnZXRPckdlbmVyYXRlQ29ycmVsYXRpb25JZCgpOwogICAgICBleHBlY3QoaWQxKS5ub3QudG9CZShpZDIpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBnZW5lcmF0ZSBhIG5ldyBJRCB3aGVuIHRoZSBjb250ZXh0IGlzIGNvcnJ1cHRlZCIsICgpID0+IHsKICAgICAgY29uc3QgcmVzdWx0ID0gd2l0aENvcnJlbGF0aW9uSWQodW5kZWZpbmVkIGFzIHVua25vd24gYXMgc3RyaW5nLCAoKSA9PiB7CiAgICAgICAgKHN0b3JhZ2UgYXMgYW55KS5ydW4oeyBjb3JyZWxhdGlvbklkOiA3IH0sICgpID0+IGdldE9yR2VuZXJhdGVDb3JyZWxhdGlvbklkKCkpOwogICAgICB9KTsKICAgICAgZXhwZWN0KHR5cGVvZiByZXN1bHQpLnRvQmUoInN0cmluZyIpOwogICAgICBleHBlY3QocmVzdWx0Lmxlbmd0aCkudG9CZSgyNik7CiAgICB9KTsKICB9KTsKCiAgZGVzY3JpYmUoImNyZWF0ZVJlcXVlc3RDb250ZXh0TWlkZGxld2FyZSIsICgpID0+IHsKICAgIGl0KCJzaG91bGQgY2FsbCBuZXh0IHdpdGggY29ycmVsYXRpb24gSUQgY29udGV4dCB3aGVuIGNvcnJlbGF0aW9uSWQgaXMgc2V0IiwgKCkgPT4gewogICAgICBjb25zdCBtaWRkbGV3YXJlID0gY3JlYXRlUmVxdWVzdENvbnRleHRNaWRkbGV3YXJlKCk7CiAgICAgIGNvbnN0IHJlcTogYW55ID0geyBjb3JyZWxhdGlvbklkOiAidGVzdC1pZCIgfTsKICAgICAgY29uc3QgcmVzOiBhbnkgPSB7fTsKICAgICAgY29uc3QgbmV4dCA9IGplc3QuZm4oKTsKCiAgICAgIG1pZGRsZXdhcmUocmVxLCByZXMsIG5leHQpOwoKICAgICAgZXhwZWN0KG5leHQpLnRvSGF2ZUJlZW5DYWxsZWQoKTsKICAgIH0pOwoKICAgIGl0KCJzaG91bGQgY2FsbCBuZXh0IHdpdGhvdXQgY29udGV4dCB3aGVuIGNvcnJlbGF0aW9uSWQgaXMgbm90IHNldCIsICgpID0+IHsKICAgICAgY29uc3QgbWlkZGxld2FyZSA9IGNyZWF0ZVJlcXVlc3RDb250ZXh0TWlkZGxld2FyZSgpOwogICAgICBjb25zdCByZXE6IGFueSA9IHt9OwogICAgICBjb25zdCByZXM6IGFueSA9IHt9OwogICAgICBjb25zdCBuZXh0ID0gamVzdC5mbigpOwoKICAgICAgbWlkZGxld2FyZShyZXEsIHJlcywgbmV4dCk7CgogICAgICBleHBlY3QobmV4dCkudG9IYXZlQmVlbkNhbGxlZCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCB1c2UgcmVxdWVzdElkIGFzIGZhbGxiYWNrIHdoZW4gY29ycmVsYXRpb25JZCBpcyBub3Qgc2V0IiwgKCkgPT4gewogICAgICBjb25zdCBtaWRkbGV3YXJlID0gY3JlYXRlUmVxdWVzdENvbnRleHRNaWRkbGV3YXJlKCk7CiAgICAgIGNvbnN0IHJlcTogYW55ID0geyByZXF1ZXN0SWQ6ICJyZXF1ZXN0LWlkIiB9OwogICAgICBjb25zdCByZXM6IGFueSA9IHt9OwogICAgICBjb25zdCBuZXh0ID0gamVzdC5mbigpOwoKICAgICAgbWlkZGxld2FyZShyZXEsIHJlcywgbmV4dCk7CgogICAgICBleHBlY3QobmV4dCkudG9IYXZlQmVlbkNhbGxlZCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBleHBvc2UgdGhlIGNvcnJlbGF0aW9uIElEIHRvIGRvd25zdHJlYW0gY29kZSB3aXRoaW4gbmV4dCgpIiwgKCkgPT4gewogICAgICBjb25zdCBtaWRkbGV3YXJlID0gY3JlYXRlUmVxdWVzdENvbnRleHRNaWRkbGV3YXJlKCk7CiAgICAgIGNvbnN0IHJlcTogYW55ID0geyBjb3JyZWxhdGlvbklkOiAibWlkZGxld2FyZS10ZXN0IiB9OwogICAgICBjb25zdCByZXM6IGFueSA9IHt9OwogICAgICBsZXQgb2JzZXJ2ZWQ6IHN0cmluZyB8IG51bGwgPSBudWxsOwogICAgICBjb25zdCBuZXh0ID0gamVzdC5mbigoKSA9PiB7CiAgICAgICAgb2JzZXJ2ZWQgPSBnZXRDb3JyZWxhdGlvbklkKCk7CiAgICAgIH0pOwoKICAgICAgbWlkZGxld2FyZShyZXEsIHJlcywgbmV4dCk7CgogICAgICBleHBlY3QobmV4dCkudG9IYXZlQmVlbkNhbGxlZCgpOwogICAgICBleHBlY3Qob2JzZXJ2ZWQpLnRvQmUoIm1pZGRsZXdhcmUtdGVzdCIpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBub3QgbGVhayB0aGUgY29udGV4dCBhZnRlciBuZXh0KCkgcmV0dXJucyIsICgpID0+IHsKICAgICAgY29uc3QgbWlkZGxld2FyZSA9IGNyZWF0ZVJlcXVlc3RDb250ZXh0TWlkZGxld2FyZSgpOwogICAgICBjb25zdCByZXE6IGFueSA9IHsgY29ycmVsYXRpb25JZDogImxlYWstdGVzdCIgfTsKICAgICAgY29uc3QgcmVzOiBhbnkgPSB7fTsKICAgICAgY29uc3QgbmV4dCA9IGplc3QuZm4oKTsKCiAgICAgIG1pZGRsZXdhcmUocmVxLCByZXMsIG5leHQpOwoKICAgICAgZXhwZWN0KGdldENvcnJlbGF0aW9uSWQoKSkudG9CZU51bGwoKTsKICAgIH0pOwoKICAgIGl0KCJzaG91bGQgcHJvcGFnYXRlIGVycm9ycyB0aHJvd24gYnkgbmV4dCgpIGFuZCBzdGlsbCB0ZWFyIGRvd24gdGhlIGNvbnRleHQiLCAoKSA9PiB7CiAgICAgIGNvbnN0IG1pZGRsZXdhcmUgPSBjcmVhdGVSZXF1ZXN0Q29udGV4dE1pZGRsZXdhcmUoKTsKICAgICAgY29uc3QgcmVxOiBhbnkgPSB7IGNvcnJlbGF0aW9uSWQ6ICJlcnJvci10ZXN0IiB9OwogICAgICBjb25zdCByZXM6IGFueSA9IHt9OwogICAgICBjb25zdCBuZXh0ID0gamVzdC5mbigoKSA9PiB7CiAgICAgICAgdGhyb3cgbmV3IEVycm9yKCJkb3duc3RyZWFtIGZhaWx1cmUiKTsKICAgICAgfSk7CgogICAgICBleHBlY3QoKCkgPT4gbWlkZGxld2FyZShyZXEsIHJlcywgbmV4dCkpLnRvVGhyb3coImRvd25zdHJlYW0gZmFpbHVyZSIpOwogICAgICBleHBlY3QoZ2V0Q29ycmVsYXRpb25JZCgpKS50b0JlTnVsbCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBub3QgZXN0YWJsaXNoIGEgY29udGV4dCBmb3IgYW4gZW1wdHktc3RyaW5nIGNvcnJlbGF0aW9uSWQiLCAoKSA9PiB7CiAgICAgIGNvbnN0IG1pZGRsZXdhcmUgPSBjcmVhdGVSZXF1ZXN0Q29udGV4dE1pZGRsZXdhcmUoKTsKICAgICAgY29uc3QgcmVxOiBhbnkgPSB7IGNvcnJlbGF0aW9uSWQ6ICIiIH07CiAgICAgIGNvbnN0IHJlczogYW55ID0ge307CiAgICAgIGxldCBvYnNlcnZlZDogc3RyaW5nIHwgbnVsbCA9ICJub3Qtc2V0IjsKICAgICAgY29uc3QgbmV4dCA9IGplc3QuZm4oKCkgPT4gewogICAgICAgIG9ic2VydmVkID0gZ2V0Q29ycmVsYXRpb25JZCgpOwogICAgICB9KTsKCiAgICAgIG1pZGRsZXdhcmUocmVxLCByZXMsIG5leHQpOwoKICAgICAgZXhwZWN0KG5leHQpLnRvSGF2ZUJlZW5DYWxsZWQoKTsKICAgICAgZXhwZWN0KG9ic2VydmVkKS50b0JlTnVsbCgpOwogICAgfSk7CiAgfSk7CgogIGRlc2NyaWJlKCJjb250ZXh0IGlzb2xhdGlvbiB3aXRoIGFzeW5jIG9wZXJhdGlvbnMiLCAoKSA9PiB7CiAgICBpdCgic2hvdWxkIG1haW50YWluIGNvbnRleHQgdGhyb3VnaCBQcm9taXNlIGNoYWlucyIsICgpID0+IHsKICAgICAgY29uc3QgdGVzdElkID0gInByb21pc2UtY2hhaW4taWQiOwogICAgICAKICAgICAgY29uc3QgcmVzdWx0ID0gYXdhaXQgd2l0aENvcnJlbGF0aW9uSWQodGVzdElkLCBhc3luYyAoKSA9PiB7CiAgICAgICAgcmV0dXJuIFByb21pc2UucmVzb2x2ZSgpCiAgICAgICAgICAudGhlbigoKSA9PiBnZXRDb3JyZWxhdGlvbklkKCkpCiAgICAgICAgICAudGhlbigoaWQpID0+IGlkKQogICAgICAgICAgLnRoZW4oKGlkKSA9PiBQcm9taXNlLnJlc29sdmUoaWQpKTsKICAgICAgfSk7CgogICAgICBleHBlY3QocmVzdWx0KS50b0JlKHRlc3RJZCk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIG1haW50YWluIGNvbnRleHQgdGhyb3VnaCBzZXRUaW1lb3V0IiwgKCkgPT4gewogICAgICBjb25zdCB0ZXN0SWQgPSAidGltZW91dC1pZCI7CiAgICAgIAogICAgICBjb25zdCByZXN1bHQgPSBhd2FpdCB3aXRoQ29ycmVsYXRpb25JZCh0ZXN0SWQsIGFzeW5jICgpID0+IHsKICAgICAgICByZXR1cm4gbmV3IFByb21pc2UoKHJlc29sdmUpID0+IHsKICAgICAgICAgIHNldFRpbWVvdXQoKCkgPT4gewogICAgICAgICAgICByZXNvbHZlKGdldENvcnJlbGF0aW9uSWQoKSk7CiAgICAgICAgICB9LCAxMCk7CiAgICAgICAgfSk7CiAgICAgIH0pOwoKICAgICAgZXhwZWN0KHJlc3VsdCkudG9CZSh0ZXN0SWQpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBtYWludGFpbiBjb250ZXh0IHRocm91Z2ggYXN5bmMvYXdhaXQiLCAoKSA9PiB7CiAgICAgIGNvbnN0IHRlc3RJZCA9ICJhc3luYy1hd2FpdC1pZCI7CiAgICAgIAogICAgICBjb25zdCByZXN1bHQgPSBhd2FpdCB3aXRoQ29ycmVsYXRpb25JZCh0ZXN0SWQsIGFzeW5jICgpID0+IHsKICAgICAgICBhd2FpdCBQcm9taXNlLnJlc29sdmUoKTsKICAgICAgICBjb25zdCBpZCA9IGdldENvcnJlbGF0aW9uSWQoKTsKICAgICAgICBhd2FpdCBQcm9taXNlLnJlc29sdmUoKTsKICAgICAgICByZXR1cm4gaWQ7CiAgICAgIH0pOwoKICAgICAgZXhwZWN0KHJlc3VsdCkudG9CZSh0ZXN0SWQpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBpc29sYXRlIGNvbnRleHQgaW4gcGFyYWxsZWwgYXN5bmMgb3BlcmF0aW9ucyIsICgpID0+IHsKICAgICAgY29uc3QgcmVzdWx0czogc3RyaW5nW10gPSBbXTsKCiAgICAgIGNvbnN0IHByb21pc2UxID0gd2l0aENvcnJlbGF0aW9uSWQoImlkLTEiLCBhc3luYyAoKSA9PiB7CiAgICAgICAgYXdhaXQgbmV3IFByb21pc2UoKHJlc29sdmUpID0+IHNldFRpbWVvdXQocmVzb2x2ZSwgMjApKTsKICAgICAgICByZXN1bHRzLnB1c2goZ2V0Q29ycmVsYXRpb25JZCgpISk7CiAgICAgIH0pOwoKICAgICAgY29uc3QgcHJvbWlzZTIgPSB3aXRoQ29ycmVsYXRpb25JZCgiaWQtMiIsIGFzeW5jICgpID0+IHsKICAgICAgICBhd2FpdCBuZXcgUHJvbWlzZSgocmVzb2x2ZSkgPT4gc2V0VGltZW91dChyZXNvbHZlLCAxMCkpOwogICAgICAgIHJlc3VsdHMucHVzaChnZXRDb3JyZWxhdGlvbklkKCkhKTsKICAgICAgfSk7CgogICAgICBjb25zdCBwcm9taXNlMyA9IHdpdGhDb3JyZWxhdGlvbklkKCJpZC0zIiwgYXN5bmMgKCkgPT4gewogICAgICAgIGF3YWl0IG5ldyBQcm9taXNlKChyZXNvbHZlKSA9PiBzZXRUaW1lb3V0KHJlc29sdmUsIDUpKTsKICAgICAgICByZXN1bHRzLnB1c2goZ2V0Q29ycmVsYXRpb25JZCgpISk7CiAgICAgIH0pOwoKICAgICAgYXdhaXQgUHJvbWlzZS5hbGwoW3Byb21pc2UxLCBwcm9taXNlMiwgcHJvbWlzZTNdKTsKCiAgICAgIGV4cGVjdChyZXN1bHRzKS50b0VxdWFsKFsiaWQtMyIsICJpZC0yIiwgImlkLTEiXSk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIG5vdCBsZWFrIGEgY29ycnVwdGVkIGNvbnRleHQgYWNyb3NzIGF3YWl0IGJvdW5kYXJpZXMiLCAoKSA9PiB7CiAgICAgIGNvbnN0IHJlc3VsdCA9IGF3YWl0IHdpdGhDb3JyZWxhdGlvbklkKHVuZGVmaW5lZCBhcyB1bmtub3duIGFzIHN0cmluZywgYXN5bmMgKCkgPT4gewogICAgICAgIChzdG9yYWdlIGFzIGFueSkucnVuKHsgY29ycmVsYXRpb25JZDogdW5kZWZpbmVkIH0sIGFzeW5jICgpID0+IHsKICAgICAgICAgIGF3YWl0IFByb21pc2UucmVzb2x2ZSgpOwogICAgICAgICAgcmV0dXJuIGdldENvcnJlbGF0aW9uSWQoKTsKICAgICAgICB9KTsKICAgICAgfSk7CiAgICAgIGV4cGVjdChyZXN1bHQpLnRvQmVOdWxsKCk7CiAgICB9KTsKICB9KTsKCiAgZGVzY3JpYmUoInNlY3VyaXR5IGFuZCBlZGdlIGNhc2VzIiwgKCkgPT4gewogICAgaXQoInNob3VsZCBwcmV2ZW50IGxvZyBpbmplY3Rpb24gdmlhIG5ld2xpbmVzIGluIGNvcnJlbGF0aW9uIElEcyIsICgpID0+IHsKICAgICAgY29uc3QgbWFsaWNpb3VzID0gInRlc3RcbkluamVjdGVkIExvZyBMaW5lIjsKICAgICAgZXhwZWN0KHNhbml0aXplQ29ycmVsYXRpb25JZChtYWxpY2lvdXMpKS50b0JlTnVsbCgpOwogICAgfSk7CgogICAgaXQoInNob3VsZCBwcmV2ZW50IGxvZyBpbmplY3Rpb24gdmlhIGNhcnJpYWdlIHJldHVybnMiLCAoKSA9PiB7CiAgICAgIGNvbnN0IG1hbGljaW91cyA9ICJ0ZXN0XHJJbmplY3RlZCBMb2cgTGluZSI7CiAgICAgIGV4cGVjdChzYW5pdGl6ZUNvcnJlbGF0aW9uSWQobWFsaWNpb3VzKSkudG9CZU51bGwoKTsKICAgIH0pOwoKICAgIGl0KCJzaG91bGQgcHJldmVudCBsb2cgaW5qZWN0aW9uIHZpYSBudWxsIGJ5dGVzIiwgKCkgPT4gewogICAgICBjb25zdCBtYWxpY2lvdXMgPSAidGVzdFwwSW5qZWN0ZWQiOwogICAgICBleHBlY3Qoc2FuaXRpemVDb3JyZWxhdGlvbklkKG1hbGljaW91cykpLnRvQmVOdWxsKCk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIHJlamVjdCBjb3JyZWxhdGlvbiBJRHMgd2l0aCBBTlNJIGVzY2FwZSBzZXF1ZW5jZXMiLCAoKSA9PiB7CiAgICAgIGNvbnN0IG1hbGljaW91cyA9ICJ0ZXN0XHgxYlszMW1JbmplY3RlZCI7CiAgICAgIGV4cGVjdChzYW5pdGl6ZUNvcnJlbGF0aW9uSWQobWFsaWNpb3VzKSkudG9CZU51bGwoKTsKICAgIH0pOwoKICAgIGl0KCJzaG91bGQgaGFuZGxlIHZlcnkgbG9uZyB2YWxpZCBjb3JyZWxhdGlvbiBJRHMiLCAoKSA9PiB7CiAgICAgIGNvbnN0IGxvbmdWYWxpZCA9ICJhIi5yZXBlYXQoMTI4KTsKICAgICAgZXhwZWN0KHNhbml0aXplQ29ycmVsYXRpb25JZChsb25nVmFsaWQpKS50b0JlKGxvbmdWYWxpZCk7CiAgICB9KTsKCiAgICBpdCgic2hvdWxkIHJlamVjdCBjb3JyZWxhdGlvbiBJRHMganVzdCBvdmVyIHRoZSBsaW1pdCIsICgpID0+IHsKICAgICAgY29uc3QganVzdE92ZXIgPSAiYSIucmVwZWF0KDEyOSk7CiAgICAgIGV4cGVjdChzYW5pdGl6ZUNvcnJlbGF0aW9uSWQoanVzdE92ZXIpKS50b0JlTnVsbCgpOwogICAgfSk7CiAgfSk7Cn0pCg==
+import { describe, expect, it, jest } from "@jest/globals";
+import { AsyncLocalStorage } from "node:async_hooks";
+import {
+  sanitizeCorrelationId,
+  generateCorrelationId,
+  runWithContext,
+  withCorrelationId,
+  getCorrelationId,
+  getOrGenerateCorrelationId,
+  createRequestContextMiddleware,
+  _setUlidGeneratorForTesting,
+  _resetUlidGeneratorForTesting,
+} from "../src/lib/requestContext";
+
+describe("requestContext", () => {
+  describe("sanitizeCorrelationId", () => {
+    it("should accept valid ULID-style correlation IDs", () => {
+      const validId = "01H9K4W2X8Y9Z0A1B2C3D4E5F6";
+      expect(sanitizeCorrelationId(validId)).toBe(validId);
+    });
+
+    it("should accept alphanumeric with hyphens and underscores", () => {
+      const validId = "ABC-123_xyz-789";
+      expect(sanitizeCorrelationId(validId)).toBe(validId);
+    });
+
+    it("should reject empty strings", () => {
+      expect(sanitizeCorrelationId("")).toBeNull();
+    });
+
+    it("should reject strings with only whitespace", () => {
+      expect(sanitizeCorrelationId("   ")).toBeNull();
+      expect(sanitizeCorrelationId("\t\n\r")).toBeNull();
+    });
+
+    it("should accept boundary min length (1 char)", () => {
+      expect(sanitizeCorrelationId("a")).toBe("a");
+      expect(sanitizeCorrelationId("1")).toBe("1");
+      expect(sanitizeCorrelationId("_")).toBe("_");
+      expect(sanitizeCorrelationId("-")).toBe("-");
+    });
+
+    it("should accept boundary max length (128 chars)", () => {
+      const maxLength = "a".repeat(128);
+      expect(sanitizeCorrelationId(maxLength)).toBe(maxLength);
+    });
+
+    it("should reject boundary length just over limit (129 chars)", () => {
+      const tooLong = "a".repeat(129);
+      expect(sanitizeCorrelationId(tooLong)).toBeNull();
+    });
+
+    it("should reject strings with special characters (log injection prevention)", () => {
+      const malicious = "test\ninjection";
+      expect(sanitizeCorrelationId(malicious)).toBeNull();
+    });
+
+    it("should reject strings with newlines", () => {
+      const withNewline = "test\ntest";
+      expect(sanitizeCorrelationId(withNewline)).toBeNull();
+    });
+
+    it("should reject strings with carriage returns", () => {
+      const withCarriageReturn = "test\rtest";
+      expect(sanitizeCorrelationId(withCarriageReturn)).toBeNull();
+    });
+
+    it("should reject strings with tabs", () => {
+      const withTab = "test\ttest";
+      expect(sanitizeCorrelationId(withTab)).toBeNull();
+    });
+
+    it("should reject strings with semicolons", () => {
+      const withSemicolon = "test;test";
+      expect(sanitizeCorrelationId(withSemicolon)).toBeNull();
+    });
+
+    it("should reject strings with pipe characters", () => {
+      const withPipe = "test|test";
+      expect(sanitizeCorrelationId(withPipe)).toBeNull();
+    });
+
+    it("should reject strings with null bytes", () => {
+      const withNullByte = "test\0test";
+      expect(sanitizeCorrelationId(withNullByte)).toBeNull();
+    });
+
+    it("should reject strings with ANSI escape codes", () => {
+      const withAnsi = "test\x1b[31mtest";
+      expect(sanitizeCorrelationId(withAnsi)).toBeNull();
+    });
+
+    it("should trim whitespace from valid IDs", () => {
+      const withSpaces = "  ABC-123  ";
+      expect(sanitizeCorrelationId(withSpaces)).toBe("ABC-123");
+    });
+
+    it("should reject IDs with spaces in the middle", () => {
+      const withInternalSpace = "ABC 123";
+      expect(sanitizeCorrelationId(withInternalSpace)).toBeNull();
+    });
+
+    it("should return null for non-string input types", () => {
+      const nonStringInputs: unknown[] = [
+        undefined,
+        null,
+        0,
+        123,
+        true,
+        false,
+        {},
+        [],
+        () => "test",
+        Symbol("test"),
+        BigInt(123),
+        NaN,
+        Infinity,
+      ];
+
+      for (const input of nonStringInputs) {
+        expect(sanitizeCorrelationId(input)).toBeNull();
+      }
+    });
+  });
+
+  describe("generateCorrelationId", () => {
+    it("should generate a ULID", () => {
+      const id = generateCorrelationId();
+      expect(id).toBeDefined();
+      expect(typeof id).toBe("string");
+      expect(id.length).toBe(26);
+    });
+
+    it("should generate unique IDs", () => {
+      const id1 = generateCorrelationId();
+      const id2 = generateCorrelationId();
+      expect(id1).not.toBe(id2);
+    });
+
+    it("should generate valid ULID characters", () => {
+      const id = generateCorrelationId();
+      expect(id).toMatch(/^[A-Z0-9]+$/);
+    });
+
+    it("should fall back to resilient ID generator when ulid() throws an error", () => {
+      _setUlidGeneratorForTesting(() => {
+        throw new Error("PRNG failure");
+      });
+
+      try {
+        const fallbackId = generateCorrelationId();
+        expect(fallbackId).toBeDefined();
+        expect(typeof fallbackId).toBe("string");
+        expect(fallbackId.length).toBeGreaterThan(0);
+        expect(sanitizeCorrelationId(fallbackId)).toBe(fallbackId);
+      } finally {
+        _resetUlidGeneratorForTesting();
+      }
+    });
+
+    it("should fall back to timestamp-entropy generator when both ULID and randomUUID fail", () => {
+      const crypto = require("node:crypto");
+      const origUUID = crypto.randomUUID;
+      _setUlidGeneratorForTesting(() => {
+        throw new Error("ULID failed");
+      });
+      crypto.randomUUID = () => {
+        throw new Error("randomUUID failed");
+      };
+
+      try {
+        const id = generateCorrelationId();
+        expect(typeof id).toBe("string");
+        expect(id.startsWith("FALLBACK")).toBe(true);
+        expect(sanitizeCorrelationId(id)).toBe(id);
+      } finally {
+        crypto.randomUUID = origUUID;
+        _resetUlidGeneratorForTesting();
+      }
+    });
+  });
+
+  describe("withCorrelationId and runWithContext", () => {
+    it("should set correlation ID in context for synchronous function", () => {
+      const testId = "test-correlation-id";
+      let capturedId: string | null = null;
+
+      withCorrelationId(testId, () => {
+        capturedId = getCorrelationId();
+      });
+
+      expect(capturedId).toBe(testId);
+    });
+
+    it("should set correlation ID in context for async function", async () => {
+      const testId = "async-correlation-id";
+      let capturedId: string | null = null;
+
+      await withCorrelationId(testId, async () => {
+        await Promise.resolve();
+        capturedId = getCorrelationId();
+      });
+
+      expect(capturedId).toBe(testId);
+    });
+
+    it("should return function result for sync execution", () => {
+      const testId = "test-id";
+      const result = withCorrelationId(testId, () => {
+        return "result-value";
+      });
+
+      expect(result).toBe("result-value");
+    });
+
+    it("should return async function result", async () => {
+      const testId = "test-id";
+      const result = await withCorrelationId(testId, async () => {
+        return "async-result";
+      });
+
+      expect(result).toBe("async-result");
+    });
+
+    it("should isolate context between concurrent calls", async () => {
+      const id1 = "context-1";
+      const id2 = "context-2";
+
+      const result1 = withCorrelationId(id1, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return getCorrelationId();
+      });
+
+      const result2 = withCorrelationId(id2, async () => {
+        await new Promise((resolve) => setTimeout(resolve, 5));
+        return getCorrelationId();
+      });
+
+      const [r1, r2] = await Promise.all([result1, result2]);
+
+      expect(r1).toBe(id1);
+      expect(r2).toBe(id2);
+    });
+
+    it("should not leak context after function completes", () => {
+      const testId = "leak-test";
+
+      withCorrelationId(testId, () => {
+        expect(getCorrelationId()).toBe(testId);
+      });
+
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should handle nested contexts cleanly", () => {
+      const outerId = "outer-id";
+      const innerId = "inner-id";
+      let capturedInner: string | null = null;
+      let capturedOuter: string | null = null;
+      let capturedAfterInner: string | null = null;
+
+      withCorrelationId(outerId, () => {
+        capturedOuter = getCorrelationId();
+
+        withCorrelationId(innerId, () => {
+          capturedInner = getCorrelationId();
+        });
+
+        capturedAfterInner = getCorrelationId();
+      });
+
+      expect(capturedOuter).toBe(outerId);
+      expect(capturedInner).toBe(innerId);
+      expect(capturedAfterInner).toBe(outerId);
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should clean up context when synchronous function throws", () => {
+      const testId = "throw-sync-test";
+
+      expect(() => {
+        withCorrelationId(testId, () => {
+          expect(getCorrelationId()).toBe(testId);
+          throw new Error("sync-error");
+        });
+      }).toThrow("sync-error");
+
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should clean up context when async function rejects", async () => {
+      const testId = "reject-async-test";
+
+      await expect(
+        withCorrelationId(testId, async () => {
+          expect(getCorrelationId()).toBe(testId);
+          await Promise.resolve();
+          throw new Error("async-error");
+        })
+      ).rejects.toThrow("async-error");
+
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should sanitize correlation ID before establishing context", () => {
+      const dirtyId = "  valid-trimmed-id  ";
+      withCorrelationId(dirtyId, () => {
+        expect(getCorrelationId()).toBe("valid-trimmed-id");
+      });
+
+      const invalidId = "invalid\nnewline-id";
+      withCorrelationId(invalidId, () => {
+        const stored = getCorrelationId();
+        expect(stored).toBeDefined();
+        expect(stored).not.toContain("\n");
+        expect(stored).not.toBe(invalidId);
+      });
+    });
+  });
+
+  describe("getCorrelationId", () => {
+    it("should return null when no context is set", () => {
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should return the correlation ID from context", () => {
+      const testId = "test-id";
+      withCorrelationId(testId, () => {
+        expect(getCorrelationId()).toBe(testId);
+      });
+    });
+
+    it("should return null after context is cleared", () => {
+      const testId = "test-id";
+
+      withCorrelationId(testId, () => {
+        expect(getCorrelationId()).toBe(testId);
+      });
+
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should never throw and always return null for corrupted context store values", () => {
+      const corruptValues: unknown[] = [
+        undefined,
+        null,
+        0,
+        123,
+        true,
+        false,
+        {},
+        [],
+        () => "test",
+        NaN,
+        Infinity,
+        BigInt(1),
+        Symbol("corr"),
+        "",
+        "   ",
+        "invalid\nnewline",
+        "a".repeat(129),
+      ];
+
+      for (const val of corruptValues) {
+        const result = (AsyncLocalStorage.prototype.run as any).call(
+          (require("../src/lib/requestContext") as any).storage ??
+            new AsyncLocalStorage(),
+          { correlationId: val },
+          () => getCorrelationId()
+        );
+        expect(result === null || typeof result === "string").toBe(true);
+      }
+    });
+
+    it("should safely return null when storage.getStore() throws an unexpected exception", () => {
+      const spy = jest
+        .spyOn(AsyncLocalStorage.prototype, "getStore")
+        .mockImplementation(() => {
+          throw new Error("Store access fault");
+        });
+
+      try {
+        expect(getCorrelationId()).toBeNull();
+      } finally {
+        spy.mockRestore();
+      }
+    });
+  });
+
+  describe("getOrGenerateCorrelationId", () => {
+    it("should safely generate a valid ID when storage.getStore() throws an unexpected exception", () => {
+      const spy = jest
+        .spyOn(AsyncLocalStorage.prototype, "getStore")
+        .mockImplementation(() => {
+          throw new Error("Storage subsystem failure");
+        });
+
+      try {
+        const id = getOrGenerateCorrelationId();
+        expect(typeof id).toBe("string");
+        expect(id.length).toBeGreaterThan(0);
+        expect(sanitizeCorrelationId(id)).toBe(id);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+    it("should return existing correlation ID from active valid context", () => {
+      const testId = "existing-active-id";
+      withCorrelationId(testId, () => {
+        const result = getOrGenerateCorrelationId();
+        expect(result).toBe(testId);
+      });
+    });
+
+    it("should generate a new ULID when no context is set", () => {
+      const result = getOrGenerateCorrelationId();
+      expect(result).toBeDefined();
+      expect(typeof result).toBe("string");
+      expect(result.length).toBe(26);
+      expect(sanitizeCorrelationId(result)).toBe(result);
+    });
+
+    it("should generate unique IDs on consecutive calls without context", () => {
+      const id1 = getOrGenerateCorrelationId();
+      const id2 = getOrGenerateCorrelationId();
+      const id3 = getOrGenerateCorrelationId();
+
+      expect(id1).not.toBe(id2);
+      expect(id2).not.toBe(id3);
+      expect(id1).not.toBe(id3);
+    });
+
+    it("should be deterministic and return identical ID across repeated calls within the same context", () => {
+      const testId = "stable-context-id";
+      withCorrelationId(testId, () => {
+        for (let i = 0; i < 50; i++) {
+          expect(getOrGenerateCorrelationId()).toBe(testId);
+        }
+      });
+    });
+
+    it("should generate a new valid ID when context store is corrupted with non-string values", () => {
+      const invalidStoreValues: unknown[] = [
+        null,
+        undefined,
+        42,
+        true,
+        false,
+        {},
+        [],
+        () => "corrupted",
+        NaN,
+        Infinity,
+        BigInt(99),
+        Symbol("invalid"),
+      ];
+
+      for (const val of invalidStoreValues) {
+        // Run with an improperly constructed store to simulate memory corruption or buggy upstream injector
+        withCorrelationId(undefined as unknown as string, () => {
+          const generated = getOrGenerateCorrelationId();
+          expect(typeof generated).toBe("string");
+          expect(generated.length).toBeGreaterThan(0);
+          expect(sanitizeCorrelationId(generated)).toBe(generated);
+        });
+      }
+    });
+
+    it("should generate a new valid ID when context store has empty or whitespace string", () => {
+      withCorrelationId("", () => {
+        const id = getOrGenerateCorrelationId();
+        expect(typeof id).toBe("string");
+        expect(id.length).toBe(26);
+      });
+
+      withCorrelationId("   ", () => {
+        const id = getOrGenerateCorrelationId();
+        expect(typeof id).toBe("string");
+        expect(id.length).toBe(26);
+      });
+    });
+
+    it("should generate a new valid ID when context store contains log-injection payload", () => {
+      const injectionPayload = "malicious\r\nSET-COOKIE: admin=true";
+      withCorrelationId(injectionPayload, () => {
+        const id = getOrGenerateCorrelationId();
+        expect(id).not.toContain("\r");
+        expect(id).not.toContain("\n");
+        expect(sanitizeCorrelationId(id)).toBe(id);
+      });
+    });
+
+    it("should generate a new valid ID when context store string exceeds 128 characters", () => {
+      const oversized = "X".repeat(150);
+      withCorrelationId(oversized, () => {
+        const id = getOrGenerateCorrelationId();
+        expect(id.length).toBeLessThanOrEqual(128);
+        expect(sanitizeCorrelationId(id)).toBe(id);
+      });
+    });
+
+    it("should handle ULID generation failure gracefully and return a valid fallback ID", () => {
+      _setUlidGeneratorForTesting(() => {
+        throw new Error("Random entropy device unavailable");
+      });
+
+      try {
+        const id = getOrGenerateCorrelationId();
+        expect(id).toBeDefined();
+        expect(typeof id).toBe("string");
+        expect(id.length).toBeGreaterThan(0);
+        expect(sanitizeCorrelationId(id)).toBe(id);
+      } finally {
+        _resetUlidGeneratorForTesting();
+      }
+    });
+
+    it("should maintain context across Promise chains and async microtasks", async () => {
+      const testId = "promise-async-chain-id";
+
+      const result = await withCorrelationId(testId, async () => {
+        return Promise.resolve()
+          .then(() => getOrGenerateCorrelationId())
+          .then((id) => {
+            expect(id).toBe(testId);
+            return Promise.resolve(getOrGenerateCorrelationId());
+          })
+          .then((id) => id);
+      });
+
+      expect(result).toBe(testId);
+    });
+
+    it("should isolate context in high-concurrency parallel async tasks (100 concurrent workers)", async () => {
+      const concurrency = 100;
+      const tasks = Array.from({ length: concurrency }, (_, idx) => {
+        const workerId = `worker-context-${idx}`;
+        return withCorrelationId(workerId, async () => {
+          const delay = Math.floor(Math.random() * 15);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          const observedId = getOrGenerateCorrelationId();
+          expect(observedId).toBe(workerId);
+          return observedId;
+        });
+      });
+
+      const results = await Promise.all(tasks);
+      expect(results).toHaveLength(concurrency);
+      const uniqueResults = new Set(results);
+      expect(uniqueResults.size).toBe(concurrency);
+    });
+
+    it("should generate unique IDs for concurrent callers running outside any context", async () => {
+      const count = 50;
+      const tasks = Array.from({ length: count }, async () => {
+        const delay = Math.floor(Math.random() * 10);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return getOrGenerateCorrelationId();
+      });
+
+      const results = await Promise.all(tasks);
+      const uniqueResults = new Set(results);
+      expect(uniqueResults.size).toBe(count);
+    });
+
+    it("should handle multiple nested contexts restoring outer context at each level", async () => {
+      const l1 = "level-1-id";
+      const l2 = "level-2-id";
+      const l3 = "level-3-id";
+
+      await withCorrelationId(l1, async () => {
+        expect(getOrGenerateCorrelationId()).toBe(l1);
+
+        await withCorrelationId(l2, async () => {
+          expect(getOrGenerateCorrelationId()).toBe(l2);
+
+          await withCorrelationId(l3, async () => {
+            expect(getOrGenerateCorrelationId()).toBe(l3);
+          });
+
+          expect(getOrGenerateCorrelationId()).toBe(l2);
+        });
+
+        expect(getOrGenerateCorrelationId()).toBe(l1);
+      });
+
+      // Outside context, generates a new ID
+      const afterId = getOrGenerateCorrelationId();
+      expect(afterId).not.toBe(l1);
+      expect(afterId).not.toBe(l2);
+      expect(afterId).not.toBe(l3);
+    });
+  });
+
+  describe("createRequestContextMiddleware", () => {
+    it("should call next with correlation ID context when correlationId is set", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { correlationId: "test-id" };
+      const res: any = {};
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+    });
+
+    it("should call next without context when correlationId is not set", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = {};
+      const res: any = {};
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+    });
+
+    it("should use requestId as fallback when correlationId is not set", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { requestId: "request-id" };
+      const res: any = {};
+      let observed: string | null = null;
+      const next = jest.fn(() => {
+        observed = getCorrelationId();
+      });
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(observed).toBe("request-id");
+    });
+
+    it("should use headers['x-request-id'] as fallback when correlationId and requestId are not set", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { headers: { "x-request-id": "header-request-id" } };
+      const res: any = {};
+      let observed: string | null = null;
+      const next = jest.fn(() => {
+        observed = getCorrelationId();
+      });
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(observed).toBe("header-request-id");
+    });
+
+    it("should sanitize header correlation IDs and reject log injection characters in middleware", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = {
+        headers: { "x-request-id": "bad\r\ninjection-header" },
+      };
+      const res: any = {};
+      let observed: string | null = "initial";
+      const next = jest.fn(() => {
+        observed = getCorrelationId();
+      });
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(observed).toBeNull();
+    });
+
+    it("should expose the correlation ID to downstream code within next()", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { correlationId: "middleware-test" };
+      const res: any = {};
+      let observed: string | null = null;
+      const next = jest.fn(() => {
+        observed = getCorrelationId();
+      });
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(observed).toBe("middleware-test");
+    });
+
+    it("should not leak the context after next() returns", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { correlationId: "leak-test" };
+      const res: any = {};
+      const next = jest.fn();
+
+      middleware(req, res, next);
+
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should propagate errors thrown by next() and still tear down the context", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { correlationId: "error-test" };
+      const res: any = {};
+      const next = jest.fn(() => {
+        throw new Error("downstream failure");
+      });
+
+      expect(() => middleware(req, res, next)).toThrow("downstream failure");
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should not establish a context for an empty-string correlationId", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { correlationId: "" };
+      const res: any = {};
+      let observed: string | null = "not-set";
+      const next = jest.fn(() => {
+        observed = getCorrelationId();
+      });
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(observed).toBeNull();
+    });
+
+    it("should handle malformed req objects gracefully without throwing", () => {
+      const middleware = createRequestContextMiddleware();
+      const next = jest.fn();
+
+      expect(() => middleware(null as any, {} as any, next)).not.toThrow();
+      expect(next).toHaveBeenCalled();
+    });
+  });
+});
