@@ -163,44 +163,78 @@ export function sanitizeCorrelationId(raw: unknown): string | null {
 }
 
 /**
+ * Resolve a candidate correlation id down to a value that is safe to place in
+ * the context, or null when the candidate must not be used.
+ *
+ * Only a string can qualify, and it must additionally survive
+ * `sanitizeCorrelationId`. Rejecting here — rather than at the point of use —
+ * is what keeps an empty, oversized or unparseable value from masking the
+ * fallback field, and keeps a value carrying newlines, terminal escapes or a
+ * null byte out of every log line that reads the context.
+ */
+function resolveContextId(candidate: unknown): string | null {
+  if (typeof candidate !== "string") return null;
+  return sanitizeCorrelationId(candidate);
+}
+
+/**
  * Express middleware that establishes the async-local-storage request context
  * from an already-resolved correlation/request id on the request object.
  *
- * It prefers `req.correlationId`, falling back to `req.requestId`. When neither
- * is present the request proceeds without a context (downstream callers fall
- * back to generating their own id). All downstream async work — audit writes,
- * outbound RPC calls, event processing — can read the id via getCorrelationId().
+ * It takes the first *usable* of `req.correlationId`, `req.requestId` and the
+ * `x-request-id` request header, in that order. "Usable" means a string that
+ * passes `sanitizeCorrelationId`, so a blank, oversized or unparseable
+ * correlationId no longer masks a valid requestId or header. When no source
+ * yields a usable id the request proceeds without a context (downstream callers
+ * fall back to generating their own id). All downstream async work — audit
+ * writes, outbound RPC calls, event processing — can read the id via
+ * getCorrelationId().
  *
  * Invariants:
  * - The context is only established for the duration of `next()`, so it cannot
  *   leak into subsequent requests on the same event-loop tick.
- * - A missing or empty id never creates a context with an undefined value.
+ * - A missing or empty id never creates a context with an undefined value, and a
+ *   value that would be unsafe to log never creates a context at all.
+ * - `next()` runs exactly once on every path, including the rejected ones: an
+ *   unusable id degrades observability, it must never stall or drop a request.
+ * - A missing or non-object `req` is treated as "no id" instead of throwing, so
+ *   a malformed request cannot take the chain down before `next()` is reached.
  * - `next()` errors are propagated to the caller unchanged; the context is still
  *   torn down correctly by AsyncLocalStorage.
  */
 export function createRequestContextMiddleware() {
   return function requestContextMiddleware(
     req: {
-      correlationId?: string;
-      requestId?: string;
+      correlationId?: unknown;
+      requestId?: unknown;
       headers?: Record<string, unknown>;
-    },
+    } | null | undefined,
     _res: unknown,
     next: (err?: any) => void
   ): void {
+    // Every candidate source is resolved through resolveContextId rather than
+    // `??`, because `??` short-circuits on a present-but-unusable value: a blank,
+    // oversized or unparseable correlationId would otherwise mask a perfectly
+    // usable requestId or x-request-id header. Resolving each source in turn
+    // means the first *usable* id wins and an unusable one falls through.
+    //
+    // The try/catch wraps only the resolution, never the next() call, so a
+    // throwing property access on a malformed `req` degrades to "no context"
+    // while a genuine downstream failure still propagates to the caller instead
+    // of being swallowed and the request silently stalling.
+    let id: string | null = null;
     try {
-      const rawId =
-        req.correlationId ??
-        req.requestId ??
-        (req.headers?.["x-request-id"] as string | undefined);
-      const sanitized = sanitizeCorrelationId(rawId);
-      if (sanitized) {
-        runWithContext(sanitized, next);
-      } else {
-        next();
-      }
+      id =
+        resolveContextId(req?.correlationId) ??
+        resolveContextId(req?.requestId) ??
+        resolveContextId(req?.headers?.["x-request-id"]);
     } catch {
-      next();
+      id = null;
     }
+    if (id === null) {
+      next();
+      return;
+    }
+    runWithContext(id, next);
   };
 }
