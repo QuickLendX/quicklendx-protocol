@@ -145,4 +145,148 @@ describe("getPreparedStatement failure boundaries", () => {
 
     expect(() => getPreparedStatement("BAD SQL")).toThrow(DatabasePrepareError);
   });
+
+  describe('getStatementCacheStats', () => {
+    test('returns correct stats when cache is empty', () => {
+      const stats = getStatementCacheStats();
+      expect(stats.size).toBe(0);
+      expect(stats.statements).toEqual([]);
+      expect(stats.statements).toHaveLength(0);
+      expect(stats.hits).toBe(0);
+      expect(stats.misses).toBe(0);
+      expect(stats.evicts).toBe(0);
+    });
+
+    test('returns correct stats after preparing statements', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      const stmt1 = getPreparedStatement('SELECT 1');
+      const stmt2 = getPreparedStatement('SELECT 2');
+      const stats = getStatementCacheStats();
+      expect(stats.size).toBe(2);
+      expect(stats.statements).toContain('SELECT 1');
+      expect(stats.statements).toContain('SELECT 2');
+      expect(stats.hits).toBe(0);
+      expect(stats.misses).toBe(2);
+      expect(stats.evicts).toBe(0);
+    });
+
+    test('returns consistent stats across multiple calls', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 1');
+      const first = getStatementCacheStats();
+      const second = getStatementCacheStats();
+      expect(first).toEqual(second);
+    });
+
+    test('returns correct stats after clearing cache', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 1');
+      clearStatementCache();
+      const stats = getStatementCacheStats();
+      expect(stats.size).toBe(0);
+      expect(stats.hits).toBe(0);
+      expect(stats.misses).toBe(0);
+      expect(stats.evicts).toBe(0);
+    });
+
+    test('statements array reflects current cache keys', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 1');
+      getPreparedStatement('SELECT 2');
+      const stats = getStatementCacheStats();
+      expect(stats.statements).toContain('SELECT 1');
+      expect(stats.statements).toContain('SELECT 2');
+      expect(stats.statements).toHaveLength(2);
+    });
+
+    test('counts a cache hit without changing size', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 1');
+      getPreparedStatement('SELECT 1');
+      getPreparedStatement('SELECT 1');
+      const stats = getStatementCacheStats();
+      expect(stats.size).toBe(1);
+      expect(stats.hits).toBe(2);
+      expect(stats.misses).toBe(1);
+      expect(stats.evicts).toBe(0);
+    });
+
+    test('a duplicate SQL string never inflates size or misses', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      for (let i = 0; i < 5; i++) getPreparedStatement('SELECT 1');
+      const stats = getStatementCacheStats();
+      expect(stats.size).toBe(1);
+      expect(stats.misses).toBe(1);
+      expect(stats.hits).toBe(4);
+    });
+
+    test('a failed preparation is counted as a miss but never cached', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 1');
+      expect(() => getPreparedStatement('BAD SQL')).toThrow(DatabasePrepareError);
+      const stats = getStatementCacheStats();
+      // The rejected statement must not be observable in the cache.
+      expect(stats.size).toBe(1);
+      expect(stats.statements).toEqual(['SELECT 1']);
+      expect(stats.misses).toBe(2);
+    });
+
+    test('returns a defensive copy that cannot corrupt the cache', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 1');
+      const first = getStatementCacheStats();
+      first.statements.push('TAMPERED');
+      first.hits = 999;
+      const second = getStatementCacheStats();
+      expect(second.statements).toEqual(['SELECT 1']);
+      expect(second.hits).toBe(0);
+      expect(second.size).toBe(1);
+    });
+
+    test('reports insertion order for cached statements', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 3');
+      getPreparedStatement('SELECT 1');
+      getPreparedStatement('SELECT 2');
+      expect(getStatementCacheStats().statements).toEqual(['SELECT 3', 'SELECT 1', 'SELECT 2']);
+    });
+
+    test('closeDatabase clears the cache and its metrics together', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      getPreparedStatement('SELECT 1');
+      getPreparedStatement('SELECT 1');
+      expect(getStatementCacheStats().hits).toBe(1);
+
+      closeDatabase();
+
+      // Regression guard: closing used to leave the previous generation's
+      // counters behind, reporting size 0 alongside non-zero hits/misses.
+      const stats = getStatementCacheStats();
+      expect(stats.size).toBe(0);
+      expect(stats.statements).toEqual([]);
+      expect(stats.hits).toBe(0);
+      expect(stats.misses).toBe(0);
+      expect(stats.evicts).toBe(0);
+    });
+
+    test('stats stay self-consistent across many prepares and clears', () => {
+      process.env.DATABASE_PATH = ':memory:';
+      for (let round = 0; round < 3; round++) {
+        getPreparedStatement('SELECT 1');
+        getPreparedStatement('SELECT 2');
+        const stats = getStatementCacheStats();
+        expect(stats.size).toBe(2);
+        expect(stats.misses).toBe(2);
+        expect(stats.hits).toBe(0);
+        clearStatementCache();
+        expect(getStatementCacheStats()).toEqual({
+          size: 0,
+          statements: [],
+          hits: 0,
+          misses: 0,
+          evicts: 0,
+        });
+      }
+    });
+  });
 });
