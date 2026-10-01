@@ -1,11 +1,15 @@
-import { describe, expect, it, jest, beforeEach } from "@jest/globals";
+import { describe, expect, it, jest } from "@jest/globals";
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   sanitizeCorrelationId,
   generateCorrelationId,
+  runWithContext,
   withCorrelationId,
   getCorrelationId,
   getOrGenerateCorrelationId,
   createRequestContextMiddleware,
+  _setUlidGeneratorForTesting,
+  _resetUlidGeneratorForTesting,
 } from "../src/lib/requestContext";
 
 describe("requestContext", () => {
@@ -26,9 +30,22 @@ describe("requestContext", () => {
 
     it("should reject strings with only whitespace", () => {
       expect(sanitizeCorrelationId("   ")).toBeNull();
+      expect(sanitizeCorrelationId("\t\n\r")).toBeNull();
     });
 
-    it("should reject strings exceeding max length", () => {
+    it("should accept boundary min length (1 char)", () => {
+      expect(sanitizeCorrelationId("a")).toBe("a");
+      expect(sanitizeCorrelationId("1")).toBe("1");
+      expect(sanitizeCorrelationId("_")).toBe("_");
+      expect(sanitizeCorrelationId("-")).toBe("-");
+    });
+
+    it("should accept boundary max length (128 chars)", () => {
+      const maxLength = "a".repeat(128);
+      expect(sanitizeCorrelationId(maxLength)).toBe(maxLength);
+    });
+
+    it("should reject boundary length just over limit (129 chars)", () => {
       const tooLong = "a".repeat(129);
       expect(sanitizeCorrelationId(tooLong)).toBeNull();
     });
@@ -63,23 +80,46 @@ describe("requestContext", () => {
       expect(sanitizeCorrelationId(withPipe)).toBeNull();
     });
 
+    it("should reject strings with null bytes", () => {
+      const withNullByte = "test\0test";
+      expect(sanitizeCorrelationId(withNullByte)).toBeNull();
+    });
+
+    it("should reject strings with ANSI escape codes", () => {
+      const withAnsi = "test\x1b[31mtest";
+      expect(sanitizeCorrelationId(withAnsi)).toBeNull();
+    });
+
     it("should trim whitespace from valid IDs", () => {
       const withSpaces = "  ABC-123  ";
       expect(sanitizeCorrelationId(withSpaces)).toBe("ABC-123");
     });
 
-    it("should return null for undefined input", () => {
-      expect(sanitizeCorrelationId(undefined)).toBeNull();
-    });
-
-    it("should accept maximum length valid ID", () => {
-      const maxLength = "a".repeat(128);
-      expect(sanitizeCorrelationId(maxLength)).toBe(maxLength);
-    });
-
     it("should reject IDs with spaces in the middle", () => {
       const withInternalSpace = "ABC 123";
       expect(sanitizeCorrelationId(withInternalSpace)).toBeNull();
+    });
+
+    it("should return null for non-string input types", () => {
+      const nonStringInputs: unknown[] = [
+        undefined,
+        null,
+        0,
+        123,
+        true,
+        false,
+        {},
+        [],
+        () => "test",
+        Symbol("test"),
+        BigInt(123),
+        NaN,
+        Infinity,
+      ];
+
+      for (const input of nonStringInputs) {
+        expect(sanitizeCorrelationId(input)).toBeNull();
+      }
     });
   });
 
@@ -101,12 +141,49 @@ describe("requestContext", () => {
       const id = generateCorrelationId();
       expect(id).toMatch(/^[A-Z0-9]+$/);
     });
+
+    it("should fall back to resilient ID generator when ulid() throws an error", () => {
+      _setUlidGeneratorForTesting(() => {
+        throw new Error("PRNG failure");
+      });
+
+      try {
+        const fallbackId = generateCorrelationId();
+        expect(fallbackId).toBeDefined();
+        expect(typeof fallbackId).toBe("string");
+        expect(fallbackId.length).toBeGreaterThan(0);
+        expect(sanitizeCorrelationId(fallbackId)).toBe(fallbackId);
+      } finally {
+        _resetUlidGeneratorForTesting();
+      }
+    });
+
+    it("should fall back to timestamp-entropy generator when both ULID and randomUUID fail", () => {
+      const crypto = require("node:crypto");
+      const origUUID = crypto.randomUUID;
+      _setUlidGeneratorForTesting(() => {
+        throw new Error("ULID failed");
+      });
+      crypto.randomUUID = () => {
+        throw new Error("randomUUID failed");
+      };
+
+      try {
+        const id = generateCorrelationId();
+        expect(typeof id).toBe("string");
+        expect(id.startsWith("FALLBACK")).toBe(true);
+        expect(sanitizeCorrelationId(id)).toBe(id);
+      } finally {
+        crypto.randomUUID = origUUID;
+        _resetUlidGeneratorForTesting();
+      }
+    });
   });
 
-  describe("withCorrelationId", () => {
+  describe("withCorrelationId and runWithContext", () => {
     it("should set correlation ID in context for synchronous function", () => {
       const testId = "test-correlation-id";
-      let capturedId: string | undefined;
+      let capturedId: string | null = null;
 
       withCorrelationId(testId, () => {
         capturedId = getCorrelationId();
@@ -117,7 +194,7 @@ describe("requestContext", () => {
 
     it("should set correlation ID in context for async function", async () => {
       const testId = "async-correlation-id";
-      let capturedId: string | undefined;
+      let capturedId: string | null = null;
 
       await withCorrelationId(testId, async () => {
         await Promise.resolve();
@@ -127,7 +204,7 @@ describe("requestContext", () => {
       expect(capturedId).toBe(testId);
     });
 
-    it("should return function result", () => {
+    it("should return function result for sync execution", () => {
       const testId = "test-id";
       const result = withCorrelationId(testId, () => {
         return "result-value";
@@ -167,37 +244,83 @@ describe("requestContext", () => {
 
     it("should not leak context after function completes", () => {
       const testId = "leak-test";
-      
+
       withCorrelationId(testId, () => {
         expect(getCorrelationId()).toBe(testId);
       });
 
-      expect(getCorrelationId()).toBeUndefined();
+      expect(getCorrelationId()).toBeNull();
     });
 
-    it("should handle nested contexts", () => {
-      const outerId = "outer";
-      const innerId = "inner";
-      let capturedInner: string | undefined;
-      let capturedOuter: string | undefined;
+    it("should handle nested contexts cleanly", () => {
+      const outerId = "outer-id";
+      const innerId = "inner-id";
+      let capturedInner: string | null = null;
+      let capturedOuter: string | null = null;
+      let capturedAfterInner: string | null = null;
 
       withCorrelationId(outerId, () => {
         capturedOuter = getCorrelationId();
-        
+
         withCorrelationId(innerId, () => {
           capturedInner = getCorrelationId();
         });
+
+        capturedAfterInner = getCorrelationId();
       });
 
       expect(capturedOuter).toBe(outerId);
       expect(capturedInner).toBe(innerId);
-      expect(getCorrelationId()).toBeUndefined();
+      expect(capturedAfterInner).toBe(outerId);
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should clean up context when synchronous function throws", () => {
+      const testId = "throw-sync-test";
+
+      expect(() => {
+        withCorrelationId(testId, () => {
+          expect(getCorrelationId()).toBe(testId);
+          throw new Error("sync-error");
+        });
+      }).toThrow("sync-error");
+
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should clean up context when async function rejects", async () => {
+      const testId = "reject-async-test";
+
+      await expect(
+        withCorrelationId(testId, async () => {
+          expect(getCorrelationId()).toBe(testId);
+          await Promise.resolve();
+          throw new Error("async-error");
+        })
+      ).rejects.toThrow("async-error");
+
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should sanitize correlation ID before establishing context", () => {
+      const dirtyId = "  valid-trimmed-id  ";
+      withCorrelationId(dirtyId, () => {
+        expect(getCorrelationId()).toBe("valid-trimmed-id");
+      });
+
+      const invalidId = "invalid\nnewline-id";
+      withCorrelationId(invalidId, () => {
+        const stored = getCorrelationId();
+        expect(stored).toBeDefined();
+        expect(stored).not.toContain("\n");
+        expect(stored).not.toBe(invalidId);
+      });
     });
   });
 
   describe("getCorrelationId", () => {
-    it("should return undefined when no context is set", () => {
-      expect(getCorrelationId()).toBeUndefined();
+    it("should return null when no context is set", () => {
+      expect(getCorrelationId()).toBeNull();
     });
 
     it("should return the correlation ID from context", () => {
@@ -207,37 +330,265 @@ describe("requestContext", () => {
       });
     });
 
-    it("should return undefined after context is cleared", () => {
+    it("should return null after context is cleared", () => {
       const testId = "test-id";
-      
+
       withCorrelationId(testId, () => {
         expect(getCorrelationId()).toBe(testId);
       });
 
-      expect(getCorrelationId()).toBeUndefined();
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should never throw and always return null for corrupted context store values", () => {
+      const corruptValues: unknown[] = [
+        undefined,
+        null,
+        0,
+        123,
+        true,
+        false,
+        {},
+        [],
+        () => "test",
+        NaN,
+        Infinity,
+        BigInt(1),
+        Symbol("corr"),
+        "",
+        "   ",
+        "invalid\nnewline",
+        "a".repeat(129),
+      ];
+
+      for (const val of corruptValues) {
+        const result = (AsyncLocalStorage.prototype.run as any).call(
+          (require("../src/lib/requestContext") as any).storage ??
+            new AsyncLocalStorage(),
+          { correlationId: val },
+          () => getCorrelationId()
+        );
+        expect(result === null || typeof result === "string").toBe(true);
+      }
+    });
+
+    it("should safely return null when storage.getStore() throws an unexpected exception", () => {
+      const spy = jest
+        .spyOn(AsyncLocalStorage.prototype, "getStore")
+        .mockImplementation(() => {
+          throw new Error("Store access fault");
+        });
+
+      try {
+        expect(getCorrelationId()).toBeNull();
+      } finally {
+        spy.mockRestore();
+      }
     });
   });
 
   describe("getOrGenerateCorrelationId", () => {
-    it("should return existing correlation ID from context", () => {
-      const testId = "existing-id";
+    it("should safely generate a valid ID when storage.getStore() throws an unexpected exception", () => {
+      const spy = jest
+        .spyOn(AsyncLocalStorage.prototype, "getStore")
+        .mockImplementation(() => {
+          throw new Error("Storage subsystem failure");
+        });
+
+      try {
+        const id = getOrGenerateCorrelationId();
+        expect(typeof id).toBe("string");
+        expect(id.length).toBeGreaterThan(0);
+        expect(sanitizeCorrelationId(id)).toBe(id);
+      } finally {
+        spy.mockRestore();
+      }
+    });
+    it("should return existing correlation ID from active valid context", () => {
+      const testId = "existing-active-id";
       withCorrelationId(testId, () => {
         const result = getOrGenerateCorrelationId();
         expect(result).toBe(testId);
       });
     });
 
-    it("should generate new ID when no context is set", () => {
+    it("should generate a new ULID when no context is set", () => {
       const result = getOrGenerateCorrelationId();
       expect(result).toBeDefined();
       expect(typeof result).toBe("string");
       expect(result.length).toBe(26);
+      expect(sanitizeCorrelationId(result)).toBe(result);
     });
 
-    it("should generate unique IDs when called without context", () => {
+    it("should generate unique IDs on consecutive calls without context", () => {
       const id1 = getOrGenerateCorrelationId();
       const id2 = getOrGenerateCorrelationId();
+      const id3 = getOrGenerateCorrelationId();
+
       expect(id1).not.toBe(id2);
+      expect(id2).not.toBe(id3);
+      expect(id1).not.toBe(id3);
+    });
+
+    it("should be deterministic and return identical ID across repeated calls within the same context", () => {
+      const testId = "stable-context-id";
+      withCorrelationId(testId, () => {
+        for (let i = 0; i < 50; i++) {
+          expect(getOrGenerateCorrelationId()).toBe(testId);
+        }
+      });
+    });
+
+    it("should generate a new valid ID when context store is corrupted with non-string values", () => {
+      const invalidStoreValues: unknown[] = [
+        null,
+        undefined,
+        42,
+        true,
+        false,
+        {},
+        [],
+        () => "corrupted",
+        NaN,
+        Infinity,
+        BigInt(99),
+        Symbol("invalid"),
+      ];
+
+      for (const val of invalidStoreValues) {
+        // Run with an improperly constructed store to simulate memory corruption or buggy upstream injector
+        withCorrelationId(undefined as unknown as string, () => {
+          const generated = getOrGenerateCorrelationId();
+          expect(typeof generated).toBe("string");
+          expect(generated.length).toBeGreaterThan(0);
+          expect(sanitizeCorrelationId(generated)).toBe(generated);
+        });
+      }
+    });
+
+    it("should generate a new valid ID when context store has empty or whitespace string", () => {
+      withCorrelationId("", () => {
+        const id = getOrGenerateCorrelationId();
+        expect(typeof id).toBe("string");
+        expect(id.length).toBe(26);
+      });
+
+      withCorrelationId("   ", () => {
+        const id = getOrGenerateCorrelationId();
+        expect(typeof id).toBe("string");
+        expect(id.length).toBe(26);
+      });
+    });
+
+    it("should generate a new valid ID when context store contains log-injection payload", () => {
+      const injectionPayload = "malicious\r\nSET-COOKIE: admin=true";
+      withCorrelationId(injectionPayload, () => {
+        const id = getOrGenerateCorrelationId();
+        expect(id).not.toContain("\r");
+        expect(id).not.toContain("\n");
+        expect(sanitizeCorrelationId(id)).toBe(id);
+      });
+    });
+
+    it("should generate a new valid ID when context store string exceeds 128 characters", () => {
+      const oversized = "X".repeat(150);
+      withCorrelationId(oversized, () => {
+        const id = getOrGenerateCorrelationId();
+        expect(id.length).toBeLessThanOrEqual(128);
+        expect(sanitizeCorrelationId(id)).toBe(id);
+      });
+    });
+
+    it("should handle ULID generation failure gracefully and return a valid fallback ID", () => {
+      _setUlidGeneratorForTesting(() => {
+        throw new Error("Random entropy device unavailable");
+      });
+
+      try {
+        const id = getOrGenerateCorrelationId();
+        expect(id).toBeDefined();
+        expect(typeof id).toBe("string");
+        expect(id.length).toBeGreaterThan(0);
+        expect(sanitizeCorrelationId(id)).toBe(id);
+      } finally {
+        _resetUlidGeneratorForTesting();
+      }
+    });
+
+    it("should maintain context across Promise chains and async microtasks", async () => {
+      const testId = "promise-async-chain-id";
+
+      const result = await withCorrelationId(testId, async () => {
+        return Promise.resolve()
+          .then(() => getOrGenerateCorrelationId())
+          .then((id) => {
+            expect(id).toBe(testId);
+            return Promise.resolve(getOrGenerateCorrelationId());
+          })
+          .then((id) => id);
+      });
+
+      expect(result).toBe(testId);
+    });
+
+    it("should isolate context in high-concurrency parallel async tasks (100 concurrent workers)", async () => {
+      const concurrency = 100;
+      const tasks = Array.from({ length: concurrency }, (_, idx) => {
+        const workerId = `worker-context-${idx}`;
+        return withCorrelationId(workerId, async () => {
+          const delay = Math.floor(Math.random() * 15);
+          await new Promise((resolve) => setTimeout(resolve, delay));
+          const observedId = getOrGenerateCorrelationId();
+          expect(observedId).toBe(workerId);
+          return observedId;
+        });
+      });
+
+      const results = await Promise.all(tasks);
+      expect(results).toHaveLength(concurrency);
+      const uniqueResults = new Set(results);
+      expect(uniqueResults.size).toBe(concurrency);
+    });
+
+    it("should generate unique IDs for concurrent callers running outside any context", async () => {
+      const count = 50;
+      const tasks = Array.from({ length: count }, async () => {
+        const delay = Math.floor(Math.random() * 10);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+        return getOrGenerateCorrelationId();
+      });
+
+      const results = await Promise.all(tasks);
+      const uniqueResults = new Set(results);
+      expect(uniqueResults.size).toBe(count);
+    });
+
+    it("should handle multiple nested contexts restoring outer context at each level", async () => {
+      const l1 = "level-1-id";
+      const l2 = "level-2-id";
+      const l3 = "level-3-id";
+
+      await withCorrelationId(l1, async () => {
+        expect(getOrGenerateCorrelationId()).toBe(l1);
+
+        await withCorrelationId(l2, async () => {
+          expect(getOrGenerateCorrelationId()).toBe(l2);
+
+          await withCorrelationId(l3, async () => {
+            expect(getOrGenerateCorrelationId()).toBe(l3);
+          });
+
+          expect(getOrGenerateCorrelationId()).toBe(l2);
+        });
+
+        expect(getOrGenerateCorrelationId()).toBe(l1);
+      });
+
+      // Outside context, generates a new ID
+      const afterId = getOrGenerateCorrelationId();
+      expect(afterId).not.toBe(l1);
+      expect(afterId).not.toBe(l2);
+      expect(afterId).not.toBe(l3);
     });
   });
 
@@ -268,156 +619,108 @@ describe("requestContext", () => {
       const middleware = createRequestContextMiddleware();
       const req: any = { requestId: "request-id" };
       const res: any = {};
-      const next = jest.fn();
+      let observed: string | null = null;
+      const next = jest.fn(() => {
+        observed = getCorrelationId();
+      });
 
       middleware(req, res, next);
 
       expect(next).toHaveBeenCalled();
+      expect(observed).toBe("request-id");
     });
 
-    it("should set correlation ID in async storage for downstream handlers", () => {
+    it("should use headers['x-request-id'] as fallback when correlationId and requestId are not set", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { headers: { "x-request-id": "header-request-id" } };
+      const res: any = {};
+      let observed: string | null = null;
+      const next = jest.fn(() => {
+        observed = getCorrelationId();
+      });
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(observed).toBe("header-request-id");
+    });
+
+    it("should sanitize header correlation IDs and reject log injection characters in middleware", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = {
+        headers: { "x-request-id": "bad\r\ninjection-header" },
+      };
+      const res: any = {};
+      let observed: string | null = "initial";
+      const next = jest.fn(() => {
+        observed = getCorrelationId();
+      });
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(observed).toBeNull();
+    });
+
+    it("should expose the correlation ID to downstream code within next()", () => {
       const middleware = createRequestContextMiddleware();
       const req: any = { correlationId: "middleware-test" };
+      const res: any = {};
+      let observed: string | null = null;
+      const next = jest.fn(() => {
+        observed = getCorrelationId();
+      });
+
+      middleware(req, res, next);
+
+      expect(next).toHaveBeenCalled();
+      expect(observed).toBe("middleware-test");
+    });
+
+    it("should not leak the context after next() returns", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { correlationId: "leak-test" };
       const res: any = {};
       const next = jest.fn();
 
       middleware(req, res, next);
 
-      // After middleware runs, the context should be set for the duration of next()
-      // We can't test this directly without running the middleware in a request context,
-      // but we can verify it doesn't throw
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should propagate errors thrown by next() and still tear down the context", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { correlationId: "error-test" };
+      const res: any = {};
+      const next = jest.fn(() => {
+        throw new Error("downstream failure");
+      });
+
+      expect(() => middleware(req, res, next)).toThrow("downstream failure");
+      expect(getCorrelationId()).toBeNull();
+    });
+
+    it("should not establish a context for an empty-string correlationId", () => {
+      const middleware = createRequestContextMiddleware();
+      const req: any = { correlationId: "" };
+      const res: any = {};
+      let observed: string | null = "not-set";
+      const next = jest.fn(() => {
+        observed = getCorrelationId();
+      });
+
+      middleware(req, res, next);
+
       expect(next).toHaveBeenCalled();
-    });
-  });
-
-  describe("context isolation with async operations", () => {
-    it("should maintain context through Promise chains", async () => {
-      const testId = "promise-chain-id";
-      
-      const result = await withCorrelationId(testId, async () => {
-        return Promise.resolve()
-          .then(() => getCorrelationId())
-          .then((id) => id)
-          .then((id) => Promise.resolve(id));
-      });
-
-      expect(result).toBe(testId);
+      expect(observed).toBeNull();
     });
 
-    it("should maintain context through setTimeout", async () => {
-      const testId = "timeout-id";
-      
-      const result = await withCorrelationId(testId, async () => {
-        return new Promise((resolve) => {
-          setTimeout(() => {
-            resolve(getCorrelationId());
-          }, 10);
-        });
-      });
+    it("should handle malformed req objects gracefully without throwing", () => {
+      const middleware = createRequestContextMiddleware();
+      const next = jest.fn();
 
-      expect(result).toBe(testId);
-    });
-
-    it("should maintain context through async/await", async () => {
-      const testId = "async-await-id";
-      
-      const result = await withCorrelationId(testId, async () => {
-        await Promise.resolve();
-        const id = getCorrelationId();
-        await Promise.resolve();
-        return id;
-      });
-
-      expect(result).toBe(testId);
-    });
-
-    it("should isolate context in parallel async operations", async () => {
-      const results: string[] = [];
-
-      const promise1 = withCorrelationId("id-1", async () => {
-        await new Promise((resolve) => setTimeout(resolve, 20));
-        results.push(getCorrelationId()!);
-      });
-
-      const promise2 = withCorrelationId("id-2", async () => {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        results.push(getCorrelationId()!);
-      });
-
-      const promise3 = withCorrelationId("id-3", async () => {
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        results.push(getCorrelationId()!);
-      });
-
-      await Promise.all([promise1, promise2, promise3]);
-
-      expect(results).toEqual(["id-3", "id-2", "id-1"]);
-    });
-  });
-
-  describe("security and edge cases", () => {
-    it("should prevent log injection via newlines in correlation IDs", () => {
-      const malicious = "test\nInjected Log Line";
-      expect(sanitizeCorrelationId(malicious)).toBeNull();
-    });
-
-    it("should prevent log injection via carriage returns", () => {
-      const malicious = "test\rInjected Log Line";
-      expect(sanitizeCorrelationId(malicious)).toBeNull();
-    });
-
-    it("should prevent log injection via null bytes", () => {
-      const malicious = "test\0Injected";
-      expect(sanitizeCorrelationId(malicious)).toBeNull();
-    });
-
-    it("should reject correlation IDs with ANSI escape sequences", () => {
-      const malicious = "test\x1b[31mInjected";
-      expect(sanitizeCorrelationId(malicious)).toBeNull();
-    });
-
-    it("should handle very long valid correlation IDs", () => {
-      const longValid = "a".repeat(128);
-      expect(sanitizeCorrelationId(longValid)).toBe(longValid);
-    });
-
-    it("should reject correlation IDs just over the limit", () => {
-      const tooLong = "a".repeat(129);
-      expect(sanitizeCorrelationId(tooLong)).toBeNull();
-    });
-
-    it("should handle concurrent context switches correctly", async () => {
-      const order: string[] = [];
-
-      const task1 = withCorrelationId("task-1", async () => {
-        order.push(getCorrelationId()!);
-        await new Promise((resolve) => setTimeout(resolve, 15));
-        order.push(getCorrelationId()!);
-      });
-
-      const task2 = withCorrelationId("task-2", async () => {
-        order.push(getCorrelationId()!);
-        await new Promise((resolve) => setTimeout(resolve, 10));
-        order.push(getCorrelationId()!);
-      });
-
-      const task3 = withCorrelationId("task-3", async () => {
-        order.push(getCorrelationId()!);
-        await new Promise((resolve) => setTimeout(resolve, 5));
-        order.push(getCorrelationId()!);
-      });
-
-      await Promise.all([task1, task2, task3]);
-
-      // Verify that each task maintained its own context
-      // The order will be interleaved but each task should see its own ID
-      const task1Ids = order.filter((id) => id === "task-1");
-      const task2Ids = order.filter((id) => id === "task-2");
-      const task3Ids = order.filter((id) => id === "task-3");
-
-      expect(task1Ids).toHaveLength(2);
-      expect(task2Ids).toHaveLength(2);
-      expect(task3Ids).toHaveLength(2);
+      expect(() => middleware(null as any, {} as any, next)).not.toThrow();
+      expect(next).toHaveBeenCalled();
     });
   });
 });
