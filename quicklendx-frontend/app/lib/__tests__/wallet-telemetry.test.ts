@@ -49,7 +49,9 @@ describe("Wallet Telemetry - Provider Implementations", () => {
     });
 
     it("logs in debug mode without failing", () => {
-      const debugSpy = jest.spyOn(console, "debug").mockImplementation(() => {});
+      const debugSpy = jest
+        .spyOn(console, "debug")
+        .mockImplementation(() => {});
       const noop = new NoopTelemetryProvider(true);
       noop.trackEvent("test_event", { foo: "bar" });
       noop.identify("user_123");
@@ -78,7 +80,10 @@ describe("Wallet Telemetry - Provider Implementations", () => {
       const provider = new MixpanelTelemetryProvider("dummy_token");
       expect(provider.name).toBe("mixpanel");
 
-      await provider.trackEvent("wallet_connected", { address: "GBBX...123", network: "testnet" });
+      await provider.trackEvent("wallet_connected", {
+        address: "GBBX...123",
+        network: "testnet",
+      });
       expect(mixpanelTrackMock).toHaveBeenCalledTimes(1);
       expect(mixpanelTrackMock).toHaveBeenCalledWith(
         "wallet_connected",
@@ -99,8 +104,13 @@ describe("Wallet Telemetry - Provider Implementations", () => {
       const fetchMock = jest.fn().mockResolvedValue({ ok: true });
       (global as any).fetch = fetchMock;
 
-      const provider = new MixpanelTelemetryProvider("test_token_123", "https://api.mixpanel.com/track");
-      await provider.trackEvent("wallet_disconnected", { address: "GBBX...456" });
+      const provider = new MixpanelTelemetryProvider(
+        "test_token_123",
+        "https://api.mixpanel.com/track"
+      );
+      await provider.trackEvent("wallet_disconnected", {
+        address: "GBBX...456",
+      });
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
       expect(fetchMock).toHaveBeenCalledWith(
@@ -124,7 +134,9 @@ describe("Wallet Telemetry - Provider Implementations", () => {
       const provider = new GoogleAnalyticsTelemetryProvider("G-XXXXX");
       expect(provider.name).toBe("google-analytics");
 
-      provider.trackEvent("wallet_connect_attempt", { walletType: "freighter" });
+      provider.trackEvent("wallet_connect_attempt", {
+        walletType: "freighter",
+      });
       expect(gtagMock).toHaveBeenCalledWith(
         "event",
         "wallet_connect_attempt",
@@ -169,7 +181,10 @@ describe("Wallet Telemetry - Provider Implementations", () => {
       const fetchMock = jest.fn().mockResolvedValue({ ok: true });
       (global as any).fetch = fetchMock;
 
-      const provider = new SelfHostedTelemetryProvider("/api/v1/telemetry", "secret_key");
+      const provider = new SelfHostedTelemetryProvider(
+        "/api/v1/telemetry",
+        "secret_key"
+      );
       expect(provider.name).toBe("self-hosted");
 
       await provider.trackEvent("wallet_connected", { address: "GBBX..." });
@@ -194,7 +209,9 @@ describe("Wallet Telemetry - Provider Implementations", () => {
 
     it("silently catches network errors without throwing to caller", async () => {
       const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
-      (global as any).fetch = jest.fn().mockRejectedValue(new Error("Network Error"));
+      (global as any).fetch = jest
+        .fn()
+        .mockRejectedValue(new Error("Network Error"));
 
       const provider = new SelfHostedTelemetryProvider("/api/telemetry");
       await expect(provider.trackEvent("wallet_event")).resolves.not.toThrow();
@@ -252,7 +269,11 @@ describe("Wallet Telemetry - Environment Config & Resolution", () => {
   });
 
   it("creates GoogleAnalytics provider when ga specified", () => {
-    const config = { enabled: true, provider: "ga" as const, apiKey: "G-12345" };
+    const config = {
+      enabled: true,
+      provider: "ga" as const,
+      apiKey: "G-12345",
+    };
     const provider = createProviderFromConfig(config);
     expect(provider.name).toBe("google-analytics");
   });
@@ -375,7 +396,10 @@ describe("Wallet Telemetry - Global Helpers & Typed Events", () => {
   });
 
   it("trackWalletConnectAttempt forwards event with correct name and props", async () => {
-    await trackWalletConnectAttempt({ walletType: "freighter", network: "testnet" });
+    await trackWalletConnectAttempt({
+      walletType: "freighter",
+      network: "testnet",
+    });
     expect(mockTrackEvent).toHaveBeenCalledWith(
       "wallet_connect_attempt",
       expect.objectContaining({
