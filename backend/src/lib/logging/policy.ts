@@ -118,13 +118,9 @@ export interface PolicyFieldEntry {
  * 2. `getPolicyFields(fields: string[]): PolicyFieldEntry[]`
  *    Classifies each field in `fields` returning `{ field, tier }` objects.
  */
-export function getPolicyFields(tier: FieldTier): string[];
-export function getPolicyFields(fields: string[]): PolicyFieldEntry[];
-export function getPolicyFields(
-  arg: FieldTier | string[]
-): string[] | PolicyFieldEntry[] {
-  if (arg === null || arg === undefined) {
-    throw new TypeError("getPolicyFields: argument cannot be null or undefined");
+export function getPolicyFieldsForTier(tier: FieldTier): string[] {
+  if (tier !== FieldTier.PUBLIC && tier !== FieldTier.PRIVATE && tier !== FieldTier.SECRET) {
+    return [];
   }
 
   if (Array.isArray(arg)) {
@@ -153,6 +149,26 @@ export function getPolicyFields(
 
   const fields = loadedPolicy[arg];
   return Array.isArray(fields) ? fields.slice() : [];
+}
+
+/**
+ * Classify a batch of field names.
+ *
+ * Deterministic and pure: returns one `{ field, tier }` entry per input, in
+ * input order, without deduplication. Unknown fields default to PRIVATE (see
+ * `classifyField`). The batch is validated up front, so any invalid input
+ * throws a `TypeError` and no partial output is ever produced.
+ */
+export function getPolicyFields(fields: string[]): { field: string; tier: FieldTier }[] {
+  if (!Array.isArray(fields)) {
+    throw new TypeError("getPolicyFields: expected an array of field names");
+  }
+  for (const field of fields) {
+    if (typeof field !== "string") {
+      throw new TypeError("getPolicyFields: every field name must be a string");
+    }
+  }
+  return fields.map((field) => ({ field, tier: classifyField(field) }));
 }
 
 /**
@@ -261,12 +277,12 @@ function canonicalise(value: unknown): string {
   if (value === null) return "null";
   if (value === undefined) return "undefined";
   const t = typeof value;
-  if (t === "string") return value as string;
+  if (t === "string") return value as string; // raw: keeps existing log hashes stable
   if (t === "number") return String(value);
-  if (t === "boolean") return String(value);
-  if (t === "bigint") return (value as bigint).toString();
-  if (t === "symbol") return String(value);
-  if (t === "function") return (value as Function).name ?? "";
+  if (t === "boolean") return `b:${value}`;
+  if (t === "bigint") return `i:${(value as bigint).toString()}`;
+  if (t === "symbol") return `y:${String(value)}`;
+  if (t === "function") return `f:${(value as Function).name ?? ""}`;
   if (Array.isArray(value)) {
     return `[${value.map(canonicalise).join(",")}]`;
   }

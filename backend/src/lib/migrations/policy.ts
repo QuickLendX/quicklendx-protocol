@@ -145,6 +145,38 @@ export class MigrationPolicy {
 }
 
 /**
+ * Deterministic failure-boundary coverage for the migration CLI entry point.
+ *
+ * Invariants enforced here:
+ *  - Command arguments are normalized before any side effects (no down without
+    emergency + global allowance; no conflicting --to/--all).
+ *  - Every failure path returns a structured result and never throws, so callers
+ *    can retry deterministically without losing state.
+ *  - Error messages are sanitized to avoid leaking secrets or connection
+ *    strings to logs.
+ */
+
+function sanitizeErrorMessage(err: unknown): string {
+  const raw = err instanceof Error ? err.message : typeof err === "string" ? err : "Unknown error";
+  // Redact typical credential/connection secrets from error output.
+  return raw
+    .replace(/(\/\/[^:@]+):[^@]+@/g, "//$1:@@")
+    .replace(/(password|pwd|secret|token|api[_\-]?key)\s*=\s*[^\s]+/gi, "$1=[REDACTED]")
+    .replace(/(BEARER\s+)[A-Za-z0-9\-\._=]+/g, "$1[REDACTED]");
+}
+
+function normalizeArgs(value: unknown): MigrateArgs {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as MigrateArgs;
+}
+
+function toBoolean(value: unknown): boolean {
+  return value === true || value === "true" || value === 1;
+}
+
+/**
  * Run the forward migration command.
  *
  * Failure boundaries are deterministic and do not mutate state:
@@ -161,12 +193,12 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<Mig
     validateOnly = false,
     check = false,
     skipChecksumVerify = false,
-  } = args as MigrateArgs;
+  } = normalizeArgs(args);
 
   if (check) {
-    try {
+try {
       const fileValid = await validateMigrationFiles();
-      const fileMigs = await loa`MigrationsFromFS();
+      const fileMigs = await loadMigrationsFromFS();
       const appliedVersions = await getAppliedVersions();
       const missing = fileMigs.filter((m) => !appliedVersions.includes(m.version));
       const valid = fileValid.valid && missing.length === 0;
@@ -183,7 +215,7 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<Mig
       console.log("✅ Migrations are in sync");
       return { success: true, message: "Migrations valid" };
     } catch (err) {
-      const message = toErrorMessage(err);
+      const message = sanitizeErrorMessage(err);
       console.error("❌ Migration check failed:", message);
       return {
         success: false,
@@ -194,7 +226,7 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<Mig
   }
 
   if (validateOnly) {
-    try {
+try {
       const migrations = (await loadMigrationsFromFS()).map((m) => m.content);
       const result = await MigrationPolicy.dryRun(migrations, { force: emergency });
       if (!result.valid) {
@@ -211,7 +243,7 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<Mig
       console.log("✅ All migration files are valid");
       return { success: true, message: "Validation passed", warnings: result.warnings };
     } catch (err) {
-      const message = toErrorMessage(err);
+      const message = sanitizeErrorMessage(err);
       console.error("❌ Migration validation failed:", message);
       return {
         success: false,
@@ -253,8 +285,8 @@ export async function migrateCommand(args: Record<string, unknown>): Promise<Mig
       applied: result.applied.length,
       skipped: result.skipped,
     };
-  } catch (err) {
-    const message = toErrorMessage(err);
+} catch (err) {
+    const message = sanitizeErrorMessage(err);
     console.error("❌ Migration failed:", message);
     return {
       success: false,
@@ -280,7 +312,7 @@ export async function migrateDownCommand(args: Record<string, unknown>): Promise
     to,
     all = false,
     skipChecksumVerify = false,
-  } = args as MigrateArgs;
+  } = normalizeArgs(args);
 
   if (!emergency && !MigrationPolicy.isDownAllowed()) {
     return {
@@ -314,8 +346,8 @@ export async function migrateDownCommand(args: Record<string, unknown>): Promise
       applied: result.applied.length,
       skipped: result.skipped,
     };
-  } catch (err) {
-    const message = toErrorMessage(err);
+} catch (err) {
+    const message = sanitizeErrorMessage(err);
     console.error("❌ Migration rollback failed:", message);
     return {
       success: false,

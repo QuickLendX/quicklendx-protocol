@@ -1,9 +1,7 @@
 // Updated implementation with deterministic failure₭boundary handling for prepared statements.
 
 import Database from 'better-sqlite3';
-I don't have the actual hunk content to resolve — the HEAD, MERGE_BASE, and BASE sections in your message are all empty.
-
-Please paste the actual conflict hunk (the lines between the conflict markers from the file), and I'll produce the resolved output.
+import * as self from './database';
 // ----- Type Declarations -----
 const DatabaseConstructor = Database as any;
 /**
@@ -157,6 +155,11 @@ function classifyError(err: unknown): DatabaseErrorCode {
 
 /**
  * Metrics for deterministic observability.
+ *
+ * Invariant: these counters describe the lifetime of the *current* cache
+ * generation. Every code path that empties `statementCache` must reset them,
+ * otherwise `getStatementCacheStats()` would report `size: 0` alongside
+ * non-zero counters that describe statements which no longer exist.
  */
 let cacheHits = 0;
 let cacheMisses = 0;
@@ -267,7 +270,14 @@ export function getPreparedStatement(sql: string): any {
   // ----- Cache Hit Path -----
   if (statementCache.has(sql)) {
     cacheHits++;
-    return statementCache.get(sql);
+    const cached = statementCache.get(sql);
+    // Never execute the statement to "validate" it: that would run writes and
+    // fail for parameterised SQL. better-sqlite3 re-prepares on schema change.
+    if (cached && typeof cached.run === 'function') {
+      return cached;
+    }
+    statementCache.delete(sql);
+    cacheEvicts++;
   }
 
   // ----- Cache Miss / Evicted Path -----
@@ -275,7 +285,7 @@ export function getPreparedStatement(sql: string): any {
   const maxAttempts = 3;
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
     try {
-      const db = customGetDatabase ? customGetDatabase() : getDatabase();
+      const db = self.getDatabase();
       const stmt = db.prepare(sql);
 // Permission guard – attempt a harmless execution to surface read‑only errors.
       try {
@@ -303,8 +313,8 @@ export function getPreparedStatement(sql: string): any {
         }
         throw new DatabaseBusyError(sql, err);
       }
-      if (err.code === 'SQLITE_READONLY' || err.code === 'SQLITE_AUTH') {
-        throw new DatabasePermissionError(sql, err);
+      if (err instanceof DatabasePermissionError) {
+        throw err;
       }
       // Any other error is a preparation failure.
       throw new DatabasePrepareError(sql, err);
@@ -319,15 +329,49 @@ export function getPreparedStatement(sql: string): any {
  */
 export function clearStatementCache(): void {
   statementCache.clear();
+  resetCacheMetrics();
+}
+
+/**
+ * Reset the counters that describe the current cache generation.
+ *
+ * Must be called whenever `statementCache` is emptied so that
+ * `getStatementCacheStats()` never mixes an empty cache with live counters.
+ */
+function resetCacheMetrics(): void {
   cacheHits = 0;
   cacheMisses = 0;
   cacheEvicts = 0;
 }
 
 /**
- * Retrieve cache statistics including deterministic metrics.
+ * Shape returned by {@link getStatementCacheStats}.
+ *
+ * Returned snapshots are defensive copies: mutating `statements` cannot
+ * corrupt the cache, and each call is a self-consistent point-in-time view.
  */
-export function getStatementCacheStats(): { size: number; statements: string[] } {
+export interface StatementCacheStats {
+  /** Number of cached prepared statements. */
+  size: number;
+  /** SQL strings currently cached, in insertion order. */
+  statements: string[];
+  /** Cache hits recorded for the current cache generation. */
+  hits: number;
+  /** Cache misses recorded for the current cache generation. */
+  misses: number;
+  /** Entries evicted due to `SQLITE_SCHEMA` in the current generation. */
+  evicts: number;
+}
+
+/**
+ * Retrieve cache statistics including deterministic metrics.
+ *
+ * Deterministic guarantees:
+ * - `statements` is a fresh array; callers cannot mutate internal state.
+ * - Repeated calls without intervening cache activity return deep-equal values.
+ * - Counters are non-negative integers and reset with the cache generation.
+ */
+export function getStatementCacheStats(): StatementCacheStats {
   return {
     size: statementCache.size,
     statements: Array.from(statementCache.keys()),
@@ -412,7 +456,11 @@ export function closeDatabase(): void {
     // must not throw. Still clear the cache in case it was populated by
     // a previous instance that was never closed.
     statementCache.clear();
-    return;
+    // Drop the metrics alongside the cache so the next generation starts from
+    // zeroed counters instead of inheriting a closed generation's hit counts.
+    resetCacheMetrics();
+    dbInstance.close();
+    dbInstance = null;
   }
 // Null out the singleton before closing so that any re-entrant call to
   // getDatabase() during close opens a fresh handle instead of returning
