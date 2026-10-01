@@ -60,7 +60,6 @@ module.exports = {
     "src/tests/perf/soak.test.ts",
     "src/tests/openapi-contract.test.ts",
     "src/tests/kyc-service.kms.test.ts",
-    "src/tests/shutdown.test.ts",
     "tests/openapi-conformance.test.ts",
     "src/tests/kyc-service.test.ts",
     "tests/openapi-example-validation.test.ts",
