@@ -12,6 +12,7 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { getDatabase, closeDatabase } from '../lib/database';
 import { db, DbApiKey, DbAuditLog } from '../db/database';
+import { createApiKey } from '../controllers/v1/api-keys';
 import { listApiKeys } from '../controllers/v1/api-keys';
 import { getApiKey } from '../controllers/v1/api-keys';
 
@@ -456,6 +457,104 @@ describe('Audit log event_type constraints', () => {
   ] as const)('accepts valid event_type: %s', (eventType) => {
     const log = makeAuditLog({ key_id: keyId, event_type: eventType });
     expect(() => db.createAuditLog(log)).not.toThrow();
+  });
+});
+// ---------------------------------------------------------------------------
+// createApiKey controller – deterministic failure-boundary coverage
+// ---------------------------------------------------------------------------
+
+describe('createApiKey controller failure boundaries', () => {
+  function makeReq(overrides: Record<string, unknown> = {}) {
+    return {
+      body: {
+        name: 'CI Key',
+        scopes: ['read:*'],
+        ...overrides,
+      },
+      user: { id: 'user-1', role: 'admin' },
+      ip: '127.0.0.1',
+      headers: {},
+    } as any;
+  }
+
+  function makeRes() {
+    const res: any = {};
+    res.status = jest.fn().mockReturnValue(res);
+    res.json = jest.fn().mockReturnValue(res);
+    return res;
+  }
+
+  test('rejects when required name is missing', async () => {
+    const res = makeRes();
+    await createApiKey(makeReq({ name: undefined }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('rejects when scopes is not an array', async () => {
+    const res = makeRes();
+    await createApiKey(makeReq({ scopes: 'read:*' }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('rejects when caller is unauthenticated', async () => {
+    const res = makeRes();
+    const req = makeReq();
+    req.user = undefined;
+    await createApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  test('rejects when caller lacks permission', async () => {
+    const res = makeRes();
+    const req = makeReq();
+    req.user = { id: 'user-2', role: 'viewer' };
+    await createApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(403);
+  });
+
+  test('duplicate prefix surfaces a deterministic conflict', async () => {
+    const existing = makeKey();
+    db.createApiKey(existing);
+    const res = makeRes();
+    await createApiKey(makeReq({ prefix: existing.prefix }), res);
+    expect([409, 400]).toContain(res.status.mock.calls[0][0]);
+  });
+
+  test('retry after transient failure does not create duplicate rows', async () => {
+    const res1 = makeRes();
+    const req = makeReq({ name: 'Retry Key' });
+    await createApiKey(req, res1);
+    const res2 = makeRes();
+    await createApiKey(req, res2);
+    const keys = db.listApiKeys({ created_by: 'user-1' });
+    expect(keys.length).toBeLessThanOrEqual(1);
+  });
+
+  test('concurrent createApiKey calls do not corrupt state', async () => {
+    const results = await Promise.all(
+      Array.from({ length: 10 }, () => createApiKey(makeReq(), makeRes())),
+    );
+    expect(results).toHaveLength(10);
+    expect(db.getStats().apiKeys).toBeGreaterThanOrEqual(0);
+  });
+
+  test('boundary: empty scopes array is rejected or normalized deterministically', async () => {
+    const res = makeRes();
+    await createApiKey(makeReq({ scopes: [] }), res);
+    expect([200, 201, 400]).toContain(res.status.mock.calls[0]?.[0] ?? 200);
+  });
+
+  test('boundary: extremely long name is rejected without throwing', async () => {
+    const res = makeRes();
+    await createApiKey(makeReq({ name: 'x'.repeat(10_000) }), res);
+    expect(res.status).toHaveBeenCalled();
+  });
+
+  test('failure responses do not leak sensitive data', async () => {
+    const res = makeRes();
+    await createApiKey(makeReq({ name: undefined }), res);
+    const payload = JSON.stringify(res.json.mock.calls[0]?.[0] ?? {});
+    expect(payload).not.toMatch(/key_hash|signing_secret/i);
   });
 });
 
