@@ -58,4 +58,28 @@ describe("ExportConcurrencyService", () => {
     expect(exportConcurrencyService.getActiveCount(key)).toBe(0);
     expect(exportConcurrencyService.tryAcquire(key)).toBe(true);
   });
+
+  it("should not go below zero on release of an unheld slot", () => {
+    const key = "test-key-7";
+    exportConcurrencyService.release(key);
+    expect(exportConcurrencyService.getActiveCount(key)).toBe(0);
+    expect(exportConcurrencyService.tryAcquire(key)).toBe(true);
+    expect(exportConcurrencyService.getActiveCount(key)).toBe(1);
+  });
+
+  it("should treat unknown keys as having zero active count", () => {
+    expect(exportConcurrencyService.getActiveCount("unknown-key")).toBe(0);
+  });
+
+  it("should allow re-acquisition after release in a loop", () => {
+    const key = "test-key-8";
+    for (let i = 0; i < 5; i++) {
+      expect(exportConcurrencyService.tryAcquire(key)).toBe(true);
+      expect(exportConcurrencyService.tryAcquire(key)).toBe(true);
+      expect(exportConcurrencyService.tryAcquire(key)).toBe(false);
+      exportConcurrencyService.release(key);
+      exportConcurrencyService.release(key);
+      expect(exportConcurrencyService.getActiveCount(key)).toBe(0);
+    }
+  });
 });
