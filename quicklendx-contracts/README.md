@@ -1311,3 +1311,20 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ❤️ on Stellar's Soroban platform**
+
+## Windows Development Notes
+
+### Testing on Windows
+Due to mingw linker limitations on Windows, you may encounter "export ordinal too large" errors when running tests that require the `cdylib` crate type. 
+
+**Workaround for Windows testing:**
+1. Temporarily change `Cargo.toml` crate-type to `["rlib"]` for local testing
+2. Run `cargo test --lib` 
+3. Restore `["rlib", "cdylib"]` before committing
+
+**Production WASM builds work fine in CI (Linux environment).**
+
+### Toolchain
+- Uses `stable` Rust toolchain 
+- Local Windows development uses GNU toolchain (`stable-x86_64-pc-windows-gnu`)
+- Set with: `rustup override set stable-x86_64-pc-windows-gnu` in the contracts directory

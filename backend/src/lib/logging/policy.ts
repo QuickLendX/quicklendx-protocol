@@ -154,26 +154,71 @@ initialisePolicy();
 
 // ── Expose policy for other modules ───────────────────────────────────────────
 
+export interface PolicyFieldEntry {
+  field: string;
+  tier: FieldTier;
+}
+
 /**
- * Return the list of fields registered under the given tier.
+ * Return policy fields.
  *
- * Behaviour is deterministic across all inputs:
- *   - Valid tier with a loaded policy → the registered field list.
- *   - Valid tier when the policy failed to load → an empty array (deny-by-
- *     default). Callers must not assume a non-empty result.
- *   - Unknown / invalid tier → an empty array. This is a boundary case and
- *     never throws, so logging call sites cannot crash on bad input.
- *
- * The returned array is a defensive copy: mutating it cannot corrupt the
- * cached policy state, and concurrent callers cannot observe each other's
- * mutations.
+ * Overloads:
+ * 1. `getPolicyFields(tier: FieldTier): string[]`
+ *    Returns the list of field names configured under the given tier.
+ * 2. `getPolicyFields(fields: string[]): PolicyFieldEntry[]`
+ *    Classifies each field in `fields` returning `{ field, tier }` objects.
  */
-export function getPolicyFields(tier: FieldTier): string[] {
+export function getPolicyFieldsForTier(tier: FieldTier): string[] {
   if (tier !== FieldTier.PUBLIC && tier !== FieldTier.PRIVATE && tier !== FieldTier.SECRET) {
     return [];
   }
-  const fields = loadedPolicy[tier];
+
+  if (Array.isArray(arg)) {
+    for (const elem of arg) {
+      if (typeof elem !== "string") {
+        throw new TypeError("getPolicyFields: all array elements must be strings");
+      }
+    }
+    return arg.map((field) => ({
+      field,
+      tier: classifyField(field),
+    }));
+  }
+
+  if (typeof arg !== "string") {
+    throw new TypeError("getPolicyFields: expected a string[] or FieldTier");
+  }
+
+  if (
+    arg !== FieldTier.PUBLIC &&
+    arg !== FieldTier.PRIVATE &&
+    arg !== FieldTier.SECRET
+  ) {
+    throw new TypeError("getPolicyFields: expected an array of field names");
+  }
+
+  const fields = loadedPolicy[arg];
   return Array.isArray(fields) ? fields.slice() : [];
+}
+
+/**
+ * Classify a batch of field names.
+ *
+ * Deterministic and pure: returns one `{ field, tier }` entry per input, in
+ * input order, without deduplication. Unknown fields default to PRIVATE (see
+ * `classifyField`). The batch is validated up front, so any invalid input
+ * throws a `TypeError` and no partial output is ever produced.
+ */
+export function getPolicyFields(fields: string[]): { field: string; tier: FieldTier }[] {
+  if (!Array.isArray(fields)) {
+    throw new TypeError("getPolicyFields: expected an array of field names");
+  }
+  for (const field of fields) {
+    if (typeof field !== "string") {
+      throw new TypeError("getPolicyFields: every field name must be a string");
+    }
+  }
+  return fields.map((field) => ({ field, tier: classifyField(field) }));
 }
 
 /**
@@ -201,9 +246,33 @@ export function getPolicyLoadError(): Error | null {
 /**
  * Return the tier for a given field name.
  * Unknown fields default to PRIVATE (deny-by-default).
+ *
+ * Invariant: for every input exactly one of `isPublic` / `isPrivate` /
+ * `isSecret` is true, and a name that is not an own key of `fieldTierMap` is
+ * always PRIVATE. Callers use those three predicates to decide whether a value
+ * may be logged verbatim, so an unclassified name that answers "none of the
+ * three" is a leak.
+ *
+ * The own-property guard is what makes that hold independently of how
+ * `fieldTierMap` was built. Relying on a null prototype alone left the invariant
+ * one `fieldTierMap = {}` away from being false again — and that is exactly what
+ * the policy-load failure path used to do, so `isPrivate("constructor")` and
+ * `isPrivate("toString")` answered false whenever the policy file was
+ * unreadable. A field explicitly registered under such a name is still honoured;
+ * only prototype lookups are rejected.
+ *
+ * A non-string input is rejected before the lookup. Property access would coerce
+ * it to a key, so `classifyField(undefined)` would resolve to the tier of a field
+ * literally named `"undefined"` — letting a caller that passes the wrong type
+ * classify a value as PUBLIC, and log it verbatim. The `string` type is only a
+ * compile-time promise; this makes it hold at runtime too.
  */
 export function classifyField(name: string): FieldTier {
-  return (fieldTierMap[name] as FieldTier | undefined) ?? FieldTier.PRIVATE;
+  if (typeof name !== "string") return FieldTier.PRIVATE;
+  const tier = Object.prototype.hasOwnProperty.call(fieldTierMap, name)
+    ? (fieldTierMap[name] as FieldTier | undefined)
+    : undefined;
+  return tier ?? FieldTier.PRIVATE;
 }
 
 /** True when a field must never appear in any log output. */
@@ -211,9 +280,20 @@ export function isSecret(name: string): boolean {
   return classifyField(name) === FieldTier.SECRET;
 }
 
-/** True when a field is safe to log verbatim. */
+/** 
+ * True when a field is safe to log verbatim. 
+ * Failure boundary: invalid inputs (null, objects, non-strings) fail closed (return false)
+ * rather than throwing.
+ */
 export function isPublic(name: string): boolean {
-  return classifyField(name) === FieldTier.PUBLIC;
+  if (typeof name !== "string") {
+    return false;
+  }
+  try {
+    return classifyField(name) === FieldTier.PUBLIC;
+  } catch {
+    return false;
+  }
 }
 
 /** True when a field should be hashed before logging. */
@@ -247,20 +327,19 @@ function canonicalise(value: unknown): string {
   if (value === null) return "null";
   if (value === undefined) return "undefined";
   const t = typeof value;
-  if (t === "string") return `s:${value}`;
-  if (t === "number") return `n:${value}`;
+  if (t === "string") return value as string; // raw: keeps existing log hashes stable
+  if (t === "number") return String(value);
   if (t === "boolean") return `b:${value}`;
   if (t === "bigint") return `i:${(value as bigint).toString()}`;
   if (t === "symbol") return `y:${String(value)}`;
   if (t === "function") return `f:${(value as Function).name ?? ""}`;
   if (Array.isArray(value)) {
-    return `a:[${value.map(canonicalise).join(",")}]`;
+    return `[${value.map(canonicalise).join(",")}]`;
   }
   const obj = value as Record<string, unknown>;
-  const ctor = (obj as { constructor?: { name?: string } }).constructor?.name ?? "Object";
   const keys = Object.keys(obj).sort();
   const body = keys.map((k) => `${JSON.stringify(k)}:${canonicalise(obj[k])}`).join(",");
-  return `o:${ctor}:{${body}}`;
+  return `{${body}}`;
 }
 
 /**
@@ -342,11 +421,29 @@ export function redactByTier(value: unknown, tier: FieldTier): unknown {
  * deterministically.
  */
 export function redactObject(
-  obj: Record<string, unknown>
+  obj: Record<string, unknown>,
+  seen: WeakSet<object> = new WeakSet()
 ): Record<string, unknown> {
+  if (obj === null || typeof obj !== "object") {
+    return {};
+  }
+  if (seen.has(obj)) {
+    throw new Error("redactObject: cyclic structure is not supported");
+  }
+  seen.add(obj);
+
   const out: Record<string, unknown> = {};
 
-  for (const [key, value] of Object.entries(obj)) {
+  // We use Object.keys instead of Object.entries to safely catch throwing getters.
+  for (const key of Object.keys(obj)) {
+    let value: unknown;
+    try {
+      value = obj[key];
+    } catch {
+      out[key] = REDACTED_SENTINEL;
+      continue;
+    }
+
     const tier = classifyField(key);
     if (Array.isArray(value)) {
       // Redact each element if they are objects, otherwise apply tier to array
@@ -361,11 +458,16 @@ export function redactObject(
           }
         }
       } else {
-        out[key] = value.map((item) =>
-          item !== null && typeof item === "object"
-            ? redactObject(item as Record<string, unknown>)
-            : item
-        );
+        out[key] = value.map((item) => {
+          if (item !== null && typeof item === "object") {
+            try {
+              return redactObject(item as Record<string, unknown>, seen);
+            } catch {
+              return REDACTED_SENTINEL;
+            }
+          }
+          return item;
+        });
       }
     } else if (value !== null && typeof value === "object") {
       if (tier === FieldTier.SECRET) {
@@ -378,7 +480,11 @@ export function redactObject(
         }
       } else {
         // PUBLIC: recurse into nested objects
-        out[key] = redactObject(value as Record<string, unknown>);
+        try {
+          out[key] = redactObject(value as Record<string, unknown>, seen);
+        } catch {
+          out[key] = REDACTED_SENTINEL;
+        }
       }
     } else {
       out[key] = redactByTier(value, tier);
@@ -399,8 +505,107 @@ export interface SafeRequestSnapshot {
 }
 
 /**
+ * Coerce an arbitrary value into a plain record for redaction.
+ *
+ * Returns an empty record for `null`, `undefined`, primitives, and arrays so
+ * that a malformed request container degrades to "nothing to redact" instead
+ * of throwing. Without this guard, `redactObject` calls `Object.entries` on the
+ * value and a `null` query or header bag raises a `TypeError` inside the
+ * logging path, which would abort the surrounding record.
+ */
+function asRedactableRecord(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
+}
+
+/**
+ * Coerce an arbitrary value into a string for the snapshot's routing fields.
+ * `null` / `undefined` become the empty string so a partial request object can
+ * never put an `undefined` hole into the serialised log line.
+ */
+function asSnapshotString(value: unknown): string {
+  return typeof value === "string" ? value : value === undefined || value === null ? "" : String(value);
+}
+
+/**
+ * Canonical string for a header value, used only to order colliding values.
+ * Uses the same tagging scheme as `canonicalise` so ordering never depends on
+ * whether a value arrived as `"1"` or `1`.
+ */
+function headerValueSortKey(value: unknown): string {
+  try {
+    return canonicalise(value);
+  } catch {
+    // A cyclic header value cannot be canonicalised; fall back to a constant
+    // key so the comparator stays total and the sort cannot throw.
+    return " ";
+  }
+}
+
+/**
+ * Lower-case header names and merge values that collide under that
+ * normalisation.
+ *
+ * Why merge instead of first-wins / last-wins: a plain `Object.fromEntries`
+ * over `[k.toLowerCase(), v]` keeps only the *last* spelling, so
+ * `{"X-Trace": "a", "x-trace": "b"}` and `{"x-trace": "b", "X-Trace": "a"}`
+ * would produce two different snapshots for the same logical request. That is
+ * an ordering-dependent log record — precisely the non-determinism a redaction
+ * boundary must not have, since it makes two identical requests look like
+ * different traffic.
+ *
+ * Colliding values are kept as a sorted array so both orderings converge, and
+ * the result stays JSON-serialisable. A single-value header (the overwhelming
+ * majority) keeps its original scalar shape, so existing snapshots and
+ * consumers are unchanged.
+ */
+function normaliseHeaderBag(
+  headers: Record<string, unknown>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    const key = name.toLowerCase();
+    const existing = Object.prototype.hasOwnProperty.call(out, key)
+      ? out[key]
+      : undefined;
+    if (!Object.prototype.hasOwnProperty.call(out, key)) {
+      out[key] = value;
+      continue;
+    }
+    const merged = (Array.isArray(existing) ? existing : [existing]).concat([
+      value,
+    ]);
+    merged.sort((a, b) => {
+      const ka = headerValueSortKey(a);
+      const kb = headerValueSortKey(b);
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+    out[key] = merged;
+  }
+  return out;
+}
+
+/**
  * Produce a log-safe snapshot of an incoming HTTP request.
  * All query params, headers, and body fields are classified and redacted.
+ *
+ * Invariants — this function is total (it never throws) and pure:
+ *   1. **Total.** A `null` request, a missing query/header bag, or a malformed
+ *      container yields an empty record rather than an exception. Logging is a
+ *      best-effort side channel: it must never be the reason a request fails,
+ *      so a defect here degrades the record instead of dropping it.
+ *   2. **No mutation.** The input request is only read; a fresh object is
+ *      returned for every section, so a caller reusing the same Express
+ *      `req` across retries cannot observe partially-redacted state.
+ *   3. **Deterministic.** Identical input yields byte-identical output: header
+ *      names are lower-cased before classification, and `hashValue` is
+ *      key-order independent. Two concurrent calls share no state, so a retry
+ *      after a failure produces exactly the snapshot the first call would have.
+ *   4. **Fails closed.** Anything that cannot be classified becomes PRIVATE
+ *      (hashed) or `[REDACTED]`; no raw value ever reaches the returned object,
+ *      so `findSecretLeak(snapshot)` is always `null`.
  */
 export function sanitiseRequest(req: {
   method: string;
@@ -409,19 +614,36 @@ export function sanitiseRequest(req: {
   headers: Record<string, unknown>;
   body?: unknown;
 }): SafeRequestSnapshot {
+  // Guard the whole body: a getter that throws on `req.headers` or a proxy
+  // that rejects `ownKeys` must not escape into the request pipeline.
+  let source: Record<string, unknown> = {};
+  try {
+    source =
+      req !== null && typeof req === "object"
+        ? (req as unknown as Record<string, unknown>)
+        : {};
+  } catch {
+    source = {};
+  }
+
   return {
-    method: req.method,
-    path: req.path,
-    query: redactObject(req.query as Record<string, unknown>),
+    method: asSnapshotString(source.method),
+    path: asSnapshotString(source.path),
+    query: redactObject(asRedactableRecord(source.query)),
     headers: redactObject(
-      // Drop raw Authorization / Cookie values before object redaction
-      Object.fromEntries(
-        Object.entries(req.headers).map(([k, v]) => [k.toLowerCase(), v])
-      )
+      // Normalise header names to lower case before classification so
+      // `Content-Type` and `content-type` cannot resolve to different tiers.
+      // RFC 9110 §5.2 makes header names case-insensitive, so two spellings of
+      // the same name are one field, not two. Colliding values are sorted by
+      // their canonical form rather than taken in arrival order, so the
+      // snapshot does not depend on the order the transport happened to
+      // deliver them in — the same headers always hash to the same value.
+      // See `normaliseHeaderBag`.
+      normaliseHeaderBag(asRedactableRecord(source.headers))
     ),
     body:
-      req.body && typeof req.body === "object"
-        ? redactObject(req.body as Record<string, unknown>)
+      source.body && typeof source.body === "object"
+        ? redactObject(source.body as Record<string, unknown>)
         : null,
   };
 }
