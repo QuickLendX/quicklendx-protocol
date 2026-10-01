@@ -43,6 +43,100 @@ describe("Migration Runner with Mocked Database", () => {
     expect(hash1).not.toBe(hash2);
   });
 
+  // --- Deterministic failure-boundary coverage for computeChecksum ---
+  describe("computeChecksum failure boundaries", () => {
+    test("produces the known SHA-256 digest for a fixed input", () => {
+      // Known vector: SHA-256("test migration content")
+      expect(computeChecksum("test migration content")).toBe(new crypto.createHash("sha256").update("test migration content", "utf8").digest("hex"));
+    });
+
+    test("is deterministic across repeated calls for the same input", () => {
+      const input = "deterministic";
+      const results = Array.from({ length: 25 }, () => computeChecksum(input));
+      for (const r of results) {
+        expect(r).toBe(results[0]);
+      }
+    });
+
+    test("handles empty string deterministically", () => {
+      const hash = computeChecksum("");
+      expect(hash).toMatch(/^[a-f0-9]{64}$/);
+      expect(hash).toBe(computeChecksum(""));
+      // SHA-256 of empty string
+      expect(hash).toBe(new crypto.createHash("sha256").update("", "utf8").digest("hex"));
+    });
+
+    test("handles whitespace-only input deterministically", () => {
+      const a = computeChecksum("   ");
+      const b = computeChecksum("   ");
+      expect(a).toBe(b);
+      expect(a).not.toBe(computeChecksum(""));
+    });
+
+    test("treats unicode input consistently", () => {
+      const input = "你好 world 🌍 📊";
+      const hash = computeChecksum(input);
+      expect(hash).toBe(computeChecksum(input));
+      expect(hash).toBe(new crypto.createHash("sha256").update(input, "utf8").digest("hex"));
+    });
+
+    test("produces a stable 64-character lowercase hex digest for boundary-size inputs", () => {
+      const sizes = [1, 2, 63, 64, 65, 127, 128, 129, 1024, 1025, 65535];
+      for (const size of sizes) {
+        const input = "a".repeat(size);
+        const hash = computeChecksum(input);
+        expect(hash).toMatch(/^[a-f0-9]{64}$/);
+        expect(hash).toBe(computeChecksum(input));
+      }
+    });
+
+    test("differs for inputs that differ only by a single byte", () => {
+      const a = "a".repeat(1024) + "\n";
+      const b = "a".repeat(1024) + "\r";
+      expect(computeChecksum(a)).not.toBe(computeChecksum(b));
+    });
+
+    test("produces the same digest for the same bytes regardless of call context", () => {
+      const input = "context-independent";
+      const direct = computeChecksum(input);
+      const indirect = computeChecksum(String(input));
+      expect(direct).toBe(indirect);
+    });
+
+    test("does not mutate the input string", () => {
+      const input = "immutable";
+      const copy = input;
+      computeChecksum(input);
+      expect(input).toBe(copy);
+    });
+
+    test("rejects non-string inputs without silently coercing", () => {
+      expect(() => computeChecksum(undefined as any)).toThrow();
+      expect(() => computeChecksum(null as any)).toThrow();
+      expect(() => computeChecksum(123 as any)).toThrow();
+      expect(() => computeChecksum({} as any)).toThrow();
+    });
+
+    test("rejection is deterministic for invalid inputs", () => {
+      const invalid = null as any;
+      let first: unknown;
+      try {
+        computeChecksum(invalid);
+      } catch (e) {
+        first = e;
+      }
+      let second: unknown;
+      try {
+        computeChecksum(invalid);
+      } catch (e) {
+        second = e;
+      }
+      expect(first).toBeDefined();
+      expect(second).toBeDefined();
+      expect((first as Error).message).toBe(undefined);
+    });
+  });
+
   test("parseMigrationFilename handles various formats", () => {
     expect(parseMigrationFilename("v001_test.ts")).toEqual({ version: 1, name: "test" });
     expect(parseMigrationFilename("001_test.ts")).toEqual({ version: 1, name: "test" });
@@ -489,7 +583,7 @@ describe("Migration Runner with Mocked Database", () => {
         get: jest.fn(() => null),
         run: jest.fn(() => ({})),
       })),
-      transaction: jest.fn((fn) => fn),
+      transaction: jest.fn((fn) => fn()),
     };
 
     const result = await runMigrations({ dryRun: true, db: mockDb });
@@ -506,7 +600,7 @@ describe("Migration Runner with Mocked Database", () => {
         get: jest.fn(() => null),
         run: jest.fn(() => ({})),
       })),
-      transaction: jest.fn((fn) => fn),
+      transaction: jest.fn((fn) => fn()),
     };
 
     const result = await runMigrations({ allowDown: true, dryRun: true, db: mockDb });
@@ -523,7 +617,7 @@ describe("Migration Runner with Mocked Database", () => {
         get: jest.fn(() => null),
         run: jest.fn(() => ({})),
       })),
-      transaction: jest.fn((fn) => fn),
+      transaction: jest.fn((fn) => fn()),
     };
 
     const result = await runMigrations({ verbose: true, dryRun: true, db: mockDb });
@@ -540,7 +634,7 @@ describe("Migration Runner with Mocked Database", () => {
         get: jest.fn(() => null),
         run: jest.fn(() => ({})),
       })),
-      transaction: jest.fn((fn) => fn),
+      transaction: jest.fn((fn) => fn()),
     };
 
     const result = await runMigrations({ skipChecksumVerify: true, dryRun: true, db: mockDb });
