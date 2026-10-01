@@ -26,9 +26,15 @@ export interface WalletTelemetryProvider {
   /** Provider identifier */
   readonly name: string;
   /** Track an analytics / telemetry event */
-  trackEvent(name: string, props?: Record<string, unknown>): Promise<void> | void;
+  trackEvent(
+    name: string,
+    props?: Record<string, unknown>
+  ): Promise<void> | void;
   /** Optional identify user */
-  identify?(userId: string, traits?: Record<string, unknown>): Promise<void> | void;
+  identify?(
+    userId: string,
+    traits?: Record<string, unknown>
+  ): Promise<void> | void;
   /** Optional reset session / identity */
   reset?(): Promise<void> | void;
 }
@@ -110,13 +116,20 @@ export class MixpanelTelemetryProvider implements WalletTelemetryProvider {
     private readonly endpoint: string = "https://api.mixpanel.com/track"
   ) {}
 
-  async trackEvent(name: string, props?: Record<string, unknown>): Promise<void> {
+  async trackEvent(
+    name: string,
+    props?: Record<string, unknown>
+  ): Promise<void> {
     const payload = {
       ...props,
       timestamp: Date.now(),
     };
 
-    if (typeof window !== "undefined" && window.mixpanel && typeof window.mixpanel.track === "function") {
+    if (
+      typeof window !== "undefined" &&
+      window.mixpanel &&
+      typeof window.mixpanel.track === "function"
+    ) {
       window.mixpanel.track(name, payload);
       return;
     }
@@ -138,7 +151,10 @@ export class MixpanelTelemetryProvider implements WalletTelemetryProvider {
           body,
         });
       } catch (err) {
-        console.warn(`[wallet-telemetry:mixpanel] Failed to send event "${name}":`, err);
+        console.warn(
+          `[wallet-telemetry:mixpanel] Failed to send event "${name}":`,
+          err
+        );
       }
     }
   }
@@ -173,7 +189,10 @@ export class GoogleAnalyticsTelemetryProvider implements WalletTelemetryProvider
 
     if (typeof window !== "undefined" && typeof window.gtag === "function") {
       window.gtag("event", name, eventPayload);
-    } else if (typeof window !== "undefined" && Array.isArray(window.dataLayer)) {
+    } else if (
+      typeof window !== "undefined" &&
+      Array.isArray(window.dataLayer)
+    ) {
       window.dataLayer.push({
         event: name,
         ...eventPayload,
@@ -207,7 +226,10 @@ export class SelfHostedTelemetryProvider implements WalletTelemetryProvider {
     private readonly apiKey?: string
   ) {}
 
-  async trackEvent(name: string, props?: Record<string, unknown>): Promise<void> {
+  async trackEvent(
+    name: string,
+    props?: Record<string, unknown>
+  ): Promise<void> {
     if (typeof fetch === "undefined") {
       return;
     }
@@ -231,11 +253,17 @@ export class SelfHostedTelemetryProvider implements WalletTelemetryProvider {
       });
     } catch (err) {
       // Telemetry errors should not break application flow
-      console.warn(`[wallet-telemetry:self-hosted] Failed to forward event "${name}":`, err);
+      console.warn(
+        `[wallet-telemetry:self-hosted] Failed to forward event "${name}":`,
+        err
+      );
     }
   }
 
-  async identify(userId: string, traits?: Record<string, unknown>): Promise<void> {
+  async identify(
+    userId: string,
+    traits?: Record<string, unknown>
+  ): Promise<void> {
     if (typeof fetch === "undefined") return;
 
     try {
@@ -249,7 +277,10 @@ export class SelfHostedTelemetryProvider implements WalletTelemetryProvider {
         }),
       });
     } catch (err) {
-      console.warn("[wallet-telemetry:self-hosted] Failed to identify user:", err);
+      console.warn(
+        "[wallet-telemetry:self-hosted] Failed to identify user:",
+        err
+      );
     }
   }
 
@@ -266,10 +297,16 @@ export class CustomTelemetryProvider implements WalletTelemetryProvider {
   readonly name = "custom";
 
   constructor(
-    private readonly handler: (name: string, props?: Record<string, unknown>) => Promise<void> | void
+    private readonly handler: (
+      name: string,
+      props?: Record<string, unknown>
+    ) => Promise<void> | void
   ) {}
 
-  async trackEvent(name: string, props?: Record<string, unknown>): Promise<void> {
+  async trackEvent(
+    name: string,
+    props?: Record<string, unknown>
+  ): Promise<void> {
     await this.handler(name, props);
   }
 }
@@ -284,10 +321,12 @@ export class CustomTelemetryProvider implements WalletTelemetryProvider {
 export function resolveConfigFromEnv(): WalletTelemetryConfig {
   const envEnabled =
     typeof process !== "undefined"
-      ? process.env.NEXT_PUBLIC_ANALYTICS_ENABLED ?? process.env.ANALYTICS_ENABLED
+      ? (process.env.NEXT_PUBLIC_ANALYTICS_ENABLED ??
+        process.env.ANALYTICS_ENABLED)
       : undefined;
 
-  const nodeEnv = typeof process !== "undefined" ? process.env.NODE_ENV : "development";
+  const nodeEnv =
+    typeof process !== "undefined" ? process.env.NODE_ENV : "development";
 
   // Enabled determination: explicit env var > nodeEnv (disabled in dev/test by default unless explicit)
   const enabled =
@@ -297,9 +336,11 @@ export function resolveConfigFromEnv(): WalletTelemetryConfig {
 
   const rawProvider =
     typeof process !== "undefined"
-      ? (process.env.NEXT_PUBLIC_ANALYTICS_PROVIDER ??
-         process.env.ANALYTICS_PROVIDER ??
-         "self-hosted").toLowerCase()
+      ? (
+          process.env.NEXT_PUBLIC_ANALYTICS_PROVIDER ??
+          process.env.ANALYTICS_PROVIDER ??
+          "self-hosted"
+        ).toLowerCase()
       : "self-hosted";
 
   let provider: TelemetryProviderType = "noop";
@@ -317,17 +358,17 @@ export function resolveConfigFromEnv(): WalletTelemetryConfig {
 
   const endpoint =
     typeof process !== "undefined"
-      ? process.env.NEXT_PUBLIC_ANALYTICS_ENDPOINT ??
+      ? (process.env.NEXT_PUBLIC_ANALYTICS_ENDPOINT ??
         process.env.ANALYTICS_ENDPOINT ??
-        "/api/analytics/events"
+        "/api/analytics/events")
       : "/api/analytics/events";
 
   const apiKey =
     typeof process !== "undefined"
-      ? process.env.NEXT_PUBLIC_MIXPANEL_TOKEN ??
+      ? (process.env.NEXT_PUBLIC_MIXPANEL_TOKEN ??
         process.env.MIXPANEL_TOKEN ??
         process.env.NEXT_PUBLIC_ANALYTICS_API_KEY ??
-        process.env.ANALYTICS_API_KEY
+        process.env.ANALYTICS_API_KEY)
       : undefined;
 
   return {
@@ -342,7 +383,9 @@ export function resolveConfigFromEnv(): WalletTelemetryConfig {
 /**
  * Instantiates the appropriate telemetry provider based on configuration.
  */
-export function createProviderFromConfig(config: WalletTelemetryConfig): WalletTelemetryProvider {
+export function createProviderFromConfig(
+  config: WalletTelemetryConfig
+): WalletTelemetryProvider {
   if (!config.enabled || config.provider === "noop") {
     return new NoopTelemetryProvider(config.debug);
   }
@@ -408,7 +451,10 @@ export class WalletTelemetryService {
   }
 
   /** Track event through active provider */
-  async trackEvent(name: string, props?: Record<string, unknown>): Promise<void> {
+  async trackEvent(
+    name: string,
+    props?: Record<string, unknown>
+  ): Promise<void> {
     if (!this.config.enabled && this.provider.name === "noop") {
       return;
     }
@@ -427,7 +473,10 @@ export class WalletTelemetryService {
   }
 
   /** Identify user session */
-  async identify(userId: string, traits?: Record<string, unknown>): Promise<void> {
+  async identify(
+    userId: string,
+    traits?: Record<string, unknown>
+  ): Promise<void> {
     if (!this.config.enabled && this.provider.name === "noop") return;
     try {
       await this.provider.identify?.(userId, traits);
@@ -446,14 +495,18 @@ export const walletTelemetry = new WalletTelemetryService();
 /**
  * Configure the global wallet telemetry service
  */
-export function configureWalletTelemetry(config: Partial<WalletTelemetryConfig>): void {
+export function configureWalletTelemetry(
+  config: Partial<WalletTelemetryConfig>
+): void {
   walletTelemetry.configure(config);
 }
 
 /**
  * Set a custom telemetry provider instance
  */
-export function setWalletTelemetryProvider(provider: WalletTelemetryProvider): void {
+export function setWalletTelemetryProvider(
+  provider: WalletTelemetryProvider
+): void {
   walletTelemetry.setProvider(provider);
 }
 
@@ -525,34 +578,44 @@ export interface WalletNetworkChangedProps {
 /**
  * Emitted when a connection attempt begins
  */
-export async function trackWalletConnectAttempt(props?: WalletConnectAttemptProps): Promise<void> {
+export async function trackWalletConnectAttempt(
+  props?: WalletConnectAttemptProps
+): Promise<void> {
   await trackWalletEvent("wallet_connect_attempt", props);
 }
 
 /**
  * Emitted when a wallet is successfully connected
  */
-export async function trackWalletConnected(props: WalletConnectedProps): Promise<void> {
+export async function trackWalletConnected(
+  props: WalletConnectedProps
+): Promise<void> {
   await trackWalletEvent("wallet_connected", props);
 }
 
 /**
  * Emitted when a wallet connection attempt fails or is rejected
  */
-export async function trackWalletConnectFailed(props: WalletConnectFailedProps): Promise<void> {
+export async function trackWalletConnectFailed(
+  props: WalletConnectFailedProps
+): Promise<void> {
   await trackWalletEvent("wallet_connect_failed", props);
 }
 
 /**
  * Emitted when a wallet is disconnected
  */
-export async function trackWalletDisconnected(props?: WalletDisconnectedProps): Promise<void> {
+export async function trackWalletDisconnected(
+  props?: WalletDisconnectedProps
+): Promise<void> {
   await trackWalletEvent("wallet_disconnected", props);
 }
 
 /**
  * Emitted when the wallet network changes
  */
-export async function trackWalletNetworkChanged(props: WalletNetworkChangedProps): Promise<void> {
+export async function trackWalletNetworkChanged(
+  props: WalletNetworkChangedProps
+): Promise<void> {
   await trackWalletEvent("wallet_network_changed", props);
 }

@@ -141,7 +141,7 @@ export function applyPagination<T extends { id: string }>(
   }
 
   // Sort: sort_field DESC, id ASC
-  const sorted = [.items].sort((a, b) => {
+  const sorted = [...items].sort((a, b) => {
     const av = a[sortField] as unknown as number;
     const bv = b[sortField] as unknown as number;
     if (bv !== av) return bv - av;
