@@ -255,3 +255,217 @@ describe("Readiness probe — does not leak internal details", () => {
     expect(res.body).not.toHaveProperty("version");
   });
 });
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Enhanced Database Diagnostics Tests
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("Enhanced readiness probe with details", () => {
+  it("backward compatibility: normal readyz works without details", async () => {
+    const res = await supertest(app).get("/readyz");
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("ready");
+    expect(res.body.database).toBe("ok");
+    expect(res.body).not.toHaveProperty("databaseDetails");
+  });
+
+  it("enhanced readyz includes database details when requested", async () => {
+    const res = await supertest(app).get("/readyz?details=true");
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("ready");
+    expect(res.body.database).toBe("ok");
+    expect(res.body).toHaveProperty("databaseDetails");
+    expect(res.body.databaseDetails).toHaveProperty("latencyMs");
+    expect(res.body.databaseDetails).toHaveProperty("attempts");
+    expect(res.body.databaseDetails).toHaveProperty("state");
+    expect(res.body.databaseDetails).toHaveProperty("stats");
+    expect(res.body.databaseDetails.state).toBe("healthy");
+  });
+
+  it("enhanced readyz shows database error details when database fails", async () => {
+    // Mock database failure
+    jest.spyOn(database, "pingDatabaseDetailed").mockResolvedValue({
+      success: false,
+      error: {
+        code: 'PING_CONNECTION_FAILED',
+        constructor: { name: 'DatabasePingConnectionError' },
+        severity: 'error',
+        retryable: true,
+        message: 'Connection failed'
+      } as any,
+      latencyMs: 100,
+      timestamp: Date.now(),
+      attempts: 3
+    });
+
+    const res = await supertest(app).get("/readyz?details=true");
+    expect(res.status).toBe(503);
+    expect(res.body.status).toBe("not_ready");
+    expect(res.body.database).toBe("unavailable");
+    expect(res.body.databaseDetails).toHaveProperty("error");
+    expect(res.body.databaseDetails.error.code).toBe("PING_CONNECTION_FAILED");
+    expect(res.body.databaseDetails.error.severity).toBe("error");
+    expect(res.body.databaseDetails.error.retryable).toBe(true);
+    expect(res.body.databaseDetails.attempts).toBe(3);
+  });
+});
+
+describe("Database diagnostics endpoint", () => {
+  beforeEach(() => {
+    // Reset database metrics before each test
+    database.resetPingMetrics();
+  });
+
+  it("returns comprehensive diagnostics when database is healthy", async () => {
+    const res = await supertest(app).get("/db-diagnostics");
+    expect(res.status).toBe(200);
+    
+    expect(res.body).toHaveProperty("current");
+    expect(res.body.current.success).toBe(true);
+    expect(res.body.current).toHaveProperty("latencyMs");
+    expect(res.body.current).toHaveProperty("attempts");
+    expect(res.body.current).toHaveProperty("state");
+    expect(res.body.current.state).toBe("healthy");
+    
+    expect(res.body).toHaveProperty("statistics");
+    expect(res.body.statistics).toHaveProperty("successCount");
+    expect(res.body.statistics).toHaveProperty("failureCount");
+    expect(res.body.statistics).toHaveProperty("errorBreakdown");
+    
+    expect(res.body).toHaveProperty("metadata");
+    expect(res.body.metadata.endpoint).toBe("/db-diagnostics");
+    expect(res.body.error).toBeNull();
+  });
+
+  it("returns error details when database fails", async () => {
+    // Mock database failure
+    jest.spyOn(database, "pingDatabaseDetailed").mockResolvedValue({
+      success: false,
+      error: {
+        code: 'PING_BUSY',
+        constructor: { name: 'DatabasePingBusyError' },
+        severity: 'warning',
+        retryable: true,
+        message: 'Database is busy'
+      } as any,
+      latencyMs: 200,
+      timestamp: Date.now(),
+      attempts: 3
+    });
+
+    const res = await supertest(app).get("/db-diagnostics");
+    expect(res.status).toBe(503);
+    expect(res.body.current.success).toBe(false);
+    expect(res.body).toHaveProperty("error");
+    expect(res.body.error.code).toBe("PING_BUSY");
+    expect(res.body.error.severity).toBe("warning");
+    expect(res.body.error.retryable).toBe(true);
+  });
+
+  it("handles unexpected errors gracefully", async () => {
+    // Mock a throw during diagnostics
+    jest.spyOn(database, "pingDatabaseDetailed").mockRejectedValue(new Error("Unexpected error"));
+
+    const res = await supertest(app).get("/db-diagnostics");
+    expect(res.status).toBe(500);
+    expect(res.body.current.success).toBe(false);
+    expect(res.body.current.error).toBe("Failed to run database diagnostics");
+    expect(res.body).toHaveProperty("statistics");
+    expect(res.body).toHaveProperty("metadata");
+  });
+});
+
+describe("Database metrics endpoint", () => {
+  beforeEach(() => {
+    database.resetPingMetrics();
+  });
+
+  it("returns Prometheus-formatted metrics", async () => {
+    // Generate some test metrics
+    database.pingDatabase(); // This will create success metrics
+    
+    const res = await supertest(app).get("/db-metrics");
+    expect(res.status).toBe(200);
+    expect(res.get('Content-Type')).toContain('text/plain');
+    
+    const body = res.text;
+    expect(body).toContain('# HELP qlx_db_ping_success_total');
+    expect(body).toContain('# TYPE qlx_db_ping_success_total counter');
+    expect(body).toContain('qlx_db_ping_success_total 1');
+    expect(body).toContain('# HELP qlx_db_ping_state');
+    expect(body).toContain('qlx_db_ping_state 0'); // healthy state
+  });
+
+  it("includes error metrics when failures occur", async () => {
+    // Reset metrics first and mock the entire metrics chain
+    jest.spyOn(database, "getPingMetricsForPrometheus").mockReturnValue([
+      {
+        name: 'qlx_db_ping_success_total',
+        type: 'counter',
+        value: 0,
+        help: 'Total successful database ping operations',
+      },
+      {
+        name: 'qlx_db_ping_failure_total',
+        type: 'counter',
+        value: 1,
+        help: 'Total failed database ping operations',
+      },
+      {
+        name: 'qlx_db_ping_state',
+        type: 'gauge',
+        value: 3, // busy state
+        help: 'Current database ping state',
+      },
+      {
+        name: 'qlx_db_ping_error_total',
+        type: 'counter',
+        value: 1,
+        help: 'Database ping errors by type',
+        labels: { error_code: 'PING_BUSY' },
+      },
+    ]);
+
+    const res = await supertest(app).get("/db-metrics");
+    expect(res.status).toBe(200);
+    
+    const body = res.text;
+    expect(body).toContain('qlx_db_ping_failure_total 1');
+    expect(body).toContain('qlx_db_ping_state 3'); // busy state
+    expect(body).toContain('qlx_db_ping_error_total{error_code="PING_BUSY"} 1');
+  });
+
+  it("handles metrics generation errors gracefully", async () => {
+    // Mock getPingMetricsForPrometheus to throw
+    jest.spyOn(database, "getPingMetricsForPrometheus").mockImplementation(() => {
+      throw new Error("Metrics error");
+    });
+
+    const res = await supertest(app).get("/db-metrics");
+    expect(res.status).toBe(500);
+    expect(res.body.error).toBe("Failed to generate database metrics");
+  });
+
+  it("properly escapes label values in Prometheus format", async () => {
+    // Mock metrics with special characters that need escaping
+    jest.spyOn(database, "getPingMetricsForPrometheus").mockReturnValue([
+      {
+        name: 'test_metric',
+        type: 'counter',
+        value: 1,
+        help: 'Test metric',
+        labels: { 
+          error_code: 'PING_"SPECIAL"\\CHARS\nNEWLINE' 
+        }
+      }
+    ]);
+
+    const res = await supertest(app).get("/db-metrics");
+    expect(res.status).toBe(200);
+    
+    const body = res.text;
+    // Check for escaped quotes and backslashes, but be more flexible with newlines
+    expect(body).toContain('test_metric{error_code="PING_\\"SPECIAL\\"\\\\CHARS');
+    expect(body).toContain('"} 1');
+  });
+});
