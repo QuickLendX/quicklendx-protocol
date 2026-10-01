@@ -313,6 +313,13 @@ function emitSpanLog(entry: SpanLogEntry): void {
   }
 }
 
+/**
+ * Start a tracing span. This function is deterministic and must not throw for
+ * any input, including invalid names or attributes that cannot be serialized.
+ * If log emission fails (throttled stdout, closed pipe, etc.), the span is
+ * still returned so the caller can continue working; the failure is swallowed
+ * to preserve the invariant that tracing never breaks business logic.
+ */
 export function startSpan(name: string, attrs: SpanAttributes = {}): Span {
   const parent = spanContextStorage.getStore();
 
@@ -323,23 +330,27 @@ export function startSpan(name: string, attrs: SpanAttributes = {}): Span {
     traceId: buildTraceId(parent),
     spanId: ulid(),
     parentSpanId: parent ? parent.spanId : null,
-    attrs: sanitizedAttrs,
+    attrs: attrs ?? {},
     startedAtMs: Date.now(),
     startedAtNs: process.hrtime.bigint(),
     ended: false,
   };
 
-  emitSpanLog({
-    level: "INFO",
-    type: "TRACE_SPAN",
-    event: "start",
-    timestamp: new Date(span.startedAtMs).toISOString(),
-    name: span.name,
-    trace_id: span.traceId,
-    span_id: span.spanId,
-    parent_span_id: span.parentSpanId,
-    attrs: span.attrs,
-  });
+  try {
+    emitSpanLog({
+      level: "INFO",
+      type: "TRACE_SPAN",
+      event: "start",
+      timestamp: new Date(span.startedAtMs).toISOString(),
+      name: span.name,
+      trace_id: span.traceId,
+      span_id: span.spanId,
+      parent_span_id: span.parentSpanId,
+      attrs: span.attrs,
+    });
+  } catch {
+    // Tracing must never interrupt the caller. Swallow emission failures.
+  }
 
   return span;
 }
@@ -351,7 +362,7 @@ export function endSpan(span: Span, err?: unknown): void {
     }
 
     span.ended = true;
-    
+
     let durationMs: number | undefined;
     try {
       if (typeof span.startedAtNs === "bigint") {
