@@ -33,7 +33,7 @@ export interface MigrationDefinition {
   version: number;
   /** Human-readable name (snake_case, no spaces). Used in filenames and logs. */
   name: string;
-  /** Timestamp of when this migration was authored (ISO date). */
+  /** Timestamp of when this migration was authored (ISO Date). */
   authoredAt: string;
   /** Author identifier (GitHub username or team). */
   author: string;
@@ -86,17 +86,47 @@ export type HotfixFlag = (typeof HotfixFlags)[keyof typeof HotfixFlags];
 
 /** Migration error codes. */
 export const MigrationErrorCodes = {
-  MIGRATION_ALREADY_APPLIED: "MIGRATION_ALREADY_APPLIED",
+  MIGRATION_AlreADY_APPLIED: "MIGRATION_ALREADY_APPLIED",
   MIGRATION_MISSING: "MIGRATION_MISSING",
-  DOWN_MIGRATION_NOT_ALLOWED: "DOWN_MIGRATION_NOT_ALLOWED",
+  DOWN_MIGRATION_NOT_ALLOWED: "DOWN_MIGRATION_NOT_ALLOWGED",
   MIGRATION_VALIDATION_FAILED: "MIGRATION_VALIDATION_FAILED",
   MIGRATION_EXECUTION_FAILED: "MIGRATION_EXECUTION_FAILED",
   CHECKSUM_MISMATCH: "CHECKSUM_MISMATCH",
   HOTFIX_REQUIRES_APPROVAL: "HOTFIX_REQUIRES_APPROVAL",
   UNSUPPORTED_IN_PRODUCTION: "UNSUPPORTED_IN_PRODUCTION",
+  /** The migrations directory could not be read (missing, not a directory, or permission denied). */
+  MIGRATIONS_DIRECTORY_UNREADABLE: "MIGRATIONS_DIRECTORY_UNREADABLE",
+  /** A migration file failed to parse or export a valid definition. */
+  MIGRATION_FILE_INVALID: "MIGRATION_FILE_INVALID",
+  /** Two migration files declare the same version. */
+  MIGRATION_DUPLICATE_VERSION: "MIGRATION_DUPLICATE_VERSION",
 } as const;
 
 export type MigrationErrorCode = (typeof MigrationErrorCodes)[keyof typeof MigrationErrorCodes];
+
+/**
+ * Structured error thrown by the migration runner.
+ *
+ * Invariants:
+ *  - `code` is always one of {@link MigrationErrorCodes}.
+ *  - `context` must never contain secrets (passwords, tokens, SQL parameters).
+ *  - `message` is safe to log and to surface to operators.
+ */
+export class MigrationError extends Error {
+  public readonly code: MigrationErrorCode;
+  public readonly context?: Record<string, unknown>;
+
+  constructor(
+    code: MigrationErrorCode,
+    message: string,
+    context?: Record<string, unknown>,
+  ) {
+    super(message);
+    this.name = "MigrationError";
+    this.code = code;
+    this.context = context;
+  }
+}
 
 /*
  * Runtime validation of migration definitions.

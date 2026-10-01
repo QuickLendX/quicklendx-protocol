@@ -25,9 +25,9 @@ jobs:
             contracts:
               - 'quicklendx-contracts/**'
 
-      - name: Skip contract build for docs-only PRs
+      - name: Skip contract checks for non-contract PRs
         if: github.event_name == 'pull_request' && steps.changes.outputs.contracts != 'true'
-        run: echo "Docs-only PR detected; skipping Soroban contract build steps."
+        run: echo "No contract changes detected; skipping Soroban build and test steps."
 
       - name: Install Rust
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'

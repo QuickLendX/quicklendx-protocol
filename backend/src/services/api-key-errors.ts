@@ -1,33 +1,41 @@
-import { ApiKeyErrorCode } from './api-key-error-codes';
-
 export class ApiKeyError extends Error {
-  public readonly code: string;
-  constructor(message: string, code: string = ApiKeyErrorCode.INTERNAL) {
+  constructor(message: string) {
     super(message);
     this.name = 'ApiKeyError';
-    this.code = code;
   }
 }
 
 export class ApiKeyNotFoundError extends ApiKeyError {
-  constructor(keyId: string) {
-    super(`API key not found: ${keyId}`, ApiKeyErrorCode.NOT_FOUND);
+  constructor(keyId?: string) {
+    super(`API key not found${keyId ? ` with id: ${keyId}` : ''}`);
     this.name = 'ApiKeyNotFoundError';
   }
 }
 
+export class ApiKeyExpiredError extends ApiKeyError {
+  constructor() {
+    super('API key has expired');
+    this.name = 'ApiKeyExpiredError';
+  }
+}
+
+export class ApiKeyInvalidError extends ApiKeyError {
+  constructor() {
+    super('Invalid API key format');
+    this.name = 'ApiKeyInvalidError';
+  }
+}
+
 export class ApiKeyRevokedError extends ApiKeyError {
-  constructor(keyId: string) {
-    super(`Cannot rotate a revoked key: ${keyId}`, ApiKeyErrorCode.REVOKED);
+  constructor(keyId?: string) {
+    super(`API key has been revoked${keyId ? ` (key ID: ${keyId})` : ''}`);
     this.name = 'ApiKeyRevokedError';
   }
 }
 
 export class ApiKeyRotationConflictError extends ApiKeyError {
-  public readonly keyId?: string;
-  constructor(message: string, keyId?: string) {
-    super(message, ApiKeyErrorCode.ROTATION_CONFLICT);
+  constructor(message?: string, keyId?: string) {
+    super(message || `API key rotation conflict${keyId ? ` (key ID: ${keyId})` : ''}`);
     this.name = 'ApiKeyRotationConflictError';
-    this.keyId = keyId;
   }
 }

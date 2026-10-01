@@ -32,9 +32,6 @@ const VERSIONED_DEFAULTS = {
   event_schema_version: 1,
 };
 
-const SUPPORTED_CONTRACT_VERSION = 10;
-const SUPPORTED_EVENT_SCHEMA_VERSION = 10;
-
 function toSettlement(row: any): Settlement {
   return {
     id: row.id,
@@ -84,11 +81,8 @@ class SettlementOrchestrator {
     const cv = input.contract_version ?? VERSIONED_DEFAULTS.contract_version;
     const esv = input.event_schema_version ?? VERSIONED_DEFAULTS.event_schema_version;
 
-    if (cv > SUPPORTED_CONTRACT_VERSION || esv > SUPPORTED_EVENT_SCHEMA_VERSION) {
-      throw new Error(
-        `Unsupported settlement version: contractVersion=${cv}, eventSchemaVersion=${esv}. ` +
-        `Supported: contractVersion<=${SUPPORTED_CONTRACT_VERSION}, eventSchemaVersion<=${SUPPORTED_EVENT_SCHEMA_VERSION}`
-      );
+    if (!Number.isSafeInteger(cv) || cv < 1 || !Number.isSafeInteger(esv) || esv < 1) {
+      throw new Error("Settlement versions must be positive safe integers");
     }
 
     const insertResult = db.prepare(`

@@ -1,22 +1,9 @@
 // Tests for deterministic getPreparedStatement implementation
-import {
-  getPreparedStatement,
-  getDatabase,
-  clearStatementCache,
-  DatabasePermissionError,
-  DatabaseBusyError,
-  DatabasePrepareError,
-  _setGetDatabaseForTesting,
-} from '../database';
+import { getPreparedStatement, getDatabase, clearStatementCache, DatabasePermissionError, DatabaseBusyError, DatabasePrepareError } from '../database';
 
 // Helper to reset environment and cache between tests
 beforeEach(() => {
   clearStatementCache();
-  _setGetDatabaseForTesting(null);
-});
-
-afterEach(() => {
-  _setGetDatabaseForTesting(null);
 });
 
 describe('getPreparedStatement success and caching', () => {
@@ -50,7 +37,7 @@ describe('failure boundaries', () => {
         run: () => ({}) as any,
       }));
 
-    _setGetDatabaseForTesting(() => ({
+    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
       prepare: mockPrepare,
     } as any));
 
@@ -65,7 +52,7 @@ describe('failure boundaries', () => {
       err.code = 'SQLITE_BUSY';
       throw err;
     });
-    _setGetDatabaseForTesting(() => ({
+    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
       prepare: mockPrepare,
     } as any));
 
@@ -74,12 +61,17 @@ describe('failure boundaries', () => {
   });
 
   test('throws DatabasePermissionError on read‑only error', () => {
-    const mockPrepare = jest.fn(() => {
-      const err: any = new Error('readonly');
-      err.code = 'SQLITE_READONLY';
-      throw err;
-    });
-    _setGetDatabaseForTesting(() => ({
+    const stmtMock = {
+      reader: true,
+      get: () => {
+        const err: any = new Error('readonly');
+        err.code = 'SQLITE_READONLY';
+        throw err;
+      },
+      run: () => ({}),
+    };
+    const mockPrepare = jest.fn(() => stmtMock);
+    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
       prepare: mockPrepare,
     } as any));
 
@@ -95,7 +87,7 @@ describe('failure boundaries', () => {
       err.code = 'SQLITE_ERROR';
       throw err;
     });
-    _setGetDatabaseForTesting(() => ({
+    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
       prepare: mockPrepare,
     } as any));
 

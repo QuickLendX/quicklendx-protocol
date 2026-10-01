@@ -31,6 +31,20 @@
  *     is already in progress returns immediately to avoid double-execution.
  *   - `ShutdownStepOutcome` records what ran, what was skipped, and any error
  *     so operators can diagnose failures without sensitive data exposure.
+ *
+ * The `http-listener` step goes one level finer than the other steps, since
+ * it bundles three separate operations (marking maintenance mode, closing
+ * the listener, and reading the drain counter) into a single registered
+ * step: each of those three is independently wrapped too, so a failure in
+ * the first (say, the status store is unreachable) cannot prevent the
+ * second (closing the listener) from still running within that same step.
+ * Without this, a single unexpected throw partway through the step would
+ * silently skip whatever came after it in that step, even though runAll's
+ * own catch only protects the *other* steps, not the rest of this one.
+ *
+ * Security: the drain loop polls the in-process counter from load-shedding
+ * middleware — no network I/O occurs during shutdown, so no half-written
+ * transactions can be introduced here.
  */
 
 import http from 'http';
@@ -107,9 +121,26 @@ export function clearRegistry(): void {
   _steps.length = 0;
 }
 
-/** Return a sorted copy of registered steps (lowest priority first). */
+/**
+ * Return a sorted copy of registered steps (lowest priority first).
+ *
+ * Determinism invariants:
+ *  - The returned array is a fresh copy; callers cannot mutate the registry.
+ *  - Ordering is stable: steps with equal priority preserve registration order.
+ *  - The registry itself is never mutated by this read.
+ */
 export function getRegisteredSteps(): ShutdownStep[] {
-  return [..._steps].sort((a, b) => a.priority - b.priority);
+  // Decorate with the original index so ties break by registration order
+  // deterministically, independent of the engine's sort stability.
+  return _steps
+    .map((step, index) => ({ step, index }))
+    .sort((a, b) => {
+      if (a.step.priority !== b.step.priority) {
+        return a.step.priority - b.step.priority;
+      }
+      return a.index - b.index;
+    })
+    .map((entry) => entry.step);
 }
 
 // ---------------------------------------------------------------------------
@@ -135,9 +166,28 @@ export function resetShuttingDown(): void {
   _runAllInProgress = false;
 }
 
-/** True once a shutdown signal has been received. */
+/**
+ * True once a shutdown signal has been received.
+ *
+ * Failure-boundary invariants (Issue #2709):
+ *  - Deterministic: returns the exact boolean state of `_shuttingDown` with
+ *    no side effects, no I/O, and no dependency on the step registry.
+ *  - Never throws: safe to call from signal handlers, readiness probes, and
+ *    request middleware even during a partial or failed drain.
+ *  - Monotonic within a process lifetime: once `true`, only an explicit
+ *    `resetShuttingDown()` (test/recovery path) can flip it back to `false`.
+ *  - Concurrent reads are safe: the flag is a single boolean assignment, so
+ *    callers observe either the pre- or post-signal value, never a torn read.
+ */
 export function isShuttingDown(): boolean {
   return _shuttingDown;
+}
+
+/** Atomically claim the shutdown latch. Returns true if this call won. */
+export function beginShutdown(): boolean {
+  if (_shuttingDown) return false;
+  _shuttingDown = true;
+  return true;
 }
 
 // ---------------------------------------------------------------------------
@@ -363,17 +413,46 @@ export function createShutdownHandler(
   register({
     name: 'http-listener',
     priority: PRIORITY_HTTP,
-    fn: async (signal) => {
-      statusService.setMaintenanceMode(true);
-      server.close();
-
-      const deadline = Date.now() + drainTimeoutMs;
-      while (getActiveRequests() > 0 && Date.now() < deadline) {
-        await new Promise<void>((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
+    fn: async () => {
+      // Each of these three is independently guarded: this step bundles
+      // three separate operations, and a throw from the first must not
+      // prevent the second and third from still running. runAll()'s own
+      // catch only protects the *other* steps, not the rest of this one.
+      try {
+        statusService.setMaintenanceMode(true);
+      } catch (err) {
+        console.error('[shutdown] Failed to set maintenance mode:', err);
       }
 
-      const remaining = getActiveRequests();
-      if (remaining > 0) {
+      try {
+        server.close();
+      } catch (err) {
+        console.error('[shutdown] server.close() failed:', err);
+      }
+
+      // A failure reading the active-request count is treated the same
+      // way: logged, not trusted for the summary warning below (a stale
+      // or fabricated count would be worse than none), and never allowed
+      // to block the remaining steps.
+      const deadline = Date.now() + drainTimeoutMs;
+      let remaining = 0;
+      let drainCountUnreliable = false;
+      try {
+        remaining = getActiveRequests();
+        while (remaining > 0 && Date.now() < deadline) {
+          await new Promise<void>((resolve) => setTimeout(resolve, DRAIN_POLL_MS));
+          remaining = getActiveRequests();
+        }
+      } catch (err) {
+        drainCountUnreliable = true;
+        console.error('[shutdown] Failed to read active request count during drain:', err);
+      }
+
+      if (drainCountUnreliable) {
+        console.warn(
+          '[shutdown] Proceeding without a reliable in-flight request count',
+        );
+      } else if (remaining > 0) {
         console.warn(
           `[shutdown] Drain timeout (${drainTimeoutMs}ms) exceeded — ` +
             `${remaining} request(s) still in-flight`,
@@ -388,12 +467,17 @@ export function createShutdownHandler(
     name: 'webhook-delivery',
     priority: PRIORITY_WEBHOOK,
     fn: async () => {
+      // Guarded here, specifically, rather than left to runAll()'s generic
+      // per-step catch: "Webhook queue flush failed" is more actionable to
+      // whoever reads the shutdown log than a generic "Step failed" would
+      // be. Re-thrown after logging so runAll()'s own outcome tracking
+      // still records this step as 'failed' rather than 'ok'.
       let pending: ReturnType<typeof webhookQueueService.flush>;
       try {
         pending = webhookQueueService.flush();
       } catch (err) {
-        console.error('[shutdown] Webhook queue flush failed', err);
-        throw err; // re-throw so runAll() records the failure outcome
+        console.error('[shutdown] Webhook queue flush failed:', err);
+        throw err;
       }
       if (pending.length > 0) {
         console.warn(`[shutdown] ${pending.length} webhook event(s) not delivered`);
@@ -410,32 +494,38 @@ export function createShutdownHandler(
       try {
         closeDatabase();
       } catch (err) {
-        console.error('[shutdown] Database close failed', err);
+        console.error('[shutdown] Database close failed:', err);
         throw err; // re-throw so runAll() records the failure outcome
       }
     },
   });
 
   return async function shutdown(signal: string): Promise<void> {
-    if (_shuttingDown) {
+    if (!beginShutdown()) {
       console.warn('[shutdown] Second signal received — forcing exit');
       process.exit(1);
       return; // guard: process.exit is a no-op in tests
     }
-    _shuttingDown = true;
 
     console.log(`[shutdown] ${signal} — starting graceful shutdown`);
-    const result = await runAll(signal, drainTimeoutMs);
-    if (result.hadErrors) {
-      console.warn(
-        `[shutdown] Shutdown completed with errors in: ` +
-          result.outcomes
-            .filter((o) => o.status !== 'ok')
-            .map((o) => `${o.name}(${o.status})`)
-            .join(', '),
-      );
+    try {
+      const result = await runAll(signal, drainTimeoutMs);
+      if (result.hadErrors) {
+        console.warn(
+          `[shutdown] Shutdown completed with errors in: ` +
+            result.outcomes
+              .filter((o) => o.status !== 'ok')
+              .map((o) => `${o.name}(${o.status})`)
+              .join(', '),
+        );
+      }
+      console.log('[shutdown] Shutdown complete');
+      process.exit(result.hadErrors ? 1 : 0);
+    } catch (err) {
+      // runAll is designed not to reject, but guard the boundary anyway so a
+      // future regression cannot leave the process in a half-shutdown state.
+      console.error('[shutdown] Unexpected failure during shutdown:', err);
+      process.exit(1);
     }
-    console.log('[shutdown] Shutdown complete');
-    process.exit(success ? 0 : 1);
   };
 }
