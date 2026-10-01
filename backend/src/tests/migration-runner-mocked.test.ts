@@ -498,4 +498,210 @@ describe("Migration Runner with Mocked Database", () => {
     const result = await MigrationPolicy.dryRun([hotfixWithoutRisk]);
     expect(result.valid).toBe(false);
   });
+
+  test("MigrationPolicy.isDownAllowed returns false when env var not set", () => {
+    const originalEnv = process.env.ALLOW_DOWN_MIGRATIONS;
+    delete process.env.ALLOW_DOWN_MIGRATIONS;
+    try {
+      expect(MigrationPolicy.isDownAllowed()).toBe(false);
+    } finally {
+      process.env.ALLOW_DOWN_MIGRATIONS = originalEnv;
+    }
+  });
+
+  test("MigrationPolicy.isDownAllowed returns true when env var set to true", () => {
+    const originalEnv = process.env.ALLOW_DOWN_MIGRATIONS;
+    process.env.ALLOW_DOWN_MIGRATIONS = "true";
+    try {
+      expect(MigrationPolicy.isDownAllowed()).toBe(true);
+    } finally {
+      process.env.ALLOW_DOWN_MIGRATIONS = originalEnv;
+    }
+  });
+
+  test("MigrationPolicy.isHotfix returns true for hotfix migration", () => {
+    const hotfix = {
+      version: 1,
+      name: "test",
+      authoredAt: "2026-04-26",
+      author: "test",
+      meta: { hotfix: true },
+      up: async () => {},
+    };
+
+    expect(MigrationPolicy.isHotfix(hotfix)).toBe(true);
+  });
+
+  test("MigrationPolicy.isHotfix returns false for regular migration", () => {
+    const regular = {
+      version: 1,
+      name: "test",
+      authoredAt: "2026-04-26",
+      author: "test",
+      up: async () => {},
+    };
+
+    expect(MigrationPolicy.isHotfix(regular)).toBe(false);
+  });
+
+  test("MigrationPolicy.validateMetadata returns errors for missing required fields", () => {
+    const incomplete = {
+      version: 1,
+      name: "",
+      authoredAt: "",
+      author: "",
+      up: async () => {},
+    };
+
+    const result = MigrationPolicy.validateMetadata(incomplete);
+    expect(result.valid).toBe(false);
+    expect(result.errors.length).toBeGreaterThan(0);
+    expect(result.errors).toContain("Migration name is required");
+    expect(result.errors).toContain("Migration author is required");
+    expect(result.errors).toContain("Migration authoredAt date is required");
+  });
+
+  test("MigrationPolicy.validateMetadata returns valid for complete migration", () => {
+    const complete = {
+      version: 1,
+      name: "test",
+      authoredAt: "2026-04-26",
+      author: "test",
+      up: async () => {},
+    };
+
+    const result = MigrationPolicy.validateMetadata(complete);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  test("runMigrations with mocked database - dry run", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+        get: jest.fn(() => null),
+        run: jest.fn(() => ({})),
+      })),
+      transaction: jest.fn((fn) => fn()),
+    };
+
+    const result = await runMigrations({ dryRun: true, db: mockDb });
+    expect(result).toHaveProperty("applied");
+    expect(result).toHaveProperty("skipped");
+    expect(result).toHaveProperty("durationMs");
+  });
+
+  test("runMigrations with mocked database - allowDown", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+        get: jest.fn(() => null),
+        run: jest.fn(() => ({})),
+      })),
+      transaction: jest.fn((fn) => fn()),
+    };
+
+    const result = await runMigrations({ allowDown: true, dryRun: true, db: mockDb });
+    expect(result).toHaveProperty("applied");
+    expect(result).toHaveProperty("skipped");
+    expect(result).toHaveProperty("durationMs");
+  });
+
+  test("runMigrations with mocked database - verbose", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+        get: jest.fn(() => null),
+        run: jest.fn(() => ({})),
+      })),
+      transaction: jest.fn((fn) => fn()),
+    };
+
+    const result = await runMigrations({ verbose: true, dryRun: true, db: mockDb });
+    expect(result).toHaveProperty("applied");
+    expect(result).toHaveProperty("skipped");
+    expect(result).toHaveProperty("durationMs");
+  });
+
+  test("runMigrations with mocked database - skipChecksumVerify", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+        get: jest.fn(() => null),
+        run: jest.fn(() => ({})),
+      })),
+      transaction: jest.fn((fn) => fn()),
+    };
+
+    const result = await runMigrations({ skipChecksumVerify: true, dryRun: true, db: mockDb });
+    expect(result).toHaveProperty("applied");
+    expect(result).toHaveProperty("skipped");
+    expect(result).toHaveProperty("durationMs");
+  });
+
+  test("getAppliedVersions with mocked database", async () => {
+    const mockDb: any = {
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => [{ version: 1 }, { version: 2 }]),
+      })),
+    };
+
+    const versions = await getAppliedVersions(mockDb);
+    expect(Array.isArray(versions)).toBe(true);
+    expect(versions).toEqual([1, 2]);
+  });
+
+  test("isDatabaseInitialized with mocked database - initialized", async () => {
+    const mockDb: any = {
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => [{ version: 1 }]),
+      })),
+    };
+
+    const initialized = await isDatabaseInitialized(mockDb);
+    expect(initialized).toBe(true);
+  });
+
+  test("isDatabaseInitialized with mocked database - not initialized", async () => {
+    const mockDb: any = {
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+      })),
+    };
+
+    const initialized = await isDatabaseInitialized(mockDb);
+    expect(initialized).toBe(false);
+  });
+
+  test("verifyAppliedChecksums with mocked database - no applied migrations", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+      })),
+    };
+
+    const result = await verifyAppliedChecksums(mockDb);
+    expect(result.valid).toBe(true);
+    expect(result.errors).toEqual([]);
+  });
+
+  test("verifyAppliedChecksums with mocked database - checksum mismatch", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => [
+          { version: 1, name: "test", checksum: "old_checksum" },
+        ]),
+      })),
+    };
+
+    const result = await verifyAppliedChecksums(mockDb);
+    expect(result).toHaveProperty("valid");
+    expect(result).toHaveProperty("errors");
+  });
 });
