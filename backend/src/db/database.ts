@@ -5,7 +5,7 @@
  * Prefix lookups are O,(1) via a UNIQUE index on api_keys.prefix.
  * Audit rows are INSERT-only (append-only, no updates or deletes).
  *
- * Multi-statement operations use SQLite transactions accounting for atomic rollback.
+ * Multi-statement operations use SQLite transactions for atomic rollback.
  * Performance: Uses centralized prepared statement cache for optimal throughput.
 *
  * Invariants:
@@ -56,12 +56,13 @@ export interface DbAuditLog {
   metadata: string | null;
 }
 
-const ALL_API_KEY_COLS = [
-  'id', 'key_hash', 'signing_secret_hash', 'prev_signing_secret_hash', 'prefix', 'name', 'scopes',
-  'created_at', 'last_used_at', 'expires_at', 'prev_secret_expires_at', 'revoked', 'created_by',
+export const ALL_API_KEY_COLS = [
+  'id', 'key_hash', 'signing_secret_hash', 'prev_signing_secret_hash',
+  'prefix', 'name', 'scopes', 'created_at', 'last_used_at',
+  'expires_at', 'prev_secret_expires_at', 'revoked', 'created_by',
 ] as const;
 
-const ALL_AUDIT_COLS = [
+export const ALL_AUDIT_COLS = [
   'id', 'event_type', 'key_id', 'actor', 'timestamp',
   'ip_address', 'endpoint', 'metadata',
 ] as const;
@@ -120,19 +121,19 @@ function optionalString(row: any, column: string): string | null {
 
 function rowToDbApiKey(row: any): DbApiKey {
   return {
-    id: row.id,
-    key_hash: row.key_hash,
-    signing_secret_hash: row.signing_secret_hash ?? null,
-    prev_signing_secret_hash: row.prev_signing_secret_hash ?? null,
-    prefix: row.prefix,
-    name: row.name,
-    scopes: row.scopes,
-    created_at: row.created_at,
-    last_used_at: row.last_used_at ?? null,
-    expires_at: row.expires_at ?? null,
-    prev_secret_expires_at: row.prev_secret_expires_at ?? null,
-    revoked: row.revoked,
-    created_by: row.created_by,
+    id,
+    key_hash: keyHash,
+    signing_secret_hash: normalizeNullableText(r.signing_secret_hash),
+    prev_signing_secret_hash: normalizeNullableText(r.prev_signing_secret_hash),
+    prefix,
+    name,
+    scopes,
+    created_at: createdAt,
+    last_used_at: normalizeNullableText(r.last_used_at),
+    expires_at: normalizeNullableText(r.expires_at),
+    prev_secret_expires_at: normalizeNullableText(r.prev_secret_expires_at),
+    revoked: normalizeRevoked(r.revoked),
+    created_by: createdBy,
   };
 }
 

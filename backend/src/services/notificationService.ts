@@ -1,4 +1,4 @@
-import nodemailer, { type Transporter } from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 import { ulid } from 'ulid';
 import { getDatabase, getPreparedStatement } from '../lib/database';
 import { CircuitBreaker } from '../lib/circuitBreaker';

@@ -1,3 +1,4 @@
+
 /**
  * Deterministic failure-boundary coverage for the shutdown orchestrator.
  * Issue #2709 — src/lib/shutdown.ts

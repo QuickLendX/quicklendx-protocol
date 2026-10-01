@@ -98,87 +98,103 @@ const KNOWN_SECRET_PATTERNS = [
   },
 ];
 
+// Invariants for shannonEntropy:
+//
+//   E1 Total      - never throws, for any JavaScript value. A throw here
+//                   propagates out of isHighEntropyToken -> scanLine ->
+//                   scanTargets and aborts the whole scan, discarding the
+//                   findings already collected for every other file.
+//   E2 Typed      - only strings are measured. A primitive string is used
+//                   directly; a String object is unwrapped through the
+//                   internal slot, which cannot run user code and cannot
+//                   throw for a well-formed wrapper. Every other type,
+//                   including revoked proxies, returns 0. Nothing is coerced
+//                   with String(value): coercion runs user code, can throw,
+//                   and would manufacture an alphabet out of
+//                   "[object Object]" and return a meaningless score.
+//   E3 Normalised - probabilities sum to exactly 1. The symbol census is
+//                   taken by code point (for...of) and divided by that same
+//                   code-point count. Dividing by value.length (UTF-16 code
+//                   units) weights every astral character at 1/2, so the
+//                   probabilities sum to less than 1, entropy is
+//                   under-reported, and a genuine secret can fall below
+//                   MIN_HIGH_ENTROPY_SCORE and be missed without a trace.
+//   E4 Bounded    - the result is always a finite, non-negative number within
+//                   [0, log2(codePointCount)]. An all-uniform input yields
+//                   +0 rather than -0, so toBe(0) holds.
+//   E5 Pure       - no shared mutable state and no I/O, so repeated and
+//                   interleaved calls on equal input return equal doubles.
+//
+// Compatibility: for any input drawn entirely from the Basic Multilingual
+// Plane, codePointCount equals value.length, so this returns bit-identical
+// doubles to the previous implementation for every call that did not throw.
+// The observable changes are limited to inputs that previously threw
+// TypeError (now 0) and astral input (now correctly normalised).
+
 function shannonEntropy(value) {
-  if (!value) {
+  let text;
+
+  if (typeof value === "string") {
+    text = value;
+  } else {
+    text = unwrapStringObject(value);
+  }
+
+  if (text === null || text.length === 0) {
     return 0;
   }
 
   const counts = new Map();
-  for (const char of value) {
+  let codePoints = 0;
+  for (const char of text) {
     counts.set(char, (counts.get(char) || 0) + 1);
+    codePoints += 1;
   }
 
+  // The division below is safe by construction: text.length > 0 was already
+  // rejected above, and for...of yields at least one code point for any
+  // non-empty string, so codePoints >= 1 and no count is ever 0.
   let entropy = 0;
   for (const count of counts.values()) {
-    const probability = count / value.length;
+    const probability = count / codePoints;
     entropy -= probability * Math.log2(probability);
+  }
+
+  // E4: collapse -0 and any non-finite residue to 0 so the result is always a
+  // plain non-negative number that compares consistently against
+  // MIN_HIGH_ENTROPY_SCORE.
+  if (!Number.isFinite(entropy) || entropy <= 0) {
+    return 0;
   }
 
   return entropy;
 }
 
-// Anchored hex shapes. Both are module-level literals deliberately created
-// without the g or y flag: RegExp.prototype.test only reads lastIndex for those
-// two flags, so the patterns are position-free and can be shared by every call
-// without leaking state between a scan line, a retry, and an interleaved call.
-const HEX_DIGITS_PATTERN = /^[0-9a-fA-F]+$/;
-const HEX_PREFIXED_PATTERN = /^0x[0-9a-fA-F]+$/;
-
-// Failure-boundary contract for isHexString. These invariants are pinned down
-// by tests/secret-scan-hex.test.ts, and every one of them is load-bearing
-// because isHexString sits on the *suppressor* side of secret classification:
-// isHighEntropyToken drops a candidate whenever isHexString reports true, so a
-// wrong true is a silently dropped finding, not a noisy one.
-//
-//   H1 Total          - never throws, for any JavaScript value, including
-//                       symbols, revoked proxies, and objects whose toString
-//                       or Symbol.toPrimitive throws. RegExp.prototype.test
-//                       coerces its argument with ToString, which runs
-//                       user-visible code; an uncaught throw escapes through
-//                       isHighEntropyToken -> collectHighEntropyMatches ->
-//                       scanLine -> scanTargets, aborts the scan, and discards
-//                       the findings already collected for other files. The one
-//                       current caller feeds it a regex-derived primitive
-//                       string, so this is defence in depth for the exported
-//                       helper and for any caller added later.
-//   H2 Type-exact     - only a string primitive can be hex. Numbers, bigints,
-//                       and String wrappers coerce to text that can be entirely
-//                       hex ("255", "0", "deadbeef"), and accepting that
-//                       coercion would let a non-string suppress a finding.
-//                       Refusing non-strings is the fail-closed direction: it
-//                       can only add findings, never remove one.
-//   H3 Full value     - the shape is matched end to end, so a padded, embedded,
-//                       or line-terminated value (" deadbeef ", "0xdeadbeefg",
-//                       "deadbeef\n") is not hex.
-//   H4 Minimal length - at least one hex digit is required, so neither the empty
-//                       string nor a bare "0x" prefix is hex.
-//   H5 Lowercase prefix only - exactly one optional "0x". "0X1f" is not hex:
-//                       widening the accepted set would suppress more findings,
-//                       i.e. weaken detection, so the conservative reading is
-//                       kept rather than "fixed".
-//   H6 Linear, pure   - the patterns are a single anchored character class with
-//                       no ambiguous quantifier, so matching is O(length) with
-//                       no catastrophic backtracking. No shared mutable state,
-//                       no I/O, and the value is never logged, so repeated
-//                       calls, retries, and interleaved execution are
-//                       deterministic and never disclose a candidate.
-//
-// Compatibility: for every string input the result is exactly what the
-// previous implementation returned, and the sole caller (isHighEntropyToken)
-// cannot observe the non-string change, because a non-string can never reach a
-// `true` from isHighEntropyToken anyway: isObviousPlaceholder fails closed to
-// true and hasMixedCharacterClasses returns false for non-strings. The only
-// observable change is for non-string inputs, which previously either threw a
-// TypeError (aborting the entire scan) or were misclassified as hex.
-function isHexString(value) {
-  // H1/H2: refuse everything that is not a string primitive before a regex can
-  // coerce it. typeof reads an internal slot, so a hostile value cannot throw
-  // and cannot run a trap here.
-  if (typeof value !== "string") {
-    return false;
+// Accepts a String object and returns its primitive value; returns null for
+// every other input. String.prototype.valueOf is called directly on the
+// intrinsic so a hostile `valueOf`/`Symbol.toPrimitive` override on a wrapper
+// or proxy is never consulted, and the revoked-proxy TypeError is absorbed.
+function unwrapStringObject(value) {
+  if (typeof value !== "object" || value === null) {
+    return null;
   }
 
-  return HEX_DIGITS_PATTERN.test(value) || HEX_PREFIXED_PATTERN.test(value);
+  let unwrapped;
+  try {
+    unwrapped = String.prototype.valueOf.call(value);
+  } catch {
+    return null;
+  }
+
+  return typeof unwrapped === "string" ? unwrapped : null;
+}
+
+function isHexString(value) {
+  if (typeof value !== "string" && !(value instanceof String)) {
+    return false;
+  }
+  const str = String(value);
+  return /^[0-9a-fA-F]+$/.test(str) || /^0x[0-9a-fA-F]+$/.test(str);
 }
 
 function isIdentifierLikeString(value) {
@@ -277,51 +293,85 @@ const STELLAR_STRKEY_REGEX = /^[GX][A-Z2-7]{55}$/;
  * @returns {boolean} True if the value matches the Stellar StrKey public format, false otherwise.
  */
 function isStellarStrKeyLike(value) {
-  if (typeof value !== "string") {
+  if (typeof value !== "string" && !(value instanceof String)) {
     return false;
   }
-
-  if (value.length !== 56) {
-    return false;
-  }
-
-  return STELLAR_STRKEY_REGEX.test(value);
+  return /^[GX][A-Z2-7]{55}$/.test(String(value));
 }
 
+// High-entropy token detection invariants enforced by isHighEntropyToken:
+//
+//   H1 Total (Fail closed) - Never throws for any JavaScript value (null, undefined,
+//                            numbers, booleans, objects, arrays, symbols, bigints,
+//                            functions, or revoked/throwing proxies). Fails closed
+//                            by returning false.
+//   H2 Type boundary       - Accepts string primitives and String wrapper objects.
+//                            Any other type immediately returns false.
+//   H3 Length boundary     - Strictly requires length >= MIN_HIGH_ENTROPY_LENGTH (32).
+//                            Values of length 0..31 immediately return false.
+//   H4 Character set       - Tokens must consist exclusively of valid base64 / base64url /
+//                            safe token characters (/^[A-Za-z0-9+/=_-]+$/). Whitespace,
+//                            control characters, non-ASCII Unicode, and symbols return false.
+//   H5 Hex exclusion       - Pure hexadecimal strings (isHexString) representing commit hashes,
+//                            SHA digests, Ethereum addresses, etc., return false.
+//   H6 Stellar StrKey      - Stellar public keys or muxed accounts (isStellarStrKeyLike)
+//                            return false.
+//   H7 Obvious placeholder - Common development/test placeholders, repeated strings,
+//                            and code identifiers (isObviousPlaceholder) return false.
+//   H8 Unique characters   - Requires new Set(str).size >= MIN_UNIQUE_CHARACTERS (10).
+//                            Low character variety returns false.
+//   H9 Character classes   - Requires at least two character classes (hasMixedCharacterClasses).
+//                            Single-class tokens (e.g. only lowercase or only digits) return false.
+//   H10 Shannon entropy    - Computes Shannon entropy; requires score >= MIN_HIGH_ENTROPY_SCORE (4.5).
+//   H11 Non-leakage        - Strictly returns boolean true or false; never logs or includes
+//                            token content in exceptions or outputs.
+//   H12 Determinism        - Fully pure and idempotent across repeated and concurrent calls,
+//                            with no regex lastIndex or shared mutable state side-effects.
 function isHighEntropyToken(value) {
-  if (typeof value !== "string" || value.length < MIN_HIGH_ENTROPY_LENGTH) {
+  // Input validation: fail closed on null and undefined
+  if (value === null || value === undefined) {
     return false;
   }
 
-  if (!/^[A-Za-z0-9+/=_-]+$/.test(value)) {
+  try {
+    if (typeof value !== "string" && !(value instanceof String)) {
+      return false;
+    }
+
+    const str = typeof value === "string" ? value : String(value);
+
+    if (str.length < MIN_HIGH_ENTROPY_LENGTH) {
+      return false;
+    }
+
+    if (!/^[A-Za-z0-9+/=_-]+$/.test(str)) {
+      return false;
+    }
+
+    if (isHexString(str)) {
+      return false;
+    }
+
+    if (isStellarStrKeyLike(str)) {
+      return false;
+    }
+
+    if (isObviousPlaceholder(str)) {
+      return false;
+    }
+
+    if (new Set(str).size < MIN_UNIQUE_CHARACTERS) {
+      return false;
+    }
+
+    if (!hasMixedCharacterClasses(str)) {
+      return false;
+    }
+
+    return shannonEntropy(str) >= MIN_HIGH_ENTROPY_SCORE;
+  } catch {
     return false;
   }
-
-  // A hex run is a commit SHA, a colour or a byte buffer, not a credential, so
-  // it is suppressed here. This is the reason isHexString is held to H1/H2 in
-  // its contract above: a spurious true from this branch silently drops the
-  // finding instead of raising a false alarm.
-  if (isHexString(value)) {
-    return false;
-  }
-
-  if (isStellarStrKeyLike(value)) {
-    return false;
-  }
-
-  if (isObviousPlaceholder(value)) {
-    return false;
-  }
-
-  if (new Set(value).size < MIN_UNIQUE_CHARACTERS) {
-    return false;
-  }
-
-  if (!hasMixedCharacterClasses(value)) {
-    return false;
-  }
-
-  return shannonEntropy(value) >= MIN_HIGH_ENTROPY_SCORE;
 }
 
 // Redaction contract enforced by redactPreview. These are the invariants the
@@ -1403,8 +1453,29 @@ function formatFindings(findings, failures = []) {
 }
 
 function assertNoSecretsPrinted(output, findings) {
+  if (typeof output !== "string") {
+    throw new TypeError("Secret scan output must be a string");
+  }
+
+  if (!Array.isArray(findings)) {
+    throw new TypeError("Secret scan findings must be an array");
+  }
+
   for (const finding of findings) {
-    if (finding.match && output.includes(finding.match)) {
+    if (!finding || typeof finding !== "object") {
+      throw new TypeError("Secret scan findings must contain objects");
+    }
+
+    const match = finding.match;
+    if (!match) {
+      continue;
+    }
+
+    if (typeof match !== "string") {
+      throw new TypeError("Secret scan finding matches must be strings");
+    }
+
+    if (output.includes(match)) {
       throw new Error(
         `Secret scan output leaked a matched value for ${finding.file}:${finding.line}`
       );
@@ -1474,6 +1545,7 @@ module.exports = {
   formatTargetFailure,
   hasMixedCharacterClasses,
   isAllowlisted,
+  isHexString,
   isHighEntropyToken,
   isHexString,
   isIdentifierLikeString,
