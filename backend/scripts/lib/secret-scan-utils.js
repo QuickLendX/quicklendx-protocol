@@ -694,6 +694,14 @@ function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
     return false;
   }
 
+  if (
+    typeof relativePath !== "string" ||
+    typeof lineNumber !== "number" ||
+    typeof matchValue !== "string"
+  ) {
+    return false;
+  }
+
   const hasFile = entry.file !== undefined;
   const hasLine = entry.line !== undefined;
   const hasMatch = entry.match !== undefined;
