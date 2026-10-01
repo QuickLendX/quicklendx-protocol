@@ -369,8 +369,107 @@ export interface SafeRequestSnapshot {
 }
 
 /**
+ * Coerce an arbitrary value into a plain record for redaction.
+ *
+ * Returns an empty record for `null`, `undefined`, primitives, and arrays so
+ * that a malformed request container degrades to "nothing to redact" instead
+ * of throwing. Without this guard, `redactObject` calls `Object.entries` on the
+ * value and a `null` query or header bag raises a `TypeError` inside the
+ * logging path, which would abort the surrounding record.
+ */
+function asRedactableRecord(value: unknown): Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+  return value as Record<string, unknown>;
+}
+
+/**
+ * Coerce an arbitrary value into a string for the snapshot's routing fields.
+ * `null` / `undefined` become the empty string so a partial request object can
+ * never put an `undefined` hole into the serialised log line.
+ */
+function asSnapshotString(value: unknown): string {
+  return typeof value === "string" ? value : value === undefined || value === null ? "" : String(value);
+}
+
+/**
+ * Canonical string for a header value, used only to order colliding values.
+ * Uses the same tagging scheme as `canonicalise` so ordering never depends on
+ * whether a value arrived as `"1"` or `1`.
+ */
+function headerValueSortKey(value: unknown): string {
+  try {
+    return canonicalise(value);
+  } catch {
+    // A cyclic header value cannot be canonicalised; fall back to a constant
+    // key so the comparator stays total and the sort cannot throw.
+    return " ";
+  }
+}
+
+/**
+ * Lower-case header names and merge values that collide under that
+ * normalisation.
+ *
+ * Why merge instead of first-wins / last-wins: a plain `Object.fromEntries`
+ * over `[k.toLowerCase(), v]` keeps only the *last* spelling, so
+ * `{"X-Trace": "a", "x-trace": "b"}` and `{"x-trace": "b", "X-Trace": "a"}`
+ * would produce two different snapshots for the same logical request. That is
+ * an ordering-dependent log record — precisely the non-determinism a redaction
+ * boundary must not have, since it makes two identical requests look like
+ * different traffic.
+ *
+ * Colliding values are kept as a sorted array so both orderings converge, and
+ * the result stays JSON-serialisable. A single-value header (the overwhelming
+ * majority) keeps its original scalar shape, so existing snapshots and
+ * consumers are unchanged.
+ */
+function normaliseHeaderBag(
+  headers: Record<string, unknown>
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [name, value] of Object.entries(headers)) {
+    const key = name.toLowerCase();
+    const existing = Object.prototype.hasOwnProperty.call(out, key)
+      ? out[key]
+      : undefined;
+    if (!Object.prototype.hasOwnProperty.call(out, key)) {
+      out[key] = value;
+      continue;
+    }
+    const merged = (Array.isArray(existing) ? existing : [existing]).concat([
+      value,
+    ]);
+    merged.sort((a, b) => {
+      const ka = headerValueSortKey(a);
+      const kb = headerValueSortKey(b);
+      return ka < kb ? -1 : ka > kb ? 1 : 0;
+    });
+    out[key] = merged;
+  }
+  return out;
+}
+
+/**
  * Produce a log-safe snapshot of an incoming HTTP request.
  * All query params, headers, and body fields are classified and redacted.
+ *
+ * Invariants — this function is total (it never throws) and pure:
+ *   1. **Total.** A `null` request, a missing query/header bag, or a malformed
+ *      container yields an empty record rather than an exception. Logging is a
+ *      best-effort side channel: it must never be the reason a request fails,
+ *      so a defect here degrades the record instead of dropping it.
+ *   2. **No mutation.** The input request is only read; a fresh object is
+ *      returned for every section, so a caller reusing the same Express
+ *      `req` across retries cannot observe partially-redacted state.
+ *   3. **Deterministic.** Identical input yields byte-identical output: header
+ *      names are lower-cased before classification, and `hashValue` is
+ *      key-order independent. Two concurrent calls share no state, so a retry
+ *      after a failure produces exactly the snapshot the first call would have.
+ *   4. **Fails closed.** Anything that cannot be classified becomes PRIVATE
+ *      (hashed) or `[REDACTED]`; no raw value ever reaches the returned object,
+ *      so `findSecretLeak(snapshot)` is always `null`.
  */
 export function sanitiseRequest(req: {
   method: string;
@@ -379,19 +478,36 @@ export function sanitiseRequest(req: {
   headers: Record<string, unknown>;
   body?: unknown;
 }): SafeRequestSnapshot {
+  // Guard the whole body: a getter that throws on `req.headers` or a proxy
+  // that rejects `ownKeys` must not escape into the request pipeline.
+  let source: Record<string, unknown> = {};
+  try {
+    source =
+      req !== null && typeof req === "object"
+        ? (req as unknown as Record<string, unknown>)
+        : {};
+  } catch {
+    source = {};
+  }
+
   return {
-    method: req.method,
-    path: req.path,
-    query: redactObject(req.query as Record<string, unknown>),
+    method: asSnapshotString(source.method),
+    path: asSnapshotString(source.path),
+    query: redactObject(asRedactableRecord(source.query)),
     headers: redactObject(
-      // Drop raw Authorization / Cookie values before object redaction
-      Object.fromEntries(
-        Object.entries(req.headers).map(([k, v]) => [k.toLowerCase(), v])
-      )
+      // Normalise header names to lower case before classification so
+      // `Content-Type` and `content-type` cannot resolve to different tiers.
+      // RFC 9110 §5.2 makes header names case-insensitive, so two spellings of
+      // the same name are one field, not two. Colliding values are sorted by
+      // their canonical form rather than taken in arrival order, so the
+      // snapshot does not depend on the order the transport happened to
+      // deliver them in — the same headers always hash to the same value.
+      // See `normaliseHeaderBag`.
+      normaliseHeaderBag(asRedactableRecord(source.headers))
     ),
     body:
-      req.body && typeof req.body === "object"
-        ? redactObject(req.body as Record<string, unknown>)
+      source.body && typeof source.body === "object"
+        ? redactObject(source.body as Record<string, unknown>)
         : null,
   };
 }
