@@ -496,6 +496,74 @@ describe("verifyAppliedChecksums failure boundaries", () => {
     await expect(verifyAppliedChecksums()).rejects.toThrow(/database is locked/);
   });
 
+  test("runMigrations with mocked database - dry run", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+        get: jest.fn(() => null),
+        run: jest.fn(() => ({})),
+      })),
+      transaction: jest.fn((fn) => fn),
+    };
+
+    const result = await runMigrations({ dryRun: true, db: mockDb });
+    expect(result).toHaveProperty("applied");
+    expect(result).toHaveProperty("skipped");
+    expect(result).toHaveProperty("durationMs");
+  });
+
+  test("runMigrations with mocked database - allowDown", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+        get: jest.fn(() => null),
+        run: jest.fn(() => ({})),
+      })),
+      transaction: jest.fn((fn) => fn),
+    };
+
+    const result = await runMigrations({ allowDown: true, dryRun: true, db: mockDb });
+    expect(result).toHaveProperty("applied");
+    expect(result).toHaveProperty("skipped");
+    expect(result).toHaveProperty("durationMs");
+  });
+
+  test("runMigrations with mocked database - verbose", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+        get: jest.fn(() => null),
+        run: jest.fn(() => ({})),
+      })),
+      transaction: jest.fn((fn) => fn),
+    };
+
+    const result = await runMigrations({ verbose: true, dryRun: true, db: mockDb });
+    expect(result).toHaveProperty("applied");
+    expect(result).toHaveProperty("skipped");
+    expect(result).toHaveProperty("durationMs");
+  });
+
+  test("runMigrations with mocked database - skipChecksumVerify", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+        get: jest.fn(() => null),
+        run: jest.fn(() => ({})),
+      })),
+      transaction: jest.fn((fn) => fn),
+    };
+
+    const result = await runMigrations({ skipChecksumVerify: true, dryRun: true, db: mockDb });
+    expect(result).toHaveProperty("applied");
+    expect(result).toHaveProperty("skipped");
+    expect(result).toHaveProperty("durationMs");
+  });
+
   test("propagates filesystem read errors without swallowing them", async () => {
     const content = "export const up = async () => {};\n";
     installDrDouble([{ version: 1, name: "init", checksum: computeChecksum(content) }]);
