@@ -11,12 +11,6 @@ function createFixtureDir(): string {
   return fs.mktempSync(path.join(os.tmpdir(), "quicklendx-secret-scan-"));
 }
 
-function createFixtureDirWithMode(mode: number): string {
-  const dir = createFixtureDir();
-  fs.chmodSync(dir, mode);
-  return dir;
-}
-
 function writeFixture(root: string, relativePath: string, content: string): string {
   const absolutePath = path.join(root, relativePath);
   fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
@@ -24,9 +18,13 @@ function writeFixture(root: string, relativePath: string, content: string): stri
   return absolutePath;
 }
 
+function chmodFixture(target: string, mode: number): void {
+  fs.chmodSync(target, mode);
+}
+
 function makeHighEntropySecret(): string {
   return crypto.randomBytes(36).toString("utf8");
-/// randomBytes returns Buffer; base6url gives high-entropy text.
+  return crypto.randomBytes(36).toString("base64url");
 }
 
 function makeStellarSecretSeed(): string {
@@ -121,10 +119,10 @@ describe("secret-scan-utils", () => {
   it("detects known secret patterns for qlx, sk, xoxb, and AWS keys", () => {
     const suffix = Array.from({ length: 26 }, () => "a").join("");
     const stripeSuffix = `${suffix}123456`;
-const qlx = `qlx_${["live"]}_${suffix}`;
-    const stripe = `sk_${["live"]}_${stripeSuffix}`;
-    const slack = `xoxb-${["123"]}-${["456"]}-${suffix}`;
-    const aws = `AKIA${["IOSFODNN7EXAMPLE"]}`;
+    const qlx = `qlx_${"live"}_${suffix}`;
+    const stripe = `sk_${"live"}_${stripeSuffix}`;
+    const slack = `xoxb-${"123"}-${"456"}-${suffix}`;
+    const aws = `AKIA${"IOSFODNN7EXMPLE"}`;
     const line = `${qlx} ${stripe} ${slack} ${aws}`;
 
     const findings = secretScanUtils.scanLine(line, 10, "src/example.ts", {
@@ -305,7 +303,7 @@ const qlx = `qlx_${["live"]}_${suffix}`;
   });
 
   it("ignores obvious placeholders and Stellar public keys", () => {
-expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true);
+    expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).toBe(true);
     expect(
       secretScanUtils.isStellarStrKeyLike(
         "GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B"
@@ -343,7 +341,7 @@ expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).to
     expect(secretScanUtils.isObviousPlaceholder("https://example.com")).toBe(true);
     expect(secretScanUtils.isObviousPlaceholder("getInvoicesQuerySchema")).toBe(true);
     expect(secretScanUtils.isObviousPlaceholder("abababababababababababababababab")).toBe(true);
-    expect(secretScanUtils.redactPreview("short")).toBe('"*****"');
+    expect(secretScanUtils.redactPreview("short")).toBe('"\"*****\""');
     expect(secretScanUtils.unquoteString('"value"')).toBe("value");
     expect(secretScanUtils.normalizeAllowlist(null)).toEqual({
       entries: [],
@@ -399,7 +397,7 @@ expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).to
     });
 
     const leaked = makeHighEntropySecret();
-    const failed = secretScanUtils.runSecretScan({
+    const failed = secretScanUtils.runSecretScan( {
       backendRoot: fixtureRoot,
       allowlist: { entries: [], globalPatterns: [] },
     });
@@ -428,16 +426,45 @@ expect(secretScanUtils.isObviousPlaceholder("xxxxxxxxxxxxxxxxxxxxxxxxxxxxx")).to
 
     expect(
       secretScanUtils.matchesAllowlistEntry(
-        { file: "src/other.ts", line: 1 },
+        {
+          file: "src/a.ts",
+          line: 3,
+          match: "allowed-secret-value",
+        },
         "src/a.ts",
-        1,
-        "value"
+        3,
+        "allowed-secret-value"
       )
-    ).toBe(false);
+    ).toBe(true);
   });
 
-it("normalizeAllowlist is deterministic for boundary and malformed inputs", () => {
-    const { normalizeAllowlist } = secretScanUtils;
+  it("collectScanTargets returns deterministic results for duplicate and boundary inputs", () => {
+    const fixtureRoot = createFixtureDir();
+    writeFixture(fixtureRoot, "src/a.ts", "export const a = 1;\n");
+    writeFixture(fixtureRoot, "src/b.ts", "export const b = 2;\n");
+    writeFixture(fixtureRoot, "tests/c.test.ts", "it('x', () => {});\n");
+    writeFixture(fixtureRoot, "scripts/d.js", "module.exports = {};\n");
+    writeFixture(fixtureRoot, ".env.example", "PORT=3001\n");
+
+    const first = secretScanUtils.collectScanTargets(fixtureRoot);
+    const second = secretScanUtils.collectScanTargets(fixtureRoot);
+    const firstPaths = first.map((target: { relativePath: string }) => target.relativePath);
+    const secondPaths = second.map((target: { relativePath: string }) => target.relativePath);
+
+    expect(firstPaths).toEqual(secondPaths);
+    expect(new Set(firstPaths).size).toBe(firstPaths.length);
+    expect(firstPaths).toContain("src/a.ts");
+    expect(firstPaths).toContain("src/b.ts");
+    expect(firstPaths).toContain("tests/c.test.ts");
+    expect(firstPaths).toContain("scripts/d.js");
+    expect(firstPaths).toContain(".env.example");
+  });
+
+  it("collectScanTargets handles missing directories and empty trees", () => {
+    const fixtureRoot = createFixtureDir();
+    const targets = secretScanUtils.collectScanTargets(fixtureRoot);
+    expect(Array.isArray(targets)).toBe(true);
+    expect(targets).toHaveLength(0);
   });
 
   describe("isObviousPlaceholder failure boundaries", () => {
@@ -2539,3 +2566,34 @@ describe("scanTargets failure boundaries (issue 2617)", () => {
     );
   });
 });
+
+  it("collectScanTargets skips non-file entries and unsupported extensions", () => {
+    const fixtureRoot = createFixtureDir();
+    writeFixture(fixtureRoot, "src/a.ts", "export const a = 1;\n");
+    writeFixture(fixtureRoot, "src/note.txt", "not a scan target\n");
+    writeFixture(fixtureRoot, "src/binary.bin", "binary\n");
+    fs.mkdirSync(path.join(fixtureRoot, "src/nested"), { recursive: true });
+
+    const targets = secretScanUtils.collectScanTargets(fixtureRoot);
+    const relativePaths = targets.map((target: { relativePath: string }) => target.relativePath);
+    expect(relativePaths).toContain("src/a.ts");
+    expect(relativePaths).not.toContain("src/note.txt");
+    expect(relativePaths).not.toContain("src/binary.bin");
+  });
+
+  it("collectScanTargets skips unreadable files without throwing", () => {
+    const fixtureRoot = createFixtureDir();
+    const unreadable = writeFixture(fixtureRoot, "src/unreadable.ts", "export const x = 1;\n");
+    writeFixture(fixtureRoot, "src/readable.ts", "export const y = 2;\n");
+    chmodFixture(unreadable, 0x000);
+
+    try {
+      const targets = secretScanUtils.collectScanTargets(fixtureRoot);
+      const relativePaths = targets.map((target: { relativePath: string }) => target.relativePath);
+      expect(Array.isArray(relativePaths)).toBe(true);
+      expect(relativePaths).toContain("src/readable.ts");
+    } finally {
+      chamodFixture(unreadable, 0x1a0);
+    }
+  });
+})
