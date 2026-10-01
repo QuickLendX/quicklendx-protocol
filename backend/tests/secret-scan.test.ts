@@ -884,6 +884,162 @@ describe("isAllowlisted failure boundaries (issue 2610)", () => {
     expect(typeof result).toBe("boolean");
     expect(String(result)).not.toContain(secret);
   });
+
+  describe("isStellarStrKeyLike failure-boundary and determinism coverage", () => {
+    const validGKey = "GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B";
+    const validXKey = `X${"A".repeat(55)}`;
+    const validBoundaryKeys = [
+      `G${"2".repeat(55)}`,
+      `G${"7".repeat(55)}`,
+      `G${"A".repeat(55)}`,
+      `G${"Z".repeat(55)}`,
+      `X${"2".repeat(55)}`,
+      `X${"7".repeat(55)}`,
+      `X${"A".repeat(55)}`,
+      `X${"Z".repeat(55)}`,
+    ];
+
+    it("accepts valid Stellar public keys and hash signers (G... and X...)", () => {
+      expect(secretScanUtils.isStellarStrKeyLike(validGKey)).toBe(true);
+      expect(secretScanUtils.isStellarStrKeyLike(validXKey)).toBe(true);
+      for (const key of validBoundaryKeys) {
+        expect(secretScanUtils.isStellarStrKeyLike(key)).toBe(true);
+      }
+    });
+
+    it("rejects Stellar secret seeds (S...) to enforce security invariants", () => {
+      const secretSeed = makeStellarSecretSeed();
+      const seedAllB = `S${"B".repeat(55)}`;
+      expect(secretScanUtils.isStellarStrKeyLike(secretSeed)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(seedAllB)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(makeStellarSecretSeed())).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`S${"A".repeat(55)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`S${"7".repeat(55)}`)).toBe(false);
+    });
+
+    it("rejects other disallowed prefix characters", () => {
+      const disallowedPrefixes = "ABCDEFHIJKLMNOPQRTUVWYZ";
+      for (const prefix of disallowedPrefixes) {
+        expect(secretScanUtils.isStellarStrKeyLike(`${prefix}${"A".repeat(55)}`)).toBe(false);
+      }
+    });
+
+    it("rejects lowercase prefixes and lowercase base32 characters", () => {
+      expect(secretScanUtils.isStellarStrKeyLike(`g${"A".repeat(55)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`x${"A".repeat(55)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(validGKey.toLowerCase())).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"a".repeat(55)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(54)}b`)).toBe(false);
+    });
+
+    it("rejects non-base32 characters (0, 1, 8, 9) and special characters", () => {
+      for (const invalidChar of ["0", "1", "8", "9"]) {
+        expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(54)}${invalidChar}`)).toBe(false);
+        expect(secretScanUtils.isStellarStrKeyLike(`X${invalidChar}${"A".repeat(54)}`)).toBe(false);
+      }
+
+      const symbols = [" ", "\t", "\n", "\r", "\0", "-", "_", "/", "+", "=", "@", "!", "$", ".", ":"];
+      for (const sym of symbols) {
+        expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(54)}${sym}`)).toBe(false);
+        expect(secretScanUtils.isStellarStrKeyLike(`${sym}G${"A".repeat(54)}`)).toBe(false);
+      }
+    });
+
+    it("enforces strict 56-character length boundary", () => {
+      expect(secretScanUtils.isStellarStrKeyLike("")).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike("G")).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike("X")).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(53)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(54)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(55)}`)).toBe(true);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(56)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(100)}`)).toBe(false);
+      expect(secretScanUtils.isStellarStrKeyLike(`G${"A".repeat(1000)}`)).toBe(false);
+    });
+
+    it("safely handles non-string inputs and failure-boundary types without throwing", () => {
+      const nonStringInputs = [
+        null,
+        undefined,
+        42,
+        0,
+        -1,
+        NaN,
+        Infinity,
+        -Infinity,
+        true,
+        false,
+        BigInt(123456789),
+        Symbol("GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B"),
+        Symbol.for("stellar"),
+        {},
+        { validGKey },
+        { toString: () => validGKey },
+        { toString() { throw new Error("poisoned toString"); } },
+        { valueOf() { throw new Error("poisoned valueOf"); } },
+        Object.create(null),
+        [validGKey],
+        [],
+        () => validGKey,
+        Buffer.from(validGKey),
+      ];
+
+      for (const input of nonStringInputs) {
+        expect(() => {
+          const result = secretScanUtils.isStellarStrKeyLike(input);
+          expect(result).toBe(false);
+        }).not.toThrow();
+      }
+    });
+
+    it("is strictly deterministic and idempotent across repeated, alternating, and concurrent calls", async () => {
+      const testCases = [
+        { input: validGKey, expected: true },
+        { input: validXKey, expected: true },
+        { input: `S${"A".repeat(55)}`, expected: false },
+        { input: null, expected: false },
+        { input: undefined, expected: false },
+        { input: "", expected: false },
+        { input: `G${"A".repeat(54)}0`, expected: false },
+        { input: Symbol("boundary"), expected: false },
+        { input: `G${"A".repeat(56)}`, expected: false },
+      ];
+
+      for (let i = 0; i < 100; i++) {
+        for (const { input, expected } of testCases) {
+          expect(secretScanUtils.isStellarStrKeyLike(input)).toBe(expected);
+        }
+      }
+
+      const concurrentRuns = Array.from({ length: 200 }, (_, index) => {
+        const item = testCases[index % testCases.length];
+        return Promise.resolve().then(() => {
+          const result = secretScanUtils.isStellarStrKeyLike(item.input);
+          return { result, expected: item.expected };
+        });
+      });
+
+      const results = await Promise.all(concurrentRuns);
+      for (const { result, expected } of results) {
+        expect(result).toBe(expected);
+      }
+    });
+
+    it("preserves secret detection invariants when integrated with scanner", () => {
+      expect(secretScanUtils.isHighEntropyToken(validGKey)).toBe(false);
+
+      const plantedSecretSeed = makeStellarSecretSeed();
+      const findings = secretScanUtils.scanLine(
+        `const secret = "${plantedSecretSeed}";`,
+        1,
+        "src/wallet.ts",
+        { entries: [], globalPatterns: [] }
+      );
+      expect(findings).toHaveLength(1);
+      expect(findings[0].type).toBe("stellar-secret-seed");
+      expect(secretScanUtils.isStellarStrKeyLike(plantedSecretSeed)).toBe(false);
+    });
+  });
 });
 
 describe("scanTargets failure boundaries (issue 2617)", () => {
