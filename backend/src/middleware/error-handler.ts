@@ -47,6 +47,11 @@ export const errorHandler = (
   res: Response,
   next: NextFunction
 ) => {
+  if (res.headersSent) {
+    next(err);
+    return;
+  }
+
   const status = err.status || 500;
   const message = err.message || "Internal Server Error";
   const code = err.code || "INTERNAL_ERROR";

@@ -1,7 +1,9 @@
 {
-  "name": "backend",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "quicklendx-backend",
+  "version": "0.1.0",
+  "description": "QuickLendX backend API controllers (TypeScript).",
+  "private": true,
+  "type": "module",
   "scripts": {
     "seed": "ts-node seed.ts",
     "test:seeds": "jest seeds.test.ts",
@@ -33,32 +35,16 @@
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
     "helmet": "^8.1.0",
-    "nodemailer": "^9.0.1",
+    "nodemailer": "^10.0.12",
     "pg": "^8.21.0",
     "rate-limiter-flexible": "^11.0.1",
     "ulid": "^3.0.2",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@jest/expect": "^30.4.1",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.6",
-    "@types/helmet": "^0.0.48",
-    "@types/jest": "^29.5.14",
-    "@types/js-yaml": "^4.0.9",
-    "@types/node": "^25.6.0",
-    "@types/pg": "^8.10.9",
-    "@types/supertest": "^7.2.0",
-    "fast-check": "^4.8.0",
-    "jest": "^30.4.2",
-    "js-yaml": "^4.1.1",
-    "node-mocks-http": "^1.17.2",
-    "supertest": "^7.2.2",
-    "ts-jest": "^29.4.11",
-    "ts-node": "^10.9.2",
-    "ts-node-dev": "^2.0.0",
-    "typescript": "^6.0.3",
-    "yargs": "^18.0.0"
+    "@types/node": "^20.19.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
   }
 }
