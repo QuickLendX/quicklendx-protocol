@@ -1,8 +1,7 @@
-﻿// Updated implementation with deterministic failureâ€‘boundary handling for prepared statements.
+// Updated implementation with deterministic failure₭boundary handling for prepared statements.
 
 import Database from 'better-sqlite3';
 import * as self from './database';
-
 
 // ----- Type Declarations -----
 const DatabaseConstructor = Database as any;
@@ -244,7 +243,6 @@ function classifyError(err: unknown): DatabaseErrorCode {
 }
 
 
-
 /**
  * Metrics for deterministic observability.
  *
@@ -258,66 +256,7 @@ let cacheMisses = 0;
 let cacheEvicts = 0;
 
 /**
- * Database ping metrics and state tracking.
- */
-let pingSuccessCount = 0;
-let pingFailureCount = 0;
-let pingRetryCount = 0;
-let pingTotalLatencyMs = 0;
-let lastPingState: DatabasePingState = 'unknown';
-let lastPingTimestamp = 0;
-
-/**
- * Metrics by error type for detailed observability.
- */
-const pingErrorCounts: Record<string, number> = {
-  'PING_TIMEOUT': 0,
-  'PING_CONNECTION_FAILED': 0,
-  'PING_PERMISSION_DENIED': 0,
-  'PING_BUSY': 0,
-  'PING_CORRUPTION': 0,
-};
-
-/**
- * Default configuration for database ping behavior.
- */
-const DEFAULT_PING_CONFIG: DatabasePingConfig = {
-  timeoutMs: 5000,
-  maxRetries: 3,
-  baseRetryDelayMs: 100,
-  pingQuery: 'SELECT 1 AS health_check',
-  enableMetrics: true,
-};
-
-/**
- * Optional metrics callback for external metrics systems.
- * Set this to integrate with your preferred metrics collection system.
- */
-let metricsCallback: ((eventType: string, value: number, labels?: Record<string, string>) => void) | null = null;
-
-/**
- * Set external metrics callback for integration with monitoring systems.
- */
-export function setPingMetricsCallback(callback: (eventType: string, value: number, labels?: Record<string, string>) => void): void {
-  metricsCallback = callback;
-}
-
-/**
- * Record a metric event, both internally and via external callback if set.
- */
-function recordMetric(eventType: string, value: number, labels?: Record<string, string>): void {
-  if (metricsCallback) {
-    try {
-      metricsCallback(eventType, value, labels);
-    } catch (error) {
-      // Don't let metrics collection failures affect database operations
-      console.warn('Database ping metrics callback failed:', error);
-    }
-  }
-}
-
-/**
- * Get a singleton instance of the better‑sqlite3 database with sensible pragmas.
+ * Get a singleton instance of the better–sqlite3 database with sensible pragmas.
  */
 export function getDatabase() {
   if (!dbInstance) {
@@ -397,13 +336,13 @@ export function getDatabase() {
  * 1. Cacheâ€‘hit returns the prepared statement after a cheap validation step.
  *    If validation fails due to a stale schema (`SQLITE_SCHEMA`) the entry is evicted
  *    and a fresh preparation is performed.
- * 2. Cacheâ€‘miss triggers a guarded preparation sequence:
+ * 2. Cache–miss triggers a guarded preparation sequence:
  *    - Concurrency guard ensures only one preparation per SQL string.
  *    - Retry loop (max 3 attempts) handles transient `SQLITE_BUSY` errors.
  *    - Permission checks surface a `DatabasePermissionError` without caching.
  *    - Any other preparation error surfaces a `DatabasePrepareError`.
  *
- * The public signature is unchanged â€“ callers receive the prepared statement or
+ * The public signature is unchanged – namely callers receive the prepared statement or
  * a thrown error they can handle deterministically.
  */
 let customGetDatabase: (() => any) | null = null;
@@ -442,7 +381,7 @@ export function getPreparedStatement(sql: string): any {
     try {
       const db = exports.getDatabase();
       const stmt = db.prepare(sql);
-      // Permission guard â€“ attempt a harmless execution to surface readâ€‘only errors.
+      // Permission guard – attempt a harmless execution to surface read–only errors.
       try {
         if (stmt.reader) {
           stmt.get();

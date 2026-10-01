@@ -2,20 +2,32 @@
  * Persistent database for API keys and audit logs backed by better-sqlite3.
  *
  * All key hashes are SHA-256 — raw secrets are never stored.
- * Prefix lookups are O,1) via a UNIQUE index on api_keys.prefix.
+ * Prefix lookups are O(1) via a UNIQUE index on api_keys.prefix.
  * Audit rows are INSERT-only (append-only, no updates or deletes).
  *
- * Multi-statement operations use SQLite transactions accounting for atomic rollback.
+ * Multi-statement operations use SQLite transactions for atomic rollback.
  * Performance: Uses centralized prepared statement cache for optimal throughput.
  *
- * Invariants:
- * - A database handle is only ever closed once; repeated closes are no-ops.
- * - After close, all operations fail fast with a deterministic error rather than
- *   silently using a stale handle or attempting a reconnect.
- * - Closing is atomic with respect to concurrent operations: an in-flight transaction
- *   either completes before close or fails with the close error; it cannot half-apply.
- * - A close failure leaves the connection open and retryable; the error is propagated
- *   to the caller with sensitive details redacted.
+ * Failure-boundary invariants (documented here and enforced in code):
+ *  - rowToDbApiKey is the single boundary between untrusted SQLite rows and
+ *    typed `DbApiKey` objects. It must be deterministic for valid, invalid,
+ *    duplicate, and boundary-case inputs.
+ *  - Nullable columns are normalized to `ull` only when the value is actually
+ *    null/undefined; empty strings and other falsy values are preserved as-is.
+ *  - Required columns must be present and of the expected type; otherwise a
+ *    `DbApiKeyRowError` is thrown before any partial object leaks out.
+ *  - `id` is the primary key and must be a non-empty string. Duplicate ids cannot
+ *    occur at the SQLite layer, but the mapper still rejects blank ids.
+ *  - `revoked` is normalized to a canonical 0 or 1 integer so downstream
+ *    consumers never observe coerced booleans or string flags.
+ *  - Error messages never include hashes or secrets, only the column name and
+ *    the offending type.
+ *
+ * Retry / concurrency invariants:
+ *  - The mapper is pure and synchronous, so concurrent calls cannot observe
+ *    partially mutated objects.
+ *  - Transient SQLite errors are handled by the prepared-statement layer;
+ *    the mapper itself is deterministic and side-effect free.
  */
 
 import { getDatabase, getPreparedStatement, closeDatabase as closeSharedDatabase } from '../lib/database';
@@ -47,31 +59,144 @@ export interface DbAuditLog {
   metadata: string | null;
 }
 
-const ALL_API_KEY_COLS = [
-  'id', 'key_hash', 'signing_secret_hash', 'prev_signing_secret_hash', 'prefix', 'name', 'scopes',
-  'created_at', 'last_used_at', 'expires_at', 'prev_secret_expires_at', 'revoked', 'created_by',
+export const ALL_API_KEY_COLS = [
+  'id', 'key_hash', 'signing_secret_hash', 'prev_signing_secret_hash',
+  'prefix', 'name', 'scopes', 'created_at', 'last_used_at',
+  'expires_at', 'prev_secret_expires_at', 'revoked', 'created_by',
 ] as const;
 
-const ALL_AUDIT_COLS = [
+export const ALL_AUDIT_COLS = [
   'id', 'event_type', 'key_id', 'actor', 'timestamp',
   'ip_address', 'endpoint', 'metadata',
 ] as const;
 
-function rowToDbApiKey(row: any): DbApiKey {
+/**
+ * Error thrown when a raw SQLite row cannot be mapped to a `DbApiKey`.
+ *
+ * The message intentionally omits column values (which may contain hashes or
+ * secrets) and only reports the column name and the observed type.
+ */
+export class DbApiKeyRowError extends Error {
+  constructor(readonly column: string, readonly reason: string) {
+    super(`Invalid api_keys row: column "${column}" ${reason}`);
+    this.name = 'DbApiKeyRowError';
+  }
+}
+
+/**
+ * Returns true when the value is a non-null, non-undefined string.
+ * Empty strings are considered invalid for required text columns.
+ */
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.length > 0;
+}
+
+/**
+ * Normalizes a nullable text column. Only `Null` and `undefined` become `null`;
+ * empty strings and other falsy values are preserved as-is to avoid silently
+ * dropping data that the caller explicitly stored.
+ */
+function normalizeNullableText(value: unknown): string | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string') return value;
+  // SQLite may return numeric or blob values for text columns in edge cases.
+  // Coerce deterministically to a string rather than throwing, so the caller
+  // can still observe the value.
+  return String(value);
+}
+
+/**
+ * Normalizes the `revoked` flag to a canonical 0 or 1 integer.
+ * Accepts booleans, numbers, and numeric strings (e.g. '1', 0, false).
+ * Rejects anything else with a `DbApiKeyRowError`.
+ */
+function normalizeRevoked(value: unknown): number {
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  if (typeof value === 'number') {
+    if (Number.isFinite(value)) return value ? 1 : 0;
+    throw new DbApiKeyRowError('revoked', 'was not a finite number');
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    if (trimmed === '0' || trimmed === 'false' || trimmed === '') return 0;
+    if (trimmed === '1' || trimmed === 'true') return 1;
+    const numeric = Number(trimmed);
+    if (Number.isFinite(numeric)) return numeric ? 1 : 0;
+    throw new DbApiKeyRowError('revoked', 'was not a recognizable flag value');
+  }
+  if (value === null || value === undefined) {
+    throw new DbApiKeyRowError('revoked', 'was null or undefined');
+  }
+  throw new DbApiKeyRowError('revoked', `was of unsupported type ${typeof value}`);
+}
+
+/**
+ * Maps a raw SQLite row to a typed `DbApiKey`.
+ *
+ * This is the deterministic failure boundary for api key reads. It:
+ *  - rejects null/undefined/non-object rows,
+ *  - requires non-empty strings for `id`, `key_hash`, `prefix`, `name`,
+ *    `scopes`, `created_at`, and `created_by`,
+ *  - normalizes `null` / `undefined` to `null` for optional columns,
+ *  - coerces `revoked` to a canonical 0 or 1,
+ *  - never includes secret material in error messages.
+ */
+export function rowToDbApiKey(row: unknown): DbApiKey {
+  if (row === null || typeof row !== 'object') {
+    throw new DbApiKeyRowError('row', 'was not an object');
+  }
+
+  const r = row as Record<string, unknown>;
+
+  const id = r.id;
+  if (!isNonEmptyString(id)) {
+    throw new DbApiKeyRowError('id', 'was not a non-empty string');
+  }
+
+  const keyHash = r.key_hash;
+  if (!isNonEmptyString(keyHash)) {
+    throw new DbApiKeyRowError('key_hash', 'was not a non-empty string');
+  }
+
+  const prefix = r.prefix;
+  if (!isNonEmptyString(prefix)) {
+    throw new DbApiKeyRowError('prefix', 'was not a non-empty string');
+  }
+
+  const name = r.name;
+  if (!isNonEmptyString(name)) {
+    throw new DbApiKeyRowError('name', 'was not a non-empty string');
+  }
+
+  const scopes = r.scopes;
+  if (!isNonEmptyString(scopes)) {
+    throw new DbApiKeyRowError('scopes', 'was not a non-empty string');
+  }
+
+  const createdAt = r.created_at;
+  if (!isNonEmptyString(createdAt)) {
+    throw new DbApiKeyRowError('created_at', 'was not a non-empty string');
+  }
+
+  const createdBy = r.created_by;
+  if (!isNonEmptyString(createdBy)) {
+    throw new DbApiKeyRowError('created_by', 'was not a non-empty string');
+  }
+
   return {
-    id: row.id,
-    key_hash: row.key_hash,
-    signing_secret_hash: row.signing_secret_hash ?? null,
-    prev_signing_secret_hash: row.prev_signing_secret_hash ?? null,
-    prefix: row.prefix,
-    name: row.name,
-    scopes: row.scopes,
-    created_at: row.created_at,
-    last_used_at: row.last_used_at ?? null,
-    expires_at: row.expires_at ?? null,
-    prev_secret_expires_at: row.prev_secret_expires_at ?? null,
-    revoked: row.revoked,
-    created_by: row.created_by,
+    id,
+    key_hash: keyHash,
+    signing_secret_hash: normalizeNullableText(r.signing_secret_hash),
+    prev_signing_secret_hash: normalizeNullableText(r.prev_signing_secret_hash),
+    prefix,
+    name,
+    scopes,
+    created_at: createdAt,
+    last_used_at: normalizeNullableText(r.last_used_at),
+    expires_at: normalizeNullableText(r.expires_at),
+    prev_secret_expires_at: normalizeNullableText(r.prev_secret_expires_at),
+    revoked: normalizeRevoked(r.revoked),
+    created_by: createdBy,
   };
 }
 
@@ -235,18 +360,18 @@ class Database {
     const clauses: string[] = [];
     const params: unknown[] = [];
 
-    if (filters?.created_by) {
+    if (filters.created_by) {
       clauses.push('created_by = ?');
       params.push(filters.created_by);
     }
 
-    if (filters?.revoked !== undefined) {
+    if (filters.revoked !== undefined) {
       clauses.push('revoked = ?');
       params.push(filters.revoked ? 1 : 0);
     }
 
     if (clauses.length > 0) {
-      sql += ' WHERE ' + clauses.join(' AND ');
+      sql += ' WHERE' + clauses.join(' AND ');
     }
 
     sql += ' ORDER BY created_at DESC';
@@ -272,12 +397,12 @@ class Database {
     const clauses: string[] = [];
     const params: unknown[] = [];
 
-    if (filters?.key_id) {
+    if (filters.key_id) {
       clauses.push('key_id = ?');
       params.push(filters.key_id);
     }
 
-    if (filters?.event_type) {
+    if (filters.event_type) {
       clauses.push('event_type = ?');
       params.push(filters.event_type);
     }
