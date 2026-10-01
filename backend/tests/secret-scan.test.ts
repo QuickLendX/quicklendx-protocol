@@ -685,7 +685,114 @@ describe("hasMixedCharacterClasses", () => {
     expect(secretScanUtils.hasMixedCharacterClasses("ABCDEFGHIJKLMNOPQRSTUVWXYZ")).toBe(false);
     expect(secretScanUtils.hasMixedCharacterClasses("01234567890123456789")).toBe(false);
   });
-});
+
+
+describe("isHighEntropyToken failure boundaries", () => {
+  const makeEntropyToken = (value) => secretScanUtils.isHighEntropyToken(value);
+
+  it("respects length boundary: below, at, and above the minimum", () => {
+    expect(makeEntropyToken("a".repeat(31))).toBe(false);
+    expect(makeEntropyToken("a".repeat(32))).toBe(false);
+    expect(makeEntropyToken("a".repeat(33))).toBe(false);
+  });
+
+  it("requires minimum unique characters: below, at, and above the threshold", () => {
+    const thirtyTwoLowUnique = "abcdefghij".repeat(3);
+    const thirtyTwoMedUnique = "abcdefghijklmnopqrst".repeat(2);
+    const thirtyTwoHighUnique = "abcdefghijklmnopqrstuvwxyz012345";
+
+    expect(new Set(thirtyTwoLowUnique).size).toBe(10);
+    expect(new Set(thirtyTwoMedUnique).size).toBeGreaterThan(10);
+    expect(new Set(thirtyTwoHighUnique).size).toBeGreaterThan(10);
+
+    expect(makeEntropyToken(thirtyTwoLowUnique)).toBe(false);
+    expect(makeEntropyToken(thirtyTwoMedUnique)).toBe(false);
+    // thirtyTwoHighUnique has 32 unique chars, mixed classes, and high entropy - should pass
+    expect(makeEntropyToken(thirtyTwoHighUnique)).toBe(true);
+  });
+
+  it("enforces mixed character classes: single class vs two+ classes", () => {
+    // Only one character class - should fail
+    const onlyLower = "abcdefghijklmnopqrstuvwxyz".repeat(2);
+    const onlyUpper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".repeat(2);
+    const onlyDigits = "0123456789".repeat(4);
+    // Two character classes but insufficient entropy - should fail
+    const lowerOnlyWithDigits = "abcdefghij0123456789".repeat(2);
+    // Two character classes with sufficient entropy - should pass
+    const lowerPlusUpper = "aB1cD2eF3gH4iJ5kL6mN7oP8qR9sT0uV";
+
+    expect(makeEntropyToken(onlyLower)).toBe(false);
+    expect(makeEntropyToken(onlyUpper)).toBe(false);
+    expect(makeEntropyToken(onlyDigits)).toBe(false);
+    expect(makeEntropyToken(lowerOnlyWithDigits)).toBe(false);
+    expect(makeEntropyToken(lowerPlusUpper)).toBe(true);
+  });
+
+  it("meets shannon entropy threshold: below, at, and above 4.5", () => {
+    const lowEntropy = "a".repeat(128);
+    const mediumEntropy = "xY1zA2bC3dE4fG5hI6jK7lM8nO9pQ0rS";
+    const highEntropy = "aB1cD2eF3gH4iJ5kL6mN7oP8qR9sT0uV1";
+
+    expect(makeEntropyToken(lowEntropy)).toBe(false);
+    expect(makeEntropyToken(mediumEntropy)).toBe(true);
+    expect(makeEntropyToken(highEntropy)).toBe(true);
+  });
+
+  it("excludes hex strings deterministically", () => {
+    expect(makeEntropyToken("0x1234567890abcdef0123456789abcdef".repeat(1))).toBe(false);
+    expect(makeEntropyToken("0xabcdef01234567890123456789abcdef".repeat(1))).toBe(false);
+  });
+
+  it("excludes stellar secret seed keys (G/X prefix format)", () => {
+    expect(makeEntropyToken("G" + "A".repeat(55))).toBe(false);
+    expect(makeEntropyToken("X" + "A".repeat(55))).toBe(false);
+  });
+
+  it("excludes obvious placeholders", () => {
+    expect(makeEntropyToken("development-only-export-secret-32-chars")).toBe(false);
+    expect(makeEntropyToken("your-api-key-here")).toBe(false);
+    expect(makeEntropyToken("example-secret-value")).toBe(false);
+    expect(makeEntropyToken("changeme-in-prod")).toBe(false);
+    expect(makeEntropyToken("test_secret_value")).toBe(false);
+  });
+
+  it("is deterministic across repeated calls with identical inputs", () => {
+    const testCases = [
+      "xY1zA2bC3dE4fG5hI6jK7lM8nO9pQ0rS",
+      "a".repeat(128),
+      "0x1234567890abcdef0123456789abcdef",
+      "development-only-export-secret-32-chars",
+    ];
+
+    for (const input of testCases) {
+      const first = secretScanUtils.isHighEntropyToken(input);
+      for (let i = 0; i < 50; i++) {
+        expect(secretScanUtils.isHighEntropyToken(input)).toBe(first);
+      }
+    }
+  });
+
+  it("produces consistent results under concurrent interleaved calls", () => {
+    const inputs = [
+      "xY1zA2bC3dE4fG5hI6jK7lM8nO9pQ0rS",
+      "a".repeat(128),
+      "0x1234567890abcdef0123456789abcdef",
+      "development-only-export-secret-32-chars",
+    ];
+    const expected = inputs.map((input) => secretScanUtils.isHighEntropyToken(input));
+
+    const permutations = inputs.map((_, offset) => [
+      ...inputs.slice(offset),
+      ...inputs.slice(0, offset),
+    ]);
+    for (const orderedInputs of permutations) {
+      for (let i = 0; i < orderedInputs.length; i++) {
+        const idx = inputs.indexOf(orderedInputs[i]);
+        expect(secretScanUtils.isHighEntropyToken(orderedInputs[i])).toBe(expected[idx]);
+      }
+    }
+  });
+});});
 
 describe("isAllowlisted failure boundaries (issue 2610)", () => {
   const allowlistFor = (entries: unknown[] = [], globalPatterns: unknown[] = []) => ({
@@ -859,5 +966,76 @@ describe("backend security:scan integration", () => {
 
     expect(packageJson.scripts["security:scan"]).toContain("dependency-scan.js");
     expect(packageJson.scripts["security:scan"]).toContain("secret-scan.js");
+  })
+
+describe("main entry point failure boundaries", () => {
+  const repoRoot = path.resolve(__dirname, "..");
+  const scriptPath = path.resolve(repoRoot, "scripts/secret-scan.js");
+
+  it("passes on clean fixture trees without findings", () => {
+    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "quicklendx-test-"));
+    fs.mkdirSync(path.join(fixtureRoot, "src"), { recursive: true });
+    fs.writeFileSync(path.join(fixtureRoot, "src", "clean.ts"), 'export const message = "development-only-export-secret-32-chars";\n');
+
+    const stdout = execFileSync("node", [scriptPath], {
+      cwd: fixtureRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+
+    expect(stdout).toContain("Secret scan passed");
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  it("returns non-zero exit code when findings are present", () => {
+    const plantedHighEntropy = crypto.randomBytes(36).toString("base64url");
+    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "quicklendx-test-"));
+    fs.mkdirSync(path.join(fixtureRoot, "src"), { recursive: true });
+    fs.writeFileSync(
+      path.join(fixtureRoot, "src", "leaked.ts"),
+      `export const token = "${plantedHighEntropy}";\n`
+    );
+
+    let stderr = "";
+    let status = 0;
+    try {
+      execFileSync("node", [scriptPath], {
+        cwd: fixtureRoot,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+    } catch (error) {
+      const execError = error as { status?: number; stderr?: Buffer };
+      status = execError.status ?? 1;
+      stderr = execError.stderr?.toString() ?? "";
+    }
+
+    expect(status).toBe(1);
+    expect(stderr).toContain("src/leaked.ts:1");
+    expect(stderr).not.toContain(plantedHighEntropy);
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
+  });
+
+  it("is deterministic across repeated calls with identical fixture (passing)", () => {
+    const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), "quicklendx-test-"));
+    fs.mkdirSync(path.join(fixtureRoot, "src"), { recursive: true });
+    fs.writeFileSync(path.join(fixtureRoot, "src", "clean.ts"), 'export const message = "development-only-export-secret-32-chars";\n');
+
+    // Run 3 times and verify same result each time
+    const first = execFileSync("node", [scriptPath], {
+      cwd: fixtureRoot,
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "pipe"],
+    }).toString();
+
+    for (let i = 0; i < 2; i += 1) {
+      const second = execFileSync("node", [scriptPath], {
+        cwd: fixtureRoot,
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+      }).toString();
+      expect(second).toBe(first);
+    }
+
+    fs.rmSync(fixtureRoot, { recursive: true, force: true });
   });
 });
