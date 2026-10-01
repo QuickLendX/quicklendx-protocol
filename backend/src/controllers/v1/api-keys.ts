@@ -307,13 +307,84 @@ function validateKeyId(input: unknown, requestId: string): string {
   return trimmed;
 }
 
-/** Validate the actor identifier: a non-empty opaque string. */
-function validateActorId(input: unknown, requestId: string): string {
-  if (typeof input !== "string") {
-    throw new ApiKeyError("UNAUTHORIZED", "Actor identity is required.", {
-      action: "revokeApiKey",
-      requestId,
-      cause: { inputType: typeof input },
+/**
+ * Rotate an API key's signing secret
+ * POST /api/v1/keys/:id/rotate-signing-secret
+ */
+export async function rotateApiKeySigningSecret(req: Request, res: Response): Promise<void> {
+  try {
+    const { id } = req.params;
+
+    // Validate request body
+    const validation = rotateSigningSecretSchema.safeParse(req.body);
+    if (!validation.success) {
+      res.status(400).json({
+        error: {
+          message: 'Invalid request body',
+          code: 'VALIDATION_ERROR',
+          details: validation.error.errors,
+        },
+      });
+      return;
+    }
+
+    const { actor, grace_window_hours } = validation.data;
+    const ipAddress = (req.ip || req.socket.remoteAddress) as string | undefined;
+
+    // Failure-boundary guards
+    const existing = await apiKeyService.getApiKeyById(id);
+    if (!existing) {
+      res.status(404).json({
+        error: { message: 'API key not found', code: 'KEY_NOT_FOUND' },
+      });
+      return;
+    }
+    if (existing.revoked) {
+      res.status(403).json({
+        error: { message: 'API key is revoked', code: 'KEY_REVOKED' },
+      });
+      return;
+    }
+    if (existing.prev_secret_expires_at && new Date(existing.prev_secret_expires_at) > new Date()) {
+      res.status(409).json({
+        error: { message: 'Previous signing secret still active', code: 'GRACE_WINDOW_CONFLICT' },
+      });
+      return;
+    }
+
+    let key;
+    try {
+      key = await apiKeyService.rotateSigningSecret(id, actor, ipAddress, grace_window_hours);
+    } catch (svcErr: any) {
+      const isDbError = svcErr.message?.toLowerCase().includes('db') || svcErr.message?.toLowerCase().includes('database') || svcErr.message?.toLowerCase().includes('constraint');
+      const status = isDbError ? 500 : 400;
+      const code = isDbError ? 'ROTATE_SECRET_DB_ERROR' : 'ROTATE_SECRET_ERROR';
+      res.status(status).json({
+        error: { message: svcErr.message || 'Failed to rotate API key signing secret', code },
+      });
+      return;
+    }
+
+    res.json({
+      data: {
+        id: key.id,
+        name: key.name,
+        prefix: key.prefix,
+        scopes: key.scopes,
+        created_at: key.created_at,
+        expires_at: key.expires_at,
+        prev_secret_expires_at: key.prev_secret_expires_at,
+        key: key.plaintext_key, // Only returned once!
+        warning: 'Store this new secret securely. The old secret will expire after the grace window.',
+      },
+    });
+  } catch (error: any) {
+    console.error('[RotateApiKeySigningSecret] Unexpected error:', error);
+    res.status(500).json({
+      error: {
+        message: error.message || 'Internal server error',
+        code: 'UNEXPECTED_ERROR',
+      },
     });
   }
   const trimmed = input.trim();
