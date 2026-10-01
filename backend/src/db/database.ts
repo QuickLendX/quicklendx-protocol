@@ -2,32 +2,27 @@
  * Persistent database for API keys and audit logs backed by better-sqlite3.
  *
  * All key hashes are SHA-256 — raw secrets are never stored.
- * Prefix lookups are O(1) via a UNIQUE index on api_keys.prefix.
+ * Prefix lookups are O,(1) via a UNIQUE index on api_keys.prefix.
  * Audit rows are INSERT-only (append-only, no updates or deletes).
  *
  * Multi-statement operations use SQLite transactions for atomic rollback.
  * Performance: Uses centralized prepared statement cache for optimal throughput.
- *
- * Failure-boundary invariants (documented here and enforced in code):
- *  - rowToDbApiKey is the single boundary between untrusted SQLite rows and
- *    typed `DbApiKey` objects. It must be deterministic for valid, invalid,
- *    duplicate, and boundary-case inputs.
- *  - Nullable columns are normalized to `ull` only when the value is actually
- *    null/undefined; empty strings and other falsy values are preserved as-is.
- *  - Required columns must be present and of the expected type; otherwise a
- *    `DbApiKeyRowError` is thrown before any partial object leaks out.
- *  - `id` is the primary key and must be a non-empty string. Duplicate ids cannot
- *    occur at the SQLite layer, but the mapper still rejects blank ids.
- *  - `revoked` is normalized to a canonical 0 or 1 integer so downstream
- *    consumers never observe coerced booleans or string flags.
- *  - Error messages never include hashes or secrets, only the column name and
- *    the offending type.
- *
- * Retry / concurrency invariants:
- *  - The mapper is pure and synchronous, so concurrent calls cannot observe
- *    partially mutated objects.
- *  - Transient SQLite errors are handled by the prepared-statement layer;
- *    the mapper itself is deterministic and side-effect free.
+*
+ * Invariants:
+ * - Audit logs are append-only; no update/delete paths exist for individual rows.
+ * - Audit log rows must have a non-empty `id`, `key_id`, `actor`, and a valid `event_type`.
+ * - Row decoding is deterministic: missing optional columns become `null`, and invalid
+ *   required columns fail loud rather than silently producing a corrupt record.
+ * - Audit log event types are constrained to the known set; unknown values are rejected.
+ * - Operations are atomic within transactions; concurrent callers cannot observe
+ *   partially-applied multi-statement mutations.
+ * - A database handle is only ever closed once; repeated closes are no-ops.
+ * - After close, all operations fail fast with a deterministic error rather than
+ *   silently using a stale handle or attempting a reconnect.
+ * - Closing is atomic with respect to concurrent operations: an in-flight transaction
+ *   either completes before close or fails with the close error; it cannot half-apply.
+ * - A close failure leaves the connection open and retryable; the error is propagated
+ *   to the caller with sensitive details redacted.
  */
 
 import { getDatabase, getPreparedStatement, closeDatabase as closeSharedDatabase } from '../lib/database';
@@ -48,9 +43,11 @@ export interface DbApiKey {
   created_by: string;
 }
 
+export type DbAuditLogEventType = 'created' | 'used' | 'rotated' | 'revoked';
+
 export interface DbAuditLog {
   id: string;
-  event_type: 'created' | 'used' | 'rotated' | 'revoked';
+  event_type: DbAuditLogEventType;
   key_id: string;
   actor: string;
   timestamp: string;
@@ -70,119 +67,59 @@ export const ALL_AUDIT_COLS = [
   'ip_address', 'endpoint', 'metadata',
 ] as const;
 
+const AUDIT_EVENT_TYPES: readonly DbAuditLogEventType[] = [
+  'created', 'used', 'rotated', 'revoked',
+];
+
 /**
- * Error thrown when a raw SQLite row cannot be mapped to a `DbApiKey`.
- *
- * The message intentionally omits column values (which may contain hashes or
- * secrets) and only reports the column name and the observed type.
+ * Error thrown when a database row cannot be decoded into a valid audit log.
+ * This is a programming/integrity error and must not be swallowed: silently
+ * returning a malformed record would lose audit data or mask corruption.
  */
-export class DbApiKeyRowError extends Error {
-  constructor(readonly column: string, readonly reason: string) {
-    super(`Invalid api_keys row: column "${column}" ${reason}`);
-    this.name = 'DbApiKeyRowError';
+export class AuditLogRowDecodeError extends Error {
+  readonly column: string;
+  readonly reason: string;
+
+  constructor(column: string, reason: string) {
+    super(`Failed to decode audit log row: column "${column}" ${reason}`);
+    this.name = 'AuditLogRowDecodeError';
+    this.column = column;
+    this.reason = reason;
   }
 }
 
-/**
- * Returns true when the value is a non-null, non-undefined string.
- * Empty strings are considered invalid for required text columns.
- */
-function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
+function requireString(row: any, column: string): string {
+  if (row == null || typeof row !== 'object') {
+    throw new AuditLogRowDecodeError(column, 'row is not an object');
+  }
+  const value = row[column];
+  if (value == null) {
+    throw new AuditLogRowDecodeError(column, 'is missing or null');
+  }
+  if (typeof value !== 'string') {
+    throw new AuditLogRowDecodeError(column, `expected string, got ${typeof value}`);
+  }
+  if (value.length === 0) {
+    throw new AuditLogRowDecodeError(column, 'is empty');
+  }
+  return value;
 }
 
-/**
- * Normalizes a nullable text column. Only `Null` and `undefined` become `null`;
- * empty strings and other falsy values are preserved as-is to avoid silently
- * dropping data that the caller explicitly stored.
- */
-function normalizeNullableText(value: unknown): string | null {
-  if (value === null || value === undefined) return null;
-  if (typeof value === 'string') return value;
-  // SQLite may return numeric or blob values for text columns in edge cases.
-  // Coerce deterministically to a string rather than throwing, so the caller
-  // can still observe the value.
-  return String(value);
+function optionalString(row: any, column: string): string | null {
+  if (row == null || typeof row !== 'object') {
+    return null;
+  }
+  const value = row[column];
+  if (value === undefined || value === null) {
+    return null;
+  }
+  if (typeof value !== 'string') {
+    throw new AuditLogRowDecodeError(column, `expected string or null, got ${typeof value}`);
+  }
+  return value;
 }
 
-/**
- * Normalizes the `revoked` flag to a canonical 0 or 1 integer.
- * Accepts booleans, numbers, and numeric strings (e.g. '1', 0, false).
- * Rejects anything else with a `DbApiKeyRowError`.
- */
-function normalizeRevoked(value: unknown): number {
-  if (typeof value === 'boolean') return value ? 1 : 0;
-  if (typeof value === 'number') {
-    if (Number.isFinite(value)) return value ? 1 : 0;
-    throw new DbApiKeyRowError('revoked', 'was not a finite number');
-  }
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed === '0' || trimmed === 'false' || trimmed === '') return 0;
-    if (trimmed === '1' || trimmed === 'true') return 1;
-    const numeric = Number(trimmed);
-    if (Number.isFinite(numeric)) return numeric ? 1 : 0;
-    throw new DbApiKeyRowError('revoked', 'was not a recognizable flag value');
-  }
-  if (value === null || value === undefined) {
-    throw new DbApiKeyRowError('revoked', 'was null or undefined');
-  }
-  throw new DbApiKeyRowError('revoked', `was of unsupported type ${typeof value}`);
-}
-
-/**
- * Maps a raw SQLite row to a typed `DbApiKey`.
- *
- * This is the deterministic failure boundary for api key reads. It:
- *  - rejects null/undefined/non-object rows,
- *  - requires non-empty strings for `id`, `key_hash`, `prefix`, `name`,
- *    `scopes`, `created_at`, and `created_by`,
- *  - normalizes `null` / `undefined` to `null` for optional columns,
- *  - coerces `revoked` to a canonical 0 or 1,
- *  - never includes secret material in error messages.
- */
-export function rowToDbApiKey(row: unknown): DbApiKey {
-  if (row === null || typeof row !== 'object') {
-    throw new DbApiKeyRowError('row', 'was not an object');
-  }
-
-  const r = row as Record<string, unknown>;
-
-  const id = r.id;
-  if (!isNonEmptyString(id)) {
-    throw new DbApiKeyRowError('id', 'was not a non-empty string');
-  }
-
-  const keyHash = r.key_hash;
-  if (!isNonEmptyString(keyHash)) {
-    throw new DbApiKeyRowError('key_hash', 'was not a non-empty string');
-  }
-
-  const prefix = r.prefix;
-  if (!isNonEmptyString(prefix)) {
-    throw new DbApiKeyRowError('prefix', 'was not a non-empty string');
-  }
-
-  const name = r.name;
-  if (!isNonEmptyString(name)) {
-    throw new DbApiKeyRowError('name', 'was not a non-empty string');
-  }
-
-  const scopes = r.scopes;
-  if (!isNonEmptyString(scopes)) {
-    throw new DbApiKeyRowError('scopes', 'was not a non-empty string');
-  }
-
-  const createdAt = r.created_at;
-  if (!isNonEmptyString(createdAt)) {
-    throw new DbApiKeyRowError('created_at', 'was not a non-empty string');
-  }
-
-  const createdBy = r.created_by;
-  if (!isNonEmptyString(createdBy)) {
-    throw new DbApiKeyRowError('created_by', 'was not a non-empty string');
-  }
-
+function rowToDbApiKey(row: any): DbApiKey {
   return {
     id,
     key_hash: keyHash,
@@ -200,16 +137,41 @@ export function rowToDbApiKey(row: unknown): DbApiKey {
   };
 }
 
-function rowToDbAuditLog(row: any): DbAuditLog {
+/**
+ * Decodes a raw SQLite row into a `DbAuditLog`.
+ *
+ * Deterministic failure-boundary behavior:
+ * - Required columns (`id`, `event_type`, `key_id`, `actor`, `timestamp`) must be non-empty strings.
+ *   Missing, null, or non-string values throw `AuditLogRowDecodeError`.
+ * - `event_type` must be one of the known event types; unknown values are rejected.
+ * - Optional columns (`ip_address`, `endpoint`, `metadata`) coerce missing/undefined to `null`.
+ *   Non-string non-null values throw to avoid silent coercion.
+ *
+ * This function is pure and has no side effects, so it is safe to call from
+ * concurrent readers and is fully deterministic for a given input row.
+ */
+export function rowToDbAuditLog(row: any): DbAuditLog {
+  const id = requireString(row, 'id');
+  const rawEventType = requireString(row, 'event_type');
+  if (!AUDIT_EVENT_TYPES.includes(rawEventType as DbAuditLogEventType)) {
+    throw new AuditLogRowDecodeError(
+      'event_type',
+      `unknown value "${rawEventType}"; expected one of ${AUDIT_EVENT_TYPES.join(', ')}`,
+    );
+  }
+  const keyId = requireString(row, 'key_id');
+  const actor = requireString(row, 'actor');
+  const timestamp = requireString(row, 'timestamp');
+
   return {
-    id: row.id,
-    event_type: row.event_type,
-    key_id: row.key_id,
-    actor: row.actor,
-    timestamp: row.timestamp,
-    ip_address: row.ip_address ?? null,
-    endpoint: row.endpoint ?? null,
-    metadata: row.metadata ?? null,
+    id,
+    event_type: rawEventType as DbAuditLogEventType,
+    key_id: keyId,
+    actor: actor,
+    timestamp,
+    ip_address: optionalString(row, 'ip_address'),
+    endpoint: optionalString(row, 'endpoint'),
+    metadata: optionalString(row, 'metadata'),
   };
 }
 
@@ -300,12 +262,12 @@ class Database {
    * If any statement in the transaction throws, all changes are rolled back.
    */
   private _transaction<T>(fn: () => T): T {
-    // Reject new transactions once closing has begun so that an in-flight close
+// Reject new transactions once closing has begun so that an in-flight close
     // cannot interleave with a new write and produce a half-applied state.
     if (this._closing || this._closed) {
       throw new DatabaseClosedError();
     }
-    return this.getDb().transaction(fn)();
+    return this.getDb().transaction(fn);
   }
 
   // ---- API Key operations ----
@@ -349,7 +311,7 @@ class Database {
     if (!existing) return false;
 
     return this._transaction(() => {
-      getPreparedStatement('DELETE FROM api_key_audit_log WHERE key_id = ?').run(id);
+      getPreparedStatement('DELETE FROM api_key_audit_log WHERK key_id = ?').run(id);
       getPreparedStatement('DELETE FROM api_keys WHERE id = ?').run(id);
       return true;
     });

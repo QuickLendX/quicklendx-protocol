@@ -2,7 +2,6 @@
 
 import Database from 'better-sqlite3';
 import * as self from './database';
-
 // ----- Type Declarations -----
 const DatabaseConstructor = Database as any;
 /**
@@ -242,7 +241,6 @@ function classifyError(err: unknown): DatabaseErrorCode {
   return 'OPEN_FAILED';
 }
 
-
 /**
  * Metrics for deterministic observability.
  *
@@ -342,8 +340,20 @@ export function getDatabase() {
  *    - Permission checks surface a `DatabasePermissionError` without caching.
  *    - Any other preparation error surfaces a `DatabasePrepareError`.
  *
- * The public signature is unchanged – namely callers receive the prepared statement or
- * a thrown error they can handle deterministically.
+* @param sql - The SQL query string with placeholders (?, ?, etc.)
+ * @returns The cached or newly prepared statement
+ * 1. Cache‑hit returns the prepared statement after a cheap validation step.
+ *    If validation fails due to a stale schema (`SQLITE_SCHEMA`) the entry is evicted
+ *    and a fresh preparation is performed.
+ * 2. Cache‑miss triggers a guarded preparation sequence:
+ *    - Concurrency guard ensures only one preparation per SQL string.
+ *    - Retry loop (max 3 attempts) handles transient `SQLITE_BUSY` errors.
+ *    - Permission checks surface a `DatabasePermissionError` without caching.
+ *    - Any other preparation error surfaces a `DatabasePrepareError`.
+ *
+ * @example
+ * const stmt = getPreparedStatement('SELECT * FROM invoices WHERE id = ?');
+ * const row = stmt.get(invoiceId);
  */
 let customGetDatabase: (() => any) | null = null;
 
@@ -381,10 +391,12 @@ export function getPreparedStatement(sql: string): any {
     try {
       const db = exports.getDatabase();
       const stmt = db.prepare(sql);
-      // Permission guard – attempt a harmless execution to surface read–only errors.
+// Permission guard – attempt a harmless execution to surface read‑only errors.
       try {
         if (stmt.reader) {
           stmt.get();
+        } else {
+          stmt.run();
         }
       } catch (permErr: any) {
         if (permErr.code === 'SQLITE_READONLY') {
@@ -403,7 +415,7 @@ export function getPreparedStatement(sql: string): any {
       }
       if (err.code === 'SQLITE_BUSY') {
         if (attempt < maxAttempts - 1) {
-          // simple synchronous backâ€‘off
+          // simple synchronous back‐off
           const delay = 50 * (attempt + 1);
           const start = Date.now();
           while (Date.now() - start < delay) {}
@@ -419,7 +431,6 @@ export function getPreparedStatement(sql: string): any {
   // Should never reach here.
   throw new DatabaseError('Unexpected preparation failure');
 }
-  
 
 /**
  * Clear the statement cache and metrics â€“ useful for testing or schema changes.
@@ -940,4 +951,41 @@ export function closeDatabase(): void {
     dbInstance.close();
     dbInstance = null;
   }
+// Null out the singleton before closing so that any re-entrant call to
+  // getDatabase() during close opens a fresh handle instead of returning
+  // the half-closed one. This is the key determinism guarantee.
+  dbInstance = null;
+
+  // Always clear on attempt, whether close succeeds or fails. Stale
+  // statements bound to a closed handle would throw on use.
+  statementCache.clear();
+
+  _state = 'closed';
+  _lastClosedAt = new Date().toISOString();
+
+  try {
+    instance.close();
+  } catch (err) {
+    // Re-throw after cleanup so callers can observe the failure (lost
+    // durability warning, etc.) while the module stays in a consistent
+    // state. The next getDatabase() will re-open fresh.
+    throw err;
+  }
+}
+
+/**
+ * Reset all module-level state.  **For use in tests only.**
+ *
+ * Closes the connection (if open), clears the statement cache, and resets
+ * lifecycle counters so each test starts from a clean slate without
+ * module-cache pollution.
+ */
+export function _resetDatabaseState(): void {
+  closeDatabase();
+  _state = 'uninitialized';
+  _lastOpenedAt = null;
+  _lastClosedAt = null;
+  _lastErrorAt = null;
+  _lastErrorCode = null;
+  _consecutiveFailures = 0;
 }
