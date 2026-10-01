@@ -30,7 +30,7 @@
  *    the mapper itself is deterministic and side-effect free.
  */
 
-import { getDatabase, getPreparedStatement } from '../lib/database';
+import { getDatabase, getPreparedStatement, closeDatabase as closeSharedDatabase } from '../lib/database';
 
 export interface DbApiKey {
   id: string;
@@ -213,10 +213,82 @@ function rowToDbAuditLog(row: any): DbAuditLog {
   };
 }
 
+/**
+ * Error thrown when an operation is attempted against a database that has been
+ * closed. This is deterministic and distinguishable from an underlying SQLite
+ * failure, so callers can decide whether to recreate the connection.
+ */
+export class DatabaseClosedError extends Error {
+  constructor(message = 'Database connection is closed') {
+    super(message);
+    this.name = 'DatabaseClosedError';
+  }
+}
+
+/**
+ * Error thrown when a close is attempted while another close is already in flight.
+ * This makes concurrent close calls deterministic: the first call owns the close,
+ * the rest observe a stable outcome.
+ */
+export class DatabaseCloseInProgressError extends Error {
+  constructor(message = 'Database close is already in progress') {
+    super(message);
+    this.name = 'DatabaseCloseInProgressError';
+  }
+}
+
+export interface DatabaseCloseResult {
+  /** True when this call performed the actual close. */
+  closed: boolean;
+  /** True when the database was already closed before this call. */
+  alreadyClosed: boolean;
+}
+
+export interface DatabaseCloseOptions {
+  /** Number of attempts for transient close failures. Defaults to 1. */
+  retries?: number;
+  /** Base delay in ms between retries. Defaults to 0. */
+  retryDelayMs?: number;
+  /** Optional callback invoked on each failed attempt. */
+  onFailure?: (error: unknown, attempt: number) => void;
+}
+
+/**
+ * Redacts error messages before logging/propagating them so that file paths,
+ * connection strings, or other sensitive details are not leaked to callers.
+ */
+function redactError(error: unknown): Error {
+  if (error instanceof Error) {
+    const safeMessage = error.message.replace(
+      /(\/(?:[\w/\\\\]+)|\\\\[\\w\\\\]+)/g,
+      '<path>',
+    );
+    const redacted = new Error(safeMessage);
+    redacted.name = error.name;
+    return redacted;
+  }
+  return new Error('Unknown database close failure');
+}
+
+function sleep(ms: number): void {
+  if (ms <= 0) return;
+  const end = Date.now() + ms;
+  // Busy-wait keeps the close path synchronous and deterministic for tests.
+  while (Date.now() < end) {
+    // intentionally empty
+  }
+}
+
 class Database {
   private _db: ReturnType<typeof getDatabase> | null = null;
+  private _closed = false;
+  private _closing = false;
+  private _closePromise: Promise<DatabaseCloseResult> | null = null;
 
   private getDb(): ReturnType<typeof getDatabase> {
+    if (this._closed) {
+      throw new DatabaseClosedError();
+    }
     if (!this._db) {
       this._db = getDatabase();
     }
@@ -228,6 +300,11 @@ class Database {
    * If any statement in the transaction throws, all changes are rolled back.
    */
   private _transaction<T>(fn: () => T): T {
+    // Reject new transactions once closing has begun so that an in-flight close
+    // cannot interleave with a new write and produce a half-applied state.
+    if (this._closing || this._closed) {
+      throw new DatabaseClosedError();
+    }
     return this.getDb().transaction(fn)();
   }
 
@@ -331,7 +408,7 @@ class Database {
     }
 
     if (clauses.length > 0) {
-      sql += ' WHERE' + clauses.join(' AND ');
+      sql += ' WHERE ' + clauses.join(' AND ');
     }
 
     sql += ' ORDER BY timestamp DESC';
@@ -357,7 +434,109 @@ class Database {
       auditLogs: auditCount,
     };
   }
+
+  // ---- Lifecycle ----
+
+  /** Whether this database instance has been closed. */
+  isClosed(): boolean {
+    return this._closed;
+  }
+
+  /** Whether a close is currently in flight. */
+  isClosing(): boolean {
+    return this._closing;
+  }
+
+  /**
+   * Closes the underlying database connection.
+   *
+   * Behavior:
+   * - Idempotent: calling on an already-closed database returns without touching
+   *   the connection and without throwing.
+   * - Concurrent-safe: while a close is in flight, other callers receive a
+   *   DatabaseCloseInProgressError instead of double-closing.
+   * - Retryable: if the underlying close throws, the error is propagated (redacted)
+   *   and the connection remains open so the caller can retry.
+   * - Fail-fast after: once closed, all operations throw DatabaseClosedError.
+   */
+  close(options?: DatabaseCloseOptions): DatabaseCloseResult {
+    if (this._closed) {
+      return { closed: false, alreadyClosed: true };
+    }
+
+    if (this._closing) {
+      throw new DatabaseCloseInProgressError();
+    }
+
+    const retries = Math.max(1, options?.retries ?? 1);
+    const retryDelayMs = Math.max(0, options?.retryDelayMs ?? 0);
+
+    this._closing = true;
+    try {
+      let lastError: unknown;
+      for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+          // Only close the shared connection if this instance actually opened it.
+          if (this._db) {
+            closeSharedDatabase();
+          }
+          this._db = null;
+          this._closed = true;
+          return { closed: true, alreadyClosed: false };
+        } catch (error) {
+          lastError = error;
+          options?.onFailure?.(error, attempt);
+          if (attempt < retries) {
+            sleep(retryDelayMs * attempt);
+          }
+        }
+      }
+      // All attempts failed: leave the connection open and retryable.
+      throw redactError(lastError);
+    } finally {
+      this._closing = false;
+    }
+  }
+
+  /**
+   * Async variant of close that coalesces concurrent callers onto a single
+   * underlying close operation. All callers resolve with the same result or
+   * reject with the same redacted error.
+   */
+  async closeAsync(options?: DatabaseCloseOptions): Promise<DatabaseCloseResult> {
+    if (this._closed) {
+      return { closed: false, alreadyClosed: true };
+    }
+    if (!this._closePromise) {
+      this._closePromise = Promise.resolve().then(() => this.close(options));
+    }
+    try {
+      return await this._closePromise;
+    } finally {
+      // Once the in-flight close settles, allow a future retry if it failed.
+      if (this._closed) {
+        this._closePromise = null;
+      } else {
+        this._closePromise = null;
+      }
+    }
+  }
 }
 
 // Singleton instance
 export const db = new Database();
+
+/**
+ * Convenience wrapper around the singleton's close method. This is the
+ * public entry point referenced by the issue and is deliberately thin so that
+ * the deterministic behavior lives in one place.
+ */
+export function closeDatabase(options?: DatabaseCloseOptions): DatabaseCloseResult {
+  return db.close(options);
+}
+
+export async function closeDatabaseAsync(options?: DatabaseCloseOptions): Promise<DatabaseCloseResult> {
+  return db.closeAsync(options);
+}
+
+export { Database };
