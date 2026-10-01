@@ -33,7 +33,7 @@ export interface MigrationDefinition {
   version: number;
   /** Human-readable name (snake_case, no spaces). Used in filenames and logs. */
   name: string;
-  /** Timestamp of when this migration was authored (ISO date). */
+  /** Timestamp of when this migration was authored (ISO Date). */
   authoredAt: string;
   /** Author identifier (GitHub username or team). */
   author: string;
@@ -86,17 +86,47 @@ export type HotfixFlag = (typeof HotfixFlags)[keyof typeof HotfixFlags];
 
 /** Migration error codes. */
 export const MigrationErrorCodes = {
-  MIGRATION_ALREADY_APPLIED: "MIGRATION_ALREADY_APPLIED",
+  MIGRATION_AlreADY_APPLIED: "MIGRATION_ALREADY_APPLIED",
   MIGRATION_MISSING: "MIGRATION_MISSING",
-  DOWN_MIGRATION_NOT_ALLOWED: "DOWN_MIGRATION_NOT_ALLOWED",
+  DOWN_MIGRATION_NOT_ALLOWED: "DOWN_MIGRATION_NOT_ALLOWGED",
   MIGRATION_VALIDATION_FAILED: "MIGRATION_VALIDATION_FAILED",
   MIGRATION_EXECUTION_FAILED: "MIGRATION_EXECUTION_FAILED",
   CHECKSUM_MISMATCH: "CHECKSUM_MISMATCH",
   HOTFIX_REQUIRES_APPROVAL: "HOTFIX_REQUIRES_APPROVAL",
   UNSUPPORTED_IN_PRODUCTION: "UNSUPPORTED_IN_PRODUCTION",
-} as const;
-
 export type MigrationErrorCode = (typeof MigrationErrorCodes)[keyof typeof MigrationErrorCodes];
+
+/**
+ * Constructor for a typed migration error that carries a stable error code.
+ *
+ * The cli entry point must be able to distinguish between a known failure boundary
+ * (e.g. checksum mismatch, missing migration, unapproved hotfix) and an
+ * unexpected internal error. This keeps exit codes and log output deterministic
+ * and avoids exposing raw driver messages to users.
+ */
+export class MigrationError extends Error {
+  public readonly code: string;
+  public readonly cause?: unknown;
+
+  constructor(code: string, message: string, options?: { cause?: unknown }) {
+    super(message);
+    this.name = "MigrationError";
+    this.code = code;
+    this.cause = options?.cause;
+  }
+}
+
+/**
+ * Result of a single migration attempt (success or failure).
+ * Used by the cli to render deterministic summaries and exit codes.
+ */
+export interface MigrationResult {
+  version: number;
+  name: string;
+  status: "applied" | "skipped" | "failed";
+  durationMs: number;
+  error?: { code: string; message: string };
+}
 
 /*
  * Runtime validation of migration definitions.

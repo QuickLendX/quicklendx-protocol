@@ -18,7 +18,7 @@
  */
 
 import { createHash } from "crypto";
-import { readFileSync } from "fs";
+import { readFileSync, promises as fsPromises } from "fs";
 import { join } from "path";
 import { z } from "zod";
 
@@ -51,52 +51,102 @@ let loadedPolicy: RedactionPolicy;
 let fieldTierMap: Record<string, FieldTier>;
 let policyLoadError: Error | null = null;
 
-function loadPolicy(): void {
-  const policyPath = join(__dirname, "redaction-policy.json");
-  const policyContent = readFileSync(policyPath, "utf-8");
-  const parsedPolicy = JSON.parse(policyContent);
-  loadedPolicy = RedactionPolicySchema.parse(parsedPolicy);
-  
-  // Build the field tier map
-  // A null prototype keeps unlisted names such as "constructor" and
-  // "toString" from resolving through Object.prototype.
-  fieldTierMap = Object.create(null) as Record<string, FieldTier>;
-  for (const field of loadedPolicy.public) {
-    fieldTierMap[field] = FieldTier.PUBLIC;
-  }
-  for (const field of loadedPolicy.private) {
-    fieldTierMap[field] = FieldTier.PRIVATE;
-  }
-  for (const field of loadedPolicy.secret) {
-    fieldTierMap[field] = FieldTier.SECRET;
-  }
+export const PolicyState = {
+  UNINITIALIZED: "UNINITIALIZED",
+  LOADING: "LOADING",
+  LOADED: "LOADED",
+  ERROR: "ERROR",
+  RETRYING: "RETRYING",
+  STALE: "STALE",
+  PERMISSION_DENIED: "PERMISSION_DENIED"
+} as const;
+
+export type PolicyState = (typeof PolicyState)[keyof typeof PolicyState];
+
+let currentState: PolicyState = PolicyState.UNINITIALIZED;
+let activePromise: Promise<void> | null = null;
+let retryCount = 0;
+const MAX_RETRIES = 3;
+
+export function getPolicyState(): PolicyState {
+  return currentState;
 }
 
-/**
- * Initialize policy on module load.
- *
- * Invariant: after this call, `loadedPolicy` and `fieldTierMap` are always
- * defined. If the on-disk policy cannot be read or fails schema validation,
- * we fall back to a deny-by-default empty policy (every field classifies as
- * PRIVATE) and record the failure so `getPolicyFields` can surface it
- * deterministically instead of throwing at import time.
- *
- * The fallback must reproduce the *deny-by-default* half of the policy, and it
- * may only do that if the replacement map has a null prototype for exactly the
- * reason `loadPolicy` does: a name that collides with an `Object.prototype`
- * member would otherwise resolve through the prototype chain, and
- * `isPrivate("constructor")` would answer false for a field that has to be
- * masked. The failure path is the one place where that was previously wrong,
- * which made the most sensitive boundary the least protected.
- */
+export async function loadPolicy(): Promise<void> {
+  if (
+    currentState === PolicyState.LOADING ||
+    currentState === PolicyState.RETRYING
+  ) {
+    if (activePromise) return activePromise;
+  }
+
+  const doLoad = async (attempt: number): Promise<void> => {
+    try {
+      const policyPath = join(__dirname, "redaction-policy.json");
+      const policyContent = await fsPromises.readFile(policyPath, "utf-8");
+      const parsedPolicy = JSON.parse(policyContent);
+      const newLoadedPolicy = RedactionPolicySchema.parse(parsedPolicy);
+      
+      const newFieldTierMap = Object.create(null) as Record<string, FieldTier>;
+      for (const field of newLoadedPolicy.public) newFieldTierMap[field] = FieldTier.PUBLIC;
+      for (const field of newLoadedPolicy.private) newFieldTierMap[field] = FieldTier.PRIVATE;
+      for (const field of newLoadedPolicy.secret) newFieldTierMap[field] = FieldTier.SECRET;
+
+      loadedPolicy = newLoadedPolicy;
+      fieldTierMap = newFieldTierMap;
+      policyLoadError = null;
+      currentState = PolicyState.LOADED;
+      retryCount = 0;
+    } catch (err: any) {
+      if (err.code === "EACCES" || err.code === "EPERM") {
+        currentState = currentState === PolicyState.LOADED || currentState === PolicyState.STALE ? PolicyState.STALE : PolicyState.PERMISSION_DENIED;
+        policyLoadError = err;
+        throw err;
+      }
+      
+      if (attempt < MAX_RETRIES) {
+        currentState = PolicyState.RETRYING;
+        await new Promise(res => setTimeout(res, 100 * Math.pow(2, attempt)));
+        return doLoad(attempt + 1);
+      } else {
+        currentState = currentState === PolicyState.LOADED || currentState === PolicyState.STALE ? PolicyState.STALE : PolicyState.ERROR;
+        policyLoadError = err instanceof Error ? err : new Error(String(err));
+        throw err;
+      }
+    }
+  };
+
+  currentState = currentState === PolicyState.LOADED || currentState === PolicyState.STALE ? PolicyState.STALE : PolicyState.LOADING;
+  activePromise = doLoad(0).finally(() => {
+    activePromise = null;
+  });
+
+  return activePromise;
+}
+
 function initialisePolicy(): void {
   try {
-    loadPolicy();
+    const policyPath = join(__dirname, "redaction-policy.json");
+    const policyContent = readFileSync(policyPath, "utf-8");
+    const parsedPolicy = JSON.parse(policyContent);
+    loadedPolicy = RedactionPolicySchema.parse(parsedPolicy);
+    
+    fieldTierMap = Object.create(null) as Record<string, FieldTier>;
+    for (const field of loadedPolicy.public) fieldTierMap[field] = FieldTier.PUBLIC;
+    for (const field of loadedPolicy.private) fieldTierMap[field] = FieldTier.PRIVATE;
+    for (const field of loadedPolicy.secret) fieldTierMap[field] = FieldTier.SECRET;
+    
+    currentState = PolicyState.LOADED;
     policyLoadError = null;
-  } catch (err) {
+  } catch (err: any) {
     policyLoadError = err instanceof Error ? err : new Error(String(err));
     loadedPolicy = { public: [], private: [], secret: [] };
-    fieldTierMap = Object.create(null) as Record<string, FieldTier>;
+    fieldTierMap = {};
+    if (err.code === "EACCES" || err.code === "EPERM") {
+      currentState = PolicyState.PERMISSION_DENIED;
+    } else {
+      currentState = PolicyState.ERROR;
+    }
   }
 }
 
@@ -118,13 +168,9 @@ export interface PolicyFieldEntry {
  * 2. `getPolicyFields(fields: string[]): PolicyFieldEntry[]`
  *    Classifies each field in `fields` returning `{ field, tier }` objects.
  */
-export function getPolicyFields(tier: FieldTier): string[];
-export function getPolicyFields(fields: string[]): PolicyFieldEntry[];
-export function getPolicyFields(
-  arg: FieldTier | string[]
-): string[] | PolicyFieldEntry[] {
-  if (arg === null || arg === undefined) {
-    throw new TypeError("getPolicyFields: argument cannot be null or undefined");
+export function getPolicyFieldsForTier(tier: FieldTier): string[] {
+  if (tier !== FieldTier.PUBLIC && tier !== FieldTier.PRIVATE && tier !== FieldTier.SECRET) {
+    return [];
   }
 
   if (Array.isArray(arg)) {
@@ -153,6 +199,26 @@ export function getPolicyFields(
 
   const fields = loadedPolicy[arg];
   return Array.isArray(fields) ? fields.slice() : [];
+}
+
+/**
+ * Classify a batch of field names.
+ *
+ * Deterministic and pure: returns one `{ field, tier }` entry per input, in
+ * input order, without deduplication. Unknown fields default to PRIVATE (see
+ * `classifyField`). The batch is validated up front, so any invalid input
+ * throws a `TypeError` and no partial output is ever produced.
+ */
+export function getPolicyFields(fields: string[]): { field: string; tier: FieldTier }[] {
+  if (!Array.isArray(fields)) {
+    throw new TypeError("getPolicyFields: expected an array of field names");
+  }
+  for (const field of fields) {
+    if (typeof field !== "string") {
+      throw new TypeError("getPolicyFields: every field name must be a string");
+    }
+  }
+  return fields.map((field) => ({ field, tier: classifyField(field) }));
 }
 
 /**
@@ -261,12 +327,12 @@ function canonicalise(value: unknown): string {
   if (value === null) return "null";
   if (value === undefined) return "undefined";
   const t = typeof value;
-  if (t === "string") return value as string;
+  if (t === "string") return value as string; // raw: keeps existing log hashes stable
   if (t === "number") return String(value);
-  if (t === "boolean") return String(value);
-  if (t === "bigint") return (value as bigint).toString();
-  if (t === "symbol") return String(value);
-  if (t === "function") return (value as Function).name ?? "";
+  if (t === "boolean") return `b:${value}`;
+  if (t === "bigint") return `i:${(value as bigint).toString()}`;
+  if (t === "symbol") return `y:${String(value)}`;
+  if (t === "function") return `f:${(value as Function).name ?? ""}`;
   if (Array.isArray(value)) {
     return `[${value.map(canonicalise).join(",")}]`;
   }
