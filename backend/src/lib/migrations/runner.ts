@@ -637,7 +637,9 @@ export function buildContext(db: DatabaseClient, isProd: boolean): MigrationCont
   };
 }
 
-export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; to?: string; all?: boolean; db?: DatabaseClient } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
+export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient; to?: number | string; all?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
+  const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb, to, all } = options;
+export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient; to?: string; all?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
   const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb } = options;
   const isProd = config.NODE_ENV === "production";
   const startTime = Date.now();
@@ -813,13 +815,19 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             continue;
           }
 
-          if (!appliedInTransaction) {
-            if (verbose) console.log(`⏭  Migration ${version}_${fileMig.name} already applied, skipping`);
-            skipped++;
-            continue;
-          }
+          const appliedDurationMs = Date.now() - migStart;
+          state = {
+            version,
+            name: fileMig.name,
+            checksum,
+            appliedAt,
+            durationMs: appliedDurationMs,
+            author: fileMig.content.author,
+            meta,
+          };
 
           appliedThisRun.push(state);
+          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${appliedDurationMs}ms)`);
           if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${state.durationMs}ms)`);
         } catch (err: any) {
           console.error(`❌ Migration ${version}_${fileMig.name} failed:', err.message);
@@ -931,8 +939,24 @@ export async function getAppliedVersions(db?: DatabaseClient): Promise<number[]>
 
 /** True when at least one migration has been recorded as applied. */
 export async function isDatabaseInitialized(db?: DatabaseClient): Promise<boolean> {
-  const applied = await getAppliedVersions(db);
-  return applied.length > 0;
+  try {
+    const applied = await getAppliedVersions(db);
+    if (!Array.isArray(applied)) {
+      return false;
+    }
+
+    // A database is considered initialized only when the migration ledger exists and
+    // contains at least one valid version. Missing tables, permission failures, and
+    // malformed query payloads are treated as an uninitialized state instead of a
+    // crash so startup and retry logic remain deterministic.
+    return applied.some((version) => Number.isInteger(version) && version >= 0);
+  } catch (error) {
+    console.warn(
+      "[migrations] Database initialization check failed; treating as uninitialized.",
+      error instanceof Error ? error.message : String(error)
+    );
+    return false;
+  }
 }
 
 /**

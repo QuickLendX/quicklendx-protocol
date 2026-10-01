@@ -817,6 +817,20 @@ describe("findSecretLeak", () => {
     expect(leak!.path).toBe("[1].password");
   });
 
+  it("detects raw secret string literals without a named field", () => {
+    const leak = findSecretLeak("Authorization: Bearer sk_live_abc123");
+    expect(leak).not.toBeNull();
+    expect(leak!.value).toBe("Authorization: Bearer sk_live_abc123");
+  });
+
+  it("handles circular references without recursion overflow", () => {
+    const graph: Record<string, any> = { request: { body: {} } };
+    graph.request.body.self = graph.request;
+
+    expect(() => findSecretLeak(graph)).not.toThrow();
+    expect(findSecretLeak(graph)).toBeNull();
+  });
+
   it("returns null for null / undefined", () => {
     expect(findSecretLeak(null)).toBeNull();
     expect(findSecretLeak(undefined)).toBeNull();

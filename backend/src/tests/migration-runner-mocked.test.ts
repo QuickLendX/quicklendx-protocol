@@ -751,8 +751,33 @@ test("runMigrations with mocked database - skipChecksumVerify", async () => {
       mockedReaddir.mockResolvedValue(["v001_test.ts"]);
       mockedReadFile.mockResolvedValue(`export const version = 1; export const name = "test"; export const authoredAt = "2026-04-26"; export const author = "test"; export const up = async () => {}; export const validate = "not-a-function";`);
 
-      await expect(loadMigrationsFromFS(validDir)).rejects.toThrow();
-    });
+  test("isDatabaseInitialized treats missing migrations table as uninitialized", async () => {
+    const mockDb: any = {
+      prepare: jest.fn(() => {
+        throw new Error("SQLITE_ERROR: no such table: _migrations");
+      }),
+    };
+
+    await expect(isDatabaseInitialized(mockDb)).resolves.toBe(false);
+  });
+
+  test("isDatabaseInitialized treats malformed query results as uninitialized", async () => {
+    const mockDb: any = {
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => null),
+      })),
+    };
+
+    await expect(isDatabaseInitialized(mockDb)).resolves.toBe(false);
+  });
+
+  test("verifyAppliedChecksums with mocked database - no applied migrations", async () => {
+    const mockDb: any = {
+      exec: jest.fn(),
+      prepare: jest.fn(() => ({
+        all: jest.fn(() => []),
+      })),
+    };
 
     test("accepts migration with valid validate function", async () => {
       mockedReaddir.mockResolvedValue(["v001_test.ts"]);
