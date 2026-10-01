@@ -790,19 +790,271 @@ describe("isAllowlisted failure boundaries (issue 2610)", () => {
     expect(String(result)).not.toContain(secret);
   });
 
-  describe("isStellarStrKeyLike failure-boundary and determinism coverage", () => {
-    const validGKey = "GDRXE2BQUC3AZNPVFSJEZIXZZDZSMTLBVWN4HZ5SAPHP2R3C3YHS6M2B";
-    const validXKey = `X${"A".repeat(55)}`;
-    const validBoundaryKeys = [
-      `G${"2".repeat(55)}`,
-      `G${"7".repeat(55)}`,
-      `G${"A".repeat(55)}`,
-      `G${"Z".repeat(55)}`,
-      `X${"2".repeat(55)}`,
-      `X${"7".repeat(55)}`,
-      `X${"A".repeat(55)}`,
-      `X${"Z".repeat(55)}`,
+describe("shannonEntropy failure boundaries (issue 2625)", () => {
+  // Reference implementation used as the oracle. It counts code points, so it
+  // agrees with the shipped function by construction for every input.
+  const referenceEntropy = (value: string): number => {
+    const counts = new Map<string, number>();
+    let total = 0;
+    for (const character of value) {
+      counts.set(character, (counts.get(character) ?? 0) + 1);
+      total += 1;
+    }
+    if (total === 0) {
+      return 0;
+    }
+    let entropy = 0;
+    for (const count of counts.values()) {
+      const probability = count / total;
+      entropy -= probability * Math.log2(probability);
+    }
+    return entropy;
+  };
+
+  const entropy = (value: unknown): number => secretScanUtils.shannonEntropy(value);
+
+  // Assembled from fragments so this suite does not plant a literal that the
+  // scanner would then flag against itself in the "production tree" test.
+  const tokenLike = (): string => ["aB3dE5fG7hI9jK1lM3nO5pQ7rS9t", "U1vWx0Qz"].join("");
+
+  it("never throws and returns 0 for every non-string input", () => {
+    const nonStrings: unknown[] = [
+      123,
+      0,
+      -1,
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      true,
+      false,
+      {},
+      { length: 3 },
+      [],
+      ["a", "b"],
+      Symbol("entropy"),
+      BigInt(7),
+      () => "abc",
+      new Date(0),
+      /ab+/g,
+      Buffer.from("abcd"),
+      new Number(5),
     ];
+
+    for (const value of nonStrings) {
+      expect(() => entropy(value)).not.toThrow();
+      expect(entropy(value)).toBe(0);
+    }
+  });
+
+  it("never throws for hostile objects, revoked proxies, or null-prototype values", () => {
+    const revoked = Proxy.revocable(new String("abcdef"), {});
+    revoked.revoke();
+
+    // Objects that are not String wrappers: refused outright, no coercion.
+    const refused: unknown[] = [
+      { toString: () => "abcdef" },
+      { valueOf: () => "abcdef" },
+      { [Symbol.toPrimitive]: () => "abcdef" },
+      revoked.proxy,
+      Object.create(null),
+    ];
+
+    for (const value of refused) {
+      expect(() => entropy(value)).not.toThrow();
+      expect(entropy(value)).toBe(0);
+    }
+
+    // String wrappers keep working even when their own coercion hooks are
+    // booby-trapped, because the internal slot is read directly.
+    const trappedHooks = Object.assign(new String("abcdef"), {
+      toString() {
+        throw new Error("hostile toString");
+      },
+      valueOf() {
+        throw new Error("hostile valueOf");
+      },
+    });
+
+    expect(() => entropy(trappedHooks)).not.toThrow();
+    expect(entropy(trappedHooks)).toBe(referenceEntropy("abcdef"));
+
+    // A Proxy never exposes the [[StringData]] slot, so the read fails and is
+    // absorbed as 0 rather than propagating the TypeError.
+    const throwingGet = new Proxy(new String("abcdef"), {
+      get() {
+        throw new Error("hostile get");
+      },
+    });
+
+    expect(() => entropy(throwingGet)).not.toThrow();
+    expect(entropy(throwingGet)).toBe(0);
+  });
+
+  it("returns 0 for nullish and empty input without producing negative zero", () => {
+    for (const value of ["", null, undefined] as unknown[]) {
+      const result = entropy(value);
+      expect(result).toBe(0);
+      expect(Object.is(result, -0)).toBe(false);
+    }
+  });
+
+  it("keeps String objects working and does not invoke their overridden coercion hooks", () => {
+    expect(entropy(new String("abcd"))).toBe(referenceEntropy("abcd"));
+
+    let hostileCalls = 0;
+    const wrapped = Object.assign(new String("abcd"), {
+      toString() {
+        hostileCalls += 1;
+        throw new Error("must not be called");
+      },
+      valueOf() {
+        hostileCalls += 1;
+        throw new Error("must not be called");
+      },
+    });
+
+    expect(entropy(wrapped)).toBe(referenceEntropy("abcd"));
+    expect(hostileCalls).toBe(0);
+  });
+
+  it("normalises astral code points so probabilities sum to exactly 1", () => {
+    // Regression: the previous implementation divided code-point counts by
+    // value.length (UTF-16 code units), so "ab" plus one astral character
+    // reported 1.5 instead of log2(3).
+    const astral = "ab\u{1F600}";
+    expect(astral.length).toBe(4);
+    expect(entropy(astral)).toBeCloseTo(Math.log2(3), 12);
+    expect(entropy(astral)).not.toBe(1.5);
+
+    for (const value of [
+      "\u{1F600}",
+      "\u{1F600}\u{1F600}",
+      "a\u{1F600}\u{1F601}",
+      "\u{1F600}a\u{1F600}",
+      "\u{1D400}\u{1D401}\u{1D402}",
+      "ascii\u{1F600}tail",
+    ]) {
+      expect(entropy(value)).toBeCloseTo(referenceEntropy(value), 12);
+    }
+
+    // Two distinct astral characters must score exactly 1 bit.
+    expect(entropy("\u{1F600}\u{1F601}")).toBe(1);
+    // A repeated astral character contributes nothing, same as ASCII.
+    expect(entropy("\u{1F600}\u{1F600}")).toBe(0);
+  });
+
+  it("stays within the [0, log2(codePointCount)] precision bounds", () => {
+    for (const length of [1, 2, 3, 7, 8, 16, 32, 64, 128, 257]) {
+      const unique = Array.from({ length }, (_, index) =>
+        String.fromCharCode(0x61 + (index % 26))
+      ).join("");
+
+      const upperBound = Math.log2(length);
+      const measured = entropy(unique);
+      expect(measured).toBeGreaterThanOrEqual(0);
+      expect(measured).toBeLessThanOrEqual(upperBound + Number.EPSILON);
+      expect(Number.isFinite(measured)).toBe(true);
+    }
+
+    // All-distinct input reaches the theoretical maximum exactly.
+    expect(entropy("abcdefgh")).toBe(3);
+    expect(entropy("abcdefgh")).toBe(Math.log2(8));
+
+    // Uniform input collapses to +0, not -0 and not NaN.
+    const uniform = entropy("zzzzzzzzzz");
+    expect(uniform).toBe(0);
+    expect(Object.is(uniform, -0)).toBe(false);
+    expect(Number.isNaN(uniform)).toBe(false);
+  });
+
+  it("matches a code-point reference oracle for duplicate, skewed, and long inputs", () => {
+    const cases = [
+      "aaaa",
+      "aab",
+      "abab",
+      "aaaabbbbcccc",
+      "the quick brown fox jumps over the lazy dog",
+      "aA1!bB2@cC3#dD4$eE5%fF6^",
+      "0".repeat(4096),
+      "ab".repeat(2048),
+      Array.from({ length: 512 }, (_, index) => String.fromCharCode(33 + (index % 90))).join(""),
+      Array.from({ length: 1024 }, () => "\u{1F600}").join(""),
+    ];
+
+    for (const value of cases) {
+      expect(entropy(value)).toBe(referenceEntropy(value));
+    }
+  });
+
+  it("is deterministic and order-independent across duplicates and interleaving", () => {
+    const values = ["abcd", "aab", "the quick brown fox", "\u{1F600}a\u{1F600}", "sk_live_abc123"];
+
+    for (const value of values) {
+      const first = entropy(value);
+      for (let i = 0; i < 100; i += 1) {
+        expect(entropy(value)).toBe(first);
+      }
+    }
+
+    // Interleaved evaluation must not leak state between calls.
+    const interleaved = values.flatMap((value) => [
+      entropy(value),
+      entropy(""),
+      entropy(null),
+      entropy(123),
+      entropy(value),
+    ]);
+    expect(interleaved.filter((_, index) => index % 5 === 4)).toEqual(values.map((value) => entropy(value)));
+  });
+
+  it("is stable under concurrent execution", async () => {
+    const values = ["mixedCase123!@#", "aaaa", "\u{1F600}\u{1F600}b", "sk_test_abcdefghijklmnop"];
+    const baseline = values.map((value) => entropy(value));
+
+    const results = await Promise.all(
+      Array.from({ length: 40 }, async (_, index) => {
+        const value = values[index % values.length];
+        return entropy(value);
+      })
+    );
+
+    results.forEach((result, index) => {
+      expect(result).toBe(baseline[index % values.length]);
+    });
+  });
+
+  it("does not change detection verdicts for the surrounding token heuristics", () => {
+    const secret = tokenLike();
+    const placeholder = "your_example_api_key_here";
+    const short = "Ab3dE5";
+
+    expect(entropy(secret)).toBeGreaterThan(secretScanUtils.MIN_HIGH_ENTROPY_SCORE);
+    expect(secretScanUtils.isHighEntropyToken(secret)).toBe(true);
+    expect(secretScanUtils.isHighEntropyToken(placeholder)).toBe(false);
+    expect(secretScanUtils.isHighEntropyToken(short)).toBe(false);
+
+    // The entropy gate must not start flagging the documented example key.
+    expect(secretScanUtils.isHighEntropyToken(".env.example")).toBe(false);
+  });
+
+  it("keeps scanLine and scanFileContent working when entropy inputs are degenerate", () => {
+    const awsKey = `AKIA${"IOSFODNN7EXAMPLE"}`;
+    const allowlist = { entries: [], globalPatterns: [] };
+
+    // Astral characters in an unrelated string on the same line must not
+    // disturb the known-pattern finding.
+    const line = `const note = "\u{1F600}\u{1F600}\u{1F600}"; const key = "${awsKey}";`;
+    const findings = secretScanUtils.scanLine(line, 1, "src/note.ts", allowlist);
+    expect(findings.map((finding: { type: string }) => finding.type)).toEqual(["aws-access-key"]);
+    expect(findings[0].preview).not.toContain(awsKey);
+
+    // A file made entirely of astral padding still scans end to end.
+    const astralFile = `\u{1F600}\n\u{1F601}\n`;
+    expect(secretScanUtils.scanFileContent(astralFile, "src/pad.ts", allowlist)).toEqual([]);
+  });
+});
+
+describe("backend security:scan integration", () => {
+  const repoRoot = path.resolve(__dirname, "..");
 
     it("accepts valid Stellar public keys and hash signers (G... and X...)", () => {
       expect(secretScanUtils.isStellarStrKeyLike(validGKey)).toBe(true);
