@@ -26,6 +26,8 @@ const MIN_HIGH_ENTROPY_LENGTH = 32;
 const MIN_HIGH_ENTROPY_SCORE = 4.5;
 const MIN_UNIQUE_CHARACTERS = 10;
 const PLAIN_STRING_REGEX = /'([^'\\]|\\.)*'|"([^"\\]|\\.)*"/g;
+const MAX_EXTENSION_LENGTH = 16;
+const MAX_RELATIVE_PATH_LENGTH = 4096;
 
 const PREVIEW_MASK_CHARACTER = "*";
 const PREVIEW_EDGE_LENGTH = 4;
@@ -65,6 +67,13 @@ const PREVIEW_MAX_LENGTH =
   PREVIEW_ELLIPSIS.length +
   PREVIEW_EDGE_LENGTH * 6 +
   PREVIEW_QUOTE.length;
+
+// Hard upper bound on matches collected from a single line. A pathological
+// pattern (or a caller-supplied regex with a zero-width match) must never be
+// able to make collectRegexMatches run unbounded, so the loop stops here and
+// returns what it has. The cap is far above any realistic secret density on
+// one line, so normal scans are unaffected.
+const MAX_MATCHES_PER_LINE = 10000;
 
 const KNOWN_SECRET_PATTERNS = [
   {
@@ -108,8 +117,68 @@ function shannonEntropy(value) {
   return entropy;
 }
 
+// Anchored hex shapes. Both are module-level literals deliberately created
+// without the g or y flag: RegExp.prototype.test only reads lastIndex for those
+// two flags, so the patterns are position-free and can be shared by every call
+// without leaking state between a scan line, a retry, and an interleaved call.
+const HEX_DIGITS_PATTERN = /^[0-9a-fA-F]+$/;
+const HEX_PREFIXED_PATTERN = /^0x[0-9a-fA-F]+$/;
+
+// Failure-boundary contract for isHexString. These invariants are pinned down
+// by tests/secret-scan-hex.test.ts, and every one of them is load-bearing
+// because isHexString sits on the *suppressor* side of secret classification:
+// isHighEntropyToken drops a candidate whenever isHexString reports true, so a
+// wrong true is a silently dropped finding, not a noisy one.
+//
+//   H1 Total          - never throws, for any JavaScript value, including
+//                       symbols, revoked proxies, and objects whose toString
+//                       or Symbol.toPrimitive throws. RegExp.prototype.test
+//                       coerces its argument with ToString, which runs
+//                       user-visible code; an uncaught throw escapes through
+//                       isHighEntropyToken -> collectHighEntropyMatches ->
+//                       scanLine -> scanTargets, aborts the scan, and discards
+//                       the findings already collected for other files. The one
+//                       current caller feeds it a regex-derived primitive
+//                       string, so this is defence in depth for the exported
+//                       helper and for any caller added later.
+//   H2 Type-exact     - only a string primitive can be hex. Numbers, bigints,
+//                       and String wrappers coerce to text that can be entirely
+//                       hex ("255", "0", "deadbeef"), and accepting that
+//                       coercion would let a non-string suppress a finding.
+//                       Refusing non-strings is the fail-closed direction: it
+//                       can only add findings, never remove one.
+//   H3 Full value     - the shape is matched end to end, so a padded, embedded,
+//                       or line-terminated value (" deadbeef ", "0xdeadbeefg",
+//                       "deadbeef\n") is not hex.
+//   H4 Minimal length - at least one hex digit is required, so neither the empty
+//                       string nor a bare "0x" prefix is hex.
+//   H5 Lowercase prefix only - exactly one optional "0x". "0X1f" is not hex:
+//                       widening the accepted set would suppress more findings,
+//                       i.e. weaken detection, so the conservative reading is
+//                       kept rather than "fixed".
+//   H6 Linear, pure   - the patterns are a single anchored character class with
+//                       no ambiguous quantifier, so matching is O(length) with
+//                       no catastrophic backtracking. No shared mutable state,
+//                       no I/O, and the value is never logged, so repeated
+//                       calls, retries, and interleaved execution are
+//                       deterministic and never disclose a candidate.
+//
+// Compatibility: for every string input the result is exactly what the
+// previous implementation returned, and the sole caller (isHighEntropyToken)
+// cannot observe the non-string change, because a non-string can never reach a
+// `true` from isHighEntropyToken anyway: isObviousPlaceholder fails closed to
+// true and hasMixedCharacterClasses returns false for non-strings. The only
+// observable change is for non-string inputs, which previously either threw a
+// TypeError (aborting the entire scan) or were misclassified as hex.
 function isHexString(value) {
-  return /^[0-9a-fA-F]+$/.test(value) || /^0x[0-9a-fA-F]+$/.test(value);
+  // H1/H2: refuse everything that is not a string primitive before a regex can
+  // coerce it. typeof reads an internal slot, so a hostile value cannot throw
+  // and cannot run a trap here.
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  return HEX_DIGITS_PATTERN.test(value) || HEX_PREFIXED_PATTERN.test(value);
 }
 
 function isIdentifierLikeString(value) {
@@ -192,12 +261,35 @@ function hasMixedCharacterClasses(value) {
   return classes.filter(Boolean).length >= 2;
 }
 
+const STELLAR_STRKEY_REGEX = /^[GX][A-Z2-7]{55}$/;
+
+/**
+ * Validates whether a value is a Stellar StrKey-like public identifier (e.g. account G... or hash signer X...).
+ *
+ * Invariants:
+ * - Type Safety: Safely handles non-string inputs (null, undefined, Symbol, BigInt, objects) returning false without throwing.
+ * - Length Boundary: Exactly 56 ASCII characters; fast-fails for any other length.
+ * - Alphabet Boundary: RFC 4648 Base32 alphabet ([A-Z2-7]) prefixed strictly by public key identifiers 'G' or 'X'.
+ * - Security Rejection: Never returns true for Stellar secret seeds ('S...') or other sensitive key types.
+ * - Stateless & Deterministic: Pure function with no shared mutable regex state; safe across concurrent, retry, and re-entrant calls.
+ *
+ * @param {unknown} value The candidate value to evaluate.
+ * @returns {boolean} True if the value matches the Stellar StrKey public format, false otherwise.
+ */
 function isStellarStrKeyLike(value) {
-  return /^[GX][A-Z2-7]{55}$/.test(value);
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  if (value.length !== 56) {
+    return false;
+  }
+
+  return STELLAR_STRKEY_REGEX.test(value);
 }
 
 function isHighEntropyToken(value) {
-  if (value.length < MIN_HIGH_ENTROPY_LENGTH) {
+  if (typeof value !== "string" || value.length < MIN_HIGH_ENTROPY_LENGTH) {
     return false;
   }
 
@@ -205,6 +297,10 @@ function isHighEntropyToken(value) {
     return false;
   }
 
+  // A hex run is a commit SHA, a colour or a byte buffer, not a credential, so
+  // it is suppressed here. This is the reason isHexString is held to H1/H2 in
+  // its contract above: a spurious true from this branch silently drops the
+  // finding instead of raising a false alarm.
   if (isHexString(value)) {
     return false;
   }
@@ -371,18 +467,213 @@ function resetRegex(regex) {
   regex.lastIndex = 0;
 }
 
+// Deterministic, fail-closed collection of regex matches for a single line.
+//
+// Invariants enforced here (see tests/secret-scan-collect-regex-matches.test.ts):
+//   C1 Total        - never throws. A null/undefined line, a missing or
+//                     malformed patternDef, a regex whose exec throws, or a
+//                     revoked proxy all yield [] instead of aborting the scan
+//                     and discarding findings already collected for other
+//                     files.
+//   C2 Deterministic- the same (line, patternDef) always yields the same
+//                     matches, regardless of prior calls. lastIndex is reset
+//                     before and after the loop so a shared regex cannot leak
+//                     state across lines or across concurrent scans.
+//   C3 Bounded      - at most MAX_MATCHES_PER_LINE matches are returned, and
+//                     the loop always advances. Zero-length matches and
+//                     non-global regexes cannot spin forever.
+//   C4 Shape        - every returned entry is { type: string, match: string,
+//                     column: number >= 1 }. Non-string match[0] is skipped
+//                     rather than coerced.
+
+// Deterministic failure-boundary handling for formatFindings.
+//
+// formatFindings is the last stage before findings are rendered into CI logs,
+// so it must never throw and must never emit an unsafe preview. The helpers
+// below normalize the finding collection and each individual finding so that
+// malformed, duplicate, or boundary-case inputs degrade to a stable, reviewable
+// shape instead of aborting the scan or leaking data.
+const FINDING_SEVERITY_ORDER = new Map([
+  ["critical", 0],
+  ["high", 1],
+  ["medium", 2],
+  ["low", 3],
+  ["info", 4],
+]);
+
+function normalizeFindingSeverity(severity) {
+  if (typeof severity !== "string") {
+    return "unknown";
+  }
+
+  const normalized = severity.trim().toLowerCase();
+  return normalized.length > 0 ? normalized : "unknown";
+}
+
+function normalizeFindingLocation(location) {
+  if (typeof location !== "string") {
+    return "";
+  }
+
+  return location;
+}
+
+function normalizeFindingType(type) {
+  if (typeof type !== "string" || type.length === 0) {
+    return "unknown";
+  }
+
+  return type;
+}
+
+function normalizeFinding(finding) {
+  if (finding === null || typeof finding !== "object") {
+    return null;
+  }
+
+  const type = normalizeFindingType(finding.type);
+  const severity = normalizeFindingSeverity(finding.severity);
+  const location = normalizeFindingLocation(finding.location);
+  const preview = redactPreview(finding.match);
+
+  return { type, severity, location, preview };
+}
+
+function findingDedupeKey(finding) {
+  return `${finding.type}\u0000${finding.severity}\u0000${finding.location}\u0000${finding.preview}`;
+}
+
+function compareFindings(left, right) {
+  const leftSeverity = FINDING_SEVERITY_ORDER.has(left.severity)
+    ? FINDING_SEVERITY_ORDER.get(left.severity)
+    : Number.MAX_SAFE_INTEGER;
+  const rightSeverity = FINDING_SEVERITY_ORDER.has(right.severity)
+    ? FINDING_SEVERITY_ORDER.get(right.severity)
+    : Number.MAX_SAFE_INTEGER;
+
+  if (leftSeverity !== rightSeverity) {
+    return leftSeverity - rightSeverity;
+  }
+
+  if (left.type !== right.type) {
+    return left.type < right.type ? -1 : 1;
+  }
+
+  if (left.location !== right.location) {
+    return left.location < right.location ? -1 : 1;
+  }
+
+  if (left.preview !== right.preview) {
+    return left.preview < right.preview ? -1 : 1;
+  }
+
+  return 0;
+}
+
+function formatFindings(findings) {
+  if (!Array.isArray(findings)) {
+    return [];
+  }
+
+  const normalized = [];
+  const seen = new Set();
+
+  for (const finding of findings) {
+    const entry = normalizeFinding(finding);
+    if (entry === null) {
+      continue;
+    }
+
+    const key = findingDedupeKey(entry);
+    if (seen.has(key)) {
+      continue;
+    }
+
+    seen.add(key);
+    normalized.push(entry);
+  }
+
+  normalized.sort(compareFindings);
+
+  return normalized.map((entry) => {
+    const location = entry.location.length > 0 ? ` ${entry.location}` : "";
+    return `[${entry.severity}] ${entry.type}${location}: ${entry.preview}`;
+  });
+}
 function collectRegexMatches(line, patternDef) {
   const matches = [];
-  resetRegex(patternDef.regex);
 
-  let match = patternDef.regex.exec(line);
-  while (match) {
-    matches.push({
-      type: patternDef.name,
-      match: match[0],
-      column: match.index + 1,
-    });
-    match = patternDef.regex.exec(line);
+  // C1: reject inputs that cannot be scanned without throwing.
+  if (typeof line !== "string") {
+    return matches;
+  }
+
+  if (!patternDef || typeof patternDef !== "object") {
+    return matches;
+  }
+
+  const regex = patternDef.regex;
+  if (!regex || typeof regex.exec !== "function") {
+    return matches;
+  }
+
+  const type = typeof patternDef.name === "string" ? patternDef.name : "unknown";
+
+  // C2: reset before scanning so a shared regex starts from a known state.
+  try {
+    resetRegex(regex);
+  } catch (error) {
+    return matches;
+  }
+
+  let match;
+  try {
+    match = regex.exec(line);
+  } catch (error) {
+    // C1: a throwing exec (revoked proxy, stateful getter) is a boundary,
+    // not a crash. Return what we have and leave the regex reset below.
+    return matches;
+  }
+
+  while (match && matches.length < MAX_MATCHES_PER_LINE) {
+    const value = match[0];
+    const index = match.index;
+
+    // C4: only string matches with a numeric index are emitted. Anything
+    // else is skipped rather than coerced, so a hostile match object cannot
+    // inject non-string data into downstream redaction.
+    if (typeof value === "string" && typeof index === "number" && index >= 0) {
+      matches.push({
+        type,
+        match: value,
+        column: index + 1,
+      });
+    }
+
+    // C3: guarantee forward progress. A zero-length match leaves lastIndex
+    // unchanged on a global regex, which would loop forever; advance it
+    // manually. A non-global regex also never advances lastIndex, so the
+    // same guard covers it.
+    if (value === "") {
+      if (regex.global || regex.sticky) {
+        regex.lastIndex = index + 1;
+      } else {
+        break;
+      }
+    }
+
+    try {
+      match = regex.exec(line);
+    } catch (error) {
+      break;
+    }
+  }
+
+  // C2: leave the regex in a clean state for the next caller.
+  try {
+    resetRegex(regex);
+  } catch (error) {
+    // Ignore: the regex is already unusable; callers get the matches we have.
   }
 
   return matches;
@@ -398,6 +689,14 @@ function unquoteString(literal) {
 }
 
 function collectQuotedStringMatches(line) {
+  // Scan callers process file lines, but keeping this helper total makes the
+  // failure boundary deterministic when a malformed caller supplies a
+  // non-string value. Returning no matches is safer than coercing arbitrary
+  // objects (which may execute user code or disclose sensitive data).
+  if (typeof line !== "string") {
+    return [];
+  }
+
   const matches = [];
   resetRegex(PLAIN_STRING_REGEX);
 
@@ -417,18 +716,36 @@ function collectQuotedStringMatches(line) {
 }
 
 function collectHighEntropyMatches(line) {
+  if (typeof line !== "string") {
+    return [];
+  }
+
   const matches = [];
 
-  for (const quoted of collectQuotedStringMatches(line)) {
-    if (!isHighEntropyToken(quoted.value)) {
-      continue;
-    }
+  try {
+    for (const quoted of module.exports.collectQuotedStringMatches(line)) {
+      try {
+        if (!quoted || typeof quoted.value !== "string") {
+          continue;
+        }
 
-    matches.push({
-      type: "high-entropy",
-      match: quoted.value,
-      column: quoted.column,
-    });
+        if (!module.exports.isHighEntropyToken(quoted.value)) {
+          continue;
+        }
+
+        matches.push({
+          type: "high-entropy",
+          match: quoted.value,
+          column: typeof quoted.column === "number" ? quoted.column : 0,
+        });
+      } catch (innerError) {
+        // Deterministic partial failure recovery: skip this match but continue processing.
+        continue;
+      }
+    }
+  } catch (error) {
+    // Deterministic failure boundary: return accumulated matches on unexpected iterator/regex error.
+    return matches;
   }
 
   return matches;
@@ -461,6 +778,14 @@ function safeCompilePattern(pattern) {
 
 function matchesAllowlistEntry(entry, relativePath, lineNumber, matchValue) {
   if (!entry || typeof entry !== "object") {
+    return false;
+  }
+
+  if (
+    typeof relativePath !== "string" ||
+    typeof lineNumber !== "number" ||
+    typeof matchValue !== "string"
+  ) {
     return false;
   }
 
@@ -559,7 +884,32 @@ function isAllowlisted(relativePath, lineNumber, matchValue, allowlist) {
 }
 
 function overlapsMatch(left, right) {
-  return left.match === right.match;
+  try {
+    if (!left || typeof left !== "object" || !right || typeof right !== "object") {
+      return false;
+    }
+
+    const leftMatch = typeof left.match === "string" ? left.match : "";
+    const rightMatch = typeof right.match === "string" ? right.match : "";
+
+    if (!leftMatch || !rightMatch) {
+      return false;
+    }
+
+    const leftStart = typeof left.column === "number" ? left.column : -1;
+    const rightStart = typeof right.column === "number" ? right.column : -1;
+
+    if (leftStart === -1 || rightStart === -1) {
+      return leftMatch === rightMatch;
+    }
+
+    const leftEnd = leftStart + leftMatch.length;
+    const rightEnd = rightStart + rightMatch.length;
+
+    return leftStart < rightEnd && rightStart < leftEnd;
+  } catch (error) {
+    return false;
+  }
 }
 
 function scanLine(line, lineNumber, relativePath, allowlist) {
@@ -610,20 +960,116 @@ function scanFileContent(content, relativePath, allowlist) {
   );
 }
 
-function shouldScanFile(relativePath, options = {}) {
-  const extensions = options.extensions || DEFAULT_EXTENSIONS;
-  const ignoredFiles = new Set(options.ignoredFiles || [".secret-scan-allow.json"]);
+/**
+ * Normalizes the `extensions` option into a Set of lowercase extensions.
+ *
+ * Invariants:
+ * - Always returns a Set (never null/undefined) so callers can rely on `.has`.
+ * - Non-string entries are dropped to avoid throwing on malformed input.
+ * - Extensions are lowercased so `Foo.TS` and `foo.ts` behave identically.
+ * - When the caller supplies an explicit (even empty) iterable, it replaces the
+ *   default set; only `undefined`/`null` falls back to DEFAULT_EXTENSIONS.
+ */
+function normalizeExtensions(extensions) {
+  if (extensions === undefined || extensions === null) {
+    return DEFAULT_EXTENSIONS;
+  }
 
-  if (ignoredFiles.has(path.basename(relativePath))) {
+  if (typeof extensions === "string") {
+    return new Set([extensions.toLowerCase()]);
+  }
+
+  if (typeof extensions[Symbol.iterator] !== "function") {
+    return DEFAULT_EXTENSIONS;
+  }
+
+  const normalized = new Set();
+  for (const entry of extensions) {
+    if (typeof entry !== "string" || entry.length === 0) {
+      continue;
+    }
+    normalized.add(entry.toLowerCase());
+  }
+
+  return normalized;
+}
+
+/**
+ * Normalizes the `ignoredFiles` option into a Set of basenames.
+ *
+ * Invariants:
+ * - Always returns a Set.
+ * - Non-string entries are dropped.
+ * - An explicit empty array is honored (disables the default ignore list);
+ *   only `undefined`/`null` falls back to the default.
+ */
+function normalizeIgnoredFiles(ignoredFiles) {
+  const fallback = new Set([".secret-scan-allow.json"]);
+
+  if (ignoredFiles === undefined || ignoredFiles === null) {
+    return fallback;
+  }
+
+  if (typeof ignoredFiles === "string") {
+    return new Set([ignoredFiles]);
+  }
+
+  if (typeof ignoredFiles[Symbol.iterator] !== "function") {
+    return fallback;
+  }
+
+  const normalized = new Set();
+  for (const entry of ignoredFiles) {
+    if (typeof entry !== "string" || entry.length === 0) {
+      continue;
+    }
+    normalized.add(entry);
+  }
+
+  return normalized;
+}
+
+/**
+ * Determines whether a relative path should be scanned.
+ *
+ * Deterministic behavior:
+ * - Non-string / empty / whitespace-only paths return false (never throw).
+ * - Paths exceeding MAX_RELATIVE_PATH_LENGTH return false.
+ * - Basenames listed in `ignoredFiles` are always skipped, even if the
+ *   extension matches.
+ * - Extension matching is case-insensitive.
+ * - Files without a matching extension are still scanned if their basename is
+ *   in DEFAULT_EXAMPLE_FILES (e.g. `.env.example`).
+ */
+function shouldScanFile(relativePath, options = {}) {
+  if (typeof relativePath !== "string") {
     return false;
   }
 
-  const extension = path.extname(relativePath);
+  const trimmedPath = relativePath.trim();
+  if (trimmedPath.length === 0 || trimmedPath.length > MAX_RELATIVE_PATH_LENGTH) {
+    return false;
+  }
+
+  const extensions = normalizeExtensions(options.extensions);
+  const ignoredFiles = normalizeIgnoredFiles(options.ignoredFiles);
+
+  const basename = path.basename(trimmedPath);
+
+  if (ignoredFiles.has(basename)) {
+    return false;
+  }
+
+  const extension = path.extname(trimmedPath).toLowerCase();
+  if (extension.length > MAX_EXTENSION_LENGTH) {
+    return false;
+  }
+
   if (extensions.has(extension)) {
     return true;
   }
 
-  return DEFAULT_EXAMPLE_FILES.includes(path.basename(relativePath));
+  return DEFAULT_EXAMPLE_FILES.includes(basename);
 }
 
 function walkDirectory(absoluteDir, relativeDir, files = []) {
@@ -682,12 +1128,204 @@ function collectScanTargets(backendRoot, options = {}) {
   return targets.filter((target) => shouldScanFile(target.relativePath, options));
 }
 
-function scanTargets(targets, allowlist) {
+// Invariants for scanTargets:
+//
+//   T1 Total        - never throws because of a per-target problem. Every
+//                      target in the list is attempted, so one unreadable file
+//                      can no longer abort the loop and discard the findings
+//                      already collected for the files ahead of it.
+//   T2 Fail closed  - a target that could not be scanned is never silently
+//                      dropped. Every failure is handed to
+//                      options.onTargetError, and when no reporter is supplied
+//                      the aggregated failures are rethrown once the loop has
+//                      finished. runSecretScan always supplies a reporter, so a
+//                      partial scan exits non-zero instead of reporting
+//                      "clean". The scan is never weakened by this isolation.
+//   T3 Deduped      - an absolutePath is scanned at most once even when it
+//                      appears repeatedly in targets. Overlapping scanRoots
+//                      used to emit the same finding once per covering root.
+//   T4 Typed        - an entry that is not an object, or that has no string
+//                      absolutePath, is recorded as a structural failure
+//                      instead of crashing the loop.
+//   T5 Redacted     - a failure record carries only the target relativePath, a
+//                      filesystem errno code, and a bounded message. File
+//                      content and matched values never enter a record, so
+//                      diagnostics cannot leak the string that was scanned.
+//   T6 Pure         - no shared mutable state; the same list always yields the
+//                      same findings and the same failures in the same order.
+//
+// Argument-shape violations (a non-array `targets`) still throw, as they did
+// before, but with an explicit message naming the received type. That is a
+// caller bug rather than a per-target condition, and silently scanning nothing
+// would be the unsafe answer.
+
+const TARGET_FAILURE_MAX_MESSAGE_LENGTH = 200;
+const TARGET_FAILURE_UNKNOWN_PATH = "<unknown>";
+const TARGET_FAILURE_UNKNOWN_REASON = "unknown reason";
+
+function targetFailureKindTag(value) {
+  if (value === null) {
+    return "null";
+  }
+  if (Array.isArray(value)) {
+    return "array";
+  }
+  return typeof value;
+}
+
+// Builds the redacted, bounded failure record described by T5. error.code is
+// a filesystem errno such as ENOENT or EACCES and is the useful triage signal;
+// the message is truncated because a path or an OS message can be arbitrarily
+// long. A hostile error is reduced to a constant rather than stringified,
+// because String(error) would run user code and can throw.
+function describeTargetFailure(error) {
+  let code = TARGET_FAILURE_UNKNOWN_REASON;
+  let message = "";
+
+  if (typeof error === "object" && error !== null) {
+    try {
+      if (typeof error.code === "string") {
+        code = error.code;
+      }
+      if (typeof error.message === "string") {
+        message = error.message;
+      }
+    } catch {
+      // A throwing getter on a hostile error object degrades to the defaults.
+      code = TARGET_FAILURE_UNKNOWN_REASON;
+      message = "";
+    }
+  }
+
+  if (message.length === 0) {
+    message = code;
+  }
+
+  return {
+    code,
+    message: message.slice(0, TARGET_FAILURE_MAX_MESSAGE_LENGTH),
+  };
+}
+
+// Reads one property without letting a hostile getter escape. A revoked proxy
+// or a booby-trapped accessor yields undefined instead of propagating, which is
+// what keeps T1 total for target descriptors built by callers.
+function safeReadProperty(target, property) {
+  try {
+    return target[property];
+  } catch {
+    return undefined;
+  }
+}
+
+// Returns the { absolutePath, relativePath } pair for a usable target, or null
+// when the entry is structurally invalid (T4). relativePath is optional: when
+// it is absent or not a string the absolutePath is reported instead, so a
+// finding is still attributable to a file rather than rendered as "undefined".
+function resolveScanTarget(target) {
+  if (typeof target !== "object" || target === null) {
+    return null;
+  }
+
+  const absolutePath = safeReadProperty(target, "absolutePath");
+  if (typeof absolutePath !== "string" || absolutePath.length === 0) {
+    return null;
+  }
+
+  const relativePath = safeReadProperty(target, "relativePath");
+
+  return {
+    absolutePath,
+    relativePath:
+      typeof relativePath === "string" && relativePath.length > 0
+        ? relativePath
+        : absolutePath,
+  };
+}
+
+function recordTargetFailure(failures, report, target, reason, code, message) {
+  const failure = {
+    target: typeof target === "string" && target.length > 0 ? target : TARGET_FAILURE_UNKNOWN_PATH,
+    reason,
+    code,
+    message: message.slice(0, TARGET_FAILURE_MAX_MESSAGE_LENGTH),
+  };
+
+  failures.push(failure);
+
+  if (report !== null) {
+    report(failure);
+  }
+
+  return failure;
+}
+
+function scanTargets(targets, allowlist, options = {}) {
+  if (!Array.isArray(targets)) {
+    throw new TypeError(
+      `scanTargets requires an array of targets, received ${targetFailureKindTag(targets)}`
+    );
+  }
+
+  const report = typeof options.onTargetError === "function" ? options.onTargetError : null;
   const findings = [];
+  const failures = [];
+  const scanned = new Set();
 
   for (const target of targets) {
-    const content = fs.readFileSync(target.absolutePath, "utf8");
-    findings.push(...scanFileContent(content, target.relativePath, allowlist));
+    const resolved = resolveScanTarget(target);
+
+    if (resolved === null) {
+      // T4: a structurally invalid entry is a recorded failure, never a crash.
+      // The relativePath read is guarded too: a hostile getter must not turn a
+      // structural failure into an unhandled throw.
+      recordTargetFailure(
+        failures,
+        report,
+        typeof target === "object" && target !== null
+          ? safeReadProperty(target, "relativePath")
+          : undefined,
+        "invalid-target",
+        "EINVAL",
+        `target is not an object with a string absolutePath (received ${targetFailureKindTag(target)})`
+      );
+      continue;
+    }
+
+    // T3: scan each file once no matter how many roots or duplicates cover it.
+    if (scanned.has(resolved.absolutePath)) {
+      continue;
+    }
+    scanned.add(resolved.absolutePath);
+
+    let content;
+    try {
+      content = fs.readFileSync(resolved.absolutePath, "utf8");
+    } catch (error) {
+      // T1/T2: isolate the failure so the remaining targets are still scanned
+      // and the findings collected so far survive.
+      const described = describeTargetFailure(error);
+      recordTargetFailure(
+        failures,
+        report,
+        resolved.relativePath,
+        "unreadable-target",
+        described.code,
+        described.message
+      );
+      continue;
+    }
+
+    findings.push(...scanFileContent(content, resolved.relativePath, allowlist));
+  }
+
+  if (failures.length > 0 && report === null) {
+    const summary = failures
+      .map((failure) => `${failure.target} (${failure.code})`)
+      .join(", ");
+    throw new Error(
+      `Secret scan could not read ${failures.length} of ${targets.length} target(s): ${summary}`
+    );
   }
 
   return findings;
@@ -696,7 +1334,7 @@ function scanTargets(targets, allowlist) {
 function scanBackend(backendRoot, options = {}) {
   const allowlist = options.allowlist || loadAllowlist(options.allowlistPath, backendRoot);
   const targets = collectScanTargets(backendRoot, options);
-  return scanTargets(targets, allowlist);
+  return scanTargets(targets, allowlist, options);
 }
 
 function loadAllowlist(allowlistPath, backendRoot = process.cwd()) {
@@ -725,18 +1363,41 @@ function formatFinding(finding) {
   );
 }
 
-function formatFindings(findings) {
-  if (findings.length === 0) {
-    return "Secret scan passed: No committed secrets were detected.";
+// Renders one failure record. Only the target path, the reason, the errno code
+// and the bounded message are emitted, per T5: no file content and no matched
+// value can reach the log line.
+function formatTargetFailure(failure) {
+  return `  ${failure.target} [${failure.reason}] ${failure.code}: ${failure.message}`;
+}
+
+function formatFindings(findings, failures = []) {
+  const lines = [];
+
+  if (findings.length > 0) {
+    lines.push(
+      `Secret scan failed: ${findings.length} potential secret(s) found.`,
+      "",
+      ...findings.map((finding) => formatFinding(finding)),
+      "",
+      "Remove the secret or add a documented allowlist entry in scripts/.secret-scan-allow.json."
+    );
   }
 
-  const lines = [
-    `Secret scan failed: ${findings.length} potential secret(s) found.`,
-    "",
-    ...findings.map((finding) => formatFinding(finding)),
-    "",
-    "Remove the secret or add a documented allowlist entry in scripts/.secret-scan-allow.json.",
-  ];
+  if (failures.length > 0) {
+    if (lines.length > 0) {
+      lines.push("");
+    }
+
+    lines.push(
+      `Secret scan failed: ${failures.length} target(s) could not be scanned.`,
+      ...failures.map((failure) => formatTargetFailure(failure)),
+      "An unreadable target is never treated as clean. Fix the path or permission and re-run the scan."
+    );
+  }
+
+  if (lines.length === 0) {
+    return "Secret scan passed: No committed secrets were detected.";
+  }
 
   return lines.join("\n");
 }
@@ -753,14 +1414,26 @@ function assertNoSecretsPrinted(output, findings) {
 
 function runSecretScan(options = {}) {
   const backendRoot = options.backendRoot || process.cwd();
-  const findings = scanBackend(backendRoot, options);
-  const message = formatFindings(findings);
 
-  if (findings.length > 0) {
+  // T2: the reporter is what lets scanTargets isolate a per-target failure and
+  // keep going. The recorded failures are what make the run fail closed, so a
+  // partial scan never reports "clean".
+  const failures = [];
+  const findings = scanBackend(backendRoot, {
+    ...options,
+    onTargetError: (failure) => {
+      failures.push(failure);
+    },
+  });
+
+  const message = formatFindings(findings, failures);
+
+  if (findings.length > 0 || failures.length > 0) {
     return {
       ok: false,
       exitCode: 1,
       findings,
+      failures,
       message,
     };
   }
@@ -769,6 +1442,7 @@ function runSecretScan(options = {}) {
     ok: true,
     exitCode: 0,
     findings,
+    failures,
     message,
   };
 }
@@ -782,6 +1456,7 @@ module.exports = {
   PLAIN_STRING_REGEX,
   MIN_HIGH_ENTROPY_LENGTH,
   MIN_HIGH_ENTROPY_SCORE,
+  MAX_MATCHES_PER_LINE,
   PREVIEW_EDGE_LENGTH,
   PREVIEW_ELLIPSIS,
   PREVIEW_MASK_CHARACTER,
@@ -796,9 +1471,11 @@ module.exports = {
   escapePreviewText,
   formatFinding,
   formatFindings,
+  formatTargetFailure,
   hasMixedCharacterClasses,
   isAllowlisted,
   isHighEntropyToken,
+  isHexString,
   isIdentifierLikeString,
   isLogSafePreview,
   isObviousPlaceholder,

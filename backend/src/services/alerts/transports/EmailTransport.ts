@@ -1,9 +1,9 @@
 import { Alert } from "../../../types/reconciliation";
 import { AlertTransport } from "./AlertTransport";
-import nodemailer from "nodemailer";
+import nodemailer, { Transporter } from "nodemailer";
 
 export class EmailTransport implements AlertTransport {
-  private readonly transporter: nodemailer.Transporter;
+  private readonly transporter: Transporter;
   private readonly recipients: string[];
 
   constructor(recipients: string[]) {

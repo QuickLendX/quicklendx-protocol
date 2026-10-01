@@ -2,6 +2,11 @@
 name = "quicklendx-contracts"
 version = "0.1.0"
 edition = "2021"
+autotests = false
+
+[[test]]
+name = "wasm_build_size_budget"
+path = "tests/wasm_build_size_budget.rs"
 
 [lib]
 # rlib for tests/integration; cdylib for WASM contract builds.

@@ -20,6 +20,14 @@ module.exports = {
       lines: 95,
       statements: 95,
     },
+    // Authorization scope matching is a security boundary: every branch must
+    // stay covered so a regression cannot silently weaken fail-closed behavior.
+    "src/config/scopes.ts": {
+      branches: 100,
+      functions: 100,
+      lines: 100,
+      statements: 100,
+    },
   },
   collectCoverageFrom: [
     "scripts/lib/secret-scan-utils.js",
@@ -35,6 +43,7 @@ module.exports = {
     "src/middleware/event-ingest-limits.ts",
     "src/controllers/v1/bids.ts",
     "src/lib/entityId.ts",
+    "src/config/scopes.ts",
   ],
   moduleNameMapper: {
     "^@/(.*)$": "<rootDir>/src/$1",
@@ -60,7 +69,6 @@ module.exports = {
     "src/tests/conditional-write.test.ts",
     "src/tests/bids.test.ts",
     "src/tests/migration-integration.test.ts",
-    "tests/correlation-id.test.ts",
     "src/tests/streaming-exports.test.ts",
     "src/tests/load-shedding-concurrency.test.ts",
     "src/tests/latency-tracker.test.ts",

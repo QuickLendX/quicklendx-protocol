@@ -483,6 +483,18 @@ export class KycService {
   }
 
   async rotateKey(record: EncryptedRecord, newProvider: LocalKeyProvider | KmsKeyProvider): Promise<EncryptedRecord> {
+    if (!record || typeof record !== "object") {
+      throw new Error("rotateKey: record is required");
+    }
+    if (!record.encryptedDek || typeof record.encryptedDek !== "string") {
+      throw new Error("rotateKey: record.encryptedDek is required");
+    }
+    if (!record.keyId || typeof record.keyId !== "string") {
+      throw new Error("rotateKey: record.keyId is required");
+    }
+    if (!newProvider || typeof newProvider.currentKeyId !== "function") {
+      throw new Error("rotateKey: newProvider is required");
+    }
     const encDek = Buffer.from(record.encryptedDek, "base64");
     const dekIv = Buffer.from(record.dekIv || "", "base64");
     const dekAuthTag = Buffer.from(record.dekAuthTag || "", "base64");
