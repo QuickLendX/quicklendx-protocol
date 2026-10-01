@@ -13,6 +13,7 @@ import {
 } from "../types/audit";
 
 const MAX_LINE_BYTES = 10 * 1024;
+const MAX_QUERY_LIMIT = 1000;
 
 function getAuditDir(): string {
   return process.env.AUDIT_DIR || "audit_logs";
@@ -144,14 +145,19 @@ class AuditService {
     );
 
     const total = filtered.length;
-    const page = filtered.slice(params.offset, params.offset + params.limit);
+    const safeLimit = Math.min(
+      Math.max(0, Math.floor(params.limit)),
+      MAX_QUERY_LIMIT
+    );
+    const safeOffset = Math.max(0, Math.floor(params.offset));
+    const page = filtered.slice(safeOffset, safeOffset + safeLimit);
 
     return {
       entries: page,
       total,
-      limit: params.limit,
-      offset: params.offset,
-      hasMore: params.offset + params.limit < total,
+      limit: safeLimit,
+      offset: safeOffset,
+      hasMore: safeOffset + safeLimit < total,
     };
   }
 
