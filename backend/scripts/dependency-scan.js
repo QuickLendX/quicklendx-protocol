@@ -12,7 +12,7 @@ const {
 
 function main() {
   const reportPath = process.argv[2] || "audit-report.json";
-  const threshold = normalizeThreshold(process.argv[3] || process.env.AUDIT_SEVERITY || "high");
+  const threshold = normalizeThreshold(process.env.AUDIT_SEVERITY || process.argv[3] || "high");
   const absolutePath = path.resolve(process.cwd(), reportPath);
 
   if (!fs.existsSync(absolutePath)) {
