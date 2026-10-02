@@ -29,6 +29,25 @@ const storage = new AsyncLocalStorage<RequestContext>();
  * Invariants:
  * - Sanitizes the correlation ID before storing. If invalid or empty, falls back to generating a valid ULID.
  * - Context is strictly bound to the execution scope of `fn` and automatically cleaned up upon completion or failure.
+ *
+ * Failure-boundary guarantees:
+ * - Never stores an unusable id. A value that is not a string, or that fails
+ *   `sanitizeCorrelationId` (blank, oversized, or carrying a newline, terminal
+ *   escape, null byte or internal space), is discarded in favour of a freshly
+ *   generated one. A tainted id therefore cannot reach the context, and from
+ *   the context cannot reach any downstream log line.
+ * - Never throws on the id path. `generateCorrelationId` cannot throw, so a
+ *   caller with no usable id still gets a context, and `fn` always runs.
+ * - Total under id-source failure. If the id source is unavailable *and* the
+ *   inbound id is unusable, the run still succeeds with a `fb-`-prefixed
+ *   degraded id, which is alertable from logs without embedding the error.
+ * - Propagates `fn`'s outcome unchanged. A synchronous throw and a returned
+ *   promise's rejection both reach the caller with their original identity, and
+ *   the context is torn down on either path.
+ * - The caller's own scope is never polluted: after `runWithContext` returns or
+ *   throws, `getCorrelationId()` is `null` outside. Work scheduled inside `fn`
+ *   that outlives it keeps the id, which is what audit writes and outbound RPC
+ *   calls that complete after the response depend on.
  */
 export function runWithContext<T>(correlationId: string, fn: () => T): T {
   const sanitized =
@@ -94,14 +113,33 @@ export function withCorrelationId<T>(correlationId: string, fn: () => T): T {
   return runWithContext(correlationId, fn);
 }
 
-let ulidGenerator: () => string = ulid;
+/**
+ * Test-only stand-in for the correlation-id source, consulted by
+ * `generateCorrelationId` in place of the live `ulid` export.
+ *
+ * Invariants:
+ * - `null` is the default and means "no override", so production behaviour and
+ *   the healthy code path are untouched.
+ * - The override is resolved *per call* rather than captured at module load, so
+ *   it is actually consulted. (It previously was not: `generateCorrelationId`
+ *   dereferenced `ulid` directly, leaving this hook write-only — every test
+ *   that set it exercised the real generator and asserted nothing.)
+ * - The override cannot weaken validation. A value it returns is still checked
+ *   against `ULID_PATTERN` and still falls through to the degraded path, so a
+ *   test double can drive the failure boundary but never launder a malformed
+ *   or tainted id into the context.
+ * - This is the only portable seam for the failure boundary: the package is
+ *   ESM, where a test runner cannot spy on a module namespace object, so
+ *   monkey-patching the `ulid` export is not available.
+ */
+let ulidOverride: (() => string) | null = null;
 
 /**
  * Hook for testing failure boundaries when ULID generation fails.
  * Internal only.
  */
 export function _setUlidGeneratorForTesting(fn: () => string): void {
-  ulidGenerator = fn;
+  ulidOverride = fn;
 }
 
 /**
@@ -109,7 +147,7 @@ export function _setUlidGeneratorForTesting(fn: () => string): void {
  * Internal only.
  */
 export function _resetUlidGeneratorForTesting(): void {
-  ulidGenerator = ulid;
+  ulidOverride = null;
 }
 
 /**
@@ -205,8 +243,12 @@ function generateDegradedCorrelationId(): string {
  *   is visible and alertable from logs without exposing the underlying error.
  */
 export function generateCorrelationId(): string {
+  // `ulid` is dereferenced per call rather than captured at module load, so
+  // module-level mocking still reaches the healthy path. `ulidOverride` is the
+  // supported seam for driving the failure boundary deterministically.
+  const source = ulidOverride ?? ulid;
   try {
-    const candidate = ulid();
+    const candidate = source();
     if (typeof candidate === "string" && ULID_PATTERN.test(candidate)) {
       return candidate;
     }
