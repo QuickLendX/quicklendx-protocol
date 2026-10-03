@@ -490,10 +490,8 @@ describe("logAccess — console.log transport failure boundary", () => {
   it("emits a diagnostic to console.error when console.log throws", () => {
     logAccess({ action: "read", resource: "kyc", fields: [], sensitiveFields: [], piiFields: [], status: "success" });
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[access-log]"),
-      expect.any(Error)
-    );
+    // Transport exceptions may contain KYC data; diagnostics use a fixed code.
+    expect(consoleErrorSpy).toHaveBeenCalledWith("[ACCESS_LOG_CONSOLE_FAILED]");
   });
 });
 
@@ -579,10 +577,8 @@ describe("accessLogMiddleware — res.json override survives logAccess failure",
 
     runMiddleware(middleware, req, res);
 
-    expect(consoleErrorSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[access-log]"),
-      expect.any(Error)
-    );
+    // Never print the caught exception, which may contain request data.
+    expect(consoleErrorSpy).toHaveBeenCalledWith("[ACCESS_LOG_WRITE_FAILED]");
   });
 });
 

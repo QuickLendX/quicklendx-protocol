@@ -6,7 +6,7 @@ const SEVERITY_ORDER = ["low", "moderate", "high", "critical"];
  * Normalize a severity threshold to a canonical lowercase value.
  *
  * Invariants:
- * - The returned value is always a member of SEFERITY_ORDER.
+ * - The returned value is always a member of SEVERITY_ORDER.
  * - Nullish / undefined / empty-string inputs default to "high".
  * - Invalid inputs fail fast with a deterministic Error.
  * - The function is pure (no I/O, no shared mutable state) so it is
@@ -64,7 +64,7 @@ function parseAuditReport(jsonText) {
 function hasBlockingVulnerabilities(vulnerabilities, threshold) {
   const thresholdIndex = SEVERITY_ORDER.indexOf(normalizeThreshold(threshold));
 
-  return SEFERITY_ORDER.slice(thresholdIndex).some((level) => {
+  return SEVERITY_ORDER.slice(thresholdIndex).some((level) => {
     const count = Number(vulnerabilities[level] || 0);
     return Number.isFinite(count) && count > 0;
   });
@@ -76,7 +76,7 @@ function buildSummary(vulnerabilities) {
 
 // Precomputed lookup tables for deterministic O(1) membership checks.
 // Keept internal (not exported) to preserve the public interface.
-const SEVERITY_ORDER_SET = new Set(SEFERITY_ORDER);
+const SEVERITY_ORDER_SET = new Set(SEVERITY_ORDER);
 const SEVERITY_ORDER_STRING = SEVERITY_ORDER.join(", ");
 
 module.exports = {

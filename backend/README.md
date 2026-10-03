@@ -119,6 +119,27 @@ npm test -- --testPathPattern=api-key.test.ts
 
 The OpenAPI spec is located in `openapi.yaml`. You can view it using any Swagger/OpenAPI viewer.
 
+## KYC access audit boundaries
+
+`kycAccessLogMiddleware(action)` records each synchronous `res.json` attempt,
+including retries, using the final synchronous HTTP status. Installing the same
+resource/action logger twice on one response does not duplicate records. This
+audit does not confirm transport delivery or cover responses sent without JSON.
+
+The logger inspects field names without reading KYC values. Authenticated
+`req.actor` takes precedence over the legacy `x-user-id` audit hint; neither the
+logger nor that hint grants access. Bearer credentials are hashed. Identity hints
+and IP addresses remain in the audit store and are omitted from console summaries.
+The in-memory store retains the newest 10,000 entries and is not durable storage.
+
+Metadata failures produce `ACCESS_LOG_METADATA_FAILED` records without blocking
+the response. Writer failures produce `RESPONSE_WRITE_FAILED` records and preserve
+the original thrown error. Console/store failures emit fixed diagnostic codes
+(`ACCESS_LOG_CONSOLE_FAILED` / `ACCESS_LOG_WRITE_FAILED`) where possible, without
+printing caught error messages or replacing an application error. If both audit
+sinks fail, delivery continues and an audit record may be unavailable. Unsupported
+runtime actions throw `TypeError` when constructing the middleware.
+
 ## Security Assumptions
 
 - **Auth Model**: Initial skeleton uses a Bearer token placeholder in the middleware. Production implementation should integrate with Soroban wallet signatures or JWT.
