@@ -5,8 +5,7 @@ import { createHash } from "crypto";
 import { AsyncLocalStorage } from "async_hooks";
 import { getDatabase } from "../database";
 import { config } from "../../config";
-import { MigrationErrorCodes } from "./types";
-import type { MigrationDefinition, MigrationState, ParsedMigration } from "./types";
+import type { MigrationContext, MigrationDefinition, MigrationState, ParsedMigration } from "./types";
 
 /**
  * A single prepared statement on a `DatabaseClient`.
@@ -102,9 +101,34 @@ const MIGRATIONS_DIR = path.resolve(process.cwd(), "src", "migrations");
 const HOTFIX_APPROVALS_DIR_NAME = ".hotfix-approvals";
 const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), HOTFIX_APPROVALS_DIR_NAME);
 
-/** Read-only query backing `getAppliedVersions`. Never interpolates input. */
-const APPLIED_VERSIONS_SQL = "SELECT version FROM _migrations ORDER BY version ASC";
+// The only shape a migration name can legitimately have, per
+// parseMigrationFilename. Enforced again when building an approval path so a
+// ParsedMigration assembled by any other caller cannot point the approval
+// check outside HOTFIX_APPROVALS_DIR via "../" or an absolute path.
+const APPROVAL_NAME_PATTERN = /^[a-z0-9_]+$/;
 
+export class MigrationLoadError extends Error {
+  code: string;
+  constructor(code: string, message: string) {
+    super(message);
+    this.name = "MigrationLoadError";
+    this.code = code;
+  }
+}
+
+export const MigrationLoadErrorCodes = {
+  ENO_ENT: "ENOENT",
+  NOT_A_DIRECTORY: "NOT_A_DIRECTORY",
+  PERMISSION_DENIED: "PERMISSION_DENIED",
+  INVALID_FILENAME: "INVALID_FILENAME",
+  DUPLICATE_VERSION: "DUPLICATE_VERSION",
+  VERSION_MISMATCH: "VERSION_MISMATCH",
+  MISSING_DEFAULT_EXPORT: "MISSING_DEFAULT_EXPORT",
+  INVALID_DEFINITION: "INVALID_DEFINITION",
+  FILE_READ_FAILED: "FILE_READ_FAILED",
+} as const;
+
+export type MigrationLoadErrorCode = (typeof MigrationLoadErrorCodes)[keyof typeof MigrationLoadErrorCodes];
 export function computeChecksum(content: string): string {
   if (typeof content !== "string") {
     throw new TypeError(
@@ -124,11 +148,24 @@ export function parseMigrationFilename(filename: string): { version: number; nam
  * Resolve the migrations directory. Tests and callers may override via the
  * `MIGRATIONS_DIR` environment variable to exercise boundary conditions without
  * touching the repository layout. Defaults to `<cwd>/src/migrations`.
+ *
+ * Security: the override is validated against path traversal — the resolved
+ * path must start with `process.cwd()` so an attacker cannot point the runner
+ * at an arbitrary directory on the filesystem.
  */
 function resolveMigrationsDir(): string {
   const override = process.env.MIGRATIONS_DIR;
   if (override && override.trim().length > 0) {
-    return path.resolve(override);
+    const resolved = path.resolve(override);
+    const cwd = process.cwd();
+    // Reject paths that escape the project root (e.g. "../../../etc").
+    if (!resolved.startsWith(cwd + path.sep) && resolved !== cwd) {
+      throw new MigrationLoadError(
+        MigrationLoadErrorCodes.PERMISSION_DENIED,
+        `MIGRATIONS_DIR must be within the project root: ${override}`,
+      );
+    }
+    return resolved;
   }
   return MIGRATIONS_DIR;
 }
@@ -156,7 +193,7 @@ function validateDefinition(
   if (typeof candidate.version !== "number") {
     throw new MigrationLoadError(
       MigrationLoadErrorCodes.INVALID_DEFINITION,
-      `Migration ${file} is missing a numeric `version` export.`,
+      `Migration ${file} is missing a numeric \`version\` export.`,
     );
   }
   if (candidate.version !== parsed.version) {
@@ -168,7 +205,7 @@ function validateDefinition(
   if (typeof candidate.up !== "function") {
     throw new MigrationLoadError(
       MigrationLoadErrorCodes.INVALID_DEFINITION,
-      `Migration ${file} is missing a `up` function.`,
+      `Migration ${file} is missing a \`up\` function.`,
     );
   }
   return def as MigrationDefinition;
@@ -249,12 +286,20 @@ export async function loadMigrationsFromFS(): Promise<ParsedMigration[]> {
     }
 
     let def: MigrationDefinition;
+    // Security: only allow .ts files to be loaded via require(). Rejects .js,
+    // .node, or any other extension that could execute untrusted code.
+    if (!file.endsWith(".ts")) {
+      throw new MigrationLoadError(
+        MigrationLoadErrorCodes.PERMISSION_DENIED,
+        `Migration file must have a .ts extension: ${file}`,
+      );
+    }
     try {
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const loaded = require(filePath);
       def = (loaded && (loaded.default ?? loaded)) as MigrationDefinition;
     } catch (err: unknown) {
-      const message = err instance of Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err);
       throw new MigrationLoadError(
         MigrationLoadErrorCodes.MISSING_DEFAULT_EXPORT,
         `Failed to load migration ${file}: ${message}`,
@@ -595,8 +640,8 @@ export function buildContext(db: DatabaseClient, isProd: boolean): MigrationCont
       // Drivers disagree on the casing of the rowid field (better-sqlite3 spells
       // it `lastInsertRowid`), so both are accepted and normalized to 0.
       return {
-        lastInsertRowId: toCount(result?.lastInsertRowId ?? result?.lastInsertRowid),
-        changes: toCount(result?.changes),
+        lastInsertRowId: (result?.lastInsertRowId ?? result?.lastInsertRowid ?? 0) as number,
+        changes: (result?.changes ?? 0) as number,
       };
     },
 
@@ -613,10 +658,8 @@ export function buildContext(db: DatabaseClient, isProd: boolean): MigrationCont
   };
 }
 
-export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient; to?: number | string; all?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
+export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; to?: string; all?: boolean; db?: DatabaseClient } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
   const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb, to, all } = options;
-export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient; to?: string; all?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
-  const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb } = options;
   const isProd = config.NODE_ENV === "production";
   const startTime = Date.now();
 
@@ -646,7 +689,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
 
   const appliedRows = db.prepare(
     "SELECT version, name, checksum, applied_at, duration_ms, author, meta FROM _migrations ORDER BY version ASC"
-  ).all() || [];
+  ).all() as any[] || [];
   const applied = new Map<number, MigrationState>();
   appliedRows.forEach((r: any) => {
     let meta: Record<string, unknown> = {};
@@ -736,8 +779,6 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
           const migStart = Date.now();
           let durationMs = 0;
           let state!: MigrationState;
-          let durationMs = 0;
-          let state!: MigrationState;
           let appliedInTransaction = false;
 
           // The context's transaction helper is awaited so that the async `up`
@@ -784,29 +825,16 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             ]);
             appliedInTransaction = true;
           });
-          applyTx();
-
-          if (concurrentlyApplied) {
+          if (!appliedInTransaction) {
+            if (verbose) console.log(`⏭  Migration ${version}_${fileMig.name} already applied, skipping`);
             skipped++;
             continue;
           }
 
-          const appliedDurationMs = Date.now() - migStart;
-          state = {
-            version,
-            name: fileMig.name,
-            checksum,
-            appliedAt,
-            durationMs: appliedDurationMs,
-            author: fileMig.content.author,
-            meta,
-          };
-
           appliedThisRun.push(state);
-          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${appliedDurationMs}ms)`);
           if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${state.durationMs}ms)`);
         } catch (err: any) {
-          console.error(`❌ Migration ${version}_${fileMig.name} failed:', err.message);
+          console.error(`❌ Migration ${version}_${fileMig.name} failed: ${err.message}`);
           throw err;
         }
       } else {
@@ -857,13 +885,6 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             durationMs = Date.now() - migStart;
             db.prepare("DELETE FROM _migrations WHERE version = ?").run([version]);
           });
-          rollbackTx();
-
-          if (concurrentlyApplied) {
-            skipped++;
-            continue;
-          }
-
           appliedThisRun.push({
             version,
             name: fileMig.name,
@@ -874,9 +895,9 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             meta: fileMig.content.meta,
           });
 
-if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms)`);
+          if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms)`);
         } catch (err: any) {
-          console.error(`❌ Rollback of ${version}_${fileMig.name} failed:', err.message);
+          console.error(`❌ Rollback of ${version}_${fileMig.name} failed: ${err.message}`);
           throw err;
         }
       } else {
@@ -898,241 +919,25 @@ if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (
 }
 
 /**
- * Deterministic failure-boundary error for reads of the `_migrations` ledger.
+ * Versions recorded in `_migrations`, ascending.
  *
- * Invariants:
- * - Every failure path in `getAppliedVersions` rejects with this error rather
- *   than returning a partial or malformed version list, so callers can never
- *   mis-order, skip, or re-apply migrations based on corrupt state.
- * - `message` is single-line and length-capped: diagnosable in logs and
- *   user-facing output without echoing raw driver payloads or ledger rows.
- * - `cause` preserves the original driver error for programmatic diagnosis.
- * - `retryable` reports whether a retry can succeed without any state change
- *   (the read itself is side-effect free apart from idempotent table DDL).
- */
-export class MigrationStateReadError extends Error {
-  /** Stable machine-readable code (see `MigrationErrorCodes`). */
-  readonly code: string;
-  /** True when the underlying failure is transient (e.g. SQLITE_BUSY). */
-  readonly retryable: boolean;
-  /** Original, unsanitized driver error for programmatic diagnosis. */
-  cause?: unknown;
-
-  constructor(message: string, options: { retryable?: boolean; cause?: unknown } = {}) {
-    super(message);
-    this.name = "MigrationStateReadError";
-    this.code = MigrationErrorCodes.MIGRATION_STATE_READ_FAILED;
-    this.retryable = options.retryable ?? false;
-    this.cause = options.cause;
-  }
-}
-
-/**
- * Collapse a driver error into a single-line, length-capped summary.
- *
- * Driver messages can be multi-line and may embed SQL, filesystem paths, or
- * row payloads, so callers and logs only receive a sanitized summary while the
- * untouched original stays available on `MigrationStateReadError.cause`.
- */
-function sanitizeDriverMessage(err: unknown): string {
-  let raw: string;
-  if (err instanceof Error) {
-    raw = err.message;
-  } else if (err !== null && typeof err === "object" && typeof (err as { message?: unknown }).message === "string") {
-    raw = (err as { message: string }).message;
-  } else {
-    raw = String(err);
-  }
-  const flattened = raw.replace(/\s+/g, " ").trim();
-  if (flattened.length === 0) return "unknown error";
-  return flattened.length > 200 ? `${flattened.slice(0, 200)}...` : flattened;
-}
-
-/** Driver codes that indicate a transient condition a retry may resolve. */
-const RETRYABLE_DRIVER_CODES = new Set(["SQLITE_BUSY", "SQLITE_LOCKED", "SQLITE_TIMEOUT", "EBUSY", "EAGAIN", "ETIMEDOUT"]);
-/** SQLite primary result codes: 5 = SQLITE_BUSY, 6 = SQLITE_LOCKED. */
-const RETRYABLE_SQLITE_PRIMARY_CODES = new Set([5, 6]);
-
-/**
- * Decide whether a driver failure is transient. Matches the driver `code`,
- * the numeric `errcode` masked to its primary SQLite result code (so extended
- * codes such as 0x105 SQLITE_BUSY_SNAPSHOT also match), or well-known lock
- * message text. Reads are idempotent, so `retryable` failures are always safe
- * to retry — retries can never produce an inconsistent result here.
- */
-function isRetryableDbError(err: unknown): boolean {
-  if (err === null || typeof err !== "object") return false;
-  const { code, errcode, message } = err as { code?: unknown; errcode?: unknown; message?: unknown };
-  if (typeof code === "string" && RETRYABLE_DRIVER_CODES.has(code)) return true;
-  if (typeof errcode === "number" && RETRYABLE_SQLITE_PRIMARY_CODES.has(errcode & 0xff)) return true;
-  if (typeof message === "string") {
-    const lower = message.toLowerCase();
-    if (lower.includes("database is locked") || lower.includes("database is busy")) return true;
-  }
-  return false;
-}
-
-/**
- * Describe a value for diagnostics without dumping raw row payloads.
- * Primitive values are included (truncated) because they identify the bad
- * column cheaply; structured values are reported by type only so ledger
- * contents can never leak into logs or user-facing errors.
- */
-function describeValue(value: unknown): string {
-  if (value === null) return "null";
-  if (Array.isArray(value)) return "array";
-  const type = typeof value;
-  if (type === "string" || type === "number" || type === "boolean" || type === "bigint") {
-    const repr = String(value as string | number | boolean | bigint);
-    return repr.length > 64 ? `${type}(${repr.slice(0, 64)}...)` : `${type}(${repr})`;
-  }
-  return type; // undefined, object, function, symbol
-}
-
-/**
- * Convert a stored `_migrations.version` cell to a safe integer.
- *
- * Accepts integers and integer-valued strings (drivers differ in how they
- * serialize INTEGER columns). Anything else is a hard failure: returning a
- * bogus version could make callers mis-order or re-apply migrations.
- * Boundary cases: version 0 is valid (the filename regex allows `v000`);
- * negative, fractional, unsafe-integer, and empty values are rejected.
- *
- * @param value    raw `version` cell from the ledger row
- * @param rowIndex zero-based row index, used for diagnostics only
- * @throws {MigrationStateReadError} when the cell is not a valid version
- */
-function toMigrationVersion(value: unknown, rowIndex: number): number {
-  let version: number;
-  if (typeof value === "number") {
-    version = value;
-  } else if (typeof value === "string" && value.trim() !== "") {
-    version = Number(value);
-  } else {
-    throw new MigrationStateReadError(
-      `Invalid _migrations row: version at index ${rowIndex} must be an integer, received ${describeValue(value)}.`
-    );
-  }
-  if (!Number.isSafeInteger(version) || version < 0) {
-    throw new MigrationStateReadError(
-      `Invalid _migrations row: version at index ${rowIndex} must be a non-negative safe integer, received ${describeValue(value)}.`
-    );
-  }
-  return version;
-}
-
-/**
- * Read the applied migration versions from the `_migrations` ledger.
- *
- * Deterministic failure-boundary invariants:
- * - Output contract: an ascending, de-duplicated array of non-negative safe
- *   integers, or a rejected promise. A partial or malformed list is never
- *   returned, so callers cannot act on corrupt migration state.
- * - Fresh database: the ledger table is bootstrapped with the same idempotent
- *   `CREATE TABLE IF NOT EXISTS` used by `runMigrations()` and
- *   `verifyAppliedChecksums()` (when the adapter exposes `exec`), so an
- *   uninitialized database deterministically yields `[]` instead of throwing.
- * - Errors: every failure path (connection acquisition, permission denied,
- *   table bootstrap, statement preparation, execution, malformed rows) rejects
- *   with `MigrationStateReadError` (`code: MIGRATION_STATE_READ_FAILED`) whose
- *   message is sanitized for logs and whose `cause` carries the raw error.
- * - Retry & concurrency: the call is read-only apart from the idempotent DDL
- *   above, so retries and concurrent invocations are safe and yield identical
- *   results; transient lock/busy failures are flagged `retryable === true`.
- * - Compatibility: `db` remains optional, legacy adapters that implement only
- *   `prepare` keep working, and nullish query results still mean an empty
- *   ledger (preserves the previous `|| []` behavior).
- *
- * @param db optional injected client; defaults to the shared connection
- * @throws {MigrationStateReadError} on any failure or malformed ledger row
+ * The bookkeeping table is created first (`CREATE TABLE IF NOT EXISTS`), so a
+ * database that has never been migrated resolves to `[]` instead of failing
+ * with `no such table`. That matters because {@link isDatabaseInitialized} uses
+ * this to answer "has this database been migrated yet?" — it must be able to
+ * answer "no" rather than throw on a fresh install.
  */
 export async function getAppliedVersions(db?: DatabaseClient): Promise<number[]> {
-  let database: DatabaseClient;
-  try {
-    database = db || getDatabase();
-  } catch (err) {
-    throw new MigrationStateReadError(
-      `Unable to acquire database handle for migration state read: ${sanitizeDriverMessage(err)}`,
-      { cause: err, retryable: isRetryableDbError(err) }
-    );
-  }
-  if (!database) {
-    throw new MigrationStateReadError(
-      "Unable to acquire database handle for migration state read: no database handle available."
-    );
-  }
-
-  // Legacy adapters may implement only `prepare` (existing callers in this
-  // repo do); the real better-sqlite3 handle always exposes `exec`.
-  try {
-    if (typeof database.exec === "function") {
-      database.exec(MIGRATIONS_TABLE);
-    }
-  } catch (err) {
-    throw new MigrationStateReadError(
-      `Failed to ensure _migrations ledger exists: ${sanitizeDriverMessage(err)}`,
-      { cause: err, retryable: isRetryableDbError(err) }
-    );
-  }
-
-  let rows: unknown;
-  try {
-    rows = database.prepare(APPLIED_VERSIONS_SQL).all();
-  } catch (err) {
-    throw new MigrationStateReadError(
-      `Failed to read applied migration ledger: ${sanitizeDriverMessage(err)}`,
-      { cause: err, retryable: isRetryableDbError(err) }
-    );
-  }
-
-  // Legacy contract: adapters may signal "no rows" with a nullish result.
-  if (rows === null || rows === undefined) return [];
-
-  if (!Array.isArray(rows)) {
-    throw new MigrationStateReadError(
-      `Failed to read applied migration ledger: expected an array of rows, received ${describeValue(rows)}.`,
-      { cause: rows }
-    );
-  }
-
-  // Validate every row before returning anything: a failure mid-way throws
-  // before any partial result can escape to the caller.
-  const versions = new Set<number>();
-  rows.forEach((row: unknown, index: number) => {
-    if (row === null || typeof row !== "object" || Array.isArray(row)) {
-      throw new MigrationStateReadError(
-        `Failed to read applied migration ledger: row at index ${index} must be an object, received ${describeValue(row)}.`,
-        { cause: row }
-      );
-    }
-    versions.add(toMigrationVersion((row as { version?: unknown }).version, index));
-  });
-
-  // Numeric (not lexicographic) ascending order, guaranteed even if an adapter
-  // ignores ORDER BY; the Set collapses duplicate ledger rows defensively.
-  return [...versions].sort((a, b) => a - b);
+  const database = db || toDatabaseClient(getDatabase());
+  database.exec(MIGRATIONS_TABLE);
+  const rows = (database.prepare("SELECT version FROM _migrations ORDER BY version ASC").all() || []) as any[];
+  return rows.map((r: any) => r.version);
 }
 
 /** True when at least one migration has been recorded as applied. */
 export async function isDatabaseInitialized(db?: DatabaseClient): Promise<boolean> {
-  try {
-    const applied = await getAppliedVersions(db);
-    if (!Array.isArray(applied)) {
-      return false;
-    }
-
-    // A database is considered initialized only when the migration ledger exists and
-    // contains at least one valid version. Missing tables, permission failures, and
-    // malformed query payloads are treated as an uninitialized state instead of a
-    // crash so startup and retry logic remain deterministic.
-    return applied.some((version) => Number.isInteger(version) && version >= 0);
-  } catch (error) {
-    console.warn(
-      "[migrations] Database initialization check failed; treating as uninitialized.",
-      error instanceof Error ? error.message : String(error)
-    );
-    return false;
-  }
+  const applied = await getAppliedVersions(db);
+  return applied.length > 0;
 }
 
 /**
@@ -1171,11 +976,7 @@ export async function validateMigrationFiles(): Promise<{ valid: boolean; errors
   // ── 1. Duplicate version detection ───────────────────────────────────────────
   // Collect every version number, then find which ones appear more than once so
   // the error message names each offending version explicitly.
-  const versionCounts = new Map<number, number>();
-  for (const m of migrations) {
-    versionCounts.set(m.version, (versionCounts.get(m.version) ?? 0) + 1);
-  }
-
+  const versions = migrations.map((m) => m.version);
   const uniqueVersions = new Set(versions);
   if (uniqueVersions.size !== versions.length) {
     errors.push("Duplicate version numbers detected");
@@ -1191,9 +992,9 @@ export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ val
   // Ensure migrations table exists
   database.exec(MIGRATIONS_TABLE);
   
-  const appliedRows = database.prepare(
+  const appliedRows = (database.prepare(
     "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
-  ).all() || [];
+  ).all() || []) as any[];
   
   const fileMigrations = await loadMigrationsFromFS();
   const fileMigrationMap = new Map(fileMigrations.map((m) => [m.version, m]));
@@ -1211,13 +1012,13 @@ export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ val
     
     if (currentChecksum !== row.checksum) {
       errors.push(
-        `Duplicate version ${version}: found ${count} migration files with the same version number`
+        `Checksum mismatch for migration ${row.version}_${row.name}`
       );
     }
   }
 
   // Work on the deduplicated, sorted version list for sequence checks.
-  const versions = Array.from(new Set(migrations.map((m) => m.version))).sort((a, b) => a - b);
+  const versions = Array.from(new Set(fileMigrations.map((m) => m.version))).sort((a, b) => a - b);
 
   // ── 2. Version-zero guard ─────────────────────────────────────────────────────
   // Version 0 is explicitly prohibited; the sequence must begin at 1.
@@ -1255,7 +1056,7 @@ export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ val
   // collision causes ambiguity that cannot be resolved at runtime without
   // reading version numbers, which operators frequently do not do under pressure.
   const nameCounts = new Map<string, number[]>();
-  for (const m of migrations) {
+  for (const m of fileMigrations) {
     if (!nameCounts.has(m.name)) nameCounts.set(m.name, []);
     nameCounts.get(m.name)!.push(m.version);
   }
@@ -1282,7 +1083,7 @@ export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ val
   // Each error is prefixed with the migration identifier so the caller can
   // display them as a flat list without needing to group by migration.
   const { MigrationPolicy } = await import("./policy");
-  for (const m of migrations) {
+  for (const m of fileMigrations) {
     const metaCheck = MigrationPolicy.validateMetadata(m.content);
     if (!metaCheck.valid) {
       for (const err of metaCheck.errors) {
@@ -1312,55 +1113,3 @@ export interface VerifyAppliedChecksumsOptions {
   appliedRows?: AppliedMugrationRow[];
 }
 
-/**
- * Verifies that every applied migration in _migrations still matches the
- * current on-disk migration file.
- *
- * Invariants:
- *   - The function is pure with respect to its inputs: given the same
- *     database state and on-disk files, it always returns the same result.
- *   - It never throws for expected failure modes (DB read failure, missing
- *     file, mismatched checksum); instead it reports them in `errors`.
- *   - Error messages are deterministic and do not include sensitive data
- *     (no file contents, no absolute paths beyond the basename).
- *   - Duplicate applied rows for the same version are reported as an error
- *     rather than silently de-duplicated.
- */
-export async function verifyAppliedChecksums(
-  db?: DatabaseClient,
-  options: VerifyAppliedChecksumsOptions = {},
-): Promise<ChecksumVerificationResult> {
-  const errors: string[] = [];
-  const database = db || getDatabase();
-// Ensure migrations table exists
-  database.exec(MIGRATIONS_TABLE);
-  const appliedRows = database.prepare(
-    "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
-  ).all() || [];
-
-  if (appliedRows.length === 0) {
-    return { valid: true, errors: [] };
-  }
-
-  const migrations = await loadMigrationsFromFS();
-  // First-match semantics (matching loadMigrationsFromFS ordering) so duplicate
-  // version numbers resolve deterministically the same way the runner applies them.
-  const fileMigrationMap = new Map<number, ParsedMigration>();
-  for (const m of migrations) {
-    if (!fileMigrationMap.has(m.version)) fileMigrationMap.set(m.version, m);
-  }
-for (const row of appliedRows as any[]) {
-    const mig = fileMigrationMap.get(row.version);
-    if (!mig) {
-      errors.push(`Applied migration ${row.version}_${row.name} has no corresponding file`);
-      continue;
-    }
-const fileContent = await fs.readFile(path.join(resolveMigrationsDir(), mig.file), "utf-8");
-    const actual = computeChecksum(fileContent);
-    if (actual !== row.checksum) {
-      errors.push(`Checksum mismatch for ${row.version}_${row.name}`);
-    }
-  }
-
-  return { valid: errors.length === 0, errors };
-}
