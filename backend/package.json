@@ -19,7 +19,8 @@
     "migrate:dry-run": "npm run migrate -- --dry-run",
     "migrate:validate": "npm run migrate -- --validate-only",
     "migrate:up": "npm run migrate",
-    "migrate:down": "ts-node src/lib/migrations/cli.ts down"
+    "migrate:down": "ts-node src/lib/migrations/cli.ts down",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
