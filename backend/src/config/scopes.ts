@@ -185,20 +185,6 @@ export function isValidScope(scope: string): boolean {
 }
 
 /**
- * Validate an array of scopes
- */
-export function validateScopes(scopes: string[]): { valid: boolean; invalid: string[] } {
-  if (!Array.isArray(scopes)) {
-    return { valid: false, invalid: [] };
-  }
-  const invalid = scopes.filter(scope => !isValidScope(scope));
-  return {
-    valid: invalid.length === 0,
-    invalid,
-  };
-}
-
-/**
  * Validate an array of scopes against the registry.
  *
  * Deterministic failure boundary:
@@ -214,6 +200,21 @@ export function validateScopes(scopes: string[]): { valid: boolean; invalid: str
  * - Non-array input is a programming error and throws a TypeError naming
  *   the received type (never a misleading "valid" result).
  */
+
+/** Result shape for scope validation. */
+export interface ScopeValidationResult {
+  valid: boolean;
+  invalid: readonly string[];
+}
+
+/** Describe a value's type for error messages. */
+function describeValueType(value: unknown): string {
+  if (value === null) return "null";
+  if (value === undefined) return "undefined";
+  if (Array.isArray(value)) return "array";
+  return typeof value;
+}
+
 export function validateScopes(scopes: string[]): ScopeValidationResult {
   if (!Array.isArray(scopes)) {
     throw new TypeError(
@@ -292,6 +293,8 @@ export function hasRequiredScopes(grantedScopes: string[], requiredScopes: strin
     return false;
   }
 
+  const granted = new Set(grantedScopes);
+
   // Check for admin:* which grants everything
   if (grantedScopes.includes('admin:*')) {
     return true;
@@ -304,14 +307,14 @@ export function hasRequiredScopes(grantedScopes: string[], requiredScopes: strin
     const [category] = required.split(':');
 
     // Check for exact match
-    if (granted.has(requiredScope)) {
+    if (granted.has(required)) {
       continue;
     }
 
     // Check for wildcard match (e.g., read:* covers read:users). The category
     // is derived from the already-validated requirement, so indexOf is safe.
-    const category = requiredScope.slice(0, requiredScope.indexOf(':'));
-    if (granted.has(`${category}:*`)) {
+    const wildcardCategory = required.slice(0, required.indexOf(':'));
+    if (granted.has(`${wildcardCategory}:*`)) {
       continue;
     }
 

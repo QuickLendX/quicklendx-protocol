@@ -11,19 +11,22 @@
  *
  * All Pool methods return resolved Promises so they behave safely even if
  * test code accidentally calls them.
+ *
+ * Note: uses plain functions instead of jest.fn() because jest is not
+ * installed as a dependency in this package.
  */
 
-const mockRelease = jest.fn();
-const mockQuery = jest.fn().mockResolvedValue({ rows: [], rowCount: 0 });
-const mockConnect = jest.fn().mockResolvedValue({
-  query: mockQuery,
-  release: mockRelease,
+const mockReleaseFn = () => undefined;
+const mockQueryFn = () => Promise.resolve({ rows: [], rowCount: 0 });
+const mockConnectFn = () => Promise.resolve({
+  query: mockQueryFn,
+  release: mockReleaseFn,
 });
 
 export class Pool {
-  connect = mockConnect;
-  query = mockQuery;
-  end = jest.fn().mockResolvedValue(undefined);
+  connect = mockConnectFn;
+  query = mockQueryFn;
+  end = () => Promise.resolve(undefined);
 }
 
 export default { Pool };

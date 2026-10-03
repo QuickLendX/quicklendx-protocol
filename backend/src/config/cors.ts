@@ -28,7 +28,7 @@ const isAllowedBrowserOrigin = (origin?: string): boolean => {
 };
 
 export const browserCorsOptions: CorsOptions = {
-  origin: (origin, callback) => {
+  origin: (origin: any, callback: any) => {
     if (isAllowedBrowserOrigin(origin)) {
       callback(null, true);
       return;
