@@ -58,9 +58,6 @@ export default {
       .split(";")
       .map((statement) => statement.trim())
       .filter((statement) => statement.length > 0 && !statement.startsWith("--"));
-
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0 && !s.startsWith("--"));
     await runInTransaction(ctx.db, statements);
   },
   down: async (ctx: MigrationContext): Promise<void> => {

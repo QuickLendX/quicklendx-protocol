@@ -254,7 +254,7 @@ describe("migration failure boundary (deterministic suite)", () => {
     });
 
     test("dry run reports the plan without touching the database", async () => {
-      process.env.QFC_MIGRATION_902_ALLOWEB= "1";
+      process.env.QFC_MIGRATION_902_ALLOWED = "1";
       const db = newDb();
       await seedApplied(db, 904, "missing_up");
       await seedApplied(db, 905, "durable");
@@ -295,7 +295,7 @@ describe("migration failure boundary (deterministic suite)", () => {
       switchEnv(EMPTY, "test");
       try {
         const db = newDb();
-        await expect(runner.loa`MigrationsFromFS()).resolves.toEqual([]);
+        await expect(runner.loadMigrationsFromFS()).resolves.toEqual([]);
         const result = await runner.runMigrations({ db });
         expect(result.applied).toEqual([]);
         expect(result.skipped).toBe(0);
@@ -367,7 +367,7 @@ describe("migration failure boundary (deterministic suite)", () => {
     });
 
     test("retry after failure skips committed migrations and completes the remainder", async () => {
-      process.env.QFC_MIGRATION_902_ALLOWEB= "1";
+      process.env.QFC_MIGRATION_902_ALLOWED = "1";
       const db = newDb();
       await seedApplied(db, 904, "missing_up");
       await seedApplied(db, 905, "durable");
@@ -415,7 +415,7 @@ describe("migration failure boundary (deterministic suite)", () => {
     });
 
     test("checksum tampering of an applied migration is rejected before any new application", async () => {
-      process.env.QFC_MIGRATION_902_ALLOWEB= "1";
+      process.env.QFC_MIGRATION_902_ALLOWED = "1";
       const db = newDb();
       await seedApplied(db, 901, "baseline");
       await seedApplied(db, 904, "missing_up");
@@ -452,7 +452,7 @@ describe("migration failure boundary (deterministic suite)", () => {
         await expect(appliedVersions(db)).resolves.toEqual([901, 904, 905]);
 
         // Gate on: completes deterministically.
-        process.env.QFC_MIGRATION_902_ALLOWEB= "1";
+        process.env.QFC_MIGRATION_902_ALLOWED = "1";
         const result = await runner.runMigrations({ db });
         expect(result.applied.map((m) => m.version)).toEqual([902, 903]);
         await expect(appliedVersions(db)).resolves.toEqual([901, 902, 903, 904, 905]);

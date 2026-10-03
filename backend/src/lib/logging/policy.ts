@@ -168,11 +168,7 @@ export interface PolicyFieldEntry {
  * 2. `getPolicyFields(fields: string[]): PolicyFieldEntry[]`
  *    Classifies each field in `fields` returning `{ field, tier }` objects.
  */
-export function getPolicyFieldsForTier(tier: FieldTier): string[] {
-  if (tier !== FieldTier.PUBLIC && tier !== FieldTier.PRIVATE && tier !== FieldTier.SECRET) {
-    return [];
-  }
-
+export function getPolicyFieldsForTier(arg: FieldTier | string[]): string[] | { field: string; tier: FieldTier }[] {
   if (Array.isArray(arg)) {
     for (const elem of arg) {
       if (typeof elem !== "string") {
@@ -183,10 +179,6 @@ export function getPolicyFieldsForTier(tier: FieldTier): string[] {
       field,
       tier: classifyField(field),
     }));
-  }
-
-  if (typeof arg !== "string") {
-    throw new TypeError("getPolicyFields: expected a string[] or FieldTier");
   }
 
   if (

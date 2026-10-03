@@ -1,7 +1,7 @@
 {
   "name": "quicklendx-backend",
   "version": "0.1.0",
-  "description": "QuickLendX backend API controllers (TypeScript).",
+  "description": "",
   "private": true,
   "type": "module",
   "scripts": {
@@ -19,12 +19,12 @@
     "migrate:dry-run": "npm run migrate -- --dry-run",
     "migrate:validate": "npm run migrate -- --validate-only",
     "migrate:up": "npm run migrate",
-    "migrate:down": "ts-node src/lib/migrations/cli.ts down"
+    "migrate:down": "ts-node src/lib/migrations/cli.ts down",
+    "typecheck": "tsc --noEmit"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@types/helmet": "^0.0.48",
     "@types/nodemailer": "^8.0.0",
@@ -42,8 +42,13 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/cors": "^2.8.19",
     "@types/node": "^20.19.0",
     "@vitest/coverage-v8": "^2.1.9",
+    "fast-check": "^3.23.2",
+    "jest": "^29.7.0",
+    "js-yaml": "^4.3.2",
+    "supertest": "^6.3.4",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
