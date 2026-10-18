@@ -1,58 +1,67 @@
- # QuickLendX Protocol
-    
-    QuickLendX is a monorepo containing the complete protocol stack for decentralized invoice financing on Stellar Soroban.
-    
-    ## Packages
-    
-    - `quicklendx-contracts/`: Smart contracts and contract tests for the QuickLendX protocol.
-    - `quicklendx-backend/`: Backend services, API schema, and server implementation.
-    - `quicklendx-frontend/`: Next.js frontend application for user interaction.
-    
-    ## Getting Started
-    
-    ### Smart Contracts
-    
-    ```bash
-    cd quicklendx-contracts
-    cargo build
-    cargo test
+# QuickLendX Protocol
 
-  ### Backend
+QuickLendX is a monorepo containing the complete protocol stack for decentralized invoice financing on Stellar Soroban.
 
-    cd quicklendx-backend
-    npm ci
-    npm run dev
+## Live deployment
 
-  ### Frontend
+| | |
+|---|---|
+| **Frontend** | https://quicklendx-frontend.vercel.app |
+| **Contract (Stellar testnet)** | [`CDA2HTKRANXYZ7HK4VG6G5IK67YM7DK44KDRTQ4C6NQIQLFKTPBBCGXK`](https://stellar.expert/explorer/testnet/contract/CDA2HTKRANXYZ7HK4VG6G5IK67YM7DK44KDRTQ4C6NQIQLFKTPBBCGXK) |
 
-    cd quicklendx-frontend
-    npm ci
-    npm run dev
+> The testnet contract is built from `quicklendx-contracts/` on `main`. Its crate root currently exposes only a placeholder entrypoint; the invoice/bid modules are not yet wired in.
 
-  ## Documentation
+## Packages
 
-  •  docs/ : Project-wide design, implementation, and audit documentation.
-  •  docs/VESTING.md  /docs/VESTING.md: Vesting model, edge cases, and admin protections.
-  •  docs/QUERIES.md  /docs/QUERIES.md: Catalog of common read-only entrypoints with concrete invocation examples and return values — the quickest way to find the query you need.
-  •  docs/contracts/platform-fee-ops.md  /docs/contracts/platform-fee-ops.md: Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
-  •  docs/RUNBOOK_INCIDENT_RESPONSE.md : Operator playbook for unexpected contract behavior and incident-mode recovery.
-  •  docs/INVESTOR_TIER.md : How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
-  •  docs/BID_OVERBID_POLICY.md : What happens when a bid exceeds the invoice amount — rejection path and error code.
-  •  docs/QLX_INVOICE_LOCK_TIME_LIMITS.md : Contributor-facing summary of invoice lock duration, auto-release behavior, and the default grace-period path.
-   •  docs/QLX_INVOICE_TAXONOMY.md : Canonical invoice categories and statuses with transition examples.
-  •  quicklendx-contracts/README.md : Smart contract-specific documentation.
-  •  quicklendx-contracts/docs/contracts/deterministic-time.md : Smart contract deterministic ledger time semantics.
-  •  quicklendx-backend/README.md : Backend-specific documentation.
-  •  backend/docs/REPLAY_RUNBOOK.md : Step-by-step operator runbook for replaying ingestion from a specific ledger — covers reorg recovery, gap backfill, force rebuild after schema
-  migration, and troubleshooting stuck runs.
-  •  quicklendx-frontend/README.md : Frontend-specific documentation.
-  •  docs/PLATFORM_FEES.md : Fee schedule and tenant override documentation.
-  •  docs/PROFIT_SPLIT.md : How platform and investor fees are split.
-  •  docs/INDEXING_CONTRACT.md : What the indexer relies on from the Soroban smart contracts — events, topics, data structures, and storage keys.
+- `quicklendx-contracts/`: Smart contracts and contract tests for the QuickLendX protocol.
+- `quicklendx-backend/`: Backend services, API schema, and server implementation.
+- `quicklendx-frontend/`: Next.js frontend application for user interaction.
 
-  ## Contribution
+## Getting Started
 
-  Please follow the repository guidelines in  AGENTS.md  and include tests for any behavior changes.
+### Smart Contracts
+
+```bash
+cd quicklendx-contracts
+cargo build
+cargo test
+
+### Backend
+
+cd quicklendx-backend
+npm ci
+npm run dev
+
+### Frontend
+
+cd quicklendx-frontend
+npm ci
+npm run dev
+
+## Documentation
+
+•  docs/ : Project-wide design, implementation, and audit documentation.
+•  docs/VESTING.md  /docs/VESTING.md: Vesting model, edge cases, and admin protections.
+•  docs/QUERIES.md  /docs/QUERIES.md: Catalog of common read-only entrypoints with concrete invocation examples and return values — the quickest way to find the query you need.
+•  docs/contracts/platform-fee-ops.md  /docs/contracts/platform-fee-ops.md: Admin operations playbook for managing fee rates, treasury rotation, and revenue splits.
+•  docs/RUNBOOK_INCIDENT_RESPONSE.md : Operator playbook for unexpected contract behavior and incident-mode recovery.
+•  docs/INVESTOR_TIER.md : How the investor risk score, tier, and investment limit are computed — math, thresholds, and worked examples.
+•  docs/BID_OVERBID_POLICY.md : What happens when a bid exceeds the invoice amount — rejection path and error code.
+•  docs/QLX_INVOICE_LOCK_TIME_LIMITS.md : Contributor-facing summary of invoice lock duration, auto-release behavior, and the default grace-period path.
+•  docs/QLX_INVOICE_TAXONOMY.md : Canonical invoice categories and statuses with transition examples.
+•  quicklendx-contracts/README.md : Smart contract-specific documentation.
+•  quicklendx-contracts/docs/contracts/deterministic-time.md : Smart contract deterministic ledger time semantics.
+•  quicklendx-backend/README.md : Backend-specific documentation.
+•  backend/docs/REPLAY_RUNBOOK.md : Step-by-step operator runbook for replaying ingestion from a specific ledger — covers reorg recovery, gap backfill, force rebuild after schema
+migration, and troubleshooting stuck runs.
+•  quicklendx-frontend/README.md : Frontend-specific documentation.
+•  docs/PLATFORM_FEES.md : Fee schedule and tenant override documentation.
+•  docs/PROFIT_SPLIT.md : How platform and investor fees are split.
+•  docs/INDEXING_CONTRACT.md : What the indexer relies on from the Soroban smart contracts — events, topics, data structures, and storage keys.
+
+## Contribution
+
+Please follow the repository guidelines in  AGENTS.md  and include tests for any behavior changes.
 
 ### Frontend
 
@@ -76,8 +85,8 @@ npm run dev
 - `quicklendx-contracts/README.md`: Smart contract-specific documentation.
 - `quicklendx-contracts/docs/contracts/deterministic-time.md`: Smart contract deterministic ledger time semantics.
 - [`docs/README.md`](docs/README.md): Full documentation index — **start here**.
-  - [`docs/contracts/contributor-guide.md`](docs/contracts/contributor-guide.md): Contract contributor guide (module layout, lifecycle, error/event stability contracts, test patterns, WASM budget).
-  - [`quicklendx-backend/docs/contributor-guide.md`](quicklendx-backend/docs/contributor-guide.md): Backend contributor guide (module layout, request pipeline, export/audit wiring, how to add an endpoint).
+- [`docs/contracts/contributor-guide.md`](docs/contracts/contributor-guide.md): Contract contributor guide (module layout, lifecycle, error/event stability contracts, test patterns, WASM budget).
+- [`quicklendx-backend/docs/contributor-guide.md`](quicklendx-backend/docs/contributor-guide.md): Backend contributor guide (module layout, request pipeline, export/audit wiring, how to add an endpoint).
 - [`docs/AUDIT_PREP.md`](docs/AUDIT_PREP.md): Security audit preparation checklist for contributors.
 - [Default Flow Diagram](docs/DEFAULT_FLOW_DIAGRAM.md): State-machine diagram from invoice past-due through default to recovery — grace period, finality guards, dispute interception, and a concrete ledger-timestamp walkthrough.
 - [`docs/INVOICE_LIFECYCLE_DIAGRAM.md`](docs/INVOICE_LIFECYCLE_DIAGRAM.md): Full invoice state machine — all statuses, transitions, entrypoints, and invariants in one diagram. Start here when debugging invoice state issues. Closes #1946.
