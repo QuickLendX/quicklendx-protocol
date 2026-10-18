@@ -475,7 +475,7 @@ Rolled back v003 via `npm run migrate -- --allow-down --emergency`
 - [ ] Require dry-run against production clone before hotfix merge
 
 ## Approval Records
-- [Approval file](.hotfix-approvals/003_hotfix_add_invoice_id.approval) signed by alice, bob
+- Approval file `.hotfix-approvals/003_hotfix_add_invoice_id.approval` signed by alice and bob
 ```
 
 ---
