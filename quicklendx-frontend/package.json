@@ -11,6 +11,7 @@
     "test:watch": "jest --watch"
   },
   "dependencies": {
+    "@stellar/stellar-sdk": "13.3.0",
     "axios": "^1.13.2",
     "next": "15.5.12",
     "react": "19.1.0",
@@ -21,6 +22,9 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@types/jest": "^29.5.14",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -28,6 +32,7 @@
     "eslint": "^9.38.0",
     "eslint-config-next": "^15.5.12",
     "jest": "^29",
+    "jest-environment-jsdom": "^29.7.0",
     "jest-environment-node": "^29",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
@@ -35,15 +40,44 @@
     "typescript": "^5"
   },
   "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/__tests__/**/*.test.ts",
-      "**/tests/**/*.test.ts"
-    ],
-    "moduleNameMapper": {
-      "^@/(.*)$": "<rootDir>/$1"
-    }
+    "projects": [
+      {
+        "displayName": "node",
+        "preset": "ts-jest",
+        "testEnvironment": "node",
+        "testMatch": [
+          "**/__tests__/**/*.test.ts",
+          "**/tests/**/*.test.ts"
+        ],
+        "moduleNameMapper": {
+          "^@/(.*)$": "<rootDir>/$1"
+        }
+      },
+      {
+        "displayName": "jsdom",
+        "preset": "ts-jest",
+        "testEnvironment": "jest-environment-jsdom",
+        "testMatch": [
+          "**/*.test.tsx"
+        ],
+        "setupFilesAfterEnv": [
+          "<rootDir>/jest.setup.ts"
+        ],
+        "transform": {
+          "^.+\\.(ts|tsx)$": [
+            "ts-jest",
+            {
+              "tsconfig": {
+                "jsx": "react-jsx"
+              }
+            }
+          ]
+        },
+        "moduleNameMapper": {
+          "^@/(.*)$": "<rootDir>/$1"
+        }
+      }
+    ]
   },
   "overrides": {
     "minimatch": "^10.2.1",
