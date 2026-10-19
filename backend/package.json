@@ -24,7 +24,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@types/helmet": "^0.0.48",
     "@types/nodemailer": "^8.0.0",
@@ -42,8 +41,12 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.19.0",
+    "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^2.1.9",
+    "supertest": "^7.3.1",
+    "ts-jest": "^29.4.15",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
