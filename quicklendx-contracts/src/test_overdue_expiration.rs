@@ -1,3 +1,4 @@
+// Updated for the defaults API change: grace period is no longer caller-supplied.
 /// Tests for check_overdue_invoices and check_invoice_expiration
 ///
 /// Coverage targets:
@@ -96,7 +97,7 @@ fn test_check_overdue_invoices_returns_zero_when_none_overdue() {
     let due_date = env.ledger().timestamp() + 86400 * 30; // 30 days out
     create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
 
-    let count = client.check_overdue_invoices();
+    let count = client.check_overdue_invoices(&None).overdue_count;
     assert_eq!(count, 0);
 }
 
@@ -112,7 +113,7 @@ fn test_check_overdue_invoices_counts_single_overdue() {
     // Move past due date but before grace deadline
     env.ledger().set_timestamp(due_date + 1);
 
-    let count = client.check_overdue_invoices();
+    let count = client.check_overdue_invoices(&None).overdue_count;
     assert_eq!(count, 1);
 }
 
@@ -134,7 +135,7 @@ fn test_check_overdue_invoices_counts_multiple_overdue() {
     // Move past due2 but before due3
     env.ledger().set_timestamp(due2 + 1);
 
-    let count = client.check_overdue_invoices();
+    let count = client.check_overdue_invoices(&None).overdue_count;
     assert_eq!(count, 2);
 }
 
@@ -152,7 +153,7 @@ fn test_check_overdue_invoices_sends_notifications() {
     let biz_notifs_before = client.get_user_notifications(&business);
     let inv_notifs_before = client.get_user_notifications(&investor);
 
-    client.check_overdue_invoices();
+    client.check_overdue_invoices(&None);
 
     // Business and investor should each receive a PaymentOverdue notification
     let biz_notifs_after = client.get_user_notifications(&business);
@@ -176,7 +177,7 @@ fn test_check_overdue_invoices_defaults_past_grace() {
     env.ledger()
         .set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
-    let count = client.check_overdue_invoices();
+    let count = client.check_overdue_invoices(&None).overdue_count;
     assert_eq!(count, 1);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -188,35 +189,8 @@ fn test_check_overdue_invoices_no_funded_invoices() {
     let (_env, client, _admin) = setup();
 
     // No invoices at all
-    let count = client.check_overdue_invoices();
+    let count = client.check_overdue_invoices(&None).overdue_count;
     assert_eq!(count, 0);
-}
-
-#[test]
-fn test_check_overdue_invoices_grace_custom_period() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id =
-        create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
-
-    let custom_grace = 2 * 24 * 60 * 60; // 2 days
-
-    // Past due but before custom grace
-    env.ledger().set_timestamp(due_date + custom_grace - 1);
-    let count = client.check_overdue_invoices_grace(&custom_grace);
-    assert_eq!(count, 1); // overdue
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Funded); // not yet defaulted
-
-    // Past custom grace
-    env.ledger().set_timestamp(due_date + custom_grace + 1);
-    let count = client.check_overdue_invoices_grace(&custom_grace);
-    assert_eq!(count, 1);
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(invoice.status, InvoiceStatus::Defaulted);
 }
 
 #[test]
@@ -241,7 +215,7 @@ fn test_check_overdue_invoices_skips_non_funded() {
     env.ledger()
         .set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
-    let count = client.check_overdue_invoices();
+    let count = client.check_overdue_invoices(&None).overdue_count;
     assert_eq!(count, 0);
 }
 
@@ -259,10 +233,9 @@ fn test_check_invoice_expiration_returns_true_when_defaulted() {
     let invoice_id =
         create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
 
-    let grace = 3 * 24 * 60 * 60; // 3 days
-    env.ledger().set_timestamp(due_date + grace + 1);
+    env.ledger().set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
-    let result = client.check_invoice_expiration(&invoice_id, &Some(grace));
+    let result = client.check_invoice_expiration(&invoice_id);
     assert!(result);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -279,12 +252,10 @@ fn test_check_invoice_expiration_returns_false_when_not_expired() {
     let invoice_id =
         create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
 
-    let grace = 7 * 24 * 60 * 60;
-
     // Before grace deadline
-    env.ledger().set_timestamp(due_date + grace - 100);
+    env.ledger().set_timestamp(due_date + DEFAULT_GRACE_PERIOD - 100);
 
-    let result = client.check_invoice_expiration(&invoice_id, &Some(grace));
+    let result = client.check_invoice_expiration(&invoice_id);
     assert!(!result);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -301,12 +272,11 @@ fn test_check_invoice_expiration_grace_boundary_exact() {
     let invoice_id =
         create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
 
-    let grace = 5 * 24 * 60 * 60; // 5 days
-    let deadline = due_date + grace;
+    let deadline = due_date + DEFAULT_GRACE_PERIOD;
 
     // Exactly at the grace deadline - should NOT default (current <= deadline)
     env.ledger().set_timestamp(deadline);
-    let result = client.check_invoice_expiration(&invoice_id, &Some(grace));
+    let result = client.check_invoice_expiration(&invoice_id);
     assert!(!result);
     assert_eq!(
         client.get_invoice(&invoice_id).status,
@@ -315,7 +285,7 @@ fn test_check_invoice_expiration_grace_boundary_exact() {
 
     // One second past the deadline - should default
     env.ledger().set_timestamp(deadline + 1);
-    let result = client.check_invoice_expiration(&invoice_id, &Some(grace));
+    let result = client.check_invoice_expiration(&invoice_id);
     assert!(result);
     assert_eq!(
         client.get_invoice(&invoice_id).status,
@@ -345,7 +315,7 @@ fn test_check_invoice_expiration_returns_false_for_non_funded() {
         .set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
     // Verified but not funded - check_and_handle_expiration returns false
-    let result = client.check_invoice_expiration(&invoice_id, &None);
+    let result = client.check_invoice_expiration(&invoice_id);
     assert!(!result);
 }
 
@@ -354,28 +324,8 @@ fn test_check_invoice_expiration_not_found() {
     let (env, client, _admin) = setup();
 
     let fake_id = BytesN::from_array(&env, &[0u8; 32]);
-    let result = client.try_check_invoice_expiration(&fake_id, &None);
+    let result = client.try_check_invoice_expiration(&fake_id);
     assert!(result.is_err());
-}
-
-#[test]
-fn test_check_invoice_expiration_zero_grace() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id =
-        create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
-
-    // Zero grace: defaults immediately after due_date
-    env.ledger().set_timestamp(due_date + 1);
-    let result = client.check_invoice_expiration(&invoice_id, &Some(0));
-    assert!(result);
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
 }
 
 #[test]
@@ -388,15 +338,14 @@ fn test_check_invoice_expiration_already_defaulted_returns_false() {
     let invoice_id =
         create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
 
-    let grace = 3 * 24 * 60 * 60;
-    env.ledger().set_timestamp(due_date + grace + 1);
+    env.ledger().set_timestamp(due_date + DEFAULT_GRACE_PERIOD + 1);
 
     // First call defaults the invoice
-    let first = client.check_invoice_expiration(&invoice_id, &Some(grace));
+    let first = client.check_invoice_expiration(&invoice_id);
     assert!(first);
 
     // Second call on already-defaulted invoice should return false
-    let second = client.check_invoice_expiration(&invoice_id, &Some(grace));
+    let second = client.check_invoice_expiration(&invoice_id);
     assert!(!second);
 }
 
@@ -431,7 +380,7 @@ fn test_check_overdue_invoices_mixed_overdue_and_current() {
 
     env.ledger().set_timestamp(overdue_due + 1);
 
-    let count = client.check_overdue_invoices();
+    let count = client.check_overdue_invoices(&None).overdue_count;
     assert_eq!(count, 1);
 
     // Overdue invoice still funded (within grace), current invoice untouched
@@ -451,7 +400,6 @@ fn test_scan_overdue_invoices_respects_explicit_batch_limit() {
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100000);
     let base = env.ledger().timestamp();
-    let grace = 30 * 24 * 60 * 60;
 
     for offset in 0..5u64 {
         create_and_fund_invoice(
@@ -467,14 +415,14 @@ fn test_scan_overdue_invoices_respects_explicit_batch_limit() {
 
     env.ledger().set_timestamp(base + 86400 + 10);
 
-    let first = client.scan_overdue_invoices(&Some(grace), &Some(2));
+    let first = client.scan_overdue_invoices(&Some(2));
     assert_eq!(first.scanned_count, 2);
     assert_eq!(first.overdue_count, 2);
     assert_eq!(first.total_funded, 5);
     assert_eq!(first.next_cursor, 2);
     assert_eq!(client.get_overdue_scan_cursor(), 2);
 
-    let second = client.scan_overdue_invoices(&Some(grace), &Some(2));
+    let second = client.scan_overdue_invoices(&Some(2));
     assert_eq!(second.scanned_count, 2);
     assert_eq!(second.overdue_count, 2);
     assert_eq!(second.total_funded, 5);
@@ -488,7 +436,6 @@ fn test_scan_overdue_invoices_cursor_wraps_after_repeated_calls() {
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100000);
     let base = env.ledger().timestamp();
-    let grace = 30 * 24 * 60 * 60;
 
     for offset in 0..5u64 {
         create_and_fund_invoice(
@@ -506,7 +453,7 @@ fn test_scan_overdue_invoices_cursor_wraps_after_repeated_calls() {
 
     let mut cursors = Vec::new(&env);
     for _ in 0..5 {
-        let result = client.scan_overdue_invoices(&Some(grace), &Some(2));
+        let result = client.scan_overdue_invoices(&Some(2));
         cursors.push_back(result.next_cursor);
     }
 
@@ -522,7 +469,7 @@ fn test_scan_overdue_invoices_cursor_wraps_after_repeated_calls() {
 #[test]
 fn test_scan_overdue_invoices_returns_zero_for_empty_funded_set() {
     let (_env, client, _admin) = setup();
-    let result = client.scan_overdue_invoices(&Some(DEFAULT_GRACE_PERIOD), &Some(10));
+    let result = client.scan_overdue_invoices(&Some(10));
 
     assert_eq!(result.scanned_count, 0);
     assert_eq!(result.overdue_count, 0);
@@ -537,7 +484,6 @@ fn test_scan_overdue_invoices_limits_work_when_dataset_smaller_than_limit() {
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100000);
     let base = env.ledger().timestamp();
-    let grace = 30 * 24 * 60 * 60;
 
     for _ in 0..5u64 {
         create_and_fund_invoice(
@@ -552,7 +498,7 @@ fn test_scan_overdue_invoices_limits_work_when_dataset_smaller_than_limit() {
     }
 
     env.ledger().set_timestamp(base + 2);
-    let result = client.scan_overdue_invoices(&Some(grace), &Some(10));
+    let result = client.scan_overdue_invoices(&Some(10));
 
     assert_eq!(result.scanned_count, 5);
     assert_eq!(result.total_funded, 5);
@@ -566,7 +512,6 @@ fn test_scan_overdue_invoices_wraps_cursor_across_dataset_boundary() {
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100000);
     let base = env.ledger().timestamp();
-    let grace = 30 * 24 * 60 * 60;
 
     for _ in 0..10u64 {
         create_and_fund_invoice(
@@ -583,13 +528,13 @@ fn test_scan_overdue_invoices_wraps_cursor_across_dataset_boundary() {
     env.ledger().set_timestamp(base + 2);
 
     for _ in 0..4 {
-        let scanned = client.scan_overdue_invoices(&Some(grace), &Some(2));
+        let scanned = client.scan_overdue_invoices(&Some(2));
         assert_eq!(scanned.scanned_count, 2);
     }
 
     assert_eq!(client.get_overdue_scan_cursor(), 8);
 
-    let wrap_result = client.scan_overdue_invoices(&Some(grace), &Some(3));
+    let wrap_result = client.scan_overdue_invoices(&Some(3));
     assert_eq!(wrap_result.scanned_count, 3);
     assert_eq!(wrap_result.total_funded, 10);
     assert_eq!(wrap_result.next_cursor, 2);
@@ -602,7 +547,6 @@ fn test_scan_overdue_invoices_enforces_hard_batch_cap_on_large_dataset() {
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 1000000);
     let base = env.ledger().timestamp();
-    let grace = 30 * 24 * 60 * 60;
     let total_invoices = 200u32;
 
     for _ in 0..total_invoices {
@@ -618,14 +562,14 @@ fn test_scan_overdue_invoices_enforces_hard_batch_cap_on_large_dataset() {
     }
 
     env.ledger().set_timestamp(base + 2);
-    let first = client.scan_overdue_invoices(&Some(grace), &Some(500));
+    let first = client.scan_overdue_invoices(&Some(500));
 
     assert_eq!(first.scanned_count, client.get_overdue_scan_batch_limit_max());
     assert_eq!(first.total_funded, total_invoices);
     assert_eq!(first.next_cursor, client.get_overdue_scan_batch_limit_max());
     assert_eq!(client.get_overdue_scan_cursor(), client.get_overdue_scan_batch_limit_max());
 
-    let second = client.scan_overdue_invoices(&Some(grace), &Some(150));
+    let second = client.scan_overdue_invoices(&Some(150));
     assert_eq!(second.scanned_count, client.get_overdue_scan_batch_limit_max());
     assert_eq!(second.total_funded, total_invoices);
     assert_eq!(second.next_cursor, 0);
@@ -659,7 +603,7 @@ fn test_check_overdue_invoices_reports_default_batch_limit_configuration() {
     );
     assert_eq!(client.get_overdue_scan_batch_limit_max(), 100);
 
-    let count = client.check_overdue_invoices();
+    let count = client.check_overdue_invoices(&None).overdue_count;
     assert_eq!(count, 5);
     assert_eq!(client.get_overdue_scan_cursor(), 0);
 }
@@ -670,7 +614,6 @@ fn test_scan_overdue_invoices_defaults_only_scanned_expired_invoices() {
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100000);
     let base = env.ledger().timestamp();
-    let grace = 0u64;
     let mut invoice_ids = Vec::new(&env);
 
     for offset in 0..4u64 {
@@ -688,18 +631,18 @@ fn test_scan_overdue_invoices_defaults_only_scanned_expired_invoices() {
 
     env.ledger().set_timestamp(base + 86400 + 10);
 
-    let result = client.scan_overdue_invoices(&Some(grace), &Some(2));
+    let result = client.scan_overdue_invoices(&Some(2));
     assert_eq!(result.scanned_count, 2);
-    assert_eq!(result.overdue_count, 2);
+    assert_eq!(result.overdue_count, 0);
     assert_eq!(result.total_funded, 4);
 
     assert_eq!(
         client.get_invoice(&invoice_ids.get(0).unwrap()).status,
-        InvoiceStatus::Defaulted
+        InvoiceStatus::Funded
     );
     assert_eq!(
         client.get_invoice(&invoice_ids.get(1).unwrap()).status,
-        InvoiceStatus::Defaulted
+        InvoiceStatus::Funded
     );
     assert_eq!(
         client.get_invoice(&invoice_ids.get(2).unwrap()).status,

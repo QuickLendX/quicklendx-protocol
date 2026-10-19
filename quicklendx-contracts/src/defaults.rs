@@ -77,7 +77,7 @@ pub struct OverdueScanResult {
 /// This prevents excessively long grace periods that could lock funds indefinitely
 const MAX_GRACE_PERIOD: u64 = 30 * 24 * 60 * 60;
 
-/// Resolve grace period using per-call override, protocol config, or default.
+/// Resolve grace period using protocol config or default.
 ///
 /// # Fallback Resolution Order
 /// 1. If `grace_period` is provided and valid -> use it (after validation)
@@ -87,7 +87,6 @@ const MAX_GRACE_PERIOD: u64 = 30 * 24 * 60 * 60;
 /// # Validation Rules
 /// - Override values must be <= MAX_GRACE_PERIOD (30 days)
 /// - Invalid overrides are rejected with QuickLendXError::InvalidTimestamp
-/// - Zero grace period is allowed (immediate default after due date)
 ///
 /// # Security Considerations
 /// - Prevents denial-of-service via extremely large grace periods
@@ -101,7 +100,7 @@ const MAX_GRACE_PERIOD: u64 = 30 * 24 * 60 * 60;
 /// # Returns
 /// * `Ok(u64)` - Resolved grace period value
 /// * `Err(QuickLendXError::InvalidTimestamp)` - If override exceeds maximum allowed value
-pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64, QuickLendXError> {
+pub(crate) fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64, QuickLendXError> {
     match grace_period {
         Some(value) => {
             if value > MAX_GRACE_PERIOD {
@@ -122,15 +121,14 @@ pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64,
 }
 
 /// @notice Marks a funded invoice as defaulted after its grace window has strictly elapsed.
-/// @dev Defaulting is allowed only when `ledger.timestamp() > due_date + resolved_grace_period`.
+/// @dev Defaulting is allowed only when `ledger.timestamp() > due_date + configured_grace_period`.
 /// Calls using a timestamp equal to the grace deadline must fail to avoid early liquidation.
-/// Grace resolution order is: explicit override, protocol config, then `DEFAULT_GRACE_PERIOD`.
+/// The grace period is always resolved from protocol config (or `DEFAULT_GRACE_PERIOD`),
+/// never from the caller, so a caller cannot shorten the protocol's grace window.
 ///
 /// # Arguments
 /// * `env` - The environment
 /// * `invoice_id` - The invoice ID to mark as defaulted
-/// * `grace_period` - Optional grace period in seconds. If `None`, uses protocol config or
-///   `DEFAULT_GRACE_PERIOD` when not configured.
 ///
 /// # Returns
 /// * `Ok(())` if the invoice was successfully marked as defaulted
@@ -143,7 +141,6 @@ pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64,
 pub fn mark_invoice_defaulted(
     env: &Env,
     invoice_id: &BytesN<32>,
-    grace_period: Option<u64>,
 ) -> Result<(), QuickLendXError> {
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -163,7 +160,52 @@ pub fn mark_invoice_defaulted(
     ensure_default_transition_open(env, invoice_id)?;
 
     let current_timestamp = env.ledger().timestamp();
-    let grace = resolve_grace_period(env, grace_period)?;
+    let grace = resolve_grace_period(env, None)?;
+    let grace_deadline = invoice.checked_grace_deadline(grace)?;
+
+    if current_timestamp <= grace_deadline {
+        return Err(QuickLendXError::OperationNotAllowed);
+    }
+
+    handle_default(env, invoice_id)
+}
+
+/// @notice Admin-only override that marks a funded invoice as defaulted using an explicit grace period.
+/// @dev Requires admin authorization. The override is still bounded by `MAX_GRACE_PERIOD`.
+/// Defaulting is allowed only when `ledger.timestamp() > due_date + grace_period`.
+///
+/// # Arguments
+/// * `env` - The environment
+/// * `admin` - The admin address authorizing the override
+/// * `invoice_id` - The invoice ID to mark as defaulted
+/// * `grace_period` - Grace period in seconds, bounded by `MAX_GRACE_PERIOD`
+///
+/// # Returns
+/// * `Ok(())` if the invoice was successfully marked as defaulted
+/// * `Err(QuickLendXError)` if the operation fails
+pub fn admin_mark_invoice_defaulted(
+    env: &Env,
+    admin: &soroban_sdk::Address,
+    invoice_id: &BytesN<32>,
+    grace_period: u64,
+) -> Result<(), QuickLendXError> {
+    crate::admin::AdminStorage::require_admin_auth(env, admin)?;
+
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    if invoice.status == InvoiceStatus::Defaulted {
+        return Err(QuickLendXError::InvoiceAlreadyDefaulted);
+    }
+
+    if invoice.status != InvoiceStatus::Funded {
+        return Err(QuickLendXError::InvoiceNotAvailableForFunding);
+    }
+
+    ensure_default_transition_open(env, invoice_id)?;
+
+    let current_timestamp = env.ledger().timestamp();
+    let grace = resolve_grace_period(env, Some(grace_period))?;
     let grace_deadline = invoice.checked_grace_deadline(grace)?;
 
     if current_timestamp <= grace_deadline {
@@ -248,8 +290,8 @@ mod scan_limit_tests {
 /// @dev Uses a rotating cursor stored in instance storage so repeated calls eventually inspect
 ///      the full funded set without any single call walking every invoice. The function reads a
 ///      snapshot of the funded index once, then processes at most `limit` entries from that snapshot.
+///      The grace period is always resolved from protocol config (or `DEFAULT_GRACE_PERIOD`).
 /// @param env The contract environment.
-/// @param grace_period Grace period in seconds used to determine default eligibility.
 /// @param limit Optional funded-invoice batch size. Values are clamped to `1..=100`.
 /// @return Scan result containing overdue count, scanned count, funded snapshot size, and next cursor.
 /// @security Bounded loops protect against excessive per-call work. Callers that need full coverage
@@ -259,10 +301,9 @@ mod scan_limit_tests {
 ///           an unbounded number of invoices.
 pub fn scan_funded_invoice_expirations(
     env: &Env,
-    grace_period: u64,
     limit: Option<u32>,
 ) -> Result<OverdueScanResult, QuickLendXError> {
-    let grace_period = resolve_grace_period(env, Some(grace_period))?;
+    let grace_period = resolve_grace_period(env, None)?;
     let funded_invoices = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
     let total_funded = funded_invoices.len();
 

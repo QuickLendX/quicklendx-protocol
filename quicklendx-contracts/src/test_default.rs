@@ -1,3 +1,4 @@
+// NOTE: This suite has been updated for the caller-cannot-choose-grace API.
 /// Comprehensive test suite for invoice default handling
 /// Tests verify default detection, grace period logic, and state transitions
 ///
@@ -136,7 +137,7 @@ fn test_default_after_grace_period() {
 
     // Mark as defaulted
     assert_eq!(client.get_business_default_history(&business), 0);
-    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice_id);
 
     // Verify invoice is now defaulted
     let defaulted_invoice = client.get_invoice(&invoice_id);
@@ -166,7 +167,7 @@ fn test_no_default_before_grace_period() {
     env.ledger().set_timestamp(before_grace);
 
     // Try to mark as defaulted - should fail
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    let result = client.try_mark_invoice_defaulted(&invoice_id);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -195,7 +196,7 @@ fn test_default_uses_default_grace_period_when_none_provided() {
     env.ledger()
         .set_timestamp(invoice.due_date + default_grace + 1);
 
-    client.mark_invoice_defaulted(&invoice_id, &None);
+    client.mark_invoice_defaulted(&invoice_id);
 
     let defaulted_invoice = client.get_invoice(&invoice_id);
     assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
@@ -219,32 +220,8 @@ fn test_check_invoice_expiration_uses_default_grace_period_when_none() {
     env.ledger()
         .set_timestamp(invoice.due_date + default_grace + 1);
 
-    let did_default = client.check_invoice_expiration(&invoice_id, &None);
+    let did_default = client.check_invoice_expiration(&invoice_id);
     assert!(did_default);
-
-    let defaulted_invoice = client.get_invoice(&invoice_id);
-    assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
-}
-
-#[test]
-fn test_per_invoice_grace_overrides_default() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let per_invoice_grace = 2 * 24 * 60 * 60; // 2 days
-
-    let amount = 1000;
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor, amount, due_date,
-    );
-
-    let invoice = client.get_invoice(&invoice_id);
-    env.ledger()
-        .set_timestamp(invoice.due_date + per_invoice_grace + 1);
-
-    client.mark_invoice_defaulted(&invoice_id, &Some(per_invoice_grace));
 
     let defaulted_invoice = client.get_invoice(&invoice_id);
     assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
@@ -274,7 +251,7 @@ fn test_cannot_default_unfunded_invoice() {
     assert_eq!(invoice.status, InvoiceStatus::Verified);
 
     // Try to mark unfunded invoice as defaulted - should fail
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &None);
+    let result = client.try_mark_invoice_defaulted(&invoice_id);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -304,7 +281,7 @@ fn test_cannot_default_pending_invoice() {
     assert_eq!(invoice.status, InvoiceStatus::Pending);
 
     // Try to mark pending invoice as defaulted - should fail
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &None);
+    let result = client.try_mark_invoice_defaulted(&invoice_id);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -331,40 +308,14 @@ fn test_cannot_default_already_defaulted_invoice() {
     env.ledger().set_timestamp(default_time);
 
     // Mark as defaulted first time
-    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice_id);
 
     // Try to mark as defaulted again - should fail with DuplicateDefaultTransition (guard fires first)
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    let result = client.try_mark_invoice_defaulted(&invoice_id);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
     assert_eq!(contract_err, QuickLendXError::DuplicateDefaultTransition);
-}
-
-#[test]
-fn test_custom_grace_period() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let amount = 1000;
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor, amount, due_date,
-    );
-
-    let invoice = client.get_invoice(&invoice_id);
-    let custom_grace_period = 3 * 24 * 60 * 60; // 3 days instead of default 7
-
-    // Move time past custom grace period but before default grace period
-    let custom_default_time = invoice.due_date + custom_grace_period + 1;
-    env.ledger().set_timestamp(custom_default_time);
-
-    // Should succeed with custom grace period
-    client.mark_invoice_defaulted(&invoice_id, &Some(custom_grace_period));
-
-    let defaulted_invoice = client.get_invoice(&invoice_id);
-    assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
 }
 
 #[test]
@@ -393,7 +344,7 @@ fn test_default_status_transition() {
     env.ledger().set_timestamp(default_time);
 
     // Mark as defaulted
-    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice_id);
 
     // Verify status changed
     let defaulted_invoice = client.get_invoice(&invoice_id);
@@ -434,7 +385,7 @@ fn test_default_investment_status_update() {
     env.ledger().set_timestamp(default_time);
 
     // Mark as defaulted
-    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice_id);
 
     // Verify investment status updated
     let defaulted_investment = client.get_invoice_investment(&invoice_id);
@@ -464,14 +415,14 @@ fn test_default_exactly_at_grace_deadline() {
     env.ledger().set_timestamp(grace_deadline);
 
     // Should fail - grace period hasn't passed yet
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    let result = client.try_mark_invoice_defaulted(&invoice_id);
     assert!(result.is_err());
 
     // Move one second past grace deadline
     env.ledger().set_timestamp(grace_deadline + 1);
 
     // Should succeed now
-    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice_id);
     let defaulted_invoice = client.get_invoice(&invoice_id);
     assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
 }
@@ -492,7 +443,7 @@ fn test_default_with_none_rejects_exactly_at_default_grace_deadline() {
     let grace_deadline = invoice.due_date + crate::defaults::DEFAULT_GRACE_PERIOD;
     env.ledger().set_timestamp(grace_deadline);
 
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &None);
+    let result = client.try_mark_invoice_defaulted(&invoice_id);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -523,7 +474,7 @@ fn test_check_invoice_expiration_respects_strict_protocol_grace_boundary() {
     let grace_deadline = invoice.due_date + custom_grace;
 
     env.ledger().set_timestamp(grace_deadline);
-    let did_default_at_deadline = client.check_invoice_expiration(&invoice_id, &None);
+    let did_default_at_deadline = client.check_invoice_expiration(&invoice_id);
     assert!(!did_default_at_deadline);
     assert_eq!(
         client.get_invoice(&invoice_id).status,
@@ -531,7 +482,7 @@ fn test_check_invoice_expiration_respects_strict_protocol_grace_boundary() {
     );
 
     env.ledger().set_timestamp(grace_deadline + 1);
-    let did_default_after_deadline = client.check_invoice_expiration(&invoice_id, &None);
+    let did_default_after_deadline = client.check_invoice_expiration(&invoice_id);
     assert!(did_default_after_deadline);
     assert_eq!(
         client.get_invoice(&invoice_id).status,
@@ -570,42 +521,18 @@ fn test_multiple_invoices_default_handling() {
     env.ledger().set_timestamp(time1);
 
     // First invoice should default
-    client.mark_invoice_defaulted(&invoice1_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice1_id);
     assert_eq!(
         client.get_invoice(&invoice1_id).status,
         InvoiceStatus::Defaulted
     );
 
     // Second invoice should not default yet
-    let result = client.try_mark_invoice_defaulted(&invoice2_id, &Some(grace_period));
+    let result = client.try_mark_invoice_defaulted(&invoice2_id);
     assert!(result.is_err());
     assert_eq!(
         client.get_invoice(&invoice2_id).status,
         InvoiceStatus::Funded
-    );
-}
-
-#[test]
-fn test_zero_grace_period_defaults_immediately_after_due_date() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let amount = 1000;
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor, amount, due_date,
-    );
-
-    let invoice = client.get_invoice(&invoice_id);
-
-    // With zero grace period, default should be possible right after due date
-    env.ledger().set_timestamp(invoice.due_date + 1);
-
-    client.mark_invoice_defaulted(&invoice_id, &Some(0));
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
     );
 }
 
@@ -629,116 +556,11 @@ fn test_cannot_default_paid_invoice() {
     env.ledger().set_timestamp(due_date + grace_period + 1);
 
     // Paid invoices cannot be defaulted
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    let result = client.try_mark_invoice_defaulted(&invoice_id);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
     assert_eq!(contract_err, QuickLendXError::InvoiceNotAvailableForFunding);
-}
-
-#[test]
-fn test_grace_period_override_exceeding_maximum_rejected() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let amount = 1000;
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor, amount, due_date,
-    );
-
-    let invoice = client.get_invoice(&invoice_id);
-    // Try to use grace period > 30 days (max allowed)
-    let excessive_grace = 31 * 24 * 60 * 60; // 31 days
-    env.ledger()
-        .set_timestamp(invoice.due_date + excessive_grace + 1);
-
-    // Should reject with InvalidTimestamp error
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(excessive_grace));
-    assert!(result.is_err());
-    let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
-    assert_eq!(contract_err, QuickLendXError::InvalidTimestamp);
-
-    // Verify invoice is still funded (not defaulted)
-    let invoice_after = client.get_invoice(&invoice_id);
-    assert_eq!(invoice_after.status, InvoiceStatus::Funded);
-}
-
-#[test]
-fn test_grace_period_zero_allowed_for_immediate_default() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let amount = 1000;
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor, amount, due_date,
-    );
-
-    let invoice = client.get_invoice(&invoice_id);
-    // With zero grace period, should be able to default immediately after due date
-    env.ledger().set_timestamp(invoice.due_date + 1);
-
-    // Zero grace period should be allowed
-    client.mark_invoice_defaulted(&invoice_id, &Some(0));
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
-}
-
-#[test]
-fn test_grace_period_exactly_at_maximum_boundary() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let amount = 1000;
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor, amount, due_date,
-    );
-
-    let invoice = client.get_invoice(&invoice_id);
-    // Exactly 30 days should be allowed (maximum boundary)
-    let max_grace = 30 * 24 * 60 * 60; // 30 days - exactly at limit
-    env.ledger().set_timestamp(invoice.due_date + max_grace + 1);
-
-    // Should succeed at exactly the maximum
-    client.mark_invoice_defaulted(&invoice_id, &Some(max_grace));
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
-        InvoiceStatus::Defaulted
-    );
-}
-
-#[test]
-fn test_grace_period_one_over_maximum_rejected() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let amount = 1000;
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor, amount, due_date,
-    );
-
-    let invoice = client.get_invoice(&invoice_id);
-    // One second over maximum should be rejected
-    let max_grace_plus_one = 30 * 24 * 60 * 60 + 1; // 30 days + 1 second
-    env.ledger()
-        .set_timestamp(invoice.due_date + max_grace_plus_one + 1);
-
-    // Should reject
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(max_grace_plus_one));
-    assert!(result.is_err());
-    let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
-    assert_eq!(contract_err, QuickLendXError::InvalidTimestamp);
 }
 
 #[test]
@@ -748,7 +570,7 @@ fn test_resolve_grace_period_validation() {
     // Test 1: Valid override value
     let override_grace = 5 * 24 * 60 * 60; // 5 days
     let resolved = env.as_contract(&client.address, || {
-        crate::defaults::resolve_grace_period(&env, Some(override_grace))
+        crate::defaults::resolve_grace_period(&env, None)
             .expect("should resolve valid override value")
     });
     assert_eq!(resolved, override_grace);
@@ -756,7 +578,7 @@ fn test_resolve_grace_period_validation() {
     // Test 2: Invalid override value (exceeds max)
     let excessive_grace = 40 * 24 * 60 * 60; // 40 days - exceeds maximum
     let result = env.as_contract(&client.address, || {
-        crate::defaults::resolve_grace_period(&env, Some(excessive_grace))
+        crate::defaults::resolve_grace_period(&env, None)
     });
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), QuickLendXError::InvalidTimestamp);
@@ -764,7 +586,7 @@ fn test_resolve_grace_period_validation() {
     // Test 3: Zero is valid
     let zero_grace = 0;
     let resolved = env.as_contract(&client.address, || {
-        crate::defaults::resolve_grace_period(&env, Some(zero_grace))
+        crate::defaults::resolve_grace_period(&env, None)
             .expect("should resolve zero grace period")
     });
     assert_eq!(resolved, zero_grace);
@@ -772,7 +594,7 @@ fn test_resolve_grace_period_validation() {
     // Test 4: Maximum boundary is valid
     let max_grace = 30 * 24 * 60 * 60; // 30 days - exactly at limit
     let resolved = env.as_contract(&client.address, || {
-        crate::defaults::resolve_grace_period(&env, Some(max_grace))
+        crate::defaults::resolve_grace_period(&env, None)
             .expect("should resolve maximum grace period")
     });
     assert_eq!(resolved, max_grace);
@@ -810,8 +632,7 @@ fn test_invalid_grace_period_does_not_affect_other_invoices() {
     env.ledger().set_timestamp(time);
 
     // Try to default invoice1 with invalid grace period
-    let excessive_grace = 40 * 24 * 60 * 60; // 40 days - invalid
-    let result = client.try_mark_invoice_defaulted(&invoice1_id, &Some(excessive_grace));
+    let result = client.try_mark_invoice_defaulted(&invoice1_id);
     assert!(result.is_err());
 
     // Invoice1 should still be funded
@@ -825,7 +646,7 @@ fn test_invalid_grace_period_does_not_affect_other_invoices() {
     env.ledger().set_timestamp(time2);
 
     // Default invoice2 with valid grace period - should work independently
-    client.mark_invoice_defaulted(&invoice2_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice2_id);
     assert_eq!(
         client.get_invoice(&invoice2_id).status,
         InvoiceStatus::Defaulted
@@ -834,37 +655,6 @@ fn test_invalid_grace_period_does_not_affect_other_invoices() {
     // Invoice1 should still be funded (not affected by invoice2's default)
     assert_eq!(
         client.get_invoice(&invoice1_id).status,
-        InvoiceStatus::Funded
-    );
-}
-
-#[test]
-fn test_check_invoice_expiration_with_invalid_grace_period() {
-    let (env, client, admin) = setup();
-    let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 10000);
-
-    let amount = 1000;
-    let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = create_and_fund_invoice(
-        &env, &client, &admin, &business, &investor, amount, due_date,
-    );
-
-    let invoice = client.get_invoice(&invoice_id);
-    let excessive_grace = 35 * 24 * 60 * 60; // 35 days - exceeds maximum
-    env.ledger()
-        .set_timestamp(invoice.due_date + excessive_grace + 1);
-
-    // check_invoice_expiration should reject invalid grace period
-    let result = client.try_check_invoice_expiration(&invoice_id, &Some(excessive_grace));
-    assert!(result.is_err());
-    let err = result.err().unwrap();
-    let contract_err = err.expect("expected contract error");
-    assert_eq!(contract_err, QuickLendXError::InvalidTimestamp);
-
-    // Invoice should not be defaulted
-    assert_eq!(
-        client.get_invoice(&invoice_id).status,
         InvoiceStatus::Funded
     );
 }
@@ -886,7 +676,7 @@ fn test_check_overdue_invoices_propagates_grace_period_error() {
     // The happy path is tested in other tests
 
     // This test ensures the function signature accepts Result propagation
-    let result = client.check_overdue_invoices();
+    let result = client.check_overdue_invoices(&None);
     // Should succeed with default protocol config (returns count)
     assert!(result >= 0); // Just verify it returns a value without error
 }
@@ -911,14 +701,14 @@ fn test_transition_guard_prevents_duplicate_default() {
     env.ledger().set_timestamp(default_time);
 
     // First attempt should succeed
-    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice_id);
     assert_eq!(
         client.get_invoice(&invoice_id).status,
         InvoiceStatus::Defaulted
     );
 
     // Second attempt should fail with DuplicateDefaultTransition
-    let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    let result = client.try_mark_invoice_defaulted(&invoice_id);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
@@ -945,7 +735,7 @@ fn test_transition_guard_persists_across_calls() {
     env.ledger().set_timestamp(default_time);
 
     // First default should succeed
-    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice_id);
     assert_eq!(
         client.get_invoice(&invoice_id).status,
         InvoiceStatus::Defaulted
@@ -953,7 +743,7 @@ fn test_transition_guard_persists_across_calls() {
 
     // Simulate multiple calls - all should fail
     for _ in 0..3 {
-        let result = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+        let result = client.try_mark_invoice_defaulted(&invoice_id);
         assert!(result.is_err());
         let err = result.err().unwrap();
         let contract_err = err.expect("expected contract error");
@@ -981,7 +771,7 @@ fn test_transition_guard_atomicity_during_partial_failure() {
     env.ledger().set_timestamp(default_time);
 
     // First attempt should succeed and set the guard
-    client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice_id);
     assert_eq!(
         client.get_invoice(&invoice_id).status,
         InvoiceStatus::Defaulted
@@ -1020,21 +810,21 @@ fn test_transition_guard_different_invoices_independent() {
     env.ledger().set_timestamp(default_time);
 
     // Default first invoice
-    client.mark_invoice_defaulted(&invoice1_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice1_id);
     assert_eq!(
         client.get_invoice(&invoice1_id).status,
         InvoiceStatus::Defaulted
     );
 
     // Second invoice should still be defaultable
-    client.mark_invoice_defaulted(&invoice2_id, &Some(grace_period));
+    client.mark_invoice_defaulted(&invoice2_id);
     assert_eq!(
         client.get_invoice(&invoice2_id).status,
         InvoiceStatus::Defaulted
     );
 
     // But first invoice still guarded
-    let result = client.try_mark_invoice_defaulted(&invoice1_id, &Some(grace_period));
+    let result = client.try_mark_invoice_defaulted(&invoice1_id);
     assert!(result.is_err());
     let err = result.err().unwrap();
     let contract_err = err.expect("expected contract error");
