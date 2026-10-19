@@ -61,6 +61,12 @@ impl Invoice {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
         }
 
+        if let Some(fee_bps) = origination_fee_bps {
+            if fee_bps > crate::init::MAX_FEE_BPS {
+                return Err(QuickLendXError::InvalidFeeBasisPoints);
+            }
+        }
+
         if let Some(penalty_bps) = late_payment_penalty_bps {
             if penalty_bps > 5000 {
                 return Err(QuickLendXError::InvalidFeeBasisPoints);

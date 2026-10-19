@@ -5,7 +5,9 @@
 use crate::audit::{log_config_change, write_i128_to_buf, write_u64_to_buf, AuditOperation};
 use crate::errors::QuickLendXError;
 use crate::events;
-use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, String, Symbol, Vec};
+use soroban_sdk::{
+    contracttype, symbol_short, vec, Address, BytesN, Env, Map, String, Symbol, Vec,
+};
 
 // Constants
 const MAX_FEE_BPS: u32 = 1000; // 10% hard cap for all fees
@@ -26,6 +28,7 @@ const LATE_FEE_SURCHARGE_BPS: i128 = 2_000; // 20%
 const FEE_CONFIG_KEY: Symbol = symbol_short!("fee_cfg");
 const REVENUE_KEY: Symbol = symbol_short!("revenue");
 const VOLUME_KEY: Symbol = symbol_short!("volume");
+const ORIGINATION_HOLD_KEY: Symbol = symbol_short!("orig_hold");
 #[allow(dead_code)]
 const TREASURY_CONFIG_KEY: Symbol = symbol_short!("treasury");
 const PLATFORM_FEE_KEY: Symbol = symbol_short!("plt_fee");
@@ -860,6 +863,134 @@ impl FeeManager {
 
         env.storage().instance().set(&key, &revenue_data);
         Self::update_user_volume(env, user, total_amount)?;
+        Ok(())
+    }
+
+    /// Collect an origination fee but keep it out of distributable revenue
+    /// until its escrow is released. A refunded escrow can then reverse the fee.
+    pub fn collect_origination_fee(
+        env: &Env,
+        user: &Address,
+        invoice_id: &BytesN<32>,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        if amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+
+        let hold_key = (ORIGINATION_HOLD_KEY.clone(), invoice_id.clone());
+        if env.storage().instance().has(&hold_key) {
+            return Err(QuickLendXError::InvoiceAlreadyFunded);
+        }
+
+        let mut fees_collected = Map::new(env);
+        fees_collected.set(FeeType::Origination, amount);
+        Self::collect_fees(env, user, fees_collected, amount)?;
+
+        let period = Self::get_current_period(env);
+        let revenue_key = (REVENUE_KEY, period);
+        let mut revenue_data: RevenueData = env
+            .storage()
+            .instance()
+            .get(&revenue_key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        revenue_data.pending_distribution = revenue_data
+            .pending_distribution
+            .checked_sub(amount)
+            .ok_or(QuickLendXError::InvalidFeeConfiguration)?;
+        env.storage().instance().set(&revenue_key, &revenue_data);
+        env.storage().instance().set(&hold_key, &(period, amount));
+        Ok(())
+    }
+
+    pub(crate) fn get_held_origination_fee(env: &Env, invoice_id: &BytesN<32>) -> Option<i128> {
+        let hold_key = (ORIGINATION_HOLD_KEY.clone(), invoice_id.clone());
+        env.storage()
+            .instance()
+            .get::<_, (u64, i128)>(&hold_key)
+            .map(|(_, amount)| amount)
+    }
+
+    /// Make a withheld origination fee distributable once the escrow is paid
+    /// to the business and can no longer be refunded.
+    pub(crate) fn release_origination_fee(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        let hold_key = (ORIGINATION_HOLD_KEY.clone(), invoice_id.clone());
+        let Some((period, amount)) = env.storage().instance().get::<_, (u64, i128)>(&hold_key)
+        else {
+            return Ok(());
+        };
+
+        let revenue_key = (REVENUE_KEY, period);
+        let mut revenue_data: RevenueData = env
+            .storage()
+            .instance()
+            .get(&revenue_key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        revenue_data.pending_distribution =
+            Self::checked_add(revenue_data.pending_distribution, amount)?;
+        env.storage().instance().set(&revenue_key, &revenue_data);
+        env.storage().instance().remove(&hold_key);
+        Ok(())
+    }
+
+    /// Reverse a withheld origination fee after the escrow principal is refunded.
+    pub(crate) fn refund_origination_fee(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        user: &Address,
+    ) -> Result<(), QuickLendXError> {
+        let hold_key = (ORIGINATION_HOLD_KEY.clone(), invoice_id.clone());
+        let (period, amount) = env
+            .storage()
+            .instance()
+            .get::<_, (u64, i128)>(&hold_key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let revenue_key = (REVENUE_KEY, period);
+        let mut revenue_data: RevenueData = env
+            .storage()
+            .instance()
+            .get(&revenue_key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        revenue_data.total_collected = revenue_data
+            .total_collected
+            .checked_sub(amount)
+            .ok_or(QuickLendXError::InvalidFeeConfiguration)?;
+        let recorded_origination = revenue_data
+            .fees_by_type
+            .get(FeeType::Origination)
+            .unwrap_or(0)
+            .checked_sub(amount)
+            .ok_or(QuickLendXError::InvalidFeeConfiguration)?;
+        revenue_data
+            .fees_by_type
+            .set(FeeType::Origination, recorded_origination);
+        revenue_data.transaction_count = revenue_data.transaction_count.saturating_sub(1);
+
+        let mut volume_data = Self::get_user_volume(env, user);
+        volume_data.total_volume = volume_data
+            .total_volume
+            .checked_sub(amount)
+            .ok_or(QuickLendXError::InvalidFeeConfiguration)?;
+        volume_data.transaction_count = volume_data.transaction_count.saturating_sub(1);
+        volume_data.current_tier = if volume_data.total_volume >= 1_000_000_000_000 {
+            VolumeTier::Platinum
+        } else if volume_data.total_volume >= 500_000_000_000 {
+            VolumeTier::Gold
+        } else if volume_data.total_volume >= 100_000_000_000 {
+            VolumeTier::Silver
+        } else {
+            VolumeTier::Standard
+        };
+        volume_data.last_updated = env.ledger().timestamp();
+
+        env.storage().instance().set(&revenue_key, &revenue_data);
+        env.storage()
+            .instance()
+            .set(&(VOLUME_KEY, user.clone()), &volume_data);
+        env.storage().instance().remove(&hold_key);
         Ok(())
     }
 
