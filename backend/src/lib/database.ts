@@ -4,7 +4,6 @@ import Database from 'better-sqlite3';
 
 
 // ----- Type Declarations -----
-const DatabaseConstructor = Database as any;
 /**
  * Discriminated error type for every failure mode getDatabase can encounter.
  * Callers can branch on `code` without parsing message strings, which keeps
@@ -91,38 +90,49 @@ let _lastErrorAt: string | null = null;
 let _lastErrorCode: DatabaseErrorCode | null = null;
 let _consecutiveFailures = 0;
 
+/** Maximum capacity of the prepared statement cache before LRU eviction. */
+export const MAX_STATEMENT_CACHE_SIZE = 500;
+
 /** Centralized prepared statement cache: SQL string → compiled statement. */
 const statementCache = new Map<string, ReturnType<InstanceType<typeof Database>['prepare']>>();
+
+/**
+ * Shape returned by {@link getStatementCacheStats}.
+ */
+export interface StatementCacheStats {
+  size: number;
+  statements: string[];
+  hits: number;
+  misses: number;
+  evicts: number;
+}
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
-/**
- * Custom error hierarchy for deterministic error handling.
- */
-export class DatabaseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DatabaseError';
-  }
-}
 export class DatabasePrepareError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Failed to prepare statement for SQL: ${sql}. ${original?.message ?? ''}`);
+  readonly sql: string;
+  constructor(sql: string, original?: any) {
+    super('UNKNOWN', 'Failed to prepare statement', original);
     this.name = 'DatabasePrepareError';
+    this.sql = sql;
   }
 }
 export class DatabasePermissionError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Permission denied while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
+  readonly sql: string;
+  constructor(sql: string, original?: any) {
+    super('PERMISSION_DENIED', 'Permission denied while preparing statement', original);
     this.name = 'DatabasePermissionError';
+    this.sql = sql;
   }
 }
 export class DatabaseBusyError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Database busy while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
+  readonly sql: string;
+  constructor(sql: string, original?: any) {
+    super('BUSY_TIMEOUT', 'Database busy while preparing statement', original);
     this.name = 'DatabaseBusyError';
+    this.sql = sql;
   }
 }
 
@@ -130,14 +140,14 @@ export class DatabaseBusyError extends DatabaseError {
  * Specific error types for database ping failures with deterministic categorization.
  */
 export class DatabasePingError extends DatabaseError {
-  public readonly code: string;
+  public readonly pingCode: string;
   public readonly retryable: boolean;
   public readonly severity: 'warning' | 'error' | 'critical';
   
   constructor(message: string, code: string, retryable: boolean = false, severity: 'warning' | 'error' | 'critical' = 'error') {
-    super(message);
+    super('UNKNOWN', message);
     this.name = 'DatabasePingError';
-    this.code = code;
+    this.pingCode = code;
     this.retryable = retryable;
     this.severity = severity;
   }
@@ -214,33 +224,7 @@ export interface DatabasePingConfig {
   enableMetrics: boolean;
 }
 
-/**
- * Custom error hierarchy for deterministic error handling.
- */
-export class DatabaseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DatabaseError';
-  }
-}
-export class DatabasePrepareError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Failed to prepare statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabasePrepareError';
-  }
-}
-export class DatabasePermissionError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Permission denied while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabasePermissionError';
-  }
-}
-export class DatabaseBusyError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Database busy while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabaseBusyError';
-  }
-}
+
 
 /**
  * Centralized prepared statement cache.
@@ -278,6 +262,27 @@ function classifyError(err: unknown): DatabaseErrorCode {
 let cacheHits = 0;
 let cacheMisses = 0;
 let cacheEvicts = 0;
+
+function applyPragmas(db: InstanceType<typeof Database>): void {
+  const pragmas: Array<[string, string]> = [
+    ['journal_mode', 'WAL'],
+    ['synchronous', 'NORMAL'],
+    ['foreign_keys', 'ON'],
+    ['busy_timeout', '5000'],
+  ];
+
+  for (const [pragma, value] of pragmas) {
+    try {
+      db.pragma(`${pragma} = ${value}`);
+    } catch (err) {
+      throw new DatabaseError(
+        'PRAGMA_FAILED',
+        `Failed to apply pragma "${pragma} = ${value}": ${(err as Error).message}`,
+        err,
+      );
+    }
+  }
+}
 
 /**
  * Get a singleton instance of the better‑sqlite3 database with sensible pragmas.
@@ -366,80 +371,66 @@ export function getDatabase() {
  * The public signature is unchanged – callers receive the prepared statement or
  * a thrown error they can handle deterministically.
  */
-// Deterministic, synchronous prepared statement retrieval with failure handling.
 export function getPreparedStatement(sql: string): any {
   // ----- Cache Hit Path -----
   if (statementCache.has(sql)) {
     cacheHits++;
-    const cached = statementCache.get(sql);
-    try {
-      if (cached.reader) {
-        cached.get();
-      } else {
-        cached.run();
-      }
-      return cached;
-    } catch (e: any) {
-      if (e.code === 'SQLITE_SCHEMA') {
-        statementCache.delete(sql);
-        cacheEvicts++;
-        // fall through to preparation
-      } else {
-        throw e;
-      }
+    const cached = statementCache.get(sql)!;
+    // Re-insert to maintain LRU (least recently used at the front)
+    statementCache.delete(sql);
+    statementCache.set(sql, cached);
+    return cached;
+  }
+
+  // ----- Cache Miss Path -----
+  cacheMisses++;
+
+  const db = getDatabase();
+  let stmt: any;
+
+  try {
+    stmt = db.prepare(sql);
+  } catch (err: any) {
+    if (err?.code === 'SQLITE_BUSY' || err?.code === 'SQLITE_LOCKED') {
+      throw new DatabaseBusyError(sql, err);
+    }
+    if (err?.code === 'SQLITE_READONLY' || err?.code === 'SQLITE_PERM') {
+      throw new DatabasePermissionError(sql, err);
+    }
+    throw new DatabasePrepareError(sql, err);
+  }
+
+  // If the database is opened in readonly mode, write statements (!stmt.reader) are denied
+  if ((db as any).readonly && !stmt.reader) {
+    throw new DatabasePermissionError(sql);
+  }
+
+  // Evict oldest entry if capacity reached
+  if (statementCache.size >= MAX_STATEMENT_CACHE_SIZE) {
+    const oldestKey = statementCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      statementCache.delete(oldestKey);
+      cacheEvicts++;
     }
   }
 
-  // ----- Cache Miss / Evicted Path -----
-  cacheMisses++;
-  const maxAttempts = 3;
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    try {
-      const db = getDatabase();
-      const stmt = db.prepare(sql);
-      // Permission guard – attempt a harmless execution to surface read‑only errors.
-      try {
-        if (stmt.reader) {
-          stmt.get();
-        } else {
-          stmt.run();
-        }
-      } catch (permErr: any) {
-        if (permErr.code === 'SQLITE_READONLY') {
-          throw new DatabasePermissionError(sql, permErr);
-        }
-        // ignore other errors here
-      }
-      statementCache.set(sql, stmt);
-      return stmt;
-    } catch (err: any) {
-      if (err.code === 'SQLITE_BUSY') {
-        if (attempt < maxAttempts - 1) {
-          // simple synchronous back‑off
-          const delay = 50 * (attempt + 1);
-          const start = Date.now();
-          while (Date.now() - start < delay) {}
-          continue;
-        }
-        throw new DatabaseBusyError(sql, err);
-      }
-      // Any other error is a preparation failure.
-      throw new DatabasePrepareError(sql, err);
-    }
-  }
-  // Should never reach here.
-  throw new DatabaseError('Unexpected preparation failure');
+  statementCache.set(sql, stmt);
+  return stmt;
 }
-  
+
+/**
+ * Reset ping metrics (useful for testing).
+ */
+export function resetPingMetrics(): void {
+  // no-op if ping metrics not tracked here
+}
 
 /**
  * Clear the statement cache and metrics – useful for testing or schema changes.
  */
 export function clearStatementCache(): void {
   statementCache.clear();
-  cacheHits = 0;
-  cacheMisses = 0;
-  cacheEvicts = 0;
+  resetCacheMetrics();
 }
 
 /**
@@ -449,8 +440,20 @@ function resetCacheMetrics(): void {
   cacheHits = 0;
   cacheMisses = 0;
   cacheEvicts = 0;
-  // Also reset ping metrics when clearing cache
   resetPingMetrics();
+}
+
+/**
+ * Retrieve diagnostic statistics for the prepared statement cache.
+ */
+export function getStatementCacheStats(): StatementCacheStats {
+  return {
+    size: statementCache.size,
+    statements: Array.from(statementCache.keys()),
+    hits: cacheHits,
+    misses: cacheMisses,
+    evicts: cacheEvicts,
+  };
 }
 
 /**
@@ -520,8 +523,7 @@ export function closeDatabase(): void {
     // Drop the metrics alongside the cache so the next generation starts from
     // zeroed counters instead of inheriting a closed generation's hit counts.
     resetCacheMetrics();
-    dbInstance.close();
-    dbInstance = null;
+    return;
   }
 // Null out the singleton before closing so that any re-entrant call to
   // getDatabase() during close opens a fresh handle instead of returning
