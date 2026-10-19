@@ -73,7 +73,7 @@ class AuditLogService {
     this.push({
       timestamp: new Date().toISOString(),
       action: event.action,
-      outcome: event.outcome ?= "performed",
+      outcome: event.outcome ?? "performed",
       role: event.role,
       method: event.method,
       path: event.path,
