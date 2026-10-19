@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "test": "jest --passWithNoTests",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "axios": "^1.13.2",
@@ -20,7 +21,11 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@types/jest": "^29.5.14",
     "@types/node": "^20",
     "@types/react": "^19",
@@ -28,6 +33,7 @@
     "eslint": "^9.38.0",
     "eslint-config-next": "^15.5.12",
     "jest": "^29",
+    "jest-environment-jsdom": "^29.7.0",
     "jest-environment-node": "^29",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
@@ -35,15 +41,45 @@
     "typescript": "^5"
   },
   "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/__tests__/**/*.test.ts",
-      "**/tests/**/*.test.ts"
-    ],
-    "moduleNameMapper": {
-      "^@/(.*)$": "<rootDir>/$1"
-    }
+    "projects": [
+      {
+        "displayName": "node",
+        "preset": "ts-jest",
+        "testEnvironment": "node",
+        "testMatch": [
+          "**/__tests__/**/*.test.ts",
+          "**/tests/**/*.test.ts",
+          "**/app/business/settlements/[id]/_lib/view-model.test.ts"
+        ],
+        "moduleNameMapper": {
+          "^@/(.*)$": "<rootDir>/$1"
+        }
+      },
+      {
+        "displayName": "dom",
+        "preset": "ts-jest",
+        "testEnvironment": "jest-environment-jsdom",
+        "testMatch": [
+          "**/*.test.tsx"
+        ],
+        "moduleNameMapper": {
+          "^@/(.*)$": "<rootDir>/$1"
+        },
+        "transform": {
+          "^.+\\.(ts|tsx)$": [
+            "ts-jest",
+            {
+              "tsconfig": {
+                "jsx": "react-jsx"
+              }
+            }
+          ]
+        },
+        "setupFilesAfterEnv": [
+          "<rootDir>/tests/setup-dom.ts"
+        ]
+      }
+    ]
   },
   "overrides": {
     "minimatch": "^10.2.1",

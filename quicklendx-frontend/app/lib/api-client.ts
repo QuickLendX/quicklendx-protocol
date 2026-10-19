@@ -1,4 +1,3 @@
-import { randomUUID } from "crypto";
 import axios, {
   AxiosInstance,
   AxiosRequestConfig,
@@ -229,7 +228,10 @@ class ApiClient {
   }
 
   private generateRequestId(): string {
-    return `req_${randomUUID()}`;
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return `req_${crypto.randomUUID()}`;
+    }
+    return `req_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
   }
 
   private getRequestKey(config: AxiosRequestConfig): string {
