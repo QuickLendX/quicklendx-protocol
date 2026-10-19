@@ -338,7 +338,7 @@ export default function SettlementReceiptPage() {
               strokeLinejoin="round"
             />
           </svg>
-          Back to Settlements
+          Back to settlements
         </Link>
 
         {/* Header */}
