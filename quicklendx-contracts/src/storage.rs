@@ -1223,6 +1223,9 @@ impl StorageMigration {
     /// Return the committed schema version stored in instance storage.
     /// Returns `0` if no version has been set (fresh / pre-migration contract).
     pub fn get_schema_version(env: &Env) -> u32 {
+        if !env.storage().instance().has(&SCHEMA_VERSION_KEY) {
+            return 0u32;
+        }
         env.storage()
             .instance()
             .get(&SCHEMA_VERSION_KEY)
@@ -1232,6 +1235,9 @@ impl StorageMigration {
     /// Return the pending migration target version, if any.
     /// `None` means no migration is currently in progress.
     pub fn get_pending_migration_version(env: &Env) -> Option<u32> {
+        if !env.storage().instance().has(&MIGRATION_PENDING_VER_KEY) {
+            return None;
+        }
         env.storage().instance().get(&MIGRATION_PENDING_VER_KEY)
     }
 
@@ -1243,6 +1249,9 @@ impl StorageMigration {
     /// Return the migration progress cursor (next offset to process).
     /// Returns `0` when no migration is in progress or on the first page.
     pub fn get_migration_offset(env: &Env) -> u32 {
+        if !env.storage().persistent().has(&MIGRATION_OFFSET_KEY) {
+            return 0u32;
+        }
         env.storage()
             .persistent()
             .get(&MIGRATION_OFFSET_KEY)
@@ -1251,6 +1260,9 @@ impl StorageMigration {
 
     /// Return the cumulative number of records migrated so far.
     pub fn get_migration_records_migrated(env: &Env) -> u32 {
+        if !env.storage().persistent().has(&MIGRATION_RECORDS_KEY) {
+            return 0u32;
+        }
         env.storage()
             .persistent()
             .get(&MIGRATION_RECORDS_KEY)
