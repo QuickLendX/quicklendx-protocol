@@ -429,22 +429,6 @@ fn ensure_default_transition_open(
     Ok(())
 }
 
-/// Get all invoice IDs that have active or resolved disputes
-pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
-    Vec::new(env)
-}
-
-/// Get details for a dispute on a specific invoice
-pub fn get_dispute_details(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-) -> Result<Option<crate::types::Dispute>, QuickLendXError> {
-    let _invoice =
-        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-
-    Ok(None)
-}
-
 pub fn require_active_insurance_at_settlement(
     env: &Env,
     invoice: &Invoice,
