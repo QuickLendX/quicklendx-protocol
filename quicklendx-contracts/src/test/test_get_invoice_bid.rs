@@ -75,7 +75,7 @@ fn create_and_verify_invoice(
         &description,
         &category,
         &Vec::new(env),
-    );
+        &None);
 
     // Verify the invoice
     let _ = client.try_verify_invoice(&invoice_id);
@@ -92,7 +92,7 @@ fn place_bid(
     bid_amount: i128,
     expected_return: i128,
 ) -> BytesN<32> {
-    client.place_bid(investor, invoice_id, &bid_amount, &expected_return)
+    client.place_bid(investor, invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]))
 }
 
 // ============================================================================
@@ -119,7 +119,7 @@ fn test_get_invoice_ok_with_correct_data() {
         &description,
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Test get_invoice - should return Ok with correct data
     let result = client.try_get_invoice(&invoice_id);
@@ -307,7 +307,7 @@ fn test_get_invoice_ok_with_tags() {
         &description,
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
 
     // Retrieve and validate tags
     let invoice = client.try_get_invoice(&invoice_id).unwrap().unwrap();

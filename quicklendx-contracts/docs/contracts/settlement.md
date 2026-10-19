@@ -20,12 +20,12 @@ maintaining flexibility.
 
 The settlement module exposes two read-only configuration values for off-chain consumers:
 
-* **Default Batch Size**: `get_settlement_batch_size_soft_cap()` → 25
+* **Default Batch Size**: `get_settlement_batch_size()` → 25
   * Recommended page size for `get_payment_records` queries
   * Balances query efficiency with memory usage
   * Suitable for most indexing workflows
 
-* **Maximum Batch Size**: `get_settlement_batch_size_soft_cap_max()` → 50
+* **Maximum Batch Size**: `get_settlement_batch_size_max()` → 50
   * Hard upper bound enforced by the contract
   * Matches the protocol-wide `MAX_QUERY_LIMIT`
   * Requests exceeding this value are automatically clamped
@@ -35,18 +35,18 @@ The settlement module exposes two read-only configuration values for off-chain c
 **For Indexers:**
 ```rust
 // Recommended: Use the default batch size for efficient pagination
-let batch_size = contract.get_settlement_batch_size_soft_cap();
+let batch_size = contract.get_settlement_batch_size();
 let payments = contract.get_payment_records(invoice_id, offset, batch_size);
 
 // Advanced: Use the maximum for fewer round trips (higher memory usage)
-let max_batch = contract.get_settlement_batch_size_soft_cap_max();
+let max_batch = contract.get_settlement_batch_size_max();
 let payments = contract.get_payment_records(invoice_id, offset, max_batch);
 ```
 
 **Pagination Pattern:**
 ```rust
 let mut offset = 0u32;
-let batch_size = contract.get_settlement_batch_size_soft_cap();
+let batch_size = contract.get_settlement_batch_size();
 
 loop {
     let page = contract.get_payment_records(invoice_id, offset, batch_size)?;

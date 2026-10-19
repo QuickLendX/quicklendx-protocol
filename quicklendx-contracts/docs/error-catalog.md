@@ -12,7 +12,7 @@ This catalog mirrors the `QuickLendXError` variants currently defined in [`quick
 - Rating: [`src/invoice.rs`](../src/invoice.rs)
 - KYC and verification: [`src/verification.rs`](../src/verification.rs), [`src/analytics.rs`](../src/analytics.rs)
 - Audit: [`src/audit.rs`](../src/audit.rs)
-- Tags: [`src/invoice.rs`](../src/invoice.rs), [`src/verification.rs`](../src/verification.rs)
+- Tags: [`src/invoice.rs`](../src/invoice.rs), [`src/verification.rs`](../src/verification.rs), [`src/storage.rs`](../src/storage.rs)
 - Fees and treasury: [`src/fees.rs`](../src/fees.rs), [`src/profits.rs`](../src/profits.rs)
 - Disputes: [`src/dispute.rs`](../src/dispute.rs), [`src/dispute_timeline.rs`](../src/dispute_timeline.rs)
 - Notifications: [`src/notifications.rs`](../src/notifications.rs)
@@ -71,7 +71,7 @@ This catalog mirrors the `QuickLendXError` variants currently defined in [`quick
 | 1701 | `AuditIntegrityError` | Audit | Reserved ABI slot; no current production raising site found. | Operator | Audit data failed integrity expectations or reserved consistency checks. | Stop relying on the affected audit record and escalate to operators. |
 | 1702 | `AuditQueryError` | Audit | Reserved ABI slot; no current production raising site found. | Recoverable | The audit query cannot be satisfied with the provided parameters. | Narrow the query range, check indexes, and retry with valid audit filters. |
 | 1800 | `InvalidTag` | Tags | [`verification.rs`](../src/verification.rs) | Recoverable | A tag is empty, malformed, duplicated, or not allowed by validation rules. | Normalize the tag list and resubmit only accepted tag values. |
-| 1801 | `TagLimitExceeded` | Tags | [`invoice.rs`](../src/invoice.rs), [`verification.rs`](../src/verification.rs) | Recoverable | The submitted tag list exceeds the configured maximum. | Remove extra tags and keep the list within protocol limits. |
+| 1801 | `TagLimitExceeded` | Tags | [`invoice.rs`](../src/invoice.rs), [`verification.rs`](../src/verification.rs), [`storage.rs`](../src/storage.rs) (`get_invoices_by_tags` query bound, issue #2509) | Recoverable | The submitted tag list exceeds the configured maximum (write path), or a `get_invoices_by_tags` query named more tags than any invoice could ever have (read path, resource bound). | Remove extra tags and keep the list within protocol limits. |
 | 1850 | `InvalidFeeConfiguration` | Fees and treasury | [`fees.rs`](../src/fees.rs), [`profits.rs`](../src/profits.rs) | Operator | Fee settings are missing, inconsistent, or outside supported configuration. | Ask an admin/operator to correct fee configuration before retrying fee-dependent flows. |
 | 1851 | `TreasuryNotConfigured` | Fees and treasury | Reserved ABI slot; no current production raising site found. | Reserved | Treasury account configuration is missing or reserved for future validation. | If surfaced, configure the treasury account through the admin setup flow. |
 | 1852 | `InvalidFeeBasisPoints` | Fees and treasury | [`fees.rs`](../src/fees.rs), [`init.rs`](../src/init.rs), [`profits.rs`](../src/profits.rs) | Recoverable | Fee basis points are outside valid limits. | Submit fee values within configured basis-point bounds. |

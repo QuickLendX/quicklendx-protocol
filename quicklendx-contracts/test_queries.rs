@@ -116,6 +116,8 @@ pub fn test_all_documented_queries() {
     
     // Test 10: Release escrow funds
     println!("\n10. Testing escrow fund release...");
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     match client.try_release_escrow_funds(&invoice_id) {
         Ok(_) => println!("✅ Escrow funds released successfully"),
         Err(e) => println!("❌ Failed to release escrow funds: {:?}", e),
@@ -453,6 +455,8 @@ pub fn test_all_documented_queries() {
     
     // Test 10: Release escrow funds
     println!("\n10. Testing escrow fund release...");
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     match client.try_release_escrow_funds(&invoice_id) {
         Ok(_) => println!("✅ Escrow funds released successfully"),
         Err(e) => println!("❌ Failed to release escrow funds: {:?}", e),

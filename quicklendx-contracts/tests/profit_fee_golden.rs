@@ -8,6 +8,8 @@
 //! ```bash
 //! ALLOW_PROFIT_FEE_CORPUS_REFRESH=1 ./scripts/refresh-profit-fee-corpus.sh
 //! ```
+#![allow(clippy::disallowed_methods)]
+#![allow(clippy::unit_arg)]
 
 use quicklendx_contracts::fees::FeeManager;
 use quicklendx_contracts::profits::{calculate_treasury_split, verify_no_dust, PlatformFee};
@@ -104,6 +106,7 @@ fn evaluate_transaction_fee(
             transaction_amount,
             is_early_payment,
             is_late_payment,
+            None,
         )
         .unwrap_or(0)
     })

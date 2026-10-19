@@ -115,7 +115,8 @@ mod test_freshness_lag {
         let (env, client, _) = setup();
         env.ledger().set_timestamp(0);
 
-        let err = client.try_get_freshness(&0u32, &0u64, &0u32)
+        let err = client
+            .try_get_freshness(&0u32, &0u64, &0u32)
             .expect_err("ledger_seq 0 must be rejected");
         assert_eq!(
             err,

@@ -66,6 +66,16 @@ fn test_storage_key_investment_count_stable() {
     assert_eq!(StorageKeys::investment_count(), symbol_short!("inv_cnt"));
 }
 
+/// STORAGE CLASS: Persistent
+#[test]
+fn test_storage_key_business_default_history_stable() {
+    let env = setup();
+    assert_snapshot_entry("business_default_history", "biz_def_h");
+    let addr = Address::generate(&env);
+    let (sym, _) = StorageKeys::business_default_history(&addr);
+    assert_eq!(sym, symbol_short!("biz_def_h"));
+}
+
 // ---------------------------------------------------------------------------
 // Indexes — invoice secondary indexes (all Persistent)
 // ---------------------------------------------------------------------------
@@ -343,6 +353,13 @@ fn test_bid_storage_ttl_key_stable() {
 fn test_bid_storage_max_active_bids_key_stable() {
     assert_snapshot_entry("max_active_bids_per_investor", "mx_actbd");
     assert_eq!(symbol_short!("mx_actbd"), symbol_short!("mx_actbd"));
+}
+
+/// STORAGE CLASS: Instance  Namespace: bid_grace (admin-configurable bid expiry grace period)
+#[test]
+fn test_bid_storage_expiry_grace_key_stable() {
+    assert_snapshot_entry("bid_expiry_grace_seconds", "bid_grace");
+    assert_eq!(symbol_short!("bid_grace"), symbol_short!("bid_grace"));
 }
 
 // ---------------------------------------------------------------------------

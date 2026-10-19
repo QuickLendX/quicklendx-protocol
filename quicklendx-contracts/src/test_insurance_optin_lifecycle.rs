@@ -165,7 +165,10 @@ mod test_insurance_optin_lifecycle {
 
         let investor = Address::generate(&env);
 
-        for (seed, pct) in [(3u8, MIN_COVERAGE_PERCENTAGE), (4u8, MAX_COVERAGE_PERCENTAGE)] {
+        for (seed, pct) in [
+            (3u8, MIN_COVERAGE_PERCENTAGE),
+            (4u8, MAX_COVERAGE_PERCENTAGE),
+        ] {
             let provider = Address::generate(&env);
             let investment_id =
                 store_active_investment(&env, &contract_id, &investor, 100_000, seed);

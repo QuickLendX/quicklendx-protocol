@@ -9,27 +9,51 @@
  */
 
 import * as fs from "fs/promises";
+import { constants } from "os";
 import * as path from "path";
 
 const DATA_DIR = path.resolve(process.cwd(), ".data");
 const HOTFIX_DIR = path.resolve(process.cwd(), ".hotfix-approvals");
 
-export async function ensureRuntimeDirs(): Promise<void> {
-  try {
-    await fs.mkdir(DATA_DIR, { recursive: true });
-    console.log(`📁 Ensured .data/ directory exists`);
-  } catch (err: any) {
-    if (err.code !== "EEXIST") {
-      console.warn("⚠️  Could not create .data/: ", err.message);
-    }
-  }
+function errorCode(error: unknown): string {
+  const code =
+    error && typeof error === "object" && "code" in error
+      ? error.code
+      : undefined;
+  // Log only known errno names, never raw messages, paths, or arbitrary payloads.
+  return typeof code === "string" &&
+    Object.prototype.hasOwnProperty.call(constants.errno, code)
+    ? code
+    : "UNKNOWN";
+}
 
+async function ensureDirectory(
+  directory: string,
+  label: string,
+): Promise<void> {
   try {
-    await fs.mkdir(HOTFIX_DIR, { recursive: true });
-    console.log(`📁 Ensured .hotfix-approvals/ directory exists`);
-  } catch (err: any) {
-    if (err.code !== "EEXIST") {
-      console.warn("⚠️  Could not create .hotfix-approvals/: ", err.message);
+    try {
+      await fs.mkdir(directory, { recursive: true });
+    } catch (error: unknown) {
+      // A competing creator is harmless only if the path is now a directory.
+      // A blocking file must be diagnosed and never removed or overwritten.
+      if (
+        errorCode(error) !== "EEXIST" ||
+        !(await fs.stat(directory)).isDirectory()
+      ) {
+        throw error;
+      }
     }
+    console.log(`📁 Ensured ${label}/ directory exists`);
+  } catch (error: unknown) {
+    console.warn(`⚠️  Could not create ${label}/:`, errorCode(error));
   }
+}
+
+export async function ensureRuntimeDirs(): Promise<void> {
+  // Preserve best-effort Promise<void> behavior: attempt each directory even if
+  // the other fails. No rollback, chmod, or cached failures: retries and concurrent
+  // calls remain idempotent without deleting database or approval contents.
+  await ensureDirectory(DATA_DIR, ".data");
+  await ensureDirectory(HOTFIX_DIR, ".hotfix-approvals");
 }

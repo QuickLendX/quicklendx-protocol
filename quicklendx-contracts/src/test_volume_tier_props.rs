@@ -21,13 +21,13 @@ fn tier_level(tier: &VolumeTier) -> u8 {
 }
 
 const BOUNDARY_VALUES: [i128; 9] = [
-    99_999_999_999,  // one below Silver (100B)
-    100_000_000_000, // at Silver threshold
-    100_000_000_001, // one above Silver
-    499_999_999_999, // one below Gold (500B)
-    500_000_000_000, // at Gold threshold
-    500_000_000_001, // one above Gold
-    999_999_999_999, // one below Platinum (1T)
+    99_999_999_999,    // one below Silver (100B)
+    100_000_000_000,   // at Silver threshold
+    100_000_000_001,   // one above Silver
+    499_999_999_999,   // one below Gold (500B)
+    500_000_000_000,   // at Gold threshold
+    500_000_000_001,   // one above Gold
+    999_999_999_999,   // one below Platinum (1T)
     1_000_000_000_000, // at Platinum threshold
     1_000_000_000_001, // one above Platinum
 ];

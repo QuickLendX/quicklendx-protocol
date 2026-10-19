@@ -21,6 +21,8 @@ struct CancelAcceptFixture {
     env: Env,
     client: QuickLendXContractClient<'static>,
     contract_id: Address,
+    business: Address,
+    currency: Address,
     invoice_id: BytesN<32>,
     bid_id: BytesN<32>,
     investor: Address,
@@ -101,6 +103,9 @@ fn build_cancel_accept_fixture() -> CancelAcceptFixture {
         &String::from_str(&env, "Cancel accept race invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
+        &None,
+        &None,
+        &None,
     );
     client.verify_invoice(&invoice_id);
 
@@ -116,10 +121,61 @@ fn build_cancel_accept_fixture() -> CancelAcceptFixture {
         env,
         client,
         contract_id,
+        business,
+        currency,
         invoice_id,
         bid_id,
         investor,
     }
+}
+
+/// The legacy `accept_bid` API must reject a bid whose invoice does not match
+/// the invoice argument.  This is a particularly important atomicity check:
+/// accepting the mismatched bid used to create escrow under the bid's invoice
+/// while marking the requested invoice as funded.
+#[test]
+fn test_accept_bid_rejects_mismatched_invoice_without_cross_invoice_state() {
+    let fixture = build_cancel_accept_fixture();
+    let second_invoice = fixture.client.upload_invoice(
+        &fixture.business,
+        &10_000i128,
+        &fixture.currency,
+        &(fixture.env.ledger().timestamp() + 86_400),
+        &String::from_str(&fixture.env, "Mismatched bid invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&fixture.env),
+        &None,
+        &None,
+        &None,
+    );
+    fixture.client.verify_invoice(&second_invoice);
+    let second_bid = fixture.client.place_bid(
+        &fixture.investor,
+        &second_invoice,
+        &9_000i128,
+        &10_000i128,
+        &BytesN::from_array(&fixture.env, &[1u8; 32]),
+    );
+
+    let result = fixture
+        .client
+        .try_accept_bid(&fixture.invoice_id, &second_bid);
+    let error = result
+        .expect_err("a bid for another invoice must be rejected")
+        .expect("contract error must decode");
+    assert_eq!(error, QuickLendXError::Unauthorized);
+
+    assert_no_funding_state(&fixture.client, &fixture.invoice_id);
+    assert_no_funding_state(&fixture.client, &second_invoice);
+    assert_eq!(
+        fixture
+            .client
+            .get_bid(&second_bid)
+            .expect("bid exists")
+            .status,
+        BidStatus::Placed,
+        "losing bid must remain untouched for a later valid acceptance"
+    );
 }
 
 fn assert_no_funding_state(client: &QuickLendXContractClient, invoice_id: &BytesN<32>) {
@@ -198,7 +254,7 @@ fn test_cancel_then_accept_same_bid_rejects_accept_and_leaves_no_partial_state()
     );
 
     assert!(
-        fixture.client.cancel_bid(&fixture.bid_id),
+        fixture.client.cancel_bid(&fixture.bid_id).is_ok(),
         "first cancel must transition Placed -> Cancelled"
     );
 
@@ -245,10 +301,9 @@ fn test_cancel_then_accept_same_bid_rejects_accept_and_leaves_no_partial_state()
 }
 
 /// Race ordering: the business acceptance is ordered before the investor
-/// cancellation. `cancel_bid` currently exposes non-`Placed` rejection as a
-/// deterministic `false` return rather than a `QuickLendXError`; this documents
-/// that API gap while still asserting the second transition cannot mutate
-/// funded invoice, escrow, or investment state.
+/// cancellation. `cancel_bid` rejects non-`Placed` bids with
+/// `Err(QuickLendXError::BidStale)`; this asserts the second transition cannot
+/// mutate funded invoice, escrow, or investment state.
 #[test]
 fn test_accept_then_cancel_same_bid_rejects_cancel_and_preserves_funded_state() {
     let fixture = build_cancel_accept_fixture();
@@ -261,9 +316,10 @@ fn test_accept_then_cancel_same_bid_rejects_cancel_and_preserves_funded_state() 
         "first accept must succeed before any cancellation; got {accept:?}"
     );
 
-    assert!(
-        !fixture.client.cancel_bid(&fixture.bid_id),
-        "cancel_bid must return false once the bid is Accepted"
+    assert_eq!(
+        fixture.client.cancel_bid(&fixture.bid_id),
+        Err(QuickLendXError::BidStale),
+        "cancel_bid must return Err(BidStale) once the bid is Accepted"
     );
 
     assert_funded_state(
