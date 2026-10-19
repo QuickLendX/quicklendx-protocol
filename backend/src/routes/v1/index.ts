@@ -23,6 +23,7 @@ import {
 import { FileRawEventStore } from "../../services/rawEventStore";
 import { getRateLimitPolicies } from "../../middleware/rate-limit";
 import { eventIngestLimits } from "../../middleware/event-ingest-limits";
+import { indexerAuth } from "../../middleware/indexer-auth";
 
 const router = Router();
 const eventIdStore = new FileRawEventStore(new DefaultEventValidator());
@@ -41,10 +42,10 @@ router.use("/admin", adminRoutes);
 router.use("/admin/monitoring", monitoringRoutes);
 router.use("/reconciliation", reconciliationRoutes);
 
-// ---------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // System status endpoint
 // Returns the current lag status including degradation level and thresholds.
-// ---------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 router.get("/status", async (req, res, next) => {
   try {
     const lagStatus = await lagMonitor.getLagStatus();
@@ -57,10 +58,10 @@ router.get("/status", async (req, res, next) => {
   }
 });
 
-// ---------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // Demo write endpoint – gated by degradedGuard (warn + critical)
 // In a real system this would be a bid placement, settlement trigger, etc.
-// ---------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 router.post(
   "/write-action",
   degradedGuard(),
@@ -69,10 +70,10 @@ router.post(
   }
 );
 
-// ---------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 // Demo critical-only gated endpoint
 // Only blocked when lag >= criticalThreshold.
-// ---------------------------------------------------------------------------
+// ----------------------------------------------------------------------------
 router.post(
   "/critical-action",
   degradedGuard({ criticalOnly: true }),
@@ -82,7 +83,9 @@ router.post(
 );
 
 // Event processing endpoint (for indexer to post events)
-router.post("/events", ...eventIngestLimits, async (req, res) => {
+// Authenticated via HMAC-SHA256 signature over timestamp + raw body.
+// Signature is checked after framing/size limits and before schema validation.
+router.post("/events", ...eventIngestLimits, indexerAuth, async (req, res) => {
   try {
     const events = Array.isArray(req.body) ? req.body : [req.body];
     const validation = validateEventBatch(events);

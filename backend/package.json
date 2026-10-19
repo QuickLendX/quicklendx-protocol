@@ -1,7 +1,7 @@
 {
   "name": "quicklendx-backend",
   "version": "0.1.0",
-  "description": "QuickLendX backend API controllers (TypeScript).",
+  "description": "",
   "private": true,
   "type": "module",
   "scripts": {
@@ -9,8 +9,8 @@
     "test:seeds": "jest seeds.test.ts",
     "test": "jest",
     "test:coverage": "jest --coverage --forceExit",
-    "dev": "ts-node-dev src/index.ts",
-    "start": "ts-node src/index.ts",
+    "dev": "node api.js && ts-node-dev src/index.ts",
+    "start": "node api.js && ts-node src/index.ts",
     "security:scan": "node scripts/dependency-scan.js audit-report.json high && node scripts/secret-scan.js",
     "sbom:generate": "node scripts/generate-sbom.js sbom/backend-sbom.cdx.json",
     "sbom:check": "node scripts/validate-sbom.js sbom/backend-sbom.cdx.json",
@@ -24,7 +24,6 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "@types/helmet": "^0.0.48",
     "@types/nodemailer": "^8.0.0",
