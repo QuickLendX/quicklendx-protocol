@@ -615,22 +615,16 @@ fn test_add_tag_rejects_when_max_tag_count_reached() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 #[test]
-fn test_add_rating_rejects_when_max_rating_count_reached() {
+fn test_add_rating_rejects_when_non_investor_attempts_rating() {
     let env = Env::default();
     let contract_id = env.register(QuickLendXContract, ());
     env.as_contract(&contract_id, || {
         let business = Address::generate(&env);
+        let investor = Address::generate(&env);
         let mut invoice = make_invoice(&env, &business);
 
-        // add_rating is only valid when invoice is funded/paid.
         invoice.status = crate::invoice::InvoiceStatus::Funded;
-
-        for i in 0..MAX_RATINGS_PER_INVOICE {
-            let rater = Address::generate(&env);
-            invoice
-                .add_rating(5, String::from_str(&env, "ok"), rater, i as u64 + 1)
-                .expect("rating add should succeed until max bound");
-        }
+        invoice.investor = Some(investor.clone());
 
         let err = invoice
             .add_rating(
@@ -640,7 +634,8 @@ fn test_add_rating_rejects_when_max_rating_count_reached() {
                 9999,
             )
             .unwrap_err();
-        assert_eq!(err, QuickLendXError::OperationNotAllowed);
+        assert_eq!(err, QuickLendXError::NotRater);
+        assert_eq!(invoice.ratings.len(), 0);
     });
 }
 

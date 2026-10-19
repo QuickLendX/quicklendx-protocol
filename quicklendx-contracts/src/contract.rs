@@ -515,8 +515,12 @@ impl QuickLendXContract {
         comment: soroban_sdk::Bytes,
         investor: Address,
     ) -> Result<(), QuickLendXError> {
+        investor.require_auth();
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        invoice.add_rating(rating, comment, investor, env.ledger().timestamp())?;
+        if invoice.investor != Some(investor.clone()) {
+            return Err(QuickLendXError::NotRater);
+        }
+        invoice.add_rating(rating, String::from_str(&env, "rating"), investor, env.ledger().timestamp())?;
         InvoiceStorage::update_invoice(&env, &invoice);
         Ok(())
     }

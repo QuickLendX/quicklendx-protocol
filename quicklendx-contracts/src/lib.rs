@@ -236,6 +236,8 @@ mod test_panic_handler;
 #[cfg(test)]
 mod test_payments;
 #[cfg(test)]
+mod test_rating_auth;
+#[cfg(test)]
 mod test_payments_auth;
 #[cfg(test)]
 mod test_queries;
@@ -4828,15 +4830,8 @@ impl QuickLendXContract {
         rater: Address,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-
         require_no_active_freeze(&env, &invoice_id)?;
-
-        let ts = env.ledger().timestamp();
-        invoice.add_rating(rating, feedback, rater, ts)?;
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
+        crate::invoice::Invoice::rate_invoice(&env, &invoice_id, rater, rating, feedback)
     }
 
     /// Admin-only: override an invoice's computed average rating.
