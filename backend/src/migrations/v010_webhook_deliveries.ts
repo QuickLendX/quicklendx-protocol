@@ -1,3 +1,13 @@
+/**
+ * v010_webhook_deliveries
+ *
+ * Author: QuickLendX Engineering
+ * Created: 2026-06-23
+ *
+ * Creates the webhook_deliveries table for durable per-delivery tracking with
+ * retry state, dead-letter support, and cleanup index.
+ */
+
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 const CREATE_WEBHOOK_DELIVERIES_TABLE = `
@@ -30,7 +40,7 @@ const CREATE_CLEANUP_INDEX = `
 `;
 
 export default {
-  version: 6,
+  version: 10,
   name: "webhook_deliveries",
   authoredAt: "2026-06-23",
   author: "QuickLendX Engineering",

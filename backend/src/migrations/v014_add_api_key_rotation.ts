@@ -1,5 +1,5 @@
 /**
- * v010_add_api_key_rotation
+ * v014_add_api_key_rotation
  *
  * Author: QuickLendX Engineering
  * Created: 2026-06-20
@@ -7,12 +7,14 @@
  * Adds columns to support API key signing secret rotation with a grace period.
  * - prev_signing_secret_hash: The hash of the previous secret
  * - prev_secret_expires_at: When the previous secret expires
+ *
+ * Depends on: v008_create_api_keys (api_keys table must exist).
  */
 
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 export default {
-  version: 10,
+  version: 14,
   name: "add_api_key_rotation",
   authoredAt: "2026-06-20",
   author: "QuickLendX Engineering",

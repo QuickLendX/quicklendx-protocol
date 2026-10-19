@@ -1,5 +1,5 @@
 /**
- * v007_create_settlements
+ * v011_create_settlements
  *
  * Author: QuickLendX Engineering
  * Created: 2026-05-27
@@ -15,7 +15,7 @@
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 export default {
-  version: 7,
+  version: 11,
   name: "create_settlements",
   authoredAt: "2026-05-27",
   author: "QuickLendX Engineering",

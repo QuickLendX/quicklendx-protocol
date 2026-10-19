@@ -1,5 +1,5 @@
 /**
- * v011_raw_events_unique
+ * v018_raw_events_unique
  *
  * Author: QuickLendX Engineering
  * Created: 2026-06-23
@@ -14,7 +14,7 @@
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 export default {
-  version: 11,
+  version: 18,
   name: "raw_events_unique",
   authoredAt: "2026-06-23",
   author: "QuickLendX Engineering",

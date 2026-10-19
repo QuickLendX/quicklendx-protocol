@@ -1,10 +1,15 @@
 /**
- * v006_kyc_records
+ * v009_kyc_records
  *
  * Author: QuickLendX Engineering
  * Created: 2026-06-23
  *
  * Migration to create the kyc_records table to back the getKycStatus verification checks.
+ *
+ * Fixes applied vs original v006_kyc_records.ts:
+ *   - Removed duplicate .split(";").map().filter() chain (TS1128 parse error).
+ *   - Collapsed SAVEPOINT_NAME / SAVEPOINT to a single constant.
+ *   - RELEASE savepoint exactly once (was erroneously called twice).
  */
 
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
@@ -24,7 +29,6 @@ const schema = `
 `;
 
 const SAVEPOINT_NAME = "kyc_migration";
-const SAVEPOINT = "kyc_migration";
 
 async function runInTransaction(
   db: MigrationContext["db"],
@@ -36,7 +40,6 @@ async function runInTransaction(
       await db.exec(statement);
     }
     await db.exec(`RELEASE ${SAVEPOINT_NAME}`);
-    await db.exec(`RELEASE ${SAVEPOINT}`);
   } catch (err) {
     try {
       await db.exec(`ROLLBACK TO SAVEPOINT ${SAVEPOINT_NAME}`);
@@ -49,18 +52,16 @@ async function runInTransaction(
 }
 
 export default {
-  version: 6,
+  version: 9,
   name: "create_kyc_records",
   authoredAt: "2026-06-23",
   author: "QuickLendX Engineering",
   up: async (ctx: MigrationContext): Promise<void> => {
     const statements = schema
       .split(";")
-      .map((statement) => statement.trim())
-      .filter((statement) => statement.length > 0 && !statement.startsWith("--"));
-
       .map((s) => s.trim())
       .filter((s) => s.length > 0 && !s.startsWith("--"));
+
     await runInTransaction(ctx.db, statements);
   },
   down: async (ctx: MigrationContext): Promise<void> => {

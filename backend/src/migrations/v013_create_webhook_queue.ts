@@ -1,5 +1,5 @@
 /**
- * v009_create_webhook_queue
+ * v013_create_webhook_queue
  *
  * Author: QuickLendX Engineering
  * Created: 2026-06-01
@@ -15,7 +15,7 @@
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 export default {
-  version: 9,
+  version: 13,
   name: "create_webhook_queue",
   authoredAt: "2026-06-01",
   author: "QuickLendX Engineering",

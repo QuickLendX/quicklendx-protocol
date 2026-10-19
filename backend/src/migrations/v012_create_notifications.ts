@@ -1,5 +1,5 @@
 /**
- * v008_create_notifications
+ * v012_create_notifications
  *
  * Author: QuickLendX Engineering
  * Created: 2026-05-28
@@ -18,7 +18,7 @@
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 export default {
-  version: 8,
+  version: 12,
   name: "create_notifications",
   authoredAt: "2026-05-28",
   author: "QuickLendX Engineering",

@@ -1,5 +1,5 @@
 /**
- * v012_feature_flags
+ * v019_feature_flags
  *
  * Author: QuickLendX Engineering
  * Created: 2026-06-24
@@ -14,7 +14,7 @@
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 export default {
-  version: 12,
+  version: 19,
   name: "feature_flags",
   authoredAt: "2026-06-24",
   author: "QuickLendX Engineering",

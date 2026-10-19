@@ -1,5 +1,5 @@
 /**
- * v006_create_api_keys
+ * v008_create_api_keys
  *
  * Author: QuickLendX Engineering
  * Created: 2026-05-27
@@ -15,7 +15,7 @@
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 export default {
-  version: 6,
+  version: 8,
   name: "create_api_keys",
   authoredAt: "2026-05-27",
   author: "QuickLendX Engineering",
