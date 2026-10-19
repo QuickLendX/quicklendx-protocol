@@ -830,49 +830,65 @@ impl InvoiceStorage {
         matches
     }
 
-    fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_business(env, business);
-        if !invoices.contains(invoice_id) {
-            invoices.push_back(invoice_id.clone());
-            let key = Indexes::invoices_by_business(business);
-            env.storage().persistent().set(&key, &invoices);
-            extend_persistent_ttl(env, &key);
-            Self::bump_business_generation(env, business);
-        }
-    }
+fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
+    let index = InvoiceIndex::Business(business.clone());
+    let mut invoices = Self::raw_index_entries(env, &index);
 
-    fn remove_from_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_business(env, business);
-        if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
-            invoices.remove(pos as u32);
-            let key = Indexes::invoices_by_business(business);
-            env.storage().persistent().set(&key, &invoices);
-            extend_persistent_ttl(env, &key);
-            Self::bump_business_generation(env, business);
-        }
-    }
+    if !invoices.contains(invoice_id) {
+        invoices.push_back(invoice_id.clone());
 
-    fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_status(env, status);
-        if !invoices.contains(invoice_id) {
-            invoices.push_back(invoice_id.clone());
-            let key = Indexes::invoices_by_status(status);
-            env.storage().persistent().set(&key, &invoices);
-            extend_persistent_ttl(env, &key);
-            Self::bump_status_generation(env, status);
-        }
+        let key = Indexes::invoices_by_business(business);
+        env.storage().persistent().set(&key, &invoices);
+        extend_persistent_ttl(env, &key);
+        Self::bump_business_generation(env, business);
     }
+}
 
-    fn remove_from_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-        let mut invoices = Self::get_by_status(env, status);
-        if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
-            invoices.remove(pos as u32);
-            let key = Indexes::invoices_by_status(status);
-            env.storage().persistent().set(&key, &invoices);
-            extend_persistent_ttl(env, &key);
-            Self::bump_status_generation(env, status);
-        }
+fn remove_from_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
+    let index = InvoiceIndex::Business(business.clone());
+    let mut invoices = Self::raw_index_entries(env, &index);
+
+    if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
+        invoices.remove(pos as u32);
+
+        let key = Indexes::invoices_by_business(business);
+        env.storage().persistent().set(&key, &invoices);
+        extend_persistent_ttl(env, &key);
+        Self::bump_business_generation(env, business);
     }
+}
+
+fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
+    let index = InvoiceIndex::Status(status);
+    let mut invoices = Self::raw_index_entries(env, &index);
+
+    if !invoices.contains(invoice_id) {
+        invoices.push_back(invoice_id.clone());
+
+        let key = Indexes::invoices_by_status(status);
+        env.storage().persistent().set(&key, &invoices);
+        extend_persistent_ttl(env, &key);
+        Self::bump_status_generation(env, status);
+    }
+}
+
+fn remove_from_status_index(
+    env: &Env,
+    status: InvoiceStatus,
+    invoice_id: &BytesN<32>,
+) {
+    let index = InvoiceIndex::Status(status);
+    let mut invoices = Self::raw_index_entries(env, &index);
+
+    if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
+        invoices.remove(pos as u32);
+
+        let key = Indexes::invoices_by_status(status);
+        env.storage().persistent().set(&key, &invoices);
+        extend_persistent_ttl(env, &key);
+        Self::bump_status_generation(env, status);
+    }
+}
 
     pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_customer(customer_name);
