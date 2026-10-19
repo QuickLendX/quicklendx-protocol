@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "feat/issue-2924-fix-contracts-module-tree-does-not-compile-once",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "feat/issue-2924-fix-contracts-module-tree-does-not-compile-once": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "feat/issue-2924-fix-contracts-module-tree-does-not-compile-once",
+    "origin"
+  ]
+}

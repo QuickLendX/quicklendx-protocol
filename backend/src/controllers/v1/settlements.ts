@@ -10,10 +10,10 @@ import { assertSettlementId, assertInvoiceId } from "../../lib/entityId";
 export const MOCK_SETTLEMENTS: any[] = [
   labelRecord<Omit<Settlement, "contract_version" | "event_schema_version" | "indexed_at">>({
     id: "0xsettle123",
-    invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+    invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
     amount: "1000000000",
-    payer: "GPAYER000000000000000000000000000000000000000000000000",
-    recipient: "GRECIP000000000000000000000000000000000000000000000000",
+    payer: "GPAYER00000000000000000000000000000000000000000000000000",
+    recipient: "GRECIP00000000000000000000000000000000000000000000000000",
     timestamp: Math.floor(Date.now() / 1000) - 3600,
     status: SettlementStatus.Pending,
   }),

@@ -1,4 +1,4 @@
-/**
+/*
  * v007_create_settlements
  *
  * Author: QuickLendX Engineering
