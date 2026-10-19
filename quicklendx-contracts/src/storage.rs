@@ -12,8 +12,20 @@ use crate::types::{
     PruneReport, RebuildReport,
 };
 
-/// Default TTL threshold for persistent storage (adjust the value as needed)
-pub const PERSISTENT_TTL_THRESHOLD: u64 = 34_732_800; // ~30 days at 5s/ledger
+/// Soroban TTL policy based on 5-second ledgers.
+///
+/// 1 day  = 17,280 ledgers
+/// 7 days = 120,960 ledgers
+/// 30 days = 518,400 ledgers
+///
+/// Persistent entries are extended only when their remaining TTL falls
+/// below the 7-day threshold, and are then extended to 30 days.
+pub const PERSISTENT_BUMP_THRESHOLD: u32 = 120_960;
+pub const PERSISTENT_EXTEND_TO: u32 = 518_400;
+
+/// Instance storage uses the same 7-day/30-day TTL policy.
+pub const INSTANCE_BUMP_THRESHOLD: u32 = 120_960;
+pub const INSTANCE_EXTEND_TO: u32 = 518_400;
 
 /// Maximum time limit for invoice locks in seconds (30 days)
 pub const LOCK_TIME_LIMIT_SECONDS: u64 = 2_592_000;
@@ -61,8 +73,13 @@ pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {
-    let ttl_u32: u32 = PERSISTENT_TTL_THRESHOLD.try_into().unwrap_or(0);
-    env.storage().persistent().extend_ttl(key, ttl_u32, ttl_u32);
+    let ttl = env.storage().persistent().get_ttl(key);
+
+    if ttl < PERSISTENT_BUMP_THRESHOLD {
+        env.storage()
+            .persistent()
+            .extend_ttl(key, PERSISTENT_BUMP_THRESHOLD, PERSISTENT_EXTEND_TO);
+    }
 }
 
 pub fn bump_persistent<T>(env: &Env, key: &T)
@@ -70,6 +87,12 @@ where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {
     extend_persistent_ttl(env, key);
+}
+
+pub fn extend_instance_ttl(env: &Env) {
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_BUMP_THRESHOLD, INSTANCE_EXTEND_TO);
 }
 
 /// Storage key for the pending treasury address during a rotation.
