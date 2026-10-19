@@ -1,6 +1,7 @@
-#![no_std]
-
-extern crate alloc; // Add this for Vec support in no_std
+#no_std
+p
+// Add this for Vec support in no_std
+extern crate alloc;
 
 use soroban_sdk::{contract, contractimpl, Env, Symbol, symbol_short};
 
@@ -8,6 +9,7 @@ use soroban_sdk::{contract, contractimpl, Env, Symbol, symbol_short};
 pub mod errors;
 pub mod types;
 pub mod invoice_amount;
+pub mod payments;
 
 // Constants that are used across modules
 pub const MAX_QUERY_LIMIT: u32 = 100;
