@@ -84,6 +84,9 @@ fn make_invoice(env: &Env) -> Invoice {
         dispute: make_dispute(env),
         total_paid: 0,
         payment_history: Vec::new(env),
+        origination_fee_bps: None,
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     }
 }
 

@@ -80,7 +80,7 @@ mod test_dispute_timeline {
             &String::from_str(env, "Timeline test invoice"),
             &InvoiceCategory::Services,
             &Vec::new(env),
-        )
+            &None)
     }
 
     /// Zero address used as the redacted actor sentinel.

@@ -49,7 +49,9 @@
         "preset": "ts-jest",
         "testEnvironment": "node",
         "testMatch": [
-          "<rootDir>/app/**/*.test.ts"
+          "<rootDir>/app/**/*.test.ts",
+          "<rootDir>/**/__tests__/**/*.test.ts",
+          "<rootDir>/**/tests/**/*.test.ts"
         ],
         "transform": {
           "^.+\\.tsx?$": [

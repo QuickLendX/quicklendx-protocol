@@ -77,6 +77,7 @@ QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing t
 - **`investment.rs`**: Investment tracking and insurance
 - **`notifications.rs`**: Notification system for all parties
 - **`events.rs`**: Event emission and handling
+- **`regulatory.rs`**: Compliance seam — no-op `require_regulatory_ok` gate called on state-changing entry points (`store_invoice`, `place_bid`), reserved for future jurisdiction-specific checks.
 - **`errors.rs`**: Error definitions and handling
 
 ## ⚡ Quick Start
@@ -143,6 +144,10 @@ See [Deterministic Ledger Time](docs/contracts/deterministic-time.md) for guidel
 ### Settlement formula and update timing
 
 See [Settlement formula, inputs, and update timing](../docs/contracts/settlement-formula.md) for the contributor-facing explanation of the settlement formula and when fee updates apply.
+
+### Settlement Currencies
+
+See [Settlement Currencies by Invoice Type](docs/SETTLEMENT_CURRENCIES.md) for a downstream integrator guide on which tokens are accepted for each invoice category.
 
 ### Core Functions
 
@@ -1107,6 +1112,7 @@ See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) for detailed security analysis.
 
 Additional documentation is available in the `docs/` directory:
 
+- **[Regulatory Compliance Hook](docs/contracts/regulatory.md)**: Reserved compliance seam — how `require_regulatory_ok` is wired into invoice and bid flows.
 - **[Decimal Handling](docs/decimal-handling.md)**: How the contract handles different token decimal places (USDC, DAI, XLM, etc.) and how integrators should convert amounts
 - **[Protocol Limits](PROTOCOL_LIMITS_README.md)**: Protocol-wide limits and configuration
 - **[Admin Operations](docs/admin-dry-run.md)**: Admin function dry-run previews
@@ -1295,6 +1301,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🔗 Links
 
+- [Contract Emergency Response Runbook](../docs/EMERGENCY_RESPONSE.md)
 - [Token Decimals — how non-standard decimals are handled internally](../docs/contracts/token-decimals.md)
 - [Stellar Documentation](https://developers.stellar.org/)
 - [Soroban Documentation](https://soroban.stellar.org/)
@@ -1304,3 +1311,20 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ---
 
 **Built with ❤️ on Stellar's Soroban platform**
+
+## Windows Development Notes
+
+### Testing on Windows
+Due to mingw linker limitations on Windows, you may encounter "export ordinal too large" errors when running tests that require the `cdylib` crate type. 
+
+**Workaround for Windows testing:**
+1. Temporarily change `Cargo.toml` crate-type to `["rlib"]` for local testing
+2. Run `cargo test --lib` 
+3. Restore `["rlib", "cdylib"]` before committing
+
+**Production WASM builds work fine in CI (Linux environment).**
+
+### Toolchain
+- Uses `stable` Rust toolchain 
+- Local Windows development uses GNU toolchain (`stable-x86_64-pc-windows-gnu`)
+- Set with: `rustup override set stable-x86_64-pc-windows-gnu` in the contracts directory

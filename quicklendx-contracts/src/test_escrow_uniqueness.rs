@@ -98,6 +98,7 @@ fn verified_invoice(
         &String::from_str(env, "Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&id);
     id
@@ -124,7 +125,13 @@ fn test_double_accept_bid_rejected() {
 
     let amount = 10_000i128;
     let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 1_000),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // First accept succeeds.
     client.accept_bid(&invoice_id, &bid_id);
@@ -181,12 +188,24 @@ fn test_second_bid_on_funded_invoice_rejected() {
 
     let amount = 10_000i128;
     let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
-    let bid1 = client.place_bid(&investor1, &invoice_id, &amount, &(amount + 1_000));
+    let bid1 = client.place_bid(
+        &investor1,
+        &invoice_id,
+        &amount,
+        &(amount + 1_000),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     client.accept_bid(&invoice_id, &bid1);
 
     // investor2 cannot place a bid on a funded invoice.
-    let result = client.try_place_bid(&investor2, &invoice_id, &amount, &(amount + 500));
+    let result = client.try_place_bid(
+        &investor2,
+        &invoice_id,
+        &amount,
+        &(amount + 500),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     assert!(result.is_err(), "bidding on funded invoice must fail");
 
     // Escrow still belongs to investor1.
@@ -302,8 +321,16 @@ fn test_no_new_escrow_after_release() {
 
     let amount = 10_000i128;
     let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 1_000),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
 
     assert_eq!(
@@ -343,7 +370,13 @@ fn test_no_new_escrow_after_refund() {
 
     let amount = 10_000i128;
     let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 1_000),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
     client.refund_escrow_funds(&invoice_id, &admin);
 
@@ -385,8 +418,20 @@ fn test_escrow_isolation_between_invoices() {
     let invoice_a = verified_invoice(&env, &client, &business, amount, &currency);
     let invoice_b = verified_invoice(&env, &client, &business, amount, &currency);
 
-    let bid_a = client.place_bid(&investor, &invoice_a, &amount, &(amount + 500));
-    let bid_b = client.place_bid(&investor, &invoice_b, &amount, &(amount + 500));
+    let bid_a = client.place_bid(
+        &investor,
+        &invoice_a,
+        &amount,
+        &(amount + 500),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+    let bid_b = client.place_bid(
+        &investor,
+        &invoice_b,
+        &amount,
+        &(amount + 500),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // Fund only invoice A.
     client.accept_bid(&invoice_a, &bid_a);
@@ -432,13 +477,27 @@ fn test_release_one_escrow_does_not_affect_other() {
     let invoice_a = verified_invoice(&env, &client, &business, amount, &currency);
     let invoice_b = verified_invoice(&env, &client, &business, amount, &currency);
 
-    let bid_a = client.place_bid(&investor, &invoice_a, &amount, &(amount + 500));
-    let bid_b = client.place_bid(&investor, &invoice_b, &amount, &(amount + 500));
+    let bid_a = client.place_bid(
+        &investor,
+        &invoice_a,
+        &amount,
+        &(amount + 500),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+    let bid_b = client.place_bid(
+        &investor,
+        &invoice_b,
+        &amount,
+        &(amount + 500),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     client.accept_bid(&invoice_a, &bid_a);
     client.accept_bid(&invoice_b, &bid_b);
 
     // Release only invoice A.
+    client.approve_early_escrow_release(&invoice_a, &business);
+    client.approve_early_escrow_release(&invoice_a, &investor);
     client.release_escrow_funds(&invoice_a);
 
     assert_eq!(
@@ -476,9 +535,27 @@ fn test_distinct_invoice_ids_produce_distinct_escrow_keys() {
     let inv_b = verified_invoice(&env, &client, &business, amount, &currency);
     let inv_c = verified_invoice(&env, &client, &business, amount, &currency);
 
-    let bid_a = client.place_bid(&investor, &inv_a, &amount, &(amount + 100));
-    let bid_b = client.place_bid(&investor, &inv_b, &amount, &(amount + 100));
-    let bid_c = client.place_bid(&investor, &inv_c, &amount, &(amount + 100));
+    let bid_a = client.place_bid(
+        &investor,
+        &inv_a,
+        &amount,
+        &(amount + 100),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+    let bid_b = client.place_bid(
+        &investor,
+        &inv_b,
+        &amount,
+        &(amount + 100),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
+    let bid_c = client.place_bid(
+        &investor,
+        &inv_c,
+        &amount,
+        &(amount + 100),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     client.accept_bid(&inv_a, &bid_a);
     client.accept_bid(&inv_b, &bid_b);
@@ -525,7 +602,13 @@ fn test_invoice_and_escrow_fields_are_consistent_after_accept() {
 
     let amount = 7_500i128;
     let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 750));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 750),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
 
     let invoice = client.get_invoice(&invoice_id);
@@ -564,7 +647,13 @@ fn test_failed_accept_leaves_no_escrow_and_no_state_change() {
 
     let amount = 5_000i128;
     let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 500));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 500),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     let result = client.try_accept_bid(&invoice_id, &bid_id);
     assert_eq!(
@@ -642,7 +731,13 @@ fn test_double_layer_guard_both_sites_active() {
 
     // Step 2: Attempt to create second escrow via public API (accept_bid)
     // This exercises the outer guard in load_accept_bid_context
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 1_000),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     let err = client
         .try_accept_bid(&invoice_id, &bid_id)
         .unwrap_err()
@@ -689,7 +784,13 @@ fn test_double_layer_guard_reverse_order() {
 
     let amount = 10_000i128;
     let invoice_id = verified_invoice(&env, &client, &business, amount, &currency);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1_000));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 1_000),
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // Step 1: Create escrow via public API (exercises outer guard)
     client.accept_bid(&invoice_id, &bid_id);

@@ -96,4 +96,5 @@ The settlement process is managed by the `settlement.rs` module.
 -   **Contributor Guide**: [`docs/contracts/settlement-formula.md`](contracts/settlement-formula.md)
 -   **Settlement Flow**: `quicklendx-contracts/src/settlement.rs`
 -   **Fee Configuration**: `quicklendx-contracts/src/fees.rs`
+-   **Partial-Fill Notes**: [`docs/PARTIAL_FILLS.md`](PARTIAL_FILLS.md)
 -   **Dispute Interaction**: `docs/settlement-dispute-interaction.md`

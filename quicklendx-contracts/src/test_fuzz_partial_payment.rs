@@ -104,6 +104,7 @@ fn setup_funded_invoice(
         &String::from_str(env, "fuzz partial payment invoice"),
         &InvoiceCategory::Services,
         &SorobanVec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(
@@ -111,6 +112,7 @@ fn setup_funded_invoice(
         &invoice_id,
         &invoice_amount,
         &(invoice_amount + 100),
+        &BytesN::from_array(&env, &[0u8; 32]),
     );
     client.accept_bid(&invoice_id, &bid_id);
     (invoice_id, business)

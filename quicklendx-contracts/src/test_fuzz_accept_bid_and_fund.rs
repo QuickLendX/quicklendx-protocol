@@ -314,10 +314,10 @@ fn setup_invoice_and_bid(
         business, &amount, token, &due_date,
         &String::from_str(env, "fuzz accept-bid"),
         &InvoiceCategory::Services, &SorobanVec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount * BID_RETURN_FACTOR / 1000));
+    let bid_id = client.place_bid(investor, &invoice_id, &amount, &(amount * BID_RETURN_FACTOR / 1000), &BytesN::from_array(&env, &[0u8; 32]));
 
     // Manually expire the bid if requested
     if bid_expired {
@@ -524,7 +524,8 @@ fn fuzz_accept_bid_case(scenario: AcceptBidScenario) -> Result<(), TestCaseError
         // If the invoice is already Funded, place_bid is expected to fail.
         let bid2_r = client.try_place_bid(&investor2, &invoice_id,
             &scenario.invoice_amount,
-            &(scenario.invoice_amount * BID_RETURN_FACTOR / 1000));
+            &(scenario.invoice_amount * BID_RETURN_FACTOR / 1000),
+            &BytesN::from_array(&env, &[0u8; 32]));
         let bid2 = match bid2_r {
             Ok(Ok(b)) => b,
             _ => {
@@ -683,9 +684,9 @@ fn clean_env(amount: i128) -> (Env, QuickLendXContractClient<'static>, Address, 
     cli.verify_investor(&investor, &MINT_AMOUNT);
 
     let dd = env.ledger().timestamp() + 86_400 * 30;
-    let iid = cli.store_invoice(&biz, &amount, &tok, &dd, &String::from_str(&env, "edge"), &InvoiceCategory::Services, &SorobanVec::new(&env));
+    let iid = cli.store_invoice(&biz, &amount, &tok, &dd, &String::from_str(&env, "edge"), &InvoiceCategory::Services, &SorobanVec::new(&env), &None);
     cli.verify_invoice(&iid);
-    let bid = cli.place_bid(&investor, &iid, &amount, &(amount * BID_RETURN_FACTOR / 1000));
+    let bid = cli.place_bid(&investor, &iid, &amount, &(amount * BID_RETURN_FACTOR / 1000), &BytesN::from_array(&env, &[0u8; 32]));
     (env, cli, cid, tok, admin, biz, investor, iid, bid)
 }
 
@@ -728,9 +729,9 @@ fn test_accept_bid_business_pending_rejected() {
     cli.submit_investor_kyc(&inv, &String::from_str(&env, "kyc"));
     cli.verify_investor(&inv, &MINT_AMOUNT);
     let dd = env.ledger().timestamp() + 86_400 * 30;
-    let iid = cli.store_invoice(&biz, &1_000, &tok, &dd, &String::from_str(&env, "test"), &InvoiceCategory::Services, &SorobanVec::new(&env));
+    let iid = cli.store_invoice(&biz, &1_000, &tok, &dd, &String::from_str(&env, "test"), &InvoiceCategory::Services, &SorobanVec::new(&env), &None);
     cli.verify_invoice(&iid);
-    let bid = cli.place_bid(&inv, &iid, &1_000, &1_100);
+    let bid = cli.place_bid(&inv, &iid, &1_000, &1_100, &BytesN::from_array(&env, &[0u8; 32]));
     let r = cli.try_accept_bid_and_fund(&iid, &bid);
     assert!(r.is_err(), "Pending business must be rejected");
     let inv2 = cli.get_invoice(&iid);

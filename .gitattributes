@@ -1,4 +1,0 @@
-# Ensure shell scripts and CI workflows use LF so Linux/macOS runners don't see "bash\r"
-*.sh text eol=lf
-.github/**/*.yml text eol=lf
-.github/**/*.yaml text eol=lf

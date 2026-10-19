@@ -121,10 +121,10 @@ impl MaintenanceControl {
     /// Guard for state-mutating operations.
     pub fn require_write_allowed(env: &Env) -> Result<(), QuickLendXError> {
         if Self::is_maintenance_mode(env) {
-            Err(QuickLendXError::MaintenanceModeActive)
-        } else {
-            Ok(())
+            return Err(QuickLendXError::MaintenanceModeActive);
         }
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(env)?;
+        Ok(())
     }
 
     /// Admin-only: extends the TTL for all major persistent storage indexes.

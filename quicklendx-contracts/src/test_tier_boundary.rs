@@ -45,8 +45,9 @@ mod test_tier_boundary {
 
     #[test]
     fn vip_default_rate_at_boundary_returns_vip() {
-        // 1 default out of 20 total = 5% which is at the VIP max
-        let result = compute_investor_tier_from_stats(5_000_000, 19, 1, 10);
+        // 3 defaults out of 53 total truncates to 5%, the VIP maximum.
+        // The fixture also satisfies the 50-successful-investments threshold.
+        let result = compute_investor_tier_from_stats(5_000_000, 50, 3, 10);
         assert_eq!(result, Ok(InvestorTier::VIP));
     }
 

@@ -28,7 +28,7 @@ fn create_invoice(
         &String::from_str(env, "Status consistency test"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 /// Assert that status list lengths match count_by_status and no orphaned IDs exist.
@@ -280,7 +280,7 @@ fn test_accept_bid_updates_status_list() {
         &String::from_str(&env, "Bid acceptance test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     client.update_invoice_status(&invoice_id, &InvoiceStatus::Verified);
 
@@ -298,7 +298,7 @@ fn test_accept_bid_updates_status_list() {
     client.verify_investor(&investor, &10_000);
 
     token_client.approve(&investor, &client.address, &10000, &20000);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000, &1100, &BytesN::from_array(&env, &[0u8; 32]));
 
     client.accept_bid(&invoice_id, &bid_id);
 

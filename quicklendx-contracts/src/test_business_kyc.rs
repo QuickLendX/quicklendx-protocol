@@ -357,7 +357,7 @@ fn test_unverified_business_cannot_upload_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
 }
 
@@ -386,7 +386,7 @@ fn test_verified_business_can_upload_invoice() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     // Verify invoice was created
     let invoice = client.get_invoice(&invoice_id);
@@ -488,7 +488,7 @@ fn test_complete_business_kyc_to_invoice_flow() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     // Step 4: Verify invoice was created correctly
     let invoice = client.get_invoice(&invoice_id);
@@ -542,7 +542,7 @@ fn test_rejected_business_resubmission_flow() {
         &description,
         &category,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
 
     // Step 4: Business resubmits with updated KYC
@@ -570,7 +570,7 @@ fn test_rejected_business_resubmission_flow() {
         &description,
         &category,
         &tags,
-    );
+        &None);
 
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.business, business);
@@ -650,7 +650,7 @@ fn test_pending_business_cannot_upload_invoice() {
         &String::from_str(&env, "Invoice from pending business"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err(), "Pending business must not upload invoices");
     let err = result.unwrap_err().unwrap();
     assert_eq!(
@@ -687,7 +687,7 @@ fn test_pending_business_cannot_cancel_invoice() {
         &String::from_str(&env, "Invoice to cancel"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // 2. Admin rejects -> business resubmits (now pending again)
     client.reject_business(&admin, &business, &rejection_reason);
@@ -736,10 +736,10 @@ fn test_pending_business_cannot_accept_bid() {
         &String::from_str(&env, "Invoice for bid acceptance test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &10_000i128, &12_000i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &10_000i128, &12_000i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // 2. Admin rejects business -> business resubmits (now pending again)
     client.reject_business(&admin, &business, &rejection_reason);
@@ -786,7 +786,7 @@ fn test_verified_business_can_act_after_pending_resolved() {
         &String::from_str(&env, "Invoice after re-verification"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     let invoice = client.get_invoice(&invoice_id);
     assert_eq!(invoice.business, business);
 }
@@ -813,7 +813,7 @@ fn test_rejected_business_gets_business_not_verified_on_upload() {
         &String::from_str(&env, "Invoice from rejected business"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.unwrap_err().unwrap();
     assert_eq!(
@@ -842,7 +842,7 @@ fn test_no_kyc_business_gets_business_not_verified_on_upload() {
         &String::from_str(&env, "Invoice from unknown business"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert!(result.is_err());
     let err = result.unwrap_err().unwrap();
     assert_eq!(
