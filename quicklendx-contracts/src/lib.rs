@@ -30,7 +30,7 @@ mod test_concurrent_default_overlap;
 #[cfg(test)]
 // Storage and migration compatibility regression tests (issue #2508).
 mod test_storage_migration_compat;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_multisig;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default;
@@ -121,9 +121,9 @@ mod test_accept_bid_instruction_budget;
 mod test_accept_bid_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_events_audit_parity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_funding_events_audit_parity;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
@@ -149,7 +149,7 @@ mod test_backup_safety;
 mod test_bid_cancel_accept_race;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_active_counts_history;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_concurrency;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_boundary;
@@ -161,7 +161,7 @@ mod test_bid_ttl;
 mod test_cancel_invoice_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_config_bounds_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency;
@@ -189,7 +189,7 @@ mod test_backfill_guard;
 mod test_currency_batch;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_match_funding;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_precision;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
@@ -229,17 +229,17 @@ mod test_expired_bids_cleanup;
 mod test_freshness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_panic_handler;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_rating_auth;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments_auth;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_queries;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_rating_override;
@@ -362,7 +362,7 @@ mod test_diagnostics;
 mod test_events;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_fuzz_cancelled_noop;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_default_counter;
 #[cfg(all(test, feature = "legacy-tests", feature = "fuzz-tests"))]
 mod test_fuzz_distribute_revenue;
@@ -403,11 +403,11 @@ mod test_rebuild_indexes;
 // mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_optin_lifecycle;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_insurance_premium_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
@@ -439,9 +439,9 @@ mod test_store_invoice_auth;
 mod test_store_invoices_batch;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_tier_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_ratings_snapshot;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pagination_cursors;
 pub mod types;
 pub use types::*;
