@@ -106,6 +106,7 @@ fn evaluate_transaction_fee(
             transaction_amount,
             is_early_payment,
             is_late_payment,
+            None,
         )
         .unwrap_or(0)
     })

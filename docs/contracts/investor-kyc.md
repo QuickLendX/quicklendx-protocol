@@ -1,6 +1,7 @@
 # Investor KYC and Investment Limits
 
-> For the detailed math behind risk scores, tier thresholds, and investment-limit multipliers, see [`docs/INVESTOR_TIER.md`](../INVESTOR_TIER.md).
+> For the detailed math behind risk scores, tier thresholds, and investment-limit multipliers, see [`docs/INVESTOR_TIER.md`](../INVESTOR_TIER.md). For the operator and support guide to investor onboarding and gating enforcements, see [`docs/QLX_INVESTOR_KYC_TIERS.md`](../QLX_INVESTOR_KYC_TIERS.md).
+
 
 ## Overview
 

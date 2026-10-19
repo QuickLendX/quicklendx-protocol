@@ -1,8 +1,9 @@
-use super::*;
+﻿use super::*;
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::testutils::{Address as _, Ledger};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{token, Address, Bytes, BytesN, Env, String, Vec};
 
 struct TestContext {
@@ -59,7 +60,7 @@ impl TestContext {
             &String::from_str(&self.env, "Test invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&self.env),
-        )
+        &None)
     }
 
     fn create_verified_invoice(&self) -> BytesN<32> {
@@ -83,7 +84,7 @@ impl TestContext {
 
     fn create_paid_invoice(&self) -> BytesN<32> {
         let invoice_id = self.create_funded_invoice();
-        self.client.settle_invoice(&invoice_id, &1_000i128);
+        self.client.settle_invoice(&invoice_id, &1_000i128, &self.client.get_investment(&invoice_id).unwrap());
         invoice_id
     }
 
@@ -164,7 +165,7 @@ fn test_transition_funded_to_paid() {
     ctx.setup_kyc();
     let invoice_id = ctx.create_funded_invoice();
     assert_eq!(ctx.invoice_status(&invoice_id), InvoiceStatus::Funded);
-    ctx.client.settle_invoice(&invoice_id, &1_000i128);
+    ctx.client.settle_invoice(&invoice_id, &1_000i128, &ctx.client.get_investment(&invoice_id).unwrap());
     assert_eq!(ctx.invoice_status(&invoice_id), InvoiceStatus::Paid);
 }
 
@@ -239,7 +240,7 @@ fn test_cannot_settle_non_funded() {
     let ctx = TestContext::new();
     ctx.setup_kyc();
     let invoice_id = ctx.create_verified_invoice();
-    let result = ctx.client.try_settle_invoice(&invoice_id, &1_000i128);
+    let result = ctx.client.try_settle_invoice(&invoice_id, &1_000i128, &ctx.client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
 }
 
@@ -248,7 +249,7 @@ fn test_cannot_settle_already_paid() {
     let ctx = TestContext::new();
     ctx.setup_kyc();
     let invoice_id = ctx.create_paid_invoice();
-    let result = ctx.client.try_settle_invoice(&invoice_id, &1_000i128);
+    let result = ctx.client.try_settle_invoice(&invoice_id, &1_000i128, &ctx.client.get_investment(&invoice_id).unwrap());
     assert!(result.is_err());
 }
 
@@ -300,7 +301,7 @@ fn test_terminal_states_are_immutable() {
         );
         let verify = ctx.client.try_verify_invoice(&invoice_id);
         assert!(verify.is_err(), "verify should fail from {:?}", status);
-        let settle = ctx.client.try_settle_invoice(&invoice_id, &1_000i128);
+        let settle = ctx.client.try_settle_invoice(&invoice_id, &1_000i128, &ctx.client.get_investment(&invoice_id).unwrap());
         assert!(settle.is_err(), "settle should fail from {:?}", status);
         let refund = ctx.client.try_refund_escrow_funds(&invoice_id, &ctx.business);
         assert!(refund.is_err(), "refund should fail from {:?}", status);
@@ -384,7 +385,7 @@ fn test_transitions_guard_consistency() {
                 ctx.client.try_accept_bid(&invoice_id, &bid_id)
             }
             (_, InvoiceStatus::Cancelled) => ctx.client.try_cancel_invoice(&invoice_id),
-            (_, InvoiceStatus::Paid) => ctx.client.try_settle_invoice(&invoice_id, &1_000i128),
+            (_, InvoiceStatus::Paid) => ctx.client.try_settle_invoice(&invoice_id, &1_000i128, &ctx.client.get_investment(&invoice_id).unwrap()),
             (_, InvoiceStatus::Defaulted) => {
                 ctx.env.ledger().set_timestamp(ctx.env.ledger().timestamp() + 86_400 * 40);
                 ctx.client.try_handle_overdue_invoices(&100u32)
@@ -398,13 +399,13 @@ fn test_transitions_guard_consistency() {
             let actual = ctx.invoice_status(&invoice_id);
             assert_eq!(
                 actual, to,
-                "expected {:?} → {:?} to set status to {:?}, got {:?}",
+                "expected {:?} â†’ {:?} to set status to {:?}, got {:?}",
                 from, to, to, actual
             );
         } else {
             assert!(
                 result.is_err(),
-                "expected {:?} → {:?} to fail, but it succeeded",
+                "expected {:?} â†’ {:?} to fail, but it succeeded",
                 from,
                 to
             );

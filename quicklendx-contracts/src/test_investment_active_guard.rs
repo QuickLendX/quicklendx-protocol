@@ -1,4 +1,4 @@
-#![cfg(test)]
+﻿#![cfg(test)]
 
 use super::*;
 use crate::errors::QuickLendXError;
@@ -73,10 +73,10 @@ fn setup_funded_investment(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &(bid_amount + 100));
+    let bid_id = client.place_bid(investor, &invoice_id, &bid_amount, &(bid_amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     invoice_id
@@ -135,7 +135,7 @@ fn test_add_insurance_fails_when_investment_is_completed() {
         &(env.ledger().sequence() + 50_000),
     );
 
-    client.settle_invoice(&invoice_id, &1000);
+    client.settle_invoice(&invoice_id, &1000, &client.get_investment(&invoice_id).unwrap());
 
     let investment = env.as_contract(&contract_id, || {
         InvestmentStorage::get_investment_by_invoice(&env, &invoice_id).unwrap()
@@ -263,7 +263,7 @@ fn test_withdraw_fails_when_investment_is_completed() {
         &(env.ledger().sequence() + 50_000),
     );
 
-    client.settle_invoice(&invoice_id, &1000);
+    client.settle_invoice(&invoice_id, &1000, &client.get_investment(&invoice_id).unwrap());
 
     let err = client
         .try_withdraw_investment(&invoice_id, &investor)
@@ -330,3 +330,34 @@ fn test_withdraw_fails_when_investment_is_already_withdrawn() {
         .unwrap();
     assert_eq!(err, QuickLendXError::InvalidStatus);
 }
+
+/// Sad Path: Settling an invoice fails when the associated investment is Withdrawn.
+#[test]
+fn test_settle_fails_when_investment_is_withdrawn() {
+    let (env, client, contract_id, admin, business, investor) = setup_env();
+    let currency = make_token(&env, &contract_id, &business, &investor);
+    let invoice_id = setup_funded_investment(
+        &env, &client, &admin, &business, &investor, &currency, 1000, 1000,
+    );
+
+    // Withdraw investment to transition status to Withdrawn
+    client.withdraw_investment(&invoice_id, &investor);
+
+    // Mint tokens for business to pay
+    let sac = token::StellarAssetClient::new(&env, &currency);
+    sac.mint(&business, &2_000i128);
+    let tok = token::Client::new(&env, &currency);
+    tok.approve(
+        &business,
+        &contract_id,
+        &400_000i128,
+        &(env.ledger().sequence() + 50_000),
+    );
+
+    let err = client
+        .try_settle_invoice(&invoice_id, &1000)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(err, QuickLendXError::InvalidStatus);
+}
+

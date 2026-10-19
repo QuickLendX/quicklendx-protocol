@@ -1,6 +1,7 @@
 // Tests for replay guard (nonce handling) in settlement.
 
 use super::*;
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
 
 /// Helper to initialize a token for testing.
@@ -47,12 +48,12 @@ fn setup_funded_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     // Investor KYC and investment.
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(investor, &10_000i128);
-    let bid_id = client.place_bid(investor, &invoice_id, &investment_amount, &invoice_amount);
+    let bid_id = client.place_bid(investor, &invoice_id, &investment_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
     invoice_id
 }
@@ -68,16 +69,25 @@ fn test_replay_guard_fresh_and_duplicate_nonce() {
     let currency = init_currency_for_test(&env, &contract_id, &business, &investor);
     let invoice_id = setup_funded_invoice(&env, &client, &business, &investor, &currency, 1_000, 900);
 
-    // First partial payment with a fresh nonce.
+    // First partial payment with a fresh nonce succeeds.
     let nonce = String::from_str(&env, "nonce-1");
     client.process_partial_payment(&invoice_id, 400, &nonce);
     let count_after_first = get_payment_count(&env, &invoice_id).unwrap();
     assert_eq!(count_after_first, 1);
 
-    // Duplicate nonce should not create a new record.
-    client.process_partial_payment(&invoice_id, 400, &nonce);
+    // Duplicate nonce must be rejected.
+    let result = client.try_process_partial_payment(&invoice_id, 400, &nonce);
+    assert!(result.is_err(), "Duplicate nonce must be rejected");
+    let err = result.unwrap_err();
+    assert_eq!(
+        err,
+        Ok(QuickLendXError::DuplicateNonce),
+        "Expected DuplicateNonce error"
+    );
+
+    // Count must remain unchanged.
     let count_after_dup = get_payment_count(&env, &invoice_id).unwrap();
-    assert_eq!(count_after_dup, 1, "Duplicate nonce should not increase count");
+    assert_eq!(count_after_dup, 1, "Duplicate nonce must not increase count");
 }
 
 #[test]

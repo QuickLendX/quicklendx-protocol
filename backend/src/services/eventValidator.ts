@@ -8,6 +8,7 @@ const eventEnvelopeSchema = z.object({
   id: z.string().min(1),
   ledger: z.number().int().nonnegative(),
   txHash: z.string().min(1),
+  eventIndex: z.number().int().nonnegative().default(0),
   timestamp: z.number().int().nonnegative(),
   complianceHold: z.boolean().default(false),
   indexedAt: isoDateTimeSchema,
@@ -89,6 +90,9 @@ export interface EventBatchValidationResult {
 }
 
 export function validateEvent(event: unknown): EventValidationResult {
+  // INVARIANT: every event is validated against the discriminated Soroban
+  // schema — unknown types, missing fields, and malformed payloads always
+  // reject, and error messages never echo raw payload contents.
   const result = SorobanEventSchema.safeParse(event);
 
   if (result.success) {

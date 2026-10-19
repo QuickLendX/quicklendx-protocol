@@ -106,12 +106,14 @@ export const getSettlementById = async (
   next: NextFunction
 ) => {
   try {
-   const id = Array.isArray(req.params.id)
-  ? req.params.id[0]
-  : req.params.id;
-  assertSettlementId(id);
+    const rawId = Array.isArray(req.params.id)
+      ? req.params.id[0]
+      : req.params.id;
+    assertSettlementId(rawId);
+    // Use the same whitespace-normalized identifier that the assertion checks.
+    const id = rawId.trim();
 
-const settlement = settlementOrchestrator.getById(id);
+    const settlement = settlementOrchestrator.getById(id);
 
     if (!settlement) {
       return res.status(404).json({

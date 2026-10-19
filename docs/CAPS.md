@@ -206,6 +206,27 @@ Only `Placed` bids count toward the limit.
 
 Source: [`src/bid.rs`](../quicklendx-contracts/src/bid.rs) L41
 
+### 3.2.1 Per-invoice per-investor position cap (optional, hard when set)
+
+| Parameter | Default | Disabled sentinel |
+|---|---|---|
+| `per_investor_position_cap` (per invoice) | unset / `None` | clear via `set_per_investor_position_cap(..., None)` |
+
+When set, `validate_bid` / `place_bid` rejects any bid with `bid_amount > cap`
+using `QuickLendXError::PerInvestorPositionCapExceeded` (1411 / `POS_CAP`).
+The cap is an absolute amount in invoice currency units and must satisfy
+`0 < cap ≤ invoice.amount` when configured by the business owner.
+
+This is defence-in-depth against a whale cornering a single invoice even when
+their KYC aggregate investment limit would otherwise allow a full-face bid.
+
+Entrypoints:
+- `set_per_investor_position_cap(business, invoice_id, cap)` — business only
+- `get_per_investor_position_cap(invoice_id)` — public read
+
+Source: [`src/verification.rs`](../quicklendx-contracts/src/verification.rs) (`validate_bid`),
+[`src/storage.rs`](../quicklendx-contracts/src/storage.rs) (`DataKey::PerInvestorPositionCap`)
+
 ### 3.3 Minimum bid amount (soft, default 10; hard floor 1)
 
 | Parameter | Default | Hard floor |

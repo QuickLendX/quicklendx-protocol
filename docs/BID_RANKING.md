@@ -3,9 +3,10 @@
 > **Audience:** contributors who want to understand, modify, audit, or extend the
 > bid-ranking logic in the QuickLendX Soroban contract.
 >
-> This document complements [`docs/contracts/bid-ranking.md`](contracts/bid-ranking.md),
-> which is the lower-level tie-breaker specification. The page you are reading is
-> the contributor-facing description of *why* the comparator is shaped the way
+> This document complements [`docs/contracts/bid-ranking.md`](contracts/bid-ranking.md)
+> and [`docs/QLX_BID_MATCH_ALGORITHM.md`](QLX_BID_MATCH_ALGORITHM.md),
+> which cover the lower-level tie-breaker and bid-matching algorithm specifications.
+> The page you are reading is the contributor-facing description of *why* the comparator is shaped the way
 > it is and *how* to verify it.
 
 ## 1. Why a dedicated ordering function?

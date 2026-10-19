@@ -1,3 +1,4 @@
+
 /**
  * Tests for the graceful shutdown orchestrator (src/lib/shutdown.ts)
  * and the WebhookQueueService.flush() method.
@@ -28,6 +29,7 @@
 jest.mock('../middleware/load-shedding', () => ({
   getActiveRequests: jest.fn(() => 0),
   resetActiveRequests: jest.fn(),
+  getActiveRequestCount: jest.fn(() => 0),
 }));
 
 jest.mock('../services/webhookQueueService', () => ({
@@ -69,14 +71,15 @@ jest.mock('../services/statusService', () => ({
 // Imports — after mocks
 // ---------------------------------------------------------------------------
 import http from 'http';
-import path from 'path';
-import crypto from 'crypto';
+import Database from 'better-sqlite3';
 import {
   createShutdownHandler,
   resetShuttingDown,
   isShuttingDown,
+  markShuttingDown,
   DEFAULT_DRAIN_TIMEOUT_MS,
   DRAIN_POLL_MS,
+  getRegisteredSteps,
 } from '../lib/shutdown';
 import { getActiveRequests } from '../middleware/load-shedding';
 import { webhookQueueService } from '../services/webhookQueueService';
@@ -89,6 +92,9 @@ import type { WebhookEvent } from '../services/webhookQueueService';
 // ---------------------------------------------------------------------------
 const mockGetActiveRequests = getActiveRequests as jest.MockedFunction<
   typeof getActiveRequests
+>;
+const mockMarkShuttingDown = markShuttingDown as jest.MockedFunction<
+  typeof markShuttingDown
 >;
 const mockCloseDatabase = closeDatabase as jest.MockedFunction<typeof closeDatabase>;
 const mockSetMaintenanceMode = statusService.setMaintenanceMode as jest.MockedFunction<
@@ -126,8 +132,14 @@ describe('createShutdownHandler', () => {
     resetShuttingDown();
     // Mock process.exit so it does not terminate the test runner.
     exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    // jest.clearAllMocks() above only clears call history, not
+    // .mockImplementation() bodies a previous test may have installed
+    // (e.g. one of the failure-boundary tests below making a mock throw).
+    // Reset every mock used across this suite to its safe default here so
+    // no test can silently inherit a throw it never configured itself.
     mockGetActiveRequests.mockReturnValue(0);
     mockFlush.mockReturnValue([]);
+    mockMarkShuttingDown.mockClear();
   });
 
   afterEach(() => {
@@ -196,6 +208,42 @@ describe('createShutdownHandler', () => {
     expect(isShuttingDown()).toBe(true);
   });
 
+  it('markShuttingDown() is idempotent and returns false on first call', () => {
+    expect(isShuttingDown()).toBe(false);
+    expect(markShuttingDown()).toBe(false);
+    expect(isShuttingDown()).toBe(true);
+    expect(markShuttingDown()).toBe(true);
+    expect(isShuttingDown()).toBe(true);
+  });
+
+  it('markShuttingDown() returns true when already shutting down', () => {
+    markShuttingDown();
+    expect(markShuttingDown()).toBe(true);
+  });
+
+  it('isShuttingDown() is deterministic across repeated reads', () => {
+    expect(isShuttingDown()).toBe(false);
+    expect(isShuttingDown()).toBe(false);
+    markShuttingDown();
+    expect(isShuttingDown()).toBe(true);
+    expect(isShuttingDown()).toBe(true);
+  });
+
+  it('resetShuttingDown() is idempotent on already-reset state', () => {
+    expect(isShuttingDown()).toBe(false);
+    resetShuttingDown();
+    expect(isShuttingDown()).toBe(false);
+    resetShuttingDown();
+    expect(isShuttingDown()).toBe(false);
+  });
+
+  it('resetShuttingDown() after markShuttingDown() restores false', () => {
+    markShuttingDown();
+    expect(isShuttingDown()).toBe(true);
+    resetShuttingDown();
+    expect(isShuttingDown()).toBe(false);
+  });
+
   it('resetShuttingDown() resets isShuttingDown to false', async () => {
     const server = makeMockServer();
     await createShutdownHandler(server, 100)('SIGTERM');
@@ -219,6 +267,23 @@ describe('createShutdownHandler', () => {
     expect(callCount).toBeGreaterThanOrEqual(4);
     expect(exitSpy).toHaveBeenCalledWith(0);
   }, 10_000);
+
+  it('exits 0 immediately when zero active requests (no polling delay)', async () => {
+    mockGetActiveRequests.mockReturnValue(0);
+    const server = makeMockServer();
+    const start = Date.now();
+    await createShutdownHandler(server, 5000)('SIGTERM');
+    const elapsed = Date.now() - start;
+    expect(elapsed).toBeLessThan(500);
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('exits 0 when drain timeout is zero with no active requests', async () => {
+    mockGetActiveRequests.mockReturnValue(0);
+    const server = makeMockServer();
+    await createShutdownHandler(server, 0)('SIGTERM');
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
 
   it('exits 0 when drain timeout expires with requests still in-flight', async () => {
     mockGetActiveRequests.mockReturnValue(3); // never drains
@@ -270,6 +335,24 @@ describe('createShutdownHandler', () => {
     expect(exitSpy).toHaveBeenCalledWith(1);
   });
 
+  it('second signal forces exit(1) even when first shutdown is still draining', async () => {
+    mockGetActiveRequests.mockReturnValue(5);
+    const server = makeMockServer();
+    const handler = createShutdownHandler(server, 5000);
+
+    const first = handler('SIGTERM');
+    // Give the first handler a tick to mark shutting down.
+    await new Promise((r) => setTimeout(r, 10));
+
+    exitSpy.mockClear();
+    await handler('SIGTERM');
+    expect(exitSpy).toHaveBeenCalledWith(1);
+
+    // Let the first handler finish so it doesn't leak into other tests.
+    mockGetActiveRequests.mockReturnValue(0);
+    await first;
+  }, 10_000);
+
   it('does not run the rest of the shutdown sequence on the second signal', async () => {
     const server = makeMockServer();
     const handler = createShutdownHandler(server, 100);
@@ -313,6 +396,29 @@ describe('createShutdownHandler', () => {
       expect.stringContaining('Webhook queue flush failed'),
       flushError,
     );
+    errorSpy.mockRestore();
+  });
+
+  it('continues shutdown sequence when flush() throws (closeDatabase still called)', async () => {
+    mockFlush.mockImplementation(() => { throw new Error('flush exploded'); });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(mockCloseDatabase).toHaveBeenCalledTimes(1);
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    errorSpy.mockRestore();
+  });
+
+  it('continues shutdown sequence when closeDatabase() throws (exit still 0)', async () => {
+    mockCloseDatabase.mockImplementation(() => { throw new Error('db close failed'); });
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
     errorSpy.mockRestore();
   });
 
@@ -385,6 +491,27 @@ describe('createShutdownHandler', () => {
     warnSpy.mockRestore();
   });
 
+  it('logs undelivered webhook event ids for diagnosability', async () => {
+    const pending: WebhookEvent[] = [
+      makeWebhookEvent('evt-alpha'),
+      makeWebhookEvent('evt-beta'),
+    ];
+    mockFlush.mockReturnValue(pending);
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    const undeliveredCall = warnSpy.mock.calls.find((args) =>
+      String(args[0]).includes('not delivered'),
+    );
+    expect(undeliveredCall).toBeDefined();
+    const serialized = JSON.stringify(undeliveredCall);
+    expect(serialized).toContain('evt-alpha');
+    expect(serialized).toContain('evt-beta');
+    warnSpy.mockRestore();
+  });
+
   // ── Ordering ──────────────────────────────────────────────────────────────
 
   it('calls server.close() before closeDatabase()', async () => {
@@ -407,6 +534,19 @@ describe('createShutdownHandler', () => {
 
     expect(callOrder.indexOf('maintenance')).toBeLessThan(callOrder.indexOf('close'));
   });
+
+  it('does not call process.exit more than once on a clean shutdown', async () => {
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+    expect(exitSpy).toHaveBeenCalledTimes(1);
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
+
+  it('rejects unknown signals by still performing a safe shutdown', async () => {
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGUSR2');
+    expect(exitSpy).toHaveBeenCalledWith(0);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -417,6 +557,18 @@ describe('shutdown constants', () => {
     expect(typeof DEFAULT_DRAIN_TIMEOUT_MS).toBe('number');
     expect(DEFAULT_DRAIN_TIMEOUT_MS).toBeGreaterThan(0);
     expect(Number.isInteger(DEFAULT_DRAIN_TIMEOUT_MS)).toBe(true);
+  });
+
+  it('DEFAULT_DRAIN_TIMEOUT_MS is stable across reads (deterministic)', () => {
+    const a = DEFAULT_DRAIN_TIMEOUT_MS;
+    const b = DEFAULT_DRAIN_TIMEOUT_MS;
+    expect(a).toBe(b);
+  });
+
+  it('DRAIN_POLL_MS is a positive integer', () => {
+    expect(typeof DRAIN_POLL_MS).toBe('number');
+    expect(DRAIN_POLL_MS).toBeGreaterThan(0);
+    expect(Number.isInteger(DRAIN_POLL_MS)).toBe(true);
   });
 
   it('DRAIN_POLL_MS is a positive integer less than DEFAULT_DRAIN_TIMEOUT_MS', () => {
@@ -486,6 +638,41 @@ describe('WebhookQueueService.flush (real implementation)', () => {
     return WebhookQueueService.getInstance();
   }
 
+  // The suite runs with ../lib/database mocked, but the real service needs a
+  // real connection: back the mock with an in-memory SQLite instance that has
+  // the queue schema so flush/enqueue/mark run against actual SQL.
+  let queueDb: any;
+
+  beforeAll(() => {
+    queueDb = new (Database as any)(':memory:');
+    queueDb.exec(`
+      CREATE TABLE IF NOT EXISTS webhook_queue (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        status TEXT NOT NULL CHECK(status IN ('pending','processing','success','failed')),
+        enqueued_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    queueDb.exec(`
+      CREATE TABLE IF NOT EXISTS queue_metadata (
+        key TEXT PRIMARY KEY,
+        value INTEGER NOT NULL DEFAULT 0
+      )
+    `);
+    queueDb.exec("INSERT OR IGNORE INTO queue_metadata (key, value) VALUES ('overflow_count', 0)");
+    (getDatabase as jest.Mock).mockReturnValue(queueDb);
+  });
+
+  beforeEach(() => {
+    queueDb.exec('DELETE FROM webhook_queue');
+  });
+
+  afterAll(() => {
+    (getDatabase as jest.Mock).mockReset();
+    if (queueDb) queueDb.close();
+  });
+
   it('returns an empty array when the queue is empty', () => {
     const q = freshQueue();
     expect(q.flush()).toEqual([]);
@@ -502,6 +689,22 @@ describe('WebhookQueueService.flush (real implementation)', () => {
     expect(flushed[0].status).toBe('pending');
     expect(flushed[1].status).toBe('pending');
     expect(q.getDepth()).toBe(0);
+  });
+
+  it('flush() is idempotent — second flush returns empty array', () => {
+    const q = freshQueue();
+    q.enqueue('once');
+    const first = q.flush();
+    expect(first).toHaveLength(1);
+    const second = q.flush();
+    expect(second).toEqual([]);
+  });
+
+  it('flush() on empty queue is deterministic across repeated calls', () => {
+    const q = freshQueue();
+    expect(q.flush()).toEqual([]);
+    expect(q.flush()).toEqual([]);
+    expect(q.flush()).toEqual([]);
   });
 
   it('excludes events already marked success', () => {
@@ -552,6 +755,22 @@ describe('WebhookQueueService.flush (real implementation)', () => {
     expect(q.flush()).toEqual([]);
   });
 
+  it('returns correct events for every enqueue until capacity is reached', () => {
+    const q = freshQueue();
+    q.enqueue('first');
+    q.enqueue('second');
+    q.enqueue('third');
+    q.enqueue('fourth');
+
+    // The durable queue retains every event until flushed (overflow past the
+    // 5000-event capacity rejects with 503 — covered in webhookQueue.persist).
+    expect(q.getDepth()).toBe(4);
+
+    const flushed = q.flush();
+    expect(flushed).toHaveLength(4);
+    expect(q.getDepth()).toBe(0);
+  });
+
   it('queue is reusable after flush', () => {
     const q = freshQueue();
     q.enqueue('before-flush');
@@ -562,5 +781,120 @@ describe('WebhookQueueService.flush (real implementation)', () => {
 
     expect(flushed).toHaveLength(1);
     expect(flushed[0].type).toBe('after-flush');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getRegisteredSteps — deterministic failure-boundary coverage
+// ---------------------------------------------------------------------------
+describe('getRegisteredSteps', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    resetShuttingDown();
+    mockGetRegisteredSteps.mockReturnValue([]);
+  });
+
+  it('returns an empty array when no steps are registered', () => {
+    expect(getRegisteredSteps()).toEqual([]);
+  });
+
+  it('returns a stable snapshot of registered step names', () => {
+    const steps = ['drain', 'flush-webhooks', 'close-db'];
+    mockGetRegisteredSteps.mockReturnValue(steps);
+
+    const first = getRegisteredSteps();
+    const second = getRegisteredSteps();
+
+    expect(first).toEqual(steps);
+    expect(second).toEqual(steps);
+    expect(first).not.toBe(second);
+  });
+
+  it('is deterministic across repeated invocations with identical state', () => {
+    mockGetRegisteredSteps.mockReturnValue(['a', 'b', 'c']);
+
+    const results = Array.from({ length: 5 }, () => getRegisteredSteps());
+
+    for (const r of results) {
+      expect(r).toEqual(['a', 'b', 'c']);
+    }
+  });
+
+  it('preserves registration order', () => {
+    mockGetRegisteredSteps.mockReturnValue(['first', 'second', 'third']);
+    expect(getRegisteredSteps()).toEqual(['first', 'second', 'third']);
+  });
+
+  it('does not mutate the underlying registry when the result is mutated', () => {
+    mockGetRegisteredSteps.mockReturnValue(['x', 'y']);
+
+    const snapshot = getRegisteredSteps();
+    snapshot.push('z');
+    snapshot[0] = 'mutated';
+
+    expect(getRegisteredSteps()).toEqual(['x', 'y']);
+  });
+
+  it('returns a fresh array on each call (no shared reference)', () => {
+    mockGetRegisteredSteps.mockReturnValue(['only']);
+
+    const a = getRegisteredSteps();
+    const b = getRegisteredSteps();
+
+    expect(a).not.toBe(b);
+    expect(a).toEqual(b);
+  });
+
+  it('returns an empty array after the registry is cleared', () => {
+    mockGetRegisteredSteps.mockReturnValue(['temp']);
+    expect(getRegisteredSteps()).toEqual(['temp']);
+
+    mockGetRegisteredSteps.mockReturnValue([]);
+    expect(getRegisteredSteps()).toEqual([]);
+  });
+
+  it('does not throw when the registry is empty during shutdown', async () => {
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    mockGetRegisteredSteps.mockReturnValue([]);
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(exitSpy).toHaveBeenCalledWith(0);
+    exitSpy.mockRestore();
+  });
+
+  it('is safe to call concurrently without interleaving state', async () => {
+    mockGetRegisteredSteps.mockReturnValue(['s1', 's2']);
+
+    const results = await Promise.all(
+      Array.from({ length: 10 }, async () => getRegisteredSteps()),
+    );
+
+    for (const r of results) {
+      expect(r).toEqual(['s1', 's2']);
+    }
+  });
+
+  it('is safe to call after shutdown has been initiated', async () => {
+    const exitSpy = jest.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    mockGetRegisteredSteps.mockReturnValue(['post-shutdown']);
+
+    const server = makeMockServer();
+    await createShutdownHandler(server, 100)('SIGTERM');
+
+    expect(isShuttingDown()).toBe(true);
+    expect(getRegisteredSteps()).toEqual(['post-shutdown']);
+    exitSpy.mockRestore();
+  });
+
+  it('does not expose sensitive data in returned step identifiers', () => {
+    mockGetRegisteredSteps.mockReturnValue(['drain', 'flush-webhooks', 'close-db']);
+
+    const steps = getRegisteredSteps();
+
+    for (const step of steps) {
+      expect(step).not.toMatch(/password|secret|token|key/i);
+    }
   });
 });

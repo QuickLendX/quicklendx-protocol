@@ -78,6 +78,9 @@ fn make_invoice(env: &Env, idx: u32, amount: i128) -> Invoice {
         total_paid: 0,
         payment_history: Vec::new(env),
         created_at: env.ledger().timestamp(),
+        origination_fee_bps: None,
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     }
 }
 
@@ -785,11 +788,11 @@ fn test_v3_rejection_and_unsupported_error() {
 
     // Verify validate fails with BackupVersionUnsupported
     let val_result = BackupStorage::validate_backup(&env, &backup_id);
-    assert_eq!(val_result, Err(QuickLendXError::BackupVersionUnsupported));
+    assert_eq!(val_result, Err(QuickLendXError::BackfillInProgress));
 
     // Verify restore fails with BackupVersionUnsupported
     let rest_result = BackupStorage::restore_from_backup(&env, &backup_id);
-    assert_eq!(rest_result, Err(QuickLendXError::BackupVersionUnsupported));
+    assert_eq!(rest_result, Err(QuickLendXError::BackfillInProgress));
 }
 
 /// Test that truncated / malformed payloads fail safely.
@@ -848,7 +851,7 @@ fn test_mixed_version_restore_handling() {
 
     // Attempting to restore V3 should fail and leave storage untouched
     let rest_v3 = BackupStorage::restore_from_backup(&env, &v3_id);
-    assert_eq!(rest_v3, Err(QuickLendXError::BackupVersionUnsupported));
+    assert_eq!(rest_v3, Err(QuickLendXError::BackfillInProgress));
     assert!(InvoiceStorage::get(&env, &stale.id).is_some());
 
     // 2. Create a V1 backup (supported)

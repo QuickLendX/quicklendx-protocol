@@ -46,7 +46,7 @@ fn test_admin_limit_update_applies_immediately_to_validation_and_default_date() 
             &String::from_str(&env, "allowed by initial limits"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        )
+            &None)
         .is_ok());
 
     client.update_protocol_limits(&admin, &200i128, &1u64, &120u64);
@@ -59,7 +59,7 @@ fn test_admin_limit_update_applies_immediately_to_validation_and_default_date() 
         &String::from_str(&env, "below updated min"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(low_amount, Err(Ok(QuickLendXError::InvalidAmount)));
 
     let above_new_horizon = client.try_store_invoice(
@@ -70,7 +70,7 @@ fn test_admin_limit_update_applies_immediately_to_validation_and_default_date() 
         &String::from_str(&env, "beyond new horizon"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         above_new_horizon,
         Err(Ok(QuickLendXError::InvoiceDueDateInvalid))
@@ -120,7 +120,7 @@ fn test_non_admin_limit_updates_are_rejected_across_all_entrypoints() {
             &String::from_str(&env, "still governed by original limits"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        )
+            &None)
         .is_ok());
 }
 
@@ -183,7 +183,7 @@ fn test_update_limits_max_invoices_applies_immediately() {
             &String::from_str(&env, "first"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        )
+            &None)
         .is_ok());
 
     let blocked = client.try_upload_invoice(
@@ -194,7 +194,7 @@ fn test_update_limits_max_invoices_applies_immediately() {
         &String::from_str(&env, "second blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(
         blocked,
         Err(Ok(QuickLendXError::MaxInvoicesPerBusinessExceeded))
@@ -211,7 +211,7 @@ fn test_update_limits_max_invoices_applies_immediately() {
             &String::from_str(&env, "second allowed"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        )
+            &None)
         .is_ok());
 }
 
@@ -267,6 +267,7 @@ fn test_initialize_rejects_invalid_limit_combination_before_state_commit() {
         max_due_date_days: 1,
         grace_period_seconds: 86_401,
         initial_currencies: Vec::new(&env),
+        corridors: Vec::new(&env),
         backfill_max_batch_size: 100,
     };
 

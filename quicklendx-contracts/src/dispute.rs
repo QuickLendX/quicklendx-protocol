@@ -1,7 +1,8 @@
 use crate::admin::AdminStorage;
+use crate::arbiter::ArbiterStorage;
 use crate::dispute_timeline::{clear_under_review_timestamp, set_under_review_timestamp};
 use crate::errors::QuickLendXError;
-use crate::storage::InvoiceStorage;
+use crate::storage::{DataKey, InvoiceStorage};
 use crate::types::{Dispute, DisputeResolution, DisputeStatus};
 use crate::verification::{
     validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
@@ -95,11 +96,82 @@ pub(crate) fn track_dispute_invoice(env: &Env, invoice_id: &BytesN<32>) {
     add_to_dispute_index(env, invoice_id);
 }
 
+#[cfg(all(test, feature = "legacy-tests"))]
+mod evidence_identity_tests {
+    use super::*;
+    use soroban_sdk::testutils::Address as _;
+
+    #[test]
+    fn evidence_payload_is_reserved_once() {
+        let env = Env::default();
+        let invoice = BytesN::from_array(&env, &[1u8; 32]);
+        let creator = Address::generate(&env);
+        let evidence = String::from_str(&env, "provider-reference-1");
+        let digest = reserve_evidence(&env, &invoice, &creator, &evidence).unwrap();
+        let expected: BytesN<32> = env.crypto().sha256(&evidence.to_bytes()).into();
+        assert_eq!(digest, expected);
+        assert_eq!(
+            reserve_evidence(&env, &invoice, &creator, &evidence),
+            Err(QuickLendXError::InvalidDisputeEvidence)
+        );
+    }
+
+    #[test]
+    fn the_same_payload_cannot_cross_invoice_boundaries() {
+        let env = Env::default();
+        let first_invoice = BytesN::from_array(&env, &[2u8; 32]);
+        let second_invoice = BytesN::from_array(&env, &[3u8; 32]);
+        let creator = Address::generate(&env);
+        let evidence = String::from_str(&env, "shared-attachment");
+        reserve_evidence(&env, &first_invoice, &creator, &evidence).unwrap();
+        let result = reserve_evidence(&env, &second_invoice, &creator, &evidence);
+        assert_eq!(result, Err(QuickLendXError::InvalidDisputeEvidence));
+    }
+
+    #[test]
+    fn different_payloads_have_independent_content_identities() {
+        let env = Env::default();
+        let invoice = BytesN::from_array(&env, &[4u8; 32]);
+        let creator = Address::generate(&env);
+        let first = String::from_str(&env, "attachment-a");
+        let second = String::from_str(&env, "attachment-b");
+        let first_digest = reserve_evidence(&env, &invoice, &creator, &first).unwrap();
+        let second_digest = reserve_evidence(&env, &invoice, &creator, &second).unwrap();
+        assert_ne!(first_digest, second_digest);
+    }
+}
+
 fn zero_address(env: &Env) -> Address {
     Address::from_str(
         env,
         "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
     )
+}
+
+/// Reserve content-addressed evidence for one invoice.
+///
+/// The digest is the evidence identity: a retry with the same payload is
+/// rejected, and the same payload cannot be attached to another invoice.
+/// Reservation happens only after authorization, lifecycle, and size checks so
+/// failed requests cannot consume an identifier.
+pub(crate) fn reserve_evidence(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    creator: &Address,
+    evidence: &String,
+) -> Result<BytesN<32>, QuickLendXError> {
+    let digest: BytesN<32> = env.crypto().sha256(&evidence.to_bytes()).into();
+    let key = DataKey::DisputeEvidence(digest.clone());
+    if env.storage().persistent().has(&key) {
+        return Err(QuickLendXError::InvalidDisputeEvidence);
+    }
+    env.storage().persistent().set(&key, invoice_id);
+    crate::storage::extend_persistent_ttl(env, &key);
+    env.events().publish(
+        (symbol_short!("evidence"),),
+        (invoice_id.clone(), creator.clone(), digest.clone()),
+    );
+    Ok(digest)
 }
 fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> {
     Ok(())
@@ -156,6 +228,7 @@ pub fn create_dispute(
     validate_dispute_reason(reason)?;
     validate_dispute_evidence(evidence)?;
     validate_dispute_eligibility(&invoice, creator)?;
+    reserve_evidence(env, invoice_id, creator, evidence)?;
     clear_under_review_timestamp(env, invoice_id);
 
     // Set dispute fields
@@ -213,6 +286,12 @@ pub fn put_dispute_under_review(
     admin: &Address,
     invoice_id: &BytesN<32>,
 ) -> Result<(), QuickLendXError> {
+    // Per Issue #1840, the `require_dispute_arbiter` guard applies to
+    // *resolve*, not the review transition. Any authenticated admin may move
+    // a dispute into `UnderReview`; only registered arbiters may finalize it.
+    // Keeping review on admin authority matches the intent expressed in the
+    // issue title and avoids breaking every existing test that legitimately
+    // drives a dispute through the review step before resolution.
     AdminStorage::require_admin(env, admin)?;
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -279,6 +358,11 @@ pub fn resolve_dispute(
     resolution: &String,
 ) -> Result<(), QuickLendXError> {
     AdminStorage::require_admin(env, admin)?;
+    // Arbiter gate: even an admin cannot resolve a dispute unless they have
+    // been explicitly registered as an arbiter. Splits dispute-adjudication
+    // authority from protocol-configuration authority so that a single
+    // compromised admin key cannot silently drain disputed escrow.
+    ArbiterStorage::require_dispute_arbiter(env, admin)?;
 
     validate_dispute_resolution(resolution)?;
 
@@ -344,6 +428,9 @@ pub fn resolve_dispute_structured(
     note: &String,
 ) -> Result<(), QuickLendXError> {
     AdminStorage::require_admin(env, admin)?;
+    // See `resolve_dispute` — the structured variant shares the same arbiter
+    // gate so both resolution paths are defended equally.
+    ArbiterStorage::require_dispute_arbiter(env, admin)?;
 
     validate_dispute_resolution(note)?;
 

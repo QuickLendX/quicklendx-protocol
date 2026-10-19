@@ -30,7 +30,7 @@ fn test_store_invoice_rejects_below_minimum_amount() {
         &String::from_str(&env, "below min"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(result, Err(Ok(QuickLendXError::InvalidAmount)));
 }
 
@@ -59,7 +59,7 @@ fn test_store_invoice_allows_at_minimum_amount() {
             &String::from_str(&env, "at min"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        )
+            &None)
         .is_ok());
 }
 
@@ -91,7 +91,7 @@ fn test_upload_invoice_enforces_minimum_amount() {
         &String::from_str(&env, "below min"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     assert_eq!(below, Err(Ok(QuickLendXError::InvalidAmount)));
 
     assert!(client
@@ -103,6 +103,6 @@ fn test_upload_invoice_enforces_minimum_amount() {
             &String::from_str(&env, "at min"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-        )
+            &None)
         .is_ok());
 }

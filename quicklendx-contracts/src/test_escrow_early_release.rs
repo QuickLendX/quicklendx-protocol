@@ -43,6 +43,7 @@ mod tests {
             &String::from_str(env, "early release invoice"),
             &InvoiceCategory::Services,
             &Vec::new(env),
+            &None,
         );
         client.verify_invoice(&invoice_id);
         let bid_id = client.place_bid(

@@ -34,6 +34,24 @@ for currency in currencies.iter() {
 }
 ```
 
+### Example: Batch Invoice Cancellation (`invoice_batch_cancel`)
+
+The `invoice_batch_cancel` entrypoint allows a business to cancel multiple pending/unpaid invoices atomically (up to `MAX_BATCH_INVOICES = 10`).
+
+#### Entrypoint Signature
+```rust
+pub fn invoice_batch_cancel(
+    env: Env,
+    business: Address,
+    invoice_ids: Vec<BytesN<32>>,
+) -> Result<(), QuickLendXError>;
+```
+
+#### Behavior & Guarantees
+- **Single Auth**: Requires `business.require_auth()` once for the entire batch.
+- **Pre-flight Validation**: Validates that all invoices exist, belong to `business`, and are not frozen before mutating storage.
+- **Atomic Rollback**: If any invoice ID in the batch fails validation (e.g. non-existent, frozen, or owned by a different address), the transaction reverts and zero state changes are persisted.
+
 ---
 
 ## 2. Backend Event Ingestion (Partial Progress / Best Effort)

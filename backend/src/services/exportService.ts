@@ -23,12 +23,52 @@ export interface ExportData {
   };
 }
 
+/**
+ * Deterministic error taxonomy for export operations.
+ *
+ * INVARIANT: Every failure path in ExportService must surface as one of these
+ * codes so callers (and tests) can assert on a stable, non-leaking contract.
+ * Raw error messages from storage/DB layers must never be propagated verbatim
+ * to the HTTP boundary.
+ */
+export enum ExportErrorCode {
+  INVALID_INPUT = "INVALID_INPUT",
+  UNAUTHORIZED = "UNAUTHORIZED",
+  TOKEN_INVALID = "TOKEN_INVALID",
+  TOKEN_EXPIRED = "TOKEN_EXPIRED",
+  NOT_FOUND = "NOT_FOUND",
+  CONFLICT = "CONFLICT",
+  STORAGE_FAILURE = "STORAGE_FAILURE",
+  INTERNAL = "INTERNAL",
+}
+
+export class ExportError extends Error {
+  public readonly code: ExportErrorCode;
+  public readonly retryable: boolean;
+  constructor(code: ExportErrorCode, message: string, retryable = false) {
+    super(message);
+    this.name = "ExportError";
+    this.code = code;
+    this.retryable = retryable;
+  }
+}
+
 interface ExportFileMeta {
   userId: string;
   format: ExportFormat;
   expiresAt: number;
   filePath: string;
 }
+
+/**
+ * In-flight export deduplication map.
+ *
+ * INVARIANT: For a given (userId, format) at most one generation runs at a
+ * time. Concurrent callers await the same promise. This prevents partial
+ * files from racing on the same tmp path and keeps retries deterministic.
+ */
+type InFlightKey = string;
+const inFlightExports = new Map<InFlightKey, Promise<string>>();
 
 class ExportService {
   private readonly secret = config.EXPORT_SECRET || "fallback-secret-for-signing-links";
@@ -37,6 +77,28 @@ class ExportService {
 
   constructor() {
     fsp.mkdir(this.exportDir, { recursive: true, mode: 0o700 }).catch(() => {});
+  }
+
+  private static inFlightKey(userId: string, format: ExportFormat): InFlightKey {
+    return `${userId}::${format}`;
+  }
+
+  private static assertValidUserId(userId: unknown): asserts userId is string {
+    if (typeof userId !== "string" || userId.trim().length === 0) {
+      throw new ExportError(
+        ExportErrorCode.INVALID_INPUT,
+        "Invalid userId: must be a non-empty string",
+      );
+    }
+  }
+
+  private static assertValidFormat(format: unknown): asserts format is ExportFormat {
+    if (format !== ExportFormat.JSON && format !== ExportFormat.CSV) {
+      throw new ExportError(
+        ExportErrorCode.INVALID_INPUT,
+        "Invalid format: must be json or csv",
+      );
+    }
   }
 
   /**
@@ -56,6 +118,8 @@ class ExportService {
     userId: string,
     verifiedContext?: { authenticatedUserId: string }
   ): Promise<ExportData["data"]> {
+    ExportService.assertValidUserId(userId);
+
     // SECURITY CHECK: Prevent context injection attacks
     // If verifiedContext is provided, userId MUST match the authenticated user
     if (verifiedContext && userId !== verifiedContext.authenticatedUserId) {
@@ -68,6 +132,9 @@ class ExportService {
     if (!userId || typeof userId !== "string" || userId.trim().length === 0) {
       throw new Error("Invalid userId: must be a non-empty string");
     }
+
+    // Deterministic boundary: reject non-string userIds before any I/O.
+    ExportService.assertValidUserId(userId);
 
     // Filter invoices strictly by business ownership
     let invoices: any[];
@@ -84,7 +151,12 @@ class ExportService {
           (inv: any) => inv.business === userId
         );
       } else {
-        throw err;
+        // Wrap storage errors so callers get a stable, non-leaking code.
+        throw new ExportError(
+          ExportErrorCode.STORAGE_FAILURE,
+          "Failed to load invoices for export",
+          true,
+        );
       }
     }
 
@@ -101,6 +173,8 @@ class ExportService {
   }
 
   public generateSignedToken(userId: string, format: ExportFormat): string {
+    ExportService.assertValidUserId(userId);
+    ExportService.assertValidFormat(format);
     const expiresAt = Date.now() + this.ttlMs;
     const payload = JSON.stringify({ userId, format, expiresAt });
     const signature = crypto
@@ -112,14 +186,19 @@ class ExportService {
 
   public validateToken(token: string): { userId: string; format: ExportFormat; expiresAt: number } | null {
     try {
+      if (typeof token !== "string" || token.length === 0) return null;
       const decoded = JSON.parse(Buffer.from(token, "base64").toString("utf8"));
       const { payload, signature } = decoded;
+      if (typeof payload !== "string" || typeof signature !== "string") return null;
       const expectedSignature = crypto
         .createHmac("sha256", this.secret)
         .update(payload)
         .digest("hex");
       if (signature !== expectedSignature) return null;
       const { userId, format, expiresAt } = JSON.parse(payload);
+      if (typeof userId !== "string" || userId.length === 0) return null;
+      if (format !== ExportFormat.JSON && format !== ExportFormat.CSV) return null;
+      if (typeof expiresAt !== "number" || !Number.isFinite(expiresAt)) return null;
       if (Date.now() > expiresAt) return null;
       return { userId, format, expiresAt };
     } catch {
@@ -127,15 +206,97 @@ class ExportService {
     }
   }
 
+  /**
+   * Deterministic token validation that distinguishes invalid vs expired.
+   * Callers that need to render different user-visible errors should use this.
+   */
+  public validateTokenStrict(
+    token: string,
+  ): { userId: string; format: ExportFormat; expiresAt: number } {
+    if (typeof token !== "string" || token.length === 0) {
+      throw new ExportError(ExportErrorCode.TOKEN_INVALID, "Export token is missing or malformed");
+    }
+    let decoded: any;
+    try {
+      decoded = JSON.parse(Buffer.from(token, "base64").toString("utf8"));
+    } catch {
+      throw new ExportError(ExportErrorCode.TOKEN_INVALID, "Export token is not decodable");
+    }
+    const { payload, signature } = decoded || {};
+    if (typeof payload !== "string" || typeof signature !== "string") {
+      throw new ExportError(ExportErrorCode.TOKEN_INVALID, "Export token payload is malformed");
+    }
+    const expectedSignature = crypto
+      .createHmac("sha256", this.secret)
+      .update(payload)
+      .digest("hex");
+    // Constant-time comparison to avoid signature oracle timing leaks.
+    const sigBuf = Buffer.from(signature, "hex");
+    const expBuf = Buffer.from(expectedSignature, "hex");
+    if (sigBuf.length !== expBuf.length || !crypto.timingSafeEqual(sigBuf, expBuf)) {
+      throw new ExportError(ExportErrorCode.TOKEN_INVALID, "Export token signature mismatch");
+    }
+    let parsed: any;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      throw new ExportError(ExportErrorCode.TOKEN_INVALID, "Export token payload is not JSON");
+    }
+    const { userId, format, expiresAt } = parsed || {};
+    if (typeof userId !== "string" || userId.length === 0) {
+      throw new ExportError(ExportErrorCode.TOKEN_INVALID, "Export token userId is invalid");
+    }
+    if (format !== ExportFormat.JSON && format !== ExportFormat.CSV) {
+      throw new ExportError(ExportErrorCode.TOKEN_INVALID, "Export token format is invalid");
+    }
+    if (typeof expiresAt !== "number" || !Number.isFinite(expiresAt)) {
+      throw new ExportError(ExportErrorCode.TOKEN_INVALID, "Export token expiry is invalid");
+    }
+    if (Date.now() > expiresAt) {
+      throw new ExportError(ExportErrorCode.TOKEN_EXPIRED, "Export token has expired");
+    }
+    return { userId, format, expiresAt };
+  }
+
   public async generateExportFile(userId: string, format: ExportFormat): Promise<string> {
-    await fsp.mkdir(this.exportDir, { recursive: true, mode: 0o700 });
-    const token = this.generateSignedToken(userId, format);
-    const ext = format === ExportFormat.JSON ? "json" : "csv";
-    const safeToken = token.replace(/[/+=]/g, "_");
-    const filePath = path.join(this.exportDir, `${safeToken}.${ext}`);
-    const data = await this.getUserData(userId);
-    await this.streamToFile(data, format, filePath);
-    return token;
+    ExportService.assertValidUserId(userId);
+    ExportService.assertValidFormat(format);
+
+    const key = ExportService.inFlightKey(userId, format);
+    const existing = inFlightExports.get(key);
+    if (existing) {
+      // Concurrent callers share the same deterministic result.
+      return existing;
+    }
+
+    const run = (async (): Promise<string> => {
+      try {
+        await fsp.mkdir(this.exportDir, { recursive: true, mode: 0o700 });
+      } catch {
+        throw new ExportError(
+          ExportErrorCode.STORAGE_FAILURE,
+          "Failed to prepare export directory",
+          true,
+        );
+      }
+      const token = this.generateSignedToken(userId, format);
+      const ext = format === ExportFormat.JSON ? "json" : "csv";
+      const safeToken = token.replace(/[/+=]/g, "_");
+      const filePath = path.join(this.exportDir, `${safeToken}.${ext}`);
+      const data = await this.getUserData(userId);
+      await this.streamToFile(data, format, filePath);
+      return token;
+    })();
+
+    inFlightExports.set(key, run);
+    try {
+      return await run;
+    } finally {
+      // Only clear if we still own the slot (defensive against future changes).
+      if (inFlightExports.get(key) === run) {
+        inFlightExports.delete(key);
+      }
+    }
   }
 
   private async streamToFile(
@@ -143,6 +304,10 @@ class ExportService {
     format: ExportFormat,
     filePath: string,
   ): Promise<void> {
+    if (typeof filePath !== "string" || filePath.length === 0) {
+      throw new ExportError(ExportErrorCode.INVALID_INPUT, "Invalid export file path");
+    }
+    ExportService.assertValidFormat(format);
     const tmpPath = filePath + ".tmp";
     const writeStream = fs.createWriteStream(tmpPath, { mode: 0o600 });
 
@@ -176,7 +341,12 @@ class ExportService {
       await fsp.chmod(filePath, 0o600);
     } catch (err) {
       await fsp.unlink(tmpPath).catch(() => {});
-      throw err;
+      if (err instanceof ExportError) throw err;
+      throw new ExportError(
+        ExportErrorCode.STORAGE_FAILURE,
+        "Failed to write export file",
+        true,
+      );
     }
   }
 
@@ -231,8 +401,33 @@ class ExportService {
     }
   }
 
+  /**
+   * Strict variant of getFilePath that surfaces a deterministic error code
+   * for invalid/expired tokens and missing files. Use at HTTP boundaries.
+   */
+  public async getFilePathStrict(token: string): Promise<string> {
+    const validated = this.validateTokenStrict(token);
+    const ext = validated.format === ExportFormat.JSON ? "json" : "csv";
+    const safeToken = token.replace(/[/+=]/g, "_");
+    const filePath = path.join(this.exportDir, `${safeToken}.${ext}`);
+    try {
+      await fsp.access(filePath, fs.constants.R_OK);
+    } catch {
+      throw new ExportError(
+        ExportErrorCode.NOT_FOUND,
+        "Export file is not available",
+      );
+    }
+    return filePath;
+  }
+
   public async deleteFile(filePath: string): Promise<void> {
     await fsp.unlink(filePath).catch(() => {});
+  }
+
+  /** Test-only hook to reset in-flight dedupe state between cases. */
+  public __resetInFlightForTests(): void {
+    inFlightExports.clear();
   }
 
   public async cleanupExpiredFiles(): Promise<number> {

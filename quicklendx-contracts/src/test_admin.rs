@@ -1885,7 +1885,9 @@ mod access_control_matrix {
                     AdminStorage::transfer_admin(&env, &non_admin, &Address::generate(&env))
                 }),
                 env.as_contract(&contract_id, || {
-                    ProtocolInitializer::set_protocol_config(&env, &non_admin, 1000, 365, 86400, 100)
+                    ProtocolInitializer::set_protocol_config(
+                        &env, &non_admin, 1000, 365, 86400, 100,
+                    )
                 }),
                 env.as_contract(&contract_id, || {
                     PauseControl::set_paused(&env, &non_admin, true)
@@ -2830,7 +2832,7 @@ mod dry_run_preview {
             max_due_date_days: 180,
             grace_period_seconds: 3 * 24 * 60 * 60, // 3 days
             fee_bps: 300,
-        backfill_max_batch_size: 100,
+            backfill_max_batch_size: 100,
         }
     }
 
@@ -2935,7 +2937,7 @@ mod dry_run_preview {
             max_due_date_days: 365,
             grace_period_seconds: 0,
             fee_bps: 999,
-        backfill_max_batch_size: 100,
+            backfill_max_batch_size: 100,
         };
         preview(&env, &contract_id, &admin, different).unwrap();
 
@@ -3090,7 +3092,7 @@ mod dry_run_preview {
             max_due_date_days: first.max_due_date_days + 10,
             grace_period_seconds: first.grace_period_seconds + 60,
             fee_bps: first.fee_bps + 50,
-        backfill_max_batch_size: 100,
+            backfill_max_batch_size: 100,
         };
 
         let diff = preview(&env, &contract_id, &admin, second).unwrap();

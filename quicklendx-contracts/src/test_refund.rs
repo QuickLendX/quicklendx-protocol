@@ -1,4 +1,4 @@
-/// Test suite for escrow refund flow
+﻿/// Test suite for escrow refund flow
 ///
 /// Test Coverage:
 /// 1. Authorization: Only admin or business owner can trigger a refund
@@ -88,10 +88,10 @@ fn create_funded_invoice(
         &String::from_str(env, "Test Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1000));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 1000), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     (invoice_id, business, investor, amount, currency)
@@ -194,7 +194,7 @@ fn test_cannot_refund_unfunded_invoice() {
         &String::from_str(&env, "Test Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // Invoice is Verified but not Funded
@@ -248,7 +248,7 @@ fn test_cannot_refund_missing_escrow() {
         &String::from_str(&env, "Test Missing Escrow"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // Forcibly update status to Funded, skipping the bid process (no escrow record created)
@@ -526,7 +526,7 @@ fn test_cannot_refund_after_settlement() {
     // Settle invoice (Business pays back investor)
     // Note: Settle usually happens after release, but in some paths it can be direct.
     // Here we ensure it's fully Paid.
-    client.settle_invoice(&invoice_id, &amount);
+    client.settle_invoice(&invoice_id, &amount, &client.get_investment(&invoice_id).unwrap());
 
     // Verify invoice status is Paid
     let invoice = client.get_invoice(&invoice_id);
@@ -543,3 +543,4 @@ fn test_cannot_refund_after_settlement() {
     let invoice_post = client.get_invoice(&invoice_id);
     assert_eq!(invoice_post.status, InvoiceStatus::Paid);
 }
+
