@@ -46,28 +46,143 @@ export const percentageSchema = z
   .max(100, "Percentage cannot exceed 100%");
 
 // Business-specific schemas
-export const invoiceSchema = z.object({
-  id: z.string().uuid("Invalid invoice ID"),
-  amount: amountSchema,
-  currency: z.enum(["USD", "EUR", "GBP"], {
-    errorMap: () => ({ message: "Please select a valid currency" }),
-  }),
-  dueDate: z
-    .date({
-      required_error: "Due date is required",
-      invalid_type_error: "Please enter a valid date",
+export const INVOICE_CATEGORIES = [
+  "Services",
+  "Goods",
+  "Consulting",
+  "Logistics",
+  "Products",
+  "Manufacturing",
+  "Technology",
+  "Healthcare",
+  "Other",
+] as const;
+
+export type InvoiceCategory = (typeof INVOICE_CATEGORIES)[number];
+
+export interface ConfiguredToken {
+  code: string;
+  address: string;
+  decimals: number;
+}
+
+export const MAX_INVOICE_AMOUNT =
+  ((BigInt(1) << BigInt(127)) - BigInt(1)) / BigInt(10000); // i128::MAX / 10_000
+
+export const CONTRACT_ADDRESS_REGEX = /^C[A-Z2-7]{55}$/;
+
+export function parseTokenAmountToUnits(
+  amountStr: string,
+  decimals: number
+): bigint {
+  const trimmed = amountStr.trim();
+  if (!trimmed || !/^\d+(\.\d+)?$/.test(trimmed)) {
+    throw new Error("Invalid amount format");
+  }
+  const [intPart, fracPart = ""] = trimmed.split(".");
+  if (fracPart.length > decimals) {
+    throw new Error(`Exceeds maximum decimal places (${decimals})`);
+  }
+  const paddedFrac = fracPart.padEnd(decimals, "0");
+  return BigInt(intPart) * BigInt(10) ** BigInt(decimals) + BigInt(paddedFrac);
+}
+
+/**
+ * Factory creating an invoice validation schema evaluated dynamically against `now`.
+ */
+export function createInvoiceSchema(
+  now: Date = new Date(),
+  tokens: ConfiguredToken[] = []
+) {
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+  const maxDueDate = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000);
+
+  const allowedAddresses =
+    tokens.length > 0 ? tokens.map((t) => t.address) : undefined;
+
+  return z
+    .object({
+      currency: z
+        .string()
+        .regex(CONTRACT_ADDRESS_REGEX, "Invalid token contract address")
+        .refine(
+          (addr) => (allowedAddresses ? allowedAddresses.includes(addr) : true),
+          { message: "Selected currency is not configured" }
+        ),
+      amount: z
+        .string()
+        .min(1, "Amount is required")
+        .refine(
+          (val) => /^\d+(\.\d+)?$/.test(val.trim()),
+          "Amount must be a valid positive number"
+        ),
+      dueDate: z
+        .date({
+          required_error: "Due date is required",
+          invalid_type_error: "Please enter a valid date",
+        })
+        .refine((d) => d >= tomorrow, {
+          message: "Due date must be in the future (from tomorrow)",
+        })
+        .refine((d) => d <= maxDueDate, {
+          message: "Due date cannot exceed 365 days from today",
+        }),
+      description: z
+        .string()
+        .min(1, "Description is required")
+        .refine(
+          (desc) => new TextEncoder().encode(desc).length <= 1024,
+          "Description exceeds maximum 1024 bytes"
+        ),
+      category: z.enum(INVOICE_CATEGORIES, {
+        errorMap: () => ({ message: "Please select a valid category" }),
+      }),
+      tags: z
+        .array(
+          z
+            .string()
+            .min(1, "Tag cannot be empty")
+            .refine(
+              (tag) => new TextEncoder().encode(tag).length <= 50,
+              "Each tag must be at most 50 bytes"
+            )
+        )
+        .max(10, "Cannot specify more than 10 tags")
+        .default([]),
+      status: z.enum(["pending", "approved", "rejected", "paid"]).optional(),
     })
-    .min(new Date(), "Due date must be in the future"),
-  description: z
-    .string()
-    .min(1, "Description is required")
-    .max(500, "Description is too long"),
-  status: z
-    .enum(["pending", "approved", "rejected", "paid"], {
-      errorMap: () => ({ message: "Invalid status" }),
-    })
-    .optional(),
-});
+    .superRefine((data, ctx) => {
+      // Find decimals for the chosen currency to validate i128 bounds
+      const token = tokens.find((t) => t.address === data.currency);
+      const decimals = token?.decimals ?? 7; // Default Stellar classic decimals
+
+      try {
+        const units = parseTokenAmountToUnits(data.amount, decimals);
+        if (units <= BigInt(0)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Amount must be greater than zero",
+            path: ["amount"],
+          });
+        } else if (units > MAX_INVOICE_AMOUNT) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Amount exceeds maximum protocol limit",
+            path: ["amount"],
+          });
+        }
+      } catch (err: any) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: err.message || "Invalid amount format",
+          path: ["amount"],
+        });
+      }
+    });
+}
+
+// Backward-compatible export
+export const invoiceSchema = createInvoiceSchema(new Date(), []);
 
 export const bidSchema = z.object({
   id: z.string().uuid("Invalid bid ID"),
