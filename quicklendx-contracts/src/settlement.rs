@@ -29,6 +29,9 @@
 //!    `Resolved` is intentionally allowed: once the admin has issued a
 //!    ruling the dispute is concluded and the admin's outcome governs, so
 //!    a business-favourable resolution can proceed to settlement normally.
+//!    Resolved outcomes `FavorInvestor` and `Split` are still blocked —
+//!    `require_no_blocking_resolution()` returns
+//!    `QuickLendXError::DisputeResolutionBlocksSettlement` (issue #2963).
 //!
 //! The explicit check is required because disputes do NOT change `invoice.status`;
 //! the invoice remains `Funded` throughout the dispute lifecycle.  Without the
@@ -90,7 +93,9 @@ use crate::payments::transfer_funds;
 use crate::profits::BPS_DENOMINATOR;
 use crate::storage::InvoiceStorage;
 use crate::types::InvestmentStatus;
-use crate::types::{DisputeStatus, Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
+use crate::types::{
+    DisputeResolution, DisputeStatus, Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord,
+};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
@@ -403,6 +408,13 @@ pub fn process_partial_payment(
         .ok_or(QuickLendXError::InvoiceNotFound)?;
     let payer = invoice.business.clone();
 
+    // Issue #2963: a resolved dispute can permanently (FavorInvestor) or
+    // provisionally (Split) forbid any further fund movement on this
+    // invoice. This guard runs before payment recording so the caller sees
+    // the dispute-specific error rather than a generic status error (e.g.
+    // `InvalidStatus` from the post-refund `Refunded` invoice).
+    require_no_blocking_resolution(&invoice)?;
+
     crate::qlx_log!(
         env,
         "settlement",
@@ -463,7 +475,7 @@ pub fn process_partial_payment(
         recorded.applied_amount,
     );
 
-    if progress.total_paid >= progress.total_due {
+    if recorded.progress.total_paid >= recorded.progress.total_due {
         settle_invoice_internal(env, invoice_id, &payer)?;
     }
 
@@ -992,7 +1004,7 @@ fn settle_invoice_internal(
     // This ensures the business receives the original funded amount during the settlement transition.
     if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
         if escrow.status == crate::payments::EscrowStatus::Held {
-            crate::payments::release_escrow(env, invoice_id, business)?;
+            crate::payments::release_escrow_internal(env, invoice_id, business)?;
         }
     }
 
@@ -1047,7 +1059,7 @@ fn settle_invoice_internal(
     // This ensures the business receives the original funded amount during the settlement transition.
     if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
         if escrow.status == crate::payments::EscrowStatus::Held {
-            crate::payments::release_escrow(env, invoice_id)?;
+            crate::payments::release_escrow_internal(env, invoice_id, business)?;
         }
     }
 
@@ -1149,6 +1161,32 @@ fn require_no_active_dispute(invoice: &Invoice) -> Result<(), QuickLendXError> {
         || invoice.dispute_status == DisputeStatus::UnderReview
     {
         return Err(QuickLendXError::DisputeActive);
+    }
+    // Open disputes are handled above; a *resolved* dispute can still
+    // forbid settlement depending on its outcome (issue #2963).
+    require_no_blocking_resolution(invoice)
+}
+
+/// Guard: reject fund movement once a resolved dispute outcome forbids it.
+///
+/// Enforcement counterpart of [`crate::resolution_policy`]
+/// (issue #2963). After resolution:
+/// - `FavorInvestor` — escrow was refunded to the investor; settlement is
+///   **permanently** blocked.
+/// - `Split` — funds are held pending an admin follow-up; settlement stays
+///   blocked until that follow-up.
+/// - `FavorBusiness` / `Dismissed` / `None` — settlement is unblocked.
+///
+/// `pub(crate)` so the partial-payment and default paths can consult the
+/// same single source of truth as final settlement.
+pub(crate) fn require_no_blocking_resolution(invoice: &Invoice) -> Result<(), QuickLendXError> {
+    if invoice.dispute_status == DisputeStatus::Resolved
+        && matches!(
+            invoice.dispute.resolution_outcome,
+            DisputeResolution::FavorInvestor | DisputeResolution::Split
+        )
+    {
+        return Err(QuickLendXError::DisputeResolutionBlocksSettlement);
     }
     Ok(())
 }
