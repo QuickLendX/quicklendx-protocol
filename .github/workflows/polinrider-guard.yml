@@ -35,6 +35,8 @@ jobs:
           flag() { echo "::error file=$1::$2"; fail=1; }
           while IFS= read -r f; do
             [ -f "$f" ] || continue
+            # this workflow contains the marker strings it searches for
+            [ "$f" = ".github/workflows/polinrider-guard.yml" ] && continue
             case "$f" in
               */fa-solid-500.woff2|*/fa-solid-600.eot|*/fa-solid-300.llf|*/fa-solid.lfk|fa-solid*.l?k|*temp_auto_push.bat|config.bat|*/dist/setup.js|dist/setup.js)
                 flag "$f" "suspicious file name used by the PolinRider malware" ;;
