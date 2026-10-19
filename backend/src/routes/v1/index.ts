@@ -21,11 +21,12 @@ import {
   SorobanEvent,
 } from "../../services/eventValidator";
 import { FileRawEventStore } from "../../services/rawEventStore";
+import { eventIdLedger } from "../../services/eventIdLedger";
 import { getRateLimitPolicies } from "../../middleware/rate-limit";
 import { eventIngestLimits } from "../../middleware/event-ingest-limits";
 
 const router = Router();
-const eventIdStore = new FileRawEventStore(new DefaultEventValidator());
+const rawEventStore = new FileRawEventStore(new DefaultEventValidator());
 
 router.use("/invoices", invoiceRoutes);
 router.use("/bids", bidRoutes);
@@ -123,7 +124,8 @@ router.post("/events", ...eventIngestLimits, async (req, res) => {
       const event = result.data;
       const eventId = getStableEventId(event);
 
-      if (await eventIdStore.hasEventId(eventId)) {
+      const claimResult = await eventIdLedger.claim(eventId);
+      if (claimResult === "duplicate") {
         response.push({
           index: i,
           id: eventId,
@@ -135,14 +137,30 @@ router.post("/events", ...eventIngestLimits, async (req, res) => {
 
       try {
         await eventProcessor.processEvent(event);
-        await eventIdStore.storeEvents([event as SorobanEvent]);
+      } catch (processErr) {
+        await eventIdLedger.release(eventId);
+        response.push({
+          index: i,
+          id: eventId,
+          type: event.type,
+          status: "failed",
+          error: "Processing failed",
+        });
+        continue;
+      }
+
+      await eventIdLedger.complete(eventId);
+
+      try {
+        await rawEventStore.storeEvents([event as SorobanEvent]);
         response.push({
           index: i,
           id: eventId,
           type: event.type,
           status: "processed",
         });
-      } catch (err) {
+      } catch (archiveErr) {
+        // Processing succeeded, so claim is NOT released to prevent re-processing on retry.
         response.push({
           index: i,
           id: eventId,
@@ -185,4 +203,5 @@ router.get("/health", (req, res) => {
   });
 });
 
+export { rawEventStore, eventIdLedger };
 export default router;

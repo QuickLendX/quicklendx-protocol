@@ -1,21 +1,3 @@
-import crypto from 'crypto';
-import { db, DbApiKey } from '../db/database';
-import {
-  ApiKey,
-  ApiKeyCreateInput,
-  ApiKeyWithPlaintext,
-  generateApiKey,
-  hashApiKey,
-  timingSafeCompare,
-} from '../models/api-key';
-import { validateScopes } from '../config/scopes';
-import { auditLogService } from './audit-log';
-import {
-  ApiKeyNotFoundError,
-  ApiKeyRevokedError,
-  ApiKeyRotationConflictError,
-} from './api-key-errors';
-
 /**
  * In-memory, single-process implementation of `ApiKeyService`.
  *
@@ -54,26 +36,13 @@ export class InMemoryApiKeyService implements ApiKeyService {
     const key: ApiKey = {
       id: input.id,
       name: input.name,
-      scopes: JSON.stringify(input.scopes),
-      created_at: now,
-      last_used_at: null,
-      expires_at: input.expires_at || null,
-      prev_signing_secret_hash: null,
-      prev_secret_expires_at: null,
-      revoked: 0,
-      created_by: input.created_by,
-    };
-
-    db.createApiKey(dbkey);
-
-    // Log creation event
-    await auditLogService.logCreated(id, input.created_by, ipAddress);
-
-    // Return the key with plaintext (only time it's ever returned)
-    return {
-      ...this.dbKeyToApiKey(dbkey),
-      plaintext_key: key,
-      plaintext_signing_secret: signingSecret,
+      ownerId: input.ownerId,
+      permissions: input.permissions ?? [],
+      status,
+      version: 1,
+      createdAt: now,
+      revokedAt: status === "active" ? null : now,
+      revokedBy: status === "active" ? null : input.ownerId,
     };
     this.keys.set(input.id, key);
   }
