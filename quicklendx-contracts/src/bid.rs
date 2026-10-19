@@ -174,6 +174,12 @@ impl Bid {
         current_timestamp >= self.expiration_timestamp.saturating_add(grace_seconds)
     }
 
+    /// Active means still in the Placed state and not yet expired at the
+    /// current ledger timestamp.
+    pub fn is_active(&self, current_timestamp: u64) -> bool {
+        self.status == BidStatus::Placed && !self.is_expired(current_timestamp)
+    }
+
     /// Backward-compatible helper used by some tests: uses compile-time default.
     pub fn default_expiration(now: u64) -> u64 {
         now.saturating_add(DEFAULT_BID_TTL_DAYS.saturating_mul(SECONDS_PER_DAY))
@@ -359,12 +365,13 @@ impl BidStorage {
     pub fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let _ = Self::refresh_expired_bids(env, invoice_id);
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
+        let current_timestamp = env.ledger().timestamp();
         let mut active_count = 0u32;
         let mut idx: u32 = 0;
         while idx < bid_ids.len() {
             let bid_id = bid_ids.get(idx).unwrap();
             if let Some(bid) = Self::get_bid(env, &bid_id) {
-                if bid.status == BidStatus::Placed {
+                if bid.is_active(current_timestamp) {
                     active_count += 1;
                 }
             }
@@ -778,7 +785,6 @@ impl BidStorage {
             bump_persistent(env, &count_key);
         }
         let mut cleaned_count = 0u32;
-        let mut write_idx: u32 = 0;
         let mut read_idx: u32 = 0;
 
         while read_idx < old_count {
@@ -794,7 +800,7 @@ impl BidStorage {
                             || bid.status == BidStatus::Withdrawn
                             || bid.status == BidStatus::Cancelled;
 
-                        if is_terminal {
+                        if is_terminal || bid.status == BidStatus::Expired {
                             true
                         } else if bid.status == BidStatus::Placed
                             && bid.is_cleanup_eligible(current_timestamp, grace_seconds)
@@ -810,10 +816,7 @@ impl BidStorage {
                                 bid.bid_id.clone(),
                             );
                             cleaned_count = cleaned_count.saturating_add(1);
-                            false
-                        } else if bid.status == BidStatus::Expired {
-                            cleaned_count = cleaned_count.saturating_add(1);
-                            false
+                            true
                         } else {
                             true
                         }
@@ -823,34 +826,12 @@ impl BidStorage {
                     }
                 });
 
-            if should_keep {
-                if write_idx != read_idx {
-                    let src = Self::invoice_bid_entry_key(invoice_id, read_idx);
-                    let dst = Self::invoice_bid_entry_key(invoice_id, write_idx);
-                    if let Some(bid_id) = env.storage().persistent().get::<_, BytesN<32>>(&src) {
-                        bump_persistent(env, &src);
-                        env.storage().persistent().set(&dst, &bid_id);
-                        bump_persistent(env, &dst);
-                    }
-                }
-                write_idx += 1;
+            if !should_keep {
+                break;
             }
             read_idx += 1;
         }
 
-        // Remove stale entries beyond the new write_idx
-        while write_idx < old_count {
-            env.storage()
-                .persistent()
-                .remove(&Self::invoice_bid_entry_key(invoice_id, write_idx));
-            write_idx += 1;
-        }
-
-        if cleaned_count > 0 {
-            let new_count = old_count.saturating_sub(cleaned_count);
-            env.storage().persistent().set(&count_key, &new_count);
-            bump_persistent(env, &count_key);
-        }
         cleaned_count
     }
 
@@ -981,7 +962,7 @@ impl BidStorage {
                             || bid.status == BidStatus::Withdrawn
                             || bid.status == BidStatus::Cancelled;
 
-                        if is_terminal {
+                        if is_terminal || bid.status == BidStatus::Expired {
                             true
                         } else if bid.status == BidStatus::Placed
                             && bid.is_cleanup_eligible(current_timestamp, grace_seconds)
@@ -997,10 +978,7 @@ impl BidStorage {
                                 bid.bid_id.clone(),
                             );
                             cleaned_count = cleaned_count.saturating_add(1);
-                            false
-                        } else if bid.status == BidStatus::Expired {
-                            cleaned_count = cleaned_count.saturating_add(1);
-                            false
+                            true
                         } else {
                             true
                         }
@@ -1010,32 +988,16 @@ impl BidStorage {
                     }
                 });
 
-            if should_keep {
-                if write_idx != read_idx {
-                    let src = Self::invoice_bid_entry_key(invoice_id, read_idx);
-                    let dst = Self::invoice_bid_entry_key(invoice_id, write_idx);
-                    if let Some(bid_id) = env.storage().persistent().get::<_, BytesN<32>>(&src) {
-                        bump_persistent(env, &src);
-                        env.storage().persistent().set(&dst, &bid_id);
-                        bump_persistent(env, &dst);
-                    }
-                }
-                write_idx += 1;
+            if !should_keep {
+                break;
             }
             read_idx += 1;
         }
 
-        // Only update count if we processed the entire list (offset=0 and end_idx=old_count)
-        // Otherwise, the full cleanup will handle the final count update
-        if offset == 0 && end_idx == old_count && cleaned_count > 0 {
-            let new_count = old_count.saturating_sub(cleaned_count);
-            env.storage().persistent().set(&count_key, &new_count);
-            bump_persistent(env, &count_key);
-            (cleaned_count, new_count)
-        } else {
-            // For partial cleanup, return the cleaned count and current total
-            (cleaned_count, old_count.saturating_sub(cleaned_count))
-        }
+        // Expired bids remain in the invoice index for historical queries; we
+        // only transition them to `Expired` in storage and return the number
+        // that were newly marked expired.
+        (cleaned_count, old_count)
     }
 
     pub fn get_bid_records_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<Bid> {
@@ -1288,11 +1250,12 @@ impl BidStorage {
     /// maximum number of open bids per investor across all invoices.
     pub fn count_active_bids_by_investor(env: &Env, investor: &Address) -> u32 {
         let all_bids = Self::get_all_bids_by_investor(env, investor);
+        let current_timestamp = env.ledger().timestamp();
         let mut count: u32 = 0;
         let mut idx: u32 = 0;
         while idx < all_bids.len() {
             let bid = all_bids.get(idx).unwrap();
-            if bid.status == BidStatus::Placed {
+            if bid.is_active(current_timestamp) {
                 count = count.saturating_add(1);
             }
             idx = idx.saturating_add(1);
@@ -1358,18 +1321,17 @@ impl BidStorage {
         invoice_id: &BytesN<32>,
         current_timestamp: u64,
     ) -> bool {
+        let grace_seconds = Self::get_bid_expiry_grace_seconds(env);
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
         let mut idx: u32 = 0;
         while idx < bid_ids.len() {
             let bid_id = bid_ids.get(idx).unwrap();
             if let Some(bid) = Self::get_bid(env, &bid_id) {
-                // Every Expired bid must have a past deadline
-                if bid.status == BidStatus::Expired && bid.expiration_timestamp >= current_timestamp
-                {
+                if bid.status == BidStatus::Expired && bid.expiration_timestamp > current_timestamp {
                     return false;
                 }
-                // No Placed bid should remain past its deadline
-                if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
+                if bid.status == BidStatus::Placed && bid.is_cleanup_eligible(current_timestamp, grace_seconds)
+                {
                     return false;
                 }
             }

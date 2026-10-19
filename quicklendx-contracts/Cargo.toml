@@ -58,6 +58,11 @@ path = "tests/invoice_lifecycle_e2e.rs"
 required-features = ["legacy-tests"]
 
 [[test]]
+name = "issue_2954_bid_expiry_active_counts"
+path = "tests/issue_2954_bid_expiry_active_counts.rs"
+required-features = ["legacy-tests"]
+
+[[test]]
 name = "pagination_match_over_under"
 path = "tests/pagination_match_over_under.rs"
 required-features = ["legacy-tests"]
