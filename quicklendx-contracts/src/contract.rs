@@ -7,16 +7,18 @@ use crate::protocol_limits::{
 };
 use crate::types::{
     Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus,
-    DisputeStatus, PaymentRecord, InvoiceRating, Escrow, EscrowStatus,
-    BusinessFreezeReason,
+    DisputeStatus, PaymentRecord, InvoiceRating, BusinessFreezeReason, InvoiceLock,
 };
 use crate::storage::InvoiceStorage;
 use crate::init::{ProtocolInitializer, InitializationParams};
 use crate::protocol_limits::ProtocolLimitsContract;
 use crate::verification::{BusinessVerificationStorage, InvestorVerificationStorage, submit_kyc_application, verify_business};
 use crate::bid::BidStorage;
-use crate::payments::EscrowStorage;
+use crate::payments::{Escrow, EscrowStatus, EscrowStorage};
 use crate::backup::{Backup, BackupStorage, BackupStatus, BackupRetentionPolicy};
+use crate::investment::InvestmentStorage;
+use crate::pause::PauseControl;
+use crate::reentrancy::with_payment_guard;
 
 #[contract]
 pub struct QuickLendXContract;
@@ -248,36 +250,25 @@ impl QuickLendXContract {
         Ok(bid_id)
     }
 
+    pub fn accept_bid_and_fund(env: Env, invoice_id: BytesN<32>, bid_id: BytesN<32>) -> Result<BytesN<32>, QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id))
+    }
+
+    pub fn accept_bid_and_fund_with_key(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+        request_key: BytesN<32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || {
+            crate::escrow::accept_bid_and_fund_with_key(&env, &invoice_id, &bid_id, &request_key)
+        })
+    }
+
     pub fn accept_bid(env: Env, invoice_id: BytesN<32>, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        if InvoiceStorage::is_frozen(&env, &invoice_id) {
-            InvoiceStorage::require_lock_within_time_limit(&env, &invoice_id)?;
-            return Err(QuickLendXError::InvoiceFrozen);
-        }
-        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        let bid = BidStorage::get_bid(&env, &bid_id).unwrap();
-        
-        invoice.mark_as_funded(&env, bid.investor.clone(), bid.bid_amount, env.ledger().timestamp());
-        InvoiceStorage::update_invoice(&env, &invoice);
-        
-        let mut bid = bid;
-        bid.status = BidStatus::Accepted;
-        BidStorage::store_bid(&env, &bid);
-        
-        let escrow_id = crate::payments::EscrowStorage::generate_unique_escrow_id(&env);
-        let escrow = Escrow {
-            escrow_id,
-            invoice_id,
-            investor: bid.investor,
-            business: invoice.business,
-            amount: bid.bid_amount,
-            currency: invoice.currency,
-            created_at: env.ledger().timestamp(),
-            released_at: None,
-            refunded_at: None,
-            status: EscrowStatus::Held,
-        };
-        crate::payments::EscrowStorage::store_escrow(&env, &escrow);
-        Ok(())
+        Self::accept_bid_and_fund(env, invoice_id, bid_id).map(|_| ())
     }
 
     pub fn get_bid(env: Env, bid_id: BytesN<32>) -> Option<Bid> {
@@ -529,21 +520,22 @@ impl QuickLendXContract {
         EscrowStorage::get_escrow_status(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
-    pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
-        escrow.status = EscrowStatus::Released;
-        escrow.released_at = Some(env.ledger().timestamp());
-        EscrowStorage::update_escrow(&env, &escrow);
-        Ok(())
+    pub fn get_investment(env: Env, investment_id: BytesN<32>) -> Result<crate::types::Investment, QuickLendXError> {
+        InvestmentStorage::get_investment(&env, &investment_id).ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
-    pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>, admin: Address) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin(&env, &admin)?;
-        let mut escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id).unwrap();
-        escrow.status = EscrowStatus::Refunded;
-        escrow.refunded_at = Some(env.ledger().timestamp());
-        EscrowStorage::update_escrow(&env, &escrow);
-        Ok(())
+    pub fn get_invoice_investment(env: Env, invoice_id: BytesN<32>) -> Result<crate::types::Investment, QuickLendXError> {
+        InvestmentStorage::get_investment_by_invoice(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
+    pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>, caller: Address) -> Result<(), QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || crate::escrow::refund_escrow_funds(&env, &invoice_id, &caller))
+    }
+
+    pub fn withdraw_investment(env: Env, invoice_id: BytesN<32>, investor: Address) -> Result<(), QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || crate::escrow::withdraw_investment(&env, &invoice_id, &investor))
     }
     
     // Backup & Restore

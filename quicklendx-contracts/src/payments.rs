@@ -654,6 +654,10 @@ impl EscrowStorage {
         }
     }
 
+    pub fn get_escrow_status(env: &Env, invoice_id: &BytesN<32>) -> Option<EscrowStatus> {
+        Self::get_escrow_by_invoice(env, invoice_id).map(|escrow| escrow.status)
+    }
+
     pub fn update_escrow(env: &Env, escrow: &Escrow) {
         env.storage().persistent().set(&escrow.escrow_id, escrow);
         extend_persistent_ttl(env, &escrow.escrow_id);
@@ -1009,13 +1013,11 @@ pub fn release_escrow(
 /// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount.
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the refund can be safely retried.
-pub fn refund_escrow(
+pub(crate) fn refund_escrow(
     env: &Env,
     invoice_id: &BytesN<32>,
-    caller: &Address,
+    _caller: &Address,
 ) -> Result<(), QuickLendXError> {
-    caller.require_auth();
-
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
