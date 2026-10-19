@@ -8,12 +8,17 @@ use soroban_sdk::{contract, contractimpl, Env, Symbol, symbol_short};
 pub mod errors;
 pub mod types;
 pub mod invoice_amount;
+pub mod notifications;
 
 // Constants that are used across modules
 pub const MAX_QUERY_LIMIT: u32 = 100;
 
 #[cfg(test)]
 mod test_invoice_amount_precision;
+#[cfg(test)]
+mod test_notification_status_matrix;
+#[cfg(test)]
+mod test_notifications;
 
 /// Shared test utilities for contract regression coverage (issue #2711 CI
 /// fix). Public (not `#[cfg(test)]`) so integration tests under `tests/`

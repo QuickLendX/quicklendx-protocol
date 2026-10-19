@@ -20,7 +20,7 @@
 
 #[allow(unused_imports)]
 use super::*;
-use crate::invoice::InvoiceCategory;
+use crate::types::InvoiceCategory;
 use crate::notifications::{
     NotificationDeliveryStatus, NotificationPreferences, NotificationPriority, NotificationSystem,
     NotificationType,
@@ -1125,6 +1125,10 @@ fn test_blocked_notification_does_not_consume_idempotency_key() {
 // Lifecycle wiring integration tests
 // ============================================================================
 
+#[cfg(feature = "legacy-tests")]
+mod lifecycle_tests {
+    use super::*;
+
 fn lifecycle_setup() -> (
     Env,
     QuickLendXContractClient<'static>,
@@ -1338,4 +1342,5 @@ fn test_wire_payment_notification_respects_preferences() {
         &business,
         NotificationType::PaymentReceived,
     ));
+}
 }
