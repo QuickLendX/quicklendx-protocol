@@ -262,6 +262,8 @@ mod test_clock_rollover;
 mod test_compute_yield_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_grace_boundary;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_overdue_scan_resilience;
 #[cfg(test)]
 mod test_diagnostics;
 #[cfg(all(test, feature = "legacy-tests"))]
