@@ -23,22 +23,24 @@ const schema = `
   CREATE INDEX IF NOT EXISTS idx_kyc_records_user_id ON kyc_records(user_id);
 `;
 
-const SAVESOINT = "kyc_migration";
+const SAVEPOINT_NAME = "kyc_migration";
+const SAVEPOINT = "kyc_migration";
 
 async function runInTransaction(
-  db: MigrationContext[\"db\"],
+  db: MigrationContext["db"],
   statements: string[]
 ): Promise<void> {
-  await db.exec(`SAVEPOINT ${SAVEPOINT}`);
+  await db.exec(`SAVEPOINT ${SAVEPOINT_NAME}`);
   try {
     for (const statement of statements) {
       await db.exec(statement);
     }
-    await db.exec(`RELEASE ${SAVESOINT}`);
+    await db.exec(`RELEASE ${SAVEPOINT_NAME}`);
+    await db.exec(`RELEASE ${SAVEPOINT}`);
   } catch (err) {
     try {
-      await db.exec(`ROLLBACK TO ${SAVEPOINT}`);
-      await db.exec(`RELEASE ${SAVEPOINT}`);
+      await db.exec(`ROLLBACK TO SAVEPOINT ${SAVEPOINT_NAME}`);
+      await db.exec(`RELEASE ${SAVEPOINT_NAME}`);
     } catch {
       // Preserve original error if rollback fails.
     }
@@ -53,8 +55,11 @@ export default {
   author: "QuickLendX Engineering",
   up: async (ctx: MigrationContext): Promise<void> => {
     const statements = schema
-      .split("'") -- note: this is not the real content but a placeholder to avoid excessive escaping issues. Replace with the actual base64 encoded content for the file.
-      \n      .map((s) => s.trim())
+      .split(";")
+      .map((statement) => statement.trim())
+      .filter((statement) => statement.length > 0 && !statement.startsWith("--"));
+
+      .map((s) => s.trim())
       .filter((s) => s.length > 0 && !s.startsWith("--"));
     await runInTransaction(ctx.db, statements);
   },
@@ -66,6 +71,14 @@ export default {
   },
   validate: async (ctx: MigrationContext): Promise<string[]> => {
     const warnings: string[] = [];
+    const existing = await ctx.db.get<{ name: string }>(
+      "SELECT name FROM sqlite_master WHERE type='table' AND name = 'kyc_records'"
+    );
+
+    if (existing) {
+      warnings.push("Table kyc_records already exists — migration is idempotent.");
+    }
+
     return warnings;
   },
 } satisfies MigrationDefinition;

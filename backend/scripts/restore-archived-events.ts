@@ -39,6 +39,9 @@ export async function restoreArchivedEvents(options: {
 
   let totalRestored = 0;
 
+  // Process archives in a stable order so failures surface deterministically.
+  files.sort();
+
   for (const fileName of files) {
     const match = fileName.match(/^raw-events-(\d{4}-\d{2})\.jsonl\.gz$/);
     if (!match) continue;
@@ -74,11 +77,24 @@ export async function restoreArchivedEvents(options: {
     const lines = text.split("\n").filter((l) => l.trim().length > 0);
     const parsedEvents: RawEvent[] = [];
     for (const line of lines) {
+      let record: unknown;
       try {
-        parsedEvents.push(JSON.parse(line) as RawEvent);
+        record = JSON.parse(line);
       } catch (err: any) {
         throw new Error(`Failed to parse JSON line from ${filePath}: ${err.message}`);
       }
+      if (
+        record === null ||
+        typeof record !== "object" ||
+        Array.isArray(record) ||
+        typeof (record as { id?: unknown }).id !== "string" ||
+        (record as { id: string }).id.length === 0
+      ) {
+        throw new Error(
+          `Failed to parse JSON line from ${filePath}: expected an event object with a non-empty id`
+        );
+      }
+      parsedEvents.push(record as RawEvent);
     }
 
     const eventsToRestore = parsedEvents.filter((e) => {
@@ -86,7 +102,13 @@ export async function restoreArchivedEvents(options: {
       return eventDate >= startDate && eventDate <= endDate;
     });
 
-    const newEvents = eventsToRestore.filter((e) => !existingIds.has(e.id));
+    // Deduplicate against already-persisted events and against events staged
+    // earlier in this run, so re-running a restore never duplicates rows.
+    const newEvents = eventsToRestore.filter((e) => {
+      if (existingIds.has(e.id)) return false;
+      existingIds.add(e.id);
+      return true;
+    });
     if (newEvents.length > 0) {
       await store.storeEvents(newEvents);
       totalRestored += newEvents.length;

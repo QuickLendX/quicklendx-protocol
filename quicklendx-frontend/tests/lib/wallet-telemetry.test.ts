@@ -78,7 +78,10 @@ describe("Wallet Telemetry (tests/lib) - Forwarding & Disabled Behavior", () => 
   it("asserts connect attempt, failure, and disconnect are forwarded when enabled", async () => {
     configureWalletTelemetry({ enabled: true });
 
-    await trackWalletConnectAttempt({ walletType: "freighter", network: "testnet" });
+    await trackWalletConnectAttempt({
+      walletType: "freighter",
+      network: "testnet",
+    });
     await trackWalletConnectFailed({
       error: "User rejected connection",
       walletType: "freighter",

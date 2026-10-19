@@ -4,7 +4,7 @@ import { getCorrelationId, withCorrelationId } from '../lib/requestContext';
 
 export class EventProcessor {
   private static instance: EventProcessor;
-  private processedEvents: Set<string>;
+  private processedEvents = new Set<string>();
 
   private eventLog: Array<{ seq: number; id: string; type: string; timestamp: number; correlationId?: string }> = [];
   private sequence: number = 0;
@@ -218,8 +218,12 @@ export class EventProcessor {
         );
         break;
 
-      default:
-        throw new Error(`Unknown event type: ${event.type}`);
+      default: {
+        const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+        // Unknown event types must fail loudly instead of being silently
+        // dropped, so callers can surface the error without losing the event.
+        throw new Error(`${correlationPrefix}Unknown event type: ${event.type}`);
+      }
     }
 
     this.eventLog.push({ seq, id: eventId, type: event.type, timestamp: event.timestamp, correlationId: correlationId || undefined });

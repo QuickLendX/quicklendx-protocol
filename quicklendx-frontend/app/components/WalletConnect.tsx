@@ -236,7 +236,10 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
   const handleConnect = useCallback(async () => {
     setState("CONNECTING");
     setErrorMessage("");
-    trackWalletConnectAttempt({ walletType: "freighter", network: expectedNetwork });
+    trackWalletConnectAttempt({
+      walletType: "freighter",
+      network: expectedNetwork,
+    });
     try {
       // Replace with Freighter SDK call when ready
       // const { address } = await getAddress();

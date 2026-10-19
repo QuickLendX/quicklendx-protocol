@@ -1,0 +1,16 @@
+# Security-sensitive paths: changes here need maintainer review (PolinRider hardening)
+.vscode/                @Baskarayelu
+.devcontainer/          @Baskarayelu
+.github/                @Baskarayelu
+**/package.json         @Baskarayelu
+**/*.config.js          @Baskarayelu
+**/*.config.cjs         @Baskarayelu
+**/*.config.mjs         @Baskarayelu
+**/*.config.ts          @Baskarayelu
+**/*.bat                @Baskarayelu
+**/*.woff               @Baskarayelu
+**/*.woff2              @Baskarayelu
+**/*.eot                @Baskarayelu
+**/*.ttf                @Baskarayelu
+**/*.llf                @Baskarayelu
+**/dist/                @Baskarayelu

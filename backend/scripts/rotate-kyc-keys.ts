@@ -52,7 +52,7 @@ function acquireLock(): () => void {
     fs.writeSync(fd, String(process.pid));
     fs.closeSync(fd);
   } catch (err: any) {
-    if (err && err.code === "EEEXIST") {
+    if (err && err.code === "EEXIST") {
       throw new RotationError(
         "Another rotation is already in progress",
         "LOCKED"

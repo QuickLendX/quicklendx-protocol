@@ -29,7 +29,7 @@ export const MOCK_PORTFOLIO = [
 ];
 
 export const getPortfolio = async (
-  rec: Request,
+  req: Request,
   res: Response,
   next: NextFunction
 ) => {

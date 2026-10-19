@@ -1,4 +1,4 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 import { ulid } from 'ulid';
 import { getDatabase, getPreparedStatement } from '../lib/database';
 import { CircuitBreaker } from '../lib/circuitBreaker';
@@ -23,7 +23,7 @@ const PREF_COLUMN: Record<NotificationType, string> = {
 
 export class NotificationService {
   private static instance: NotificationService;
-  private transporter: nodemailer.Transporter;
+  private transporter: Transporter;
   private dedupCache: NotificationDedupCache;
   private circuitBreaker: CircuitBreaker;
 

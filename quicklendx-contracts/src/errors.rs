@@ -61,6 +61,8 @@ pub enum QuickLendXError {
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InvalidDescription = 1204,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
+    InvalidCursor = 1206,
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
     SelfTransfer = 1205,
 
     // Storage (1300-1301)
@@ -309,6 +311,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidCurrency => symbol_short!("INV_CR"),
             QuickLendXError::InvalidTimestamp => symbol_short!("INV_TM"),
             QuickLendXError::InvalidDescription => symbol_short!("INV_DS"),
+            QuickLendXError::InvalidCursor => symbol_short!("INV_CUR"),
             // Storage
             QuickLendXError::StorageError => symbol_short!("STORE"),
             QuickLendXError::StorageKeyNotFound => symbol_short!("KEY_NF"),

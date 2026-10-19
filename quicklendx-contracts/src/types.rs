@@ -9,7 +9,8 @@
 //! - Type safety: strong typing for status and categories
 //! - Addresses are used for identity to leverage Soroban's built-in access control
 
-use crate::DisputeResolution as OtherDisputeResolution;
+// Remove problematic import for now
+// use crate::DisputeResolution as OtherDisputeResolution;
 use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
 /// Invoice status enumeration representing the lifecycle of an invoice
@@ -484,7 +485,7 @@ pub struct InvoicePage {
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaginatedBids {
-    pub items: Vec<crate::bid::Bid>,
+    pub items: Vec<Bid>,
     pub total_count: u32,
     pub has_more: bool,
 }
