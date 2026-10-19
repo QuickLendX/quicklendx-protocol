@@ -751,16 +751,17 @@ impl FeeManager {
 
     pub fn get_user_volume(env: &Env, user: &Address) -> UserVolumeData {
         let key = (VOLUME_KEY, user.clone());
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or(UserVolumeData {
-                user: user.clone(),
-                total_volume: 0,
-                transaction_count: 0,
-                current_tier: VolumeTier::Standard,
-                last_updated: env.ledger().timestamp(),
-            })
+        let res = env.storage().persistent().get(&key);
+        if res.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        res.unwrap_or(UserVolumeData {
+            user: user.clone(),
+            total_volume: 0,
+            transaction_count: 0,
+            current_tier: VolumeTier::Standard,
+            last_updated: env.ledger().timestamp(),
+        })
     }
 
     /// Update a user's cumulative transaction volume and derived discount tier.
@@ -789,7 +790,8 @@ impl FeeManager {
             VolumeTier::Standard
         };
         let key = (VOLUME_KEY, user.clone());
-        env.storage().instance().set(&key, &volume_data);
+        env.storage().persistent().set(&key, &volume_data);
+        crate::storage::extend_persistent_ttl(env, &key);
         Ok(volume_data)
     }
 
@@ -834,7 +836,7 @@ impl FeeManager {
         let period = Self::get_current_period(env);
         let key = (REVENUE_KEY, period);
         let mut revenue_data: RevenueData =
-            env.storage().instance().get(&key).unwrap_or(RevenueData {
+            env.storage().persistent().get(&key).unwrap_or(RevenueData {
                 period,
                 total_collected: 0,
                 fees_by_type: Map::new(env),
@@ -858,7 +860,8 @@ impl FeeManager {
             revenue_data.fees_by_type.set(fee_type, merged);
         }
 
-        env.storage().instance().set(&key, &revenue_data);
+        env.storage().persistent().set(&key, &revenue_data);
+        crate::storage::extend_persistent_ttl(env, &key);
         Self::update_user_volume(env, user, total_amount)?;
         Ok(())
     }
@@ -1025,7 +1028,7 @@ impl FeeManager {
         }
 
         let revenue_key = (REVENUE_KEY, period);
-        let mut revenue_data: RevenueData = env.storage().instance().get(&revenue_key).unwrap();
+        let mut revenue_data: RevenueData = env.storage().persistent().get(&revenue_key).unwrap();
 
         if revenue_data.pending_distribution == 0 {
             return Err(QuickLendXError::OperationNotAllowed);
@@ -1064,7 +1067,8 @@ impl FeeManager {
 
         revenue_data.total_distributed = Self::checked_add(revenue_data.total_distributed, amount)?;
         revenue_data.pending_distribution = 0;
-        env.storage().instance().set(&revenue_key, &revenue_data);
+        env.storage().persistent().set(&revenue_key, &revenue_data);
+        crate::storage::extend_persistent_ttl(env, &revenue_key);
 
         // Emit distribution event for transparency and auditing
         crate::events::emit_revenue_distributed(
@@ -1080,7 +1084,8 @@ impl FeeManager {
 
     pub fn get_analytics(env: &Env, period: u64) -> Result<FeeAnalytics, QuickLendXError> {
         let revenue_key = (REVENUE_KEY, period);
-        let revenue_data: RevenueData = env.storage().instance().get(&revenue_key).unwrap();
+        let revenue_data: RevenueData = env.storage().persistent().get(&revenue_key).unwrap();
+        crate::storage::extend_persistent_ttl(env, &revenue_key);
         let average_fee_rate = if revenue_data.transaction_count > 0 {
             revenue_data
                 .total_collected
