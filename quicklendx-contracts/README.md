@@ -152,9 +152,9 @@ See [Settlement Currencies by Invoice Type](docs/SETTLEMENT_CURRENCIES.md) for a
 ### Contract entrypoints (current surface)
 
 The deployed contract (`src/contract.rs`) currently exposes the protocol
-initialization and admin slice. The remaining modules (invoices, bids, escrow,
-settlement, disputes, KYC, fees, pause, backup) are wired in by their own
-issues; the functions documented under *Core Functions* below describe those
+initialization and admin slice and invoice creation and lifecycle. The
+remaining modules (bids, escrow, settlement, disputes, KYC, fees, pause,
+backup) are wired in by their own issues; the functions documented under *Core Functions* below describe those
 modules and are not callable on-chain until they are wired.
 
 Every entrypoint is a thin wrapper; validation, auth and events live in the
@@ -184,12 +184,38 @@ module function it delegates to.
 | `set_two_step_enabled(admin, enabled)` | `AdminStorage::set_two_step_enabled` | admin |
 | `is_two_step_enabled()` | `AdminStorage::is_two_step_enabled` | — |
 | `get_pending_admin()` | `AdminStorage::get_pending_admin` | — |
+| `store_invoice(business, amount, currency, due_date, description, category, tags, origination_fee_bps, late_payment_penalty_bps, early_payment_discount_bps, nonce)` | `Invoice::new` + `InvoiceStorage::store_invoice` (see order of checks below) | business |
+| `get_invoice(invoice_id)` | `InvoiceStorage::get` | — |
+| `get_business_invoices(business)` | `InvoiceStorage::get_business_invoices` | — |
+| `get_invoices_by_status(status)` | `InvoiceStorage::get_invoices_by_status` | — |
+| `get_total_invoice_count()` | `InvoiceStorage::get_total_count` | — |
+| `get_invoice_count_by_status(status)` | status index length | — |
+| `get_invoices_by_customer(customer_name)` | `InvoiceStorage::get_by_customer` | — |
+| `get_invoices_by_tax_id(tax_id)` | `InvoiceStorage::get_by_tax_id` | — |
+| `get_invoices_by_status_batch(invoice_ids)` | status per ID, at most `MAX_INPUT_STATUS_BATCH_SIZE` IDs | — |
+| `verify_invoice(admin, invoice_id)` | `Invoice::verify` | admin (`require_admin_auth`) |
+| `update_invoice_metadata(business, invoice_id, metadata)` | `Invoice::update_metadata` | business (inside `Invoice`) |
+| `clear_invoice_metadata(business, invoice_id)` | `Invoice::clear_metadata` | business (inside `Invoice`) |
+| `add_invoice_tag(business, invoice_id, tag)` | `Invoice::add_tag` | business (wrapper, after ownership check) |
+| `remove_invoice_tag(business, invoice_id, tag)` | `Invoice::remove_tag` | business (wrapper, after ownership check) |
+| `update_invoice_category(business, invoice_id, category)` | `Invoice::update_category` | business (wrapper, after ownership check) |
 
 `initialize` succeeds once. Repeating it with identical params returns `Ok(())`;
 any other params return `OperationNotAllowed`. There is no standalone
 `initialize_admin`: the admin is installed only by `initialize`. If a
 deployment already has an admin from an older flow, only that admin can
 complete `initialize`.
+
+`store_invoice` checks, in order: the business signature; idempotency (the key
+is `sha256("inv_create" || business || nonce)`, so a repeated
+`(business, nonce)` returns the original ID and another business reusing the
+nonce gets its own invoice); the per-address rate limit and input size bounds;
+KYC, regulatory, currency whitelist and protocol limits (minimum amount, due
+date horizon, invoices per business); `Invoice::new`; storage; the
+`invoice_uploaded` event, the audit entry and the notification; and finally
+the idempotency record. Invoice IDs come from `Invoice::new`, which mixes the
+ledger timestamp, sequence and a monotonic counter, so invoices created in the
+same ledger get distinct IDs.
 
 ### Core Functions
 
