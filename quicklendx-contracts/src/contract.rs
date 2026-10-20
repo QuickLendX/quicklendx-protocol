@@ -1,14 +1,12 @@
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, Vec, Bytes, xdr::ToXdr};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::protocol_limits::{
     check_and_record_mutation, require_batch_size_bound, require_description_bound,
     require_kyc_data_bound, require_status_batch_bound, require_tags_bound,
 };
-use crate::types::{
-    Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus,
-    DisputeStatus, PaymentRecord, InvoiceRating, BusinessFreezeReason, InvoiceLock,
-};
+use crate::types::{Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus,
+    BusinessFreezeReason, InvoiceLock};
 use crate::storage::InvoiceStorage;
 use crate::init::{ProtocolInitializer, InitializationParams};
 use crate::protocol_limits::ProtocolLimitsContract;
@@ -19,6 +17,7 @@ use crate::backup::{Backup, BackupStorage, BackupStatus, BackupRetentionPolicy};
 use crate::investment::InvestmentStorage;
 use crate::pause::PauseControl;
 use crate::reentrancy::with_payment_guard;
+use crate::idempotency::{idempotency_exists, idempotency_key, store_idempotency};
 
 #[contract]
 pub struct QuickLendXContract;
@@ -128,9 +127,9 @@ impl QuickLendXContract {
         amount: i128,
         currency: Address,
         due_date: u64,
-        description: soroban_sdk::Bytes,
+        description: String,
         category: InvoiceCategory,
-        tags: Vec<soroban_sdk::Bytes>,
+        tags: Vec<String>,
         nonce: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         if let Some(existing_id) = crate::idempotency::get_idempotency_result::<BytesN<32>>(&env, &nonce) {
@@ -154,15 +153,10 @@ impl QuickLendXContract {
         // (`amount <= 0 || amount > MAX_INVOICE_AMOUNT`); see `invoice_amount`.
         crate::invoice_amount::validate_invoice_amount_ceiling(amount)?;
 
-        ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
+        crate::protocol_limits::check_invoice_limit(&env, &business)?;
 
-        let invoice_id: BytesN<32> = env
-            .crypto()
-            .sha256(&env.ledger().timestamp().to_xdr(&env))
-            .into();
-
-        let invoice = Invoice {
-            invoice_id: invoice_id.clone(),
+        let invoice = Invoice::new(
+            &env,
             business,
             amount,
             currency,
@@ -170,24 +164,11 @@ impl QuickLendXContract {
             description,
             category,
             tags,
-            status: InvoiceStatus::Pending,
-            metadata: None,
-            metadata_customer_name: None,
-            metadata_tax_id: None,
-            total_paid: 0,
-            funded_amount: 0,
-            funded_at: None,
-            average_rating: None,
-            total_ratings: 0,
-            investor: None,
-            dispute_status: DisputeStatus::None,
-            dispute: None,
-            payment_history: Vec::new(&env),
-            ratings: Vec::new(&env),
-            created_at: env.ledger().timestamp(),
-            updated_at: env.ledger().timestamp(),
-            settled_at: None,
-        };
+            None,
+            None,
+            None,
+        )?;
+        let invoice_id = invoice.id.clone();
 
         InvoiceStorage::store_invoice(&env, &invoice);
         crate::idempotency::store_idempotency_result(&env, &nonce, &invoice_id);
@@ -351,7 +332,7 @@ impl QuickLendXContract {
         // #2439 – input-size ceiling before any expensive work
         require_kyc_data_bound(&kyc_data)?;
         check_and_record_mutation(&env, &business)?;
-        submit_kyc_application(&env, &business, kyc_data)
+        submit_kyc_application(&env, &business, kyc_data.into())
     }
 
     pub fn freeze_invoice(
@@ -403,11 +384,12 @@ impl QuickLendXContract {
         // #2439 – input-size ceiling
         require_kyc_data_bound(&kyc_data)?;
         check_and_record_mutation(&env, &investor)?;
-        InvestorVerificationStorage::submit(&env, &investor, kyc_data)
+        InvestorVerificationStorage::submit(&env, &investor, kyc_data.into())
     }
 
-    pub fn verify_investor(env: Env, investor: Address, limit: i128) {
-        InvestorVerificationStorage::verify_investor(&env, &investor, limit);
+    pub fn verify_investor(env: Env, investor: Address, limit: i128) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        crate::verification::verify_investor(&env, &admin, &investor, limit).map(|_| ())
     }
 
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
@@ -419,11 +401,11 @@ impl QuickLendXContract {
     }
 
     pub fn get_total_invoice_count(env: Env) -> u32 {
-        InvoiceStorage::get_total_count(&env)
+        InvoiceStorage::get_total_count(&env) as u32
     }
 
     pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
-        InvoiceStorage::get_count_by_status(&env, status)
+        InvoiceStorage::get_invoices_by_status(&env, status).len()
     }
 
     pub fn update_invoice_metadata(env: Env, caller: Address, invoice_id: BytesN<32>, metadata: InvoiceMetadata, nonce: BytesN<32>) -> Result<(), QuickLendXError> {
@@ -480,11 +462,11 @@ impl QuickLendXContract {
     }
 
     pub fn get_invoices_by_customer(env: Env, customer_name: soroban_sdk::Bytes) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_by_customer(&env, &customer_name)
+        InvoiceStorage::get_by_customer(&env, &customer_name.into())
     }
 
     pub fn get_invoices_by_tax_id(env: Env, tax_id: soroban_sdk::Bytes) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_by_tax_id(&env, &tax_id)
+        InvoiceStorage::get_by_tax_id(&env, &tax_id.into())
     }
 
     pub fn get_invoices_by_status_batch(env: Env, ids: Vec<BytesN<32>>) -> Result<Vec<Option<InvoiceStatus>>, QuickLendXError> {
@@ -507,7 +489,7 @@ impl QuickLendXContract {
         investor: Address,
     ) -> Result<(), QuickLendXError> {
         let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        invoice.add_rating(rating, comment, investor, env.ledger().timestamp())?;
+        invoice.add_rating(rating, comment.into(), investor, env.ledger().timestamp())?;
         InvoiceStorage::update_invoice(&env, &invoice);
         Ok(())
     }
@@ -562,9 +544,10 @@ impl QuickLendXContract {
         let backup = Backup {
             backup_id: backup_id.clone(),
             timestamp: env.ledger().timestamp(),
-            description: soroban_sdk::Bytes::from_slice(&env, "Automatic Backup".as_bytes()),
+            description: String::from_str(&env, "Automatic Backup"),
             invoice_count: all_invoices.len(),
             status: BackupStatus::Active,
+            format_version: 2,
         };
         
         BackupStorage::store_backup(&env, &backup, Some(&all_invoices))?;

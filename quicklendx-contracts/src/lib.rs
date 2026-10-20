@@ -10,6 +10,8 @@ pub mod analytics;
 pub mod arbiter;
 pub mod audit;
 pub mod backup;
+pub mod backup_v1;
+pub mod backpressure;
 pub mod bid;
 pub mod contract;
 pub mod currency;
@@ -28,6 +30,7 @@ pub mod health;
 pub mod idempotency;
 pub mod incident;
 pub mod init;
+pub mod invariants;
 pub mod investment;
 pub mod investment_queries;
 pub mod invoice;
@@ -57,6 +60,7 @@ pub mod verification;
 pub mod vesting;
 
 pub use contract::{QuickLendXContract, QuickLendXContractClient};
+pub use admin::AdminStorage;
 // Constants that are used across modules
 pub const MAX_QUERY_LIMIT: u32 = 100;
 

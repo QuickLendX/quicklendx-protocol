@@ -526,6 +526,23 @@ impl InvoiceStorage {
         }
     }
 
+    pub fn set_invoice_lock(env: &Env, invoice_id: &BytesN<32>, lock: InvoiceLock) {
+        let key = DataKey::FrozenInvoice(invoice_id.clone());
+        if lock == InvoiceLock::None {
+            env.storage().persistent().remove(&key);
+        } else {
+            env.storage().persistent().set(&key, &lock);
+            extend_persistent_ttl(env, &key);
+        }
+    }
+
+    pub fn get_invoice_lock(env: &Env, invoice_id: &BytesN<32>) -> InvoiceLock {
+        env.storage()
+            .persistent()
+            .get(&DataKey::FrozenInvoice(invoice_id.clone()))
+            .unwrap_or(InvoiceLock::None)
+    }
+
     pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
         let key = DataKey::FrozenInvoice(invoice_id.clone());
         if let Some(lock) = env.storage().persistent().get::<_, InvoiceLock>(&key) {

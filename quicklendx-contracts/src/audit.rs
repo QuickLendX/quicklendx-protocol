@@ -54,6 +54,8 @@ pub enum AuditOperation {
     InvoiceRated,
     BidPlaced,
     BidAccepted,
+    BidCancelled,
+    BidExpired,
     BidWithdrawn,
     EscrowCreated,
     EscrowReleased,
@@ -262,7 +264,9 @@ impl From<AuditOperation> for OpType {
             AuditOperation::InvoiceRated => OpType::InvoiceRated,
             AuditOperation::BidPlaced => OpType::BidPlaced,
             AuditOperation::BidAccepted => OpType::BidAccepted,
-            AuditOperation::BidWithdrawn => OpType::BidWithdrawn,
+            AuditOperation::BidWithdrawn
+            | AuditOperation::BidCancelled
+            | AuditOperation::BidExpired => OpType::BidWithdrawn,
             AuditOperation::EscrowCreated => OpType::EscrowCreated,
             AuditOperation::EscrowReleased => OpType::EscrowReleased,
             AuditOperation::EscrowRefunded => OpType::EscrowRefunded,
@@ -568,7 +572,9 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::InvoiceRated => 7,
         AuditOperation::BidPlaced => 8,
         AuditOperation::BidAccepted => 9,
-        AuditOperation::BidWithdrawn => 10,
+        AuditOperation::BidWithdrawn
+        | AuditOperation::BidCancelled
+        | AuditOperation::BidExpired => 10,
         AuditOperation::EscrowCreated => 11,
         AuditOperation::EscrowReleased => 12,
         AuditOperation::EscrowRefunded => 13,
