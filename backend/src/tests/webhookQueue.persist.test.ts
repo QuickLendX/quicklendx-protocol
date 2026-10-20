@@ -1,7 +1,7 @@
 import path from "path";
 import crypto from "crypto";
 import { getDatabase, closeDatabase } from "../lib/database";
-import { WebhookQueueService, webhookQueueService } from "../services/webhookQueueService";
+import { WebhookQueueService } from "../services/webhookQueueService";
 
 // ---------------------------------------------------------------------------
 // Test database lifecycle – isolated temp file per run
@@ -9,6 +9,11 @@ import { WebhookQueueService, webhookQueueService } from "../services/webhookQue
 
 const TEST_DB_DIR = path.resolve(__dirname, "../../.data");
 const TEST_DB_PATH = path.join(TEST_DB_DIR, `test-webhook-queue-${crypto.randomUUID()}.db`);
+
+// Bound to the current instance in beforeEach: the module-level export is
+// created at import time (before DATABASE_PATH points at this test's DB) and
+// would otherwise hold a stale, closed connection.
+let webhookQueueService: WebhookQueueService;
 
 beforeAll(() => {
   process.env.DATABASE_PATH = TEST_DB_PATH;
@@ -59,6 +64,7 @@ beforeEach(() => {
   const conn = getDatabase();
   conn.exec("DELETE FROM webhook_deliveries");
   WebhookQueueService.resetInstance();
+  webhookQueueService = WebhookQueueService.getInstance();
 });
 
 describe("Durable Webhook Queue Resilience Tests", () => {

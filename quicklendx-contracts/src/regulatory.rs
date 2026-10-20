@@ -54,9 +54,6 @@ use soroban_sdk::{Address, Env};
 /// Always `Ok(())` in the current no-op implementation. A future implementation
 /// may return a compliance-specific error variant.
 #[inline]
-pub fn require_regulatory_ok(
-    _env: &Env,
-    _actor: &Address,
-) -> Result<(), QuickLendXError> {
+pub fn require_regulatory_ok(_env: &Env, _actor: &Address) -> Result<(), QuickLendXError> {
     Ok(())
 }

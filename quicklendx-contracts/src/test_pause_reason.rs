@@ -20,7 +20,10 @@ fn manual_pause_exposes_reason_and_unpause_clears_it() {
 
     assert_eq!(client.pause_reason(), None);
     client.pause(&admin);
-    assert_eq!(client.pause_reason(), Some(crate::pause::PauseReason::Manual));
+    assert_eq!(
+        client.pause_reason(),
+        Some(crate::pause::PauseReason::Manual)
+    );
     client.unpause(&admin);
     assert_eq!(client.pause_reason(), None);
 }

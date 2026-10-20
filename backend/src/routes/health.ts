@@ -26,7 +26,13 @@
  */
 
 import { Router, Request, Response } from "express";
-import { pingDatabase } from "../lib/database";
+import { 
+  pingDatabase,
+  pingDatabaseDetailed,
+  getPingStats,
+  getPingState,
+  getPingMetricsForPrometheus
+} from "../lib/database";
 import { statusService } from "../services/statusService";
 import { lagMonitor } from "../services/lagMonitor";
 import { webhookQueueService } from "../services/webhookQueueService";
@@ -63,7 +69,7 @@ router.get("/livez", liveness);
 // Readiness
 // ---------------------------------------------------------------------------
 
-router.get("/readyz", async (_req: Request, res: Response) => {
+router.get("/readyz", async (req: Request, res: Response) => {
   // Maintenance mode short-circuits readiness: the instance is intentionally
   // not serving, so it should be pulled from rotation regardless of deps.
   if (statusService.isMaintenanceEnabled()) {
@@ -77,10 +83,56 @@ router.get("/readyz", async (_req: Request, res: Response) => {
     return;
   }
 
+  // Check for detailed diagnostics query parameter
+  const includeDetails = req.query.details === 'true';
+
   // --- Database connectivity (hard dependency) ---------------------------
   let database: SubStatus = "ok";
-  if (!pingDatabase()) {
-    database = "unavailable";
+  let databaseDetails: any = undefined;
+  
+  if (includeDetails) {
+    // Use enhanced ping for detailed diagnostics
+    try {
+      const pingResult = await pingDatabaseDetailed({ timeoutMs: 3000 });
+      if (pingResult.success) {
+        database = "ok";
+        databaseDetails = {
+          latencyMs: pingResult.latencyMs,
+          attempts: pingResult.attempts,
+          state: getPingState(),
+          stats: getPingStats()
+        };
+      } else {
+        database = "unavailable";
+        databaseDetails = {
+          error: {
+            code: pingResult.error.code,
+            type: pingResult.error.constructor.name,
+            severity: pingResult.error.severity,
+            retryable: pingResult.error.retryable
+          },
+          latencyMs: pingResult.latencyMs,
+          attempts: pingResult.attempts,
+          state: getPingState(),
+          stats: getPingStats()
+        };
+      }
+    } catch (error) {
+      database = "unavailable";
+      databaseDetails = {
+        error: {
+          message: "Unexpected database ping failure",
+          type: "UnknownError"
+        },
+        state: getPingState(),
+        stats: getPingStats()
+      };
+    }
+  } else {
+    // Use backward-compatible simple ping
+    if (!pingDatabase()) {
+      database = "unavailable";
+    }
   }
 
   // --- Ingest lag --------------------------------------------------------
@@ -119,13 +171,123 @@ router.get("/readyz", async (_req: Request, res: Response) => {
 
   const status: ReadyStatus = unavailable ? "not_ready" : "ready";
 
-  res.status(unavailable ? 503 : 200).json({
+  const response: any = {
     status,
     database,
     ingest,
     webhookQueue,
     timestamp: new Date().toISOString(),
-  });
+  };
+
+  // Include detailed diagnostics if requested
+  if (includeDetails && databaseDetails) {
+    response.databaseDetails = databaseDetails;
+  }
+
+  res.status(unavailable ? 503 : 200).json(response);
+});
+
+// ---------------------------------------------------------------------------
+// Database Diagnostics and Metrics
+// ---------------------------------------------------------------------------
+
+/**
+ * Database ping diagnostics endpoint for detailed troubleshooting.
+ * Returns comprehensive database connectivity information including
+ * error details, retry attempts, latency metrics, and state history.
+ * 
+ * This endpoint is unauthenticated for operational use but provides
+ * detailed information for debugging database connectivity issues.
+ */
+router.get("/db-diagnostics", async (_req: Request, res: Response) => {
+  try {
+    const [detailedResult, currentStats] = await Promise.all([
+      pingDatabaseDetailed({ timeoutMs: 3000 }),
+      Promise.resolve(getPingStats())
+    ]);
+
+    const diagnostics = {
+      current: {
+        success: detailedResult.success,
+        latencyMs: detailedResult.latencyMs,
+        attempts: detailedResult.attempts,
+        timestamp: detailedResult.timestamp,
+        state: getPingState(),
+      },
+      error: detailedResult.success ? null : {
+        code: detailedResult.error.code,
+        type: detailedResult.error.constructor.name,
+        message: detailedResult.error.message,
+        severity: detailedResult.error.severity,
+        retryable: detailedResult.error.retryable,
+      },
+      statistics: currentStats,
+      metadata: {
+        endpoint: "/db-diagnostics",
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+      }
+    };
+
+    res.status(detailedResult.success ? 200 : 503).json(diagnostics);
+  } catch (error) {
+    res.status(500).json({
+      current: {
+        success: false,
+        error: "Failed to run database diagnostics",
+        timestamp: new Date().toISOString(),
+      },
+      statistics: getPingStats(),
+      metadata: {
+        endpoint: "/db-diagnostics", 
+        timestamp: new Date().toISOString(),
+        uptime: process.uptime(),
+      }
+    });
+  }
+});
+
+/**
+ * Database metrics in Prometheus format for monitoring integration.
+ * Returns metrics that can be scraped by Prometheus or similar systems.
+ */
+router.get("/db-metrics", (_req: Request, res: Response) => {
+  try {
+    const metrics = getPingMetricsForPrometheus();
+    
+    // Convert to Prometheus text format
+    const lines: string[] = [];
+    const processedNames = new Set<string>();
+    
+    for (const metric of metrics) {
+      if (!processedNames.has(metric.name)) {
+        lines.push(`# HELP ${metric.name} ${metric.help}`);
+        lines.push(`# TYPE ${metric.name} ${metric.type}`);
+        processedNames.add(metric.name);
+      }
+      
+      let line = metric.name;
+      if (metric.labels && Object.keys(metric.labels).length > 0) {
+        const labelPairs = Object.entries(metric.labels)
+          .map(([key, value]) => `${key}="${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`)
+          .join(',');
+        line += `{${labelPairs}}`;
+      }
+      line += ` ${metric.value}`;
+      lines.push(line);
+    }
+    
+    res.set('Content-Type', 'text/plain; charset=utf-8');
+    res.status(200).send(lines.join('\n') + '\n');
+  } catch (error) {
+    res.status(500).json({
+      error: "Failed to generate database metrics",
+      timestamp: new Date().toISOString(),
+    });
+  }
 });
 
 export default router;
+
+// Export types for testing
+export type { SubStatus, ReadyStatus };

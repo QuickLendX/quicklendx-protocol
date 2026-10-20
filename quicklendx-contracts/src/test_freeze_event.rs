@@ -75,15 +75,13 @@ fn create_invoice(
 fn latest_event_data(env: &Env, topic_str: &str) -> Map<Symbol, Val> {
     use soroban_sdk::xdr;
     let topic_sym = Symbol::new(env, topic_str);
-    let topic_xdr = soroban_sdk::xdr::ScVal::try_from_val(env, &topic_sym)
-        .expect("topic to ScVal");
+    let topic_xdr = soroban_sdk::xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
     let all = env.events().all();
     for e in all.events().iter().rev() {
         let body = &e.body;
         if let xdr::ContractEventBody::V0(b) = body {
             if b.topics.first() == Some(&topic_xdr) {
-                let data_val =
-                    Val::try_from_val(env, &b.data).expect("data ScVal to Val");
+                let data_val = Val::try_from_val(env, &b.data).expect("data ScVal to Val");
                 return Map::<Symbol, Val>::try_from_val(env, &data_val)
                     .expect("event data is not a Map<Symbol,Val>");
             }
@@ -247,7 +245,10 @@ fn test_business_freeze_reason_label_all_variants() {
         "suspicious_activity"
     );
     assert_eq!(BusinessFreezeReason::LegalHold.label(), "legal_hold");
-    assert_eq!(BusinessFreezeReason::FraudSuspected.label(), "fraud_suspected");
+    assert_eq!(
+        BusinessFreezeReason::FraudSuspected.label(),
+        "fraud_suspected"
+    );
     assert_eq!(BusinessFreezeReason::Dispute.label(), "dispute");
     assert_eq!(BusinessFreezeReason::Voluntary.label(), "voluntary");
 }

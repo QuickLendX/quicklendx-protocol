@@ -26,6 +26,7 @@
 | [storage-schema.md](contracts/storage-schema.md) | Persistent storage keys and index layout |
 | [backup.md](contracts/backup.md) | Backup and restore |
 | [audit.md](contracts/audit.md) | Audit trail and hash chain |
+| [AUDIT_PREP.md](AUDIT_PREP.md) | Security audit preparation checklist for contributors |
 | [CROSS_INVOICE_ANALYTICS.md](CROSS_INVOICE_ANALYTICS.md) | Cross-invoice read patterns, supported entrypoints, and pagination bounds for contributors and integrators |
 | [QLX_REPORT_LIFECYCLE.md](QLX_REPORT_LIFECYCLE.md) | Analytics report lifecycle — Requested → Delivered → Archived, entrypoints, storage layout, and invariants |
 | [QLX_RISK_PARAMETERS.md](QLX_RISK_PARAMETERS.md) | Complete catalog of risk-related parameters with min/max/default values — investor tiers, business supply limits, bid controls, fee ceilings, and operational bounds |

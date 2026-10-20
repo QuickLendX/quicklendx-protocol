@@ -9,7 +9,8 @@
 //! - Type safety: strong typing for status and categories
 //! - Addresses are used for identity to leverage Soroban's built-in access control
 
-use crate::DisputeResolution as OtherDisputeResolution;
+// Remove problematic import for now
+// use crate::DisputeResolution as OtherDisputeResolution;
 use soroban_sdk::{contracttype, Address, BytesN, String, Vec};
 
 /// Invoice status enumeration representing the lifecycle of an invoice
@@ -432,6 +433,14 @@ pub struct SearchResult {
 /// signal and what it counts as `reindexed`.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IndexCleanupReport {
+    pub scanned: u32,
+    pub removed: u32,
+    pub next_offset: u32,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RebuildReport {
     /// Number of invoice IDs examined in this page.
     pub scanned: u32,
@@ -466,8 +475,17 @@ pub struct PaginatedBytes32Vec {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct InvoicePage {
+    pub items: Vec<BytesN<32>>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub generation: u64,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PaginatedBids {
-    pub items: Vec<crate::bid::Bid>,
+    pub items: Vec<Bid>,
     pub total_count: u32,
     pub has_more: bool,
 }
@@ -479,5 +497,3 @@ pub struct PaginatedCurrencies {
     pub total_count: u32,
     pub has_more: bool,
 }
-
-

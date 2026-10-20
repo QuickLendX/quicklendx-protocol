@@ -9,14 +9,14 @@
 //! | Caller            | Bid status | Expected outcome          |
 //! |-------------------|------------|---------------------------|
 //! | Bid owner         | Placed     | Ok - status -> Cancelled   |
-//! | Bid owner         | Cancelled  | false (no-op)             |
-//! | Bid owner         | Accepted   | false (no-op)             |
-//! | Bid owner         | Withdrawn  | false (no-op)             |
-//! | Bid owner         | Expired    | false (no-op)             |
+//! | Bid owner         | Cancelled  | Err(BidStale)             |
+//! | Bid owner         | Accepted   | Err(BidStale)             |
+//! | Bid owner         | Withdrawn  | Err(BidStale)             |
+//! | Bid owner         | Expired    | Err(BidStale)             |
 //! | Third party       | Placed     | Auth panic (rejected)     |
 //! | Business owner    | Placed     | Auth panic (rejected)     |
 //! | Admin             | Placed     | Auth panic (rejected)     |
-//! | Non-existent bid  | -          | false (no-op)             |
+//! | Non-existent bid  | -          | Err(BidStale)             |
 //!
 //! # Security assumptions validated
 //! - `require_auth()` is called on `bid.investor` inside `cancel_bid`; any
@@ -24,7 +24,7 @@
 //! - Admin has **no** special override for `cancel_bid`; cancellation is
 //!   strictly investor-only.
 //! - Cancellation is idempotent on terminal states (Cancelled/Accepted/
-//!   Withdrawn/Expired) - returns false without mutating state.
+//!   Withdrawn/Expired) - returns Err(BidStale) without mutating state.
 //! - A cancelled bid cannot be re-cancelled or re-placed.
 
 #![cfg(test)]
@@ -118,7 +118,7 @@ fn test_investor_can_cancel_own_placed_bid() {
 
     // mock_all_auths is active - investor auth is satisfied
     let result = client.cancel_bid(&bid_id);
-    assert!(result, "investor should be able to cancel their own Placed bid");
+    assert!(result.is_ok(), "investor should be able to cancel their own Placed bid");
 
     let bid = client.get_bid(&bid_id).unwrap();
     assert_eq!(
@@ -174,49 +174,49 @@ fn test_invoice_lock_round_trip_admin_api() {
 }
 
 #[test]
-fn test_cancel_bid_returns_true_on_success() {
+fn test_cancel_bid_returns_ok_on_success() {
     let (env, client, admin, business) = setup();
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
-    assert_eq!(client.cancel_bid(&bid_id), true);
+    assert!(client.cancel_bid(&bid_id).is_ok());
 }
 
 // ===========================================================================
-// 2. IDEMPOTENCY - terminal states return false without mutation
+// 2. IDEMPOTENCY - terminal states return Err(BidStale) without mutation
 // ===========================================================================
 
 #[test]
-fn test_cancel_already_cancelled_bid_returns_false() {
+fn test_cancel_already_cancelled_bid_returns_bid_stale() {
     let (env, client, admin, business) = setup();
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
     client.cancel_bid(&bid_id); // first cancel
     let result = client.cancel_bid(&bid_id); // second cancel
-    assert!(!result, "cancelling an already-Cancelled bid must return false");
+    assert_eq!(result, Err(QuickLendXError::BidStale), "cancelling an already-Cancelled bid must return BidStale");
 }
 
 #[test]
-fn test_cancel_accepted_bid_returns_false() {
+fn test_cancel_accepted_bid_returns_bid_stale() {
     let (env, client, admin, business) = setup();
     let (bid_id, _, invoice_id) = place_bid(&env, &client, &admin, &business);
     client.accept_bid(&invoice_id, &bid_id);
     let result = client.cancel_bid(&bid_id);
-    assert!(!result, "cancelling an Accepted bid must return false");
+    assert_eq!(result, Err(QuickLendXError::BidStale), "cancelling an Accepted bid must return BidStale");
 }
 
 #[test]
-fn test_cancel_withdrawn_bid_returns_false() {
+fn test_cancel_withdrawn_bid_returns_bid_stale() {
     let (env, client, admin, business) = setup();
     let (bid_id, _, _) = place_bid(&env, &client, &admin, &business);
     client.withdraw_bid(&bid_id).unwrap();
     let result = client.cancel_bid(&bid_id);
-    assert!(!result, "cancelling a Withdrawn bid must return false");
+    assert_eq!(result, Err(QuickLendXError::BidStale), "cancelling a Withdrawn bid must return BidStale");
 }
 
 #[test]
-fn test_cancel_nonexistent_bid_returns_false() {
+fn test_cancel_nonexistent_bid_returns_bid_stale() {
     let (env, client, _, _) = setup();
     let fake_id = BytesN::from_array(&env, &[0u8; 32]);
     let result = client.cancel_bid(&fake_id);
-    assert!(!result, "cancelling a non-existent bid must return false");
+    assert_eq!(result, Err(QuickLendXError::BidStale), "cancelling a non-existent bid must return BidStale");
 }
 
 // ===========================================================================
@@ -487,8 +487,8 @@ fn test_investor_can_cancel_multiple_own_bids() {
     let (bid_id_1, investor, _) = place_bid(&env, &client, &admin, &business);
     let (bid_id_2, _, _) = place_bid(&env, &client, &admin, &business);
 
-    assert!(client.cancel_bid(&bid_id_1), "first cancel must succeed");
-    assert!(client.cancel_bid(&bid_id_2), "second cancel must succeed");
+    assert!(client.cancel_bid(&bid_id_1).is_ok(), "first cancel must succeed");
+    assert!(client.cancel_bid(&bid_id_2).is_ok(), "second cancel must succeed");
 
     assert_eq!(
         client.get_bid(&bid_id_1).unwrap().status,

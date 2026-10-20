@@ -5,7 +5,7 @@
 mod test_admin {
     use soroban_sdk::{
         testutils::{Address as _, AuthorizedFunction, AuthorizedInvocation},
-        vec, Address, Env, IntoVal,
+        vec, Address, Env, IntoVal, String,
     };
 
     use crate::{AdminContract, AdminContractClient, ContractError, FeeConfig, ProtocolConfig};
@@ -48,7 +48,7 @@ mod test_admin {
 
     #[test]
     fn test_initialize_sets_admin() {
-        let (_, client, admin) = setup();
+        let (env, client, admin) = setup();
         // Re-initialization must fail.
         let result = client.try_initialize(&admin);
         assert_eq!(result, Err(Ok(ContractError::AlreadyInitialized)));
@@ -200,6 +200,139 @@ mod test_admin {
         let treasury = Address::generate(&env);
         let result = client.try_set_fee_config(&impostor, &default_fee_cfg(&treasury));
         assert_eq!(result, Err(Ok(ContractError::NotAdmin)));
+    }
+
+    // -----------------------------------------------------------------------
+    // Authorized recovery paths
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn test_protocol_recovery_requires_expected_state_and_emits_audit() {
+        let (_, client, admin) = setup();
+        let original = default_protocol_cfg();
+        let replacement = ProtocolConfig {
+            min_invoice_amount: 2_000_000,
+            max_due_date_days: 120,
+            grace_period_seconds: 172_800,
+        };
+        client.set_protocol_config(&admin, &original);
+        let recovered = client.recover_protocol_config(
+            &admin,
+            &original,
+            &replacement,
+            &String::from_str(&env, "incident-123"),
+        );
+        assert_eq!(recovered, Ok(()));
+        let diff = client.preview_protocol_config(&admin, &replacement);
+        assert!(diff.is_noop);
+    }
+
+    #[test]
+    fn test_fee_recovery_requires_expected_state_and_changes_only_target() {
+        let (env, client, admin) = setup();
+        let treasury = Address::generate(&env);
+        let original = default_fee_cfg(&treasury);
+        let replacement = FeeConfig { fee_bps: 1000, treasury: treasury.clone() };
+        client.set_fee_config(&admin, &original);
+        client.recover_fee_config(
+            &admin,
+            &original,
+            &replacement,
+            &String::from_str(&env, "incident-fee-1"),
+        );
+        let diff = client.preview_fee_config(&admin, &replacement);
+        assert!(diff.is_noop);
+    }
+
+    #[test]
+    fn test_recovery_emits_one_audit_event_with_reason_and_target() {
+        let (env, client, admin) = setup();
+        let current = default_protocol_cfg();
+        client.set_protocol_config(&admin, &current);
+        let before = env.events().all().len();
+        client.recover_protocol_config(
+            &admin,
+            &current,
+            &ProtocolConfig { min_invoice_amount: 2_000_000, ..current.clone() },
+            &String::from_str(&env, "restore-approved-state"),
+        );
+        assert_eq!(env.events().all().len(), before + 1);
+    }
+
+    #[test]
+    fn test_recovery_rejects_stale_expected_state_without_mutation() {
+        let (env, client, admin) = setup();
+        let original = default_protocol_cfg();
+        let current = ProtocolConfig { min_invoice_amount: 1_500_000, ..original.clone() };
+        client.set_protocol_config(&admin, &current);
+        let stale = client.try_recover_protocol_config(
+            &admin,
+            &original,
+            &ProtocolConfig { min_invoice_amount: 2_000_000, ..original.clone() },
+            &String::from_str(&env, "stale-recovery"),
+        );
+        assert_eq!(stale, Err(Ok(ContractError::OperationNotAllowed)));
+        assert!(client.preview_protocol_config(&admin, &current).is_noop);
+    }
+
+    #[test]
+    fn test_recovery_validates_replacement_before_storage_write() {
+        let (env, client, admin) = setup();
+        let original = default_protocol_cfg();
+        client.set_protocol_config(&admin, &original);
+        let invalid = ProtocolConfig { max_due_date_days: 0, ..original.clone() };
+        let result = client.try_recover_protocol_config(
+            &admin,
+            &original,
+            &invalid,
+            &String::from_str(&env, "invalid-replacement"),
+        );
+        assert_eq!(result, Err(Ok(ContractError::InvalidParameter)));
+        assert!(client.preview_protocol_config(&admin, &original).is_noop);
+    }
+
+    #[test]
+    fn test_recovery_requires_non_empty_reason() {
+        let (env, client, admin) = setup();
+        let original = default_protocol_cfg();
+        client.set_protocol_config(&admin, &original);
+        let result = client.try_recover_protocol_config(
+            &admin,
+            &original,
+            &ProtocolConfig { min_invoice_amount: 2_000_000, ..original.clone() },
+            &String::from_str(&env, ""),
+        );
+        assert_eq!(result, Err(Ok(ContractError::InvalidParameter)));
+        assert!(client.preview_protocol_config(&admin, &original).is_noop);
+    }
+
+    #[test]
+    fn test_unauthorized_recovery_fails_before_target_state_is_read() {
+        let (env, client, admin) = setup();
+        let impostor = Address::generate(&env);
+        let original = default_protocol_cfg();
+        client.set_protocol_config(&admin, &original);
+        let result = client.try_recover_protocol_config(
+            &impostor,
+            &original,
+            &ProtocolConfig { min_invoice_amount: 2_000_000, ..original.clone() },
+            &String::from_str(&env, "unauthorized"),
+        );
+        assert_eq!(result, Err(Ok(ContractError::NotAdmin)));
+        assert!(client.preview_protocol_config(&admin, &original).is_noop);
+    }
+
+    #[test]
+    fn test_preview_does_not_write_or_emit_recovery_event() {
+        let (env, client, admin) = setup();
+        let original = default_protocol_cfg();
+        client.set_protocol_config(&admin, &original);
+        let before = env.events().all().len();
+        let projected = ProtocolConfig { min_invoice_amount: 3_000_000, ..original.clone() };
+        let diff = client.preview_protocol_config(&admin, &projected);
+        assert_eq!(diff.projected, projected);
+        assert_eq!(env.events().all().len(), before);
+        assert!(client.preview_protocol_config(&admin, &original).is_noop);
     }
 
     // -----------------------------------------------------------------------

@@ -31,11 +31,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     (env, client, admin)
 }
 
-fn verified_business(
-    env: &Env,
-    client: &QuickLendXContractClient<'_>,
-    admin: &Address,
-) -> Address {
+fn verified_business(env: &Env, client: &QuickLendXContractClient<'_>, admin: &Address) -> Address {
     let business = Address::generate(env);
     client.submit_kyc_application(&business, &String::from_str(env, "KYC data"));
     client.verify_business(admin, &business);
@@ -52,9 +48,9 @@ fn make_inputs(env: &Env, currency: &Address, n: u32) -> Vec<InvoiceInput> {
             description: String::from_str(env, "Batch invoice"),
             category: InvoiceCategory::Services,
             tags: Vec::new(env),
-        
-        early_payment_discount_bps: None,
-});
+
+            early_payment_discount_bps: None,
+        });
     }
     inputs
 }
@@ -226,7 +222,11 @@ fn test_invoice_batch_cancel_frozen_invoice_aborts() {
     let ids = client.store_invoices_batch(&business, &inputs);
 
     // Freeze second invoice
-    client.freeze_invoice(&admin, &ids.get(1).unwrap(), &BusinessFreezeReason::Administrative);
+    client.freeze_invoice(
+        &admin,
+        &ids.get(1).unwrap(),
+        &BusinessFreezeReason::Administrative,
+    );
 
     let res = client.try_invoice_batch_cancel(&business, &ids);
     assert_eq!(res, Err(Ok(QuickLendXError::InvoiceFrozen)));

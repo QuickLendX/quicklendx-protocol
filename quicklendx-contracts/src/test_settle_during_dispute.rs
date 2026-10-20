@@ -1,4 +1,4 @@
-﻿//! Negative regression tests: settlement is blocked while a dispute is active.
+//! Negative regression tests: settlement is blocked while a dispute is active.
 //!
 //! # Security gap being closed (defence-in-depth)
 //!
@@ -127,9 +127,16 @@ fn setup_funded_invoice(
         &String::from_str(env, "Dispute-settlement interaction test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &amount, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &amount,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
 
     (client, invoice_id, business, investor, contract_id)
@@ -169,7 +176,11 @@ fn test_settle_blocked_while_disputed() {
     );
 
     // Attempt full settlement while the dispute is active â€” MUST FAIL.
-    let result = client.try_settle_invoice(&invoice_id, &100_000i128, &client.get_investment(&invoice_id).unwrap());
+    let result = client.try_settle_invoice(
+        &invoice_id,
+        &100_000i128,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
 
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -220,7 +231,11 @@ fn test_settle_blocked_while_under_review() {
     );
 
     // Settlement attempt while admin review is in progress â€” MUST FAIL.
-    let result = client.try_settle_invoice(&invoice_id, &100_000i128, &client.get_investment(&invoice_id).unwrap());
+    let result = client.try_settle_invoice(
+        &invoice_id,
+        &100_000i128,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
 
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -279,7 +294,11 @@ fn test_settle_allowed_after_dispute_resolved() {
     );
 
     // Settlement must NOT be blocked by the dispute-active guard now.
-    let result = client.try_settle_invoice(&invoice_id, &100_000i128, &client.get_investment(&invoice_id).unwrap());
+    let result = client.try_settle_invoice(
+        &invoice_id,
+        &100_000i128,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
     assert_ne!(
         result.err().and_then(|e| e.ok()),
         Some(QuickLendXError::DisputeActive),
@@ -363,7 +382,11 @@ fn test_settle_succeeds_when_dispute_status_is_none() {
         "pre-condition: invoice must start with dispute_status == None (cleared)"
     );
 
-    let result = client.try_settle_invoice(&invoice_id, &100_000i128, &client.get_investment(&invoice_id).unwrap());
+    let result = client.try_settle_invoice(
+        &invoice_id,
+        &100_000i128,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
     assert!(
         result.is_ok(),
         "settle_invoice must succeed when dispute_status == None (cleared), got {:?}",
@@ -402,7 +425,10 @@ fn test_partial_payment_succeeds_when_dispute_status_is_none() {
     );
 
     let inv = client.get_invoice(&invoice_id);
-    assert_eq!(inv.total_paid, 30_000, "total_paid must reflect the partial payment");
+    assert_eq!(
+        inv.total_paid, 30_000,
+        "total_paid must reflect the partial payment"
+    );
     assert_eq!(
         inv.status,
         InvoiceStatus::Funded,
@@ -584,7 +610,11 @@ fn test_settle_succeeds_after_structured_resolution_favor_business() {
         "pre-condition: structured resolution must transition status to Resolved"
     );
 
-    let result = client.try_settle_invoice(&invoice_id, &100_000i128, &client.get_investment(&invoice_id).unwrap());
+    let result = client.try_settle_invoice(
+        &invoice_id,
+        &100_000i128,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
     assert_ne!(
         result.as_ref().err().and_then(|e| e.as_ref().ok()).copied(),
         Some(QuickLendXError::DisputeActive),
@@ -649,4 +679,3 @@ fn test_settle_under_review_returns_dispute_active_not_invalid_status() {
         "DisputeActive must be strictly distinct from InvalidStatus for off-chain clients"
     );
 }
-

@@ -39,7 +39,7 @@ proptest! {
 
         let due_date = env.ledger().timestamp() + 86400;
         let invoice_amount = 100_000i128;
-        
+
         // KYC-verify business before upload_invoice and investor before place_bid.
         client.submit_kyc_application(&business, &String::from_str(&env, "KYC"));
         client.verify_business(&admin, &business);
@@ -52,9 +52,9 @@ proptest! {
             &String::from_str(&env, "Test Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-
             &None,
-
+            &None,
+            &None,
         );
 
         client.verify_invoice(&invoice_id);
@@ -67,7 +67,7 @@ proptest! {
         client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &salt);
 
         let auths = env.auths();
-        
+
         let (auth_address, invocation) = auths.last().unwrap();
 
         assert_eq!(auth_address, &investor, "The auth address must match the investor");

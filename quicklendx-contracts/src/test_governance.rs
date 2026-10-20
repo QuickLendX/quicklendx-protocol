@@ -1,7 +1,7 @@
 #![cfg(test)]
 
-use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{Address, BytesN, Env};
 
 use crate::errors::QuickLendXError;
@@ -19,10 +19,7 @@ impl Governable for TestGovernance {
         10
     }
 
-    fn execute_proposal(
-        env: &Env,
-        proposal_id: &BytesN<32>,
-    ) -> Result<(), QuickLendXError> {
+    fn execute_proposal(env: &Env, proposal_id: &BytesN<32>) -> Result<(), QuickLendXError> {
         env.storage()
             .instance()
             .set(&crate::admin::ADMIN_KEY, proposal_id);
@@ -72,19 +69,11 @@ fn finalize_proposal(
     contract_id: &Address,
     id: &BytesN<32>,
 ) -> Result<ProposalStatus, QuickLendXError> {
-    env.as_contract(contract_id, || {
-        TestGovernance::finalize_proposal(env, id)
-    })
+    env.as_contract(contract_id, || TestGovernance::finalize_proposal(env, id))
 }
 
-fn run_proposal(
-    env: &Env,
-    contract_id: &Address,
-    id: &BytesN<32>,
-) -> Result<(), QuickLendXError> {
-    env.as_contract(contract_id, || {
-        TestGovernance::run_proposal(env, id)
-    })
+fn run_proposal(env: &Env, contract_id: &Address, id: &BytesN<32>) -> Result<(), QuickLendXError> {
+    env.as_contract(contract_id, || TestGovernance::run_proposal(env, id))
 }
 
 fn get_proposal(
@@ -92,9 +81,7 @@ fn get_proposal(
     contract_id: &Address,
     id: &BytesN<32>,
 ) -> Result<Proposal, QuickLendXError> {
-    env.as_contract(contract_id, || {
-        TestGovernance::get_proposal(env, id)
-    })
+    env.as_contract(contract_id, || TestGovernance::get_proposal(env, id))
 }
 
 // ============================================================================

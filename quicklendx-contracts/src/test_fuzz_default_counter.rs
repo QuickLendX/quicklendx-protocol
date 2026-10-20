@@ -100,37 +100,37 @@ proptest! {
     ) {
         let (env, client, admin) = setup();
         let business = create_verified_business(&env, &client, &admin);
-        
+
         let mut expected_defaults = 0;
-        
+
         for i in 0..default_count {
             // Must have unique investors so we don't hit any limits or overwrite states if reused
             let investor = create_verified_investor(&env, &client, &admin, 1000000);
             let due_date = 1_000_000 + (i as u64) * 86400;
             let invoice_id = create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
-            
+
             // Advance time to allow default
             let grace_period = 7 * 24 * 60 * 60;
             env.ledger().set_timestamp(due_date + grace_period + 1);
-            
+
             client.mark_invoice_defaulted(&invoice_id, &Some(grace_period));
             expected_defaults += 1;
-            
+
             let history = client.get_business_default_history(&business);
             prop_assert_eq!(history, expected_defaults);
-            
+
             // Simulate recovery attempts (they shouldn't decrement the counter)
             // Example: try settling or paying, which fails but demonstrates we tried a "recovery" path
             let res = client.try_settle_invoice(&invoice_id, &1000);
             prop_assert!(res.is_err());
-            
+
             // Even if an admin triggers an emergency action, the default history should be preserved
             // Let's just trigger emergency withdraw flow on the contract to simulate governance action
             // This is just to prove that NO action decrements it, including governance/recovery
-            
+
             let history_after = client.get_business_default_history(&business);
             prop_assert_eq!(history_after, expected_defaults);
-            
+
             let summary = client.get_address_summary(&business);
             prop_assert_eq!(summary.business_defaulted_invoices, expected_defaults);
         }

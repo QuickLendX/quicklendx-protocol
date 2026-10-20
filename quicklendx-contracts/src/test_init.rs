@@ -569,8 +569,13 @@ mod test_init {
         let (env, client, _params) = setup_initialized();
         let non_admin = Address::generate(&env);
 
-        let result =
-            client.try_set_protocol_config(&non_admin, &1_000_000i128, &365u64, &604800u64, &100u32);
+        let result = client.try_set_protocol_config(
+            &non_admin,
+            &1_000_000i128,
+            &365u64,
+            &604800u64,
+            &100u32,
+        );
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::NotAdmin)),
@@ -583,7 +588,8 @@ mod test_init {
         let (env, client, params) = setup_initialized();
 
         // Test invalid min amount
-        let result = client.try_set_protocol_config(&params.admin, &0i128, &365u64, &604800u64, &100u32);
+        let result =
+            client.try_set_protocol_config(&params.admin, &0i128, &365u64, &604800u64, &100u32);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvalidAmount)),
@@ -591,8 +597,13 @@ mod test_init {
         );
 
         // Test invalid max days
-        let result =
-            client.try_set_protocol_config(&params.admin, &1_000_000i128, &0u64, &604800u64, &100u32);
+        let result = client.try_set_protocol_config(
+            &params.admin,
+            &1_000_000i128,
+            &0u64,
+            &604800u64,
+            &100u32,
+        );
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvoiceDueDateInvalid)),
@@ -600,8 +611,13 @@ mod test_init {
         );
 
         // Test invalid grace period
-        let result =
-            client.try_set_protocol_config(&params.admin, &1_000_000i128, &365u64, &3_000_000u64, &100u32);
+        let result = client.try_set_protocol_config(
+            &params.admin,
+            &1_000_000i128,
+            &365u64,
+            &3_000_000u64,
+            &100u32,
+        );
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::InvalidTimestamp)),

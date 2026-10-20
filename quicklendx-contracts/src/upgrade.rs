@@ -25,11 +25,8 @@ impl UpgradeControl {
     ///
     /// Returns `(wasm_hash, scheduled_at)` when an upgrade is pending,
     /// or `None` when no upgrade is scheduled.
-    pub fn get_pending_upgrade(
-        env: &Env,
-    ) -> Option<(BytesN<32>, u64)> {
-        let wasm_hash: BytesN<32> =
-            env.storage().instance().get(&PENDING_UPGRADE_WASM_KEY)?;
+    pub fn get_pending_upgrade(env: &Env) -> Option<(BytesN<32>, u64)> {
+        let wasm_hash: BytesN<32> = env.storage().instance().get(&PENDING_UPGRADE_WASM_KEY)?;
         let scheduled_at: u64 = env
             .storage()
             .instance()
@@ -142,7 +139,8 @@ impl UpgradeControl {
 
         crate::events::emit_upgrade_executed(env, admin, &wasm_hash);
 
-        env.deployer().update_current_contract_wasm(wasm_hash.clone());
+        env.deployer()
+            .update_current_contract_wasm(wasm_hash.clone());
 
         Ok(())
     }

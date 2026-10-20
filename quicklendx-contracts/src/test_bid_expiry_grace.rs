@@ -19,8 +19,7 @@
 #![cfg(test)]
 
 use crate::bid::{
-    BidStatus, DEFAULT_BID_EXPIRY_GRACE_SECONDS, MAX_BID_EXPIRY_GRACE_SECONDS,
-    MIN_BID_TTL_DAYS,
+    BidStatus, DEFAULT_BID_EXPIRY_GRACE_SECONDS, MAX_BID_EXPIRY_GRACE_SECONDS, MIN_BID_TTL_DAYS,
 };
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
@@ -134,7 +133,10 @@ fn cleanup_fires_immediately_when_grace_is_default_zero() {
     env.ledger().set_timestamp(bid.expiration_timestamp + 1);
 
     let cleaned = client.cleanup_expired_bids(&invoice_id);
-    assert_eq!(cleaned, 1, "zero grace must behave like pre-existing immediate cleanup");
+    assert_eq!(
+        cleaned, 1,
+        "zero grace must behave like pre-existing immediate cleanup"
+    );
 
     let bid_after = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid_after.status, BidStatus::Expired);
@@ -157,7 +159,10 @@ fn bid_is_not_cleaned_up_within_grace_window() {
     env.ledger().set_timestamp(bid.expiration_timestamp + 1);
 
     let cleaned = client.cleanup_expired_bids(&invoice_id);
-    assert_eq!(cleaned, 0, "bid must not be cleaned up while inside grace window");
+    assert_eq!(
+        cleaned, 0,
+        "bid must not be cleaned up while inside grace window"
+    );
 
     let bid_after = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid_after.status, BidStatus::Placed);
@@ -184,7 +189,10 @@ fn bid_is_cleaned_up_after_grace_window_elapses() {
     env.ledger()
         .set_timestamp(bid.expiration_timestamp + grace_seconds);
     let cleaned = client.cleanup_expired_bids(&invoice_id);
-    assert_eq!(cleaned, 1, "bid must be cleaned up once grace window elapses");
+    assert_eq!(
+        cleaned, 1,
+        "bid must be cleaned up once grace window elapses"
+    );
 
     let bid_after = client.get_bid(&bid_id).unwrap();
     assert_eq!(bid_after.status, BidStatus::Expired);
@@ -249,7 +257,10 @@ fn get_bid_expiry_grace_config_reports_custom_after_set_and_clears_after_reset()
 
     client.reset_bid_grace_to_default(&admin);
     let config_after_reset = client.get_bid_expiry_grace_config();
-    assert_eq!(config_after_reset.current_seconds, DEFAULT_BID_EXPIRY_GRACE_SECONDS);
+    assert_eq!(
+        config_after_reset.current_seconds,
+        DEFAULT_BID_EXPIRY_GRACE_SECONDS
+    );
     assert!(!config_after_reset.is_custom);
 }
 

@@ -1,4 +1,4 @@
-﻿//! Hostile token reentrancy fault-injection tests.
+//! Hostile token reentrancy fault-injection tests.
 //!
 //! This suite validates that every payment/escrow funds-moving entrypoint
 //! cannot be re-entered (directly or indirectly) during a token transfer.
@@ -148,7 +148,11 @@ impl HostileToken {
                 );
             }
             2 => {
-                let _ = qc.try_settle_invoice(&invoice_id, &1i128, &qc.get_investment(&invoice_id).unwrap());
+                let _ = qc.try_settle_invoice(
+                    &invoice_id,
+                    &1i128,
+                    &qc.get_investment(&invoice_id).unwrap(),
+                );
             }
             3 => {
                 let _ = qc.try_refund_escrow_funds(&invoice_id, &admin);
@@ -315,10 +319,17 @@ impl Fixture {
             &String::from_str(&env, "hostile-inj"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None);
+            &None,
+        );
         client.verify_invoice(&invoice_id);
 
-        let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &(1_100i128), &BytesN::from_array(&env, &[0u8; 32]));
+        let bid_id = client.place_bid(
+            &investor,
+            &invoice_id,
+            &1_000i128,
+            &(1_100i128),
+            &BytesN::from_array(&env, &[0u8; 32]),
+        );
         client.accept_bid(&invoice_id, &bid_id);
 
         // Register hostile token and set as invoice currency by creating a new invoice.
@@ -347,9 +358,16 @@ impl Fixture {
             &String::from_str(&env, "hostile-inj-2"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None);
+            &None,
+        );
         client.verify_invoice(&invoice_id2);
-        let bid_id2 = client.place_bid(&investor, &invoice_id2, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+        let bid_id2 = client.place_bid(
+            &investor,
+            &invoice_id2,
+            &1_000i128,
+            &1_100i128,
+            &BytesN::from_array(&env, &[0u8; 32]),
+        );
 
         // At this point escrow creation will attempt token transfer from investor to contract.
         // The token call will trigger hostile re-entry.
@@ -410,8 +428,12 @@ fn test_hostile_token_reentry_accept_bid_and_fund_is_blocked_p0() {
 fn test_hostile_token_reentry_deeply_nested_and_alternating_entrypoints_are_blocked() {
     let fixture = Fixture::new();
 
-    fixture.client.approve_early_escrow_release(&fixture.invoice_id, &fixture.business);
-    fixture.client.approve_early_escrow_release(&fixture.invoice_id, &fixture.investor);
+    fixture
+        .client
+        .approve_early_escrow_release(&fixture.invoice_id, &fixture.business);
+    fixture
+        .client
+        .approve_early_escrow_release(&fixture.invoice_id, &fixture.investor);
 
     // We invoke one guarded entrypoint with guard held by the test harness.
     // During token transfer, HostileToken will attempt to re-enter different entrypoints.
@@ -425,4 +447,3 @@ fn test_hostile_token_reentry_deeply_nested_and_alternating_entrypoints_are_bloc
     assert!(matches!(result, Err(QuickLendXError::OperationNotAllowed)));
     assert!(!is_payment_guard_locked(&fixture.env));
 }
-

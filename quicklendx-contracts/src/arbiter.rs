@@ -60,7 +60,11 @@ impl ArbiterStorage {
     /// Idempotent — re-registering an existing arbiter is a no-op and does
     /// **not** emit a duplicate-registration error. Audit trails come from
     /// the `arbiter_registered` event emitted below.
-    pub fn register_arbiter(env: &Env, admin: &Address, arbiter: &Address) -> Result<(), QuickLendXError> {
+    pub fn register_arbiter(
+        env: &Env,
+        admin: &Address,
+        arbiter: &Address,
+    ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin_auth(env, admin)?;
 
         if Self::is_arbiter(env, arbiter) {
@@ -120,10 +124,7 @@ impl ArbiterStorage {
     /// Distinct from [`AdminStorage::require_admin`]: admin status controls
     /// protocol configuration; arbiter status controls dispute resolution.
     /// They are deliberately not the same authority.
-    pub fn require_dispute_arbiter(
-        env: &Env,
-        address: &Address,
-    ) -> Result<(), QuickLendXError> {
+    pub fn require_dispute_arbiter(env: &Env, address: &Address) -> Result<(), QuickLendXError> {
         if !Self::is_arbiter(env, address) {
             return Err(QuickLendXError::NotArbiter);
         }

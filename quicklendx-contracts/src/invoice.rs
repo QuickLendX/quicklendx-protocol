@@ -1,5 +1,5 @@
 use crate::errors::QuickLendXError;
-use crate::protocol_limits::{check_string_length, MAX_FEEDBACK_LENGTH, MAX_INVOICE_AMOUNT};
+use crate::protocol_limits::{check_string_length, MAX_FEEDBACK_LENGTH};
 use crate::storage::DataKey;
 use crate::verification::normalize_tag;
 use soroban_sdk::{Address, BytesN, Env, String, Vec};
@@ -15,7 +15,6 @@ pub use crate::types::{
 /// Limiting tag cardinality prevents unbounded metadata growth and keeps
 /// tag-based query/index operations predictable.
 pub const MAX_INVOICE_TAGS: u32 = 10;
-
 
 /// Require that the number of tags does not exceed the given cap.
 ///
@@ -53,9 +52,10 @@ impl Invoice {
         late_payment_penalty_bps: Option<u32>,
         early_payment_discount_bps: Option<u32>,
     ) -> Result<Self, QuickLendXError> {
-        if amount <= 0 || amount > MAX_INVOICE_AMOUNT {
-            return Err(QuickLendXError::InvalidAmount);
-        }
+        // #2432 — exact sign/ceiling validation before any state is written.
+        // Semantically identical to the historical inline predicate
+        // (`amount <= 0 || amount > MAX_INVOICE_AMOUNT`); see `invoice_amount`.
+        crate::invoice_amount::validate_invoice_amount_ceiling(amount)?;
 
         if due_date <= env.ledger().timestamp() {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
@@ -218,7 +218,7 @@ impl Invoice {
         env: &Env,
         grace_period: u64,
     ) -> Result<bool, QuickLendXError> {
-        if env.ledger().timestamp() <= self.grace_deadline(grace_period) {
+        if env.ledger().timestamp() <= self.checked_grace_deadline(grace_period)? {
             return Ok(false);
         }
         if self.status == InvoiceStatus::Funded {
@@ -291,6 +291,10 @@ impl Invoice {
 
     pub fn cancel(&mut self, env: &Env, actor: Address) -> Result<(), QuickLendXError> {
         require_matching_business_invoice_ownership(env, &actor, self)?;
+        match self.status {
+            InvoiceStatus::Pending | InvoiceStatus::Verified => {}
+            _ => return Err(QuickLendXError::InvalidStatus),
+        }
         self.status = InvoiceStatus::Cancelled;
         Ok(())
     }
@@ -405,6 +409,18 @@ impl Invoice {
         self.due_date.saturating_add(grace_period)
     }
 
+    /// Derive the deadline used by default/finality decisions.
+    ///
+    /// Saturating arithmetic is useful for legacy read-only callers, but it
+    /// would turn an invalid timestamp configuration into a silently extended
+    /// default window. Runtime transitions must use this checked variant so
+    /// malformed or overflowed deadlines fail closed.
+    pub fn checked_grace_deadline(&self, grace_period: u64) -> Result<u64, QuickLendXError> {
+        self.due_date
+            .checked_add(grace_period)
+            .ok_or(QuickLendXError::InvalidTimestamp)
+    }
+
     fn compute_average_rating(&self) -> u32 {
         if self.ratings.is_empty() {
             return 0;
@@ -469,4 +485,3 @@ fn zero_address(env: &Env) -> Address {
         "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
     )
 }
-

@@ -47,8 +47,12 @@ fn test_store_invoice_regulatory_gate_is_noop() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
-    assert!(result.is_ok(), "store_invoice must not be blocked by the no-op regulatory gate");
+        &None,
+    );
+    assert!(
+        result.is_ok(),
+        "store_invoice must not be blocked by the no-op regulatory gate"
+    );
 }
 
 /// `place_bid` must succeed even though the regulatory gate is active.
@@ -70,8 +74,12 @@ fn test_place_bid_regulatory_gate_is_noop() {
         &String::from_str(&env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
-    assert!(result.is_ok(), "store_invoice must not be blocked by the no-op regulatory gate");
+        &None,
+    );
+    assert!(
+        result.is_ok(),
+        "store_invoice must not be blocked by the no-op regulatory gate"
+    );
     let invoice_id = result.unwrap().unwrap();
 
     client.verify_invoice(&invoice_id);
@@ -87,6 +95,9 @@ fn test_place_bid_regulatory_gate_is_noop() {
         &1_100i128,
         &soroban_sdk::BytesN::from_array(&env, &[0u8; 32]),
     );
-    assert!(bid_result.is_ok(), "place_bid must not be blocked by the no-op regulatory gate");
+    assert!(
+        bid_result.is_ok(),
+        "place_bid must not be blocked by the no-op regulatory gate"
+    );
     let _bid_id = bid_result.unwrap().unwrap();
 }

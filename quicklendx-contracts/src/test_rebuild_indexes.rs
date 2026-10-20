@@ -27,7 +27,8 @@ fn make_invoice(env: &Env, client: &QuickLendXContractClient) -> BytesN<32> {
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None)
+        &None,
+    )
 }
 
 #[test]

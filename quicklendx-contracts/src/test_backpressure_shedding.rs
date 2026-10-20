@@ -80,7 +80,8 @@ fn create_verified_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
     invoice_id
 }
@@ -109,7 +110,8 @@ fn test_shedding_store_invoice_at_threshold() {
         &String::from_str(&env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive,
@@ -127,7 +129,13 @@ fn test_shedding_place_bid_at_threshold() {
     // Cross threshold
     enable_maintenance(&client, &admin, &env);
 
-    let result = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let result = client.try_place_bid(
+        &investor,
+        &invoice_id,
+        &1_000i128,
+        &1_100i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive,
@@ -151,7 +159,8 @@ fn test_shedding_verify_invoice_at_threshold() {
         &String::from_str(env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
 
     // Cross threshold
     enable_maintenance(&client, &admin, &env);
@@ -232,7 +241,8 @@ fn test_shedding_update_invoice_metadata_at_threshold() {
         &String::from_str(env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
 
     // Cross threshold
     enable_maintenance(&client, &admin, &env);
@@ -273,7 +283,8 @@ fn test_recovery_store_invoice_below_threshold() {
         &String::from_str(&env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -291,7 +302,8 @@ fn test_recovery_store_invoice_below_threshold() {
         &String::from_str(&env, "Recovered"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     assert_ne!(
         invoice_id,
         soroban_sdk::BytesN::from_array(&env, &[0u8; 32])
@@ -309,7 +321,13 @@ fn test_recovery_place_bid_below_threshold() {
     enable_maintenance(&client, &admin, &env);
 
     // Verify shedding
-    let result = client.try_place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let result = client.try_place_bid(
+        &investor,
+        &invoice_id,
+        &1_000i128,
+        &1_100i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -319,7 +337,13 @@ fn test_recovery_place_bid_below_threshold() {
     disable_maintenance(&client, &admin, &env);
 
     // Mutating call must succeed again
-    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &1_000i128,
+        &1_100i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     assert_ne!(bid_id, soroban_sdk::BytesN::from_array(&env, &[0u8; 32]));
 }
 
@@ -339,7 +363,8 @@ fn test_recovery_verify_invoice_below_threshold() {
         &String::from_str(env, "Test"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
 
     // Cross threshold
     enable_maintenance(&client, &admin, &env);
@@ -402,7 +427,8 @@ fn test_recovery_multiple_cycles() {
         &String::from_str(env, "Cycle 1"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     enable_maintenance(&client, &admin, &env);
     let result = client.try_store_invoice(
         &business,
@@ -412,7 +438,8 @@ fn test_recovery_multiple_cycles() {
         &String::from_str(env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -426,7 +453,8 @@ fn test_recovery_multiple_cycles() {
         &String::from_str(env, "Cycle 1 Recovered"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
 
     // Cycle 2: Normal -> Shed -> Recover
     enable_maintenance(&client, &admin, &env);
@@ -438,7 +466,8 @@ fn test_recovery_multiple_cycles() {
         &String::from_str(env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -452,7 +481,8 @@ fn test_recovery_multiple_cycles() {
         &String::from_str(env, "Cycle 2 Recovered"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
 
     // Verify all successful writes persisted
     assert_ne!(invoice_id_1, invoice_id_2);
@@ -549,7 +579,13 @@ fn test_reads_not_shed_get_bid() {
 
     // Create invoice and bid before crossing threshold
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &1_000i128,
+        &1_100i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // Cross threshold
     enable_maintenance(&client, &admin, &env);
@@ -610,7 +646,8 @@ fn test_exactly_at_threshold_shedding() {
         &String::from_str(&env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -640,7 +677,8 @@ fn test_exactly_below_threshold_recovery() {
         &String::from_str(&env, "Recovered"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None);
+        &None,
+    );
     assert_ne!(
         invoice_id,
         soroban_sdk::BytesN::from_array(&env, &[0u8; 32])
@@ -787,7 +825,13 @@ fn test_integration_full_lifecycle_with_shedding() {
 
     // Phase 1: Normal operation - create invoice and bid
     let invoice_id = create_verified_invoice(&env, &client, &business, &currency);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1_000i128, &1_100i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &1_000i128,
+        &1_100i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
 
     // Verify reads work
     let invoice = client.get_invoice(&invoice_id);
@@ -808,13 +852,20 @@ fn test_integration_full_lifecycle_with_shedding() {
         &String::from_str(env, "Blocked"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
     );
 
-    let result = client.try_place_bid(&investor, &invoice_id, &2_000i128, &2_200i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let result = client.try_place_bid(
+        &investor,
+        &invoice_id,
+        &2_000i128,
+        &2_200i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     assert_eq!(
         result.unwrap_err().unwrap(),
         QuickLendXError::MaintenanceModeActive
@@ -839,10 +890,17 @@ fn test_integration_full_lifecycle_with_shedding() {
         &String::from_str(env, "Recovered"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     assert_ne!(invoice_id_2, invoice_id);
 
-    let bid_id_2 = client.place_bid(&investor, &invoice_id_2, &2_000i128, &2_200i128, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id_2 = client.place_bid(
+        &investor,
+        &invoice_id_2,
+        &2_000i128,
+        &2_200i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     assert_ne!(bid_id_2, bid_id);
 
     // Verify reads work

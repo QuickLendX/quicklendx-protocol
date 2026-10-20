@@ -69,10 +69,11 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
         },
         total_paid: 0,
         payment_history: soroban_sdk::Vec::new(env),
-    },
         origination_fee_bps: None,
+        late_payment_penalty_bps: None,
         early_payment_discount_bps: None,
     }
+}
 
 fn setup_env() -> Env {
     let env = Env::default();
@@ -267,9 +268,10 @@ fn test_invoice_storage() {
             ratings: Vec::new(&env),
             created_at: 1234567890,
             updated_at: 1234567890,
-        origination_fee_bps: None,
-        early_payment_discount_bps: None,
-    };
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
+        };
 
         // Test storing invoice
         InvoiceStorage::store(&env, &invoice);

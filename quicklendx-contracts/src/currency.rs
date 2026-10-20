@@ -236,7 +236,7 @@ impl CurrencyWhitelist {
             .get(&WHITELIST_KEY)
             .unwrap_or_else(|| Vec::new(env))
     }
-    
+
     /// Returns the canonical zero address used for validation.
     fn zero_address(env: &Env) -> Address {
         Address::from_string(&String::from_str(

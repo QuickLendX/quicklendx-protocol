@@ -50,7 +50,8 @@ fn store_invoice_rejects_contract_as_business() {
             &String::from_str(&env, "inv"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None)
+            &None,
+        )
         .unwrap_err()
         .expect("expected contract error");
 

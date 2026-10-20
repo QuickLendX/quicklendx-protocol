@@ -1,6 +1,5 @@
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, symbol_short,
-    BytesN, Env, Symbol, Vec,
+    contract, contracterror, contractimpl, contracttype, symbol_short, BytesN, Env, Symbol, Vec,
 };
 
 #[contracterror]
@@ -23,9 +22,11 @@ pub struct OwnerSignature {
 const OWNERS_KEY: Symbol = symbol_short!("owners");
 const THRESHOLD_KEY: Symbol = symbol_short!("thresh");
 
+#[cfg(not(target_arch = "wasm32"))]
 #[contract]
 pub struct MultisigContract;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[contractimpl]
 impl MultisigContract {
     pub fn initialize(
@@ -82,11 +83,8 @@ impl MultisigContract {
 
             let public_key = owners.get(index).unwrap();
             // Cryptographically verify signature
-            env.crypto().ed25519_verify(
-                &public_key,
-                &message_hash.clone().into(),
-                &sig.signature,
-            );
+            env.crypto()
+                .ed25519_verify(&public_key, &message_hash.clone().into(), &sig.signature);
         }
 
         Ok(())

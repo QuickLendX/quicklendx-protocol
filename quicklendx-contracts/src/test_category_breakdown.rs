@@ -54,11 +54,11 @@ mod tests {
             attachment_hash: None,
             settlement_amount: None,
             settlement_currency: None,
-            settlement_timestamp: None,
             dispute_status: DisputeStatus::None,
-        },
-        origination_fee_bps: None,
-        early_payment_discount_bps: None,
+            origination_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
+        }
     }
 
     #[test]

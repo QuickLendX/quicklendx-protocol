@@ -391,13 +391,8 @@ impl BackupStorage {
         // Step 1: validate before mutating anything.
         Self::validate_backup(env, backup_id)?;
 
-        // Step 1b: mark a destructive backfill as in progress *before* any
-        // invoice-state mutation, so that `schedule_upgrade` cannot fire in
-        // between clear and rebuild. The flag is set first and cleared last
-        // so a panic between steps leaves `true` rather than `false` (false
-        // positives are safer than false negatives here — they at worst
-        // block a legitimate upgrade, never corrupt a restore).
-        env.storage().instance().set(&PENDING_BACKFILL_KEY, &true);
+        // Fetch the validated payload.
+        let data = Self::get_backup_data(env, backup_id).unwrap();
 
         let restore_outcome: Result<u32, QuickLendXError> = (|| {
             // Fetch the validated payload.

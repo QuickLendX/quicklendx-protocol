@@ -48,7 +48,7 @@ fn setup_funded_invoice(
         &String::from_str(env, "Stress test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+    );
 
     client.verify_invoice(&invoice_id);
     client.submit_investor_kyc(&investor, &String::from_str(env, "investor-kyc"));

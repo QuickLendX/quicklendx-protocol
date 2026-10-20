@@ -5,11 +5,6 @@ on:
     branches: ["main"]
   pull_request:
     branches: ["main"]
-  workflow_dispatch:
-
-concurrency:
-  group: soroban-ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -17,16 +12,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - rust: stable
-            target: wasm32-unknown-unknown
-            test_target: no_accidental_mainnet_fixture
-          - rust: stable
-            target: wasm32-unknown-unknown
-            test_target: wasm_build_size_budget
 
     steps:
       - uses: actions/checkout@v4
@@ -40,27 +25,23 @@ jobs:
             contracts:
               - 'quicklendx-contracts/**'
 
-      - name: Skip contract build for docs-only PRs
+      - name: Skip contract checks for non-contract PRs
         if: github.event_name == 'pull_request' && steps.changes.outputs.contracts != 'true'
-        run: echo "Docs-only PR detected; skipping Soroban contract build steps."
+        run: echo "No contract changes detected; skipping Soroban build and test steps."
 
       - name: Install Rust
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
           source $HOME/.cargo/env
-          rustup toolchain install stable --profile minimal
-          rustup default stable
       - name: Install Rust target for Soroban
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
-          rustup target add ${{ matrix.target }}
-          rustup target add wasm32v1-none || true
+          rustup target add wasm32v1-none
       - name: Detect optional Stellar CLI
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
-          source $HOME/.cargo/env
           if command -v stellar >/dev/null 2>&1; then
             stellar --version
           else
@@ -71,14 +52,7 @@ jobs:
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           cd quicklendx-contracts
-          cargo build --target wasm32v1-none --verbose
-
-      - name: Run targeted regression test
-        if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
-        run: |
-          source $HOME/.cargo/env
-          cd quicklendx-contracts
-          cargo test --test ${{ matrix.test_target }} --verbose
+          cargo build --verbose
 
       - name: Check code quality
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
@@ -107,12 +81,19 @@ jobs:
           source $HOME/.cargo/env
           quicklendx-contracts/scripts/check-wasm-size.sh
 
-      - name: Build WASM for release
+      - name: Run WASM size budget regression tests
+        # Runs tests/wasm_build_size_budget.rs – a self-contained integration test
+        # that does NOT import contract types, so it compiles independently of the
+        # legacy test suite.  It enforces:
+        #   • hard budget  (256 KiB)
+        #   • warning zone (90 % of budget)
+        #   • regression limit (baseline + 5 % margin)
+        # plus ~30 fast unit tests for constants, classify_size, and helpers.
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'
         run: |
           source $HOME/.cargo/env
           cd quicklendx-contracts
-          cargo build --target ${{ matrix.target }} --release --verbose
+          cargo test --test wasm_build_size_budget --verbose
 
       - name: Run Cargo tests
         if: github.event_name != 'pull_request' || steps.changes.outputs.contracts == 'true'

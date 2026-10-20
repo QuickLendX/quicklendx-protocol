@@ -1,13 +1,9 @@
 use crate::errors::QuickLendXError;
-use crate::protocol_limits::{
-    is_active_status,
-    DEFAULT_MAX_INVOICES_PER_BUSINESS,
-};
+use crate::protocol_limits::{is_active_status, DEFAULT_MAX_INVOICES_PER_BUSINESS};
 use crate::types::InvoiceStatus;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address,
-    Env,
+    Address, Env,
 };
 
 // =========================================================================
@@ -188,6 +184,8 @@ fn create_invoice_at(
         &InvoiceCategory::Services,
         &Vec::new(env),
         &None,
+        &None,
+        &None,
     )
 }
 
@@ -207,13 +205,7 @@ fn test_store_invoice_respects_cap_at_boundary() {
 
     // Set a small limit so we don't hit resource budget
     let small_cap = 5u32;
-    client.update_limits_max_invoices(
-        &admin,
-        &10i128,
-        &365u64,
-        &604800u64,
-        &small_cap,
-    );
+    client.update_limits_max_invoices(&admin, &10i128, &365u64, &604800u64, &small_cap);
 
     // Fill invoices up to the cap.
     for _ in 0..small_cap {
@@ -231,8 +223,13 @@ fn test_store_invoice_respects_cap_at_boundary() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
         &None,
+        &None,
+        &None,
     );
-    assert_eq!(result, Err(Ok(QuickLendXError::MaxInvoicesPerBusinessExceeded)));
+    assert_eq!(
+        result,
+        Err(Ok(QuickLendXError::MaxInvoicesPerBusinessExceeded))
+    );
 }
 
 #[test]
@@ -249,13 +246,7 @@ fn test_store_invoice_one_above_cap_rejected() {
 
     // Set a small limit for testing
     let small_limit = 3u32;
-    client.update_limits_max_invoices(
-        &admin,
-        &10i128,
-        &365u64,
-        &604800u64,
-        &small_limit,
-    );
+    client.update_limits_max_invoices(&admin, &10i128, &365u64, &604800u64, &small_limit);
 
     // Fill to cap
     for _ in 0..small_limit {
@@ -273,8 +264,13 @@ fn test_store_invoice_one_above_cap_rejected() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
         &None,
+        &None,
+        &None,
     );
-    assert_eq!(result, Err(Ok(QuickLendXError::MaxInvoicesPerBusinessExceeded)));
+    assert_eq!(
+        result,
+        Err(Ok(QuickLendXError::MaxInvoicesPerBusinessExceeded))
+    );
 }
 
 // ── Integration: zero limit = unlimited ─────────────────────────────────
@@ -292,13 +288,7 @@ fn test_zero_limit_allows_many_invoices() {
     let currency = setup_environment(&env, &client, &admin, &business);
 
     // Set limit to 0 = unlimited
-    client.update_limits_max_invoices(
-        &admin,
-        &10i128,
-        &365u64,
-        &604800u64,
-        &0u32,
-    );
+    client.update_limits_max_invoices(&admin, &10i128, &365u64, &604800u64, &0u32);
 
     // Create many invoices — should all succeed
     for i in 0..10u32 {
@@ -311,6 +301,8 @@ fn test_zero_limit_allows_many_invoices() {
             &String::from_str(&env, "Unlimited cap invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
+            &None,
+            &None,
             &None,
         );
         // Read invoice back to confirm it was stored
@@ -363,13 +355,7 @@ fn test_after_settlement_frees_cap_slot() {
     token_client.approve(&business, &contract_id, &1_000_000i128, &expiration);
     token_client.approve(&investor, &contract_id, &1_000_000i128, &expiration);
 
-    client.update_limits_max_invoices(
-        &admin,
-        &10i128,
-        &365u64,
-        &604800u64,
-        &cap,
-    );
+    client.update_limits_max_invoices(&admin, &10i128, &365u64, &604800u64, &cap);
 
     // Create invoices up to cap
     let inv1 = create_invoice_at(&env, &client, &business, &currency);
@@ -386,8 +372,13 @@ fn test_after_settlement_frees_cap_slot() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
         &None,
+        &None,
+        &None,
     );
-    assert_eq!(over_cap, Err(Ok(QuickLendXError::MaxInvoicesPerBusinessExceeded)));
+    assert_eq!(
+        over_cap,
+        Err(Ok(QuickLendXError::MaxInvoicesPerBusinessExceeded))
+    );
 
     // Fund the first invoice
     client.verify_invoice(&inv1);
@@ -403,8 +394,18 @@ fn test_after_settlement_frees_cap_slot() {
     client.accept_bid(&inv1, &bid_id);
 
     // Settle with full payment covering the invoice amount
-    env.ledger().set_timestamp(env.ledger().timestamp() + 172_800);
-    client.settle_invoice(&inv1, &1_000i128);
+    env.ledger()
+        .set_timestamp(env.ledger().timestamp() + 172_800);
+    let dummy_investment = crate::types::Investment {
+        investment_id: BytesN::from_array(&env, &[0u8; 32]),
+        invoice_id: inv1.clone(),
+        investor: investor.clone(),
+        amount: 500i128,
+        funded_at: env.ledger().timestamp(),
+        status: crate::types::InvestmentStatus::Active,
+        insurance: Vec::new(&env),
+    };
+    client.settle_invoice(&inv1, &1_000i128, &dummy_investment);
 
     // Now the invoice is Paid — a new invoice should succeed
     let new_invoice = create_invoice_at(&env, &client, &business, &currency);

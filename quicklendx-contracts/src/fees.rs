@@ -316,10 +316,11 @@ impl FeeManager {
 
         // Fetch existing config and reject duplicate treasury address.
         let mut platform_config = Self::get_platform_fee_config(env)?;
-        if let Some(ref existing) = platform_config.treasury_address {
-            if *existing == treasury_address {
-                return Err(QuickLendXError::InvalidFeeConfiguration);
-            }
+        // The first configuration establishes the recipient.  Once a live
+        // recipient exists, all replacements must use the delayed rotation
+        // flow so no single admin mutation can redirect fees immediately.
+        if platform_config.treasury_address.is_some() {
+            return Err(QuickLendXError::OperationNotAllowed);
         }
 
         let treasury_config = TreasuryConfig {
@@ -708,8 +709,8 @@ impl FeeManager {
                     .ok_or(QuickLendXError::ArithmeticOverflow)?;
             }
             if is_late_payment && structure.fee_type == FeeType::LatePayment {
-                let surcharge_bps = late_payment_penalty_bps
-                    .unwrap_or(LATE_FEE_SURCHARGE_BPS as u32) as i128;
+                let surcharge_bps =
+                    late_payment_penalty_bps.unwrap_or(LATE_FEE_SURCHARGE_BPS as u32) as i128;
                 let late = Self::checked_mul_div(fee, surcharge_bps, BPS_DENOMINATOR)?;
                 fee = fee
                     .checked_add(late)
@@ -1202,7 +1203,11 @@ impl FeeManager {
         now: u64,
         request: &RecipientRotationRequest,
     ) -> Result<(), QuickLendXError> {
-        if now < request.initiated_at.saturating_add(MIN_ROTATION_DELAY_SECONDS) {
+        if now
+            < request
+                .initiated_at
+                .saturating_add(MIN_ROTATION_DELAY_SECONDS)
+        {
             return Err(QuickLendXError::RotationTimelockNotElapsed);
         }
         if now > request.confirmation_deadline {
@@ -1272,6 +1277,7 @@ impl FeeManager {
         }
 
         env.storage().instance().remove(&ROTATION_KEY);
+        crate::events::treasury_rotation_cancelled(env, admin);
         Ok(())
     }
 

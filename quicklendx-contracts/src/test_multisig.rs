@@ -1,8 +1,6 @@
 #![cfg(test)]
 
-use super::multisig::{
-    MultisigContract, MultisigContractClient, MultisigError, OwnerSignature,
-};
+use super::multisig::{MultisigContract, MultisigContractClient, MultisigError, OwnerSignature};
 use ed25519_dalek::{Signer, SigningKey};
 use soroban_sdk::{BytesN, Env, Vec};
 
@@ -32,7 +30,7 @@ fn test_initialize_boundary_checks() {
     owners.push_back(owner2);
 
     // Boundary conditions: threshold range is [1, N-1] = [1, 2]
-    
+
     // Lower bound: 1 (succeeds)
     let res = client.try_initialize(&owners, &1);
     assert!(res.is_ok());
@@ -127,7 +125,10 @@ fn test_verify_op_insufficient_signatures() {
     // Send 0 signatures (threshold is 1)
     let signatures = Vec::new(&env);
     let res = client.try_verify_op(&message_hash, &signatures);
-    assert_eq!(res.unwrap_err().ok(), Some(MultisigError::NotEnoughSignatures));
+    assert_eq!(
+        res.unwrap_err().ok(),
+        Some(MultisigError::NotEnoughSignatures)
+    );
 }
 
 #[test]
@@ -165,7 +166,10 @@ fn test_verify_op_duplicate_signatures() {
     });
 
     let res = client.try_verify_op(&message_hash, &signatures);
-    assert_eq!(res.unwrap_err().ok(), Some(MultisigError::DuplicateSignature));
+    assert_eq!(
+        res.unwrap_err().ok(),
+        Some(MultisigError::DuplicateSignature)
+    );
 }
 
 #[test]
@@ -197,7 +201,10 @@ fn test_verify_op_invalid_owner_index() {
     });
 
     let res = client.try_verify_op(&message_hash, &signatures);
-    assert_eq!(res.unwrap_err().ok(), Some(MultisigError::InvalidOwnerIndex));
+    assert_eq!(
+        res.unwrap_err().ok(),
+        Some(MultisigError::InvalidOwnerIndex)
+    );
 }
 
 #[test]

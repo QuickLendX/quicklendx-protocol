@@ -1,4 +1,4 @@
-﻿//! Comprehensive investment lifecycle transition invariant tests.
+//! Comprehensive investment lifecycle transition invariant tests.
 //!
 //! Tests enforce:
 //! - **All allowed transitions work correctly** (Active â†’ terminal states)
@@ -115,14 +115,21 @@ impl TestContext {
                 &String::from_str(&self.env, "Test invoice"),
                 &InvoiceCategory::Services,
                 &Vec::new(&self.env),
-        &None)
+                &None,
+            )
             .unwrap();
         self.client.verify_invoice(&invoice_id).unwrap();
 
         // Place and accept bid to create investment
         let bid_id = self
             .client
-            .place_bid(investor, &invoice_id, &bid_amount, &invoice_amount, &BytesN::from_array(&env, &[0u8; 32]))
+            .place_bid(
+                investor,
+                &invoice_id,
+                &bid_amount,
+                &invoice_amount,
+                &BytesN::from_array(&env, &[0u8; 32]),
+            )
             .unwrap();
         self.client.accept_bid(&invoice_id, &bid_id).unwrap();
 
@@ -427,7 +434,13 @@ fn test_no_orphan_after_completion() {
     assert!(ctx.is_in_active_index(&investment_id));
 
     // Complete the investment
-    ctx.client.settle_invoice(&invoice_id, &1_000, &ctx.client.get_investment(&invoice_id).unwrap()).unwrap();
+    ctx.client
+        .settle_invoice(
+            &invoice_id,
+            &1_000,
+            &ctx.client.get_investment(&invoice_id).unwrap(),
+        )
+        .unwrap();
 
     // Verify removed from active index
     assert!(!ctx.is_in_active_index(&investment_id));
@@ -501,7 +514,13 @@ fn test_double_settlement_prevention() {
     let invoice_id = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
 
     // First settlement
-    ctx.client.settle_invoice(&invoice_id, &1_000, &ctx.client.get_investment(&invoice_id).unwrap()).unwrap();
+    ctx.client
+        .settle_invoice(
+            &invoice_id,
+            &1_000,
+            &ctx.client.get_investment(&invoice_id).unwrap(),
+        )
+        .unwrap();
     let investment_after_first = ctx.get_investment(&invoice_id);
     assert_eq!(investment_after_first.status, InvestmentStatus::Completed);
 
@@ -577,7 +596,11 @@ fn test_concurrent_investments_independent_transitions() {
     assert_eq!(active_before, 3);
 
     // Transition 1: Settle (completed)
-    ctx.client.settle_invoice(&invoice1, &1_000, &ctx.client.get_investment(&invoice1).unwrap());
+    ctx.client.settle_invoice(
+        &invoice1,
+        &1_000,
+        &ctx.client.get_investment(&invoice1).unwrap(),
+    );
     assert!(!ctx.is_in_active_index(&inv1));
 
     // Transition 2: Default
@@ -653,7 +676,13 @@ fn test_active_index_cant_contain_terminal_investments() {
     let inv2 = ctx.get_investment(&invoice_id2).investment_id;
 
     // Create terminal states
-    ctx.client.settle_invoice(&invoice_id1, &1_000, &ctx.client.get_investment(&invoice_id1).unwrap()).unwrap();
+    ctx.client
+        .settle_invoice(
+            &invoice_id1,
+            &1_000,
+            &ctx.client.get_investment(&invoice_id1).unwrap(),
+        )
+        .unwrap();
 
     ctx.env
         .ledger()
@@ -691,7 +720,13 @@ fn test_terminal_investments_do_not_reenter_active_set() {
     let currency = ctx.make_token(&business, &investor);
 
     let invoice_id = ctx.setup_funded_invoice(&business, &investor, &currency, 1_000, 1_000);
-    ctx.client.settle_invoice(&invoice_id, &1_000, &ctx.client.get_investment(&invoice_id).unwrap()).unwrap();
+    ctx.client
+        .settle_invoice(
+            &invoice_id,
+            &1_000,
+            &ctx.client.get_investment(&invoice_id).unwrap(),
+        )
+        .unwrap();
 
     let completed_investment = ctx.get_investment(&invoice_id);
     assert_eq!(completed_investment.status, InvestmentStatus::Completed);
@@ -731,7 +766,13 @@ fn test_index_integrity_under_mutations() {
 
     // Settle all
     for invoice_id in invoice_ids.iter() {
-        ctx.client.settle_invoice(&invoice_id, &1_000, &ctx.client.get_investment(&invoice_id).unwrap()).unwrap();
+        ctx.client
+            .settle_invoice(
+                &invoice_id,
+                &1_000,
+                &ctx.client.get_investment(&invoice_id).unwrap(),
+            )
+            .unwrap();
     }
 
     let after_count = ctx.client.get_active_investment_ids().len();
@@ -746,4 +787,3 @@ fn test_index_integrity_under_mutations() {
 
     ctx.assert_no_orphans();
 }
-

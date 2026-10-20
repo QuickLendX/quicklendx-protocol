@@ -99,6 +99,7 @@ fn setup_escrow(env: &Env) -> (Address, Address, Address, BytesN<32>, Address, Q
         total_paid: 0,
         payment_history: Vec::new(env),
         origination_fee_bps: None,
+        late_payment_penalty_bps: None,
         early_payment_discount_bps: None,
     };
     InvoiceStorage::store(env, &invoice);
@@ -187,7 +188,7 @@ fn extend_escrow_expiry_not_held() {
     let (admin, _investor, _business, inv_id, _currency, client) = setup_escrow(&env);
     
     // Release the escrow so it's no longer Held
-    crate::payments::release_escrow(&env, &inv_id);
+    crate::payments::release_escrow(&env, &inv_id, &business);
 
     let invoice = InvoiceStorage::get_invoice(&env, &inv_id).unwrap();
     let new_due_date = invoice.due_date + SECONDS_PER_DAY * 10;

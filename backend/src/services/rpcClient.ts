@@ -1,7 +1,7 @@
 import { config } from "../config";
 import { URL } from "url";
 import { getCorrelationId } from "../lib/requestContext";
-import { CircuitBreaker, CircuitBreakerOptions } from "../lib/circuitBreaker";
+import { CircuitBreaker, CircuitBreakerOptions, CircuitState } from "../lib/circuitBreaker";
 
 export interface RpcOptions extends CircuitBreakerOptions {
   timeoutMs?: number;

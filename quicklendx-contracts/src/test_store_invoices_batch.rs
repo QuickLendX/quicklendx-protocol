@@ -31,11 +31,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     (env, client, admin)
 }
 
-fn verified_business(
-    env: &Env,
-    client: &QuickLendXContractClient<'_>,
-    admin: &Address,
-) -> Address {
+fn verified_business(env: &Env, client: &QuickLendXContractClient<'_>, admin: &Address) -> Address {
     let business = Address::generate(env);
     client.submit_kyc_application(&business, &String::from_str(env, "KYC data"));
     client.verify_business(admin, &business);
@@ -122,7 +118,11 @@ fn test_batch_max_size_succeeds() {
     let inputs = make_inputs(&env, &currency, MAX_BATCH_INVOICES);
     let ids = client.store_invoices_batch(&business, &inputs);
 
-    assert_eq!(ids.len(), MAX_BATCH_INVOICES, "Max batch should be accepted");
+    assert_eq!(
+        ids.len(),
+        MAX_BATCH_INVOICES,
+        "Max batch should be accepted"
+    );
 }
 
 // ─── Batch-size guard ─────────────────────────────────────────────────────────
@@ -168,12 +168,12 @@ fn test_batch_respects_active_invoice_cap() {
     // Default is 100; set it to 3 so we can test the cap easily.
     client.set_protocol_limits_full(
         &admin,
-        &10,    // min_invoice_amount
-        &10,    // min_bid_amount
-        &100,   // min_bid_bps
-        &365,   // max_due_date_days
-        &604800, // grace_period_seconds (7 days)
-        &3,     // max_invoices_per_business
+        &10,                                       // min_invoice_amount
+        &10,                                       // min_bid_amount
+        &100,                                      // min_bid_bps
+        &365,                                      // max_due_date_days
+        &604800,                                   // grace_period_seconds (7 days)
+        &3,                                        // max_invoices_per_business
         &crate::verification::InvestorTier::Basic, // min_investor_tier
     );
 

@@ -13,6 +13,7 @@ import {
 } from "../types/audit";
 
 const MAX_LINE_BYTES = 10 * 1024;
+const MAX_QUERY_LIMIT = 1000;
 
 function getAuditDir(): string {
   return process.env.AUDIT_DIR || "audit_logs";
@@ -55,12 +56,29 @@ class AuditService {
     return ulid();
   }
 
-  append(entry: Omit<AuditEntry, "id" | "timestamp">): AuditEntry {
+  append(
+    entry: Omit<AuditEntry, "id" | "timestamp" | "prevHash" | "entryHash">
+  ): AuditEntry {
     // Stamp the originating request id from async-local-storage so the audit
     // entry can be traced back to the inbound API call. An explicit value on
     // the entry wins; otherwise we fall back to the active request context.
     const requestId = entry.requestId ?? getCorrelationId() ?? undefined;
-    const full: AuditEntry = {
+    const timestamp = new Date().toISOString();
+    const filePath = this.logFilePath(timestamp.slice(0, 10));
+    let prevHash = AUDIT_CHAIN_GENESIS_HASH;
+    if (fs.existsSync(filePath)) {
+      const lines = fs.readFileSync(filePath, "utf8").split("\n").filter(Boolean);
+      if (lines.length > 0) {
+        try {
+          const previous = AuditEntrySchema.parse(JSON.parse(lines[lines.length - 1]));
+          prevHash = previous.entryHash;
+        } catch {
+          // Keep the genesis hash when the last line is malformed.
+        }
+      }
+    }
+
+    const full = {
       ...entry,
       requestId,
       id: this.generateId(),
@@ -127,14 +145,19 @@ class AuditService {
     );
 
     const total = filtered.length;
-    const page = filtered.slice(params.offset, params.offset + params.limit);
+    const safeLimit = Math.min(
+      Math.max(0, Math.floor(params.limit)),
+      MAX_QUERY_LIMIT
+    );
+    const safeOffset = Math.max(0, Math.floor(params.offset));
+    const page = filtered.slice(safeOffset, safeOffset + safeLimit);
 
     return {
       entries: page,
       total,
-      limit: params.limit,
-      offset: params.offset,
-      hasMore: params.offset + params.limit < total,
+      limit: safeLimit,
+      offset: safeOffset,
+      hasMore: safeOffset + safeLimit < total,
     };
   }
 

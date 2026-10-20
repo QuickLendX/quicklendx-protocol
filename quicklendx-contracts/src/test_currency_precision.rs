@@ -30,7 +30,9 @@
 use crate::errors::QuickLendXError;
 use crate::payments::require_matching_currency_precision;
 use crate::QuickLendXContract;
-use soroban_sdk::{contract, contractimpl, symbol_short, testutils::Address as _, Address, Env, Symbol};
+use soroban_sdk::{
+    contract, contractimpl, symbol_short, testutils::Address as _, Address, Env, Symbol,
+};
 
 // ============================================================================
 // Mock token contracts

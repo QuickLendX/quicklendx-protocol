@@ -43,7 +43,8 @@ mod tests {
             &String::from_str(env, "Invoice for settlement tests"),
             &InvoiceCategory::Services,
             &Vec::new(env),
-            &None);
+            &None,
+        );
         client.verify_invoice(&invoice_id);
         client.submit_investor_kyc(&investor, &String::from_str(env, "investor-kyc"));
         client.verify_investor(&investor, &initial_balance);

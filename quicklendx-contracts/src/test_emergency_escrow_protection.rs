@@ -130,7 +130,8 @@ fn upload_verified_invoice(
         &String::from_str(env, description),
         &InvoiceCategory::Technology,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
     invoice_id
 }
@@ -1001,8 +1002,12 @@ fn release_still_works_after_same_token_surplus_withdrawal() {
     fixture.client.execute_emergency_withdraw(&fixture.admin);
 
     let business_before = token_client.balance(&fixture.escrow.business);
-    fixture.client.approve_early_escrow_release(&fixture.escrow.invoice_id, &fixture.escrow.business);
-    fixture.client.approve_early_escrow_release(&fixture.escrow.invoice_id, &fixture.escrow.investor);
+    fixture
+        .client
+        .approve_early_escrow_release(&fixture.escrow.invoice_id, &fixture.escrow.business);
+    fixture
+        .client
+        .approve_early_escrow_release(&fixture.escrow.invoice_id, &fixture.escrow.investor);
     fixture
         .client
         .release_escrow_funds(&fixture.escrow.invoice_id);

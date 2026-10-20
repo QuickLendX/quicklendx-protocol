@@ -1,4 +1,4 @@
-﻿//! Negative regression tests: settlement is blocked when the per-invoice
+//! Negative regression tests: settlement is blocked when the per-invoice
 //! settlement currency whitelist does not include `invoice.currency`.
 //!
 //! # Security gap being closed (defence-in-depth)
@@ -97,9 +97,16 @@ fn setup_funded_invoice(
         &String::from_str(env, "Settlement currency whitelist test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &amount, &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_id = client.place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &amount,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    );
     client.accept_bid(&invoice_id, &bid_id);
 
     (client, invoice_id, business, investor, contract_id)
@@ -137,7 +144,11 @@ fn test_settlement_blocked_when_whitelist_does_not_match() {
     crate::settlement::store_settlement_currencies(&env, &invoice_id, &bad_whitelist);
 
     // Attempt full settlement â€” MUST FAIL.
-    let result = client.try_settle_invoice(&invoice_id, &100_000i128, &client.get_investment(&invoice_id).unwrap());
+    let result = client.try_settle_invoice(
+        &invoice_id,
+        &100_000i128,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
 
     assert_eq!(
         result.unwrap_err().unwrap(),
@@ -173,7 +184,11 @@ fn test_settlement_succeeds_with_default_whitelist() {
     );
 
     // Full settlement with default whitelist â€” MUST SUCCEED.
-    let result = client.try_settle_invoice(&invoice_id, &100_000i128, &client.get_investment(&invoice_id).unwrap());
+    let result = client.try_settle_invoice(
+        &invoice_id,
+        &100_000i128,
+        &client.get_investment(&invoice_id).unwrap(),
+    );
 
     assert!(
         result.is_ok(),
@@ -189,4 +204,3 @@ fn test_settlement_succeeds_with_default_whitelist() {
         "invoice must transition to Paid after successful settlement"
     );
 }
-

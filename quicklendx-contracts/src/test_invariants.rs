@@ -1140,7 +1140,7 @@ fn invariant_cancel_bid_no_orphan_escrow_investment() {
 
     // Cancel before funding
     let cancel_result = client.cancel_bid(&bid_id);
-    assert!(cancel_result);
+    assert!(cancel_result.is_ok());
 
     // Verify cancellation
     let bid = client.get_bid(&bid_id).unwrap();

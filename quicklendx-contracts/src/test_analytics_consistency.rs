@@ -68,7 +68,8 @@ fn upload(
         &String::from_str(env, desc),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None)
+        &None,
+    )
 }
 
 proptest! {
@@ -97,7 +98,8 @@ proptest! {
 #[test]
 fn get_period_dates_all_time_keeps_full_history_window() {
     let timestamp = 10_000u64;
-    let (start_date, end_date) = AnalyticsCalculator::get_period_dates(timestamp, TimePeriod::AllTime);
+    let (start_date, end_date) =
+        AnalyticsCalculator::get_period_dates(timestamp, TimePeriod::AllTime);
     assert_eq!(start_date, 0);
     assert_eq!(end_date, timestamp);
 }

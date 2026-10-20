@@ -100,17 +100,18 @@ mod test_dispute_timeline_props {
     ) -> BytesN<32> {
         env.as_contract(contract_id, || {
             let invoice = Invoice::new(
-env,
-business.clone(),
-100_000i128,
-currency.clone(),
-env.ledger().timestamp() + 30 * 24 * 60 * 60,
-String::from_str(env, "Dispute timeline property invoice"),
-InvoiceCategory::Services,
-Vec::new(env),
-        None, /* early_payment_discount_bps */,
-        None
-)
+                env,
+                business.clone(),
+                100_000i128,
+                currency.clone(),
+                env.ledger().timestamp() + 30 * 24 * 60 * 60,
+                String::from_str(env, "Dispute timeline property invoice"),
+                InvoiceCategory::Services,
+                Vec::new(env),
+                None,
+                None,
+                None,
+            )
             .expect("invoice should build");
 
             let invoice_id = invoice.id.clone();

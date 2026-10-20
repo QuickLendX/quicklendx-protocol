@@ -261,7 +261,7 @@ fn test_cancellation_frees_slot() {
     );
 
     // Cancel bid0 — transitions Placed → Cancelled.
-    assert!(client.cancel_bid(&bid0), "cancel_bid must return true");
+    assert!(client.cancel_bid(&bid0).is_ok(), "cancel_bid must return Ok(())");
     assert_eq!(client.get_bid(&bid0).unwrap().status, BidStatus::Cancelled);
 
     assert_eq!(
@@ -369,7 +369,7 @@ fn test_count_excludes_non_placed_statuses() {
     );
 
     // Transition bid_cancel → Cancelled.
-    client.cancel_bid(&bid_cancel);
+    client.cancel_bid(&bid_cancel).unwrap();
 
     // Transition bid_withdraw → Withdrawn.
     client.withdraw_bid(&bid_withdraw).unwrap();

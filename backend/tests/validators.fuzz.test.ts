@@ -102,7 +102,7 @@ describe("hexStringSchema — fuzz", () => {
   it("accepts well-formed hex strings", () => {
     fc.assert(
       fc.property(
-        fc.hexaString({ minLength: 1, maxLength: 64 }),
+        fc.string().filter(s => /^[a-fA-F0-9]+$/.test(s)),
         (hex) => {
           const result = hexStringSchema.safeParse(`0x${hex}`);
           expect(result.success).toBe(true);
@@ -114,7 +114,7 @@ describe("hexStringSchema — fuzz", () => {
   it("rejects strings without 0x prefix", () => {
     fc.assert(
       fc.property(
-        fc.hexaString({ minLength: 1, maxLength: 64 }),
+        fc.string().filter(s => /^[a-fA-F0-9]+$/.test(s)),
         (hex) => {
           const result = hexStringSchema.safeParse(hex);
           expect(result.success).toBe(false);

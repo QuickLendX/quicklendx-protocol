@@ -208,11 +208,7 @@ mod test_dispute_history_guard {
 
         // Resolve the dispute.
         client.put_dispute_under_review(&invoice_id, &admin);
-        client.resolve_dispute(
-            &invoice_id,
-            &admin,
-            &String::from_str(&env, "Resolved"),
-        );
+        client.resolve_dispute(&invoice_id, &admin, &String::from_str(&env, "Resolved"));
 
         // Guard must now pass.
         assert!(

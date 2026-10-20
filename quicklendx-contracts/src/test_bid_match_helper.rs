@@ -93,8 +93,26 @@ fn compare_bids_prefers_higher_profit_when_profit_differs() {
     let env = Env::default();
     let invoice = invoice_id(&env, 1);
     let investor = Address::generate(&env);
-    let a = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 1);
-    let b = build_bid(&env, &invoice, &investor, 1_000, 3_000, 100, BidStatus::Placed, 2);
+    let a = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let b = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        3_000,
+        100,
+        BidStatus::Placed,
+        2,
+    );
 
     assert_eq!(BidStorage::compare_bids(&a, &b), Ordering::Less);
     assert_eq!(BidStorage::compare_bids(&b, &a), Ordering::Greater);
@@ -107,8 +125,26 @@ fn compare_bids_breaks_profit_tie_with_expected_return() {
     let invoice = invoice_id(&env, 2);
     let investor = Address::generate(&env);
     // Both have profit = 1_000.
-    let lower = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 1);
-    let higher = build_bid(&env, &invoice, &investor, 1_500, 2_500, 100, BidStatus::Placed, 2);
+    let lower = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let higher = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_500,
+        2_500,
+        100,
+        BidStatus::Placed,
+        2,
+    );
 
     assert_eq!(BidStorage::compare_bids(&lower, &higher), Ordering::Less);
     assert_eq!(BidStorage::compare_bids(&higher, &lower), Ordering::Greater);
@@ -128,8 +164,26 @@ fn compare_bids_breaks_with_bid_amount_when_profit_and_return_tie() {
     let investor = Address::generate(&env);
     // Both bids have profit clamped to 0 via saturating_sub (return <= bid_amount);
     // expected_return is identical so tier 2 ties and tier 3 (bid_amount) decides.
-    let smaller_amount = build_bid(&env, &invoice, &investor, 1_000, 1_000, 100, BidStatus::Placed, 1);
-    let larger_amount = build_bid(&env, &invoice, &investor, 1_500, 1_000, 100, BidStatus::Placed, 2);
+    let smaller_amount = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        1_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let larger_amount = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_500,
+        1_000,
+        100,
+        BidStatus::Placed,
+        2,
+    );
 
     assert_eq!(
         BidStorage::compare_bids(&smaller_amount, &larger_amount),
@@ -147,8 +201,26 @@ fn compare_bids_prefers_newer_timestamp_on_economic_tie() {
     let env = Env::default();
     let invoice = invoice_id(&env, 4);
     let investor = Address::generate(&env);
-    let older = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 1);
-    let newer = build_bid(&env, &invoice, &investor, 1_000, 2_000, 200, BidStatus::Placed, 2);
+    let older = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let newer = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        200,
+        BidStatus::Placed,
+        2,
+    );
 
     assert_eq!(BidStorage::compare_bids(&older, &newer), Ordering::Less);
     assert_eq!(BidStorage::compare_bids(&newer, &older), Ordering::Greater);
@@ -160,11 +232,35 @@ fn compare_bids_uses_bid_id_at_full_tie() {
     let env = Env::default();
     let invoice = invoice_id(&env, 5);
     let investor = Address::generate(&env);
-    let lower_id = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 1);
-    let higher_id = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 9);
+    let lower_id = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let higher_id = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        9,
+    );
 
-    assert_eq!(BidStorage::compare_bids(&lower_id, &higher_id), Ordering::Less);
-    assert_eq!(BidStorage::compare_bids(&higher_id, &lower_id), Ordering::Greater);
+    assert_eq!(
+        BidStorage::compare_bids(&lower_id, &higher_id),
+        Ordering::Less
+    );
+    assert_eq!(
+        BidStorage::compare_bids(&higher_id, &lower_id),
+        Ordering::Greater
+    );
 }
 
 // ===========================================================================
@@ -177,8 +273,26 @@ fn compare_bids_returns_equal_for_identical_bids() {
     let env = Env::default();
     let invoice = invoice_id(&env, 6);
     let investor = Address::generate(&env);
-    let a = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 1);
-    let b = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 1);
+    let a = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let b = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
 
     assert_eq!(BidStorage::compare_bids(&a, &b), Ordering::Equal);
     assert_eq!(BidStorage::compare_bids(&b, &a), Ordering::Equal);
@@ -190,13 +304,49 @@ fn compare_bids_ignores_status_field() {
     let env = Env::default();
     let invoice = invoice_id(&env, 7);
     let investor = Address::generate(&env);
-    let placed = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 1);
-    let cancelled = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Cancelled, 1);
-    let accepted = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Accepted, 1);
+    let placed = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let cancelled = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Cancelled,
+        1,
+    );
+    let accepted = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Accepted,
+        1,
+    );
 
-    assert_eq!(BidStorage::compare_bids(&placed, &cancelled), Ordering::Equal);
-    assert_eq!(BidStorage::compare_bids(&placed, &accepted), Ordering::Equal);
-    assert_eq!(BidStorage::compare_bids(&cancelled, &accepted), Ordering::Equal);
+    assert_eq!(
+        BidStorage::compare_bids(&placed, &cancelled),
+        Ordering::Equal
+    );
+    assert_eq!(
+        BidStorage::compare_bids(&placed, &accepted),
+        Ordering::Equal
+    );
+    assert_eq!(
+        BidStorage::compare_bids(&cancelled, &accepted),
+        Ordering::Equal
+    );
 }
 
 // ===========================================================================
@@ -210,9 +360,27 @@ fn compare_bids_handles_clamped_negative_profit() {
     let invoice = invoice_id(&env, 8);
     let investor = Address::generate(&env);
     // profit(a) = 500 - 1_000 -> saturating_sub -> 0.
-    let a = build_bid(&env, &invoice, &investor, 1_000, 500, 100, BidStatus::Placed, 1);
+    let a = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        500,
+        100,
+        BidStatus::Placed,
+        1,
+    );
     // profit(b) = 3_000 - 2_000 = 1_000.
-    let b = build_bid(&env, &invoice, &investor, 2_000, 3_000, 100, BidStatus::Placed, 2);
+    let b = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        2_000,
+        3_000,
+        100,
+        BidStatus::Placed,
+        2,
+    );
 
     assert_eq!(BidStorage::compare_bids(&a, &b), Ordering::Less);
     assert_eq!(BidStorage::compare_bids(&b, &a), Ordering::Greater);
@@ -227,8 +395,14 @@ fn compare_bids_handles_zero_values() {
     let zero_all = build_bid(&env, &invoice, &investor, 0, 0, 0, BidStatus::Placed, 1);
     let nonzero_return = build_bid(&env, &invoice, &investor, 0, 1, 0, BidStatus::Placed, 2);
 
-    assert_eq!(BidStorage::compare_bids(&zero_all, &nonzero_return), Ordering::Less);
-    assert_eq!(BidStorage::compare_bids(&nonzero_return, &zero_all), Ordering::Greater);
+    assert_eq!(
+        BidStorage::compare_bids(&zero_all, &nonzero_return),
+        Ordering::Less
+    );
+    assert_eq!(
+        BidStorage::compare_bids(&nonzero_return, &zero_all),
+        Ordering::Greater
+    );
 }
 
 /// Tier dominance holds at extremes: massive values do not overflow.
@@ -268,9 +442,36 @@ fn get_best_bid_returns_highest_profit_placed_bid() {
     let inv1 = Address::generate(&env);
     let inv2 = Address::generate(&env);
     let inv3 = Address::generate(&env);
-    let low = build_bid(&env, &invoice, &inv1, 1_000, 1_500, 50, BidStatus::Placed, 1); // profit 500
-    let mid = build_bid(&env, &invoice, &inv2, 1_000, 2_500, 60, BidStatus::Placed, 2); // profit 1500
-    let high = build_bid(&env, &invoice, &inv3, 1_000, 3_500, 70, BidStatus::Placed, 3); // profit 2500
+    let low = build_bid(
+        &env,
+        &invoice,
+        &inv1,
+        1_000,
+        1_500,
+        50,
+        BidStatus::Placed,
+        1,
+    ); // profit 500
+    let mid = build_bid(
+        &env,
+        &invoice,
+        &inv2,
+        1_000,
+        2_500,
+        60,
+        BidStatus::Placed,
+        2,
+    ); // profit 1500
+    let high = build_bid(
+        &env,
+        &invoice,
+        &inv3,
+        1_000,
+        3_500,
+        70,
+        BidStatus::Placed,
+        3,
+    ); // profit 2500
     persist_bid(&env, &low);
     persist_bid(&env, &mid);
     persist_bid(&env, &high);
@@ -301,10 +502,46 @@ fn get_best_bid_returns_none_when_only_terminal_status_bids_exist() {
     let invoice = invoice_id(&env, 22);
 
     let investor = Address::generate(&env);
-    let cancelled = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Cancelled, 1);
-    let withdrawn = build_bid(&env, &invoice, &investor, 1_000, 2_500, 100, BidStatus::Withdrawn, 2);
-    let accepted = build_bid(&env, &invoice, &investor, 1_000, 3_000, 100, BidStatus::Accepted, 3);
-    let expired = build_bid(&env, &invoice, &investor, 1_000, 3_500, 100, BidStatus::Expired, 4);
+    let cancelled = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Cancelled,
+        1,
+    );
+    let withdrawn = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_500,
+        100,
+        BidStatus::Withdrawn,
+        2,
+    );
+    let accepted = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        3_000,
+        100,
+        BidStatus::Accepted,
+        3,
+    );
+    let expired = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        3_500,
+        100,
+        BidStatus::Expired,
+        4,
+    );
     persist_bid(&env, &cancelled);
     persist_bid(&env, &withdrawn);
     persist_bid(&env, &accepted);
@@ -327,8 +564,26 @@ fn get_best_bid_prefers_placed_over_higher_economics_terminal_bid() {
 
     let inv1 = Address::generate(&env);
     let inv2 = Address::generate(&env);
-    let placed_low = build_bid(&env, &invoice, &inv1, 1_000, 1_500, 100, BidStatus::Placed, 1);
-    let cancelled_high = build_bid(&env, &invoice, &inv2, 1_000, 9_999, 100, BidStatus::Cancelled, 2);
+    let placed_low = build_bid(
+        &env,
+        &invoice,
+        &inv1,
+        1_000,
+        1_500,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let cancelled_high = build_bid(
+        &env,
+        &invoice,
+        &inv2,
+        1_000,
+        9_999,
+        100,
+        BidStatus::Cancelled,
+        2,
+    );
     persist_bid(&env, &placed_low);
     persist_bid(&env, &cancelled_high);
 
@@ -350,7 +605,16 @@ fn get_best_bid_returns_single_bid_when_only_one_is_placed() {
     env.ledger().with_mut(|li| li.timestamp = 1_000);
     let invoice = invoice_id(&env, 24);
     let investor = Address::generate(&env);
-    let only = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 1);
+    let only = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
     persist_bid(&env, &only);
 
     let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
@@ -366,8 +630,26 @@ fn get_best_bid_returns_none_after_all_placed_bids_expire_and_cleanup_runs() {
 
     let inv1 = Address::generate(&env);
     let inv2 = Address::generate(&env);
-    let mut bid1 = build_bid(&env, &invoice, &inv1, 1_000, 2_000, 100, BidStatus::Placed, 1);
-    let mut bid2 = build_bid(&env, &invoice, &inv2, 1_000, 3_000, 100, BidStatus::Placed, 2);
+    let mut bid1 = build_bid(
+        &env,
+        &invoice,
+        &inv1,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let mut bid2 = build_bid(
+        &env,
+        &invoice,
+        &inv2,
+        1_000,
+        3_000,
+        100,
+        BidStatus::Placed,
+        2,
+    );
     // Force expiration just after the current ledger timestamp.
     bid1.expiration_timestamp = 101;
     bid2.expiration_timestamp = 101;
@@ -399,9 +681,36 @@ fn rank_bids_orders_by_profit_descending() {
     let inv1 = Address::generate(&env);
     let inv2 = Address::generate(&env);
     let inv3 = Address::generate(&env);
-    let low = build_bid(&env, &invoice, &inv1, 1_000, 1_500, 100, BidStatus::Placed, 1);
-    let mid = build_bid(&env, &invoice, &inv2, 1_000, 2_500, 200, BidStatus::Placed, 2);
-    let high = build_bid(&env, &invoice, &inv3, 1_000, 3_500, 300, BidStatus::Placed, 3);
+    let low = build_bid(
+        &env,
+        &invoice,
+        &inv1,
+        1_000,
+        1_500,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let mid = build_bid(
+        &env,
+        &invoice,
+        &inv2,
+        1_000,
+        2_500,
+        200,
+        BidStatus::Placed,
+        2,
+    );
+    let high = build_bid(
+        &env,
+        &invoice,
+        &inv3,
+        1_000,
+        3_500,
+        300,
+        BidStatus::Placed,
+        3,
+    );
     persist_bid(&env, &low);
     persist_bid(&env, &mid);
     persist_bid(&env, &high);
@@ -424,10 +733,46 @@ fn rank_bids_first_index_matches_get_best_bid() {
     let inv_b = Address::generate(&env);
     let inv_c = Address::generate(&env);
     let inv_d = Address::generate(&env);
-    let placed_a = build_bid(&env, &invoice, &inv_a, 1_000, 2_500, 100, BidStatus::Placed, 1);
-    let placed_b = build_bid(&env, &invoice, &inv_b, 1_000, 1_500, 100, BidStatus::Placed, 2);
-    let cancelled = build_bid(&env, &invoice, &inv_c, 1_000, 9_500, 100, BidStatus::Cancelled, 3);
-    let expired = build_bid(&env, &invoice, &inv_d, 1_000, 9_500, 100, BidStatus::Expired, 4);
+    let placed_a = build_bid(
+        &env,
+        &invoice,
+        &inv_a,
+        1_000,
+        2_500,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let placed_b = build_bid(
+        &env,
+        &invoice,
+        &inv_b,
+        1_000,
+        1_500,
+        100,
+        BidStatus::Placed,
+        2,
+    );
+    let cancelled = build_bid(
+        &env,
+        &invoice,
+        &inv_c,
+        1_000,
+        9_500,
+        100,
+        BidStatus::Cancelled,
+        3,
+    );
+    let expired = build_bid(
+        &env,
+        &invoice,
+        &inv_d,
+        1_000,
+        9_500,
+        100,
+        BidStatus::Expired,
+        4,
+    );
 
     persist_bid(&env, &cancelled);
     persist_bid(&env, &placed_b);
@@ -461,9 +806,36 @@ fn rank_bids_returns_empty_when_only_terminal_status_bids_exist() {
     let invoice = invoice_id(&env, 33);
 
     let investor = Address::generate(&env);
-    let cancelled = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Cancelled, 1);
-    let withdrawn = build_bid(&env, &invoice, &investor, 2_000, 3_000, 100, BidStatus::Withdrawn, 2);
-    let accepted = build_bid(&env, &invoice, &investor, 3_000, 4_000, 100, BidStatus::Accepted, 3);
+    let cancelled = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Cancelled,
+        1,
+    );
+    let withdrawn = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        2_000,
+        3_000,
+        100,
+        BidStatus::Withdrawn,
+        2,
+    );
+    let accepted = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        3_000,
+        4_000,
+        100,
+        BidStatus::Accepted,
+        3,
+    );
     persist_bid(&env, &cancelled);
     persist_bid(&env, &withdrawn);
     persist_bid(&env, &accepted);
@@ -481,8 +853,26 @@ fn rank_bids_excludes_terminal_statuses_around_placed_bids() {
 
     let inv1 = Address::generate(&env);
     let inv2 = Address::generate(&env);
-    let placed = build_bid(&env, &invoice, &inv1, 1_000, 2_000, 100, BidStatus::Placed, 1);
-    let cancelled = build_bid(&env, &invoice, &inv2, 1_000, 9_999, 100, BidStatus::Cancelled, 2);
+    let placed = build_bid(
+        &env,
+        &invoice,
+        &inv1,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let cancelled = build_bid(
+        &env,
+        &invoice,
+        &inv2,
+        1_000,
+        9_999,
+        100,
+        BidStatus::Cancelled,
+        2,
+    );
     persist_bid(&env, &placed);
     persist_bid(&env, &cancelled);
 
@@ -502,7 +892,16 @@ fn rank_bids_handles_single_placed_bid() {
     env.ledger().with_mut(|li| li.timestamp = 1_000);
     let invoice = invoice_id(&env, 35);
     let investor = Address::generate(&env);
-    let only = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 1);
+    let only = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
     persist_bid(&env, &only);
 
     let ranked = BidStorage::rank_bids(&env, &invoice);
@@ -562,8 +961,26 @@ fn rank_bids_resolves_full_tie_via_bid_id_lexicographic() {
     let invoice = invoice_id(&env, 38);
     let investor = Address::generate(&env);
 
-    let lower_id = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 1);
-    let higher_id = build_bid(&env, &invoice, &investor, 1_000, 2_000, 100, BidStatus::Placed, 9);
+    let lower_id = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
+    let higher_id = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        2_000,
+        100,
+        BidStatus::Placed,
+        9,
+    );
     persist_bid(&env, &lower_id);
     persist_bid(&env, &higher_id);
 
@@ -585,19 +1002,73 @@ fn rank_bids_resolves_each_of_five_tiebreaker_tiers() {
     let investor = Address::generate(&env);
 
     // Tier 1 winner: profit = 4_000 (highest, distinctly above the rest).
-    let high_profit = build_bid(&env, &invoice, &investor, 1_000, 5_000, 100, BidStatus::Placed, 1);
+    let high_profit = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        5_000,
+        100,
+        BidStatus::Placed,
+        1,
+    );
     // Tier 2 winner: lower profit than high_profit, higher return than the
     // four tier-3+ bids. Loses to high_profit on tier 1, wins the rest on tier 2.
-    let higher_return = build_bid(&env, &invoice, &investor, 1_000, 3_000, 100, BidStatus::Placed, 2);
+    let higher_return = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        1_000,
+        3_000,
+        100,
+        BidStatus::Placed,
+        2,
+    );
     // Tier 3 loser (lower amount): profit clamps to 0 via `saturating_sub`,
     // expected_return tied with tier3_high so only bid_amount can break the tie.
-    let tier3_low = build_bid(&env, &invoice, &investor, 2_000, 500, 100, BidStatus::Placed, 3);
+    let tier3_low = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        2_000,
+        500,
+        100,
+        BidStatus::Placed,
+        3,
+    );
     // Tier 3 winner among the clamped pairs.
-    let tier3_high = build_bid(&env, &invoice, &investor, 3_000, 500, 100, BidStatus::Placed, 4);
+    let tier3_high = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        3_000,
+        500,
+        100,
+        BidStatus::Placed,
+        4,
+    );
     // Tier 4 winner: matches tier3_high economically but newer timestamp breaks the tie at tier 4.
-    let tier4_newer = build_bid(&env, &invoice, &investor, 3_000, 500, 200, BidStatus::Placed, 5);
+    let tier4_newer = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        3_000,
+        500,
+        200,
+        BidStatus::Placed,
+        5,
+    );
     // Tier 5 winner: matches tier4_newer except higher bid_id suffix at byte 30/31.
-    let tier5_higher_id = build_bid(&env, &invoice, &investor, 3_000, 500, 200, BidStatus::Placed, 9);
+    let tier5_higher_id = build_bid(
+        &env,
+        &invoice,
+        &investor,
+        3_000,
+        500,
+        200,
+        BidStatus::Placed,
+        9,
+    );
 
     // Insertion order is mixed deliberately: rank_bids must be insertion-order invariant
     // thanks to selection sort via `select_best_index`.
@@ -610,12 +1081,36 @@ fn rank_bids_resolves_each_of_five_tiebreaker_tiers() {
 
     let ranked = BidStorage::rank_bids(&env, &invoice);
     assert_eq!(ranked.len(), 6);
-    assert_eq!(ranked.get(0).unwrap().bid_id, high_profit.bid_id, "tier 1 winner");
-    assert_eq!(ranked.get(1).unwrap().bid_id, higher_return.bid_id, "tier 2 winner");
-    assert_eq!(ranked.get(2).unwrap().bid_id, tier5_higher_id.bid_id, "tier 5 winner");
-    assert_eq!(ranked.get(3).unwrap().bid_id, tier4_newer.bid_id, "tier 4 loser to tier 5");
-    assert_eq!(ranked.get(4).unwrap().bid_id, tier3_high.bid_id, "tier 3 winner over tier3_low");
-    assert_eq!(ranked.get(5).unwrap().bid_id, tier3_low.bid_id, "tier 3 loser");
+    assert_eq!(
+        ranked.get(0).unwrap().bid_id,
+        high_profit.bid_id,
+        "tier 1 winner"
+    );
+    assert_eq!(
+        ranked.get(1).unwrap().bid_id,
+        higher_return.bid_id,
+        "tier 2 winner"
+    );
+    assert_eq!(
+        ranked.get(2).unwrap().bid_id,
+        tier5_higher_id.bid_id,
+        "tier 5 winner"
+    );
+    assert_eq!(
+        ranked.get(3).unwrap().bid_id,
+        tier4_newer.bid_id,
+        "tier 4 loser to tier 5"
+    );
+    assert_eq!(
+        ranked.get(4).unwrap().bid_id,
+        tier3_high.bid_id,
+        "tier 3 winner over tier3_low"
+    );
+    assert_eq!(
+        ranked.get(5).unwrap().bid_id,
+        tier3_low.bid_id,
+        "tier 3 loser"
+    );
 }
 
 /// Ranking is order-sensitive so no adjacent inversions occur
@@ -628,12 +1123,66 @@ fn rank_bids_produces_no_adjacent_inversions() {
 
     let investors: alloc::vec::Vec<Address> = (0..6).map(|_| Address::generate(&env)).collect();
     let mut bids: alloc::vec::Vec<Bid> = alloc::vec::Vec::new();
-    bids.push(build_bid(&env, &invoice, &investors[0], 1_000, 1_200, 50, BidStatus::Placed, 1));
-    bids.push(build_bid(&env, &invoice, &investors[1], 1_000, 4_500, 80, BidStatus::Placed, 2));
-    bids.push(build_bid(&env, &invoice, &investors[2], 2_000, 3_500, 70, BidStatus::Placed, 3));
-    bids.push(build_bid(&env, &invoice, &investors[3], 1_500, 2_200, 60, BidStatus::Placed, 4));
-    bids.push(build_bid(&env, &invoice, &investors[4], 500, 700, 90, BidStatus::Placed, 5));
-    bids.push(build_bid(&env, &invoice, &investors[5], 1_000, 2_000, 65, BidStatus::Placed, 6));
+    bids.push(build_bid(
+        &env,
+        &invoice,
+        &investors[0],
+        1_000,
+        1_200,
+        50,
+        BidStatus::Placed,
+        1,
+    ));
+    bids.push(build_bid(
+        &env,
+        &invoice,
+        &investors[1],
+        1_000,
+        4_500,
+        80,
+        BidStatus::Placed,
+        2,
+    ));
+    bids.push(build_bid(
+        &env,
+        &invoice,
+        &investors[2],
+        2_000,
+        3_500,
+        70,
+        BidStatus::Placed,
+        3,
+    ));
+    bids.push(build_bid(
+        &env,
+        &invoice,
+        &investors[3],
+        1_500,
+        2_200,
+        60,
+        BidStatus::Placed,
+        4,
+    ));
+    bids.push(build_bid(
+        &env,
+        &invoice,
+        &investors[4],
+        500,
+        700,
+        90,
+        BidStatus::Placed,
+        5,
+    ));
+    bids.push(build_bid(
+        &env,
+        &invoice,
+        &investors[5],
+        1_000,
+        2_000,
+        65,
+        BidStatus::Placed,
+        6,
+    ));
 
     for b in bids.iter() {
         persist_bid(&env, b);

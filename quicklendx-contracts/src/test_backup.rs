@@ -40,7 +40,8 @@ fn create_invoice(
         &String::from_str(env, description),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None)
+        &None,
+    )
 }
 
 /// Create a minimal Invoice suitable for backup tests.
@@ -87,10 +88,11 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
         },
         total_paid: 0,
         payment_history: soroban_sdk::Vec::new(env),
-    },
         origination_fee_bps: None,
+        late_payment_penalty_bps: None,
         early_payment_discount_bps: None,
     }
+}
 
 /// Persist a complete, valid backup (metadata + data) and return its ID.
 fn create_valid_backup(env: &Env, invoices: Vec<Invoice>) -> soroban_sdk::BytesN<32> {

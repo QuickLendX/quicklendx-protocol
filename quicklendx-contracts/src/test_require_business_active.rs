@@ -4,10 +4,7 @@ use crate::errors::QuickLendXError;
 use crate::types::{InvoiceCategory, InvoiceMetadata, LineItemRecord};
 use crate::verification::BusinessVerificationStorage;
 use crate::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::{
-    testutils::Address as _,
-    vec, Address, BytesN, Env, String, Vec,
-};
+use soroban_sdk::{testutils::Address as _, vec, Address, BytesN, Env, String, Vec};
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let env = Env::default();
@@ -37,7 +34,8 @@ fn upload_invoice(env: &Env, client: &QuickLendXContractClient, business: &Addre
         &String::from_str(env, "test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None)
+        &None,
+    )
 }
 
 fn delete_business(env: &Env, contract_id: &Address, business: &Address) {
@@ -242,7 +240,10 @@ fn test_upload_invoice_succeeds_after_unfreeze() {
 
     let second = upload_invoice(&env, &client, &business);
     let invoice = client.try_get_invoice(&second);
-    assert!(invoice.is_ok(), "newly uploaded invoice must be retrievable");
+    assert!(
+        invoice.is_ok(),
+        "newly uploaded invoice must be retrievable"
+    );
 }
 
 /// Unfreezing a business that was never frozen must fail.
@@ -297,10 +298,7 @@ fn test_two_freeze_unfreeze_cycles() {
     // Cycle 1
     delete_business(&env, &contract_id, &business);
     assert_eq!(
-        client
-            .try_cancel_invoice(&invoice_id)
-            .unwrap_err()
-            .unwrap(),
+        client.try_cancel_invoice(&invoice_id).unwrap_err().unwrap(),
         QuickLendXError::BusinessDeleted,
     );
     restore_business(&env, &contract_id, &business);
@@ -349,7 +347,10 @@ fn test_update_metadata_blocked_then_succeeds_after_unfreeze() {
     restore_business(&env, &contract_id, &business);
 
     let result = client.try_update_invoice_metadata(&invoice_id, &metadata);
-    assert!(result.is_ok(), "metadata update must succeed after unfreeze");
+    assert!(
+        result.is_ok(),
+        "metadata update must succeed after unfreeze"
+    );
 }
 
 /// Tag operations blocked while frozen, succeed after unfreeze.
@@ -392,7 +393,10 @@ fn test_update_category_blocked_then_succeeds_after_unfreeze() {
     restore_business(&env, &contract_id, &business);
 
     let result = client.try_update_invoice_category(&invoice_id, &InvoiceCategory::Goods);
-    assert!(result.is_ok(), "category update must succeed after unfreeze");
+    assert!(
+        result.is_ok(),
+        "category update must succeed after unfreeze"
+    );
 }
 
 /// View operations (read-only) are never blocked by freeze or unfreeze.

@@ -53,6 +53,35 @@ describe("EventProcessor", () => {
         timestamp: 1234567890,
       });
     });
+
+    it("clears the deduplication marker after notification failure so retries work", async () => {
+      mockNotificationService.processNotification.mockRejectedValueOnce(
+        new Error("notification unavailable")
+      );
+
+      await expect(
+        eventProcessor.processInvoiceSettled(
+          "retry-event",
+          "inv123",
+          "business456",
+          "investor789",
+          "1000",
+          1234567890
+        )
+      ).rejects.toThrow("notification unavailable");
+
+      mockNotificationService.processNotification.mockResolvedValueOnce(undefined);
+      await eventProcessor.processInvoiceSettled(
+        "retry-event",
+        "inv123",
+        "business456",
+        "investor789",
+        "1000",
+        1234567890
+      );
+
+      expect(mockNotificationService.processNotification).toHaveBeenCalledTimes(2);
+    });
   });
 
   describe("processPaymentRecorded", () => {

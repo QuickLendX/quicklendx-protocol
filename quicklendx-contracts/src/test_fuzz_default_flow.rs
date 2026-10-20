@@ -2,8 +2,8 @@
 
 use crate::contract::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
-use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use crate::investment::InvestmentStatus;
+use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use proptest::prelude::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
@@ -13,7 +13,12 @@ use soroban_sdk::{
 fn setup_env_and_invoice(
     env: &Env,
     due_date: u64,
-) -> (QuickLendXContractClient<'static>, soroban_sdk::BytesN<32>, Address, Address) {
+) -> (
+    QuickLendXContractClient<'static>,
+    soroban_sdk::BytesN<32>,
+    Address,
+    Address,
+) {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(env, &contract_id);
@@ -54,7 +59,7 @@ fn setup_env_and_invoice(
     client.verify_invoice(&invoice_id);
     let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
     client.accept_bid(&invoice_id, &bid_id);
-    
+
     (client, invoice_id, business, investor)
 }
 
@@ -76,14 +81,14 @@ proptest! {
     ) {
         let env = Env::default();
         let (client, invoice_id, _business, _investor) = setup_env_and_invoice(&env, due_date);
-        
+
         let initial_invoice = client.get_invoice(&invoice_id);
         prop_assert_eq!(initial_invoice.status, InvoiceStatus::Funded);
 
         // 1. Past-due (after due date, before grace period ends)
         let past_due_time = due_date + grace_period / 2;
         env.ledger().set_timestamp(past_due_time);
-        
+
         // Attempting to default should fail, it's in grace
         let res_grace = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
         prop_assert!(
@@ -96,17 +101,17 @@ proptest! {
         // 2. Default (after grace period)
         let default_time = due_date + grace_period + 1;
         env.ledger().set_timestamp(default_time);
-        
+
         let res_default = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
         prop_assert!(res_default.is_ok(), "Should successfully default after grace");
-        
+
         let defaulted_invoice = client.get_invoice(&invoice_id);
         prop_assert_eq!(defaulted_invoice.status, InvoiceStatus::Defaulted);
 
         // Verify investment status also transitioned to Defaulted
         let investment = client.get_invoice_investment(&invoice_id);
         prop_assert_eq!(investment.status, InvestmentStatus::Defaulted);
-        
+
         // 3. Recovery (insurance claim or similar would follow, but state is locked to Defaulted)
         // Ensure no further transition is possible
         let res_double_default = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));

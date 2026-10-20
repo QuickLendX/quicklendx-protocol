@@ -155,7 +155,11 @@ fn accept_bid_blocked_when_invoice_is_expired() {
 
         // Verify invoice state is unchanged
         let invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
-        assert_eq!(invoice.status, InvoiceStatus::Verified, "invoice must remain Verified");
+        assert_eq!(
+            invoice.status,
+            InvoiceStatus::Verified,
+            "invoice must remain Verified"
+        );
         assert_eq!(invoice.funded_amount, 0, "invoice must not be funded");
     });
 }

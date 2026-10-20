@@ -39,7 +39,11 @@ fn kyc_business(env: &Env, client: &crate::QuickLendXContractClient, admin: &Add
     biz
 }
 
-fn create_invoice(env: &Env, client: &crate::QuickLendXContractClient, biz: &Address) -> BytesN<32> {
+fn create_invoice(
+    env: &Env,
+    client: &crate::QuickLendXContractClient,
+    biz: &Address,
+) -> BytesN<32> {
     let token_admin = Address::generate(env);
     let currency = env
         .register_stellar_asset_contract_v2(token_admin)
@@ -61,8 +65,7 @@ fn create_invoice(env: &Env, client: &crate::QuickLendXContractClient, biz: &Add
 fn latest_event_data(env: &Env, topic_str: &str) -> Map<Symbol, Val> {
     use soroban_sdk::xdr;
     let topic_sym = Symbol::new(env, topic_str);
-    let topic_xdr =
-        soroban_sdk::xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
+    let topic_xdr = soroban_sdk::xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to ScVal");
     let all = env.events().all();
     for e in all.events().iter().rev() {
         let body = &e.body;
@@ -399,8 +402,7 @@ fn freeze_info_roundtrip_all_reasons() {
         };
 
         let val: Val = info.clone().into_val(&env);
-        let restored =
-            FreezeInfo::try_from_val(&env, &val).expect("FreezeInfo round-trip failed");
+        let restored = FreezeInfo::try_from_val(&env, &val).expect("FreezeInfo round-trip failed");
 
         assert_eq!(
             restored.reason, *reason,
@@ -434,10 +436,8 @@ fn freeze_info_different_reasons_serialize_differently() {
     let val_a: Val = info_a.into_val(&env);
     let val_b: Val = info_b.into_val(&env);
 
-    let scval_a = soroban_sdk::xdr::ScVal::try_from_val(&env, &val_a)
-        .expect("val_a to ScVal");
-    let scval_b = soroban_sdk::xdr::ScVal::try_from_val(&env, &val_b)
-        .expect("val_b to ScVal");
+    let scval_a = soroban_sdk::xdr::ScVal::try_from_val(&env, &val_a).expect("val_a to ScVal");
+    let scval_b = soroban_sdk::xdr::ScVal::try_from_val(&env, &val_b).expect("val_b to ScVal");
 
     assert_ne!(
         scval_a, scval_b,
