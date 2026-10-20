@@ -106,6 +106,8 @@ pub enum AuditOperation {
     InvestorFrozen,
     /// An investor was unfrozen (investment actions restored).
     InvestorUnfrozen,
+    BidCancelled,
+    BidExpired,
 }
 
 /// Typed operation types used by audit-log emission.

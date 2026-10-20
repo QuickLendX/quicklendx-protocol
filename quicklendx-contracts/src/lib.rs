@@ -591,6 +591,9 @@ impl QuickLendXContract {
             min_invoice_amount,
             max_due_date_days,
             grace_period_seconds,
+            init::ProtocolInitializer::get_protocol_config(&env)
+                .map(|config| config.backfill_max_batch_size)
+                .unwrap_or(100),
         )
     }
 
@@ -855,9 +858,13 @@ impl QuickLendXContract {
         currency::CurrencyWhitelist::currency_count(&env)
     }
 
-    /// Return a paginated slice of the whitelist.
-    pub fn get_whitelisted_currencies_paged(env: Env, offset: u32, limit: u32) -> Vec<Address> {
-        currency::CurrencyWhitelist::get_whitelisted_currencies_paged(&env, offset, limit)
+    /// Return the requested slice of whitelisted currencies.
+    pub fn get_whitelisted_currencies_paged(
+        env: Env,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<Address> {
+        currency::CurrencyWhitelist::get_whitelisted_currencies_paged(&env, offset, limit).items
     }
 
     /// Cancel a pending emergency withdrawal (admin only).
@@ -1571,7 +1578,7 @@ impl QuickLendXContract {
     /// preventing double-action execution regardless of call ordering.
     pub fn cancel_bid(env: Env, bid_id: BytesN<32>) -> bool {
         pause::PauseControl::require_not_paused(&env).is_ok()
-            && bid::BidStorage::cancel_bid(&env, &bid_id)
+            && bid::BidStorage::cancel_bid(&env, &bid_id).is_ok()
     }
 
     /// Withdraw a bid (investor only, Placed --- Withdrawn).
@@ -1850,10 +1857,19 @@ impl QuickLendXContract {
         payment_amount: i128,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
-        let _investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id);
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        let investment = InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         let result = reentrancy::with_payment_guard(&env, || {
-            do_settle_invoice(&env, &invoice_id, payment_amount)
+            do_settle_invoice(
+                &env,
+                &invoice_id,
+                payment_amount,
+                &investment,
+                &invoice.business,
+            )
         });
 
         if result.is_ok() {
@@ -2215,6 +2231,7 @@ impl QuickLendXContract {
         grace_period_seconds: u64,
     ) -> Result<(), QuickLendXError> {
         let _ = protocol_limits::ProtocolLimitsContract::initialize(env.clone(), admin.clone());
+        let existing = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits_authed(
             &env,
             &admin,
@@ -2224,6 +2241,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2251,6 +2269,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2278,6 +2297,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             existing.max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2305,6 +2325,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2342,6 +2363,7 @@ impl QuickLendXContract {
         max_invoices_per_business: u32,
     ) -> Result<(), QuickLendXError> {
         pause::PauseControl::require_not_paused(&env)?;
+        let existing = protocol_limits::ProtocolLimitsContract::get_protocol_limits(env.clone());
         protocol_limits::ProtocolLimitsContract::set_protocol_limits(
             env,
             admin,
@@ -2351,6 +2373,7 @@ impl QuickLendXContract {
             max_due_date_days,
             grace_period_seconds,
             max_invoices_per_business,
+            existing.min_investor_tier,
         )
     }
 
@@ -2520,7 +2543,7 @@ impl QuickLendXContract {
             let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
                 .unwrap();
 
-            release_escrow(&env, &invoice_id)?;
+            release_escrow(&env, &invoice_id, &invoice.business)?;
 
             emit_escrow_released(
                 &env,
@@ -2688,7 +2711,10 @@ impl QuickLendXContract {
     }
 
     /// Get invoices by multiple tags (AND logic)
-    pub fn get_invoices_by_tags(env: Env, tags: Vec<String>) -> Vec<BytesN<32>> {
+    pub fn get_invoices_by_tags(
+        env: Env,
+        tags: Vec<String>,
+    ) -> Result<Vec<BytesN<32>>, QuickLendXError> {
         InvoiceStorage::get_invoices_by_tags(&env, &tags)
     }
 
@@ -2911,6 +2937,7 @@ impl QuickLendXContract {
             transaction_amount,
             is_early_payment,
             is_late_payment,
+            None,
         )
     }
 
@@ -3102,6 +3129,7 @@ impl QuickLendXContract {
             offset,
             limit,
         )
+        .items
     }
 
     /// Get available invoices with pagination and optional filters
