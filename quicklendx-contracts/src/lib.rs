@@ -702,11 +702,6 @@ impl QuickLendXContract {
         bid::BidStorage::get_max_active_bids_per_investor(&env)
     }
 
-    /// Get current investor active-bid limit configuration snapshot.
-    pub fn get_bid_limit_config(env: Env) -> bid::BidLimitConfig {
-        bid::BidStorage::get_bid_limit_config(&env)
-    }
-
     /// Set maximum active bids allowed per investor (admin only)
     pub fn set_max_active_bids_per_investor(env: Env, limit: u32) -> Result<u32, QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;

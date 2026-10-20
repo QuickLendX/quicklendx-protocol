@@ -290,7 +290,7 @@ pub fn scan_funded_invoice_expirations(
 
     while scanned_count < scan_limit {
         if let Some(invoice_id) = funded_invoices.get(cursor) {
-            let result = (|| {
+            let result: Result<(), QuickLendXError> = (|| {
                 let invoice = InvoiceStorage::get_invoice(env, &invoice_id)
                     .ok_or(QuickLendXError::InvoiceNotFound)?;
                 let grace_deadline = invoice
