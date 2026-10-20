@@ -445,7 +445,7 @@ fn test_reset_max_active_bids_per_investor_clears_custom_flag() {
     client.set_max_active_bids_per_investor(&3u32);
     assert!(client.get_bid_limit_config().is_custom);
 
-    client.reset_max_active_bids_per_investor();
+    client.reset_bid_limit();
 
     let cfg = client.get_bid_limit_config();
     assert_eq!(cfg.limit, 20, "reset restores compile-time default");

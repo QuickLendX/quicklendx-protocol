@@ -463,7 +463,7 @@ pub fn process_partial_payment(
         recorded.applied_amount,
     );
 
-    if progress.total_paid >= progress.total_due {
+    if recorded.progress.total_paid >= recorded.progress.total_due {
         settle_invoice_internal(env, invoice_id, &payer)?;
     }
 

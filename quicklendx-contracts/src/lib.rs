@@ -18,18 +18,7 @@
     clippy::disallowed_methods
 )]
 
-//! QuickLendX contracts library - minimal surface.
-//!
-//! The historical contract implementation lives in the `src/*.rs` sibling
-//! modules but is not wired in yet because the legacy test suite is mid-
-//! migration (see the `# temporarily disabled` note in
-//! `.github/workflows/ci.yml`). Until the legacy modules are restored, this
-//! file exposes only the pure, self-contained utility layer plus a minimal
-//! placeholder contract.
-//!
-//! The placeholder `#[contract]` is required for the `wasm32v1-none` release
-//! build: Soroban's contract macros install the `#[panic_handler]` and wire
-//! the SDK's global allocator, both of which are mandatory on that target.
+//! QuickLendX Soroban smart contract library.
 
 extern crate alloc;
 
@@ -95,10 +84,12 @@ pub mod idempotency;
 pub mod investment;
 pub mod investment_queries;
 pub mod invoice;
+pub mod invoice_amount;
 pub mod invoice_search;
 pub mod maintenance;
 pub mod monitor;
 pub mod notifications;
+pub mod observability;
 pub mod operational_limits;
 pub mod pagination;
 pub mod panic_handler;
@@ -109,6 +100,7 @@ pub mod protocol_limits;
 pub mod reentrancy;
 pub mod settlement;
 pub mod storage;
+pub mod upgrade;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -723,7 +715,7 @@ impl QuickLendXContract {
     /// Removes the stored override so [`get_bid_limit_config`] reports
     /// `is_custom = false` and `is_disabled = false`.  Useful for reverting a
     /// previous [`set_max_active_bids_per_investor(0)`] call.
-    pub fn reset_max_active_bids_per_investor(env: Env) -> Result<u32, QuickLendXError> {
+    pub fn reset_bid_limit(env: Env) -> Result<u32, QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         bid::BidStorage::reset_max_active_bids_per_investor(&env, &admin)
     }
