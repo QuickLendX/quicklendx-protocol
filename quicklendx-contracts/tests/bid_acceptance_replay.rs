@@ -32,8 +32,8 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.initialize_admin(&admin);
-    client.set_admin(&admin);
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
+    client.set_admin(&admin, &admin);
+    client.initialize_protocol_limits(&admin);
     (env, client, admin, contract_id)
 }
 
@@ -97,7 +97,7 @@ fn upload_and_verify_invoice(
         &None,
         &None,
     );
-    client.verify_invoice(&invoice_id);
+    client.verify_invoice(&client.get_admin(), &invoice_id);
     invoice_id
 }
 

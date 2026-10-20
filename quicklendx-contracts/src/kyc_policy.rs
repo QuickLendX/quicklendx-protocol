@@ -420,7 +420,7 @@ mod tests {
         let contract_id = env.register(QuickLendXContract, ());
         let client = QuickLendXContractClient::new(&env, &contract_id);
         let admin = Address::generate(&env);
-        client.set_admin(&admin);
+        client.set_admin(&admin, &admin);
         (env, client, admin)
     }
 
@@ -466,10 +466,10 @@ mod tests {
     fn reject_investor(
         _env: &Env,
         client: &QuickLendXContractClient,
-        _admin: &Address,
+        admin: &Address,
         inv: &Address,
     ) {
-        client.reject_investor(inv, &SorobanString::from_str(_env, "rejected"));
+        client.reject_investor(admin, inv, &SorobanString::from_str(_env, "rejected"));
     }
 
     // ======================================================================

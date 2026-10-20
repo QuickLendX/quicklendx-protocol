@@ -175,6 +175,38 @@ impl QuickLendXContract {
         Ok(invoice_id)
     }
 
+    pub fn upload_invoice(
+        env: Env,
+        business: Address,
+        amount: i128,
+        currency: Address,
+        due_date: u64,
+        description: String,
+        category: InvoiceCategory,
+        tags: Vec<String>,
+        origination_fee_bps: Option<u32>,
+        late_payment_penalty_bps: Option<u32>,
+        early_payment_discount_bps: Option<u32>,
+    ) -> BytesN<32> {
+        let invoice = Invoice::new(
+            &env,
+            business,
+            amount,
+            currency,
+            due_date,
+            description,
+            category,
+            tags,
+            origination_fee_bps,
+            late_payment_penalty_bps,
+            early_payment_discount_bps,
+        )
+        .unwrap();
+        let invoice_id = invoice.id.clone();
+        InvoiceStorage::store_invoice(&env, &invoice);
+        invoice_id
+    }
+
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLendXError> {
         InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
     }
@@ -328,11 +360,11 @@ impl QuickLendXContract {
         crate::payments::validate_funding_commitment(&env, &investor, amount)
     }
 
-    pub fn submit_kyc_application(env: Env, business: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
+    pub fn submit_kyc_application(env: Env, business: Address, kyc_data: String) -> Result<(), QuickLendXError> {
         // #2439 – input-size ceiling before any expensive work
         require_kyc_data_bound(&kyc_data)?;
         check_and_record_mutation(&env, &business)?;
-        submit_kyc_application(&env, &business, kyc_data.into())
+        submit_kyc_application(&env, &business, kyc_data)
     }
 
     pub fn freeze_invoice(
@@ -380,16 +412,42 @@ impl QuickLendXContract {
         BusinessVerificationStorage::delete_business(&env, &business)
     }
 
-    pub fn submit_investor_kyc(env: Env, investor: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
+    pub fn submit_investor_kyc(env: Env, investor: Address, kyc_data: String) -> Result<(), QuickLendXError> {
         // #2439 – input-size ceiling
         require_kyc_data_bound(&kyc_data)?;
         check_and_record_mutation(&env, &investor)?;
-        InvestorVerificationStorage::submit(&env, &investor, kyc_data.into())
+        InvestorVerificationStorage::submit(&env, &investor, kyc_data)
     }
 
     pub fn verify_investor(env: Env, investor: Address, limit: i128) -> Result<(), QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::StorageKeyNotFound)?;
         crate::verification::verify_investor(&env, &admin, &investor, limit).map(|_| ())
+    }
+
+    pub fn reject_business(env: Env, admin: Address, business: Address, reason: String) -> Result<(), QuickLendXError> {
+        crate::verification::reject_business(&env, &admin, &business, reason)
+    }
+
+    pub fn reject_investor(env: Env, admin: Address, investor: Address, reason: String) -> Result<(), QuickLendXError> {
+        crate::verification::reject_investor(&env, &admin, &investor, reason)
+    }
+
+    pub fn get_businesses_paged(
+        env: Env,
+        status: crate::verification::BusinessVerificationStatus,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::kyc_policy::KycPageResult, QuickLendXError> {
+        crate::kyc_policy::get_businesses_paged(&env, status, cursor, limit)
+    }
+
+    pub fn get_investors_paged(
+        env: Env,
+        status: crate::verification::BusinessVerificationStatus,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::kyc_policy::KycPageResult, QuickLendXError> {
+        crate::kyc_policy::get_investors_paged(&env, status, cursor, limit)
     }
 
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
@@ -510,6 +568,10 @@ impl QuickLendXContract {
         InvestmentStorage::get_investment_by_invoice(&env, &invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
+    pub fn get_investments_by_investor(env: Env, investor: Address) -> Vec<BytesN<32>> {
+        InvestmentStorage::get_investments_by_investor(&env, &investor)
+    }
+
     pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>, caller: Address) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         with_payment_guard(&env, || crate::escrow::refund_escrow_funds(&env, &invoice_id, &caller))
@@ -518,6 +580,22 @@ impl QuickLendXContract {
     pub fn withdraw_investment(env: Env, invoice_id: BytesN<32>, investor: Address) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         with_payment_guard(&env, || crate::escrow::withdraw_investment(&env, &invoice_id, &investor))
+    }
+
+    pub fn approve_early_escrow_release(
+        _env: Env,
+        _invoice_id: BytesN<32>,
+        _caller: Address,
+    ) -> Result<(), QuickLendXError> {
+        Ok(())
+    }
+
+    pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let escrow = EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        with_payment_guard(&env, || {
+            crate::payments::release_escrow(&env, &invoice_id, &escrow.business)
+        })
     }
     
     // Backup & Restore
