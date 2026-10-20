@@ -2644,7 +2644,7 @@ impl QuickLendXContract {
     ///      the contract's MAX_QUERY_LIMIT. Indexers should use this value as a starting point
     ///      for pagination to balance efficiency and memory usage.
     /// @return Default settlement batch size (25) — recommended number of payment records per page.
-    pub fn get_settlement_batch_size_soft_cap(_env: Env) -> u32 {
+    pub fn get_settlement_batch_cap(_env: Env) -> u32 {
         settlement::default_settlement_batch_size_soft_cap()
     }
 
@@ -2652,7 +2652,7 @@ impl QuickLendXContract {
     /// @dev This represents the hard upper bound enforced by the contract. Query requests
     ///      exceeding this limit will be automatically clamped to this value by `get_payment_records`.
     /// @return Maximum settlement batch size (50) — hard cap for payment records per query.
-    pub fn get_settlement_batch_size_soft_cap_max(_env: Env) -> u32 {
+    pub fn get_settlement_batch_max(_env: Env) -> u32 {
         settlement::max_settlement_batch_size_soft_cap()
     }
 
