@@ -55,7 +55,6 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     let _ = client.try_initialize_admin(&admin);
-    client.set_admin(&admin, &admin);
     (env, client, admin)
 }
 
@@ -168,7 +167,7 @@ fn build_two_investor_race() -> (
     Address,
 ) {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor_a = verified_investor(&env, &client, &admin, 500_000);
     let investor_b = verified_investor(&env, &client, &admin, 500_000);

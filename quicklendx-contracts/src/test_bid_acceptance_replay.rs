@@ -51,7 +51,6 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.initialize_admin(&admin);
-    client.set_admin(&admin, &admin);
     (env, client, admin, contract_id)
 }
 
