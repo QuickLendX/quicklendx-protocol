@@ -82,7 +82,20 @@ fn kyc_submitted_at(env: &Env, kind: KycIndexKind, address: &Address) -> u64 {
 }
 
 fn kyc_address_lex_gt(a: &Address, b: &Address) -> bool {
-    a.to_string().compare(&b.to_string()) == core::cmp::Ordering::Greater
+    let a_bytes = a.to_string().to_bytes();
+    let b_bytes = b.to_string().to_bytes();
+    let common_len = a_bytes.len().min(b_bytes.len());
+
+    for i in 0..common_len {
+        let a_byte = a_bytes.get(i).unwrap_or(0);
+        let b_byte = b_bytes.get(i).unwrap_or(0);
+
+        if a_byte != b_byte {
+            return a_byte > b_byte;
+        }
+    }
+
+    a_bytes.len() > b_bytes.len()
 }
 
 fn ensure_kyc_index_sorted(env: &Env, kind: KycIndexKind) {
@@ -597,17 +610,15 @@ impl BusinessVerificationStorage {
         }
     }
 
-    pub fn get_verification(env: &Env, business: &Address) -> Option<BusinessVerification> {
-        let key = KycStorageKey::BusinessRecord(business.clone());
-        let value = env.storage().persistent().get(&key);
-        if value.is_some() {
-            crate::storage::extend_persistent_ttl(env, &key);
-        }
-        value.or_else(|| {
-            let raw: Val = env.storage().instance().get(business)?;
-            BusinessVerification::try_from_val(env, &raw).ok()
-        })
+
+pub fn get_verification(env: &Env, business: &Address) -> Option<BusinessVerification> {
+    let key = KycStorageKey::BusinessRecord(business.clone());
+    let value = env.storage().persistent().get(&key);
+    if value.is_some() {
+        crate::storage::extend_persistent_ttl(env, &key);
     }
+    value
+}
 
     pub fn update_verification(
         env: &Env,
@@ -921,17 +932,16 @@ impl InvestorVerificationStorage {
         crate::storage::extend_persistent_ttl(env, &key);
     }
 
-    pub fn get(env: &Env, investor: &Address) -> Option<InvestorVerification> {
-        let key = KycStorageKey::InvestorRecord(investor.clone());
-        let value = env.storage().persistent().get(&key);
-        if value.is_some() {
-            crate::storage::extend_persistent_ttl(env, &key);
-        }
-        value.or_else(|| {
-            let raw: Val = env.storage().instance().get(investor)?;
-            InvestorVerification::try_from_val(env, &raw).ok()
-        })
+
+pub fn get(env: &Env, investor: &Address) -> Option<InvestorVerification> {
+    let key = KycStorageKey::InvestorRecord(investor.clone());
+    let value = env.storage().persistent().get(&key);
+    if value.is_some() {
+        crate::storage::extend_persistent_ttl(env, &key);
     }
+    value
+}
+
 
     pub fn update(env: &Env, verification: &InvestorVerification) {
         let old_verification = Self::get(env, &verification.investor);
