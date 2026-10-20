@@ -59,6 +59,7 @@ pub mod bench;
 pub mod address_summary;
 pub mod admin;
 pub mod analytics;
+pub mod arbiter;
 pub mod audit;
 pub mod backpressure;
 pub mod backup;
