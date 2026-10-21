@@ -1,296 +1,325 @@
-"use client";
+“use client”;
 
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from “react”;
 import {
-  trackWalletConnectAttempt,
-  trackWalletConnected,
-  trackWalletConnectFailed,
-  trackWalletDisconnected,
-} from "../lib/wallet-telemetry";
+trackWalletConnectAttempt,
+trackWalletConnected,
+trackWalletConnectFailed,
+trackWalletDisconnected,
+} from “../lib/wallet-telemetry”;
 
-// ---------------------------------------------------------------------------
+// —————————————————————————
 // Types
-// ---------------------------------------------------------------------------
+// —————————————————————————
 
 export type WalletConnectionState =
-  | "NOT_CONNECTED"
-  | "CONNECTING"
-  | "CONNECTED"
-  | "WRONG_NETWORK"
-  | "ERROR"
-  | "DISCONNECTING";
+| “NOT_CONNECTED”
+| “CONNECTING”
+| “CONNECTED”
+| “WRONG_NETWORK”
+| “ERROR”
+| “DISCONNECTING”;
 
 export interface WalletConnectProps {
-  /** Expected network: "public" (Mainnet) or "testnet". */
-  expectedNetwork?: "public" | "testnet";
-  /** Called when the user successfully connects. Receives the public key. */
-  onConnect?: (publicKey: string) => void;
-  /** Called when the user disconnects. */
-  onDisconnect?: () => void;
+/** Expected network: “public” (Mainnet) or “testnet”. /
+expectedNetwork?: “public” | “testnet”;
+/* Called when the user successfully connects. Receives the public key. /
+onConnect?: (publicKey: string) => void;
+/* Called when the user disconnects. */
+onDisconnect?: () => void;
 }
 
-// ---------------------------------------------------------------------------
+// —————————————————————————
 // Helpers
-// ---------------------------------------------------------------------------
+// —————————————————————————
 
 /**
- * Truncates a Stellar address to "XXXXXX…XXXX" format.
- * Spec: docs/ux/wallet-connect.md §4.1
- */
-export function truncateAddress(address: string): string {
-  if (address.length <= 13) return address;
-  return `${address.slice(0, 6)}\u2026${address.slice(-4)}`;
+
+* Truncates a Stellar address to “XXXXXX…XXXX” format.
+* Spec: docs/ux/wallet-connect.md §4.1
+    */
+    export function truncateAddress(address: string): string {
+    if (address.length <= 13) return address;
+    return ${address.slice(0, 6)}\u2026${address.slice(-4)};
+    }
+
+function explorerUrl(address: string, network: “public” | “testnet”): string {
+return https://stellar.expert/explorer/${network}/account/${address};
 }
 
-function explorerUrl(address: string, network: "public" | "testnet"): string {
-  return `https://stellar.expert/explorer/${network}/account/${address}`;
-}
+// —————————————————————————
+// Copy button
+// —————————————————————————
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-/** Copy-to-clipboard button with feedback and error hardening. */
+/** Copy-to-clipboard button with feedback and error handling. */
 export const CopyButton: React.FC<{ value: string }> = ({ value }) => {
-  const [copied, setCopied] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const liveRef = useRef<HTMLSpanElement>(null);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+const [copied, setCopied] = useState(false);
+const [errorMessage, setErrorMessage] = useState<string | null>(null);
+const liveRef = useRef(null);
+const timeoutRef = useRef<ReturnType | null>(null);
 
-  useEffect(() => {
-    return () => {
-      if (timeoutRef.current) {
-        clearTimeout(timeoutRef.current);
+useEffect(() => {
+return () => {
+if (timeoutRef.current !== null) {
+clearTimeout(timeoutRef.current);
+}
+};
+}, []);
+
+const handleCopy = useCallback(
+async (e: React.MouseEvent) => {
+e.stopPropagation();
+setErrorMessage(null);
+
+  try {
+    if (!navigator.clipboard?.writeText) {
+      throw new Error("Clipboard API not available");
+    }
+    await navigator.clipboard.writeText(value);
+    setCopied(true);
+    if (liveRef.current) {
+      liveRef.current.textContent = "Address copied.";
+    }
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      setCopied(false);
+      if (liveRef.current) {
+        liveRef.current.textContent = "";
       }
-    };
-  }, []);
-
-  const handleCopy = useCallback(
-    async (e: React.MouseEvent | React.KeyboardEvent) => {
-      e.stopPropagation();
+      timeoutRef.current = null;
+    }, 2000);
+  } catch {
+    const message = "Couldn't copy, select the address manually";
+    setErrorMessage(message);
+    if (liveRef.current) {
+      liveRef.current.textContent = message;
+    }
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
       setErrorMessage(null);
-      try {
-        if (!navigator?.clipboard?.writeText) {
-          throw new Error("Clipboard API not available");
-        }
-        await navigator.clipboard.writeText(value);
-        setCopied(true);
-        if (liveRef.current) liveRef.current.textContent = "Address copied.";
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => {
-          setCopied(false);
-          if (liveRef.current) liveRef.current.textContent = "";
-        }, 2000);
-      } catch {
-        const errText = "Couldn't copy, select the address manually";
-        setErrorMessage(errText);
-        if (liveRef.current) liveRef.current.textContent = errText;
-        if (timeoutRef.current) clearTimeout(timeoutRef.current);
-        timeoutRef.current = setTimeout(() => {
-          setErrorMessage(null);
-          if (liveRef.current) liveRef.current.textContent = "";
-        }, 3000);
+      if (liveRef.current) {
+        liveRef.current.textContent = "";
       }
-    },
-    [value]
-  );
+      timeoutRef.current = null;
+    }, 3000);
+  }
+},
+[value]
 
-  return (
-    <div className="relative inline-flex items-center">
-      <button
-        type="button"
-        onClick={handleCopy}
-        aria-label="Copy full address to clipboard"
-        className="ml-1 text-neutral-500 hover:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
-      >
-        {copied ? (
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            aria-hidden="true"
-          >
-            <path
-              d="M3 8l4 4 6-6"
-              stroke="#10B981"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        ) : (
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 16 16"
-            fill="none"
-            aria-hidden="true"
-          >
-            <rect
-              x="5"
-              y="5"
-              width="8"
-              height="8"
-              rx="1"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            />
-            <path
-              d="M3 11V3h8"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-        )}
-      </button>
-      {/* aria-live region for screen readers */}
-      <span ref={liveRef} aria-live="polite" className="sr-only" />
-      {errorMessage && (
-        <div
-          role="alert"
-          className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 whitespace-nowrap bg-red-900 text-white text-xs px-2 py-1 rounded shadow-lg z-50"
-        >
-          {errorMessage}
-        </div>
-      )}
+);
+
+return (
+{copied ? (
+) : (
+)}
+  <span
+    ref={liveRef}
+    aria-live="polite"
+    aria-atomic="true"
+    className="sr-only"
+  />
+  {errorMessage && (
+    <div
+      role="alert"
+      className="absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded bg-red-900 px-2 py-1 text-xs text-white shadow-lg"
+    >
+      {errorMessage}
     </div>
-  );
+  )}
+</div>
+
+);
 };
 
+// —————————————————————————
+// Connected account
+// —————————————————————————
+
 export interface ConnectedAccountProps {
-  address: string;
-  network: "public" | "testnet";
-  onDisconnect?: () => void;
-  disconnecting?: boolean;
+address: string;
+network: “public” | “testnet”;
+onDisconnect?: () => void;
+disconnecting?: boolean;
 }
 
-/** Connected account pill restructured as a role="group" with sibling controls. */
-export const ConnectedAccount: React.FC<ConnectedAccountProps> = ({
-  address,
-  network,
-  onDisconnect,
-  disconnecting = false,
-}) => {
-  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const disconnectRef = useRef<HTMLButtonElement>(null);
+/**
 
-  // Handle outside pointerdown & Escape key
-  useEffect(() => {
-    const handleOutsidePointerDown = (event: PointerEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setAccountMenuOpen(false);
-      }
-    };
+* Displays the connected wallet as a group of sibling controls.
+* The account trigger opens a keyboard-accessible menu.
+    */
+    export const ConnectedAccount: React.FC = ({
+    address,
+    network,
+    onDisconnect,
+    disconnecting = false,
+    }) => {
+    const [accountMenuOpen, setAccountMenuOpen] = useState(false);
 
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape" && accountMenuOpen) {
-        setAccountMenuOpen(false);
-        triggerRef.current?.focus();
-      }
-    };
+const rootRef = useRef(null);
+const triggerRef = useRef(null);
+const explorerRef = useRef(null);
+const disconnectRef = useRef(null);
 
-    if (accountMenuOpen) {
-      document.addEventListener("pointerdown", handleOutsidePointerDown);
-      document.addEventListener("keydown", handleKeyDown);
-    }
-    return () => {
-      document.removeEventListener("pointerdown", handleOutsidePointerDown);
-      document.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [accountMenuOpen]);
+const closeMenu = useCallback((restoreFocus = false) => {
+setAccountMenuOpen(false);
 
-  // Move focus to first menu item when opened
-  useEffect(() => {
-    if (accountMenuOpen) {
-      disconnectRef.current?.focus();
-    }
-  }, [accountMenuOpen]);
+if (restoreFocus) {
+  requestAnimationFrame(() => {
+    triggerRef.current?.focus();
+  });
+}
 
-  const handleTriggerKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") {
-      e.preventDefault();
-      setAccountMenuOpen(true);
-    }
-  };
+}, []);
 
-  return (
-    <div
-      ref={menuRef}
-      role="group"
-      aria-label="Connected wallet"
-      className="relative inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#E2E8F0] bg-white text-sm font-mono text-[#0F172A]"
-    >
-      {/* Live indicator */}
-      <span className="h-2 w-2 rounded-full bg-[#10B981]" aria-hidden="true" />
+// Close the menu when the user clicks or taps outside the entire component.
+useEffect(() => {
+if (!accountMenuOpen) return;
 
-      {/* Account menu trigger button */}
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={accountMenuOpen}
-        onClick={() => setAccountMenuOpen((v) => !v)}
-        onKeyDown={handleTriggerKeyDown}
-        className="flex items-center gap-1 hover:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
-      >
-        <span>{truncateAddress(address)}</span>
-        <svg
-          width="12"
-          height="12"
-          viewBox="0 0 16 16"
-          fill="none"
-          aria-hidden="true"
-          className={`transition-transform duration-200 ${
-            accountMenuOpen ? "rotate-180" : ""
-          }`}
-        >
-          <path
-            d="M4 6l4 4 4-4"
-            stroke="currentColor"
-            strokeWidth="1.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      </button>
+const handleOutsidePointerDown = (event: PointerEvent) => {
+  const target = event.target;
+  if (
+    target instanceof Node &&
+    rootRef.current &&
+    !rootRef.current.contains(target)
+  ) {
+    setAccountMenuOpen(false);
+  }
+};
+const handleDocumentKeyDown = (event: KeyboardEvent) => {
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeMenu(true);
+  }
+};
+document.addEventListener("pointerdown", handleOutsidePointerDown);
+document.addEventListener("keydown", handleDocumentKeyDown);
+return () => {
+  document.removeEventListener("pointerdown", handleOutsidePointerDown);
+  document.removeEventListener("keydown", handleDocumentKeyDown);
+};
 
-      {/* Sibling copy button */}
-      <CopyButton value={address} />
+}, [accountMenuOpen, closeMenu]);
 
-      {/* Dropdown Menu */}
-      {accountMenuOpen && (
-        <div
-          role="menu"
-          className="absolute right-0 top-full mt-2 w-48 bg-white border border-[#E2E8F0] rounded-lg shadow-lg py-1 z-50 text-xs font-sans"
-        >
-          <a
-            role="menuitem"
-            href={explorerUrl(address, network)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="block px-4 py-2 text-[#0F172A] hover:bg-neutral-100 transition-colors"
-          >
-            View on Explorer ↗
-          </a>
-          <button
-            ref={disconnectRef}
-            role="menuitem"
-            type="button"
-            disabled={disconnecting}
-            onClick={() => {
-              setAccountMenuOpen(false);
-              onDisconnect?.();
-            }}
-            className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
-          >
-            {disconnecting ? "Disconnecting..." : "Disconnect"}
-          </button>
-        </div>
-      )}
-    </div>
+// Focus the first menu item whenever the menu opens.
+useEffect(() => {
+if (accountMenuOpen) {
+disconnectRef.current?.focus();
+}
+}, [accountMenuOpen]);
+
+const handleTriggerKeyDown = (event: React.KeyboardEvent) => {
+if (
+event.key === “ArrowDown” &&
+!accountMenuOpen
+) {
+event.preventDefault();
+setAccountMenuOpen(true);
+}
+};
+
+const handleMenuKeyDown = (event: React.KeyboardEvent) => {
+if (event.key === “Tab”) {
+closeMenu(false);
+}
+
+if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+  event.preventDefault();
+  const items = [disconnectRef.current, explorerRef.current].filter(
+    (item): item is HTMLButtonElement | HTMLAnchorElement => item !== null
   );
+  const currentIndex = items.indexOf(
+    document.activeElement as HTMLButtonElement | HTMLAnchorElement
+  );
+  const direction = event.key === "ArrowDown" ? 1 : -1;
+  const nextIndex =
+    currentIndex === -1
+      ? 0
+      : (currentIndex + direction + items.length) % items.length;
+  items[nextIndex]?.focus();
+}
+if (event.key === "Home") {
+  event.preventDefault();
+  disconnectRef.current?.focus();
+}
+if (event.key === "End") {
+  event.preventDefault();
+  explorerRef.current?.focus();
+}
+
+};
+
+return (
+  {/* Account menu trigger */}
+  <button
+    ref={triggerRef}
+    type="button"
+    aria-haspopup="menu"
+    aria-expanded={accountMenuOpen}
+    aria-controls="connected-account-menu"
+    onClick={() => setAccountMenuOpen((open) => !open)}
+    onKeyDown={handleTriggerKeyDown}
+    className="flex items-center gap-1 rounded hover:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+  >
+    <span>{truncateAddress(address)}</span>
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 16 16"
+      fill="none"
+      aria-hidden="true"
+      className={`transition-transform duration-200 ${
+        accountMenuOpen ? "rotate-180" : ""
+      }`}
+    >
+      <path
+        d="M4 6l4 4 4-4"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  </button>
+  {/* Copy is a sibling control, not nested inside the trigger. */}
+  <CopyButton value={address} />
+  {/* Explorer link is also a sibling control. */}
+  <a
+    href={explorerUrl(address, network)}
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label="View wallet on Stellar Explorer (opens in a new tab)"
+    className="ml-1 rounded px-1 text-xs text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB]"
+  >
+    Explorer ↗
+  </a>
+  {accountMenuOpen && (
+    <div
+      id="connected-account-menu"
+      role="menu"
+      aria-label="Wallet account actions"
+      onKeyDown={handleMenuKeyDown}
+      className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-[#E2E8F0] bg-white py-1 font-sans text-xs shadow-lg"
+    >
+      <button
+        ref={disconnectRef}
+        role="menuitem"
+        type="button"
+        disabled={disconnecting}
+        onClick={() => {
+          closeMenu(false);
+          onDisconnect?.();
+        }}
+        className="w-full px-4 py-2 text-left text-red-600 transition-colors hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {disconnecting ? "Disconnecting…" : "Disconnect"}
+      </button>
+    </div>
+  )}
+</div>
+
+);
 };
