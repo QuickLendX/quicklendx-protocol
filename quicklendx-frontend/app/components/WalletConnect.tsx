@@ -244,4 +244,53 @@ export const ConnectedAccount: React.FC<ConnectedAccountProps> = ({
           viewBox="0 0 16 16"
           fill="none"
           aria-hidden="true"
-          className={`transition-
+          className={`transition-transform duration-200 ${
+            accountMenuOpen ? "rotate-180" : ""
+          }`}
+        >
+          <path
+            d="M4 6l4 4 4-4"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      </button>
+
+      {/* Sibling copy button */}
+      <CopyButton value={address} />
+
+      {/* Dropdown Menu */}
+      {accountMenuOpen && (
+        <div
+          role="menu"
+          className="absolute right-0 top-full mt-2 w-48 bg-white border border-[#E2E8F0] rounded-lg shadow-lg py-1 z-50 text-xs font-sans"
+        >
+          <a
+            role="menuitem"
+            href={explorerUrl(address, network)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block px-4 py-2 text-[#0F172A] hover:bg-neutral-100 transition-colors"
+          >
+            View on Explorer ↗
+          </a>
+          <button
+            ref={disconnectRef}
+            role="menuitem"
+            type="button"
+            disabled={disconnecting}
+            onClick={() => {
+              setAccountMenuOpen(false);
+              onDisconnect?.();
+            }}
+            className="w-full text-left px-4 py-2 text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+          >
+            {disconnecting ? "Disconnecting..." : "Disconnect"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
