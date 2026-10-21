@@ -218,7 +218,8 @@ impl BackupStorage {
         env: &Env,
         backup_id: &BytesN<32>,
     ) -> Result<u32, QuickLendXError> {
-        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id).unwrap();
+        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         if let Ok(map) =
             soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)

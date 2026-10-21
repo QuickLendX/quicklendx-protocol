@@ -740,6 +740,12 @@ impl InvoiceStorage {
             .unwrap_or(0)
     }
 
+    pub fn set_total_count(env: &Env, count: u32) {
+        env.storage()
+            .persistent()
+            .set(&StorageKeys::invoice_count(), &(count as u64));
+    }
+
     pub fn delete_invoice(env: &Env, invoice_id: &BytesN<32>) {
         crate::assert_view_only!(env);
         if let Some(invoice) = Self::get(env, invoice_id) {
