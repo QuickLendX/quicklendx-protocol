@@ -463,7 +463,7 @@ pub fn process_partial_payment(
         recorded.applied_amount,
     );
 
-    if progress.total_paid >= progress.total_due {
+    if recorded.progress.total_paid >= recorded.progress.total_due {
         settle_invoice_internal(env, invoice_id, &payer)?;
     }
 
@@ -784,7 +784,7 @@ pub fn settle_invoice(
         return Err(QuickLendXError::PaymentTooLow);
     }
 
-    let nonce = make_settlement_nonce(env);
+    let nonce = make_settlement_nonce(env, invoice_id);
     record_payment(env, invoice_id, &payer, payment_amount, nonce)?;
     settle_invoice_internal(env, invoice_id, business)
 }
@@ -988,14 +988,6 @@ fn settle_invoice_internal(
         return Err(QuickLendXError::PaymentTooLow);
     }
 
-    // Auto-release escrow funds to business if they are still held in the contract.
-    // This ensures the business receives the original funded amount during the settlement transition.
-    if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
-        if escrow.status == crate::payments::EscrowStatus::Held {
-            crate::payments::release_escrow(env, invoice_id, business)?;
-        }
-    }
-
     let investor_address = invoice
         .investor
         .clone()
@@ -1043,11 +1035,14 @@ fn settle_invoice_internal(
     // guarantee rather than relying on it silently.
     mark_finalized(env, invoice_id);
 
-    // Auto-release escrow funds to business if they are still held in the contract.
-    // This ensures the business receives the original funded amount during the settlement transition.
+    // Auto-release escrow funds to business if they are still held.
+    // Uses release_escrow_internal because the business's auth was already
+    // obtained in the same invocation frame via record_payment / payer.require_auth().
+    // Calling release_escrow (public variant) here would trigger a duplicate-auth
+    // error (Error(Auth, ExistingValue)).
     if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
         if escrow.status == crate::payments::EscrowStatus::Held {
-            crate::payments::release_escrow(env, invoice_id)?;
+            crate::payments::release_escrow_internal(env, invoice_id)?;
         }
     }
 
@@ -1245,10 +1240,30 @@ fn get_last_applied_amount(env: &Env, invoice_id: &BytesN<32>) -> Result<i128, Q
     Ok(record.amount)
 }
 
-fn make_settlement_nonce(env: &Env) -> String {
-    // Full settlement can only succeed once per invoice (status becomes Paid),
-    // so a static nonce is sufficient for this internal path.
-    String::from_str(env, "settlement")
+fn make_settlement_nonce(env: &Env, invoice_id: &BytesN<32>) -> String {
+    // Generate a deterministic, per-invoice 64-character hex nonce.
+    // sha256("settle" || invoice_id) produces a unique 32-byte digest per invoice.
+    // Encoding it as lowercase hex gives a 64-character string that passes
+    // `validate_transaction_hash`.  The nonce is stable: the same invoice always
+    // produces the same value, which is fine because full settlement can only
+    // succeed once (status becomes Paid after the first call).
+    let mut payload = soroban_sdk::Bytes::new(env);
+    // "settle" prefix as raw bytes
+    payload.extend_from_array(&[b's', b'e', b't', b't', b'l', b'e']);
+    let id_bytes = invoice_id.to_array();
+    payload.extend_from_slice(&id_bytes);
+    let digest: soroban_sdk::BytesN<32> = env.crypto().sha256(&payload).into();
+    let digest_bytes = digest.to_array();
+
+    // Encode 32 bytes → 64 lowercase hex chars
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut hex_buf = [0u8; 64];
+    for (i, &byte) in digest_bytes.iter().enumerate() {
+        hex_buf[i * 2]     = HEX[(byte >> 4) as usize];
+        hex_buf[i * 2 + 1] = HEX[(byte & 0x0f) as usize];
+    }
+    // SAFETY: hex_buf contains only ASCII hex characters.
+    String::from_str(env, core::str::from_utf8(&hex_buf).unwrap_or("0000000000000000000000000000000000000000000000000000000000000000"))
 }
 
 fn emit_payment_recorded(

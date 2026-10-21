@@ -909,41 +909,25 @@ pub fn create_escrow_record_only(
     Ok(escrow_id)
 }
 
-/// Release escrow funds to business (contract -> business).
+/// Internal escrow release used by settlement flows where `business.require_auth()`
+/// has already been called in the same invocation frame.
 ///
-/// # Requirements
-/// - Escrow must be in `Held` status.
-/// - The invoice should ideally be in `Funded` or `Paid` status (enforced by caller in `lib.rs`).
+/// Calling `require_auth()` twice for the same address in one Soroban invocation frame
+/// returns `Error(Auth, ExistingValue)`.  This variant skips the auth call so that
+/// `settle_invoice_internal` (which already has the business's auth from `record_payment`)
+/// can auto-release the held escrow without a duplicate-auth error.
 ///
 /// # Security
-/// - Idempotency: Once released, status becomes `Released`, preventing repeated transfers.
-/// - Atomic: Funds are transferred before updating status in storage; if transfer fails,
-///   the operation can be safely retried.
-///
-/// # Errors
-/// * [`QuickLendXError::StorageKeyNotFound`] - no escrow record exists for this invoice.
-/// * [`QuickLendXError::InvalidStatus`] - escrow is not in `Held` status (already released/refunded).
-///   Also returned while reserve repair is active for this token.
-/// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount
-///   (should never happen in normal operation; indicates a critical invariant violation).
-/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
-///   **not** updated so the release can be safely retried.
-pub fn release_escrow(
+/// Callers MUST have already verified `business == escrow.business` via the invoice record
+/// and obtained the business's authorization in the same invocation frame.
+/// This function MUST NOT be called from any public entry-point that has not already
+/// performed that authorization.
+pub(crate) fn release_escrow_internal(
     env: &Env,
     invoice_id: &BytesN<32>,
-    business: &Address,
 ) -> Result<(), QuickLendXError> {
-    business.require_auth();
-
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-    let invoice =
-        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
-
-    if escrow.business != invoice.business {
-        return Err(QuickLendXError::Unauthorized);
-    }
 
     // Enforce the legal transition matrix
     escrow.status.verify_transition(&EscrowStatus::Released)?;
@@ -993,11 +977,52 @@ pub fn release_escrow(
     crate::qlx_log!(
         env,
         "payment",
-        "Escrow released to business: amount={}",
+        "Escrow released to business (internal): amount={}",
         escrow.amount
     );
 
     Ok(())
+}
+
+/// Release escrow funds to business (contract -> business).
+///
+/// # Requirements
+/// - Escrow must be in `Held` status.
+/// - `business` must match `escrow.business` (prevents unauthorized early release).
+/// - The invoice should ideally be in `Funded` or `Paid` status (enforced by caller in `lib.rs`).
+///
+/// # Security
+/// - Caller must match `escrow.business`: rejects unauthorized early escrow releases.
+/// - Idempotency: Once released, status becomes `Released`, preventing repeated transfers.
+/// - Atomic: Funds are transferred before updating status in storage; if transfer fails,
+///   the operation can be safely retried.
+///
+/// # Errors
+/// * [`QuickLendXError::StorageKeyNotFound`] - no escrow record exists for this invoice.
+/// * [`QuickLendXError::Unauthorized`] - `business` does not match `escrow.business`.
+/// * [`QuickLendXError::InvalidStatus`] - escrow is not in `Held` status (already released/refunded).
+///   Also returned while reserve repair is active for this token.
+/// * [`QuickLendXError::InsufficientFunds`] - contract balance is below the escrow amount
+///   (should never happen in normal operation; indicates a critical invariant violation).
+/// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
+///   **not** updated so the release can be safely retried.
+pub fn release_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    business: &Address,
+) -> Result<(), QuickLendXError> {
+    // Verify caller is the escrow owner before authorizing — prevents
+    // unauthorized early escrow releases by any address that knows the invoice ID.
+    let escrow_check = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    if escrow_check.business != *business {
+        return Err(QuickLendXError::Unauthorized);
+    }
+
+    business.require_auth();
+
+    // Delegate to the shared internal implementation (no double-auth).
+    release_escrow_internal(env, invoice_id)
 }
 
 /// Refund escrow funds to investor (contract -> investor). Escrow must be Held.
