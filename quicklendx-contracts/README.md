@@ -149,6 +149,48 @@ See [Settlement formula, inputs, and update timing](../docs/contracts/settlement
 
 See [Settlement Currencies by Invoice Type](docs/SETTLEMENT_CURRENCIES.md) for a downstream integrator guide on which tokens are accepted for each invoice category.
 
+### Contract entrypoints (current surface)
+
+The deployed contract (`src/contract.rs`) currently exposes the protocol
+initialization and admin slice. The remaining modules (invoices, bids, escrow,
+settlement, disputes, KYC, fees, pause, backup) are wired in by their own
+issues; the functions documented under *Core Functions* below describe those
+modules and are not callable on-chain until they are wired.
+
+Every entrypoint is a thin wrapper; validation, auth and events live in the
+module function it delegates to.
+
+| Entrypoint | Delegates to | Auth |
+|---|---|---|
+| `initialize(params: InitializationParams)` | `ProtocolInitializer::initialize` | `params.admin` (once) |
+| `is_initialized()` | `ProtocolInitializer::is_initialized` | — |
+| `get_version()` | `ProtocolInitializer::get_version` | — |
+| `get_protocol_config()` | `ProtocolInitializer::get_protocol_config` | — |
+| `preview_protocol_config(admin, params: ProtocolConfigParams)` | `ProtocolInitializer::preview_protocol_config` | admin (read-only) |
+| `set_protocol_config(admin, min_invoice_amount, max_due_date_days, grace_period_seconds, backfill_max_batch_size)` | `ProtocolInitializer::set_protocol_config` | admin |
+| `set_fee_config(admin, fee_bps)` | `ProtocolInitializer::set_fee_config` | admin |
+| `set_treasury(admin, treasury)` | `ProtocolInitializer::set_treasury` | admin |
+| `get_fee_bps()` | `ProtocolInitializer::get_fee_bps` | — |
+| `get_treasury()` | `ProtocolInitializer::get_treasury` | — |
+| `get_min_invoice_amount()` | `ProtocolInitializer::get_min_invoice_amount` | — |
+| `get_max_due_date_days()` | `ProtocolInitializer::get_max_due_date_days` | — |
+| `get_grace_period_seconds()` | `ProtocolInitializer::get_grace_period_seconds` | — |
+| `get_corridors()` | `ProtocolInitializer::get_corridors` | — |
+| `get_current_admin()` | `AdminStorage::get_admin` | — |
+| `transfer_admin(current_admin, new_admin)` | `AdminStorage::transfer_admin` (records a pending transfer when two-step is on) | current admin |
+| `initiate_admin_transfer(current_admin, pending_admin)` | `AdminStorage::initiate_admin_transfer` | current admin |
+| `accept_admin_transfer(pending_admin)` | `AdminStorage::accept_admin_transfer` | pending admin |
+| `cancel_admin_transfer(current_admin)` | `AdminStorage::cancel_admin_transfer` | current admin |
+| `set_two_step_enabled(admin, enabled)` | `AdminStorage::set_two_step_enabled` | admin |
+| `is_two_step_enabled()` | `AdminStorage::is_two_step_enabled` | — |
+| `get_pending_admin()` | `AdminStorage::get_pending_admin` | — |
+
+`initialize` succeeds once. Repeating it with identical params returns `Ok(())`;
+any other params return `OperationNotAllowed`. There is no standalone
+`initialize_admin`: the admin is installed only by `initialize`. If a
+deployment already has an admin from an older flow, only that admin can
+complete `initialize`.
+
 ### Core Functions
 
 #### Invoice Management
@@ -733,12 +775,12 @@ stellar-cli contract deploy \
 3. **Initialize Contract**
 
 ```bash
-# Set admin
+# Initialize protocol (admin signs; sets admin, treasury, fee and limits atomically)
 stellar-cli contract invoke \
     --id <CONTRACT_ID> \
     --source admin \
-    -- set_admin \
-    --admin <ADMIN_ADDRESS>
+    -- initialize \
+    --params '{"admin":"<ADMIN_ADDRESS>","treasury":"<TREASURY_ADDRESS>","fee_bps":200,"min_invoice_amount":"1000000","max_due_date_days":365,"grace_period_seconds":604800,"initial_currencies":[],"corridors":[],"backfill_max_batch_size":100}'
 ```
 
 ### Testnet Deployment

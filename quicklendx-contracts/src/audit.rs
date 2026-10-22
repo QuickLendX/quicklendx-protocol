@@ -108,6 +108,10 @@ pub enum AuditOperation {
     InvestorFrozen,
     /// An investor was unfrozen (investment actions restored).
     InvestorUnfrozen,
+    /// A placed bid was cancelled by its investor.
+    BidCancelled,
+    /// A placed bid expired (TTL / grace cleanup).
+    BidExpired,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -159,6 +163,10 @@ pub enum OpType {
     KycRevoked,
     InvestorFrozen,
     InvestorUnfrozen,
+    /// A placed bid was cancelled by its investor.
+    BidCancelled,
+    /// A placed bid expired (TTL / grace cleanup).
+    BidExpired,
 }
 
 impl OpType {
@@ -206,6 +214,8 @@ impl OpType {
             OpType::KycRevoked => symbol_short!("kyc_rev"),
             OpType::InvestorFrozen => symbol_short!("inv_frz"),
             OpType::InvestorUnfrozen => symbol_short!("inv_unf"),
+            OpType::BidCancelled => symbol_short!("bid_cnl"),
+            OpType::BidExpired => symbol_short!("bid_exp"),
         }
     }
 
@@ -253,6 +263,8 @@ impl OpType {
             OpType::KycRevoked => 36,
             OpType::InvestorFrozen => 37,
             OpType::InvestorUnfrozen => 38,
+            OpType::BidCancelled => 39,
+            OpType::BidExpired => 40,
         }
     }
 }
@@ -303,6 +315,8 @@ impl From<AuditOperation> for OpType {
             AuditOperation::KycRevoked => OpType::KycRevoked,
             AuditOperation::InvestorFrozen => OpType::InvestorFrozen,
             AuditOperation::InvestorUnfrozen => OpType::InvestorUnfrozen,
+            AuditOperation::BidCancelled => OpType::BidCancelled,
+            AuditOperation::BidExpired => OpType::BidExpired,
         }
     }
 }
@@ -609,6 +623,8 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::KycRevoked => 36,
         AuditOperation::InvestorFrozen => 37,
         AuditOperation::InvestorUnfrozen => 38,
+        AuditOperation::BidCancelled => 39,
+        AuditOperation::BidExpired => 40,
     }
 }
 
