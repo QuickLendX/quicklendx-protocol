@@ -49,7 +49,6 @@ required-features = ["legacy-tests"]
 [[test]]
 name = "bid_acceptance_replay"
 path = "tests/bid_acceptance_replay.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "investor_kyc_tier"

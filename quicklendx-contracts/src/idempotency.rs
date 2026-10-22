@@ -17,7 +17,7 @@
 
 extern crate alloc;
 
-use crate::storage::extend_persistent_ttl;
+use crate::storage::{bump_persistent, extend_persistent_ttl};
 use soroban_sdk::{symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, Symbol};
 
 /// Storage namespace for idempotency markers (`bool`).
@@ -98,23 +98,17 @@ pub fn store_idempotency_result<T: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(
 mod tests {
     use super::*;
     use crate::QuickLendXContract;
-    use soroban_sdk::testutils::Address as _;
-
-    fn in_contract<R>(f: impl FnOnce(&Env) -> R) -> R {
-        let env = Env::default();
-        let id = env.register(QuickLendXContract, ());
-        env.as_contract(&id, || f(&env))
-    }
+    use soroban_sdk::Env;
 
     #[test]
     #[ignore = "pre-existing: mutates storage outside env.as_contract, rejected by current soroban-sdk (issue #2963)"]
     fn test_idempotency_result() {
         let env = Env::default();
-        let contract_id = env.register(crate::QuickLendXContract, ());
-        let key = BytesN::from_array(&env, &[1; 32]);
-        let result = BytesN::from_array(&env, &[2; 32]);
-
+        let contract_id = env.register(QuickLendXContract, ());
         env.as_contract(&contract_id, || {
+            let key = BytesN::from_array(&env, &[1; 32]);
+            let result = BytesN::from_array(&env, &[2; 32]);
+
             assert_eq!(get_idempotency_result::<BytesN<32>>(&env, &key), None);
             store_idempotency_result(&env, &key, &result);
             assert_eq!(

@@ -574,7 +574,7 @@ pub fn check_and_record_mutation(env: &Env, addr: &Address) -> Result<(), QuickL
 // ─── Input-size validation helpers (#2439) ──────────────────────────────────
 
 /// Reject a description blob that exceeds [`MAX_INPUT_DESCRIPTION_BYTES`].
-pub fn require_description_bound(desc: &soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
+pub fn require_description_bound(desc: &soroban_sdk::String) -> Result<(), QuickLendXError> {
     if desc.len() as u32 > MAX_INPUT_DESCRIPTION_BYTES {
         return Err(QuickLendXError::InputTooLarge);
     }
@@ -582,7 +582,7 @@ pub fn require_description_bound(desc: &soroban_sdk::Bytes) -> Result<(), QuickL
 }
 
 /// Reject a KYC data blob that exceeds [`MAX_INPUT_KYC_DATA_BYTES`].
-pub fn require_kyc_data_bound(data: &soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
+pub fn require_kyc_data_bound(data: &soroban_sdk::String) -> Result<(), QuickLendXError> {
     if data.len() as u32 > MAX_INPUT_KYC_DATA_BYTES {
         return Err(QuickLendXError::InputTooLarge);
     }

@@ -8,8 +8,8 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symb
 use crate::errors::QuickLendXError;
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, Invoice, InvoiceCategory, InvoiceLock, InvestorFreezeInfo, InvoiceStatus, PlatformFeeConfig,
-    PruneReport, RebuildReport,
+    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, InvestorFreezeInfo, Invoice,
+    InvoiceCategory, InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
 };
 
 /// Soroban TTL policy based on 5-second ledgers.
@@ -547,6 +547,23 @@ impl InvoiceStorage {
         } else {
             env.storage().persistent().remove(&key);
         }
+    }
+
+    pub fn set_invoice_lock(env: &Env, invoice_id: &BytesN<32>, lock: InvoiceLock) {
+        let key = DataKey::FrozenInvoice(invoice_id.clone());
+        if lock == InvoiceLock::None {
+            env.storage().persistent().remove(&key);
+        } else {
+            env.storage().persistent().set(&key, &lock);
+            extend_persistent_ttl(env, &key);
+        }
+    }
+
+    pub fn get_invoice_lock(env: &Env, invoice_id: &BytesN<32>) -> InvoiceLock {
+        env.storage()
+            .persistent()
+            .get(&DataKey::FrozenInvoice(invoice_id.clone()))
+            .unwrap_or(InvoiceLock::None)
     }
 
     pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {

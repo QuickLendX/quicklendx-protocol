@@ -34,7 +34,6 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     let _ = client.try_initialize_admin(&admin);
-    client.set_admin(&admin);
     (env, client, admin)
 }
 
@@ -103,9 +102,9 @@ fn create_verified_invoice(
         &String::from_str(env, "Test Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None,
+        &BytesN::from_array(env, &[1u8; 32]),
     );
-    client.verify_invoice(&invoice_id);
+    client.verify_invoice(&client.get_admin(), &invoice_id);
     invoice_id
 }
 
@@ -122,7 +121,7 @@ fn place_test_bid(
         invoice_id,
         &bid_amount,
         &expected_return,
-        &BytesN::from_array(&env, &[0u8; 32]),
+        &BytesN::from_array(&client.env, &[0u8; 32]),
     )
 }
 
@@ -179,7 +178,7 @@ fn test_only_verified_invoice_can_be_funded() {
         &String::from_str(&env, "Unverified Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-        &None,
+        &BytesN::from_array(&env, &[2u8; 32]),
     );
 
     // Attempt to place bid on unverified invoice - should fail
@@ -196,7 +195,7 @@ fn test_only_verified_invoice_can_be_funded() {
     );
 
     // Verify the invoice
-    client.verify_invoice(&invoice_id);
+    client.verify_invoice(&client.get_admin(), &invoice_id);
 
     // Now bidding should work
     let bid_id = client.place_bid(
@@ -833,7 +832,7 @@ fn test_verify_invoice_when_funded_triggers_release_escrow_funds() {
 
     let business_balance_before = token_client.balance(&business);
 
-    let result = client.try_verify_invoice(&invoice_id);
+    let result = client.try_verify_invoice(&client.get_admin(), &invoice_id);
     assert!(
         result.is_ok(),
         "verify_invoice when funded should trigger release"
@@ -1620,7 +1619,7 @@ fn test_accept_bid_and_fund_with_origination_fee_succeeds() {
     token_client.approve(&investor, &contract_id, &(amount * 10), &expiration);
 
     let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = client.store_invoice(
+    let invoice_id = client.upload_invoice(
         &business,
         &amount,
         &currency,
@@ -1629,8 +1628,10 @@ fn test_accept_bid_and_fund_with_origination_fee_succeeds() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
         &Some(fee_bps),
+        &None,
+        &None,
     );
-    client.verify_invoice(&invoice_id);
+    client.verify_invoice(&client.get_admin(), &invoice_id);
 
     let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 500);
 
@@ -1664,7 +1665,8 @@ fn test_accept_bid_and_fund_with_origination_fee_succeeds() {
     // Investment exists with the full amount
     let investments = client.get_investments_by_investor(&investor);
     assert_eq!(investments.len(), 1);
-    assert_eq!(investments.get_unchecked(0).amount, amount);
+    let investment = client.get_investment(&investments.get_unchecked(0));
+    assert_eq!(investment.amount, amount);
 }
 
 /// accept_bid_and_fund with origination fee fails cleanly when the investor
@@ -1694,7 +1696,7 @@ fn test_accept_bid_and_fund_origination_fee_insufficient_balance() {
     token_client.approve(&investor, &contract_id, &(amount * 10), &expiration);
 
     let due_date = env.ledger().timestamp() + 86400;
-    let invoice_id = client.store_invoice(
+    let invoice_id = client.upload_invoice(
         &business,
         &amount,
         &currency,
@@ -1703,8 +1705,10 @@ fn test_accept_bid_and_fund_origination_fee_insufficient_balance() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
         &Some(fee_bps),
+        &None,
+        &None,
     );
-    client.verify_invoice(&invoice_id);
+    client.verify_invoice(&client.get_admin(), &invoice_id);
 
     let bid_id = place_test_bid(&client, &investor, &invoice_id, amount, amount + 500);
 
