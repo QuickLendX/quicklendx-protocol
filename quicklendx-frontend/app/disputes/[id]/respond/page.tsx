@@ -1,11 +1,20 @@
 "use client";
 
 import React, { useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, notFound } from "next/navigation";
+import { isHexId } from "../../../lib/ids";
 
 export default function DisputeResponsePage() {
   const params = useParams();
-  const disputeId = params.id;
+  const disputeId =
+    typeof params?.id === "string" ? (params.id as string) : undefined;
+
+  // Reject malformed identifiers before any API call is made: dispute ids are
+  // on-chain hex strings (`0x` + hex digits, see
+  // `backend/src/validators/shared.ts` `hexStringSchema`).
+  if (disputeId !== undefined && !isHexId(disputeId)) {
+    notFound();
+  }
   const [selectedOption, setSelectedOption] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
 

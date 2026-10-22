@@ -2,7 +2,8 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, notFound } from "next/navigation";
+import { isHexId } from "../../../lib/ids";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -277,7 +278,17 @@ const ExportButton: React.FC<{
 
 export default function SettlementReceiptPage() {
   const params = useParams();
-  const receiptId = (params?.id as string) ?? PLACEHOLDER.id;
+  const requestedId =
+    typeof params?.id === "string" ? (params.id as string) : undefined;
+
+  // Reject malformed identifiers before any API call is made: settlement ids
+  // are on-chain hex strings (`0x` + hex digits, see
+  // `backend/src/validators/shared.ts` `hexStringSchema`).
+  if (requestedId !== undefined && !isHexId(requestedId)) {
+    notFound();
+  }
+
+  const receiptId = requestedId ?? PLACEHOLDER.id;
 
   // TODO: replace with authenticated API call: GET /api/settlements/:id
   const receipt = PLACEHOLDER;

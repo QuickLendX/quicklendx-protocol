@@ -410,6 +410,13 @@ export function createProviderFromConfig(
 export class WalletTelemetryService {
   private config: WalletTelemetryConfig;
   private provider: WalletTelemetryProvider;
+  /**
+   * True when the active provider was supplied explicitly (via
+   * `setProvider`) instead of being derived from the configuration. An
+   * explicitly supplied provider survives a `configure()` call that does not
+   * name a provider type.
+   */
+  private hasCustomProvider = false;
 
   constructor(initialConfig?: Partial<WalletTelemetryConfig>) {
     const envConfig = resolveConfigFromEnv();
@@ -420,12 +427,22 @@ export class WalletTelemetryService {
   /** Update runtime configuration and instantiate corresponding provider */
   configure(config: Partial<WalletTelemetryConfig>): void {
     this.config = { ...this.config, ...config };
+
+    // Keep an explicitly injected provider unless the caller asked for a
+    // specific provider type. Otherwise every `configure({ enabled: true })`
+    // would silently swap the injected provider for a config-derived one.
+    if (this.hasCustomProvider && config.provider === undefined) {
+      return;
+    }
+
+    this.hasCustomProvider = false;
     this.provider = createProviderFromConfig(this.config);
   }
 
   /** Explicitly set a custom provider instance */
   setProvider(provider: WalletTelemetryProvider): void {
     this.provider = provider;
+    this.hasCustomProvider = true;
   }
 
   /** Get active provider instance */
@@ -447,6 +464,7 @@ export class WalletTelemetryService {
   reset(): void {
     const envConfig = resolveConfigFromEnv();
     this.config = envConfig;
+    this.hasCustomProvider = false;
     this.provider = createProviderFromConfig(this.config);
   }
 
