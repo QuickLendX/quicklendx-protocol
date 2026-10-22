@@ -292,8 +292,11 @@ impl QuickLendXContract {
         load_invoice(&env, &invoice_id)
     }
 
-    pub fn get_business_invoices(env: Env, business: Address) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_business_invoices(&env, &business)
+    // ── Admin management ────────────────────────────────────────────────────
+
+    /// Current admin, `None` before initialization.
+    pub fn get_current_admin(env: Env) -> Option<Address> {
+        AdminStorage::get_admin(&env)
     }
 
     pub fn get_invoices_by_status(env: Env, status: InvoiceStatus) -> Vec<BytesN<32>> {

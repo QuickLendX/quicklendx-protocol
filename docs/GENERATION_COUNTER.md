@@ -6,7 +6,7 @@ What the generation counter is, who consumes it, and how to read it on-chain.
 
 ## What it is
 
-The **generation counter** is the on-chain **protocol version** — a single `u32` stored in instance storage under the key `proto_ver` (symbol `PROTOCOL_VERSION_KEY` in [`init.rs`](../quicklendx-contracts/src/init.rs:61)).
+The **generation counter** is the on-chain **protocol version** — a single `u32` stored in instance storage under the key `proto_ver` (symbol `PROTOCOL_VERSION_KEY` in [`init.rs`](../quicklendx-contracts/src/init.rs#L61)).
 
 It is written **once**, at protocol initialization time, and **never updated** afterward. The value comes from the `PROTOCOL_VERSION` constant compiled into the WASM at the moment `initialize` runs.
 
@@ -79,7 +79,7 @@ stellar-cli contract storage \
 ## Generation-bump invariant (tested invariant)
 
 The test `test_generation_bump_invariant_version_read_from_storage` in
-[`test_init_invariants.rs`](../quicklendx-contracts/src/test_init_invariants.rs:159)
+[`test_init_invariants.rs`](../quicklendx-contracts/src/test_init_invariants.rs#L159)
 verifies:
 
 1. Before `initialize`: `get_version` returns the compile-time constant (`PROTOCOL_VERSION`).
@@ -93,7 +93,7 @@ This guarantees that `get_version` always reflects the generation that created t
 ## Upgrade policy (when the counter increments)
 
 The `PROTOCOL_VERSION` constant is bumped according to the table below (documented in
-[`init.rs`](../quicklendx-contracts/src/init.rs:55-75) and
+[`init.rs`](../quicklendx-contracts/src/init.rs#L55-L75) and
 [`CONTRACT_VERSION_COMPATIBILITY.md`](CONTRACT_VERSION_COMPATIBILITY.md#upgrade-policy)).
 
 | Release type | Example | Storage schema | Version bump |
@@ -109,6 +109,6 @@ Only a **major** release must increment `PROTOCOL_VERSION` before building the W
 ## Related documentation
 
 - [`CONTRACT_VERSION_COMPATIBILITY.md`](CONTRACT_VERSION_COMPATIBILITY.md) — full interop matrix for protocol version, backup format, and analytics schema.
-- [`quicklendx-contracts/src/init.rs`](../quicklendx-contracts/src/init.rs:61) — constant definition, storage key, and `get_version` implementation.
-- [`quicklendx-contracts/src/test_init_invariants.rs`](../quicklendx-contracts/src/test_init_invariants.rs:159) — generation-bump invariant test.
+- [`quicklendx-contracts/src/init.rs`](../quicklendx-contracts/src/init.rs#L61) — constant definition, storage key, and `get_version` implementation.
+- [`quicklendx-contracts/src/test_init_invariants.rs`](../quicklendx-contracts/src/test_init_invariants.rs#L159) — generation-bump invariant test.
 - [`RUNBOOK_INCIDENT_RESPONSE.md`](RUNBOOK_INCIDENT_RESPONSE.md) — operator checklist after WASM upgrade (includes `get_version` verification).

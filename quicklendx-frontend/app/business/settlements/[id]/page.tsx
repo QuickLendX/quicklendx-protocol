@@ -287,7 +287,17 @@ export default function SettlementReceiptPage() {
 
   const handleDownloadJSON = async () => {
     // TODO: replace with authenticated fetch
-    const blob = new Blob([JSON.stringify({ receipt }, null, 2)], {
+    const exportReceipt = {
+      settlement_id: receipt.id,
+      settlement_date: receipt.settlementDate,
+      account_last4: receipt.transfer.accountLast4,
+      escrow_release: receipt.funding.escrowRelease
+        .split(',')[0]
+        ?.trim()
+        .toLowerCase(),
+      transfer: receipt.transfer,
+    };
+    const blob = new Blob([JSON.stringify(exportReceipt, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -295,7 +305,8 @@ export default function SettlementReceiptPage() {
     a.href = url;
     a.download = `${receiptId}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    // Keep the object URL alive until the browser has consumed the detached link.
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
     setLiveMsg("JSON downloaded.");
     setTimeout(() => setLiveMsg(""), 3000);
   };

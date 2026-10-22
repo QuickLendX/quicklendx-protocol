@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { WalletProvider } from "./lib/wallet/WalletProvider";
+import { AppHeader } from "./components/AppHeader";
 
 export const metadata: Metadata = {
   title: "QuickLendX - Decentralized Invoice Financing Platform",
@@ -36,7 +38,18 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        {/*
+          WalletProvider is a client component that wraps the entire app.
+          AppHeader is also client-side, but page-level content remains
+          server-rendered because Next.js per-page Server Components are
+          not affected by a client boundary in the layout.
+        */}
+        <WalletProvider>
+          <AppHeader />
+          <main>{children}</main>
+        </WalletProvider>
+      </body>
     </html>
   );
 }

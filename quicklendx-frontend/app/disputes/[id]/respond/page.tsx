@@ -1,13 +1,17 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import { useParams } from "next/navigation";
+import { Dialog } from "../../../components/Dialog";
 
 export default function DisputeResponsePage() {
   const params = useParams();
   const disputeId = params.id;
   const [selectedOption, setSelectedOption] = useState("");
   const [showConfirmation, setShowConfirmation] = useState(false);
+
+  // Ref to "Submit Response" button so focus returns there when modal closes
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
 
   const options = [
     {
@@ -32,6 +36,9 @@ export default function DisputeResponsePage() {
     },
   ];
 
+  const confirmationTitleId = "dispute-confirm-title";
+  const confirmationDescId = "dispute-confirm-desc";
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-3xl mx-auto">
@@ -41,10 +48,13 @@ export default function DisputeResponsePage() {
             Respond to Dispute #{disputeId || "DSP-20260426-001"}
           </h1>
           <div className="mt-2 flex items-center text-sm text-amber-600 font-medium">
+            {/* Decorative clock icon — hidden from AT */}
             <svg
               className="h-5 w-5 mr-1"
               fill="currentColor"
               viewBox="0 0 20 20"
+              aria-hidden="true"
+              focusable="false"
             >
               <path
                 fillRule="evenodd"
@@ -119,11 +129,14 @@ export default function DisputeResponsePage() {
                       </label>
                       <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-gray-300 border-dashed rounded-md">
                         <div className="space-y-1 text-center">
+                          {/* Decorative upload icon — hidden from AT */}
                           <svg
                             className="mx-auto h-12 w-12 text-gray-400"
                             stroke="currentColor"
                             fill="none"
                             viewBox="0 0 48 48"
+                            aria-hidden="true"
+                            focusable="false"
                           >
                             <path
                               d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02"
@@ -159,10 +172,13 @@ export default function DisputeResponsePage() {
                   <div className="p-4 bg-blue-50 rounded-md">
                     <div className="flex">
                       <div className="flex-shrink-0">
+                        {/* Decorative info icon — hidden from AT */}
                         <svg
                           className="h-5 w-5 text-blue-400"
                           fill="currentColor"
                           viewBox="0 0 20 20"
+                          aria-hidden="true"
+                          focusable="false"
                         >
                           <path
                             fillRule="evenodd"
@@ -187,6 +203,7 @@ export default function DisputeResponsePage() {
           </div>
           <div className="px-4 py-4 sm:px-6 bg-gray-50 text-right">
             <button
+              ref={submitBtnRef}
               disabled={!selectedOption}
               onClick={() => setShowConfirmation(true)}
               className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:bg-gray-300 disabled:cursor-not-allowed"
@@ -197,77 +214,73 @@ export default function DisputeResponsePage() {
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      {showConfirmation && (
-        <div className="fixed z-10 inset-0 overflow-y-auto">
-          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
-            <div
-              className="fixed inset-0 transition-opacity"
+      {/* Confirmation Dialog — SC 4.1.2, SC 2.4.3, SC 2.1.1 */}
+      <Dialog
+        isOpen={showConfirmation}
+        onClose={() => setShowConfirmation(false)}
+        triggerRef={submitBtnRef}
+        role="alertdialog"
+        labelId={confirmationTitleId}
+        descriptionId={confirmationDescId}
+        dismissible={true}
+        panelClassName="top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-lg mx-4 sm:mx-0 bg-white rounded-lg shadow-xl p-6"
+      >
+        <div>
+          <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-amber-100">
+            {/* Decorative warning icon — hidden from AT */}
+            <svg
+              className="h-6 w-6 text-amber-600"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
               aria-hidden="true"
+              focusable="false"
             >
-              <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
-            </div>
-            <span
-              className="hidden sm:inline-block sm:align-middle sm:h-screen"
-              aria-hidden="true"
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+              />
+            </svg>
+          </div>
+          <div className="mt-3 text-center sm:mt-5">
+            <h3
+              id={confirmationTitleId}
+              className="text-lg leading-6 font-medium text-gray-900"
             >
-              &#8203;
-            </span>
-            <div className="inline-block align-middle bg-white rounded-lg px-4 pt-5 pb-4 text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full sm:p-6">
-              <div>
-                <div className="mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-amber-100">
-                  <svg
-                    className="h-6 w-6 text-amber-600"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                    />
-                  </svg>
-                </div>
-                <div className="mt-3 text-center sm:mt-5">
-                  <h3 className="text-lg leading-6 font-medium text-gray-900">
-                    Confirm Response Submission?
-                  </h3>
-                  <div className="mt-2 text-sm text-gray-500">
-                    <p>
-                      You are about to submit your response:{" "}
-                      <strong>
-                        {options.find((o) => o.id === selectedOption)?.label}
-                      </strong>
-                      .
-                    </p>
-                    <p className="mt-2">
-                      Once submitted, this response is immutable and will be
-                      logged on-chain. It will be shared with the investor
-                      anonymously.
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
-                <button
-                  onClick={() => setShowConfirmation(false)}
-                  className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:col-start-2 sm:text-sm"
-                >
-                  Confirm & Send
-                </button>
-                <button
-                  onClick={() => setShowConfirmation(false)}
-                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:col-start-1 sm:text-sm"
-                >
-                  Cancel
-                </button>
-              </div>
+              Confirm Response Submission?
+            </h3>
+            <div id={confirmationDescId} className="mt-2 text-sm text-gray-500">
+              <p>
+                You are about to submit your response:{" "}
+                <strong>
+                  {options.find((o) => o.id === selectedOption)?.label}
+                </strong>
+                .
+              </p>
+              <p className="mt-2">
+                Once submitted, this response is immutable and will be logged
+                on-chain. It will be shared with the investor anonymously.
+              </p>
             </div>
           </div>
         </div>
-      )}
+        <div className="mt-5 sm:mt-6 sm:grid sm:grid-cols-2 sm:gap-3 sm:grid-flow-row-dense">
+          <button
+            onClick={() => setShowConfirmation(false)}
+            className="w-full inline-flex justify-center rounded-md border border-transparent shadow-sm px-4 py-2 bg-indigo-600 text-base font-medium text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:col-start-2 sm:text-sm"
+          >
+            Confirm &amp; Send
+          </button>
+          <button
+            onClick={() => setShowConfirmation(false)}
+            className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 sm:mt-0 sm:col-start-1 sm:text-sm"
+          >
+            Cancel
+          </button>
+        </div>
+      </Dialog>
     </div>
   );
 }

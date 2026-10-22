@@ -13,6 +13,10 @@ import { invoiceStore } from '../../services/invoiceStore';
 import { db as apiKeyDb } from '../../db/database';
 import { Invoice, InvoiceStatus } from '../../types/contract';
 import { ulid } from 'ulid';
+import express from 'express';
+import { getInvoices } from '../../controllers/v1/invoices';
+import { measure } from './harness';
+import request from 'supertest';
 
 describe('Database Performance Tests', () => {
   // File-backed temp database: SQLite cannot enable WAL on `:memory:`
@@ -188,6 +192,43 @@ describe('Database Performance Tests', () => {
 
       // Cached should be at least 10% faster (conservative estimate)
       expect(cachedElapsed).toBeLessThan(uncachedElapsed * 2.0); // Flaky perf test
+    });
+
+    it('keeps GET /invoices?limit=20 under 15 ms p95 with 50,000 invoices', async () => {
+      const db = getDatabase();
+      db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_invoices_created_at_id
+        ON invoices(created_at DESC, id ASC);
+        CREATE INDEX IF NOT EXISTS idx_invoices_business_created_at_id
+        ON invoices(business, created_at DESC, id ASC);
+        CREATE INDEX IF NOT EXISTS idx_invoices_status_created_at_id
+        ON invoices(status, created_at DESC, id ASC);
+      `);
+
+      const insert = db.prepare(`
+        INSERT INTO invoices (
+          id, business, amount, currency, due_date, status, description, category,
+          tags, metadata, created_at, updated_at, contract_version,
+          event_schema_version, indexed_at
+        ) VALUES (?, 'GBUSINESS123', '100', 'USDC', 1, 'Verified', 'invoice',
+          'Services', '[]', '{}', ?, ?, 1, 1, 'now')
+      `);
+      const seed = db.transaction(() => {
+        for (let i = 0; i < 50_000; i++) {
+          insert.run(`perf-${String(i).padStart(5, '0')}`, 1_700_000_000 + i, 1_700_000_000 + i);
+        }
+      });
+      seed();
+
+      const app = express();
+      app.get('/api/v1/invoices', getInvoices);
+      const response = await request(app).get('/api/v1/invoices?limit=20');
+      expect(response.status).toBe(200);
+      expect(response.body.data).toHaveLength(20);
+      const stats = await measure(app, '/api/v1/invoices?limit=20', 100);
+
+      console.info(`GET /api/v1/invoices?limit=20 p95: ${stats.p95.toFixed(2)} ms`);
+      expect(stats.p95).toBeLessThan(15);
     });
 
     it('should handle high-volume inserts efficiently', () => {
