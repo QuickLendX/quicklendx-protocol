@@ -13,7 +13,10 @@ use crate::types::{
 use crate::storage::InvoiceStorage;
 use crate::init::{ProtocolInitializer, InitializationParams};
 use crate::protocol_limits::ProtocolLimitsContract;
-use crate::verification::{BusinessVerificationStorage, InvestorVerificationStorage, submit_kyc_application, verify_business};
+use crate::verification::{
+    migrate_legacy_kyc_page, BusinessVerificationStorage, InvestorVerificationStorage,
+    submit_kyc_application, verify_business,
+};
 use crate::bid::BidStorage;
 use crate::payments::EscrowStorage;
 use crate::backup::{Backup, BackupStorage, BackupStatus, BackupRetentionPolicy};
@@ -354,6 +357,15 @@ impl QuickLendXContract {
         amount: i128,
     ) -> Result<(), QuickLendXError> {
         crate::payments::validate_funding_commitment(&env, &investor, amount)
+    }
+
+    /// Migrate a bounded page of legacy KYC records to namespaced persistent storage.
+    pub fn migrate_legacy_kyc_page(
+        env: Env,
+        admin: Address,
+        addresses: Vec<Address>,
+    ) -> Result<u32, QuickLendXError> {
+        migrate_legacy_kyc_page(&env, &admin, &addresses)
     }
 
     pub fn submit_kyc_application(env: Env, business: Address, kyc_data: soroban_sdk::Bytes) -> Result<(), QuickLendXError> {
