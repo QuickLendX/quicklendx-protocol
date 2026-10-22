@@ -1,9 +1,13 @@
-import crypto from "node:crypto";
-import { db, type DbApiKey } from "../db/database";
-import { type ApiKey, type ApiKeyService as ServiceContract, type ApiKeyCreateInput,
-  type ApiKeyWithPlaintext, type RevokedApiKey, generateApiKey, hashApiKey, timingSafeCompare } from "../models/api-key";
-import { validateScopes } from "../config/scopes";
-import { auditLogService } from "./audit-log";
+/**
+ * In-memory, single-process implementation of `ApiKeyService`.
+ *
+ * - Optimistic concurrency: `revokeApiKey` rejects with `CONFLICT` when the
+ *   stored `version` differs from `expectedVersion` (if provided), proving the
+ *   caller operated on a stale read.
+ * - Idempotent: revoking an already-revoked/expired key returns the current
+ *   record without mutating state, so repeated/concurrent callers converge.
+ * - Secret material is never materialized or returned.
+ */
 import { ApiKeyError } from "../errors/api-key-error";
 import { SystemClock, type Clock } from "./clock";
 
@@ -145,28 +149,61 @@ export interface CreateApiKeyInput {
   status?: "active" | "expired"; createdAt?: number;
 }
 
-/** Test double sharing the production service logic, without persistent writes. */
-export class InMemoryApiKeyService extends ApiKeyService {
-  private readonly keys: Map<string, DbApiKey>;
-  constructor(clock: Clock = new SystemClock()) {
-    const keys = new Map<string, DbApiKey>();
-    const copy = (row?: DbApiKey) => row ? { ...row } : undefined;
-    super({
-      createApiKey: row => { keys.set(row.id, { ...row }); },
-      getApiKeyById: id => copy(keys.get(id)),
-      getApiKeyByPrefix: prefix => copy([...keys.values()].find(row => row.prefix === prefix)),
-      listApiKeys: (filters = {}) => [...keys.values()].filter(row =>
-        (filters.created_by === undefined || row.created_by === filters.created_by) &&
-        (filters.revoked === undefined || !!row.revoked === filters.revoked)).map(row => ({ ...row })),
-      updateApiKey: (id, updates) => {
-        const row = keys.get(id);
-        if (!row) return false;
-        keys.set(id, { ...row, ...updates }); return true;
-      },
-      transaction: fn => {
-        const before = new Map(keys);
-        try { return fn(); } catch (error) {
-          keys.clear(); before.forEach((row, id) => keys.set(id, row)); throw error;
+export class InMemoryApiKeyService implements ApiKeyService {
+  private readonly keys = new Map<string, ApiKey>();
+  private readonly clock: Clock;
+
+  constructor(clock: Clock) {
+    this.clock = clock;
+  }
+
+  /** Seed a key for a test/seed scenario. */
+  create(input: CreateApiKeyInput): void {
+    const now = input.createdAt ?? this.clock.now();
+    const status: ApiKey["status"] = input.status ?? "active";
+    const key: ApiKey = {
+      id: input.id,
+      name: input.name,
+      ownerId: input.ownerId,
+      permissions: input.permissions ?? [],
+      status,
+      version: 1,
+      createdAt: now,
+      revokedAt: status === "active" ? null : now,
+      revokedBy: status === "active" ? null : input.ownerId,
+    };
+    this.keys.set(input.id, key);
+  }
+
+  async getApiKey(id: string): Promise<ApiKey | null> {
+    const key = this.keys.get(id);
+    return key ? { ...key } : null;
+  }
+
+  async revokeApiKey(
+    id: string,
+    revokedBy: string,
+    expectedVersion?: number
+  ): Promise<RevokedApiKey> {
+    const existing = this.keys.get(id);
+    if (!existing) {
+      throw new ApiKeyError(
+        "NOT_FOUND",
+        "The requested API key was not found.",
+        { action: "revokeApiKey", apiKeyId: id, actorId: revokedBy }
+      );
+    }
+
+    // Stale read: another mutation advanced the version since we last read.
+    if (expectedVersion !== undefined && existing.version !== expectedVersion) {
+      throw new ApiKeyError(
+        "CONFLICT",
+        "API key version changed; re-read and retry.",
+        {
+          action: "revokeApiKey",
+          apiKeyId: id,
+          actorId: revokedBy,
+          cause: { expectedVersion, actualVersion: existing.version },
         }
       },
     }, clock, { logCreated: async () => {}, logUsed: async () => {}, logRotated: async () => {}, logRevoked: async () => {} });

@@ -184,6 +184,7 @@ export function isValidScope(scope: string): boolean {
   return SCOPE_REGISTRY.some(s => s.scope === scope);
 }
 
+
 /**
  * Validate an array of scopes against the registry.
  *
@@ -280,9 +281,24 @@ function hasOnlyWellFormedScopes(scopes: unknown): scopes is string[] {
  * - The function never throws for any input, including `null`/`undefined`.
  */
 export function hasRequiredScopes(grantedScopes: string[], requiredScopes: string[]): boolean {
-  if (!hasOnlyWellFormedScopes(requiredScopes)) return false;
-  const granted = new Set(normalizeGrantedScopes(grantedScopes).filter(isWellFormedScope));
-  if (requiredScopes.length === 0 || granted.has('admin:*')) return true;
+  // Defensively ignore malformed granted scope lists (deny-only direction).
+  const granted = new Set(normalizeGrantedScopes(grantedScopes));
+
+  // An explicit, empty requirement list is always satisfied.
+  if (Array.isArray(requiredScopes) && requiredScopes.length === 0) {
+    return true;
+  }
+
+  // A missing or malformed requirement cannot be evaluated: fail closed.
+  if (!hasOnlyWellFormedScopes(requiredScopes)) {
+    return false;
+  }
+
+  // Check for admin:* which grants everything
+  if (granted.has('admin:*')) {
+    return true;
+  }
+
   for (const requiredScope of requiredScopes) {
     // Check for exact match
     if (granted.has(requiredScope)) {

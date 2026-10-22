@@ -4,7 +4,6 @@ import Database from 'better-sqlite3';
 
 
 // ----- Type Declarations -----
-
 /**
  * Discriminated error type for every failure mode getDatabase can encounter.
  * Callers can branch on `code` without parsing message strings, which keeps
@@ -24,21 +23,29 @@ export type DatabaseErrorCode =
   | 'BUSY_TIMEOUT'
   | 'PRAGMA_FAILED'
   | 'CLOSED'
-  | 'UNKNOWN';
+  | 'UNKNOWN'
+  | (string & {});
 
 export class DatabaseError extends Error {
   readonly code: string;
   readonly cause: unknown;
 
-  constructor(code: string, message: string = code, cause?: unknown) {
-    super(message);
-    this.name = 'DatabaseError';
-    this.code = code;
-    this.cause = cause;
-    // Preserve original stack when wrapping another error
-    if (cause instanceof Error && cause.stack) {
-      this.stack = `${this.stack}\nCaused by: ${cause.stack}`;
+  constructor(message: string);
+  constructor(code: DatabaseErrorCode, message: string, cause?: unknown);
+  constructor(codeOrMessage: DatabaseErrorCode | string, message?: string, cause?: unknown) {
+    if (message !== undefined) {
+      super(message);
+      this.code = codeOrMessage as DatabaseErrorCode;
+      this.cause = cause;
+      if (cause instanceof Error && cause.stack) {
+        this.stack = `${this.stack}\nCaused by: ${cause.stack}`;
+      }
+    } else {
+      super(codeOrMessage);
+      this.code = 'UNKNOWN';
+      this.cause = undefined;
     }
+    this.name = 'DatabaseError';
   }
 }
 
@@ -101,6 +108,25 @@ const statementCache = new Map<string, ReturnType<ReturnType<typeof Database>['p
 /**
  * Custom error hierarchy for deterministic error handling.
  */
+export class DatabasePrepareError extends DatabaseError {
+  constructor(sql: string, original: any) {
+    super(`Failed to prepare statement for SQL: ${sql}. ${original?.message ?? ''}`);
+    this.name = 'DatabasePrepareError';
+  }
+}
+export class DatabasePermissionError extends DatabaseError {
+  constructor(sql: string, original: any) {
+    super(`Permission denied while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
+    this.name = 'DatabasePermissionError';
+  }
+}
+export class DatabaseBusyError extends DatabaseError {
+  constructor(sql: string, original: any) {
+    super(`Database busy while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
+    this.name = 'DatabaseBusyError';
+  }
+}
+
 /**
  * Specific error types for database ping failures with deterministic categorization.
  */
@@ -189,27 +215,6 @@ export interface DatabasePingConfig {
   enableMetrics: boolean;
 }
 
-/**
- * Custom error hierarchy for deterministic error handling.
- */
-export class DatabasePrepareError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Failed to prepare statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabasePrepareError';
-  }
-}
-export class DatabasePermissionError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Permission denied while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabasePermissionError';
-  }
-}
-export class DatabaseBusyError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Database busy while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabaseBusyError';
-  }
-}
 
 /**
  * Centralized prepared statement cache.
@@ -335,7 +340,23 @@ export function getPreparedStatement(sql: string): any {
   // ----- Cache Hit Path -----
   if (statementCache.has(sql)) {
     cacheHits++;
-    return statementCache.get(sql)!;
+    const cached = statementCache.get(sql);
+    try {
+      if (cached.reader) {
+        cached.get();
+      } else {
+        cached.run();
+      }
+      return cached;
+    } catch (e: any) {
+      if (e.code === 'SQLITE_SCHEMA') {
+        statementCache.delete(sql);
+        cacheEvicts++;
+        // fall through to preparation
+      } else {
+        return cached;
+      }
+    }
   }
 
   // ----- Cache Miss / Evicted Path -----
@@ -379,12 +400,18 @@ export function clearStatementCache(): void {
 }
 
 /**
+ * Reset ping metrics (no-op retained for backwards compatibility and test resets).
+ */
+export function resetPingMetrics(): void {}
+
+/**
  * Retrieve cache statistics including deterministic metrics.
  */
 function resetCacheMetrics(): void {
   cacheHits = 0;
   cacheMisses = 0;
   cacheEvicts = 0;
+  resetPingMetrics();
 }
 
 /**
