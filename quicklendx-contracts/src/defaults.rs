@@ -375,6 +375,7 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
+    crate::fees::FeeManager::release_origination_fee(env, invoice_id)?;
 
     InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Defaulted, invoice_id);
 

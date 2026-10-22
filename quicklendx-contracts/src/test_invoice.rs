@@ -509,6 +509,56 @@ fn queries_follow_the_indexes() {
     );
 }
 
+#[test]
+fn origination_fee_bps_capped() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let business = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let due_date = env.ledger().timestamp() + 86400;
+    let description = String::from_str(&env, "Origination fee cap");
+    let tags = Vec::new(&env);
+
+    let too_high = env.as_contract(&contract_id, || {
+        Invoice::new(
+            &env,
+            business.clone(),
+            1_000_000,
+            currency.clone(),
+            due_date,
+            description.clone(),
+            InvoiceCategory::Services,
+            tags.clone(),
+            Some(1_001),
+            None,
+            None,
+        )
+    });
+    assert_eq!(
+        too_high.unwrap_err(),
+        QuickLendXError::InvalidFeeBasisPoints
+    );
+
+    let at_cap = env
+        .as_contract(&contract_id, || {
+            Invoice::new(
+                &env,
+                business,
+                1_000_000,
+                currency,
+                due_date,
+                description,
+                InvoiceCategory::Services,
+                tags,
+                Some(1_000),
+                None,
+                None,
+            )
+        })
+        .expect("1,000 bps is the documented maximum origination fee");
+    assert_eq!(at_cap.origination_fee_bps, Some(1_000));
+}
+
 // ============================================================================
 // AUTHORIZATION AND SECURITY ENFORCEMENT TESTS
 // ============================================================================

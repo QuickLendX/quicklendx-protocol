@@ -191,6 +191,10 @@ pub fn accept_bid_and_fund(
 
     let mut escrow_amount = bid.bid_amount;
     if let Some(fee_bps) = invoice.origination_fee_bps {
+        if fee_bps > crate::init::MAX_FEE_BPS {
+            return Err(QuickLendXError::InvalidFeeBasisPoints);
+        }
+
         let total_fee = (bid
             .bid_amount
             .checked_mul(fee_bps as i128)
@@ -204,23 +208,14 @@ pub fn accept_bid_and_fund(
             .ok_or(QuickLendXError::ArithmeticOverflow)?;
 
         if total_fee > 0 {
-            // Single transfer for the full bid amount avoids a stale balance read
-            // that could occur when two sequential transfer_funds calls are made
-            // from the same source address within one transaction.
-            crate::payments::transfer_funds(
+            crate::payments::require_matching_currency_precision(
                 env,
                 &invoice.currency,
-                &bid.investor,
-                &env.current_contract_address(),
                 bid.bid_amount,
             )?;
 
-            let mut fees_collected = soroban_sdk::Map::new(env);
-            fees_collected.set(crate::fees::FeeType::Origination, total_fee);
-            crate::fees::FeeManager::collect_fees(env, &bid.investor, fees_collected, total_fee)?;
-
-            // Funds are already in the contract from the single transfer above.
-            // Create the escrow record without a second transfer.
+            // This validates the net escrow amount and records it before the
+            // single gross transfer. Any later error rolls back the transaction.
             let escrow_id = create_escrow_record_only(
                 env,
                 invoice_id,
@@ -230,13 +225,27 @@ pub fn accept_bid_and_fund(
                 &invoice.currency,
             )?;
 
+            crate::payments::transfer_funds(
+                env,
+                &invoice.currency,
+                &bid.investor,
+                &env.current_contract_address(),
+                bid.bid_amount,
+            )?;
+            crate::fees::FeeManager::collect_origination_fee(
+                env,
+                &bid.investor,
+                invoice_id,
+                total_fee,
+            )?;
+
             // 6. Update states
-            update_states_after_funding(env, invoice_id, &mut invoice, &mut bid)?;
+            update_states_after_funding(env, invoice_id, &mut invoice, &mut bid, escrow_amount)?;
 
             crate::qlx_log!(env, "escrow", "Invoice funded and bid accepted");
 
             // 7. Events
-            emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
+            emit_invoice_funded(env, invoice_id, &bid.investor, escrow_amount);
             emit_bid_accepted(env, &bid, invoice_id, &invoice.business);
             crate::audit::log_bid_accepted(
                 env,
@@ -265,12 +274,12 @@ pub fn accept_bid_and_fund(
     )?;
 
     // 6. Update states
-    update_states_after_funding(env, invoice_id, &mut invoice, &mut bid)?;
+    update_states_after_funding(env, invoice_id, &mut invoice, &mut bid, escrow_amount)?;
 
     crate::qlx_log!(env, "escrow", "Invoice funded and bid accepted");
 
     // 7. Events
-    emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
+    emit_invoice_funded(env, invoice_id, &bid.investor, escrow_amount);
     emit_bid_accepted(env, &bid, invoice_id, &invoice.business);
     crate::audit::log_bid_accepted(
         env,
@@ -343,6 +352,7 @@ fn update_states_after_funding(
     invoice_id: &BytesN<32>,
     invoice: &mut crate::types::Invoice,
     bid: &mut crate::types::Bid,
+    escrow_amount: i128,
 ) -> Result<(), QuickLendXError> {
     bid.status = BidStatus::Accepted;
     BidStorage::update_bid(env, bid);
@@ -352,7 +362,7 @@ fn update_states_after_funding(
     invoice.mark_as_funded(
         env,
         bid.investor.clone(),
-        bid.bid_amount,
+        escrow_amount,
         env.ledger().timestamp(),
     );
     InvoiceStorage::update_invoice(env, invoice);
@@ -364,7 +374,7 @@ fn update_states_after_funding(
         investment_id: investment_id.clone(),
         invoice_id: invoice_id.clone(),
         investor: bid.investor.clone(),
-        amount: bid.bid_amount,
+        amount: escrow_amount,
         funded_at: env.ledger().timestamp(),
         status: InvestmentStatus::Active,
         insurance: Vec::new(env),
@@ -382,13 +392,8 @@ fn update_states_after_funding(
         bid.bid_amount,
         bid.bid_id.clone(),
     );
-    emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
-    crate::audit::log_invoice_funded(
-        env,
-        invoice_id.clone(),
-        bid.investor.clone(),
-        bid.bid_amount,
-    );
+    emit_invoice_funded(env, invoice_id, &bid.investor, escrow_amount);
+    crate::audit::log_invoice_funded(env, invoice_id.clone(), bid.investor.clone(), escrow_amount);
 
     // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
     // after escrow funding and state transitions complete successfully.
@@ -403,7 +408,7 @@ fn update_states_after_funding(
 /// Invoice must be in Funded status.
 ///
 /// # Correctness
-/// - Refunds the exact `escrow.amount` stored for the invoice.
+/// - Refunds the net `escrow.amount` and any withheld origination fee.
 /// - Sends funds to the stored `escrow.investor`, never to a caller-controlled recipient.
 /// - Uses `payments::refund_escrow` which rejects any escrow not in `Held` status,
 ///   making repeated refund attempts fail and preventing double refunds.
@@ -439,6 +444,12 @@ pub fn refund_escrow_funds(
 
     // 4. Retrieve Escrow
     let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
+    let refund_amount = escrow
+        .amount
+        .checked_add(
+            crate::fees::FeeManager::get_held_origination_fee(env, invoice_id).unwrap_or(0),
+        )
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
 
     // 5. Transfer funds and update escrow state
     // This calls payments::refund_escrow which handles the token transfer and status update
@@ -480,7 +491,7 @@ pub fn refund_escrow_funds(
         &escrow.escrow_id,
         invoice_id,
         &escrow.investor,
-        escrow.amount,
+        refund_amount,
     );
 
     Ok(())
