@@ -3,7 +3,12 @@ import { InvoiceStatus, InvoiceCategory, Invoice } from "../../types/contract";
 import { applyCacheHeaders, CC_SHORT } from "../../middleware/cache-headers";
 import { freshnessService } from "../../services/freshnessService";
 import { invoiceStore } from "../../services/invoiceStore";
-import { parsePaginationParams, PaginationError, applyPagination } from "../../utils/pagination";
+import {
+  parsePaginationParams,
+  PaginationError,
+  applyPagination,
+  paginationScope,
+} from "../../utils/pagination";
 import { getKycStatus } from "../../services/kycService";
 import { assertInvoiceId } from "../../lib/entityId";
 
@@ -33,23 +38,32 @@ export const getInvoices = async (
       filter.status = status as InvoiceStatus;
     }
 
-    let filtered;
+    let page;
     try {
-      filtered = invoiceStore.findInvoices(filter);
+      page = invoiceStore.listPage({
+        filters: filter,
+        limit: params.limit,
+        cursor: params.cursor,
+      });
     } catch (err: any) {
       const msg = err && err.message ? String(err.message) : "";
       // Only fall back to mocks when the DB table is missing (test environments)
       if (process.env.NODE_ENV === "test" && /no such table/i.test(msg)) {
-        filtered = MOCK_INVOICES.filter((inv) => {
+        const filtered = MOCK_INVOICES.filter((inv) => {
           if (filter.business && inv.business !== filter.business) return false;
           if (filter.status && inv.status !== filter.status) return false;
           return true;
         });
+        page = applyPagination(
+          filtered,
+          "created_at",
+          params,
+          paginationScope(filter)
+        );
       } else {
         throw err;
       }
     }
-    const page = applyPagination(filtered, "created_at", params);
 
     const body = { data: page.data, next_cursor: page.next_cursor, has_more: page.has_more, freshness: freshnessService.getFreshness() };
     if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body })) {

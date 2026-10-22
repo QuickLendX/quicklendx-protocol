@@ -1,4 +1,4 @@
-"use client";
+“use client”;
 
 /**
  * WalletConnect — view component over useWallet().
@@ -13,9 +13,9 @@
 import React, { useCallback, useState } from "react";
 import { useWallet } from "../lib/wallet/WalletProvider";
 
-// ---------------------------------------------------------------------------
+// —————————————————————————
 // Types
-// ---------------------------------------------------------------------------
+// —————————————————————————
 
 export interface WalletConnectProps {
   /** Called when the user successfully connects. Receives the public key. */
@@ -24,17 +24,22 @@ export interface WalletConnectProps {
   onDisconnect?: () => void;
 }
 
-// ---------------------------------------------------------------------------
+// —————————————————————————
 // Helpers
-// ---------------------------------------------------------------------------
+// —————————————————————————
 
 /**
- * Truncates a Stellar address to "XXXXXX…XXXX" format.
- * Spec: docs/ux/wallet-connect.md §4.1
- */
-export function truncateAddress(address: string): string {
-  if (address.length <= 13) return address;
-  return `${address.slice(0, 6)}\u2026${address.slice(-4)}`;
+
+* Truncates a Stellar address to “XXXXXX…XXXX” format.
+* Spec: docs/ux/wallet-connect.md §4.1
+    */
+    export function truncateAddress(address: string): string {
+    if (address.length <= 13) return address;
+    return ${address.slice(0, 6)}\u2026${address.slice(-4)};
+    }
+
+function explorerUrl(address: string, network: “public” | “testnet”): string {
+return https://stellar.expert/explorer/${network}/account/${address};
 }
 
 function explorerUrl(
@@ -43,10 +48,13 @@ function explorerUrl(
 ): string {
   return `https://stellar.expert/explorer/${network}/account/${address}`;
 }
+};
+}, []);
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
+const handleCopy = useCallback(
+async (e: React.MouseEvent) => {
+e.stopPropagation();
+setErrorMessage(null);
 
 const CopyButton: React.FC<{ value: string }> = ({ value }) => {
   const [copied, setCopied] = useState(false);
@@ -55,12 +63,38 @@ const CopyButton: React.FC<{ value: string }> = ({ value }) => {
   const handleCopy = useCallback(async () => {
     await navigator.clipboard.writeText(value);
     setCopied(true);
-    if (liveRef.current) liveRef.current.textContent = "Address copied.";
-    setTimeout(() => {
+    if (liveRef.current) {
+      liveRef.current.textContent = "Address copied.";
+    }
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
       setCopied(false);
-      if (liveRef.current) liveRef.current.textContent = "";
+      if (liveRef.current) {
+        liveRef.current.textContent = "";
+      }
+      timeoutRef.current = null;
     }, 2000);
-  }, [value]);
+  } catch {
+    const message = "Couldn't copy, select the address manually";
+    setErrorMessage(message);
+    if (liveRef.current) {
+      liveRef.current.textContent = message;
+    }
+    if (timeoutRef.current !== null) {
+      clearTimeout(timeoutRef.current);
+    }
+    timeoutRef.current = setTimeout(() => {
+      setErrorMessage(null);
+      if (liveRef.current) {
+        liveRef.current.textContent = "";
+      }
+      timeoutRef.current = null;
+    }, 3000);
+  }
+},
+[value]
 
   return (
     <>
@@ -116,9 +150,39 @@ const AddressPill: React.FC<{
   </button>
 );
 
-// ---------------------------------------------------------------------------
-// Main component
-// ---------------------------------------------------------------------------
+return (
+{copied ? (
+) : (
+)}
+  <span
+    ref={liveRef}
+    aria-live="polite"
+    aria-atomic="true"
+    className="sr-only"
+  />
+  {errorMessage && (
+    <div
+      role="alert"
+      className="absolute bottom-full left-1/2 z-50 mb-2 -translate-x-1/2 whitespace-nowrap rounded bg-red-900 px-2 py-1 text-xs text-white shadow-lg"
+    >
+      {errorMessage}
+    </div>
+  )}
+</div>
+
+);
+};
+
+// —————————————————————————
+// Connected account
+// —————————————————————————
+
+export interface ConnectedAccountProps {
+address: string;
+network: “public” | “testnet”;
+onDisconnect?: () => void;
+disconnecting?: boolean;
+}
 
 export const WalletConnect: React.FC<WalletConnectProps> = ({
   onConnect,
