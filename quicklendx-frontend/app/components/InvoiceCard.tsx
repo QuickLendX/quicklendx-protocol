@@ -1,262 +1,112 @@
 import React from "react";
 import Link from "next/link";
-import { getInvoiceStatusMeta, type InvoiceStatus } from "./invoice-status";
-import { formatAtomicAmount } from "@/app/business/invoices/_lib/math";
-
-export interface InvoiceCardInvoice {
-  id: string;
-  amount: string;
-  currency?: string;
-  due_date: number;
-  status: InvoiceStatus;
-  description?: string;
-  category?: string;
-  decimals?: number;
-}
+import { PublicInvoice } from "../invest/_lib/view-model";
 
 export interface InvoiceCardProps {
-  invoice: InvoiceCardInvoice;
-  variant?: "compact" | "expanded";
-  decimals?: number;
-  href?: string;
+  invoice: PublicInvoice;
+  bestBidSlot?: React.ReactNode;
 }
 
-function formatDueDate(unixSeconds: number): string {
-  const ms = unixSeconds < 10_000_000_000 ? unixSeconds * 1000 : unixSeconds;
-  const d = new Date(ms);
-  if (Number.isNaN(d.getTime())) {
-    return String(unixSeconds);
-  }
-  return d.toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    timeZone: "UTC",
-  });
-}
+export function InvoiceCard({ invoice, bestBidSlot }: InvoiceCardProps) {
+  // Format due date
+  const dueDateStr = invoice.due_date
+    ? new Date(invoice.due_date * 1000).toLocaleDateString(undefined, {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    : "N/A";
 
-export const StatusIcon: React.FC<{
-  status: InvoiceStatus;
-  size?: number;
-}> = ({ status, size = 16 }) => {
-  switch (status) {
-    case "Pending":
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 20 20"
-          fill="none"
-          aria-hidden="true"
-          className="shrink-0"
-        >
-          <path
-            d="M6 3h8M6 17h8M7 3v3.5a3 3 0 001.2 2.4L10 10l1.8-1.1A3 3 0 0013 6.5V3M7 17v-3.5a3 3 0 011.2-2.4L10 10l1.8 1.1a3 3 0 011.2 2.4V17"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    case "Verified":
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 20 20"
-          fill="none"
-          aria-hidden="true"
-          className="shrink-0"
-        >
-          <circle
-            cx="10"
-            cy="10"
-            r="7"
-            stroke="currentColor"
-            strokeWidth="1.75"
-          />
-          <path
-            d="M10 6.5v7M6.5 10h7"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
-    case "Funded":
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 20 20"
-          fill="none"
-          aria-hidden="true"
-          className="shrink-0"
-        >
-          <rect
-            x="3"
-            y="5"
-            width="14"
-            height="10"
-            rx="2"
-            stroke="currentColor"
-            strokeWidth="1.75"
-          />
-          <circle
-            cx="10"
-            cy="10"
-            r="2"
-            stroke="currentColor"
-            strokeWidth="1.75"
-          />
-        </svg>
-      );
-    case "Paid":
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 20 20"
-          fill="none"
-          aria-hidden="true"
-          className="shrink-0"
-        >
-          <circle
-            cx="10"
-            cy="10"
-            r="7"
-            stroke="currentColor"
-            strokeWidth="1.75"
-          />
-          <path
-            d="M7 10.2l2 2 4-4.4"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
-      );
-    case "Defaulted":
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 20 20"
-          fill="none"
-          aria-hidden="true"
-          className="shrink-0"
-        >
-          <path
-            d="M10 3.5L2.8 16h14.4L10 3.5z"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinejoin="round"
-          />
-          <path
-            d="M10 8.5v3.5M10 14h.01"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
-    case "Cancelled":
-      return (
-        <svg
-          width={size}
-          height={size}
-          viewBox="0 0 20 20"
-          fill="none"
-          aria-hidden="true"
-          className="shrink-0"
-        >
-          <circle
-            cx="10"
-            cy="10"
-            r="7"
-            stroke="currentColor"
-            strokeWidth="1.75"
-          />
-          <path
-            d="M7.5 7.5l5 5M12.5 7.5l-5 5"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-          />
-        </svg>
-      );
-  }
-};
-
-export const InvoiceCard: React.FC<InvoiceCardProps> = ({
-  invoice,
-  variant = "expanded",
-  decimals,
-  href,
-}) => {
-  const meta = getInvoiceStatusMeta(invoice.status);
-  const resolvedDecimals = decimals ?? invoice.decimals ?? 7;
-  const formattedAmount = formatAtomicAmount(invoice.amount, resolvedDecimals);
-  const currency = invoice.currency || "USDC";
-  const targetHref = href ?? `/business/invoices/${invoice.id}`;
-
-  const isCompact = variant === "compact";
-  const paddingClass = isCompact
-    ? "px-3 py-2 text-[13px]"
-    : "px-6 py-4 text-[15px]";
-  const iconSize = isCompact ? 16 : 20;
+  // Format amount with commas if number
+  const formattedAmount = (() => {
+    try {
+      const bi = BigInt(invoice.amount);
+      return bi.toLocaleString();
+    } catch {
+      return invoice.amount;
+    }
+  })();
 
   return (
-    <Link
-      href={targetHref}
-      data-rail={meta.rail}
-      data-variant={variant}
-      className={`block bg-white border border-[#E2E8F0] border-l-4 ${meta.railClass} rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] hover:bg-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1 transition-colors ${paddingClass}`}
+    <div
+      data-testid={`invoice-card-${invoice.id}`}
+      className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm hover:shadow-md transition-shadow flex flex-col justify-between"
     >
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div className="min-w-0">
-          <div className="font-mono font-semibold text-[#0F172A] truncate">
+      <div>
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs font-mono bg-gray-100 text-gray-700 px-2 py-1 rounded">
             {invoice.id}
+          </span>
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+            <svg
+              className="w-3.5 h-3.5 text-emerald-600"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M5 13l4 4L19 7"
+              />
+            </svg>
+            {invoice.status}
+          </span>
+        </div>
+
+        <div className="mb-4">
+          <div className="text-2xl font-bold text-gray-900">
+            {formattedAmount}{" "}
+            <span className="text-sm font-semibold text-gray-500 uppercase">
+              {invoice.currency}
+            </span>
           </div>
-          {!isCompact && invoice.description && (
-            <p className="mt-1 text-sm text-[#64748B] truncate">
-              {invoice.description}
-            </p>
-          )}
+          <div className="flex items-center gap-1 text-xs text-gray-500 mt-1">
+            <svg
+              className="w-4 h-4 text-gray-400"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              aria-hidden="true"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+              />
+            </svg>
+            <span>Due {dueDateStr}</span>
+          </div>
         </div>
 
-        <span
-          className={`inline-flex items-center gap-1.5 self-start sm:self-auto px-2.5 py-1 rounded-full text-xs font-medium border ${meta.badgeClass}`}
+        {invoice.description && (
+          <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+            {invoice.description}
+          </p>
+        )}
+
+        {invoice.category && (
+          <div className="mb-3">
+            <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-medium">
+              {invoice.category}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="pt-3 border-t border-gray-100 mt-2 flex flex-col gap-3">
+        {bestBidSlot && <div className="min-h-[28px]">{bestBidSlot}</div>}
+        <Link
+          href={`/invest/invoices/${encodeURIComponent(invoice.id)}`}
+          style={{ color: "#ffffff" }}
+          className="w-full text-center py-2 px-3 bg-indigo-600 hover:bg-indigo-700 !text-white font-medium text-sm rounded-lg transition-colors"
         >
-          <StatusIcon status={invoice.status} size={iconSize} />
-          <span>{meta.label}</span>
-        </span>
+          View Details
+        </Link>
       </div>
-
-      <div
-        className={`mt-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-[#E2E8F0] pt-2.5 text-[#0F172A]`}
-      >
-        <div className="flex items-baseline gap-1.5">
-          <span className="text-xs font-medium text-[#64748B] uppercase tracking-wide">
-            Amount:
-          </span>
-          <span className="font-mono font-semibold text-[#0F172A]">
-            {formattedAmount}
-          </span>
-          <span className="text-xs font-medium text-[#64748B]">{currency}</span>
-        </div>
-
-        <div className="flex items-baseline gap-1.5 text-xs text-[#64748B]">
-          <span className="font-medium uppercase tracking-wide">Due:</span>
-          <span className="text-[#0F172A] font-medium">
-            {formatDueDate(invoice.due_date)}
-          </span>
-        </div>
-      </div>
-    </Link>
+    </div>
   );
-};
-
-export default InvoiceCard;
+}
