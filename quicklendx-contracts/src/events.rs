@@ -892,6 +892,12 @@ pub struct ProtocolInitialized {
     pub timestamp: u64,
 }
 
+#[contractevent]
+pub struct ScanItemFailed {
+    pub invoice_id: BytesN<32>,
+    pub error_code: u32,
+}
+
 // ============================================================================
 // Pause Control Events
 
@@ -915,6 +921,14 @@ pub fn emit_paused(env: &Env, admin: &Address) {
 pub fn emit_unpaused(env: &Env, admin: &Address) {
     Unpaused {
         admin: admin.clone(),
+    }
+    .publish(env);
+}
+
+pub fn emit_scan_item_failed(env: &Env, invoice_id: &BytesN<32>, error_code: u32) {
+    ScanItemFailed {
+        invoice_id: invoice_id.clone(),
+        error_code,
     }
     .publish(env);
 }

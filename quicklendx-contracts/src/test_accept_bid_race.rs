@@ -55,7 +55,6 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     let _ = client.try_initialize_admin(&admin);
-    client.set_admin(&admin);
     (env, client, admin)
 }
 
@@ -126,8 +125,10 @@ fn upload_and_verify_invoice(
         &InvoiceCategory::Services,
         &Vec::new(env),
         &None,
+        &None,
+        &None,
     );
-    client.verify_invoice(&invoice_id);
+    client.verify_invoice(&client.get_admin(), &invoice_id);
     invoice_id
 }
 
@@ -143,7 +144,7 @@ fn place_bid(
         invoice_id,
         &amount,
         &(amount / 10),
-        &BytesN::from_array(&env, &[0u8; 32]),
+        &BytesN::from_array(&client.env, &[0u8; 32]),
     )
 }
 
@@ -166,7 +167,7 @@ fn build_two_investor_race() -> (
     Address,
 ) {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor_a = verified_investor(&env, &client, &admin, 500_000);
     let investor_b = verified_investor(&env, &client, &admin, 500_000);

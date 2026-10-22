@@ -410,6 +410,7 @@ export function createProviderFromConfig(
 export class WalletTelemetryService {
   private config: WalletTelemetryConfig;
   private provider: WalletTelemetryProvider;
+  private providerWasInjected = false;
 
   constructor(initialConfig?: Partial<WalletTelemetryConfig>) {
     const envConfig = resolveConfigFromEnv();
@@ -420,12 +421,19 @@ export class WalletTelemetryService {
   /** Update runtime configuration and instantiate corresponding provider */
   configure(config: Partial<WalletTelemetryConfig>): void {
     this.config = { ...this.config, ...config };
-    this.provider = createProviderFromConfig(this.config);
+
+    if (Object.prototype.hasOwnProperty.call(config, "provider")) {
+      this.providerWasInjected = false;
+      this.provider = createProviderFromConfig(this.config);
+    } else if (!this.providerWasInjected) {
+      this.provider = createProviderFromConfig(this.config);
+    }
   }
 
   /** Explicitly set a custom provider instance */
   setProvider(provider: WalletTelemetryProvider): void {
     this.provider = provider;
+    this.providerWasInjected = true;
   }
 
   /** Get active provider instance */
@@ -445,6 +453,7 @@ export class WalletTelemetryService {
 
   /** Reset service to defaults (useful in testing) */
   reset(): void {
+    this.providerWasInjected = false;
     const envConfig = resolveConfigFromEnv();
     this.config = envConfig;
     this.provider = createProviderFromConfig(this.config);
@@ -455,7 +464,7 @@ export class WalletTelemetryService {
     name: string,
     props?: Record<string, unknown>
   ): Promise<void> {
-    if (!this.config.enabled && this.provider.name === "noop") {
+    if (!this.config.enabled) {
       return;
     }
 
@@ -477,7 +486,7 @@ export class WalletTelemetryService {
     userId: string,
     traits?: Record<string, unknown>
   ): Promise<void> {
-    if (!this.config.enabled && this.provider.name === "noop") return;
+    if (!this.config.enabled) return;
     try {
       await this.provider.identify?.(userId, traits);
     } catch (err) {

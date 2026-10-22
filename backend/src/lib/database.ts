@@ -1,20 +1,20 @@
 // Updated implementation with deterministic failure‑boundary handling for prepared statements.
 
 import Database from 'better-sqlite3';
-
+import { config } from '../config';
 
 // ----- Type Declarations -----
-const DatabaseConstructor = Database as any;
 /**
  * Discriminated error type for every failure mode getDatabase can encounter.
  * Callers can branch on `code` without parsing message strings, which keeps
  * error handling deterministic and testable.
  *
  * Codes:
- *  - OPEN_FAILED      Database file could not be opened (corrupt, missing dir, etc.)
+ *  - OPEN_FAILED       Database file could not be opened (corrupt, missing dir, etc.)
  *  - PERMISSION_DENIED OS-level permission error on the database file or its directory
  *  - BUSY_TIMEOUT      Database was locked for longer than the busy_timeout
  *  - PRAGMA_FAILED     A post-open configuration pragma failed (leaves no live instance)
+ *  - PREPARE_FAILED    Statement preparation failed
  *  - CLOSED            The caller tried to use a connection that has already been closed
  *  - UNKNOWN           Any other failure – the original error is preserved in `cause`
  */
@@ -23,22 +23,64 @@ export type DatabaseErrorCode =
   | 'PERMISSION_DENIED'
   | 'BUSY_TIMEOUT'
   | 'PRAGMA_FAILED'
+  | 'PREPARE_FAILED'
   | 'CLOSED'
-  | 'UNKNOWN';
+  | 'UNKNOWN'
+  | (string & {});
 
 export class DatabaseError extends Error {
-  readonly code: DatabaseErrorCode;
+  readonly code: string;
   readonly cause: unknown;
 
-  constructor(code: DatabaseErrorCode, message: string, cause?: unknown) {
-    super(message);
-    this.name = 'DatabaseError';
-    this.code = code;
-    this.cause = cause;
-    // Preserve original stack when wrapping another error
-    if (cause instanceof Error && cause.stack) {
-      this.stack = `${this.stack}\nCaused by: ${cause.stack}`;
+  constructor(message: string);
+  constructor(code: DatabaseErrorCode, message: string, cause?: unknown);
+  constructor(codeOrMessage: DatabaseErrorCode | string, message?: string, cause?: unknown) {
+    if (message !== undefined) {
+      super(message);
+      this.code = codeOrMessage as DatabaseErrorCode;
+      this.cause = cause;
+      if (cause instanceof Error && cause.stack) {
+        this.stack = `${this.stack}\nCaused by: ${cause.stack}`;
+      }
+    } else {
+      super(codeOrMessage);
+      this.code = 'UNKNOWN';
+      this.cause = undefined;
     }
+    this.name = 'DatabaseError';
+  }
+}
+
+export class DatabasePrepareError extends DatabaseError {
+  constructor(sql: string, original: any) {
+    super(
+      'PREPARE_FAILED',
+      `Failed to prepare statement for SQL: ${sql}. ${original?.message ?? ''}`,
+      original,
+    );
+    this.name = 'DatabasePrepareError';
+  }
+}
+
+export class DatabasePermissionError extends DatabaseError {
+  constructor(sql: string, original: any) {
+    super(
+      'PERMISSION_DENIED',
+      `Permission denied while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`,
+      original,
+    );
+    this.name = 'DatabasePermissionError';
+  }
+}
+
+export class DatabaseBusyError extends DatabaseError {
+  constructor(sql: string, original: any) {
+    super(
+      'BUSY_TIMEOUT',
+      `Database busy while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`,
+      original,
+    );
+    this.name = 'DatabaseBusyError';
   }
 }
 
@@ -81,9 +123,9 @@ export interface DatabaseStatus {
 const DatabaseConstructor = Database as unknown as new (
   path: string,
   options?: object
-) => InstanceType<typeof Database>;
+) => ReturnType<typeof Database>;
 
-let dbInstance: InstanceType<typeof Database> | null = null;
+let dbInstance: ReturnType<typeof Database> | null = null;
 let _state: DatabaseState = 'uninitialized';
 let _lastOpenedAt: string | null = null;
 let _lastClosedAt: string | null = null;
@@ -92,49 +134,26 @@ let _lastErrorCode: DatabaseErrorCode | null = null;
 let _consecutiveFailures = 0;
 
 /** Centralized prepared statement cache: SQL string → compiled statement. */
-const statementCache = new Map<string, ReturnType<InstanceType<typeof Database>['prepare']>>();
+const statementCache = new Map<string, ReturnType<ReturnType<typeof Database>['prepare']>>();
 
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
 
 /**
- * Custom error hierarchy for deterministic error handling.
- */
-export class DatabaseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DatabaseError';
-  }
-}
-export class DatabasePrepareError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Failed to prepare statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabasePrepareError';
-  }
-}
-export class DatabasePermissionError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Permission denied while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabasePermissionError';
-  }
-}
-export class DatabaseBusyError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Database busy while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabaseBusyError';
-  }
-}
-
-/**
  * Specific error types for database ping failures with deterministic categorization.
  */
-export class DatabasePingError extends DatabaseError {
+export class DatabasePingError extends Error {
   public readonly code: string;
   public readonly retryable: boolean;
   public readonly severity: 'warning' | 'error' | 'critical';
-  
-  constructor(message: string, code: string, retryable: boolean = false, severity: 'warning' | 'error' | 'critical' = 'error') {
+
+  constructor(
+    message: string,
+    code: string,
+    retryable: boolean = false,
+    severity: 'warning' | 'error' | 'critical' = 'error',
+  ) {
     super(message);
     this.name = 'DatabasePingError';
     this.code = code;
@@ -181,16 +200,16 @@ export class DatabasePingCorruptionError extends DatabasePingError {
 /**
  * Database ping result with comprehensive failure information.
  */
-export type DatabasePingResult = 
+export type DatabasePingResult =
   | { success: true; latencyMs: number; timestamp: number; attempts: number }
   | { success: false; error: DatabasePingError; latencyMs?: number; timestamp: number; attempts: number };
 
 /**
  * Database ping state for deterministic tracking.
  */
-export type DatabasePingState = 
+export type DatabasePingState =
   | 'healthy'
-  | 'degraded' 
+  | 'degraded'
   | 'timeout'
   | 'busy'
   | 'permission_denied'
@@ -215,36 +234,8 @@ export interface DatabasePingConfig {
 }
 
 /**
- * Custom error hierarchy for deterministic error handling.
- */
-export class DatabaseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'DatabaseError';
-  }
-}
-export class DatabasePrepareError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Failed to prepare statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabasePrepareError';
-  }
-}
-export class DatabasePermissionError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Permission denied while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabasePermissionError';
-  }
-}
-export class DatabaseBusyError extends DatabaseError {
-  constructor(sql: string, original: any) {
-    super(`Database busy while preparing statement for SQL: ${sql}. ${original?.message ?? ''}`);
-    this.name = 'DatabaseBusyError';
-  }
-}
-
-/**
- * Centralized prepared statement cache.
- * Key: SQL string, Value: prepared statement.
+ * Classify a raw better-sqlite3 / OS error into one of our typed codes so
+ * that callers never need to inspect message strings.
  */
 function classifyError(err: unknown): DatabaseErrorCode {
   if (!(err instanceof Error)) return 'UNKNOWN';
@@ -270,7 +261,31 @@ function classifyError(err: unknown): DatabaseErrorCode {
   return 'OPEN_FAILED';
 }
 
+/**
+ * Apply all post-open WAL/durability pragmas.
+ * Throws `DatabaseError(PRAGMA_FAILED, …)` on the first pragma that errors,
+ * which lets `getDatabase` tear down the partially-initialized instance.
+ */
+export function applyPragmas(db: InstanceType<typeof Database>): void {
+  const pragmas: Array<[string, string]> = [
+    ['journal_mode', 'WAL'],
+    ['synchronous', 'NORMAL'],
+    ['foreign_keys', 'ON'],
+    ['busy_timeout', '5000'],
+  ];
 
+  for (const [pragma, value] of pragmas) {
+    try {
+      db.pragma(`${pragma} = ${value}`);
+    } catch (err) {
+      throw new DatabaseError(
+        'PRAGMA_FAILED',
+        `Failed to apply pragma "${pragma} = ${value}": ${(err as Error).message}`,
+        err,
+      );
+    }
+  }
+}
 
 /**
  * Metrics for deterministic observability.
@@ -282,17 +297,24 @@ let cacheEvicts = 0;
 /**
  * Get a singleton instance of the better‑sqlite3 database with sensible pragmas.
  */
-export function getDatabase() {
-  if (!dbInstance) {
-    const db = new DatabaseConstructor(process.env.DATABASE_PATH || '.data/dev.db');
-    // Apply performance pragmas.
-    db.pragma('journal_mode = WAL');
-    db.pragma('synchronous = NORMAL');
-    db.pragma('foreign_keys = ON');
-    db.pragma('busy_timeout = 5000');
-    dbInstance = db;
+export function getDatabase(): InstanceType<typeof Database> {
+  // ── Guard: re-entrant call while opening ──────────────────────────────────
+  if (_state === 'opening') {
+    throw new DatabaseError(
+      'OPEN_FAILED',
+      'Re-entrant call to getDatabase() detected while a connection is already being opened. ' +
+        'This indicates a circular dependency in initialization code.',
+    );
   }
 
+  // ── Guard: stale instance whose file descriptor was closed externally ─────
+  if (dbInstance !== null && (dbInstance as any).open === false) {
+    dbInstance = null;
+    statementCache.clear();
+    resetCacheMetrics();
+    _state = 'closed';
+    _lastClosedAt = new Date().toISOString();
+  }
   // ── Fast path: already open ───────────────────────────────────────────────
   if (dbInstance !== null) {
     return dbInstance;
@@ -300,10 +322,10 @@ export function getDatabase() {
 
   // ── Slow path: open a new connection ─────────────────────────────────────
   _state = 'opening';
-  let fresh: InstanceType<typeof Database> | null = null;
+  let fresh: ReturnType<typeof Database> | null = null;
 
   try {
-    const path = process.env.DATABASE_PATH || '.data/dev.db';
+    const path = config.DATABASE_PATH;
     fresh = new DatabaseConstructor(path);
   } catch (err) {
     _state = 'error';
@@ -324,17 +346,20 @@ export function getDatabase() {
     throw new DatabaseError(code, safeMsg, err);
   }
 
-  // Apply configuration pragmas.  If any pragma fails we must not expose a
+  // Apply configuration pragmas. If any pragma fails we must not expose a
   // half-configured instance — close and rethrow.
+  let pragma = '';
   try {
-    applyPragmas(fresh);
+    for (pragma of ['journal_mode = WAL', 'synchronous = NORMAL', 'foreign_keys = ON', 'busy_timeout = 5000']) {
+      fresh.pragma(pragma);
+    }
   } catch (err) {
     try { fresh.close(); } catch { /* best-effort cleanup */ }
     _state = 'error';
     _lastErrorAt = new Date().toISOString();
     _consecutiveFailures++;
     _lastErrorCode = 'PRAGMA_FAILED';
-    throw err; // already a DatabaseError(PRAGMA_FAILED)
+    throw new DatabaseError('PRAGMA_FAILED', `Failed to apply pragma ${pragma}.`, err);
   }
 
   // ── Commit the instance ───────────────────────────────────────────────────
@@ -354,14 +379,9 @@ export function getDatabase() {
 /**
  * Retrieve a prepared statement with deterministic failure handling.
  *
- * 1. Cache‑hit returns the prepared statement after a cheap validation step.
- *    If validation fails due to a stale schema (`SQLITE_SCHEMA`) the entry is evicted
- *    and a fresh preparation is performed.
- * 2. Cache‑miss triggers a guarded preparation sequence:
- *    - Concurrency guard ensures only one preparation per SQL string.
- *    - Retry loop (max 3 attempts) handles transient `SQLITE_BUSY` errors.
- *    - Permission checks surface a `DatabasePermissionError` without caching.
- *    - Any other preparation error surfaces a `DatabasePrepareError`.
+ * Cached statements are returned without execution. Preparing a statement must
+ * never run writes or consume missing bind parameters; callers own execution.
+ * Preparation retries SQLITE_BUSY up to three times and wraps failures.
  *
  * The public signature is unchanged – callers receive the prepared statement or
  * a thrown error they can handle deterministically.
@@ -385,7 +405,7 @@ export function getPreparedStatement(sql: string): any {
         cacheEvicts++;
         // fall through to preparation
       } else {
-        throw e;
+        return cached;
       }
     }
   }
@@ -397,22 +417,12 @@ export function getPreparedStatement(sql: string): any {
     try {
       const db = getDatabase();
       const stmt = db.prepare(sql);
-      // Permission guard – attempt a harmless execution to surface read‑only errors.
-      try {
-        if (stmt.reader) {
-          stmt.get();
-        } else {
-          stmt.run();
-        }
-      } catch (permErr: any) {
-        if (permErr.code === 'SQLITE_READONLY') {
-          throw new DatabasePermissionError(sql, permErr);
-        }
-        // ignore other errors here
-      }
       statementCache.set(sql, stmt);
       return stmt;
     } catch (err: any) {
+      if (err instanceof DatabasePermissionError) {
+        throw err;
+      }
       if (err.code === 'SQLITE_BUSY') {
         if (attempt < maxAttempts - 1) {
           // simple synchronous back‑off
@@ -428,19 +438,21 @@ export function getPreparedStatement(sql: string): any {
     }
   }
   // Should never reach here.
-  throw new DatabaseError('Unexpected preparation failure');
+  throw new DatabaseError('PREPARE_FAILED', 'Unexpected preparation failure');
 }
-  
 
 /**
  * Clear the statement cache and metrics – useful for testing or schema changes.
  */
 export function clearStatementCache(): void {
   statementCache.clear();
-  cacheHits = 0;
-  cacheMisses = 0;
-  cacheEvicts = 0;
+  resetCacheMetrics();
 }
+
+/**
+ * Reset ping metrics (no-op retained for backwards compatibility and test resets).
+ */
+export function resetPingMetrics(): void {}
 
 /**
  * Retrieve cache statistics including deterministic metrics.
@@ -449,8 +461,27 @@ function resetCacheMetrics(): void {
   cacheHits = 0;
   cacheMisses = 0;
   cacheEvicts = 0;
-  // Also reset ping metrics when clearing cache
-  resetPingMetrics();
+}
+
+export interface StatementCacheStats {
+  size: number;
+  statements: string[];
+  hits: number;
+  misses: number;
+  evicts: number;
+}
+
+/**
+ * Retrieve cache statistics including deterministic metrics.
+ */
+export function getStatementCacheStats(): StatementCacheStats {
+  return {
+    size: statementCache.size,
+    statements: Array.from(statementCache.keys()),
+    hits: cacheHits,
+    misses: cacheMisses,
+    evicts: cacheEvicts,
+  };
 }
 
 /**
@@ -466,6 +497,10 @@ export function getPingStats() {
   };
 }
 
+export function getStatementCacheStats() {
+  return { size: statementCache.size, statements: Array.from(statementCache.keys()) };
+}
+
 /**
  * Simple health probe – deterministic, never throws.
  */
@@ -473,7 +508,7 @@ export function pingDatabase(): boolean {
   try {
     // Use synchronous approach for backward compatibility
     const db = getDatabase();
-    const row = db.prepare('SELECT 1 AS ok').get();
+    const row = db.prepare('SELECT 1 AS ok').get() as { ok?: number } | undefined;
     return row?.ok === 1;
   } catch {
     return false;
@@ -481,7 +516,7 @@ export function pingDatabase(): boolean {
 }
 
 /**
- * Graceful shutdown.
+ * Return a read-only snapshot of connection lifecycle state.
  */
 export function getDatabaseStatus(): DatabaseStatus {
   return {
@@ -520,10 +555,9 @@ export function closeDatabase(): void {
     // Drop the metrics alongside the cache so the next generation starts from
     // zeroed counters instead of inheriting a closed generation's hit counts.
     resetCacheMetrics();
-    dbInstance.close();
-    dbInstance = null;
+    return;
   }
-// Null out the singleton before closing so that any re-entrant call to
+  // Null out the singleton before closing so that any re-entrant call to
   // getDatabase() during close opens a fresh handle instead of returning
   // the half-closed one. This is the key determinism guarantee.
   dbInstance = null;
@@ -531,6 +565,7 @@ export function closeDatabase(): void {
   // Always clear on attempt, whether close succeeds or fails. Stale
   // statements bound to a closed handle would throw on use.
   statementCache.clear();
+  resetCacheMetrics();
 
   _state = 'closed';
   _lastClosedAt = new Date().toISOString();
@@ -546,7 +581,7 @@ export function closeDatabase(): void {
 }
 
 /**
- * Reset all module-level state.  **For use in tests only.**
+ * Reset all module-level state. **For use in tests only.**
  *
  * Closes the connection (if open), clears the statement cache, and resets
  * lifecycle counters so each test starts from a clean slate without

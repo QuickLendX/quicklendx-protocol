@@ -13,6 +13,17 @@
 //! (no storage mutation) so callers and off-chain tooling can reason
 //! about outcomes without executing a transaction.
 //!
+//! # Enforcement
+//!
+//! The policy is enacted on-chain by
+//! [`crate::dispute::apply_resolution_policy`], which is called from the
+//! dispute resolution paths, and is consulted by the settlement and
+//! default guards
+//! (`crate::settlement::require_no_blocking_resolution` /
+//! `crate::defaults`).  This module stays pure so the spec and the
+//! enforcement cannot drift apart — see the
+//! `policy_table_matches_enforcement` regression test (issue #2963).
+//!
 //! # Usage
 //!
 //! ```ignore
@@ -31,7 +42,7 @@
 //! [`RESOLUTION_POLICY_VERSION`].
 
 use crate::types::DisputeResolution;
-use soroban_sdk::contracttype;
+use soroban_sdk::{contracttype, Env, Vec};
 
 // ---------------------------------------------------------------------------
 // Version
@@ -194,8 +205,14 @@ impl ResolutionPolicy {
 
     /// Returns the policy history (all versions) for the given outcome.
     /// Currently only v1 exists.
-    pub fn history_for_outcome(outcome: DisputeResolution) -> soroban_sdk::Vec<Self> {
-        let mut v = soroban_sdk::Vec::new(&soroban_sdk::Env::default());
+    ///
+    /// Takes `env` explicitly so the returned `Vec` is allocated on the
+    /// caller's host. (Constructing a default environment here would
+    /// allocate on a fresh testutils-only host, which is invalid inside a
+    /// contract call and only compiled because of the crate's `testutils`
+    /// dev-dependency feature leak — issue #2963.)
+    pub fn history_for_outcome(env: &Env, outcome: DisputeResolution) -> Vec<Self> {
+        let mut v = Vec::new(env);
         v.push_back(Self::for_outcome(outcome));
         v
     }

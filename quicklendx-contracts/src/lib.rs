@@ -4,9 +4,36 @@ extern crate alloc; // Add this for Vec support in no_std
 
 use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Symbol, Vec, symbol_short};
 
-// Export essential modules for basic functionality
+pub mod address_summary;
+pub mod admin;
+pub mod analytics;
+pub mod arbiter;
+pub mod audit;
+pub mod backpressure;
+pub mod backup;
+pub mod backup_v1;
+pub mod bid;
+pub mod contract;
+pub mod currency;
+pub mod defaults;
+pub mod diagnostics;
+pub mod dispute;
+pub mod dispute_timeline;
+pub mod emergency;
 pub mod errors;
-pub mod types;
+pub mod escrow;
+pub mod events;
+pub mod fees;
+pub mod freshness;
+pub mod governance;
+pub mod health;
+pub mod idempotency;
+pub mod incident;
+pub mod init;
+pub mod invariants;
+pub mod investment;
+pub mod investment_queries;
+pub mod invoice;
 pub mod invoice_amount;
 pub mod admin;
 pub mod backup;
@@ -19,11 +46,23 @@ pub mod events;
 pub mod audit;
 pub mod governance;
 
+pub use admin::AdminStorage;
+pub use contract::{QuickLendXContract, QuickLendXContractClient};
 // Constants that are used across modules
 pub const MAX_QUERY_LIMIT: u32 = 100;
 
 #[cfg(test)]
+mod test_accept_bid_race;
+#[cfg(test)]
+mod test_bid_acceptance_replay;
+#[cfg(test)]
+mod test_escrow;
+#[cfg(test)]
 mod test_invoice_amount_precision;
+#[cfg(test)]
+mod test_notification_status_matrix;
+#[cfg(test)]
+mod test_notifications;
 
 #[cfg(test)]
 mod test_backup;
