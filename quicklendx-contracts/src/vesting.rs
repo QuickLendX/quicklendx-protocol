@@ -10,9 +10,13 @@ use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol};
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::payments::transfer_funds;
+use crate::storage::extend_persistent_ttl;
 
 const VESTING_COUNTER_KEY: Symbol = symbol_short!("vest_cnt");
 const VESTING_KEY: Symbol = symbol_short!("vest");
+/// Per-token outstanding vesting reserve key: tracks the total amount of token
+/// held in the contract that is still owed to vesting beneficiaries.
+const VESTING_RESERVE_KEY: Symbol = symbol_short!("vest_res");
 
 /// Events emitted by the vesting module.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -84,6 +88,78 @@ impl VestingStorage {
         env.storage()
             .persistent()
             .set(&Self::key(schedule.id), schedule);
+    }
+
+    // -----------------------------------------------------------------------
+    // Per-token outstanding vesting reserve
+    // -----------------------------------------------------------------------
+
+    fn reserve_key(token: &Address) -> (Symbol, Address) {
+        (VESTING_RESERVE_KEY, token.clone())
+    }
+
+    /// Return the total amount of `token` currently owed to vesting beneficiaries.
+    /// Returns 0 if no counter has been stored yet.
+    pub fn get_outstanding_vesting(env: &Env, token: &Address) -> i128 {
+        let key = Self::reserve_key(token);
+        let result: Option<i128> = env.storage().persistent().get(&key);
+        if let Some(v) = result {
+            extend_persistent_ttl(env, &key);
+            v.max(0)
+        } else {
+            0
+        }
+    }
+
+    /// Increase the outstanding vesting reserve for `token` by `amount`.
+    /// Called when a new vesting schedule is created.
+    pub(crate) fn outstanding_vesting_increase(
+        env: &Env,
+        token: &Address,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        if amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        let key = Self::reserve_key(token);
+        let current: i128 = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(0i128)
+            .max(0);
+        let new_value = current
+            .checked_add(amount)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
+        env.storage().persistent().set(&key, &new_value);
+        extend_persistent_ttl(env, &key);
+        Ok(())
+    }
+
+    /// Decrease the outstanding vesting reserve for `token` by `amount`.
+    /// Called when tokens are released to a beneficiary.
+    /// Saturates to zero rather than underflowing (defensive: keeps emergency
+    /// guard fail-closed if state is ever inconsistent).
+    pub(crate) fn outstanding_vesting_decrease(
+        env: &Env,
+        token: &Address,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        if amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        let key = Self::reserve_key(token);
+        let current: i128 = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(0i128)
+            .max(0);
+        // If the counter would go below zero, clamp to zero (defensive guard).
+        let new_value = current.saturating_sub(amount).max(0);
+        env.storage().persistent().set(&key, &new_value);
+        extend_persistent_ttl(env, &key);
+        Ok(())
     }
 }
 
@@ -206,6 +282,9 @@ impl Vesting {
         // Move tokens into contract custody.
         let contract = env.current_contract_address();
         transfer_funds(env, &token, admin, &contract, total_amount)?;
+
+        // Track the custodied amount so emergency withdrawal cannot sweep it.
+        VestingStorage::outstanding_vesting_increase(env, &token, total_amount)?;
 
         VestingStorage::store(env, &schedule);
         env.events().publish(
@@ -373,6 +452,9 @@ impl Vesting {
         }
         let contract = env.current_contract_address();
         transfer_funds(env, &schedule.token, &contract, beneficiary, releasable)?;
+
+        // Reduce the outstanding reserve now that tokens have left the contract.
+        VestingStorage::outstanding_vesting_decrease(env, &schedule.token, releasable)?;
 
         schedule.released_amount = schedule
             .released_amount

@@ -61,4 +61,4 @@ Each entry captures timestamp, role, request method, path, client IP, action nam
 
 ## Testing
 
-Authorization behavior is covered with matrix tests in [src/tests/rbac.test.ts](../src/tests/rbac.test.ts) and status/admin behavior checks in [src/tests/status.test.ts](../src/tests/status.test.ts).
+Authorization behavior is covered by the [RBAC token tests](../src/tests/rbac.tokens.test.ts) and [admin authentication tests](../src/tests/adminAuth.test.ts).
