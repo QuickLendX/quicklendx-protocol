@@ -58,7 +58,7 @@ jobs:
     - name: Run tests
       run: |
         cd quicklendx-frontend
-        npm test -- --ci
+        npm test
 
   build:
     name: Build and Optimize

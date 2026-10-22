@@ -2,16 +2,49 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
-import { useWallet } from "@/app/lib/useWallet";
-import { getSettlement, getInvoice, SettlementStatus } from "./_lib/data";
-import {
-  toReceiptViewModel,
-  toJsonExport,
-  ReceiptViewModel,
-} from "./_lib/view-model";
-import { ReceiptSkeleton } from "./ReceiptSkeleton";
-import { truncateAddress } from "@/app/components/WalletConnect";
+import { useParams, notFound } from "next/navigation";
+import { isHexId } from "../../../lib/ids";
+
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+interface FeeLineItem {
+  label: string;
+  amount: number;
+}
+
+interface SettlementReceipt {
+  id: string;
+  settlementDate: string;
+  status: "SETTLED" | "PENDING" | "DELAYED";
+  invoice: {
+    id: string;
+    debtor: string;
+    debtorVerified: boolean;
+    amount: number;
+    issueDate: string;
+    dueDate: string;
+    description: string;
+  };
+  funding: {
+    fundedDate: string;
+    fullFundingAt: string;
+    investorCount: number;
+    escrowRelease: string;
+    paymentReceived: boolean;
+  };
+  calculation: {
+    grossAmount: number;
+    fees: FeeLineItem[];
+    netPayout: number;
+  };
+  transfer: {
+    accountLast4: string;
+    transferredAt: string;
+    stellarTxHash: string;
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -287,8 +320,17 @@ const ExportButton: React.FC<{
 
 export default function SettlementReceiptPage() {
   const params = useParams();
-  const rawId = params?.id;
-  const settlementId = Array.isArray(rawId) ? rawId[0] : (rawId as string);
+  const requestedId =
+    typeof params?.id === "string" ? (params.id as string) : undefined;
+
+  // Reject malformed identifiers before any API call is made: settlement ids
+  // are on-chain hex strings (`0x` + hex digits, see
+  // `backend/src/validators/shared.ts` `hexStringSchema`).
+  if (requestedId !== undefined && !isHexId(requestedId)) {
+    notFound();
+  }
+
+  const receiptId = requestedId ?? PLACEHOLDER.id;
 
   const { address, connect } = useWallet();
 

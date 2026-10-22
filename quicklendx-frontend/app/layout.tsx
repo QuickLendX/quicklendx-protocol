@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Providers } from "./providers";
 import "./globals.css";
 import { WalletProvider } from "@/app/lib/wallet/WalletProvider";
 
@@ -40,7 +41,7 @@ export default function RootLayout({
   return (
     <html lang="en">
       <body>
-        <WalletProvider>{children}</WalletProvider>
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

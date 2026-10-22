@@ -191,26 +191,21 @@ describe("Wallet Telemetry - Provider Implementations", () => {
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
 
-      expect(fetchMock).toHaveBeenCalledWith(
-        "/api/v1/telemetry",
-        expect.objectContaining({
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: "Bearer secret_key",
-          },
-        })
-      );
-
-      const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-
-      expect(requestBody).toEqual(
-        expect.objectContaining({
-          event: "wallet_connected",
-          properties: { address: "GBBX..." },
-          timestamp: expect.any(Number),
-        })
-      );
+      // The body is parsed before it is asserted: `expect.any(Number)` cannot
+      // survive `JSON.stringify`, so the expected body was compared as a
+      // string and could never match the serialised timestamp.
+      const [url, init] = fetchMock.mock.calls[0];
+      expect(url).toBe("/api/v1/telemetry");
+      expect(init.method).toBe("POST");
+      expect(init.headers).toEqual({
+        "Content-Type": "application/json",
+        Authorization: "Bearer secret_key",
+      });
+      expect(JSON.parse(init.body)).toEqual({
+        event: "wallet_connected",
+        properties: { address: "GBBX..." },
+        timestamp: expect.any(Number),
+      });
     });
 
     it("silently catches network errors without throwing to caller", async () => {
