@@ -14,6 +14,8 @@ pub const MAX_QUERY_LIMIT: u32 = 100;
 
 #[cfg(test)]
 mod test_invoice_amount_precision;
+#[cfg(test)]
+mod test_storage_tier_migration;
 
 /// Shared test utilities for contract regression coverage (issue #2711 CI
 /// fix). Public (not `#[cfg(test)]`) so integration tests under `tests/`

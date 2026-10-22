@@ -287,21 +287,34 @@ impl BackupStorage {
     /// Store the invoice payload for a backup.
     pub fn store_backup_data(env: &Env, backup_id: &BytesN<32>, invoices: &Vec<Invoice>) {
         let key = (BACKUP_DATA_KEY, backup_id.clone());
-        env.storage().instance().set(&key, invoices);
+        env.storage().persistent().set(&key, invoices);
+        crate::storage::bump_persistent(env, &key);
     }
 
     /// Retrieve the invoice payload for a backup.
     pub fn get_backup_data(env: &Env, backup_id: &BytesN<32>) -> Option<Vec<Invoice>> {
         let key = (BACKUP_DATA_KEY, backup_id.clone());
-        env.storage().instance().get(&key)
+        if let Some(data) = env.storage().persistent().get(&key) {
+            return Some(data);
+        }
+        let legacy: Option<Vec<Invoice>> = env.storage().instance().get(&key);
+        if let Some(data) = legacy.clone() {
+            env.storage().persistent().set(&key, &data);
+            crate::storage::bump_persistent(env, &key);
+        }
+        legacy
+    }
+
+    pub fn purge_backup_data(env: &Env, backup_id: &BytesN<32>) {
+        let data_key = (BACKUP_DATA_KEY, backup_id.clone());
+        env.storage().persistent().remove(&data_key);
     }
 
     /// Delete a backup record and its stored invoice payload.
     pub fn purge_backup(env: &Env, backup_id: &BytesN<32>) {
         Self::remove_from_backup_list(env, backup_id);
         env.storage().instance().remove(backup_id);
-        let data_key = (BACKUP_DATA_KEY, backup_id.clone());
-        env.storage().instance().remove(&data_key);
+        Self::purge_backup_data(env, backup_id);
     }
 
     /// Validate backup data integrity.

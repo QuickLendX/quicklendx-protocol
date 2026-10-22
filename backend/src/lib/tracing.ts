@@ -92,6 +92,14 @@ function isValidTraceId(value: unknown): value is string {
 
 const spanContextStorage = new AsyncLocalStorage<SpanContext>();
 
+const MAX_SPAN_LOG_BYTES = 1024 * 1024;
+const MAX_ATTR_STRING_LENGTH = 2048;
+const MAX_ATTR_KEYS = 64;
+const MAX_ATTR_DEPTH = 6;
+const TRUNCATION_MARKER = "…[truncated]";
+const CIRCULAR_MARKER = "[circular]";
+const DEPTH_MARKER = "[depth limit]";
+
 /**
  * Determines whether `value` should be treated as a promise by `withSpan`.
  *

@@ -8,14 +8,38 @@ export class EventProcessor {
 
   private eventLog: Array<{ seq: number; id: string; type: string; timestamp: number; correlationId?: string }> = [];
   private sequence: number = 0;
+  private maxLogEntries: number = 10000;
 
-  private constructor() {}
+  public constructor(maxLogEntries: number = 10000) {
+    this.maxLogEntries = maxLogEntries;
+  }
 
   public static getInstance(): EventProcessor {
     if (!EventProcessor.instance) {
       EventProcessor.instance = new EventProcessor();
     }
     return EventProcessor.instance;
+  }
+
+  public setMaxLogEntries(max: number): void {
+    this.maxLogEntries = Math.max(1, max);
+    if (this.eventLog.length > this.maxLogEntries) {
+      this.eventLog.splice(0, this.eventLog.length - this.maxLogEntries);
+    }
+  }
+
+  public getMaxLogEntries(): number {
+    return this.maxLogEntries;
+  }
+
+  public getEventLogLength(): number {
+    return this.eventLog.length;
+  }
+
+  public reset(): void {
+    this.processedEvents.clear();
+    this.eventLog = [];
+    this.sequence = 0;
   }
 
   // Process invoice settled event (funded)
@@ -178,14 +202,23 @@ export class EventProcessor {
     const eventId = event.id || `${event.type}_${event.timestamp}_${seq}`;
     const correlationId = getCorrelationId();
 
+    const payload = event.payload || {};
+    const invoiceId = payload.invoice_id || event.invoice_id;
+    const business = payload.business || event.business;
+    const investor = payload.investor || event.investor;
+    const amount = payload.amount || event.amount || payload.investor_return || event.investor_return;
+    const payer = payload.payer || event.payer;
+    const initiator = payload.initiator || event.initiator;
+    const resolvedBy = payload.resolved_by || event.resolved_by || payload.admin || event.admin;
+
     switch (event.type) {
       case 'InvoiceSettled':
         await this.processInvoiceSettled(
           eventId,
-          event.invoice_id,
-          event.business,
-          event.investor,
-          event.amount || event.investor_return,
+          invoiceId,
+          business,
+          investor,
+          amount,
           event.timestamp
         );
         break;
@@ -193,9 +226,9 @@ export class EventProcessor {
       case 'PaymentRecorded':
         await this.processPaymentRecorded(
           eventId,
-          event.invoice_id,
-          event.payer,
-          event.amount,
+          invoiceId,
+          payer,
+          amount,
           event.timestamp
         );
         break;
@@ -203,8 +236,8 @@ export class EventProcessor {
       case 'DisputeCreated':
         await this.processDisputeCreated(
           eventId,
-          event.invoice_id,
-          event.initiator,
+          invoiceId,
+          initiator,
           event.timestamp
         );
         break;
@@ -212,10 +245,15 @@ export class EventProcessor {
       case 'DisputeResolved':
         await this.processDisputeResolved(
           eventId,
-          event.invoice_id,
-          event.resolved_by || event.admin,
+          invoiceId,
+          resolvedBy,
           event.timestamp
         );
+        break;
+
+      case 'InvoiceCreated':
+      case 'BidPlaced':
+        // Legacy/indexer events accepted by the HTTP ingestion endpoint
         break;
 
       default: {
@@ -227,6 +265,9 @@ export class EventProcessor {
     }
 
     this.eventLog.push({ seq, id: eventId, type: event.type, timestamp: event.timestamp, correlationId: correlationId || undefined });
+    if (this.eventLog.length > this.maxLogEntries) {
+      this.eventLog.splice(0, this.eventLog.length - this.maxLogEntries);
+    }
   }
 
   public async listEvents(cursor?: string, limit: number = 50): Promise<{ events: Array<{ seq: number; id: string; type: string; timestamp: number; correlationId?: string }>; nextCursor: string | null }> {

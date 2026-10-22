@@ -1,6 +1,13 @@
 import crypto from 'crypto';
 import { getDatabase, getPreparedStatement } from '../lib/database';
 import { Settlement, SettlementStatus } from '../types/contract';
+import {
+  CursorPayload,
+  PageResult,
+  PaginationError,
+  encodeCursor,
+  paginationScope,
+} from '../utils/pagination';
 
 export class IllegalTransitionError extends Error {
   constructor(from: SettlementStatus, to: SettlementStatus) {
@@ -218,6 +225,59 @@ class SettlementOrchestrator {
 
     const rows = this.getDb().prepare(sql).all(...params) as any[];
     return rows.map(toSettlement);
+  }
+
+  /**
+   * List a bounded page of settlements in timestamp-descending, id-ascending order.
+   */
+  listPage({
+    filters = {},
+    limit,
+    cursor,
+  }: {
+    filters?: { invoice_id?: string; status?: SettlementStatus };
+    limit: number;
+    cursor: CursorPayload | null;
+  }): PageResult<Settlement> {
+    const scope = paginationScope(filters);
+    if (cursor && cursor.scope !== scope) {
+      throw new PaginationError("cursor scope mismatch");
+    }
+
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    if (filters.invoice_id) {
+      clauses.push("invoice_id = ?");
+      params.push(filters.invoice_id);
+    }
+    if (filters.status) {
+      clauses.push("status = ?");
+      params.push(filters.status);
+    }
+    if (cursor) {
+      clauses.push("(timestamp < ? OR (timestamp = ? AND id > ?))");
+      params.push(cursor.sort_val, cursor.sort_val, cursor.id);
+    }
+
+    let sql = "SELECT * FROM settlements";
+    if (clauses.length > 0) {
+      sql += ` WHERE ${clauses.join(" AND ")}`;
+    }
+    sql += " ORDER BY timestamp DESC, id ASC LIMIT ?";
+
+    const rows = this.getDb().prepare(sql).all(...params, limit + 1) as any[];
+    const has_more = rows.length > limit;
+    const data = rows.slice(0, limit).map(toSettlement);
+    const last = data[data.length - 1];
+
+    return {
+      data,
+      has_more,
+      next_cursor:
+        has_more && last
+          ? encodeCursor({ id: last.id, sort_val: last.timestamp, scope })
+          : null,
+    };
   }
 
   /**

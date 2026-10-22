@@ -685,12 +685,21 @@ paths:
                 type: object
                 required:
                   - data
+                  - next_cursor
+                  - has_more
                   - freshness
                 properties:
                   data:
                     type: array
                     items:
                       $ref: "#/components/schemas/Settlement"
+                  next_cursor:
+                    type: string
+                    nullable: true
+                    description: Opaque cursor for the next page, or null when there are no more pages.
+                  has_more:
+                    type: boolean
+                    description: Whether more settlements exist beyond this page.
                   freshness:
                     $ref: '#/components/schemas/FreshnessMetadata'
                   _system:
@@ -702,6 +711,8 @@ paths:
                       level: { type: string }
               example:
                 data: []
+                next_cursor: null
+                has_more: false
                 freshness:
                   lastIndexedLedger: 100000
                   indexLagSeconds: 0
@@ -836,13 +847,15 @@ paths:
       x-rate-limit:
         policies: [global, perKey]
       summary: Get user notification preferences
+      security:
+        - BearerAuth: []
       parameters:
         - name: userId
           in: path
           required: true
           schema:
             type: string
-          description: User identifier
+          description: User identifier (Stellar address)
       responses:
         '200':
           description: User notification preferences
@@ -850,6 +863,10 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserNotificationPreferences'
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - caller does not own this userId
         '404':
           description: User preferences not found
     put:
@@ -857,13 +874,15 @@ paths:
         policies: [global, perKey]
       operationId: updateNotificationPreferences
       summary: Update user notification preferences
+      security:
+        - BearerAuth: []
       parameters:
         - name: userId
           in: path
           required: true
           schema:
             type: string
-          description: User identifier
+          description: User identifier (Stellar address)
       requestBody:
         required: true
         content:
@@ -884,8 +903,53 @@ paths:
       responses:
         '200':
           description: Preferences updated successfully
+        '202':
+          description: Email change pending verification
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verification_required:
+                    type: boolean
+                    example: true
         '400':
           description: Invalid request data
+        '401':
+          description: Unauthorized
+        '403':
+          description: Forbidden - caller does not own this userId
+
+  /notifications/preferences/{userId}/email/verify:
+    post:
+      x-rate-limit:
+        policies: [global, perKey]
+      summary: Verify and activate new notification email address
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+          description: User identifier (Stellar address)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token:
+                  type: string
+                  description: 24h HMAC single-use verification token
+      responses:
+        '200':
+          description: Email verified and activated successfully
+        '400':
+          description: Token expired or already used
+        '403':
+          description: Invalid token or user mismatch
 
   /notifications/unsubscribe/{userId}:
     post:
@@ -898,10 +962,18 @@ paths:
           required: true
           schema:
             type: string
-          description: User identifier
+          description: User identifier (Stellar address)
+        - name: token
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Unguessable HMAC-SHA256 unsubscribe token
       responses:
         '200':
           description: Successfully unsubscribed
+        '403':
+          description: Invalid or missing unsubscribe token
 
   /exports/generate:
     post:

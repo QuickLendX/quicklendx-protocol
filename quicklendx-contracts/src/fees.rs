@@ -23,6 +23,8 @@ const ROTATION_TTL_SECONDS: u64 = 604_800; // 7 days
 pub const MIN_ROTATION_DELAY_SECONDS: u64 = 86_400; // 1 day
 const EARLY_PLATFORM_DISCOUNT_BPS: i128 = 1_000; // 10%
 const LATE_FEE_SURCHARGE_BPS: i128 = 2_000; // 20%
+/// Maximum late-payment penalty basis points allowed (50% = 5,000 bps).
+pub const MAX_LATE_PAYMENT_PENALTY_BPS: u32 = 5_000;
 
 // Storage keys
 const FEE_CONFIG_KEY: Symbol = symbol_short!("fee_cfg");
@@ -91,17 +93,6 @@ pub struct UserVolumeData {
 pub struct TreasuryConfig {
     pub treasury_address: Address,
     pub is_active: bool,
-    pub updated_at: u64,
-    pub updated_by: Address,
-}
-
-/// Platform fee configuration  
-#[contracttype]
-#[derive(Clone, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
-pub struct PlatformFeeConfig {
-    pub fee_bps: u32,
-    pub treasury_address: Option<Address>, // Simplified - just store address directly
     pub updated_at: u64,
     pub updated_by: Address,
 }
@@ -245,8 +236,7 @@ impl FeeManager {
 
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         // Explicit admin authorization: the caller must be the designated admin.
-        admin.require_auth();
-        crate::AdminStorage::require_admin(env, admin)?;
+        crate::AdminStorage::require_admin_auth(env, admin)?;
 
         // Guard: reject re-initialization to prevent overwriting live fee config.
         if env.storage().instance().has(&FEES_INIT_KEY) {
@@ -309,8 +299,7 @@ impl FeeManager {
         admin: &Address,
         treasury_address: Address,
     ) -> Result<TreasuryConfig, QuickLendXError> {
-        admin.require_auth();
-        crate::AdminStorage::require_admin(env, admin)?;
+        crate::AdminStorage::require_admin_auth(env, admin)?;
 
         // Reject self-assignment: treasury must not be the contract itself.
         if treasury_address == env.current_contract_address() {
@@ -352,9 +341,9 @@ impl FeeManager {
         admin: &Address,
         fee_bps: u32,
     ) -> Result<(), QuickLendXError> {
-        // Auth is checked by the caller
-        admin.require_auth();
-        crate::AdminStorage::require_admin(env, admin)?;
+        // Only the protocol admin may change the fee. This also proves the
+        // caller's signature, so no partial/self-authorization path exists.
+        crate::AdminStorage::require_admin_auth(env, admin)?;
 
         if fee_bps > MAX_PLATFORM_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
@@ -550,7 +539,8 @@ impl FeeManager {
         for i in 0..fee_structures.len() {
             let structure = fee_structures.get(i).unwrap();
             // Accumulate total active minimum fees, checking for i128 overflow.
-            if structure.is_active {
+            // Exclude the structure being updated/replaced to avoid double-counting.
+            if structure.is_active && structure.fee_type != *fee_type {
                 total_active_min_fees = total_active_min_fees
                     .checked_add(structure.min_fee)
                     .ok_or(QuickLendXError::ArithmeticOverflow)?;
@@ -581,6 +571,7 @@ impl FeeManager {
         is_active: bool,
     ) -> Result<FeeStructure, QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
         if base_fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
@@ -662,13 +653,20 @@ impl FeeManager {
     /// 2. Clamp the raw fee into that structure's `[min_fee, max_fee]` range.
     /// 3. Apply the user's volume-tier discount to every fee except `LatePayment`.
     /// 4. Apply the early-payment discount to the `Platform` fee only.
-    /// 5. Apply the late-payment surcharge to the `LatePayment` fee only.
+    /// 5. Apply the late-payment surcharge to the `LatePayment` fee only (validated
+    ///    to not exceed `MAX_LATE_PAYMENT_PENALTY_BPS` = 5,000 bps).
+    /// 6. Enforce whole-transaction bound: if `total_fees >= transaction_amount`,
+    ///    return `Err(QuickLendXError::InvalidAmount)` so fee quotes never consume
+    ///    or exceed the transaction principal.
     ///
     /// # Security notes
     /// - Uses checked BPS multiplication to fail safely on overflow.
     /// - Uses checked addition for total fee aggregation.
+    /// - Rejects `late_payment_penalty_bps > MAX_LATE_PAYMENT_PENALTY_BPS` with
+    ///   `QuickLendXError::InvalidFeeBasisPoints`.
     /// - Iterates only over configured fee structures, keeping work deterministic.
     /// - Uses integer division throughout, so rounding always truncates toward zero.
+    /// - Guarantees fee quote is strictly less than `transaction_amount` (`0 <= total_fees < amount`).
     pub fn calculate_total_fees(
         env: &Env,
         user: &Address,
@@ -679,6 +677,11 @@ impl FeeManager {
     ) -> Result<i128, QuickLendXError> {
         if transaction_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
+        }
+        if let Some(penalty_bps) = late_payment_penalty_bps {
+            if penalty_bps > MAX_LATE_PAYMENT_PENALTY_BPS {
+                return Err(QuickLendXError::InvalidFeeBasisPoints);
+            }
         }
         let fee_structures: Vec<FeeStructure> =
             env.storage().instance().get(&FEE_CONFIG_KEY).unwrap();
@@ -720,6 +723,9 @@ impl FeeManager {
             }
             total_fees = Self::checked_add(total_fees, fee)?;
         }
+        if total_fees >= transaction_amount {
+            return Err(QuickLendXError::InvalidAmount);
+        }
         Ok(total_fees)
     }
 
@@ -754,16 +760,17 @@ impl FeeManager {
 
     pub fn get_user_volume(env: &Env, user: &Address) -> UserVolumeData {
         let key = (VOLUME_KEY, user.clone());
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or(UserVolumeData {
-                user: user.clone(),
-                total_volume: 0,
-                transaction_count: 0,
-                current_tier: VolumeTier::Standard,
-                last_updated: env.ledger().timestamp(),
-            })
+        let res = env.storage().persistent().get(&key);
+        if res.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        res.unwrap_or(UserVolumeData {
+            user: user.clone(),
+            total_volume: 0,
+            transaction_count: 0,
+            current_tier: VolumeTier::Standard,
+            last_updated: env.ledger().timestamp(),
+        })
     }
 
     /// Update a user's cumulative transaction volume and derived discount tier.
@@ -792,7 +799,8 @@ impl FeeManager {
             VolumeTier::Standard
         };
         let key = (VOLUME_KEY, user.clone());
-        env.storage().instance().set(&key, &volume_data);
+        env.storage().persistent().set(&key, &volume_data);
+        crate::storage::extend_persistent_ttl(env, &key);
         Ok(volume_data)
     }
 
@@ -837,7 +845,7 @@ impl FeeManager {
         let period = Self::get_current_period(env);
         let key = (REVENUE_KEY, period);
         let mut revenue_data: RevenueData =
-            env.storage().instance().get(&key).unwrap_or(RevenueData {
+            env.storage().persistent().get(&key).unwrap_or(RevenueData {
                 period,
                 total_collected: 0,
                 fees_by_type: Map::new(env),
@@ -861,7 +869,8 @@ impl FeeManager {
             revenue_data.fees_by_type.set(fee_type, merged);
         }
 
-        env.storage().instance().set(&key, &revenue_data);
+        env.storage().persistent().set(&key, &revenue_data);
+        crate::storage::extend_persistent_ttl(env, &key);
         Self::update_user_volume(env, user, total_amount)?;
         Ok(())
     }
@@ -1014,6 +1023,7 @@ impl FeeManager {
         config: RevenueConfig,
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
 
         // Validate individual share bounds
         Self::validate_revenue_shares(
@@ -1134,6 +1144,7 @@ impl FeeManager {
         period: u64,
     ) -> Result<(i128, i128, i128), QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
         let config: RevenueConfig = env
             .storage()
             .instance()
@@ -1156,7 +1167,7 @@ impl FeeManager {
         }
 
         let revenue_key = (REVENUE_KEY, period);
-        let mut revenue_data: RevenueData = env.storage().instance().get(&revenue_key).unwrap();
+        let mut revenue_data: RevenueData = env.storage().persistent().get(&revenue_key).unwrap();
 
         if revenue_data.pending_distribution == 0 {
             return Err(QuickLendXError::OperationNotAllowed);
@@ -1195,7 +1206,8 @@ impl FeeManager {
 
         revenue_data.total_distributed = Self::checked_add(revenue_data.total_distributed, amount)?;
         revenue_data.pending_distribution = 0;
-        env.storage().instance().set(&revenue_key, &revenue_data);
+        env.storage().persistent().set(&revenue_key, &revenue_data);
+        crate::storage::extend_persistent_ttl(env, &revenue_key);
 
         // Emit distribution event for transparency and auditing
         crate::events::emit_revenue_distributed(
@@ -1211,7 +1223,8 @@ impl FeeManager {
 
     pub fn get_analytics(env: &Env, period: u64) -> Result<FeeAnalytics, QuickLendXError> {
         let revenue_key = (REVENUE_KEY, period);
-        let revenue_data: RevenueData = env.storage().instance().get(&revenue_key).unwrap();
+        let revenue_data: RevenueData = env.storage().persistent().get(&revenue_key).unwrap();
+        crate::storage::extend_persistent_ttl(env, &revenue_key);
         let average_fee_rate = if revenue_data.transaction_count > 0 {
             revenue_data
                 .total_collected
@@ -1290,6 +1303,7 @@ impl FeeManager {
         new_address: Address,
     ) -> Result<RecipientRotationRequest, QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
 
         if env
             .storage()
@@ -1396,6 +1410,7 @@ impl FeeManager {
     /// Can be called at any time before confirmation to abort the rotation.
     pub fn cancel_treasury_rotation(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
 
         if env
             .storage()
