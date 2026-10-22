@@ -3,7 +3,7 @@
 > Audience: **operators and contributors** who need to reason about
 > invoice disputes without reading every smart-contract source file.
 > For the complete entrypoint/error reference used by contract developers,
-> see [quicklendx-contracts/docs/contracts/dispute.md](../quicklendx-contracts/docs/contracts/dispute.md).
+> see [the contract dispute reference](./contracts/dispute.md).
 
 ## What this document covers
 
@@ -180,7 +180,7 @@ it blocks settlement:
 
 - [Resolution Policy Per Contract](contracts/resolution-policy.md) — Expected downstream effect of each resolution outcome on invoice, settlement, escrow, bids, and investments.
 - [ESCROW](ESCROW.md) — How funds are locked and released.
-- [quicklendx-contracts/docs/contracts/dispute.md](../quicklendx-contracts/docs/contracts/dispute.md) — Full contract-level entrypoint and field-length reference.
+- [Contract dispute reference](./contracts/dispute.md) — Full contract-level entrypoint and field-length reference.
 - [docs/dispute-timeline-invariants.md](dispute-timeline-invariants.md) — Executable invariant reference for timeline property tests.
 - [quicklendx-contracts/docs/settlement-dispute-interaction.md](../quicklendx-contracts/docs/settlement-dispute-interaction.md) — How settlement is blocked and resumed across dispute boundaries.
 - [`APPEALS.md`](APPEALS.md) — Appeals process: who reviews, timeline, and outcomes after a dispute is resolved.

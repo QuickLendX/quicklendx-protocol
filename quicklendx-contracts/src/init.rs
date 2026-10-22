@@ -31,7 +31,7 @@
 //! - `set_treasury()` - Update treasury address
 //! - Currency whitelist management functions
 
-use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
+use crate::admin::AdminStorage;
 use crate::audit::{
     address_to_audit_string, log_config_change, write_i128_to_buf, write_u64_to_buf, AuditOperation,
 };
@@ -362,6 +362,7 @@ impl ProtocolInitializer {
                     && current_whitelist == params.initial_currencies
                     && current_corridors == params.corridors
                 {
+                    params.admin.require_auth();
                     return Ok(());
                 }
             }
@@ -372,8 +373,20 @@ impl ProtocolInitializer {
         // VALIDATION: Validate all parameters before making any state changes
         Self::validate_initialization_params(env, params)?;
 
-        // ATOMIC: Initialize admin system first (foundation for all operations)
-        AdminStorage::initialize(env, &params.admin)?;
+        // ATOMIC: Initialize admin system first (foundation for all operations).
+        //
+        // If an admin already exists (installed by a legacy/phased flow), only
+        // that admin may complete initialization, and the admin entry is kept
+        // as is instead of being re-initialized. Either branch requires
+        // `params.admin` to sign exactly once.
+        if AdminStorage::is_initialized(env) {
+            if AdminStorage::get_admin(env).as_ref() != Some(&params.admin) {
+                return Err(QuickLendXError::OperationNotAllowed);
+            }
+            params.admin.require_auth();
+        } else {
+            AdminStorage::initialize(env, &params.admin)?;
+        }
 
         // ATOMIC: Store treasury address
         env.storage()
@@ -461,20 +474,14 @@ impl ProtocolInitializer {
     ///
     /// @notice Returns true when the initialization flag is set.
     pub fn is_initialized(env: &Env) -> bool {
-        let proto_init = env
-            .storage()
+        // Only the protocol flag counts. An admin installed by a legacy or
+        // phased flow (`ADMIN_INITIALIZED_KEY`) does not mean the protocol has
+        // a treasury, fee or config yet; `initialize` must still be able to run
+        // (see the legacy-admin branch in `initialize_internal`).
+        env.storage()
             .instance()
             .get(&PROTOCOL_INITIALIZED_KEY)
-            .unwrap_or(false);
-
-        // Also check if admin was initialized via legacy/phased flow
-        let admin_init = env
-            .storage()
-            .instance()
-            .get(&ADMIN_INITIALIZED_KEY)
-            .unwrap_or(false);
-
-        proto_init || admin_init
+            .unwrap_or(false)
     }
 
     /// Validate initialization parameters with comprehensive checks.

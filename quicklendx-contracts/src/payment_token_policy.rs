@@ -58,37 +58,64 @@ mod tests {
     #[test]
     fn test_authorize_mutation_success() {
         let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(crate::QuickLendXContract, ());
         let actor = Address::generate(&env);
-        
-        let result = PaymentTokenPolicy::authorize_mutation(&env, &actor, &actor, true);
+
+        let result = env.as_contract(&contract_id, || {
+            PaymentTokenPolicy::authorize_mutation(&env, &actor, &actor, true)
+        });
         assert_eq!(result, Ok(()));
     }
 
     #[test]
     fn test_authorize_mutation_unauthorized() {
         let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(crate::QuickLendXContract, ());
         let actor = Address::generate(&env);
         let expected = Address::generate(&env);
-        
-        let result = PaymentTokenPolicy::authorize_mutation(&env, &actor, &expected, true);
+
+        let result = env.as_contract(&contract_id, || {
+            PaymentTokenPolicy::authorize_mutation(&env, &actor, &expected, true)
+        });
         assert_eq!(result, Err(QuickLendXError::Unauthorized));
     }
 
     #[test]
     fn test_authorize_mutation_stale() {
         let env = Env::default();
+        env.mock_all_auths();
+        let contract_id = env.register(crate::QuickLendXContract, ());
         let actor = Address::generate(&env);
-        
-        let result = PaymentTokenPolicy::authorize_mutation(&env, &actor, &actor, false);
+
+        let result = env.as_contract(&contract_id, || {
+            PaymentTokenPolicy::authorize_mutation(&env, &actor, &actor, false)
+        });
         assert_eq!(result, Err(QuickLendXError::InvalidStatus));
     }
 
     #[test]
     fn test_validate_fee_configuration() {
-        assert_eq!(PaymentTokenPolicy::validate_fee_configuration(500, 300, 2000, 500), Ok(()));
-        assert_eq!(PaymentTokenPolicy::validate_fee_configuration(501, 300, 2000, 500), Err(QuickLendXError::InvalidAmount));
-        assert_eq!(PaymentTokenPolicy::validate_fee_configuration(500, 301, 2000, 500), Err(QuickLendXError::InvalidAmount));
-        assert_eq!(PaymentTokenPolicy::validate_fee_configuration(500, 300, 2001, 500), Err(QuickLendXError::InvalidAmount));
-        assert_eq!(PaymentTokenPolicy::validate_fee_configuration(500, 300, 2000, 501), Err(QuickLendXError::InvalidAmount));
+        assert_eq!(
+            PaymentTokenPolicy::validate_fee_configuration(500, 300, 2000, 500),
+            Ok(())
+        );
+        assert_eq!(
+            PaymentTokenPolicy::validate_fee_configuration(501, 300, 2000, 500),
+            Err(QuickLendXError::InvalidAmount)
+        );
+        assert_eq!(
+            PaymentTokenPolicy::validate_fee_configuration(500, 301, 2000, 500),
+            Err(QuickLendXError::InvalidAmount)
+        );
+        assert_eq!(
+            PaymentTokenPolicy::validate_fee_configuration(500, 300, 2001, 500),
+            Err(QuickLendXError::InvalidAmount)
+        );
+        assert_eq!(
+            PaymentTokenPolicy::validate_fee_configuration(500, 300, 2000, 501),
+            Err(QuickLendXError::InvalidAmount)
+        );
     }
 }
