@@ -25,21 +25,29 @@ export type DatabaseErrorCode =
   | 'PRAGMA_FAILED'
   | 'PREPARE_FAILED'
   | 'CLOSED'
-  | 'UNKNOWN';
+  | 'UNKNOWN'
+  | (string & {});
 
 export class DatabaseError extends Error {
-  readonly code: DatabaseErrorCode;
+  readonly code: string;
   readonly cause: unknown;
 
-  constructor(code: DatabaseErrorCode, message: string, cause?: unknown) {
-    super(message);
-    this.name = 'DatabaseError';
-    this.code = code;
-    this.cause = cause;
-    // Preserve original stack when wrapping another error
-    if (cause instanceof Error && cause.stack) {
-      this.stack = `${this.stack}\nCaused by: ${cause.stack}`;
+  constructor(message: string);
+  constructor(code: DatabaseErrorCode, message: string, cause?: unknown);
+  constructor(codeOrMessage: DatabaseErrorCode | string, message?: string, cause?: unknown) {
+    if (message !== undefined) {
+      super(message);
+      this.code = codeOrMessage as DatabaseErrorCode;
+      this.cause = cause;
+      if (cause instanceof Error && cause.stack) {
+        this.stack = `${this.stack}\nCaused by: ${cause.stack}`;
+      }
+    } else {
+      super(codeOrMessage);
+      this.code = 'UNKNOWN';
+      this.cause = undefined;
     }
+    this.name = 'DatabaseError';
   }
 }
 
@@ -115,9 +123,9 @@ export interface DatabaseStatus {
 const DatabaseConstructor = Database as unknown as new (
   path: string,
   options?: object
-) => InstanceType<typeof Database>;
+) => ReturnType<typeof Database>;
 
-let dbInstance: InstanceType<typeof Database> | null = null;
+let dbInstance: ReturnType<typeof Database> | null = null;
 let _state: DatabaseState = 'uninitialized';
 let _lastOpenedAt: string | null = null;
 let _lastClosedAt: string | null = null;
@@ -126,7 +134,7 @@ let _lastErrorCode: DatabaseErrorCode | null = null;
 let _consecutiveFailures = 0;
 
 /** Centralized prepared statement cache: SQL string → compiled statement. */
-const statementCache = new Map<string, ReturnType<InstanceType<typeof Database>['prepare']>>();
+const statementCache = new Map<string, ReturnType<ReturnType<typeof Database>['prepare']>>();
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -307,7 +315,6 @@ export function getDatabase(): InstanceType<typeof Database> {
     _state = 'closed';
     _lastClosedAt = new Date().toISOString();
   }
-
   // ── Fast path: already open ───────────────────────────────────────────────
   if (dbInstance !== null) {
     return dbInstance;
@@ -315,7 +322,7 @@ export function getDatabase(): InstanceType<typeof Database> {
 
   // ── Slow path: open a new connection ─────────────────────────────────────
   _state = 'opening';
-  let fresh: InstanceType<typeof Database> | null = null;
+  let fresh: ReturnType<typeof Database> | null = null;
 
   try {
     const path = config.DATABASE_PATH;
@@ -341,15 +348,18 @@ export function getDatabase(): InstanceType<typeof Database> {
 
   // Apply configuration pragmas. If any pragma fails we must not expose a
   // half-configured instance — close and rethrow.
+  let pragma = '';
   try {
-    applyPragmas(fresh);
+    for (pragma of ['journal_mode = WAL', 'synchronous = NORMAL', 'foreign_keys = ON', 'busy_timeout = 5000']) {
+      fresh.pragma(pragma);
+    }
   } catch (err) {
     try { fresh.close(); } catch { /* best-effort cleanup */ }
     _state = 'error';
     _lastErrorAt = new Date().toISOString();
     _consecutiveFailures++;
     _lastErrorCode = 'PRAGMA_FAILED';
-    throw err; // already a DatabaseError(PRAGMA_FAILED)
+    throw new DatabaseError('PRAGMA_FAILED', `Failed to apply pragma ${pragma}.`, err);
   }
 
   // ── Commit the instance ───────────────────────────────────────────────────
@@ -369,14 +379,9 @@ export function getDatabase(): InstanceType<typeof Database> {
 /**
  * Retrieve a prepared statement with deterministic failure handling.
  *
- * 1. Cache‑hit returns the prepared statement after a cheap validation step.
- *    If validation fails due to a stale schema (`SQLITE_SCHEMA`) the entry is evicted
- *    and a fresh preparation is performed.
- * 2. Cache‑miss triggers a guarded preparation sequence:
- *    - Concurrency guard ensures only one preparation per SQL string.
- *    - Retry loop (max 3 attempts) handles transient `SQLITE_BUSY` errors.
- *    - Permission checks surface a `DatabasePermissionError` without caching.
- *    - Any other preparation error surfaces a `DatabasePrepareError`.
+ * Cached statements are returned without execution. Preparing a statement must
+ * never run writes or consume missing bind parameters; callers own execution.
+ * Preparation retries SQLITE_BUSY up to three times and wraps failures.
  *
  * The public signature is unchanged – callers receive the prepared statement or
  * a thrown error they can handle deterministically.
@@ -400,7 +405,7 @@ export function getPreparedStatement(sql: string): any {
         cacheEvicts++;
         // fall through to preparation
       } else {
-        throw e;
+        return cached;
       }
     }
   }
@@ -412,19 +417,6 @@ export function getPreparedStatement(sql: string): any {
     try {
       const db = getDatabase();
       const stmt = db.prepare(sql);
-      // Permission guard – attempt a harmless execution to surface read‑only errors.
-      try {
-        if (stmt.reader) {
-          stmt.get();
-        } else {
-          stmt.run();
-        }
-      } catch (permErr: any) {
-        if (permErr.code === 'SQLITE_READONLY') {
-          throw new DatabasePermissionError(sql, permErr);
-        }
-        // ignore other errors here
-      }
       statementCache.set(sql, stmt);
       return stmt;
     } catch (err: any) {
@@ -456,6 +448,11 @@ export function clearStatementCache(): void {
   statementCache.clear();
   resetCacheMetrics();
 }
+
+/**
+ * Reset ping metrics (no-op retained for backwards compatibility and test resets).
+ */
+export function resetPingMetrics(): void {}
 
 /**
  * Retrieve cache statistics including deterministic metrics.
@@ -498,6 +495,10 @@ export function getPingStats() {
     misses: cacheMisses,
     evicts: cacheEvicts,
   };
+}
+
+export function getStatementCacheStats() {
+  return { size: statementCache.size, statements: Array.from(statementCache.keys()) };
 }
 
 /**

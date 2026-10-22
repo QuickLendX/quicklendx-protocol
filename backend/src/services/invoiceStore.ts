@@ -1,5 +1,12 @@
 import { getDatabase, getPreparedStatement } from '../lib/database';
 import { Invoice, InvoiceStatus } from '../types/contract';
+import {
+  CursorPayload,
+  PageResult,
+  PaginationError,
+  encodeCursor,
+  paginationScope,
+} from '../utils/pagination';
 
 export const invoiceStore = {
   findInvoices(filter: { business?: string; status?: InvoiceStatus } = {}): Invoice[] {
@@ -22,6 +29,56 @@ export const invoiceStore = {
 
     const rows = getPreparedStatement(query).all(...params);
     return rows.map(mapRowToInvoice);
+  },
+
+  listPage({
+    filters = {},
+    limit,
+    cursor,
+  }: {
+    filters?: { business?: string; status?: InvoiceStatus };
+    limit: number;
+    cursor: CursorPayload | null;
+  }): PageResult<Invoice> {
+    const scope = paginationScope(filters);
+    if (cursor && cursor.scope !== scope) {
+      throw new PaginationError("cursor scope mismatch");
+    }
+
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    if (filters.business) {
+      conditions.push("business = ?");
+      params.push(filters.business);
+    }
+    if (filters.status) {
+      conditions.push("status = ?");
+      params.push(filters.status);
+    }
+    if (cursor) {
+      conditions.push("(created_at < ? OR (created_at = ? AND id > ?))");
+      params.push(cursor.sort_val, cursor.sort_val, cursor.id);
+    }
+
+    let sql = "SELECT * FROM invoices";
+    if (conditions.length > 0) {
+      sql += ` WHERE ${conditions.join(" AND ")}`;
+    }
+    sql += " ORDER BY created_at DESC, id ASC LIMIT ?";
+
+    const rows = getDatabase().prepare(sql).all(...params, limit + 1) as any[];
+    const has_more = rows.length > limit;
+    const data = rows.slice(0, limit).map(mapRowToInvoice);
+    const last = data[data.length - 1];
+
+    return {
+      data,
+      has_more,
+      next_cursor:
+        has_more && last
+          ? encodeCursor({ id: last.id, sort_val: last.created_at, scope })
+          : null,
+    };
   },
 
   findInvoiceById(id: string): Invoice | undefined {

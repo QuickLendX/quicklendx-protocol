@@ -20,6 +20,8 @@ import {
 
 const ORIGINAL_DATABASE_PATH = config.DATABASE_PATH;
 
+afterEach(() => jest.restoreAllMocks());
+
 // Helper to reset environment and cache between tests
 beforeEach(() => {
   vi.restoreAllMocks();
@@ -270,4 +272,14 @@ describe('failure boundaries', () => {
       });
     });
   });
+});
+
+// Preparing or retrieving a cached write must not execute it without parameters.
+test('cached preparation never executes writes', () => {
+  const db = getDatabase();
+  db.exec('CREATE TABLE IF NOT EXISTS prepare_safety (value TEXT)');
+  const sql = 'INSERT INTO prepare_safety (value) VALUES (?)';
+  getPreparedStatement(sql).run('once');
+  getPreparedStatement(sql);
+  expect(db.prepare('SELECT value FROM prepare_safety').all()).toEqual([{ value: 'once' }]);
 });
