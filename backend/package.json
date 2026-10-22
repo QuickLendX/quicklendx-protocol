@@ -1,5 +1,5 @@
 {
-  "name": "quicklendx-backend",
+  "name": "@quicklendx/backend",
   "version": "0.1.0",
   "description": "QuickLendX backend API controllers (TypeScript).",
   "private": true,

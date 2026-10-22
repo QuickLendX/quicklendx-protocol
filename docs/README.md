@@ -39,11 +39,12 @@
 
 | Document | What it covers |
 |----------|---------------|
-| [quicklendx-backend/docs/contributor-guide.md](../quicklendx-backend/docs/contributor-guide.md) | **Start here if you are new to the backend.** Module layout, request pipeline, export/audit wiring, metrics, how to add an endpoint. |
-| [quicklendx-backend/docs/configuration.md](../quicklendx-backend/docs/configuration.md) | All environment variables with types, defaults, and production rules |
-| [quicklendx-backend/docs/exports.md](../quicklendx-backend/docs/exports.md) | Export limits, streaming, formats, and integrity digest |
-| [quicklendx-backend/docs/observability.md](../quicklendx-backend/docs/observability.md) | Prometheus metrics, Grafana queries, alert rules |
-| [quicklendx-backend/docs/testing.md](../quicklendx-backend/docs/testing.md) | Contract testing, fixtures, and coverage requirements |
+| [backend/docs/contributor-guide.md](../backend/docs/contributor-guide.md) | **Start here if you are new to the backend.** Module layout, request pipeline, and how to add an endpoint. |
+| [backend/docs/configuration.md](../backend/docs/configuration.md) | Backend environment variables and defaults |
+| [backend/docs/exports.md](../backend/docs/exports.md) | Authenticated export generation, download links, and implementation |
+| [backend/docs/observability.md](../backend/docs/observability.md) | Ingest-lag monitoring, alert transitions, and degraded-mode behavior |
+| [backend/docs/secrets.md](../backend/docs/secrets.md) | Local environment and committed-secret scanning |
+| [backend/docs/runbooks.md](../backend/docs/runbooks.md) | Scheduler operation and lease behavior |
 
 ## Operator reference
 
