@@ -28,7 +28,8 @@
 use crate::errors::QuickLendXError;
 use crate::pagination;
 use crate::verification::{
-    BusinessVerificationStatus, BusinessVerificationStorage, InvestorVerificationStorage,
+    get_kyc_index_page, BusinessVerificationStatus, BusinessVerificationStorage,
+    InvestorVerificationStorage, KycIndexKind,
 };
 use alloc::string::String as AllocString;
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
@@ -125,40 +126,30 @@ pub fn decode_cursor(cursor: &String) -> Result<u32, QuickLendXError> {
 ///
 /// # Errors
 /// - `InvalidCursor` if `cursor` contains non-digit characters or overflows.
+
 fn query_businesses_by_status(
     env: &Env,
     status: BusinessVerificationStatus,
     cursor: &Option<String>,
     limit: u32,
 ) -> Result<KycPageResult, QuickLendXError> {
-    // Resolve the raw address list for the requested status.
-    let raw_list = match status {
-        BusinessVerificationStatus::Verified => {
-            BusinessVerificationStorage::get_verified_businesses(env)
-        }
-        BusinessVerificationStatus::Pending => {
-            BusinessVerificationStorage::get_pending_businesses(env)
-        }
-        BusinessVerificationStatus::Rejected => {
-            BusinessVerificationStorage::get_rejected_businesses(env)
-        }
+    let kind = match status {
+        BusinessVerificationStatus::Verified => KycIndexKind::VerifiedBusinesses,
+        BusinessVerificationStatus::Pending => KycIndexKind::PendingBusinesses,
+        BusinessVerificationStatus::Rejected => KycIndexKind::RejectedBusinesses,
     };
 
-    let total_count = raw_list.len();
-
-    // Sort by (submitted_at, address) for deterministic pagination.
-    let sorted = sort_addresses_by_submitted_at(env, &raw_list, true);
-
-    // Resolve offset from cursor.
     let offset = match cursor {
         Some(c) => decode_cursor(c)?,
         None => 0,
     };
 
+    let (_, total_count) = get_kyc_index_page(env, kind, 0, 0);
+
     let (safe_offset, effective_limit, has_more) =
         pagination::validate_pagination_params(offset, limit, total_count);
 
-    let page_items = paginate_address_list(env, &sorted, safe_offset, effective_limit);
+    let (page_items, _) = get_kyc_index_page(env, kind, safe_offset, effective_limit);
 
     let next_cursor = if has_more {
         Some(encode_cursor(
@@ -178,37 +169,30 @@ fn query_businesses_by_status(
 
 /// Retrieve a sorted, paginated slice of addresses that hold a given KYC
 /// status for investors.
+
 fn query_investors_by_status(
     env: &Env,
     status: BusinessVerificationStatus,
     cursor: &Option<String>,
     limit: u32,
 ) -> Result<KycPageResult, QuickLendXError> {
-    let raw_list = match status {
-        BusinessVerificationStatus::Verified => {
-            InvestorVerificationStorage::get_verified_investors(env)
-        }
-        BusinessVerificationStatus::Pending => {
-            InvestorVerificationStorage::get_pending_investors(env)
-        }
-        BusinessVerificationStatus::Rejected => {
-            InvestorVerificationStorage::get_rejected_investors(env)
-        }
+    let kind = match status {
+        BusinessVerificationStatus::Verified => KycIndexKind::VerifiedInvestors,
+        BusinessVerificationStatus::Pending => KycIndexKind::PendingInvestors,
+        BusinessVerificationStatus::Rejected => KycIndexKind::RejectedInvestors,
     };
-
-    let total_count = raw_list.len();
-
-    let sorted = sort_addresses_by_submitted_at(env, &raw_list, true);
 
     let offset = match cursor {
         Some(c) => decode_cursor(c)?,
         None => 0,
     };
 
+    let (_, total_count) = get_kyc_index_page(env, kind, 0, 0);
+
     let (safe_offset, effective_limit, has_more) =
         pagination::validate_pagination_params(offset, limit, total_count);
 
-    let page_items = paginate_address_list(env, &sorted, safe_offset, effective_limit);
+    let (page_items, _) = get_kyc_index_page(env, kind, safe_offset, effective_limit);
 
     let next_cursor = if has_more {
         Some(encode_cursor(

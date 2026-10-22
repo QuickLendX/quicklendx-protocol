@@ -29,6 +29,9 @@ import { getDatabase, getPreparedStatement, closeDatabase as closeSharedDatabase
 
 export interface DbApiKey {
   id: string;
+  version?: number;
+  revoked_at?: number | null;
+  revoked_by?: string | null;
   key_hash: string;
   signing_secret_hash: string | null;
   prev_signing_secret_hash: string | null;
@@ -121,19 +124,15 @@ function optionalString(row: any, column: string): string | null {
 
 function rowToDbApiKey(row: any): DbApiKey {
   return {
-    id,
-    key_hash: keyHash,
-    signing_secret_hash: normalizeNullableText(r.signing_secret_hash),
-    prev_signing_secret_hash: normalizeNullableText(r.prev_signing_secret_hash),
-    prefix,
-    name,
-    scopes,
-    created_at: createdAt,
-    last_used_at: normalizeNullableText(r.last_used_at),
-    expires_at: normalizeNullableText(r.expires_at),
-    prev_secret_expires_at: normalizeNullableText(r.prev_secret_expires_at),
-    revoked: normalizeRevoked(r.revoked),
-    created_by: createdBy,
+    id: requireString(row, 'id'), key_hash: requireString(row, 'key_hash'),
+    prefix: requireString(row, 'prefix'), name: requireString(row, 'name'),
+    scopes: requireString(row, 'scopes'), created_at: requireString(row, 'created_at'),
+    created_by: requireString(row, 'created_by'), revoked: row.revoked ? 1 : 0,
+    last_used_at: optionalString(row, 'last_used_at'), expires_at: optionalString(row, 'expires_at'),
+    signing_secret_hash: optionalString(row, 'signing_secret_hash'),
+    prev_signing_secret_hash: optionalString(row, 'prev_signing_secret_hash'),
+    prev_secret_expires_at: optionalString(row, 'prev_secret_expires_at'),
+    version: row.version ?? 1, revoked_at: row.revoked_at ?? null, revoked_by: row.revoked_by ?? null,
   };
 }
 
@@ -267,18 +266,22 @@ class Database {
     if (this._closing || this._closed) {
       throw new DatabaseClosedError();
     }
-    return this.getDb().transaction(fn);
+    return this.getDb().transaction(fn)();
+  }
+
+  transaction<T>(fn: () => T): T {
+    return this.getDb().transaction(fn).immediate();
   }
 
   // ---- API Key operations ----
 
   createApiKey(key: DbApiKey): void {
     getPreparedStatement(`
-      INSERT INTO api_keys (id, key_hash, signing_secret_hash, prev_signing_secret_hash, prefix, name, scopes, created_at, last_used_at, expires_at, prev_secret_expires_at, revoked, created_by)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO api_keys (id, key_hash, signing_secret_hash, prev_signing_secret_hash, prefix, name, scopes, created_at, last_used_at, expires_at, prev_secret_expires_at, revoked, created_by, version, revoked_at, revoked_by)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       key.id, key.key_hash, key.signing_secret_hash, key.prev_signing_secret_hash, key.prefix, key.name, key.scopes,
-      key.created_at, key.last_used_at, key.expires_at, key.prev_secret_expires_at, key.revoked, key.created_by,
+      key.created_at, key.last_used_at, key.expires_at, key.prev_secret_expires_at, key.revoked, key.created_by, key.version ?? 1, key.revoked_at ?? null, key.revoked_by ?? null,
     );
   }
 
@@ -322,18 +325,18 @@ class Database {
     const clauses: string[] = [];
     const params: unknown[] = [];
 
-    if (filters.created_by) {
+    if (filters?.created_by) {
       clauses.push('created_by = ?');
       params.push(filters.created_by);
     }
 
-    if (filters.revoked !== undefined) {
+    if (filters?.revoked !== undefined) {
       clauses.push('revoked = ?');
       params.push(filters.revoked ? 1 : 0);
     }
 
     if (clauses.length > 0) {
-      sql += ' WHERE' + clauses.join(' AND ');
+      sql += ' WHERE ' + clauses.join(' AND ');
     }
 
     sql += ' ORDER BY created_at DESC';
@@ -359,12 +362,12 @@ class Database {
     const clauses: string[] = [];
     const params: unknown[] = [];
 
-    if (filters.key_id) {
+    if (filters?.key_id) {
       clauses.push('key_id = ?');
       params.push(filters.key_id);
     }
 
-    if (filters.event_type) {
+    if (filters?.event_type) {
       clauses.push('event_type = ?');
       params.push(filters.event_type);
     }

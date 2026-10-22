@@ -72,6 +72,10 @@ mod test_bid_acceptance_replay;
 mod test_escrow;
 #[cfg(test)]
 mod test_invoice_amount_precision;
+#[cfg(test)]
+mod test_notification_status_matrix;
+#[cfg(test)]
+mod test_notifications;
 
 /// Shared test utilities for contract regression coverage (issue #2711 CI
 /// fix). Public (not `#[cfg(test)]`) so integration tests under `tests/`

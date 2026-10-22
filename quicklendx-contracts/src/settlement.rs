@@ -29,6 +29,9 @@
 //!    `Resolved` is intentionally allowed: once the admin has issued a
 //!    ruling the dispute is concluded and the admin's outcome governs, so
 //!    a business-favourable resolution can proceed to settlement normally.
+//!    Resolved outcomes `FavorInvestor` and `Split` are still blocked —
+//!    `require_no_blocking_resolution()` returns
+//!    `QuickLendXError::DisputeResolutionBlocksSettlement` (issue #2963).
 //!
 //! The explicit check is required because disputes do NOT change `invoice.status`;
 //! the invoice remains `Funded` throughout the dispute lifecycle.  Without the
@@ -90,7 +93,9 @@ use crate::payments::transfer_funds;
 use crate::profits::BPS_DENOMINATOR;
 use crate::storage::InvoiceStorage;
 use crate::types::InvestmentStatus;
-use crate::types::{DisputeStatus, Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord};
+use crate::types::{
+    DisputeResolution, DisputeStatus, Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord,
+};
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
@@ -403,6 +408,13 @@ pub fn process_partial_payment(
         .ok_or(QuickLendXError::InvoiceNotFound)?;
     let payer = invoice.business.clone();
 
+    // Issue #2963: a resolved dispute can permanently (FavorInvestor) or
+    // provisionally (Split) forbid any further fund movement on this
+    // invoice. This guard runs before payment recording so the caller sees
+    // the dispute-specific error rather than a generic status error (e.g.
+    // `InvalidStatus` from the post-refund `Refunded` invoice).
+    require_no_blocking_resolution(&invoice)?;
+
     crate::qlx_log!(
         env,
         "settlement",
@@ -546,20 +558,8 @@ pub fn record_payment(
     let fee_bps = settlement_fee_bps(env);
     let mut ledger = load_or_reconstruct_ledger(env, &invoice, fee_bps)?;
 
-    if !ledger.late_assessed
-        && env.ledger().timestamp() > invoice.due_date
-        && invoice
-            .late_payment_penalty_bps
-            .map(|bps| bps > 0)
-            .unwrap_or(false)
-    {
-        let remaining_contractual = contractual_remaining(&invoice)?;
-        let bps = invoice.late_payment_penalty_bps.unwrap_or(0) as i128;
-        ledger.assessed_late = remaining_contractual
-            .checked_mul(bps)
-            .ok_or(QuickLendXError::ArithmeticOverflow)?
-            .checked_div(BPS_DENOMINATOR)
-            .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    if let Some(assessed_late) = late_penalty_if_assessed_now(env, &invoice, Some(&ledger))? {
+        ledger.assessed_late = assessed_late;
         ledger.late_assessed = true;
     }
 
@@ -992,7 +992,7 @@ fn settle_invoice_internal(
     // This ensures the business receives the original funded amount during the settlement transition.
     if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
         if escrow.status == crate::payments::EscrowStatus::Held {
-            crate::payments::release_escrow(env, invoice_id, business)?;
+            crate::payments::release_escrow_internal(env, invoice_id, business)?;
         }
     }
 
@@ -1150,6 +1150,32 @@ fn require_no_active_dispute(invoice: &Invoice) -> Result<(), QuickLendXError> {
     {
         return Err(QuickLendXError::DisputeActive);
     }
+    // Open disputes are handled above; a *resolved* dispute can still
+    // forbid settlement depending on its outcome (issue #2963).
+    require_no_blocking_resolution(invoice)
+}
+
+/// Guard: reject fund movement once a resolved dispute outcome forbids it.
+///
+/// Enforcement counterpart of [`crate::resolution_policy`]
+/// (issue #2963). After resolution:
+/// - `FavorInvestor` — escrow was refunded to the investor; settlement is
+///   **permanently** blocked.
+/// - `Split` — funds are held pending an admin follow-up; settlement stays
+///   blocked until that follow-up.
+/// - `FavorBusiness` / `Dismissed` / `None` — settlement is unblocked.
+///
+/// `pub(crate)` so the partial-payment and default paths can consult the
+/// same single source of truth as final settlement.
+pub(crate) fn require_no_blocking_resolution(invoice: &Invoice) -> Result<(), QuickLendXError> {
+    if invoice.dispute_status == DisputeStatus::Resolved
+        && matches!(
+            invoice.dispute.resolution_outcome,
+            DisputeResolution::FavorInvestor | DisputeResolution::Split
+        )
+    {
+        return Err(QuickLendXError::DisputeResolutionBlocksSettlement);
+    }
     Ok(())
 }
 
@@ -1185,23 +1211,40 @@ fn remaining_due_with_late(
         .ok_or(QuickLendXError::InvalidAmount)
 }
 
-fn preview_assessed_late(env: &Env, invoice: &Invoice) -> Result<i128, QuickLendXError> {
-    if let Some(ledger) = get_repayment_ledger(env, &invoice.id) {
-        return Ok(ledger.assessed_late);
-    }
-    if env.ledger().timestamp() > invoice.due_date {
-        if let Some(bps) = invoice.late_payment_penalty_bps {
-            if bps > 0 {
-                let remaining = contractual_remaining(invoice)?;
-                return remaining
-                    .checked_mul(bps as i128)
-                    .ok_or(QuickLendXError::ArithmeticOverflow)?
-                    .checked_div(BPS_DENOMINATOR)
-                    .ok_or(QuickLendXError::ArithmeticOverflow);
-            }
+fn late_penalty_if_assessed_now(
+    env: &Env,
+    invoice: &Invoice,
+    ledger: Option<&RepaymentLedger>,
+) -> Result<Option<i128>, QuickLendXError> {
+    if let Some(ledger) = ledger {
+        if ledger.late_assessed {
+            return Ok(Some(ledger.assessed_late));
         }
     }
-    Ok(0)
+
+    let Some(bps) = invoice.late_payment_penalty_bps else {
+        return Ok(None);
+    };
+    if env.ledger().timestamp() <= invoice.due_date || bps == 0 {
+        return Ok(None);
+    }
+
+    let remaining_contractual = contractual_remaining(invoice)?;
+    let assessed_late = remaining_contractual
+        .checked_mul(bps as i128)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?
+        .checked_div(BPS_DENOMINATOR)
+        .ok_or(QuickLendXError::ArithmeticOverflow)?;
+    Ok(Some(assessed_late))
+}
+
+fn preview_assessed_late(env: &Env, invoice: &Invoice) -> Result<i128, QuickLendXError> {
+    Ok(late_penalty_if_assessed_now(
+        env,
+        invoice,
+        get_repayment_ledger(env, &invoice.id).as_ref(),
+    )?
+    .unwrap_or(0))
 }
 
 fn compute_remaining_due(env: &Env, invoice: &Invoice) -> Result<i128, QuickLendXError> {

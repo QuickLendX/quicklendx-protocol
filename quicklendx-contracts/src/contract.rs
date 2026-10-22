@@ -29,58 +29,38 @@ pub struct QuickLendXContract;
 
 #[contractimpl]
 impl QuickLendXContract {
-    /// Initialize the protocol with comprehensive parameters.
-    pub fn initialize(
-        env: Env,
-        admin: Address,
-        treasury: Address,
-        fee_bps: u32,
-        min_invoice_amount: i128,
-        max_due_date_days: u64,
-        grace_period_seconds: u64,
-        initial_currencies: Vec<Address>,
-        corridors: Vec<Address>,
-    ) -> Result<(), QuickLendXError> {
-        let params = InitializationParams {
-            admin,
-            treasury,
-            fee_bps,
-            min_invoice_amount,
-            max_due_date_days,
-            grace_period_seconds,
-            initial_currencies,
-            corridors,
-            backfill_max_batch_size: 100,
-        };
+    // ── Protocol initialization ─────────────────────────────────────────────
+
+    /// Initialize the protocol. `params.admin` must sign. Can succeed once;
+    /// repeating the call with identical params returns `Ok(())`, any other
+    /// params return `OperationNotAllowed`.
+    pub fn initialize(env: Env, params: InitializationParams) -> Result<(), QuickLendXError> {
         ProtocolInitializer::initialize(&env, &params)
     }
 
-    pub fn set_admin(env: Env, admin: Address, new_admin: Address) -> Result<(), QuickLendXError> {
-        AdminStorage::set_admin(&env, &admin, &new_admin)?;
-        Ok(())
+    /// `true` once `initialize` has completed.
+    pub fn is_initialized(env: Env) -> bool {
+        ProtocolInitializer::is_initialized(&env)
     }
 
-    /// Initialize the protocol admin only.
-    pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        AdminStorage::initialize(&env, &admin)
+    /// Protocol version recorded at initialization (or the current constant
+    /// before initialization).
+    pub fn get_version(env: Env) -> u32 {
+        ProtocolInitializer::get_version(&env)
     }
 
-    pub fn get_admin(env: Env) -> Result<Address, QuickLendXError> {
-        AdminStorage::get_admin(&env).ok_or(QuickLendXError::StorageKeyNotFound)
+    /// Current protocol configuration, `None` before initialization.
+    pub fn get_protocol_config(env: Env) -> Option<ProtocolConfig> {
+        ProtocolInitializer::get_protocol_config(&env)
     }
 
-    /// Admin-gated, read-only protocol invariant self-check ("heartbeat").
-    ///
-    /// Aggregates the cross-module integrity checks (orphan investments, audit
-    /// chain integrity, solvency, and storage-index coherence) into a single
-    /// [`InvariantReport`] of `(check_name, passed, evidence)` rows for incident
-    /// response. Authenticates `admin` before running; the checks never mutate
-    /// state, so an unauthorized or failing call leaves the ledger unchanged.
-    pub fn invariant_self_check(
+    /// Dry-run a configuration change (admin only, read-only).
+    pub fn preview_protocol_config(
         env: Env,
         admin: Address,
-    ) -> Result<crate::invariants::InvariantReport, QuickLendXError> {
-        crate::invariants::invariant_self_check(&env, &admin)
+        params: ProtocolConfigParams,
+    ) -> Result<ProtocolConfigDiff, QuickLendXError> {
+        ProtocolInitializer::preview_protocol_config(&env, &admin, params)
     }
 
     /// Initialize protocol limits.
@@ -88,41 +68,108 @@ impl QuickLendXContract {
         ProtocolLimitsContract::initialize(env, admin)
     }
 
-    /// Store a new invoice on behalf of a KYC-verified business.
+    /// Update the protocol fee in basis points (admin only).
+    pub fn set_fee_config(env: Env, admin: Address, fee_bps: u32) -> Result<(), QuickLendXError> {
+        ProtocolInitializer::set_fee_config(&env, &admin, fee_bps)
+    }
+
+    /// Update the treasury address (admin only).
+    pub fn set_treasury(
+        env: Env,
+        admin: Address,
+        treasury: Address,
+    ) -> Result<(), QuickLendXError> {
+        ProtocolInitializer::set_treasury(&env, &admin, &treasury)
+    }
+
+    pub fn get_fee_bps(env: Env) -> u32 {
+        ProtocolInitializer::get_fee_bps(&env)
+    }
+
+    pub fn get_treasury(env: Env) -> Option<Address> {
+        ProtocolInitializer::get_treasury(&env)
+    }
+
+    pub fn get_min_invoice_amount(env: Env) -> i128 {
+        ProtocolInitializer::get_min_invoice_amount(&env)
+    }
+
+    pub fn get_max_due_date_days(env: Env) -> u64 {
+        ProtocolInitializer::get_max_due_date_days(&env)
+    }
+
+    pub fn get_grace_period_seconds(env: Env) -> u64 {
+        ProtocolInitializer::get_grace_period_seconds(&env)
+    }
+
+    pub fn get_corridors(env: Env) -> Vec<Address> {
+        ProtocolInitializer::get_corridors(&env)
+    }
+
+    // ── Admin management ────────────────────────────────────────────────────
+
+    /// Current admin, `None` before initialization.
+    pub fn get_current_admin(env: Env) -> Option<Address> {
+        AdminStorage::get_admin(&env)
+    }
+
+    /// Transfer admin. With two-step mode enabled this only records
+    /// `new_admin` as pending; `accept_admin_transfer` completes it.
+    pub fn transfer_admin(
+        env: Env,
+        current_admin: Address,
+        new_admin: Address,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::transfer_admin(&env, &current_admin, &new_admin)
+    }
+
+    /// Start a two-step transfer to `pending_admin`.
+    pub fn initiate_admin_transfer(
+        env: Env,
+        current_admin: Address,
+        pending_admin: Address,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::initiate_admin_transfer(&env, &current_admin, &pending_admin)
+    }
+
+    /// Complete a two-step transfer; `pending_admin` must sign.
+    pub fn accept_admin_transfer(env: Env, pending_admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::accept_admin_transfer(&env, &pending_admin)
+    }
+
+    /// Cancel a pending two-step transfer (current admin only).
+    pub fn cancel_admin_transfer(env: Env, current_admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::cancel_admin_transfer(&env, &current_admin)
+    }
+
+    /// Enable or disable two-step admin transfers (admin only).
+    pub fn set_two_step_enabled(
+        env: Env,
+        admin: Address,
+        enabled: bool,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::set_two_step_enabled(&env, &admin, enabled)
+    }
+
+    pub fn is_two_step_enabled(env: Env) -> bool {
+        AdminStorage::is_two_step_enabled(&env)
+    }
+
+    pub fn get_pending_admin(env: Env) -> Option<Address> {
+        AdminStorage::get_pending_admin(&env)
+    }
+
+    // ── Invoice creation and lifecycle ──────────────────────────────────────
+
+    /// Create an invoice for a KYC-verified `business` (which must sign) and
+    /// return its ID.
     ///
-    /// # Authentication & KYC Policy (Issue #790)
-    ///
-    /// This function enforces a **two-layer authentication policy** to prevent
-    /// unauthorized invoice creation and storage-based denial-of-service attacks:
-    ///
-    /// 1. **Business signature** - `business.require_auth()` is called first.
-    ///    Only the business address itself may submit an invoice; no third party
-    ///    (including the admin) can create invoices on behalf of a business.
-    ///
-    /// 2. **Verified KYC** - the business must have a `Verified` KYC record.
-    ///    - `BusinessNotVerified` (1600) is returned if the business has no KYC
-    ///      record or was rejected.
-    ///    - `KYCAlreadyPending` (1601) is returned if the KYC application is
-    ///      still awaiting admin review, preventing spam from unvetted entities.
-    ///
-    /// # Security Invariants
-    /// - An unverified or pending business **cannot** create invoices.
-    /// - Admin cannot bypass the business signature requirement.
-    /// - Prevents storage DoS: only KYC-gated addresses can write invoice data.
-    ///
-    /// # Arguments
-    /// * `env`         - The contract environment.
-    /// * `business`    - The address of the invoice-issuing business (must sign).
-    /// * `amount`      - Invoice face value in the smallest currency unit.
-    /// * `currency`    - Token contract address for the invoice currency.
-    /// * `due_date`    - Unix timestamp by which the invoice must be settled.
-    /// * `description` - Human-readable invoice description.
-    /// * `category`    - Invoice category (Services, Products, etc.).
-    /// * `tags`        - Optional searchable tags (max 10, each 1-50 bytes).
-    ///
-    /// # Errors
-    /// * `BusinessNotVerified` (1600) - business has no KYC record or is rejected.
-    /// * `KYCAlreadyPending`   (1601) - business KYC is pending admin review.
+    /// Order of checks: business signature; idempotency (a repeat of the same
+    /// `(business, nonce)` returns the original ID); rate limit and input size
+    /// bounds; KYC, regulatory, currency whitelist and protocol limits;
+    /// `Invoice::new` (amount ceiling, due date, bps, tags); storage; event,
+    /// audit entry and notification; idempotency record.
+    #[allow(clippy::too_many_arguments)]
     pub fn store_invoice(
         env: Env,
         business: Address,
@@ -142,15 +189,29 @@ impl QuickLendXContract {
 
         business.require_auth();
 
-        // #2439 – per-address rate limit (cheap check before any heavy work)
-        check_and_record_mutation(&env, &business)?;
+        // 2. Idempotency: the key is bound to the business, so another
+        //    business reusing this nonce gets its own invoice, not this ID.
+        let idem_key = crate::idempotency::invoice_create_key(&env, &business, &nonce);
+        if let Some(existing) =
+            crate::idempotency::get_idempotency_result::<BytesN<32>>(&env, &idem_key)
+        {
+            return Ok(existing);
+        }
+        require_writable(&env)?;
 
-        // #2439 – hard input-size ceilings (reject oversized payloads early)
-        require_description_bound(&description)?;
+        // 3. Rate limit and hard input-size ceilings.
+        check_and_record_mutation(&env, &business)?;
+        if description.len() > MAX_INPUT_DESCRIPTION_BYTES {
+            return Err(QuickLendXError::InputTooLarge);
+        }
         require_tags_bound(&tags)?;
 
+        // 4. KYC, regulatory, currency and protocol limits.
         crate::verification::require_business_not_pending(&env, &business)?;
         crate::regulatory::require_regulatory_ok(&env, &business)?;
+        CurrencyWhitelist::require_allowed_currency(&env, &currency)?;
+        ProtocolLimitsContract::validate_invoice(env.clone(), amount, due_date)?;
+        check_invoice_limit(&env, &business)?;
 
         // #2432 — exact sign/ceiling validation before any state is written.
         // Semantically identical to the historical inline predicate
@@ -174,9 +235,18 @@ impl QuickLendXContract {
         )?;
         let invoice_id = invoice.id.clone();
 
+        // 6. Persist with all secondary indexes.
         InvoiceStorage::store_invoice(&env, &invoice);
-        crate::idempotency::store_idempotency_result(&env, &nonce, &invoice_id);
-        Ok(invoice_id)
+
+        // 7. Event, audit trail, notification (a notification failure must
+        //    not undo the invoice).
+        crate::events::emit_invoice_uploaded(&env, &invoice);
+        crate::audit::log_invoice_created(&env, &invoice);
+        let _ = crate::notifications::NotificationSystem::notify_invoice_created(&env, &invoice);
+
+        // 8. Remember the result for this (business, nonce).
+        crate::idempotency::store_idempotency_result(&env, &idem_key, &invoice.id);
+        Ok(invoice.id)
     }
 
     pub fn upload_invoice(
@@ -212,7 +282,7 @@ impl QuickLendXContract {
     }
 
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<Invoice, QuickLendXError> {
-        InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
+        load_invoice(&env, &invoice_id)
     }
 
     pub fn update_invoice_status(
@@ -529,6 +599,7 @@ impl QuickLendXContract {
         InvoiceStorage::get_total_count(&env) as u32
     }
 
+    /// Number of invoices currently in `status` (from the status index).
     pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
         InvoiceStorage::get_invoices_by_status(&env, status).len()
     }
@@ -653,15 +724,14 @@ impl QuickLendXContract {
             let status = InvoiceStorage::get(&env, &id).map(|i| i.status);
             results.push_back(status);
         }
-        Ok(results)
+        Ok(out)
     }
 
-    pub fn add_invoice_rating(
+    /// Mark an invoice verified. `admin` must be the admin and must sign.
+    pub fn verify_invoice(
         env: Env,
+        admin: Address,
         invoice_id: BytesN<32>,
-        rating: u32,
-        comment: soroban_sdk::Bytes,
-        investor: Address,
     ) -> Result<(), QuickLendXError> {
         let mut invoice =
             InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -811,18 +881,14 @@ impl QuickLendXContract {
 
     pub fn set_backup_retention_policy(
         env: Env,
-        admin: Address,
-        max_backups: u32,
-        max_age_seconds: u64,
-        enabled: bool,
+        business: Address,
+        invoice_id: BytesN<32>,
+        metadata: InvoiceMetadata,
     ) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin(&env, &admin)?;
-        let policy = BackupRetentionPolicy {
-            max_backups,
-            max_age_seconds,
-            auto_cleanup_enabled: enabled,
-        };
-        BackupStorage::set_retention_policy(&env, &policy);
+        require_writable(&env)?;
+        let mut invoice = load_invoice(&env, &invoice_id)?;
+        invoice.update_metadata(&env, &business, metadata)?;
+        InvoiceStorage::update_invoice(&env, &invoice);
         Ok(())
     }
 
@@ -841,39 +907,42 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    /// Rebuild customer, tax_id, and tag secondary indexes from the canonical invoice list.
-    /// Admin-only. Returns the number of invoices processed.
-    pub fn admin_reindex_invoices(env: Env, admin: Address) -> Result<u32, QuickLendXError> {
-        AdminStorage::require_admin(&env, &admin)?;
-        admin.require_auth();
+    pub fn add_invoice_tag(
+        env: Env,
+        business: Address,
+        invoice_id: BytesN<32>,
+        tag: String,
+    ) -> Result<(), QuickLendXError> {
+        require_writable(&env)?;
+        let mut invoice = load_owned_invoice(&env, &business, &invoice_id)?;
+        invoice.add_tag(&env, tag)?;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
 
-        let all_ids = InvoiceStorage::get_all_invoice_ids(&env);
-        let mut count: u32 = 0;
+    pub fn remove_invoice_tag(
+        env: Env,
+        business: Address,
+        invoice_id: BytesN<32>,
+        tag: String,
+    ) -> Result<(), QuickLendXError> {
+        require_writable(&env)?;
+        let mut invoice = load_owned_invoice(&env, &business, &invoice_id)?;
+        invoice.remove_tag(tag)?;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
 
-        for invoice_id in all_ids.iter() {
-            let invoice = match InvoiceStorage::get(&env, &invoice_id) {
-                Some(inv) => inv,
-                None => continue,
-            };
-
-            // Rebuild customer index
-            if let Some(ref name) = invoice.metadata_customer_name {
-                InvoiceStorage::add_to_customer_index(&env, name, &invoice_id);
-            }
-
-            // Rebuild tax_id index
-            if let Some(ref tax_id) = invoice.metadata_tax_id {
-                InvoiceStorage::add_to_tax_id_index(&env, tax_id, &invoice_id);
-            }
-
-            // Rebuild tag indexes
-            for tag in invoice.tags.iter() {
-                InvoiceStorage::add_tag_index(&env, &tag, &invoice_id);
-            }
-
-            count += 1;
-        }
-
-        Ok(count)
+    pub fn update_invoice_category(
+        env: Env,
+        business: Address,
+        invoice_id: BytesN<32>,
+        category: InvoiceCategory,
+    ) -> Result<(), QuickLendXError> {
+        require_writable(&env)?;
+        let mut invoice = load_owned_invoice(&env, &business, &invoice_id)?;
+        invoice.update_category(category);
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
     }
 }

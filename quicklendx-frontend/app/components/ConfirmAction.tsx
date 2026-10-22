@@ -8,8 +8,8 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import toast from "react-hot-toast";
+import { Dialog } from "./Dialog";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,7 +79,7 @@ function dialogReducer(state: DialogPhase, action: DialogAction): DialogPhase {
     case "SUBMIT":
       return { phase: "submitting" };
     case "SUCCESS":
-      return { phase: "idle" }; // dialog will be closed by parent
+      return { phase: "idle" };
     case "ERROR":
       return { phase: "error", message: action.message };
     case "TIMEOUT":
@@ -165,7 +165,6 @@ const ProgressArc: React.FC<ProgressArcProps> = ({
       viewBox="0 0 48 48"
       className="absolute inset-0 pointer-events-none"
     >
-      {/* Track */}
       <circle
         cx="24"
         cy="24"
@@ -174,7 +173,6 @@ const ProgressArc: React.FC<ProgressArcProps> = ({
         stroke="#E2E8F0"
         strokeWidth="3"
       />
-      {/* Progress */}
       <circle
         cx="24"
         cy="24"
@@ -226,7 +224,6 @@ const CommitmentSummary: React.FC<CommitmentSummaryProps> = ({
       aria-label="Commitment summary"
       className="overflow-y-auto max-h-[60vh] md:max-h-[70vh] text-sm text-gray-900"
     >
-      {/* Key facts */}
       <dl className="space-y-1 mb-4">
         <div className="flex justify-between">
           <dt className="text-gray-500">Invoice</dt>
@@ -242,14 +239,12 @@ const CommitmentSummary: React.FC<CommitmentSummaryProps> = ({
         </div>
       </dl>
 
-      {/* Commitment statement */}
       <p className="mb-4 text-gray-700">
         By accepting, you lock{" "}
         <span className="font-mono">{formatXlm(lockedAmountXlm)} XLM</span>{" "}
         until {formatLockDate(lockUntilDate)}.
       </p>
 
-      {/* Fee receipt */}
       <div className="border-t border-gray-200 pt-3 mb-3 space-y-1">
         {fees.map((fee, i) => (
           <div key={i} className="flex justify-between items-center">
@@ -279,7 +274,6 @@ const CommitmentSummary: React.FC<CommitmentSummaryProps> = ({
         <span className="font-mono">{formatXlm(netPayout)} XLM</span>
       </div>
 
-      {/* Low-collateral warning */}
       {isLowCollateral && (
         <p
           role="status"
@@ -290,7 +284,6 @@ const CommitmentSummary: React.FC<CommitmentSummaryProps> = ({
         </p>
       )}
 
-      {/* Stellar Explorer link */}
       <a
         href={stellarExplorerUrl}
         target="_blank"
@@ -431,7 +424,6 @@ const TwoStepButton: React.FC<TwoStepButtonProps> = ({ phase, onConfirm }) => {
     }
   }, [pending, isSubmitting, onConfirm]);
 
-  // Reset when dialog phase changes away from idle/holding
   useEffect(() => {
     if (phase !== "idle" && phase !== "holding") {
       setPending(false);
@@ -488,21 +480,16 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
   triggerRef,
 }) => {
   const [state, dispatch] = useReducer(dialogReducer, { phase: "idle" });
-  const [mounted, setMounted] = useState(false);
   const [closing, setClosing] = useState(false);
 
-  const dialogRef = useRef<HTMLDivElement>(null);
-  const cancelBtnRef = useRef<HTMLButtonElement>(null);
   const holdIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const serverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const progressRef = useRef(0);
-  // Stable ref so handleHoldStart can call handleSubmit without a circular dep
   const handleSubmitRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
   const titleId = useId();
   const summaryId = useId();
 
-  // Detect reduced-motion preference
   const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -512,20 +499,14 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
     return () => mq.removeEventListener("change", handler);
   }, []);
 
-  // Portal mount guard
-  useEffect(() => setMounted(true), []);
-
-  // Open / close lifecycle
+  // Reset state when dialog opens
   useEffect(() => {
     if (isOpen) {
       setClosing(false);
       dispatch({ type: "RESET" });
-      // Focus Cancel button after paint
-      requestAnimationFrame(() => cancelBtnRef.current?.focus());
     }
   }, [isOpen]);
 
-  // Hold mechanic — defined before handleClose so it can be called from it
   const clearHoldInterval = useCallback(() => {
     if (holdIntervalRef.current) {
       clearInterval(holdIntervalRef.current);
@@ -534,34 +515,19 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
     progressRef.current = 0;
   }, []);
 
+  // Single close function — all close paths (success, dismiss, cancel, backdrop,
+  // Escape) must go through here so focus always returns to the trigger.
   const handleClose = useCallback(() => {
     if (state.phase === "submitting") return;
     clearHoldInterval();
-    setClosing(true);
     const delay = reducedMotion ? 0 : 200;
+    setClosing(true);
     setTimeout(() => {
       setClosing(false);
       onClose();
-      // Return focus to trigger
-      const target = triggerRef?.current;
-      if (target && typeof target.focus === "function") {
-        target.focus();
-      }
     }, delay);
-  }, [state.phase, reducedMotion, onClose, triggerRef, clearHoldInterval]);
-
-  // Escape key handler
-  useEffect(() => {
-    if (!isOpen) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && state.phase !== "submitting") {
-        handleClose();
-      }
-    };
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOpen, state.phase]);
+    // Focus return is handled by Dialog via triggerRef
+  }, [state.phase, reducedMotion, onClose, clearHoldInterval]);
 
   const handleHoldStart = useCallback(() => {
     if (state.phase !== "idle") return;
@@ -598,7 +564,8 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
       await onConfirm();
       if (serverTimeoutRef.current) clearTimeout(serverTimeoutRef.current);
       dispatch({ type: "SUCCESS" });
-      onClose();
+      // Route through handleClose so focus is returned
+      handleClose();
       toast.success("Bid accepted. Funds are in escrow.", { duration: 5000 });
     } catch (err) {
       if (serverTimeoutRef.current) clearTimeout(serverTimeoutRef.current);
@@ -609,9 +576,8 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
       dispatch({ type: "ERROR", message });
       onRevert?.();
     }
-  }, [onConfirm, onClose, onOptimisticUpdate, onRevert]);
+  }, [onConfirm, handleClose, onOptimisticUpdate, onRevert]);
 
-  // Keep the ref in sync so handleHoldStart can always call the latest version
   handleSubmitRef.current = handleSubmit;
 
   // Cleanup on unmount
@@ -622,14 +588,11 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
     };
   }, [clearHoldInterval]);
 
-  if (!mounted || !isOpen) return null;
-
   const isSubmitting = state.phase === "submitting";
   const progressPct = state.phase === "holding" ? state.progressPct : 0;
 
-  // Determine viewport for animation class
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const noAnim = reducedMotion || window.innerWidth < 375;
+  const noAnim = reducedMotion || (typeof window !== "undefined" && window.innerWidth < 375);
 
   const panelAnimClass = noAnim
     ? ""
@@ -641,9 +604,8 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
         ? "animate-[cad-close-desktop_200ms_ease-in_forwards]"
         : "animate-[cad-open-desktop_200ms_ease-out_forwards]";
 
-  return createPortal(
+  return (
     <>
-      {/* Keyframe styles injected inline for portability */}
       <style>{`
         @keyframes cad-open-desktop {
           from { opacity: 0; transform: scale(0.95); }
@@ -666,25 +628,15 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
         }
       `}</style>
 
-      {/* Backdrop */}
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 bg-black/50 z-40"
-        onClick={() => {
-          if (!isSubmitting) handleClose();
-        }}
-      />
-
-      {/* Dialog */}
-      <div
-        ref={dialogRef}
+      <Dialog
+        isOpen={isOpen}
+        onClose={handleClose}
+        triggerRef={triggerRef}
         role="alertdialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        aria-describedby={summaryId}
-        tabIndex={-1}
-        className={[
-          "fixed z-50",
+        labelId={titleId}
+        descriptionId={summaryId}
+        dismissible={!isSubmitting}
+        panelClassName={[
           // Mobile: full-screen sheet
           "inset-0 flex flex-col bg-white",
           // Desktop: centred modal
@@ -694,17 +646,6 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
           panelAnimClass,
         ].join(" ")}
       >
-        {/* Focus sentinel — start */}
-        <span
-          tabIndex={0}
-          aria-hidden="true"
-          className="sr-only"
-          onFocus={() => {
-            // Wrap to last focusable: the cancel button
-            cancelBtnRef.current?.focus();
-          }}
-        />
-
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 shrink-0">
           <h2 id={titleId} className="text-2xl font-semibold text-gray-900">
@@ -738,7 +679,6 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
             stellarExplorerUrl={stellarExplorerUrl}
           />
 
-          {/* Error state */}
           {state.phase === "error" && (
             <p
               role="alert"
@@ -748,7 +688,6 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
             </p>
           )}
 
-          {/* Timeout state */}
           {state.phase === "timeout" && (
             <p
               role="status"
@@ -762,7 +701,6 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
 
         {/* Footer */}
         <div className="shrink-0 px-6 py-4 border-t border-gray-200">
-          {/* Hold + two-step buttons */}
           <div className="flex flex-col md:flex-row md:justify-end gap-2 mb-2">
             <HoldButton
               phase={state.phase}
@@ -774,19 +712,18 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
             <TwoStepButton phase={state.phase} onConfirm={handleSubmit} />
           </div>
 
-          {/* Cancel / Dismiss row */}
           <div className="flex flex-col md:flex-row md:justify-end gap-2">
             {state.phase === "timeout" ? (
+              // Dismiss — must also restore focus, so go through handleClose
               <button
                 type="button"
-                onClick={onClose}
+                onClick={handleClose}
                 className="w-full md:w-auto min-h-[48px] px-6 py-3 rounded-lg text-sm font-medium bg-gray-100 text-gray-900 hover:bg-gray-200 focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 transition-colors"
               >
                 Dismiss
               </button>
             ) : (
               <button
-                ref={cancelBtnRef}
                 type="button"
                 onClick={handleClose}
                 disabled={isSubmitting}
@@ -806,20 +743,8 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
             )}
           </div>
         </div>
-
-        {/* Focus sentinel — end */}
-        <span
-          tabIndex={0}
-          aria-hidden="true"
-          className="sr-only"
-          onFocus={() => {
-            // Wrap to first focusable: the cancel button
-            cancelBtnRef.current?.focus();
-          }}
-        />
-      </div>
-    </>,
-    document.body
+      </Dialog>
+    </>
   );
 };
 
