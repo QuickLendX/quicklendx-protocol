@@ -1565,6 +1565,7 @@ pub fn repay_escrow_with_key(
     Ok(allocation)
 }
 
+use soroban_sdk::String;
 #[cfg(test)]
 mod payments_tests {
     use super::*;
@@ -1576,6 +1577,45 @@ mod payments_tests {
         env.mock_all_auths();
         let contract_id = env.register(QuickLendXContract, ());
         (env, contract_id)
+    }
+
+    /// Store a minimal Pending/Verified invoice record so that
+    /// `validate_and_prepare_escrow`'s invoice lookup succeeds.
+    fn store_test_invoice(
+        env: &Env,
+        contract_id: &Address,
+        invoice_id: &BytesN<32>,
+        business: &Address,
+        currency: &Address,
+        amount: i128,
+    ) {
+        use crate::invoice::{InvoiceCategory, InvoiceStatus};
+        let invoice = crate::types::Invoice {
+            id: invoice_id.clone(),
+            business: business.clone(),
+            amount,
+            currency: currency.clone(),
+            due_date: env.ledger().timestamp() + 86400,
+            status: InvoiceStatus::Verified,
+            metadata: None,
+            category: InvoiceCategory::Services,
+            tags: soroban_sdk::Vec::new(env),
+            investor: None,
+            funded_amount: 0,
+            funded_at: None,
+            total_paid: 0,
+            settled_at: None,
+            origination_fee_bps: None,
+            servicing_fee_bps: None,
+            late_payment_penalty_bps: None,
+            early_payment_discount_bps: None,
+            metadata_customer_name: None,
+            metadata_tax_id: None,
+            payment_history: soroban_sdk::Vec::new(env),
+        };
+        env.as_contract(contract_id, || {
+            crate::storage::InvoiceStorage::store_invoice(env, &invoice);
+        });
     }
 
     fn mint_and_approve(
@@ -1607,12 +1647,21 @@ mod payments_tests {
     fn test_create_escrow_zero_amount_returns_invalid_amount() {
         let (env, contract_id) = contract_env();
         let investor = Address::generate(&env);
-        let business = Address::generate(&env);
         let invoice_id = BytesN::from_array(&env, &[0u8; 32]);
+        let business = Address::generate(&env);
         let token_admin = Address::generate(&env);
         let currency = env
             .register_stellar_asset_contract_v2(token_admin)
             .address();
+
+        store_test_invoice(
+            &env,
+            &contract_id,
+            &invoice_id,
+            &business,
+            &currency,
+            crate::protocol_limits::MAX_INVOICE_AMOUNT,
+        );
 
         let result = env.as_contract(&contract_id, || {
             create_escrow(&env, &invoice_id, &investor, &business, 0, &currency)
@@ -1667,12 +1716,22 @@ mod payments_tests {
         let invoice_id = BytesN::from_array(&env, &[2u8; 32]);
         let tok = token::Client::new(&env, &currency);
 
+        let business = Address::generate(&env);
+        store_test_invoice(
+            &env,
+            &contract_id,
+            &invoice_id,
+            &business,
+            &currency,
+            crate::protocol_limits::MAX_INVOICE_AMOUNT,
+        );
+
         let result = env.as_contract(&contract_id, || {
             create_escrow(
                 &env,
                 &invoice_id,
                 &investor,
-                &Address::generate(&env),
+                &business,
                 crate::protocol_limits::MAX_INVOICE_AMOUNT,
                 &currency,
             )
@@ -1693,6 +1752,16 @@ mod payments_tests {
         let token_admin = Address::generate(&env);
         let currency = mint_and_approve(&env, &contract_id, &token_admin, &investor, 5_000, 10_000);
 
+        let business = Address::generate(&env);
+        store_test_invoice(
+            &env,
+            &contract_id,
+            &invoice_id,
+            &business,
+            &currency,
+            crate::protocol_limits::MAX_INVOICE_AMOUNT,
+        );
+
         let invoice_id = BytesN::from_array(&env, &[3u8; 32]);
         let tok = token::Client::new(&env, &currency);
 
@@ -1700,14 +1769,7 @@ mod payments_tests {
         let contract_bal = tok.balance(&contract_id);
 
         let result = env.as_contract(&contract_id, || {
-            create_escrow(
-                &env,
-                &invoice_id,
-                &investor,
-                &Address::generate(&env),
-                5_001,
-                &currency,
-            )
+            create_escrow(&env, &invoice_id, &investor, &business, 5_001, &currency)
         });
         assert_eq!(result, Err(QuickLendXError::InsufficientFunds));
         assert_eq!(tok.balance(&investor), investor_bal);
@@ -1741,14 +1803,25 @@ mod payments_tests {
         );
 
         let invoice_id = BytesN::from_array(&env, &[4u8; 32]);
+
         let tok = token::Client::new(&env, &currency);
+
+        let business = Address::generate(&env);
+        store_test_invoice(
+            &env,
+            &contract_id,
+            &invoice_id,
+            &business,
+            &currency,
+            crate::protocol_limits::MAX_INVOICE_AMOUNT,
+        );
 
         let result = env.as_contract(&contract_id, || {
             create_escrow(
                 &env,
                 &invoice_id,
                 &investor,
-                &Address::generate(&env),
+                &business,
                 MAX_INVOICE_AMOUNT,
                 &currency,
             )
@@ -1773,7 +1846,7 @@ mod payments_tests {
                 &env,
                 &invoice_id_over,
                 &investor,
-                &Address::generate(&env),
+                &business,
                 MAX_INVOICE_AMOUNT + 1,
                 &currency,
             )
@@ -1860,29 +1933,25 @@ mod payments_tests {
 
         let invoice_id = BytesN::from_array(&env, &[6u8; 32]);
 
+        let business = Address::generate(&env);
+        store_test_invoice(
+            &env,
+            &contract_id,
+            &invoice_id,
+            &business,
+            &currency,
+            crate::protocol_limits::MAX_INVOICE_AMOUNT,
+        );
+
         // First escrow
         let r1 = env.as_contract(&contract_id, || {
-            create_escrow(
-                &env,
-                &invoice_id,
-                &investor1,
-                &Address::generate(&env),
-                10_000,
-                &currency,
-            )
+            create_escrow(&env, &invoice_id, &investor1, &business, 10_000, &currency)
         });
         assert!(r1.is_ok(), "first escrow must succeed");
 
         // Second attempt (different investor) must fail
         let r2 = env.as_contract(&contract_id, || {
-            create_escrow(
-                &env,
-                &invoice_id,
-                &investor2,
-                &Address::generate(&env),
-                5_000,
-                &currency,
-            )
+            create_escrow(&env, &invoice_id, &investor2, &business, 5_000, &currency)
         });
         assert_eq!(r2, Err(QuickLendXError::InvoiceAlreadyFunded));
     }
@@ -1951,13 +2020,13 @@ mod payments_tests {
 
     #[test]
     fn test_allocate_repayment_treasury_split() {
-        // principal 0 so all payment is profit: payment 10_000, fee 1000 bps -> fee 1000
-        let a = allocate_repayment(0, 10_000, 1000, 0, 5000).unwrap();
+        // principal 1, payment 10_001, profit 10_000, fee 1000 bps -> fee 1000
+        let a = allocate_repayment(1, 10_001, 1000, 0, 5000).unwrap();
         assert_eq!(a.platform_fee, 1000);
         assert_eq!(a.treasury_amount, 500);
         assert_eq!(a.treasury_remaining, 500);
-        assert_eq!(a.investor_return, 9000);
-        assert_eq!(a.investor_return + a.platform_fee + a.late_fee, 10_000);
+        assert_eq!(a.investor_return, 9001);
+        assert_eq!(a.investor_return + a.platform_fee + a.late_fee, 10_001);
     }
 
     #[test]
@@ -1995,9 +2064,9 @@ mod payments_tests {
     #[test]
     fn test_allocate_repayment_fee_bps_clamped() {
         // fee_bps beyond 10000 is clamped, so it behaves like 10000 (full profit)
-        let a = allocate_repayment(0, 10_000, 99_999, 0, 10_000).unwrap();
+        let a = allocate_repayment(1, 10_001, 99_999, 0, 10_000).unwrap();
         assert_eq!(a.platform_fee, 10_000);
-        assert_eq!(a.investor_return, 0);
+        assert_eq!(a.investor_return, 1);
     }
 
     #[test]

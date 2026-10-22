@@ -1,7 +1,7 @@
 extern crate alloc;
 
 use crate::storage::{bump_persistent, extend_persistent_ttl};
-use soroban_sdk::{symbol_short, Address, Bytes, BytesN, Env, Symbol, xdr::ToXdr};
+use soroban_sdk::{symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, Symbol};
 
 /// Storage key for the idempotency map.
 pub const IDEMPOTENCY_MAP_KEY: Symbol = symbol_short!("idem_map");
@@ -60,19 +60,23 @@ pub fn store_idempotency_result<T: soroban_sdk::IntoVal<Env, soroban_sdk::Val>>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::QuickLendXContract;
     use soroban_sdk::Env;
 
     #[test]
     fn test_idempotency_result() {
         let env = Env::default();
-        let key = BytesN::from_array(&env, &[1; 32]);
-        let result = BytesN::from_array(&env, &[2; 32]);
+        let contract_id = env.register(QuickLendXContract, ());
+        env.as_contract(&contract_id, || {
+            let key = BytesN::from_array(&env, &[1; 32]);
+            let result = BytesN::from_array(&env, &[2; 32]);
 
-        assert_eq!(get_idempotency_result::<BytesN<32>>(&env, &key), None);
-        store_idempotency_result(&env, &key, &result);
-        assert_eq!(
-            get_idempotency_result::<BytesN<32>>(&env, &key),
-            Some(result)
-        );
+            assert_eq!(get_idempotency_result::<BytesN<32>>(&env, &key), None);
+            store_idempotency_result(&env, &key, &result);
+            assert_eq!(
+                get_idempotency_result::<BytesN<32>>(&env, &key),
+                Some(result)
+            );
+        });
     }
 }
