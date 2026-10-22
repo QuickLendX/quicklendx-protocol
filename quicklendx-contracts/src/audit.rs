@@ -108,7 +108,9 @@ pub enum AuditOperation {
     InvestorFrozen,
     /// An investor was unfrozen (investment actions restored).
     InvestorUnfrozen,
+    /// A placed bid was cancelled by its owner.
     BidCancelled,
+    /// A placed bid expired via TTL/grace cleanup.
     BidExpired,
 }
 
@@ -210,7 +212,7 @@ impl OpType {
             OpType::KycRevoked => symbol_short!("kyc_rev"),
             OpType::InvestorFrozen => symbol_short!("inv_frz"),
             OpType::InvestorUnfrozen => symbol_short!("inv_unf"),
-            OpType::BidCancelled => symbol_short!("bid_cnl"),
+            OpType::BidCancelled => symbol_short!("bid_can"),
             OpType::BidExpired => symbol_short!("bid_exp"),
         }
     }

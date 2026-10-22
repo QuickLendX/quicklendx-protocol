@@ -418,6 +418,15 @@ fn ensure_default_transition_open(
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    // Issue #2963: defaulting must not side-step a dispute ruling. After a
+    // `FavorInvestor` resolution the escrow is already refunded and the
+    // invoice is terminal; after a `Split` resolution the funds are held
+    // pending an admin follow-up. Both outcomes block defaulting with a
+    // dispute-specific error rather than the generic escrow-status error.
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    crate::settlement::require_no_blocking_resolution(&invoice)?;
+
     if let Some(escrow) = EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
         if escrow.status != EscrowStatus::Held {
             return Err(QuickLendXError::InvalidStatus);
