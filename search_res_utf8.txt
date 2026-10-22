@@ -1,0 +1,25 @@
+﻿
+quicklendx-contracts\src\test_settle_during_dispute.rs:349:/// "Cleared" means no investigation was ever opened on the 
+invoice.  The
+quicklendx-contracts\src\test_settle_during_dispute.rs:350:/// active-investigation guard is a no-op in this state and 
+normal settlement
+quicklendx-contracts\src\test_settle_during_dispute.rs:417:/// `UnderReview` state — admin has acknowledged the 
+dispute (investigation is
+quicklendx-contracts\src\test_settle_during_dispute.rs:438:    // Open dispute and advance to UnderReview (active 
+investigation).
+quicklendx-contracts\src\test_settle_during_dispute.rs:451:        "pre-condition: dispute must be UnderReview (active 
+investigation)"
+quicklendx-contracts\src\test_settle_during_dispute.rs:454:    // Finalising payment — MUST be rejected by the 
+active-investigation guard.
+quicklendx-contracts\src\test_settle_during_dispute.rs:482:/// Once the admin issues a ruling the investigation is 
+closed and normal
+quicklendx-contracts\src\test_settle_during_dispute.rs:527:    // Now the remaining 50 % — must succeed, investigation 
+is closed.
+quicklendx-contracts\src\test_settle_during_dispute.rs:610:/// Locks in the explicit error contract: the 
+active-investigation guard fires
+quicklendx-contracts\src\test_settle_during_dispute.rs:627:        &String::from_str(&env, "Investigation guard 
+error-code boundary test"),
+quicklendx-contracts\src\test_settle_during_dispute.rs:643:        "settle_invoice on UnderReview must return 
+DisputeActive (investigation guard fires before other status checks); got {:?}",
+
+

@@ -20,7 +20,7 @@ queries and raw event subscriptions are provided at the bottom.
 | Backend API key for `/v1/metrics` Bearer auth | Yes |
 | SQLite replica for indexer queries | Recommended |
 
-See [`quicklendx-backend/docs/observability.md`](../quicklendx-backend/docs/observability.md)
+See [`backend/docs/observability.md`](../backend/docs/observability.md)
 for Prometheus scrape configuration and the full metric reference.
 
 ---
@@ -350,4 +350,4 @@ relevant runbook section.
 | [`EVENTS_SCHEMA.md`](EVENTS_SCHEMA.md) | Every contract event topic, payload fields, and subscription examples |
 | [`ON_CHAIN_LOGS.md`](ON_CHAIN_LOGS.md) | How to subscribe to on-chain events via Soroban RPC |
 | [`RUNBOOK_INCIDENT_RESPONSE.md`](RUNBOOK_INCIDENT_RESPONSE.md) | Step-by-step operator playbook for incidents |
-| [`quicklendx-backend/docs/observability.md`](../quicklendx-backend/docs/observability.md) | Full Prometheus scrape config, metric definitions, and Grafana data-source setup |
+| [`backend/docs/observability.md`](../backend/docs/observability.md) | Backend ingest-lag alerting and degraded-mode behavior |

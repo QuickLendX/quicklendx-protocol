@@ -65,6 +65,8 @@
  */
 
 import Database from 'better-sqlite3';
+import { vi, type Mock, type Mocked, type MockedClass } from 'vitest';
+import { config } from '../config';
 import {
   getDatabase,
   closeDatabase,
@@ -84,27 +86,27 @@ import {
 // We mock better-sqlite3 at the module level so we can control exactly when
 // the constructor throws, which pragmas succeed/fail, and whether a returned
 // instance has .open === true or false — without touching the file system.
-jest.mock('better-sqlite3');
+vi.mock('better-sqlite3');
 
-const MockDatabase = Database as jest.MockedClass<typeof Database>;
+const MockDatabase = Database as unknown as MockedClass<typeof Database>;
 
 // Shared instance mock returned by the constructor in the happy-path baseline.
 // Each test that needs different behaviour overrides MockDatabase.mockImplementation.
-function makeMockDb(overrides: Partial<InstanceType<typeof Database>> = {}): jest.Mocked<InstanceType<typeof Database>> {
+function makeMockDb(overrides: Partial<InstanceType<typeof Database>> = {}): Mocked<InstanceType<typeof Database>> {
   const db = {
     open: true,
-    pragma: jest.fn(),
-    prepare: jest.fn((sql: string) => ({
-      get: jest.fn(),
-      run: jest.fn(),
-      all: jest.fn(),
+    pragma: vi.fn(),
+    prepare: vi.fn((sql: string) => ({
+      get: vi.fn(),
+      run: vi.fn(),
+      all: vi.fn(),
       sql,
     })),
-    close: jest.fn(),
-    exec: jest.fn(),
-    transaction: jest.fn(),
+    close: vi.fn(),
+    exec: vi.fn(),
+    transaction: vi.fn(),
     ...overrides,
-  } as unknown as jest.Mocked<InstanceType<typeof Database>>;
+  } as unknown as Mocked<InstanceType<typeof Database>>;
   return db;
 }
 
@@ -124,16 +126,20 @@ function expectDatabaseError(fn: () => unknown, code: string): void {
 // Setup / teardown
 // ---------------------------------------------------------------------------
 
+const ORIGINAL_DATABASE_PATH = config.DATABASE_PATH;
+
 beforeEach(() => {
   // Full module state reset between tests — prevents singleton bleed.
   _resetDatabaseState();
-  jest.clearAllMocks();
+  vi.clearAllMocks();
+  (config as { DATABASE_PATH: string }).DATABASE_PATH = ORIGINAL_DATABASE_PATH;
   // Default: constructor succeeds, pragmas succeed, instance is open.
   MockDatabase.mockImplementation(() => makeMockDb());
 });
 
 afterAll(() => {
   _resetDatabaseState();
+  (config as { DATABASE_PATH: string }).DATABASE_PATH = ORIGINAL_DATABASE_PATH;
 });
 
 // ===========================================================================
@@ -163,7 +169,7 @@ describe('getDatabase – happy path', () => {
 
     getDatabase();
 
-    const pragmaCalls = (mockDb.pragma as jest.Mock).mock.calls.map((c: any[]) => c[0] as string);
+    const pragmaCalls = (mockDb.pragma as unknown as Mock).mock.calls.map((c: any[]) => c[0] as string);
     expect(pragmaCalls).toContain('journal_mode = WAL');
     expect(pragmaCalls).toContain('synchronous = NORMAL');
     expect(pragmaCalls).toContain('foreign_keys = ON');
@@ -178,12 +184,12 @@ describe('getDatabase – happy path', () => {
     getDatabase();
     getDatabase();
 
-    expect((mockDb.pragma as jest.Mock).mock.calls).toHaveLength(4);
+    expect((mockDb.pragma as unknown as Mock).mock.calls).toHaveLength(4);
   });
 
   it('pingDatabase returns true when the connection is healthy', () => {
     const mockDb = makeMockDb();
-    (mockDb.prepare as jest.Mock).mockReturnValue({ get: jest.fn().mockReturnValue({ ok: 1 }) });
+    (mockDb.prepare as unknown as Mock).mockReturnValue({ get: vi.fn().mockReturnValue({ ok: 1 }) });
     MockDatabase.mockImplementation(() => mockDb);
 
     expect(pingDatabase()).toBe(true);
@@ -266,6 +272,9 @@ describe('getDatabase – open failures', () => {
     try { getDatabase(); } catch { /* expected */ }
     expect(getDatabaseStatus().consecutiveFailures).toBe(1);
 
+    try { getDatabase(); } catch { /* expected */ }
+    expect(getDatabaseStatus().consecutiveFailures).toBe(2);
+
     _resetDatabaseState();
     try { getDatabase(); } catch { /* expected */ }
     expect(getDatabaseStatus().consecutiveFailures).toBe(1);
@@ -286,7 +295,7 @@ describe('getDatabase – open failures', () => {
   });
 
   it('error message does not leak DATABASE_PATH', () => {
-    process.env.DATABASE_PATH = '/secret/path/to/prod.db';
+    (config as { DATABASE_PATH: string }).DATABASE_PATH = '/secret/path/to/prod.db';
     MockDatabase.mockImplementation(() => { throw new Error('disk full'); });
 
     let caught: DatabaseError | undefined;
@@ -294,8 +303,6 @@ describe('getDatabase – open failures', () => {
 
     expect(caught).toBeInstanceOf(DatabaseError);
     expect(caught!.message).not.toContain('/secret/path/to/prod.db');
-
-    delete process.env.DATABASE_PATH;
   });
 
   it('PERMISSION_DENIED message does not expose OS path details', () => {
@@ -349,7 +356,7 @@ describe('getDatabase – open failures', () => {
 describe('getDatabase – pragma failures', () => {
   it('throws DatabaseError PRAGMA_FAILED when a pragma throws after open', () => {
     const mockDb = makeMockDb();
-    (mockDb.pragma as jest.Mock).mockImplementation(() => {
+    (mockDb.pragma as unknown as Mock).mockImplementation(() => {
       throw new Error('unknown pragma');
     });
     MockDatabase.mockImplementation(() => mockDb);
@@ -359,7 +366,7 @@ describe('getDatabase – pragma failures', () => {
 
   it('tears down the partially-open instance — no stale reference left', () => {
     const mockDb = makeMockDb();
-    (mockDb.pragma as jest.Mock).mockImplementation(() => {
+    (mockDb.pragma as unknown as Mock).mockImplementation(() => {
       throw new Error('unknown pragma');
     });
     MockDatabase.mockImplementation(() => mockDb);
@@ -367,7 +374,7 @@ describe('getDatabase – pragma failures', () => {
     try { getDatabase(); } catch { /* expected */ }
 
     // The instance's close() should have been called to release the fd
-    expect((mockDb.close as jest.Mock)).toHaveBeenCalledTimes(1);
+    expect((mockDb.close as unknown as Mock)).toHaveBeenCalledTimes(1);
     // Status should reflect error, not open
     expect(getDatabaseStatus().state).toBe('error');
     expect(getDatabaseStatus().lastErrorCode).toBe('PRAGMA_FAILED');
@@ -380,7 +387,7 @@ describe('getDatabase – pragma failures', () => {
       if (callCount === 1) {
         // First attempt: pragma fails
         const bad = makeMockDb();
-        (bad.pragma as jest.Mock).mockImplementation(() => { throw new Error('pragma error'); });
+        (bad.pragma as unknown as Mock).mockImplementation(() => { throw new Error('pragma error'); });
         return bad;
       }
       // Second attempt: everything succeeds
@@ -396,7 +403,7 @@ describe('getDatabase – pragma failures', () => {
   it('DatabaseError PRAGMA_FAILED message names the failing pragma', () => {
     let pragmaCallCount = 0;
     const mockDb = makeMockDb();
-    (mockDb.pragma as jest.Mock).mockImplementation((p: string) => {
+    (mockDb.pragma as unknown as Mock).mockImplementation((_p: string) => {
       pragmaCallCount++;
       // Fail on the second pragma (synchronous = NORMAL)
       if (pragmaCallCount === 2) throw new Error('bad pragma value');
@@ -475,7 +482,7 @@ describe('getDatabase – re-entrant call guard', () => {
     // scenario with buggy initialization code that creates circular deps.
     const mockDb = makeMockDb();
     let firstPragmaCall = true;
-    (mockDb.pragma as jest.Mock).mockImplementation(() => {
+    (mockDb.pragma as unknown as Mock).mockImplementation(() => {
       if (firstPragmaCall) {
         firstPragmaCall = false;
         // Re-entrant call while state === 'opening'
@@ -538,7 +545,13 @@ describe('getPreparedStatement – cache behavior (mocked)', () => {
 
   it('getStatementCacheStats reflects current size and keys accurately', () => {
     clearStatementCache();
-    expect(getStatementCacheStats()).toEqual({ size: 0, statements: [] });
+    expect(getStatementCacheStats()).toEqual({
+      size: 0,
+      statements: [],
+      hits: 0,
+      misses: 0,
+      evicts: 0,
+    });
 
     getPreparedStatement('SELECT 1');
     const stats = getStatementCacheStats();
@@ -548,8 +561,8 @@ describe('getPreparedStatement – cache behavior (mocked)', () => {
 
   it('prepare() is only called once per unique SQL across many callers', () => {
     const mockDb = makeMockDb();
-    const prepareSpy = jest.fn((sql: string) => ({ get: jest.fn(), sql }));
-    (mockDb.prepare as jest.Mock).mockImplementation(prepareSpy);
+    const prepareSpy = vi.fn((sql: string) => ({ reader: true, get: vi.fn(), run: vi.fn(), sql }));
+    (mockDb.prepare as unknown as Mock).mockImplementation(prepareSpy);
     MockDatabase.mockImplementation(() => mockDb);
 
     const sql = 'SELECT * FROM test WHERE id = ?';
@@ -608,7 +621,7 @@ describe('closeDatabase', () => {
     getDatabase();
     closeDatabase();
 
-    expect((mockDb.close as jest.Mock)).toHaveBeenCalledTimes(1);
+    expect((mockDb.close as unknown as Mock)).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -699,7 +712,7 @@ describe('pingDatabase – failure paths', () => {
 
   it('returns false when the SELECT 1 result is null', () => {
     const mockDb = makeMockDb();
-    (mockDb.prepare as jest.Mock).mockReturnValue({ get: jest.fn().mockReturnValue(null) });
+    (mockDb.prepare as unknown as Mock).mockReturnValue({ get: vi.fn().mockReturnValue(null) });
     MockDatabase.mockImplementation(() => mockDb);
 
     expect(pingDatabase()).toBe(false);
@@ -707,7 +720,7 @@ describe('pingDatabase – failure paths', () => {
 
   it('returns false when ok !== 1', () => {
     const mockDb = makeMockDb();
-    (mockDb.prepare as jest.Mock).mockReturnValue({ get: jest.fn().mockReturnValue({ ok: 0 }) });
+    (mockDb.prepare as unknown as Mock).mockReturnValue({ get: vi.fn().mockReturnValue({ ok: 0 }) });
     MockDatabase.mockImplementation(() => mockDb);
 
     expect(pingDatabase()).toBe(false);
@@ -715,7 +728,7 @@ describe('pingDatabase – failure paths', () => {
 
   it('returns false when the prepare call itself throws', () => {
     const mockDb = makeMockDb();
-    (mockDb.prepare as jest.Mock).mockImplementation(() => { throw new Error('prepare error'); });
+    (mockDb.prepare as unknown as Mock).mockImplementation(() => { throw new Error('prepare error'); });
     MockDatabase.mockImplementation(() => mockDb);
 
     expect(pingDatabase()).toBe(false);
@@ -733,18 +746,17 @@ describe('pingDatabase – failure paths', () => {
 // ===========================================================================
 
 describe('boundary inputs', () => {
-  it('DATABASE_PATH env var is passed to the better-sqlite3 constructor', () => {
-    process.env.DATABASE_PATH = '/tmp/test-boundary.db';
+  it('config.DATABASE_PATH is passed to the better-sqlite3 constructor', () => {
+    (config as { DATABASE_PATH: string }).DATABASE_PATH = '/tmp/test-boundary.db';
     MockDatabase.mockImplementation(() => makeMockDb());
 
     getDatabase();
 
     expect(MockDatabase).toHaveBeenCalledWith('/tmp/test-boundary.db');
-    delete process.env.DATABASE_PATH;
   });
 
-  it('defaults to .data/dev.db when DATABASE_PATH is not set', () => {
-    delete process.env.DATABASE_PATH;
+  it('defaults to .data/dev.db when DATABASE_PATH is not overridden', () => {
+    (config as { DATABASE_PATH: string }).DATABASE_PATH = '.data/dev.db';
     MockDatabase.mockImplementation(() => makeMockDb());
 
     getDatabase();
