@@ -890,6 +890,7 @@ impl FeeManager {
         config: RevenueConfig,
     ) -> Result<(), QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
 
         // Validate individual share bounds
         Self::validate_revenue_shares(
@@ -1010,6 +1011,7 @@ impl FeeManager {
         period: u64,
     ) -> Result<(i128, i128, i128), QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
         let config: RevenueConfig = env
             .storage()
             .instance()
@@ -1087,7 +1089,11 @@ impl FeeManager {
 
     pub fn get_analytics(env: &Env, period: u64) -> Result<FeeAnalytics, QuickLendXError> {
         let revenue_key = (REVENUE_KEY, period);
-        let revenue_data: RevenueData = env.storage().instance().get(&revenue_key).unwrap();
+        let revenue_data: RevenueData = env
+            .storage()
+            .instance()
+            .get(&revenue_key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         let average_fee_rate = if revenue_data.transaction_count > 0 {
             revenue_data
                 .total_collected
@@ -1166,6 +1172,7 @@ impl FeeManager {
         new_address: Address,
     ) -> Result<RecipientRotationRequest, QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
 
         if env
             .storage()
@@ -1272,6 +1279,7 @@ impl FeeManager {
     /// Can be called at any time before confirmation to abort the rotation.
     pub fn cancel_treasury_rotation(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
 
         if env
             .storage()

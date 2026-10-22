@@ -8,7 +8,7 @@ use crate::protocol_limits::{
 use crate::types::{
     Invoice, InvoiceStatus, InvoiceCategory, InvoiceMetadata, Bid, BidStatus,
     DisputeStatus, PaymentRecord, InvoiceRating, Escrow, EscrowStatus,
-    BusinessFreezeReason,
+    BusinessFreezeReason, InvoiceLock,
 };
 use crate::storage::InvoiceStorage;
 use crate::init::{ProtocolInitializer, InitializationParams};
@@ -545,8 +545,250 @@ impl QuickLendXContract {
         EscrowStorage::update_escrow(&env, &escrow);
         Ok(())
     }
+
+    // ─── Fee Management Entrypoints ──────────────────────────────────────────
+
+    /// Initialize the fee system with default fee structures and platform fee config.
+    ///
+    /// # Auth
+    /// - `admin` must authorize this call via `require_auth()`.
+    /// - `admin` must be the protocol admin (checked by `AdminStorage::require_admin`).
+    ///
+    /// # Returns
+    /// - `Ok(())` on success.
+    /// - `Err(InvalidFeeConfiguration)` if the fee system is already initialized.
+    pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::fees::FeeManager::initialize(&env, &admin)
+    }
+
+    /// Configure the treasury address for platform fee routing.
+    ///
+    /// This can only be called once to set the initial treasury. After that,
+    /// all treasury changes must use the two-step rotation flow.
+    ///
+    /// # Auth
+    /// - `admin` must authorize and be the protocol admin.
+    ///
+    /// # Returns
+    /// - `Ok(TreasuryConfig)` with the configured treasury details.
+    /// - `Err(OperationNotAllowed)` if a treasury is already configured.
+    pub fn configure_treasury(
+        env: Env,
+        admin: Address,
+        treasury: Address,
+    ) -> Result<crate::fees::TreasuryConfig, QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        crate::fees::FeeManager::configure_treasury(&env, &admin, treasury)
+    }
+
+    /// Update the platform fee basis points.
+    ///
+    /// # Auth
+    /// - `admin` must authorize and be the protocol admin.
+    ///
+    /// # Args
+    /// - `fee_bps`: New platform fee in basis points (max 1000 = 10%).
+    ///
+    /// # Returns
+    /// - `Ok(())` on success.
+    /// - `Err(InvalidFeeBasisPoints)` if `fee_bps > 1000`.
+    pub fn update_platform_fee_bps(
+        env: Env,
+        admin: Address,
+        fee_bps: u32,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        crate::fees::FeeManager::update_platform_fee(&env, &admin, fee_bps)
+    }
+
+    /// Update a fee structure for a specific fee type.
+    ///
+    /// # Auth
+    /// - `admin` must authorize and be the protocol admin.
+    ///
+    /// # Args
+    /// - `fee_type`: Type of fee to update (Platform, Processing, etc.).
+    /// - `base_fee_bps`: Base fee rate in basis points (max 1000 = 10%).
+    /// - `min_fee`: Minimum fee amount.
+    /// - `max_fee`: Maximum fee amount.
+    /// - `is_active`: Whether this fee structure is active.
+    pub fn update_fee_structure(
+        env: Env,
+        admin: Address,
+        fee_type: crate::fees::FeeType,
+        base_fee_bps: u32,
+        min_fee: i128,
+        max_fee: i128,
+        is_active: bool,
+    ) -> Result<crate::fees::FeeStructure, QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        crate::fees::FeeManager::update_fee_structure(
+            &env,
+            &admin,
+            fee_type,
+            base_fee_bps,
+            min_fee,
+            max_fee,
+            is_active,
+        )
+    }
+
+    /// Configure revenue distribution shares.
+    ///
+    /// # Auth
+    /// - `admin` must authorize and be the protocol admin.
+    ///
+    /// # Args
+    /// - `config`: Revenue distribution configuration with share allocations.
+    ///
+    /// # Returns
+    /// - `Ok(())` on success.
+    /// - `Err(InvalidFeeConfiguration)` if shares don't sum to 10,000 bps.
+    pub fn configure_revenue_distribution(
+        env: Env,
+        admin: Address,
+        config: crate::fees::RevenueConfig,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        crate::fees::FeeManager::configure_revenue_distribution(&env, &admin, config)
+    }
+
+    /// Distribute accumulated revenue for a period according to configured shares.
+    ///
+    /// # Auth
+    /// - `admin` must authorize and be the protocol admin.
+    ///
+    /// # Args
+    /// - `period`: Period number to distribute (timestamp / 2_592_000).
+    ///
+    /// # Returns
+    /// - `Ok((treasury_amount, developer_amount, platform_amount))` on success.
+    pub fn distribute_revenue(
+        env: Env,
+        admin: Address,
+        period: u64,
+    ) -> Result<(i128, i128, i128), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        crate::fees::FeeManager::distribute_revenue(&env, &admin, period)
+    }
+
+    /// Initiate a two-step treasury address rotation.
+    ///
+    /// # Auth
+    /// - `admin` must authorize and be the protocol admin.
+    ///
+    /// # Args
+    /// - `new_address`: New treasury address that will need to confirm.
+    ///
+    /// # Returns
+    /// - `Ok(RecipientRotationRequest)` with rotation details.
+    /// - `Err(RotationAlreadyPending)` if a rotation is already in progress.
+    pub fn initiate_treasury_rotation(
+        env: Env,
+        admin: Address,
+        new_address: Address,
+    ) -> Result<crate::fees::RecipientRotationRequest, QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        crate::fees::FeeManager::initiate_treasury_rotation(&env, &admin, new_address)
+    }
+
+    /// Confirm a pending treasury rotation.
+    ///
+    /// # Auth
+    /// - `new_address` must authorize (proving ownership).
+    ///
+    /// # Args
+    /// - `new_address`: The pending new treasury address.
+    ///
+    /// # Returns
+    /// - `Ok(Address)` of the confirmed treasury.
+    /// - `Err(RotationTimelockNotElapsed)` if called before the 1-day delay.
+    /// - `Err(RotationExpired)` if called after the 7-day window.
+    pub fn confirm_treasury_rotation(
+        env: Env,
+        new_address: Address,
+    ) -> Result<Address, QuickLendXError> {
+        crate::fees::FeeManager::confirm_treasury_rotation(&env, &new_address)
+    }
+
+    /// Cancel a pending treasury rotation.
+    ///
+    /// # Auth
+    /// - `admin` must authorize and be the protocol admin.
+    pub fn cancel_treasury_rotation(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        crate::fees::FeeManager::cancel_treasury_rotation(&env, &admin)
+    }
+
+    // ─── Fee View Functions ──────────────────────────────────────────────────
+
+    /// Get current platform fee configuration.
+    pub fn get_platform_fee_config(
+        env: Env,
+    ) -> Result<crate::fees::PlatformFeeConfig, QuickLendXError> {
+        crate::fees::FeeManager::get_platform_fee_config(&env)
+    }
+
+    /// Get current treasury address if configured.
+    pub fn get_treasury_address(env: Env) -> Option<Address> {
+        crate::fees::FeeManager::get_treasury_address(&env)
+    }
+
+    /// Get the complete fee schedule (all fee structures).
+    pub fn get_fee_schedule(env: Env) -> Vec<crate::fees::FeeStructure> {
+        crate::fees::FeeManager::get_fee_schedule(&env)
+    }
+
+    /// Get a specific fee structure by type.
+    pub fn get_fee_structure(
+        env: Env,
+        fee_type: crate::fees::FeeType,
+    ) -> Result<crate::fees::FeeStructure, QuickLendXError> {
+        crate::fees::FeeManager::get_fee_structure(&env, &fee_type)
+    }
+
+    /// Calculate total transaction fees for a user and context.
+    ///
+    /// # Args
+    /// - `user`: User address (for volume tier discount).
+    /// - `amount`: Transaction amount.
+    /// - `is_early`: Whether early payment discount applies.
+    /// - `is_late`: Whether late payment surcharge applies.
+    ///
+    /// # Returns
+    /// - Total fee amount after all discounts/surcharges.
+    pub fn calculate_transaction_fees(
+        env: Env,
+        user: Address,
+        amount: i128,
+        is_early: bool,
+        is_late: bool,
+    ) -> Result<i128, QuickLendXError> {
+        crate::fees::FeeManager::calculate_total_fees(&env, &user, amount, is_early, is_late, None)
+    }
+
+    /// Get fee analytics for a specific period.
+    ///
+    /// # Args
+    /// - `period`: Period number (timestamp / 2_592_000).
+    ///
+    /// # Returns
+    /// - `Ok(FeeAnalytics)` with period statistics.
+    /// - `Err(StorageKeyNotFound)` if the period has no data.
+    pub fn get_fee_analytics(
+        env: Env,
+        period: u64,
+    ) -> Result<crate::fees::FeeAnalytics, QuickLendXError> {
+        crate::fees::FeeManager::get_analytics(&env, period)
+    }
+
+    /// Get any pending treasury rotation request.
+    pub fn get_pending_rotation(env: Env) -> Option<crate::fees::RecipientRotationRequest> {
+        crate::fees::FeeManager::get_pending_rotation(&env)
+    }
     
-    // Backup & Restore
+    // ─── Backup & Restore ─────────────────────────────────────────────────────
+
     pub fn create_backup(env: Env, admin: Address) -> Result<BytesN<32>, QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
         
