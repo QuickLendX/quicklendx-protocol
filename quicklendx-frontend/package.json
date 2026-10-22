@@ -10,7 +10,7 @@
     "lint": "cross-env ESLINT_USE_FLAT_CONFIG=false eslint .",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
-    "test:e2e": "cross-env NEXT_PUBLIC_E2E=1 playwright test"
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@stellar/freighter-api": "6.0.1",
@@ -26,6 +26,7 @@
     "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/jest-dom": "^6.9.2",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
     "@types/jest": "^29.5.14",
@@ -51,20 +52,12 @@
         "preset": "ts-jest",
         "testEnvironment": "node",
         "testMatch": [
-          "<rootDir>/app/**/*.test.ts",
-          "<rootDir>/**/__tests__/**/*.test.ts",
-          "<rootDir>/**/tests/**/*.test.ts"
+          "**/__tests__/**/*.test.ts",
+          "**/tests/**/*.test.ts"
         ],
-        "transform": {
-          "^.+\\.tsx?$": [
-            "ts-jest",
-            {
-              "tsconfig": {
-                "jsx": "react-jsx"
-              }
-            }
-          ]
-        },
+        "setupFilesAfterEnv": [
+          "<rootDir>/jest.node.setup.ts"
+        ],
         "moduleNameMapper": {
           "^@/(.*)$": "<rootDir>/$1"
         }
@@ -72,9 +65,12 @@
       {
         "displayName": "jsdom",
         "preset": "ts-jest",
-        "testEnvironment": "jsdom",
+        "testEnvironment": "jest-environment-jsdom",
         "testMatch": [
-          "<rootDir>/app/**/*.test.tsx"
+          "**/*.test.tsx"
+        ],
+        "setupFilesAfterEnv": [
+          "<rootDir>/jest.setup.ts"
         ],
         "transform": {
           "^.+\\.tsx?$": [
