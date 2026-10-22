@@ -3,18 +3,23 @@
 //! Called from the public API with a reentrancy guard. Validates invoice/bid state,
 //! creates escrow via payments, and updates bid, invoice, and investment state.
 //!
-//! ## One-Escrow-Per-Invoice Invariant
-//! Each invoice may have **at most one** escrow record across its entire lifetime.
+//! ## One-Live-Escrow-Per-Invoice Invariant
+//! Each invoice may have **at most one live** escrow record (`EscrowStatus::Held`)
+//! at a time. Terminal escrows (`Released`, `Refunded`) are immutable history and
+//! remain reachable by their `escrow_id`; the invoice→current mapping is advanced
+//! to any newly created escrow. The same rule applies to investments: only an
+//! `Active` investment is live; terminal investments remain reachable by ID.
 //! This is enforced at two independent layers:
 //!
-//! 1. **`load_accept_bid_context`** - checks `EscrowStorage::get_escrow_by_invoice`
-//!    and `InvestmentStorage::get_investment_by_invoice` before any state changes.
-//! 2. **`payments::create_escrow`** - re-checks `get_escrow_by_invoice` before the
+//! 1. **`load_accept_bid_context`** - rejects a `Held` escrow or `Active`
+//!    investment before any state changes.
+//! 2. **`payments::create_escrow`** - re-checks for a `Held` escrow before the
 //!    token transfer, so the guard holds even if the higher-level check is bypassed.
 //!
-//! Any duplicate attempt returns [`QuickLendXError::InvoiceAlreadyFunded`] or
-//! [`QuickLendXError::InvalidStatus`] and leaves all state unchanged.
-//! See `test_escrow_uniqueness.rs` for the full attack-vector test suite.
+//! Any duplicate attempt against a live record returns
+//! [`QuickLendXError::InvoiceAlreadyFunded`] or [`QuickLendXError::InvalidStatus`]
+//! and leaves all state unchanged. See `test_escrow_uniqueness.rs` for the full
+//! attack-vector test suite.
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
@@ -74,13 +79,15 @@ fn store_bid_acceptance_record(env: &Env, request_key: &BytesN<32>, record: &Bid
 /// # Security
 /// - Authorization is checked against the exact invoice being funded
 /// - The bid must belong to that invoice
-/// - The invoice must not already have escrow, funding metadata, or an investment
+/// - The invoice must not already have a *live* escrow or investment
 ///
-/// ## One-Escrow-Per-Invoice Invariant (Two-Layer Guard)
-/// This function implements the outer guard of the one-escrow-per-invoice invariant:
-/// it checks for existing escrow or investment records before any state changes.
-/// The inner guard is in `payments::create_escrow`, which re-checks
-/// `EscrowStorage::get_escrow_by_invoice` before the token transfer.
+/// ## One-Live-Escrow-Per-Invoice Invariant (Two-Layer Guard)
+/// This function implements the outer guard: it rejects an invoice that still has
+/// a `Held` escrow or an `Active` investment before any state changes. Terminal
+/// records (`Released`/`Refunded` escrow, `Withdrawn`/`Completed`/`Defaulted`/
+/// `Refunded` investment) are audit history and must not block re-funding after a
+/// withdrawal. The inner guard is in `payments::create_escrow`, which re-checks
+/// for a `Held` escrow before the token transfer.
 /// If either guard fails, the function returns an error and no state is mutated.
 pub(crate) fn load_accept_bid_context(
     env: &Env,
@@ -118,14 +125,21 @@ pub(crate) fn load_accept_bid_context(
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    // Outer guard: check for existing escrow or investment record before any state changes.
-    // This is the first layer of the one-escrow-per-invoice invariant.
-    // The second layer is in payments::create_escrow which re-checks get_escrow_by_invoice
-    // before the token transfer, ensuring the invariant holds even if this check is bypassed.
-    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some()
-        || InvestmentStorage::get_investment_by_invoice(env, invoice_id).is_some()
-    {
-        return Err(QuickLendXError::InvalidStatus);
+    // Outer guard: reject only if a *live* escrow or investment still exists.
+    // Terminal records from a prior funding cycle (Refunded/Released escrow,
+    // Withdrawn/Completed/Defaulted/Refunded investment) are retained for audit
+    // and must not prevent an invoice that has returned to the market from being
+    // funded again. The second layer is in payments::create_escrow which
+    // re-checks for a Held escrow before the token transfer.
+    if let Some(escrow) = EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
+        if escrow.status == EscrowStatus::Held {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+    }
+    if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
+        if investment.status == InvestmentStatus::Active {
+            return Err(QuickLendXError::InvalidStatus);
+        }
     }
 
     let bid = BidStorage::get_bid(env, bid_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
@@ -419,7 +433,9 @@ pub fn refund_escrow_funds(
     }
 
     // 4. Retrieve Escrow
-    let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
+    let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
     // 5. Transfer funds and update escrow state
     // This calls payments::refund_escrow which handles the token transfer and status update
     refund_escrow(env, invoice_id, caller)?;
@@ -505,7 +521,8 @@ pub fn withdraw_investment(
     investor.require_auth();
 
     // 2. Validate investment exists, is Active, and belongs to caller
-    let mut investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
+    let mut investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if investment.status != InvestmentStatus::Active {
         return Err(QuickLendXError::InvalidStatus);
@@ -524,7 +541,8 @@ pub fn withdraw_investment(
     }
 
     // 4. Validate escrow exists and is still Held
-    let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id).unwrap();
+    let escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     if escrow.status != EscrowStatus::Held {
         return Err(QuickLendXError::InvalidStatus);
