@@ -70,18 +70,22 @@ fn dispute_index_key() -> soroban_sdk::Symbol {
     symbol_short!("dispute")
 }
 
-fn get_dispute_index(env: &Env) -> Vec<BytesN<32>> {
-    env.storage()
-        .instance()
-        .get(&dispute_index_key())
-        .unwrap_or_else(|| Vec::new(env))
+pub fn get_dispute_index(env: &Env) -> Vec<BytesN<32>> {
+    let key = dispute_index_key();
+    let res = env.storage().persistent().get(&key);
+    if res.is_some() {
+        crate::storage::extend_persistent_ttl(env, &key);
+    }
+    res.unwrap_or_else(|| Vec::new(env))
 }
 
-fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
+pub fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
     let mut ids = get_dispute_index(env);
     if !ids.iter().any(|id| id == *invoice_id) {
         ids.push_back(invoice_id.clone());
-        env.storage().instance().set(&dispute_index_key(), &ids);
+        let key = dispute_index_key();
+        env.storage().persistent().set(&key, &ids);
+        crate::storage::extend_persistent_ttl(env, &key);
     }
 }
 
@@ -579,6 +583,42 @@ pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
     get_dispute_index(env)
 }
 
+/// Return a paginated slice of dispute-indexed invoice IDs.
+pub fn get_invoices_with_disputes_paged(
+    env: &Env,
+    offset: u32,
+    limit: u32,
+) -> Vec<BytesN<32>> {
+    let list = get_dispute_index(env);
+    let total_count = list.len();
+    let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+    let mut page = Vec::new(env);
+    let mut idx = start;
+    while idx < end {
+        if let Some(id) = list.get(idx) {
+            page.push_back(id);
+        }
+        idx = idx.saturating_add(1);
+    }
+    page
+}
+
+/// Return a paginated response with metadata for dispute-indexed invoices.
+pub fn get_invoices_with_disputes_paginated(
+    env: &Env,
+    offset: u32,
+    limit: u32,
+) -> crate::types::PaginatedBytes32Vec {
+    let items = get_invoices_with_disputes_paged(env, offset, limit);
+    let total_count = get_dispute_index(env).len();
+    let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+    crate::types::PaginatedBytes32Vec {
+        items,
+        total_count,
+        has_more,
+    }
+}
+
 /// @notice Read the dispute index for query endpoints.
 /// @param env The contract environment.
 /// @return Invoice IDs that have entered the dispute lifecycle.
@@ -597,6 +637,27 @@ pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<
         }
     }
     result
+}
+
+/// Return a paginated slice of invoices matching a specific dispute status.
+pub fn get_invoices_by_dispute_status_paged(
+    env: &Env,
+    status: &DisputeStatus,
+    offset: u32,
+    limit: u32,
+) -> Vec<BytesN<32>> {
+    let list = get_invoices_by_dispute_status(env, status);
+    let total_count = list.len();
+    let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+    let mut page = Vec::new(env);
+    let mut idx = start;
+    while idx < end {
+        if let Some(id) = list.get(idx) {
+            page.push_back(id);
+        }
+        idx = idx.saturating_add(1);
+    }
+    page
 }
 
 /// @notice Filter dispute-indexed invoices by dispute status.
