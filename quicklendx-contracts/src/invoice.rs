@@ -48,6 +48,31 @@ impl Invoice {
         description: String,
         category: InvoiceCategory,
         tags: Vec<String>,
+    ) -> Result<Self, QuickLendXError> {
+        Self::new_with_fee_settings(
+            env,
+            business,
+            amount,
+            currency,
+            due_date,
+            description,
+            category,
+            tags,
+            None,
+            None,
+            None,
+        )
+    }
+
+    pub fn new_with_fee_settings(
+        env: &Env,
+        business: Address,
+        amount: i128,
+        currency: Address,
+        due_date: u64,
+        description: String,
+        category: InvoiceCategory,
+        tags: Vec<String>,
         origination_fee_bps: Option<u32>,
         late_payment_penalty_bps: Option<u32>,
         early_payment_discount_bps: Option<u32>,
@@ -59,6 +84,12 @@ impl Invoice {
 
         if due_date <= env.ledger().timestamp() {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
+        if let Some(fee_bps) = origination_fee_bps {
+            if fee_bps > crate::init::MAX_FEE_BPS {
+                return Err(QuickLendXError::InvalidFeeBasisPoints);
+            }
         }
 
         if let Some(penalty_bps) = late_payment_penalty_bps {
@@ -334,10 +365,10 @@ impl Invoice {
 
     /// Append an investor rating to this invoice.
     ///
-    /// Returns `OperationNotAllowed` when the ratings vector has reached
-    /// `MAX_RATINGS_PER_INVOICE`, preventing unbounded on-chain growth.
-    /// Also rejects duplicate raters (`AlreadyRated`) and invalid scores or
-    /// invoice states.
+    /// Ratings are restricted to the invoice's funded investor and must be
+    /// authorized by that investor's signature. This closes the sybil path where
+    /// arbitrary third parties can pin a business's average rating down to an
+    /// artificially low score.
     pub fn add_rating(
         &mut self,
         rating: u32,
@@ -351,6 +382,9 @@ impl Invoice {
         }
         if self.status != InvoiceStatus::Funded && self.status != InvoiceStatus::Paid {
             return Err(QuickLendXError::NotFunded);
+        }
+        if self.investor != Some(rater.clone()) {
+            return Err(QuickLendXError::NotRater);
         }
         if self.ratings.len() >= MAX_RATINGS_PER_INVOICE {
             return Err(QuickLendXError::OperationNotAllowed);
@@ -368,6 +402,21 @@ impl Invoice {
         });
         self.total_ratings = self.ratings.len();
         self.average_rating = Some(self.compute_average_rating());
+        Ok(())
+    }
+
+    pub fn rate_invoice(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        rater: Address,
+        rating: u32,
+        feedback: String,
+    ) -> Result<(), QuickLendXError> {
+        rater.require_auth();
+        let mut invoice = InvoiceStorage::get_invoice(env, invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        invoice.add_rating(rating, feedback, rater, env.ledger().timestamp())?;
+        InvoiceStorage::update_invoice(env, &invoice);
         Ok(())
     }
 

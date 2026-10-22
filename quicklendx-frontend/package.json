@@ -5,13 +5,15 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "build:e2e": "cross-env NEXT_PUBLIC_E2E=1 next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "cross-env ESLINT_USE_FLAT_CONFIG=false eslint .",
     "test": "jest --passWithNoTests",
     "test:watch": "jest --watch",
     "test:e2e": "playwright test"
   },
   "dependencies": {
+    "@stellar/freighter-api": "6.0.1",
     "axios": "^1.13.2",
     "next": "15.5.12",
     "react": "19.1.0",
@@ -27,9 +29,11 @@
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
     "@types/jest": "^29.5.14",
+    "@types/jest-axe": "^3.5.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
     "eslint": "^9.38.0",
     "eslint-config-next": "^15.5.12",
     "jest": "^29",
