@@ -32,7 +32,7 @@ When engaging the audit firm, provide a single zip file or a direct link to a sp
 ### Scope Definition
 Clearly define what is in and out of scope. For example:
 - **In Scope:** `quicklendx-contracts/src/**/*.rs`
-- **Out of Scope:** `quicklendx-frontend/`, `quicklendx-backend/`
+- **Out of Scope:** `quicklendx-frontend/`, `backend/`
 
 ### The Commit Hash
 Never give a branch name (e.g., `main`). Always provide the exact commit hash:

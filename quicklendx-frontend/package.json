@@ -13,6 +13,7 @@
     "test:e2e": "cross-env NEXT_PUBLIC_E2E=1 playwright test"
   },
   "dependencies": {
+    "@stellar/freighter-api": "6.0.1",
     "axios": "^1.13.2",
     "next": "15.5.12",
     "react": "19.1.0",
@@ -28,6 +29,7 @@
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
     "@types/jest": "^29.5.14",
+    "@types/jest-axe": "^3.5.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
