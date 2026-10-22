@@ -218,7 +218,8 @@ impl BackupStorage {
         env: &Env,
         backup_id: &BytesN<32>,
     ) -> Result<u32, QuickLendXError> {
-        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id).unwrap();
+        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         if let Ok(map) =
             soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
@@ -326,13 +327,15 @@ impl BackupStorage {
     /// 4. Every invoice in the payload has a positive `amount`.
     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
         let _version = Self::verify_backup_version(env, backup_id)?;
-        let backup = Self::get_backup(env, backup_id).unwrap();
+        let backup = Self::get_backup(env, backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         // Validate metadata alone first (cheap).
         Self::validate_backup_metadata(&backup, None)?;
 
         // Fetch the payload and validate together with the count.
-        let data = Self::get_backup_data(env, backup_id).unwrap();
+        let data = Self::get_backup_data(env, backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         if data.len() != backup.invoice_count {
             return Err(QuickLendXError::StorageError);
@@ -377,7 +380,12 @@ impl BackupStorage {
     ///         this step does not matter because `store_invoice` is
     ///         self-contained.
     ///
-    /// Step 4  Mark the backup as Archived
+    /// Step 4  Restore invoice_count
+    ///         ----------------------
+    ///         Sets invoice_count to match the number of restored invoices,
+    ///         ensuring health/diagnostics totals are consistent.
+    ///
+    /// Step 5  Mark the backup as Archived
     ///         ----------------------------
     ///         Prevents the same backup from being restored twice, which
     ///         could cause duplicate invoice registrations if the store is
@@ -386,7 +394,7 @@ impl BackupStorage {
     ///
     /// # Errors
     ///
-    /// Returns an error *only* in step 1.  Steps 2-4 are infallible on a
+    /// Returns an error *only* in step 1.  Steps 2-5 are infallible on a
     /// well-formed Soroban environment; panics in those steps indicate a
     /// platform bug, not a contract bug.
     ///
@@ -405,12 +413,10 @@ impl BackupStorage {
         Self::validate_backup(env, backup_id)?;
 
         // Fetch the validated payload.
-        let data = Self::get_backup_data(env, backup_id).unwrap();
+        let data = Self::get_backup_data(env, backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         let restore_outcome: Result<u32, QuickLendXError> = (|| {
-            // Fetch the validated payload.
-            let data = Self::get_backup_data(env, backup_id).unwrap();
-
             let restored_count = data.len();
 
             //  Step 2: atomically clear all existing invoice state
@@ -421,7 +427,10 @@ impl BackupStorage {
                 crate::storage::InvoiceStorage::store_invoice(env, &invoice);
             }
 
-            // Step 4: mark the backup as archived to prevent re-use
+            // Step 4: restore invoice_count to the restored invoice count
+            crate::storage::InvoiceStorage::set_total_count(env, restored_count);
+
+            // Step 5: mark the backup as archived to prevent re-use
             if let Some(mut backup) = Self::get_backup(env, backup_id) {
                 backup.status = BackupStatus::Archived;
                 // Ignore the result - the restore itself has already succeeded.

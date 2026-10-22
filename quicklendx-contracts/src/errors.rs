@@ -287,6 +287,10 @@ pub enum QuickLendXError {
     /// or storage writes so that an oversized payload is rejected cheaply.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InputTooLarge = 2221,
+    /// Attempted to execute a scheduled upgrade before the timelock delay elapsed.
+    /// The upgrade can only be executed after scheduled_at + UPGRADE_DELAY_SECS.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    UpgradeTimelockNotElapsed = 2222,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -410,6 +414,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::BidStale => symbol_short!("BID_STL"),
             QuickLendXError::MutationLimitExceeded => symbol_short!("MUT_LIM"),
             QuickLendXError::InputTooLarge => symbol_short!("IN_TOO_L"),
+            QuickLendXError::UpgradeTimelockNotElapsed => symbol_short!("UPG_TLK"),
         }
     }
 }

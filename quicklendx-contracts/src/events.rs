@@ -2018,10 +2018,10 @@ pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
 // ── Upgrade events ──────────────────────────────────────────────────────────
 
 /// Emitted when an admin schedules a WASM contract upgrade.
-pub fn emit_upgrade_scheduled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+pub fn emit_upgrade_scheduled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>, executable_at: u64) {
     env.events().publish(
         (symbol_short!("upg_sch"),),
-        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp()),
+        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp(), executable_at),
     );
 }
 
