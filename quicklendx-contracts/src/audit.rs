@@ -108,9 +108,9 @@ pub enum AuditOperation {
     InvestorFrozen,
     /// An investor was unfrozen (investment actions restored).
     InvestorUnfrozen,
-    /// A placed bid was cancelled by its owner.
+    /// A placed bid was cancelled by its investor (Placed -> Cancelled).
     BidCancelled,
-    /// A placed bid expired via TTL/grace cleanup.
+    /// A placed bid transitioned to Expired (via TTL/grace cleanup).
     BidExpired,
 }
 
