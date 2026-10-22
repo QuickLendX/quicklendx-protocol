@@ -1,5 +1,5 @@
 /**
- * v011_freshness_state
+ * v017_freshness_state
  *
  * Author: QuickLendX Engineering
  * Created: 2026-06-23
@@ -19,7 +19,7 @@ const schema = `
 `;
 
 export default {
-  version: 11,
+  version: 17,
   name: "freshness_state",
   authoredAt: "2026-06-23",
   author: "QuickLendX Engineering",

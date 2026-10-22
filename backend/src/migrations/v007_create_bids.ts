@@ -1,17 +1,18 @@
 /**
- * v006_create_bids
+ * v007_create_bids
  *
  * Author: QuickLendX Engineering
  * Created: 2026-05-28
  *
  * Adds a bids table for persisted bid storage with proper indexing
  * and constraints aligned with contract semantics.
+ *
+ * Depends on: v006_create_invoices_table (invoices.id is the FK target).
  */
 
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 const schema = `
-  -- Persistent bid storage
   CREATE TABLE IF NOT EXISTS bids (
     bid_id VARCHAR(66) PRIMARY KEY,
     invoice_id VARCHAR(66) NOT NULL,
@@ -26,15 +27,10 @@ const schema = `
     created_by VARCHAR(56) NOT NULL,
     FOREIGN KEY (invoice_id) REFERENCES invoices(id)
   );
-
-  -- Indexes for efficient querying and ranking
   CREATE INDEX IF NOT EXISTS idx_bids_invoice_id ON bids(invoice_id);
   CREATE INDEX IF NOT EXISTS idx_bids_investor ON bids(investor);
   CREATE INDEX IF NOT EXISTS idx_bids_invoice_status ON bids(invoice_id, status);
   CREATE INDEX IF NOT EXISTS idx_bids_created_at ON bids(created_at);
-  
-  -- Index for ranking: (profit DESC, expected_return DESC, bid_amount DESC, timestamp DESC, bid_id ASC)
-  -- This is a covering index for bid ranking queries
   CREATE INDEX IF NOT EXISTS idx_bids_ranking ON bids(
     invoice_id,
     status
@@ -42,7 +38,7 @@ const schema = `
 `;
 
 export default {
-  version: 6,
+  version: 7,
   name: "create_bids",
   authoredAt: "2026-05-28",
   author: "QuickLendX Engineering",

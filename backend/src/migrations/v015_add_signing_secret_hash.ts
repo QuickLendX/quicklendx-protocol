@@ -1,15 +1,17 @@
 /**
- * v011_add_signing_secret_hash
+ * v015_add_signing_secret_hash
  *
  * Adds signing_secret_hash column to api_keys to support per-API-key HMAC request signing.
+ *
+ * Depends on: v008_create_api_keys (api_keys table must exist).
  */
 
 import type { MigrationDefinition, MigrationContext } from "../lib/migrations/types";
 
 export default {
-  version: 11,
+  version: 15,
   name: "add_signing_secret_hash",
-  authoredAt: new Date().toISOString().split('T')[0],
+  authoredAt: "2026-06-23",
   author: "QuickLendX Engineering",
   up: async (ctx: MigrationContext): Promise<void> => {
     try {
