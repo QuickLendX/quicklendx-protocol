@@ -147,6 +147,8 @@ export function ensureRawEventsSchema(db: ReturnType<typeof getDatabase>): void 
   `);
 }
 
+export { ensureProcessedEventsSchema } from "./eventIdLedger";
+
 export class SqliteRawEventStore {
   insertEvent(
     event: RawEvent,
@@ -192,6 +194,9 @@ export class FileRawEventStore implements RawEventStore {
   private readonly cursorFile: string;
   private readonly maxFileSize: number;
   private readonly validator: EventValidator;
+  private readonly seenIds: Set<string> = new Set();
+  private dirEnsured: boolean = false;
+  private currentSize?: number;
 
   constructor(
     validator: EventValidator,
@@ -206,7 +211,10 @@ export class FileRawEventStore implements RawEventStore {
   }
 
   async storeEvents(events: RawEvent[]): Promise<void> {
-    await fs.mkdir(this.dataDir, { recursive: true });
+    if (!this.dirEnsured) {
+      await fs.mkdir(this.dataDir, { recursive: true });
+      this.dirEnsured = true;
+    }
 
     const sanitizedEvents: RawEvent[] = [];
     const validationErrors: string[] = [];
@@ -228,27 +236,76 @@ export class FileRawEventStore implements RawEventStore {
 
     sanitizedEvents.sort((a, b) => a.ledger - b.ledger);
 
-    const lines = sanitizedEvents.map((event) => JSON.stringify(event));
-    await fs.appendFile(this.eventsFile, lines.join("\n") + "\n", "utf8");
+    for (const event of sanitizedEvents) {
+      if (event.id) {
+        this.seenIds.add(event.id);
+      }
+    }
 
-    await this.rotateFileIfNeeded();
+    const lines = sanitizedEvents.map((event) => JSON.stringify(event));
+    const content = lines.join("\n") + "\n";
+    const bytes = Buffer.byteLength(content, "utf8");
+
+    if (this.currentSize === undefined) {
+      try {
+        const stats = await fs.stat(this.eventsFile);
+        this.currentSize = stats.size;
+      } catch {
+        this.currentSize = 0;
+      }
+    }
+
+    if (this.currentSize + bytes > this.maxFileSize) {
+      await this.rotateFileIfNeeded();
+    }
+
+    const handle = await this.getAppendHandle();
+    await handle.write(content, null, "utf8");
+    this.currentSize += bytes;
+  }
+
+  private appendHandle?: fs.FileHandle;
+
+  private async getAppendHandle(): Promise<fs.FileHandle> {
+    if (!this.appendHandle) {
+      this.appendHandle = await fs.open(this.eventsFile, "a");
+    }
+    return this.appendHandle;
   }
 
   async hasEventId(eventId: string): Promise<boolean> {
+    if (this.seenIds.has(eventId)) {
+      return true;
+    }
+
     await fs.mkdir(this.dataDir, { recursive: true });
 
     try {
-      const data = await fs.readFile(this.eventsFile, "utf8");
-      const lines = data.trim().split("\n").filter((line) => line.length > 0);
-
-      for (const line of lines) {
+      const files = await this.getEventFiles();
+      for (let i = files.length - 1; i >= 0; i--) {
+        const file = files[i];
         try {
-          const event = JSON.parse(line) as RawEvent;
-          if (event.id === eventId) {
-            return true;
+          const data = await fs.readFile(file, "utf8");
+          const lines = data.trim().split("\n").filter((line) => line.length > 0);
+
+          for (const line of lines) {
+            try {
+              const event = JSON.parse(line) as RawEvent;
+              if (event.id) {
+                this.seenIds.add(event.id);
+              }
+              if (event.id === eventId) {
+                return true;
+              }
+            } catch {
+              // Ignore malformed historical rows while scanning for idempotency.
+            }
           }
-        } catch {
-          // Ignore malformed historical rows while scanning for idempotency.
+        } catch (error) {
+          if ((error as any).code === "ENOENT") {
+            continue;
+          }
+          throw error;
         }
       }
 
@@ -519,6 +576,10 @@ export class FileRawEventStore implements RawEventStore {
   }
 
   async reset(): Promise<void> {
+    await this.close();
+    this.seenIds.clear();
+    this.dirEnsured = false;
+    this.currentSize = undefined;
     try {
       await fs.rm(this.dataDir, { recursive: true, force: true });
     } catch {
@@ -526,19 +587,28 @@ export class FileRawEventStore implements RawEventStore {
     }
   }
 
+  async close(): Promise<void> {
+    if (this.appendHandle) {
+      await this.appendHandle.close().catch(() => {});
+      this.appendHandle = undefined;
+    }
+  }
+
   private async rotateFileIfNeeded(): Promise<void> {
     try {
-      const stats = await fs.stat(this.eventsFile);
-      if (stats.size > this.maxFileSize) {
-        const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-        const rotatedFile = path.join(
-          this.dataDir,
-          `events-${timestamp}.jsonl`
-        );
-        await fs.rename(this.eventsFile, rotatedFile);
+      if (this.appendHandle) {
+        await this.appendHandle.close().catch(() => {});
+        this.appendHandle = undefined;
       }
+      const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+      const rotatedFile = path.join(
+        this.dataDir,
+        `events-${timestamp}.jsonl`
+      );
+      await fs.rename(this.eventsFile, rotatedFile);
+      this.currentSize = 0;
     } catch (error) {
-      // File might not exist yet
+      this.currentSize = 0;
     }
   }
 
