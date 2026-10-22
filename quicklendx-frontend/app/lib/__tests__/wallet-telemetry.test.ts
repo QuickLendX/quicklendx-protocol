@@ -190,6 +190,7 @@ describe("Wallet Telemetry - Provider Implementations", () => {
       await provider.trackEvent("wallet_connected", { address: "GBBX..." });
 
       expect(fetchMock).toHaveBeenCalledTimes(1);
+
       expect(fetchMock).toHaveBeenCalledWith(
         "/api/v1/telemetry",
         expect.objectContaining({
@@ -198,11 +199,16 @@ describe("Wallet Telemetry - Provider Implementations", () => {
             "Content-Type": "application/json",
             Authorization: "Bearer secret_key",
           },
-          body: JSON.stringify({
-            event: "wallet_connected",
-            properties: { address: "GBBX..." },
-            timestamp: expect.any(Number),
-          }),
+        })
+      );
+
+      const requestBody = JSON.parse(fetchMock.mock.calls[0][1].body as string);
+
+      expect(requestBody).toEqual(
+        expect.objectContaining({
+          event: "wallet_connected",
+          properties: { address: "GBBX..." },
+          timestamp: expect.any(Number),
         })
       );
     });
@@ -356,6 +362,79 @@ describe("Wallet Telemetry - Service & Event Forwarding", () => {
         timestamp: expect.any(Number),
       })
     );
+  });
+
+  it("preserves an injected provider during ordinary configuration updates", async () => {
+    const mockTrackEvent = jest.fn();
+    const service = new WalletTelemetryService({ enabled: true });
+
+    service.setProvider({
+      name: "test-provider",
+      trackEvent: mockTrackEvent,
+    });
+
+    service.configure({ enabled: true });
+
+    await service.trackEvent("wallet_connected");
+
+    expect(service.getProvider().name).toBe("test-provider");
+    expect(mockTrackEvent).toHaveBeenCalledTimes(1);
+    expect(mockTrackEvent).toHaveBeenCalledWith(
+      "wallet_connected",
+      expect.objectContaining({
+        timestamp: expect.any(Number),
+      })
+    );
+  });
+
+  it("replaces an injected provider when configuration explicitly overrides it", async () => {
+    const mockTrackEvent = jest.fn();
+    const service = new WalletTelemetryService({ enabled: true });
+
+    service.setProvider({
+      name: "test-provider",
+      trackEvent: mockTrackEvent,
+    });
+
+    service.configure({ enabled: true, provider: "noop" });
+
+    await service.trackEvent("wallet_connected");
+
+    expect(service.getProvider().name).toBe("noop");
+    expect(mockTrackEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not track or identify when telemetry is disabled with an injected provider", async () => {
+    const mockTrackEvent = jest.fn();
+    const mockIdentify = jest.fn();
+    const service = new WalletTelemetryService({ enabled: true });
+
+    service.setProvider({
+      name: "test-provider",
+      trackEvent: mockTrackEvent,
+      identify: mockIdentify,
+    });
+
+    service.configure({ enabled: false });
+
+    await service.trackEvent("wallet_connected");
+    await service.identify("user-123");
+
+    expect(mockTrackEvent).not.toHaveBeenCalled();
+    expect(mockIdentify).not.toHaveBeenCalled();
+  });
+
+  it("clears the injected provider state when reset is called", () => {
+    const service = new WalletTelemetryService({ enabled: true });
+
+    service.setProvider({
+      name: "test-provider",
+      trackEvent: jest.fn(),
+    });
+
+    service.reset();
+
+    expect(service.getProvider().name).toBe("noop");
   });
 
   it("handles provider runtime errors gracefully", async () => {
