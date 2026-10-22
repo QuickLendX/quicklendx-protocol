@@ -12,10 +12,11 @@ use crate::observability::{TransitionPhase, OBSERVABILITY_SCHEMA_VERSION};
 use crate::reentrancy::with_payment_guard;
 use crate::settlement::{
     allocate_cumulative_repayment, get_invoice_progress, get_repayment_ledger,
-    process_partial_payment,
+    process_partial_payment, record_payment,
 };
 use crate::types::{InvoiceCategory, InvoiceStatus};
 use crate::{QuickLendXContract, QuickLendXContractClient};
+use proptest::prelude::*;
 use soroban_sdk::{
     testutils::{Address as _, Events, Ledger},
     token, xdr, Address, BytesN, Env, String, Symbol, TryFromVal, Vec,
@@ -37,6 +38,7 @@ fn setup_token(
     business: &Address,
     investor: &Address,
     contract_id: &Address,
+    invoice_amount: i128,
 ) -> Address {
     let token_admin = Address::generate(env);
     let currency = env
@@ -44,7 +46,7 @@ fn setup_token(
         .address();
     let token_client = token::Client::new(env, &currency);
     let sac_client = token::StellarAssetClient::new(env, &currency);
-    let initial_balance = 1_000_000i128;
+    let initial_balance = invoice_amount * 2;
     sac_client.mint(business, &initial_balance);
     sac_client.mint(investor, &initial_balance);
     let expiration = env.ledger().sequence() + 10_000;
@@ -67,7 +69,7 @@ fn fund_invoice(
     let investor = Address::generate(env);
     client.submit_investor_kyc(&investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(&investor, &(amount * 10));
-    let currency = setup_token(env, &business, &investor, &contract_id);
+    let currency = setup_token(env, &business, &investor, &contract_id, amount);
     let due_date = env.ledger().timestamp() + 86_400;
     let invoice_id = client.store_invoice(
         &business,
@@ -126,6 +128,20 @@ fn payment_nonce(env: &Env, seed: u8) -> String {
     hex[62] = b'a' + (seed % 6);
     hex[63] = b'0' + (seed % 10);
     String::from_str(env, core::str::from_utf8(&hex).unwrap())
+}
+
+fn commit_test_payment(
+    env: &Env,
+    contract_id: &Address,
+    invoice_id: &BytesN<32>,
+    business: &Address,
+    amount: i128,
+    seed: u8,
+) -> crate::settlement::RecordedPayment {
+    let nonce = payment_nonce(env, seed);
+    env.as_contract(contract_id, || {
+        record_payment(env, invoice_id, business, amount, nonce).unwrap()
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -301,6 +317,178 @@ fn test_late_penalty_assessed_once_and_paid_to_investor() {
     assert_eq!(token_client.balance(&investor), investor_before + 11_000);
     assert_eq!(token_client.balance(&treasury), treasury_before);
     let _ = business;
+}
+
+#[test]
+fn preview_after_early_partial_payment() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+    let (invoice_id, business, _investor, _currency) =
+        fund_invoice(&env, &client, &admin, 1_000, Some(1_000));
+    let due_date = client.get_invoice(&invoice_id).due_date;
+
+    commit_test_payment(&env, &contract_id, &invoice_id, &business, 400, 20);
+    env.ledger().set_timestamp(due_date + 1);
+
+    let progress = env.as_contract(&contract_id, || {
+        get_invoice_progress(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(progress.total_due, 1_060);
+    assert_eq!(progress.remaining_due, 660);
+}
+
+#[test]
+fn settle_with_previewed_amount() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+    let (invoice_id, business, _investor, _currency) =
+        fund_invoice(&env, &client, &admin, 1_000, Some(1_000));
+    let due_date = client.get_invoice(&invoice_id).due_date;
+
+    commit_test_payment(&env, &contract_id, &invoice_id, &business, 400, 21);
+    env.ledger().set_timestamp(due_date + 1);
+    let preview = env.as_contract(&contract_id, || {
+        get_invoice_progress(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(preview.remaining_due, 660);
+
+    let payment = commit_test_payment(
+        &env,
+        &contract_id,
+        &invoice_id,
+        &business,
+        preview.remaining_due,
+        22,
+    );
+    assert_eq!(payment.applied_amount, 660);
+    assert_eq!(payment.ledger.assessed_late, 60);
+    assert_eq!(payment.progress.total_paid, 1_060);
+    assert_eq!(payment.progress.remaining_due, 0);
+}
+
+#[test]
+fn no_late_fee_before_due() {
+    let (env, client, admin) = setup();
+    let contract_id = client.address.clone();
+    let (invoice_id, business, _investor, _currency) =
+        fund_invoice(&env, &client, &admin, 1_000, Some(1_000));
+    let due_date = client.get_invoice(&invoice_id).due_date;
+
+    env.ledger().set_timestamp(due_date - 1);
+    let no_ledger_progress = env.as_contract(&contract_id, || {
+        get_invoice_progress(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(no_ledger_progress.total_due, 1_000);
+    assert_eq!(no_ledger_progress.remaining_due, 1_000);
+
+    commit_test_payment(&env, &contract_id, &invoice_id, &business, 400, 23);
+    let ledger = env.as_contract(&contract_id, || {
+        get_repayment_ledger(&env, &invoice_id).unwrap()
+    });
+    assert!(!ledger.late_assessed);
+
+    let ledger_progress = env.as_contract(&contract_id, || {
+        get_invoice_progress(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(ledger_progress.total_due, 1_000);
+    assert_eq!(ledger_progress.remaining_due, 600);
+
+    env.ledger().set_timestamp(due_date);
+    let due_boundary_progress = env.as_contract(&contract_id, || {
+        get_invoice_progress(&env, &invoice_id).unwrap()
+    });
+    assert_eq!(due_boundary_progress.total_due, 1_000);
+    assert_eq!(due_boundary_progress.remaining_due, 600);
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig {
+        cases: 256,
+        ..ProptestConfig::default()
+    })]
+
+    #[test]
+    fn preview_matches_record(
+        (amount, late_bps, early_payment) in (1i128..=1_000_000_000_000i128)
+            .prop_flat_map(|amount| (
+                Just(amount),
+                0u32..=5_000u32,
+                0i128..=amount - 1,
+            )),
+    ) {
+        let (env, client, admin) = setup();
+        let contract_id = client.address.clone();
+
+        // The test-only protocol floor is configurable; lower it so the
+        // property covers the complete requested amount interval, including 1.
+        env.as_contract(&contract_id, || {
+            crate::protocol_limits::ProtocolLimitsContract::set_protocol_limits(
+                env.clone(),
+                admin.clone(),
+                1,
+                1,
+                0,
+                365,
+                2_592_000,
+                0,
+                crate::verification::InvestorTier::Basic,
+            ).unwrap();
+        });
+
+        let (invoice_id, business, _investor, _currency) =
+            fund_invoice(&env, &client, &admin, amount, Some(late_bps));
+        let due_date = client.get_invoice(&invoice_id).due_date;
+
+        if early_payment > 0 {
+            env.ledger().set_timestamp(due_date - 1);
+            let early_record = commit_test_payment(
+                &env,
+                &contract_id,
+                &invoice_id,
+                &business,
+                early_payment,
+                24,
+            );
+            prop_assert_eq!(early_record.ledger.assessed_late, 0);
+            let before_due = env.as_contract(&contract_id, || {
+                get_invoice_progress(&env, &invoice_id).unwrap()
+            });
+            prop_assert_eq!(before_due.total_due, amount);
+        }
+
+        // The exact due-date boundary is not overdue, whether or not an early
+        // partial payment has already created a repayment ledger.
+        env.ledger().set_timestamp(due_date);
+        let at_due = env.as_contract(&contract_id, || {
+            get_invoice_progress(&env, &invoice_id).unwrap()
+        });
+        prop_assert_eq!(at_due.total_due, amount);
+
+        env.ledger().set_timestamp(due_date + 1);
+        let mut step = 25u8;
+        for _ in 0..2 {
+            let before = env.as_contract(&contract_id, || {
+                get_invoice_progress(&env, &invoice_id).unwrap()
+            });
+            if before.remaining_due == 0 {
+                break;
+            }
+            let previewed_late = before.total_due - amount;
+            let requested = if before.remaining_due > 1 { 1 } else { before.remaining_due };
+            let recorded = commit_test_payment(
+                &env,
+                &contract_id,
+                &invoice_id,
+                &business,
+                requested,
+                step,
+            );
+            step += 1;
+            prop_assert_eq!(recorded.ledger.assessed_late, previewed_late);
+            prop_assert_eq!(recorded.progress.total_due, before.total_due);
+        }
+        Ok(())
+    }
 }
 
 #[test]

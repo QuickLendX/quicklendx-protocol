@@ -685,12 +685,21 @@ paths:
                 type: object
                 required:
                   - data
+                  - next_cursor
+                  - has_more
                   - freshness
                 properties:
                   data:
                     type: array
                     items:
                       $ref: "#/components/schemas/Settlement"
+                  next_cursor:
+                    type: string
+                    nullable: true
+                    description: Opaque cursor for the next page, or null when there are no more pages.
+                  has_more:
+                    type: boolean
+                    description: Whether more settlements exist beyond this page.
                   freshness:
                     $ref: '#/components/schemas/FreshnessMetadata'
                   _system:
@@ -702,6 +711,8 @@ paths:
                       level: { type: string }
               example:
                 data: []
+                next_cursor: null
+                has_more: false
                 freshness:
                   lastIndexedLedger: 100000
                   indexLagSeconds: 0
