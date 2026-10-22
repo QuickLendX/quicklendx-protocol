@@ -22,6 +22,8 @@ const ROTATION_TTL_SECONDS: u64 = 604_800; // 7 days
 pub const MIN_ROTATION_DELAY_SECONDS: u64 = 86_400; // 1 day
 const EARLY_PLATFORM_DISCOUNT_BPS: i128 = 1_000; // 10%
 const LATE_FEE_SURCHARGE_BPS: i128 = 2_000; // 20%
+/// Maximum late-payment penalty basis points allowed (50% = 5,000 bps).
+pub const MAX_LATE_PAYMENT_PENALTY_BPS: u32 = 5_000;
 
 // Storage keys
 const FEE_CONFIG_KEY: Symbol = symbol_short!("fee_cfg");
@@ -535,7 +537,8 @@ impl FeeManager {
         for i in 0..fee_structures.len() {
             let structure = fee_structures.get(i).unwrap();
             // Accumulate total active minimum fees, checking for i128 overflow.
-            if structure.is_active {
+            // Exclude the structure being updated/replaced to avoid double-counting.
+            if structure.is_active && structure.fee_type != *fee_type {
                 total_active_min_fees = total_active_min_fees
                     .checked_add(structure.min_fee)
                     .ok_or(QuickLendXError::ArithmeticOverflow)?;
@@ -648,13 +651,20 @@ impl FeeManager {
     /// 2. Clamp the raw fee into that structure's `[min_fee, max_fee]` range.
     /// 3. Apply the user's volume-tier discount to every fee except `LatePayment`.
     /// 4. Apply the early-payment discount to the `Platform` fee only.
-    /// 5. Apply the late-payment surcharge to the `LatePayment` fee only.
+    /// 5. Apply the late-payment surcharge to the `LatePayment` fee only (validated
+    ///    to not exceed `MAX_LATE_PAYMENT_PENALTY_BPS` = 5,000 bps).
+    /// 6. Enforce whole-transaction bound: if `total_fees >= transaction_amount`,
+    ///    return `Err(QuickLendXError::InvalidAmount)` so fee quotes never consume
+    ///    or exceed the transaction principal.
     ///
     /// # Security notes
     /// - Uses checked BPS multiplication to fail safely on overflow.
     /// - Uses checked addition for total fee aggregation.
+    /// - Rejects `late_payment_penalty_bps > MAX_LATE_PAYMENT_PENALTY_BPS` with
+    ///   `QuickLendXError::InvalidFeeBasisPoints`.
     /// - Iterates only over configured fee structures, keeping work deterministic.
     /// - Uses integer division throughout, so rounding always truncates toward zero.
+    /// - Guarantees fee quote is strictly less than `transaction_amount` (`0 <= total_fees < amount`).
     pub fn calculate_total_fees(
         env: &Env,
         user: &Address,
@@ -665,6 +675,11 @@ impl FeeManager {
     ) -> Result<i128, QuickLendXError> {
         if transaction_amount <= 0 {
             return Err(QuickLendXError::InvalidAmount);
+        }
+        if let Some(penalty_bps) = late_payment_penalty_bps {
+            if penalty_bps > MAX_LATE_PAYMENT_PENALTY_BPS {
+                return Err(QuickLendXError::InvalidFeeBasisPoints);
+            }
         }
         let fee_structures: Vec<FeeStructure> =
             env.storage().instance().get(&FEE_CONFIG_KEY).unwrap();
@@ -705,6 +720,9 @@ impl FeeManager {
                     .ok_or(QuickLendXError::ArithmeticOverflow)?;
             }
             total_fees = Self::checked_add(total_fees, fee)?;
+        }
+        if total_fees >= transaction_amount {
+            return Err(QuickLendXError::InvalidAmount);
         }
         Ok(total_fees)
     }
