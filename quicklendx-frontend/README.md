@@ -103,6 +103,8 @@ quicklendx-frontend/
 - `npm run build` - Build for production
 - `npm run start` - Start production server
 - `npm run lint` - Run ESLint
+- `npm test` - Run Jest Node and jsdom projects
+- `npm run test:e2e` - Build and run Playwright browser tests
 
 ### Code Organization
 
@@ -160,6 +162,20 @@ This will:
 - Type-check the codebase
 - Build optimized production bundle
 - Generate static assets
+
+### UI and End-to-End Tests
+
+```bash
+npm test
+npx playwright install chromium
+npm run test:e2e
+```
+
+Jest runs the existing `*.test.ts` suites in Node and `*.test.tsx` component
+tests in jsdom. Playwright starts a production build with the test-only wallet
+injection enabled, then captures responsive settlement-list states and runs an
+axe accessibility check. The wallet injection is guarded by
+`NEXT_PUBLIC_E2E=1` and is not enabled in normal production builds.
 
 ## 🚀 Deployment
 

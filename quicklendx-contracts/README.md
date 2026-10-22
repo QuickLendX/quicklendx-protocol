@@ -1332,7 +1332,7 @@ Default constants (defined in `src/protocol_limits.rs`):
 | `reset_bid_ttl_to_default()` | Restore default 7-day TTL |
 | `get_bid_limit_config()` | Full per-investor cap snapshot (`limit`, `is_disabled`, `is_custom`) |
 | `set_max_active_bids_per_investor(limit)` | Set cap; `0` = unlimited |
-| `reset_max_active_bids_per_investor()` | Restore default 20-bid cap |
+| `reset_bid_limit()` | Restore default 20-bid cap |
 
 Full documentation: [`docs/contracts/limits.md`](../docs/contracts/limits.md).
 

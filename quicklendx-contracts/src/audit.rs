@@ -108,9 +108,7 @@ pub enum AuditOperation {
     InvestorFrozen,
     /// An investor was unfrozen (investment actions restored).
     InvestorUnfrozen,
-    /// A placed bid was cancelled by its investor.
     BidCancelled,
-    /// A placed bid expired (TTL / grace cleanup).
     BidExpired,
 }
 
@@ -163,9 +161,7 @@ pub enum OpType {
     KycRevoked,
     InvestorFrozen,
     InvestorUnfrozen,
-    /// A placed bid was cancelled by its investor.
     BidCancelled,
-    /// A placed bid expired (TTL / grace cleanup).
     BidExpired,
 }
 

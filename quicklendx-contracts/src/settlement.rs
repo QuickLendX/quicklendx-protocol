@@ -1035,7 +1035,7 @@ fn settle_invoice_internal(
     // This ensures the business receives the original funded amount during the settlement transition.
     if let Some(escrow) = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
         if escrow.status == crate::payments::EscrowStatus::Held {
-            crate::payments::release_escrow(env, invoice_id, business)?;
+            crate::payments::release_escrow(env, invoice_id, &invoice.business)?;
         }
     }
 

@@ -63,8 +63,6 @@ function formatDate(iso: string): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
-    timeZoneName: "short",
   });
 }
 
@@ -333,7 +331,7 @@ export default function SettlementReceiptPage() {
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Back link — hidden on print */}
         <Link
-          href="/"
+          href="/business/settlements"
           className="print:hidden inline-flex items-center gap-1 text-sm text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
         >
           <svg
@@ -351,7 +349,7 @@ export default function SettlementReceiptPage() {
               strokeLinejoin="round"
             />
           </svg>
-          Back to Home
+          Back to settlements
         </Link>
 
         {/* Header */}
@@ -688,7 +686,7 @@ export default function SettlementReceiptPage() {
         {/* Print-only footer */}
         <div className="hidden print:block mt-8 pt-4 border-t border-[#E2E8F0] text-xs text-[#64748B]">
           <p>Confidential — for authorised account holder only.</p>
-          <p suppressHydrationWarning>
+          <p>
             Printed on{" "}
             {new Date().toLocaleDateString("en-US", {
               year: "numeric",
