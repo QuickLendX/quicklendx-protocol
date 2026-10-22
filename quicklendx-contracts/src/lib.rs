@@ -1,6 +1,7 @@
-#![no_std]
-
-extern crate alloc; // Add this for Vec support in no_std
+#no_std
+p
+// Add this for Vec support in no_std
+extern crate alloc;
 
 use soroban_sdk::{contract, contractimpl, Env, Symbol, symbol_short};
 
@@ -248,6 +249,7 @@ mod test_cannot_withdraw_more_than_deposited;
 mod test_tier_boundary;
 pub mod types;
 pub mod invoice_amount;
+pub mod payments;
 
 // The legacy contract modules are not wired into the deployment surface yet,
 // but platform-fee ownership tests exercise them directly. Compile only the
