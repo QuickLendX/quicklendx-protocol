@@ -37,9 +37,9 @@
 //! - Fee configuration requires admin authorization
 
 use crate::errors::QuickLendXError;
-use crate::events::emit_platform_fee_updated;
+use crate::fees::FeeManager;
 use crate::types::PlatformFeeConfig;
-use soroban_sdk::{contracttype, symbol_short, Address, Env};
+use soroban_sdk::{contracttype, Address, Env};
 
 // ============================================================================
 // Constants
@@ -98,11 +98,10 @@ pub struct ProfitFeeBreakdown {
 pub struct PlatformFee;
 
 impl PlatformFee {
-    /// Storage key for fee configuration
-    /// Note: Uses "pf_cfg" to avoid conflict with fees.rs which uses "fee_cfg" for FeeStructure list
-    const STORAGE_KEY: soroban_sdk::Symbol = symbol_short!("plt_fee");
-
-    /// Creates the default fee configuration
+    /// Creates the default fee configuration.
+    ///
+    /// Used only as a read fallback before the fee system has been
+    /// initialized; writes always go through [`FeeManager`].
     fn default_config(env: &Env) -> PlatformFeeConfig {
         PlatformFeeConfig {
             fee_bps: DEFAULT_PLATFORM_FEE_BPS as u32,
@@ -122,10 +121,10 @@ impl PlatformFee {
     /// assert_eq!(config.fee_bps, 200); // 2%
     /// ```
     pub fn get_config(env: &Env) -> PlatformFeeConfig {
-        env.storage()
-            .instance()
-            .get(&Self::STORAGE_KEY)
-            .unwrap_or_else(|| Self::default_config(env))
+        // `FeeManager` is the single owner of the platform fee storage slot.
+        // Delegating keeps both modules reading the same value and avoids two
+        // independent interpretations of the same key.
+        FeeManager::get_platform_fee_config(env).unwrap_or_else(|_| Self::default_config(env))
     }
 
     /// Updates the platform fee configuration
@@ -139,36 +138,22 @@ impl PlatformFee {
     /// * `InvalidAmount` - If fee_bps < 0 or > 1000 (10%)
     ///
     /// # Security
-    /// Requires admin authorization via `require_auth()`
+    /// Requires the protocol admin's authorization. Delegates to
+    /// [`FeeManager::update_platform_fee`], which verifies the address against
+    /// `AdminStorage` and preserves the configured treasury.
     pub fn set_config(
         env: &Env,
         admin: &Address,
         new_fee_bps: i128,
     ) -> Result<PlatformFeeConfig, QuickLendXError> {
-        admin.require_auth();
-
-        // Validate fee bounds
+        // Validate fee bounds before narrowing to the `u32` stored by
+        // `FeeManager`.
         if !(0..=MAX_PLATFORM_FEE_BPS).contains(&new_fee_bps) {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
-        let old_config = Self::get_config(env);
-
-        // Optimization: No-op if fee is unchanged
-        if new_fee_bps as u32 == old_config.fee_bps {
-            return Ok(old_config);
-        }
-
-        let config = PlatformFeeConfig {
-            fee_bps: new_fee_bps as u32,
-            treasury_address: None, // Will be updated via FeeManager if needed
-            updated_at: env.ledger().timestamp(),
-            updated_by: admin.clone(),
-        };
-
-        env.storage().instance().set(&Self::STORAGE_KEY, &config);
-        emit_platform_fee_updated(env, &config);
-        Ok(config)
+        FeeManager::update_platform_fee(env, admin, new_fee_bps as u32)?;
+        Ok(Self::get_config(env))
     }
 
     /// Core calculation: computes investor return and platform fee

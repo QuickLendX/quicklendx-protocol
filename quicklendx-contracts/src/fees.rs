@@ -5,6 +5,7 @@
 use crate::audit::{log_config_change, write_i128_to_buf, write_u64_to_buf, AuditOperation};
 use crate::errors::QuickLendXError;
 use crate::events;
+use crate::types::PlatformFeeConfig;
 use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, Map, String, Symbol, Vec};
 
 // Constants
@@ -88,17 +89,6 @@ pub struct UserVolumeData {
 pub struct TreasuryConfig {
     pub treasury_address: Address,
     pub is_active: bool,
-    pub updated_at: u64,
-    pub updated_by: Address,
-}
-
-/// Platform fee configuration  
-#[contracttype]
-#[derive(Clone, PartialEq)]
-#[cfg_attr(test, derive(Debug))]
-pub struct PlatformFeeConfig {
-    pub fee_bps: u32,
-    pub treasury_address: Option<Address>, // Simplified - just store address directly
     pub updated_at: u64,
     pub updated_by: Address,
 }
@@ -242,8 +232,7 @@ impl FeeManager {
 
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         // Explicit admin authorization: the caller must be the designated admin.
-        admin.require_auth();
-        crate::AdminStorage::require_admin(env, admin)?;
+        crate::AdminStorage::require_admin_auth(env, admin)?;
 
         // Guard: reject re-initialization to prevent overwriting live fee config.
         if env.storage().instance().has(&FEES_INIT_KEY) {
@@ -306,8 +295,7 @@ impl FeeManager {
         admin: &Address,
         treasury_address: Address,
     ) -> Result<TreasuryConfig, QuickLendXError> {
-        admin.require_auth();
-        crate::AdminStorage::require_admin(env, admin)?;
+        crate::AdminStorage::require_admin_auth(env, admin)?;
 
         // Reject self-assignment: treasury must not be the contract itself.
         if treasury_address == env.current_contract_address() {
@@ -349,9 +337,9 @@ impl FeeManager {
         admin: &Address,
         fee_bps: u32,
     ) -> Result<(), QuickLendXError> {
-        // Auth is checked by the caller
-        admin.require_auth();
-        crate::AdminStorage::require_admin(env, admin)?;
+        // Only the protocol admin may change the fee. This also proves the
+        // caller's signature, so no partial/self-authorization path exists.
+        crate::AdminStorage::require_admin_auth(env, admin)?;
 
         if fee_bps > MAX_PLATFORM_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
