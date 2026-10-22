@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Providers } from "./providers";
 import "./globals.css";
+import { WalletProvider } from "@/app/lib/wallet/WalletProvider";
 
 export const metadata: Metadata = {
   title: "QuickLendX - Decentralized Invoice Financing Platform",
@@ -29,6 +30,8 @@ export const metadata: Metadata = {
       "Connect businesses with investors through transparent, secure invoice financing",
   },
 };
+
+import { WalletProvider } from "@/app/lib/useWallet";
 
 export default function RootLayout({
   children,

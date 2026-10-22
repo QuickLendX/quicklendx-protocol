@@ -122,12 +122,12 @@ pub fn get_maintenance_reason(env: Env) -> Option<String>
 
 Check these before dispatching mutating calls; paused entrypoints will reject with `ContractPaused`.
 
-### `get_settlement_batch_size_soft_cap`
+### `get_settlement_batch_cap`
 
 Returns the suggested default page size for fetching settlement (payment) records. This is a soft hint — not a hard enforcement — to help indexers and off-chain consumers standardize their pagination. The contract does not require callers to use this value.
 
 ```rust
-pub fn get_settlement_batch_size_soft_cap(env: Env) -> u32
+pub fn get_settlement_batch_cap(env: Env) -> u32
 ```
 
 **Return value:** `25` — recommended number of payment records per `get_payment_records` call.
@@ -136,7 +136,7 @@ pub fn get_settlement_batch_size_soft_cap(env: Env) -> u32
 
 ```json
 {
-  "function": "get_settlement_batch_size_soft_cap",
+  "function": "get_settlement_batch_cap",
   "args": []
 }
 ```
@@ -145,7 +145,7 @@ pub fn get_settlement_batch_size_soft_cap(env: Env) -> u32
 
 ```rust
 // Discover the hint at startup
-let batch_size = contract.get_settlement_batch_size_soft_cap(env.clone());
+let batch_size = contract.get_settlement_batch_cap(env.clone());
 
 // Paginate payment records using the hint
 let mut offset = 0u32;
@@ -159,12 +159,12 @@ loop {
 }
 ```
 
-### `get_settlement_batch_size_soft_cap_max`
+### `get_settlement_batch_max`
 
 Returns the hard upper bound for settlement batch queries. Requests to `get_payment_records` exceeding this value are silently clamped to this limit by the contract.
 
 ```rust
-pub fn get_settlement_batch_size_soft_cap_max(env: Env) -> u32
+pub fn get_settlement_batch_max(env: Env) -> u32
 ```
 
 **Return value:** `50` — maximum number of payment records per query.
@@ -468,7 +468,7 @@ Lighter-weight than `get_escrow_details` when only the status is needed. Returns
 
 ### `get_payment_records`
 
-Returns a paginated slice of payment records for an invoice in chronological order. Indexers should page through these using `get_settlement_batch_size_soft_cap` as the recommended batch size.
+Returns a paginated slice of payment records for an invoice in chronological order. Indexers should page through these using `get_settlement_batch_cap` as the recommended batch size.
 
 ```rust
 pub fn get_payment_records(
@@ -497,7 +497,7 @@ Vec<SettlementPaymentRecord {
 **Recommended pagination:**
 
 ```rust
-let batch = contract.get_settlement_batch_size_soft_cap(env.clone()); // 25
+let batch = contract.get_settlement_batch_cap(env.clone()); // 25
 let mut offset = 0u32;
 loop {
     let page = contract.get_payment_records(env.clone(), invoice_id.clone(), offset, batch)?;
@@ -553,8 +553,8 @@ The contract exposes two read-only hints to help indexers discover the recommend
 
 | Entrypoint | Return value | Description |
 |---|---|---|
-| `get_settlement_batch_size_soft_cap` | `25` | Recommended default page size |
-| `get_settlement_batch_size_soft_cap_max` | `50` | Hard upper bound enforced by the contract |
+| `get_settlement_batch_cap` | `25` | Recommended default page size |
+| `get_settlement_batch_max` | `50` | Hard upper bound enforced by the contract |
 
 See [Configuration & Protocol State](#configuration--protocol-state) for full documentation of these entrypoints.
 

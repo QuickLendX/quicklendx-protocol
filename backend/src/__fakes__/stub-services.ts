@@ -16,6 +16,9 @@ export const OTHER_ACTOR_ID = "actor_999999";
 export const FIXED_TIME = 1_700_000_000_000;
 
 export const buildApiKey = (overrides: Partial<ApiKey> = {}): ApiKey => ({
+  prefix: "qlx_fixture", scopes: ["read:invoices"], created_by: OWNER_ID,
+  created_at: new Date(FIXED_TIME).toISOString(), last_used_at: null, expires_at: null,
+  revoked: false, signing_secret_hash: null, prev_signing_secret_hash: null, prev_secret_expires_at: null,
   id: KEY_ID,
   name: "Production Key",
   ownerId: OWNER_ID,
@@ -45,7 +48,7 @@ export interface CallRecord {
 }
 
 /** A fully programmable fake of `ApiKeyService`. */
-export class StubApiKeyService implements ApiKeyService {
+export class StubApiKeyService implements Pick<ApiKeyService, "getApiKey" | "revokeApiKey"> {
   calls: Record<string, CallRecord[]> = {
     getApiKey: [],
     revokeApiKey: [],

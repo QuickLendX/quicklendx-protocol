@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams, notFound } from "next/navigation";
 import { isHexId } from "../../../lib/ids";
@@ -50,86 +50,128 @@ interface SettlementReceipt {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function formatCurrency(amount: number): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-  }).format(amount);
+function formatDisplayDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZone: "UTC",
+      timeZoneName: "short",
+    });
+  } catch {
+    return iso;
+  }
 }
 
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "UTC",
-    timeZoneName: "short",
-  });
+function truncateMiddle(str: string, prefixLen = 6, suffixLen = 4): string {
+  if (str.length <= prefixLen + suffixLen + 2) return str;
+  return `${str.slice(0, prefixLen)}…${str.slice(-suffixLen)}`;
 }
-
-// Placeholder data — replace with API call to GET /api/settlements/:id
-const PLACEHOLDER: SettlementReceipt = {
-  id: "REC-20260428-001",
-  settlementDate: "2026-04-28T15:45:00Z",
-  status: "SETTLED",
-  invoice: {
-    id: "INV-8201",
-    debtor: "Acme Corp",
-    debtorVerified: true,
-    amount: 5000,
-    issueDate: "2026-04-15",
-    dueDate: "2026-05-15",
-    description: "Professional Services, April 2026",
-  },
-  funding: {
-    fundedDate: "2026-04-23",
-    fullFundingAt: "2026-04-28T14:15:00Z",
-    investorCount: 3,
-    escrowRelease: "Automatic, April 28, 2026",
-    paymentReceived: true,
-  },
-  calculation: {
-    grossAmount: 5000,
-    fees: [{ label: "Service Fee (3%)", amount: -150 }],
-    netPayout: 4850,
-  },
-  transfer: {
-    accountLast4: "5678",
-    transferredAt: "2026-04-28T15:45:00Z",
-    stellarTxHash: "abc123def456",
-  },
-};
 
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-const StatusBadge: React.FC<{ status: SettlementReceipt["status"] }> = ({
-  status,
-}) => {
-  const map = {
-    SETTLED: {
-      label: "✓ Settled & Transferred",
+const StatusBadge: React.FC<{ status: SettlementStatus }> = ({ status }) => {
+  const map: Record<SettlementStatus, { label: string; cls: string }> = {
+    Paid: {
+      label: "✓ Settled",
       cls: "bg-emerald-50 text-emerald-700 border-emerald-200",
     },
-    PENDING: {
+    Pending: {
       label: "⏳ Pending",
       cls: "bg-amber-50 text-amber-700 border-amber-200",
     },
-    DELAYED: {
-      label: "⚠ Delayed",
-      cls: "bg-orange-50 text-orange-700 border-orange-200",
+    Defaulted: {
+      label: "⚠ Defaulted",
+      cls: "bg-red-50 text-red-700 border-red-200",
     },
   };
-  const { label, cls } = map[status];
+
+  const { label, cls } = map[status] || {
+    label: status,
+    cls: "bg-gray-50 text-gray-700 border-gray-200",
+  };
+
   return (
     <span
       className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${cls}`}
     >
       {label}
     </span>
+  );
+};
+
+/** Copy button with live text feedback */
+const CopyButton: React.FC<{ value: string; label?: string }> = ({
+  value,
+  label = "Copy full value",
+}) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(value);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // Ignore copy error
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleCopy}
+      aria-label={label}
+      title={label}
+      className="inline-flex items-center text-neutral-500 hover:text-neutral-900 focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded p-0.5"
+    >
+      {copied ? (
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <path
+            d="M3 8l4 4 6-6"
+            stroke="#10B981"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        </svg>
+      ) : (
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          fill="none"
+          aria-hidden="true"
+        >
+          <rect
+            x="5"
+            y="5"
+            width="8"
+            height="8"
+            rx="1.5"
+            stroke="currentColor"
+            strokeWidth="1.5"
+          />
+          <path
+            d="M3 11V3.5A1.5 1.5 0 014.5 2H11"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+          />
+        </svg>
+      )}
+    </button>
   );
 };
 
@@ -273,7 +315,7 @@ const ExportButton: React.FC<{
 };
 
 // ---------------------------------------------------------------------------
-// Page
+// Main Page Component
 // ---------------------------------------------------------------------------
 
 export default function SettlementReceiptPage() {
@@ -290,30 +332,106 @@ export default function SettlementReceiptPage() {
 
   const receiptId = requestedId ?? PLACEHOLDER.id;
 
-  // TODO: replace with authenticated API call: GET /api/settlements/:id
-  const receipt = PLACEHOLDER;
+  const { address, connect } = useWallet();
+
+  const [viewModel, setViewModel] = useState<ReceiptViewModel | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [notFound, setNotFound] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   // aria-live region for export feedback
   const [liveMsg, setLiveMsg] = useState("");
 
+  const abortControllerRef = useRef<AbortController | null>(null);
+
+  const fetchData = useCallback(async () => {
+    if (!settlementId || !address) return;
+
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+
+    setLoading(true);
+    setNotFound(false);
+    setError(null);
+
+    try {
+      const settlement = await getSettlement(settlementId, controller.signal);
+      const invoice = await getInvoice(
+        settlement.invoice_id,
+        controller.signal
+      );
+
+      const vm = toReceiptViewModel(settlement, invoice);
+      setViewModel(vm);
+    } catch (err: unknown) {
+      if (controller.signal.aborted) {
+        return;
+      }
+      const errObj = err as {
+        name?: string;
+        message?: string;
+        code?: string;
+        context?: { additionalData?: { status?: number } };
+        response?: { status?: number };
+      };
+      const is404 =
+        errObj?.name === "BusinessLogicError" ||
+        errObj?.code === "NOT_FOUND" ||
+        errObj?.context?.additionalData?.status === 404 ||
+        errObj?.response?.status === 404 ||
+        errObj?.message?.toLowerCase().includes("not found");
+
+      if (is404) {
+        setNotFound(true);
+      } else {
+        setError(errObj?.message || "Failed to load settlement receipt");
+      }
+    } finally {
+      if (!controller.signal.aborted) {
+        setLoading(false);
+      }
+    }
+  }, [settlementId, address]);
+
+  useEffect(() => {
+    if (address && settlementId) {
+      fetchData();
+    } else {
+      setViewModel(null);
+      setLoading(false);
+      setNotFound(false);
+      setError(null);
+    }
+
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, [address, settlementId, fetchData]);
+
   const handleDownloadJSON = async () => {
-    // TODO: replace with authenticated fetch
-    const blob = new Blob([JSON.stringify({ receipt }, null, 2)], {
+    if (!viewModel) return;
+    const exportData = toJsonExport(viewModel);
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${receiptId}.json`;
+    a.download = `${viewModel.id}.json`;
+    document.body.appendChild(a);
     a.click();
+    document.body.removeChild(a);
     URL.revokeObjectURL(url);
     setLiveMsg("JSON downloaded.");
     setTimeout(() => setLiveMsg(""), 3000);
   };
 
   const handleDownloadPDF = async () => {
-    // TODO: call authenticated server-side PDF endpoint
-    // e.g. GET /api/settlements/:id/pdf?token=<short-lived-token>
     throw new Error("PDF generation not yet implemented.");
   };
 
@@ -322,18 +440,245 @@ export default function SettlementReceiptPage() {
   };
 
   const handleEmail = async () => {
-    // TODO: POST /api/settlements/:id/email
     throw new Error("Email not yet implemented.");
   };
 
-  const explorerUrl = `https://stellar.expert/explorer/testnet/tx/${receipt.transfer.stellarTxHash}`;
+  // 1. No wallet state: Connect prompt
+  if (!address) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 print:bg-white print:py-4">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <Link
+            href="/"
+            className="print:hidden inline-flex items-center gap-1 text-sm text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M10 12L6 8l4-4"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Back to Home
+          </Link>
+
+          <div className="bg-white border border-[#E2E8F0] rounded-lg p-8 text-center shadow-sm space-y-4">
+            <h2 className="text-xl font-bold text-[#0F172A]">
+              Connect Wallet to View Receipt
+            </h2>
+            <p className="text-sm text-[#64748B] max-w-md mx-auto">
+              Please connect your Stellar wallet to view this settlement
+              receipt.
+            </p>
+            <div>
+              <button
+                type="button"
+                onClick={() => connect()}
+                className="inline-flex items-center px-4 py-2 bg-[#2563EB] text-white rounded-md text-sm font-medium hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1"
+              >
+                Connect Wallet
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Loading state: Skeleton
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 print:bg-white print:py-4">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <Link
+            href="/"
+            className="print:hidden inline-flex items-center gap-1 text-sm text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M10 12L6 8l4-4"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Back to Home
+          </Link>
+          <ReceiptSkeleton />
+        </div>
+      </div>
+    );
+  }
+
+  // 3. 404 state: Receipt not found
+  if (notFound) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 print:bg-white print:py-4">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <Link
+            href="/"
+            className="print:hidden inline-flex items-center gap-1 text-sm text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M10 12L6 8l4-4"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Back to Home
+          </Link>
+
+          <div className="bg-white border border-[#E2E8F0] rounded-lg p-8 text-center shadow-sm space-y-4">
+            <h2 className="text-xl font-bold text-[#0F172A]">
+              Receipt not found
+            </h2>
+            <p className="text-sm text-[#64748B]">
+              The requested settlement receipt could not be found.
+            </p>
+            <div>
+              <Link
+                href="/business/settlements"
+                className="inline-flex items-center px-4 py-2 bg-[#2563EB] text-white rounded-md text-sm font-medium hover:brightness-110 focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1"
+              >
+                Back to Settlements
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. Other error state: Role="alert" with Retry
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 print:bg-white print:py-4">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <Link
+            href="/"
+            className="print:hidden inline-flex items-center gap-1 text-sm text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M10 12L6 8l4-4"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Back to Home
+          </Link>
+
+          <div
+            role="alert"
+            className="bg-red-50 border border-red-200 rounded-lg p-6 space-y-4 text-red-700"
+          >
+            <h2 className="text-lg font-bold">Error Loading Receipt</h2>
+            <p className="text-sm">{error}</p>
+            <button
+              type="button"
+              onClick={() => fetchData()}
+              className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-1"
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 5. Access Gate: Client-side access gate
+  // NOTE: This is a client-side gate since the read API is public.
+  // The receipt is only shown if the connected wallet equals invoice.business,
+  // settlement.payer, or settlement.recipient.
+  const isAuthorized =
+    viewModel &&
+    (address === viewModel.invoice.business ||
+      address === viewModel.payer ||
+      address === viewModel.recipient);
+
+  if (viewModel && !isAuthorized) {
+    return (
+      <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 print:bg-white print:py-4">
+        <div className="max-w-3xl mx-auto space-y-6">
+          <Link
+            href="/"
+            className="print:hidden inline-flex items-center gap-1 text-sm text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              aria-hidden="true"
+            >
+              <path
+                d="M10 12L6 8l4-4"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+            Back to Home
+          </Link>
+
+          <div className="bg-white border border-[#E2E8F0] rounded-lg p-8 text-center shadow-sm space-y-4">
+            <h2 className="text-xl font-bold text-[#0F172A]">
+              You don&apos;t have access to this receipt.
+            </h2>
+            <p className="text-sm text-[#64748B]">
+              Only the participating parties (business, payer, or recipient) can
+              view this settlement receipt.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!viewModel) {
+    return null;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 print:bg-white print:py-4">
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Back link — hidden on print */}
         <Link
-          href="/"
+          href="/business/settlements"
           className="print:hidden inline-flex items-center gap-1 text-sm text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
         >
           <svg
@@ -351,7 +696,7 @@ export default function SettlementReceiptPage() {
               strokeLinejoin="round"
             />
           </svg>
-          Back to Home
+          Back to settlements
         </Link>
 
         {/* Header */}
@@ -360,177 +705,94 @@ export default function SettlementReceiptPage() {
             <h1 className="text-3xl font-bold text-[#0F172A]">
               Settlement Receipt
             </h1>
-            <p className="mt-1 font-mono text-sm text-[#64748B]">
-              #{receipt.id}
-            </p>
+            <div className="mt-1 flex items-center gap-1.5 font-mono text-sm text-[#64748B]">
+              <span>#{truncateMiddle(viewModel.id)}</span>
+              <CopyButton
+                value={viewModel.id}
+                label="Copy full receipt ID to clipboard"
+              />
+            </div>
             <p className="text-sm text-[#64748B]">
-              {formatDate(receipt.settlementDate)}
+              {formatDisplayDate(viewModel.settlementDate)}
             </p>
           </div>
-          <StatusBadge status={receipt.status} />
+          <StatusBadge status={viewModel.status} />
         </div>
 
         {/* Block 1: Invoice Details */}
         <Block title="Invoice Details">
           <dl className="space-y-0">
             <Row label="Invoice ID">
-              <a
-                href={`/business/invoices/${receipt.invoice.id}`}
+              <Link
+                href={`/business/invoices/${viewModel.invoice.id}`}
                 className="text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
               >
-                {receipt.invoice.id}
-              </a>
-            </Row>
-            <Row label="Debtor">
-              <span className="flex items-center gap-1.5">
-                {receipt.invoice.debtor}
-                {receipt.invoice.debtorVerified && (
-                  <span
-                    className="text-[#10B981] text-xs font-medium"
-                    aria-label="Verified"
-                  >
-                    ✓ Verified
-                  </span>
-                )}
-              </span>
+                {viewModel.invoice.id}
+              </Link>
             </Row>
             <Row label="Invoice Amount">
               <span className="font-mono">
-                {formatCurrency(receipt.invoice.amount)}
+                {viewModel.invoice.amount} {viewModel.invoice.currency}
               </span>
             </Row>
-            <Row label="Issue Date">{receipt.invoice.issueDate}</Row>
-            <Row label="Due Date">{receipt.invoice.dueDate}</Row>
-            <Row label="Description">{receipt.invoice.description}</Row>
+            <Row label="Due Date">
+              {formatDisplayDate(viewModel.invoice.dueDate)}
+            </Row>
+            {viewModel.invoice.category && (
+              <Row label="Category">{viewModel.invoice.category}</Row>
+            )}
+            <Row label="Description">{viewModel.invoice.description}</Row>
           </dl>
         </Block>
 
-        {/* Block 2: Funding Details */}
-        <Block title="Funding Details">
+        {/* Block 2: Settlement Details */}
+        <Block title="Settlement Details">
           <dl className="space-y-0">
-            <Row label="Funded Date">{receipt.funding.fundedDate}</Row>
-            <Row label="Full Funding Achieved">
-              {formatDate(receipt.funding.fullFundingAt)}
-            </Row>
-            <Row label="Funding Source">
-              {receipt.funding.investorCount} Investors
-            </Row>
-            <Row label="Payment Status">
-              <span className="flex items-center gap-1">
-                Received from Debtor
-                {receipt.funding.paymentReceived && (
-                  <span className="text-[#10B981]" aria-hidden="true">
-                    {" "}
-                    ✓
-                  </span>
-                )}
+            <Row label="Settled Amount">
+              <span className="font-mono font-bold text-[#0F172A]">
+                {viewModel.settledAmount}
               </span>
             </Row>
-            <Row label="Escrow Release">{receipt.funding.escrowRelease}</Row>
+            <Row label="Payer">
+              <span className="inline-flex items-center gap-1.5 font-mono">
+                <a
+                  href={`https://stellar.expert/explorer/testnet/account/${viewModel.payer}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+                >
+                  {truncateAddress(viewModel.payer)}
+                </a>
+                <CopyButton
+                  value={viewModel.payer}
+                  label="Copy payer address"
+                />
+              </span>
+            </Row>
+            <Row label="Recipient">
+              <span className="inline-flex items-center gap-1.5 font-mono">
+                <a
+                  href={`https://stellar.expert/explorer/testnet/account/${viewModel.recipient}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+                >
+                  {truncateAddress(viewModel.recipient)}
+                </a>
+                <CopyButton
+                  value={viewModel.recipient}
+                  label="Copy recipient address"
+                />
+              </span>
+            </Row>
           </dl>
-        </Block>
-
-        {/* Block 3: Settlement Calculation */}
-        <Block title="Settlement Calculation">
-          {/* Semantic fee breakdown table — spec §2.3 */}
-          <table className="w-full" aria-label="Settlement fee breakdown">
-            <caption className="sr-only">
-              Fee breakdown for receipt {receipt.id}
-            </caption>
-            <tbody>
-              <tr className="border-b border-[#E2E8F0]">
-                <th
-                  scope="row"
-                  className="py-2 text-left text-sm font-normal text-[#64748B]"
-                >
-                  Invoice Amount
-                </th>
-                <td className="py-2 text-right font-mono text-sm text-[#0F172A]">
-                  {formatCurrency(receipt.calculation.grossAmount)}
-                </td>
-              </tr>
-              {receipt.calculation.fees.map((fee) => (
-                <tr key={fee.label} className="border-b border-[#E2E8F0]">
-                  <th
-                    scope="row"
-                    className="py-2 text-left text-sm font-normal text-[#64748B] pl-4"
-                  >
-                    {fee.label}
-                  </th>
-                  <td className="py-2 text-right font-mono text-sm text-[#EF4444]">
-                    {formatCurrency(fee.amount)}
-                  </td>
-                </tr>
-              ))}
-              <tr className="border-t-2 border-[#0F172A]">
-                <th
-                  scope="row"
-                  className="py-3 text-left text-sm font-bold text-[#0F172A]"
-                >
-                  Net Payout
-                </th>
-                <td
-                  className="py-3 text-right font-mono text-sm font-bold text-[#0F172A]"
-                  aria-label={`Net payout: ${formatCurrency(receipt.calculation.netPayout)}`}
-                >
-                  {formatCurrency(receipt.calculation.netPayout)}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-
-          {/* Transfer details */}
-          <div className="mt-4 pt-4 border-t border-[#E2E8F0] space-y-1 text-sm text-[#64748B]">
-            <p>
-              Transferred to account{" "}
-              <span
-                className="font-mono text-[#0F172A]"
-                aria-label={`Account ending in ${receipt.transfer.accountLast4}`}
-              >
-                ••••{receipt.transfer.accountLast4}
-              </span>
-            </p>
-            <p>Transfer time: 2–4 business hours</p>
-            <p>Transferred at: {formatDate(receipt.transfer.transferredAt)}</p>
-            <a
-              href={explorerUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              aria-label={`View transaction ${receipt.transfer.stellarTxHash} on Stellar Expert (opens in new tab)`}
-              className="inline-flex items-center gap-1 text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded font-mono text-xs mt-1"
-            >
-              {receipt.transfer.stellarTxHash.slice(0, 6)}…
-              {receipt.transfer.stellarTxHash.slice(-4)}
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 16 16"
-                fill="none"
-                aria-hidden="true"
-              >
-                <path
-                  d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-                <path
-                  d="M10 2h4v4M14 2l-6 6"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </a>
-          </div>
         </Block>
 
         {/* Export Actions — hidden on print */}
         <div className="print:hidden flex flex-wrap gap-3">
           <ExportButton
             label="Download PDF"
-            ariaLabel={`Download settlement receipt ${receipt.id} as PDF`}
+            ariaLabel={`Download settlement receipt ${viewModel.id} as PDF`}
             variant="primary"
             onClick={handleDownloadPDF}
             icon={
@@ -559,7 +821,7 @@ export default function SettlementReceiptPage() {
           />
           <ExportButton
             label="Download JSON"
-            ariaLabel={`Download settlement receipt ${receipt.id} as JSON`}
+            ariaLabel={`Download settlement receipt ${viewModel.id} as JSON`}
             onClick={handleDownloadJSON}
             icon={
               <svg
@@ -587,7 +849,7 @@ export default function SettlementReceiptPage() {
           />
           <ExportButton
             label="Print"
-            ariaLabel={`Print settlement receipt ${receipt.id}`}
+            ariaLabel={`Print settlement receipt ${viewModel.id}`}
             onClick={handlePrint}
             icon={
               <svg
@@ -623,7 +885,7 @@ export default function SettlementReceiptPage() {
           />
           <ExportButton
             label="Email Receipt"
-            ariaLabel={`Email settlement receipt ${receipt.id}`}
+            ariaLabel={`Email settlement receipt ${viewModel.id}`}
             onClick={handleEmail}
             icon={
               <svg
@@ -652,7 +914,7 @@ export default function SettlementReceiptPage() {
             }
           />
           <Link
-            href={`/business/settlements/${receiptId}/timeline`}
+            href={`/business/settlements/${settlementId}/timeline`}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border border-[#E2E8F0] text-[#0F172A] bg-white hover:bg-[#F8FAFC] focus:outline-none focus:ring-2 focus:ring-[#2563EB] focus:ring-offset-1"
           >
             <svg
@@ -688,7 +950,7 @@ export default function SettlementReceiptPage() {
         {/* Print-only footer */}
         <div className="hidden print:block mt-8 pt-4 border-t border-[#E2E8F0] text-xs text-[#64748B]">
           <p>Confidential — for authorised account holder only.</p>
-          <p suppressHydrationWarning>
+          <p>
             Printed on{" "}
             {new Date().toLocaleDateString("en-US", {
               year: "numeric",

@@ -462,6 +462,7 @@ export class WalletTelemetryService {
 
   /** Reset service to defaults (useful in testing) */
   reset(): void {
+    this.providerWasInjected = false;
     const envConfig = resolveConfigFromEnv();
     this.config = envConfig;
     this.hasCustomProvider = false;
@@ -473,7 +474,7 @@ export class WalletTelemetryService {
     name: string,
     props?: Record<string, unknown>
   ): Promise<void> {
-    if (!this.config.enabled && this.provider.name === "noop") {
+    if (!this.config.enabled) {
       return;
     }
 
@@ -495,7 +496,7 @@ export class WalletTelemetryService {
     userId: string,
     traits?: Record<string, unknown>
   ): Promise<void> {
-    if (!this.config.enabled && this.provider.name === "noop") return;
+    if (!this.config.enabled) return;
     try {
       await this.provider.identify?.(userId, traits);
     } catch (err) {

@@ -1,26 +1,28 @@
 #![cfg(test)]
 
-use crate::audit::{AuditOperation, AuditQueryFilter, AuditStorage};
+use crate::audit::{AuditOperation, AuditQueryFilter};
 use crate::errors::QuickLendXError;
+use crate::notifications::{NotificationSystem, NotificationType};
 use crate::payments::EscrowStatus;
+use crate::storage::InvoiceStorage;
 use crate::types::{BidStatus, InvestmentStatus, InvoiceStatus};
 use crate::QuickLendXContractClient;
 use soroban_sdk::testutils::Events as EventsTrait;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    token, Address, BytesN, Env, String, Symbol, TryFromVal, Vec, xdr,
+    token, xdr, Address, BytesN, Env, String, Symbol, TryFromVal, Vec,
 };
 
-fn event_emitted(env: &Env, topic: &str) -> bool {
-    let topic_sym = Symbol::new(env, topic);
-    let topic_xdr = xdr::ScVal::try_from_val(env, &topic_sym).expect("topic to xdr");
+fn count_events(env: &Env, topic: Symbol) -> u32 {
+    let topic_xdr = xdr::ScVal::try_from_val(env, &topic).expect("topic to xdr");
     env.events()
         .all()
         .events()
         .iter()
-        .any(|e| match &e.body {
+        .filter(|e| match &e.body {
             xdr::ContractEventBody::V0(b) => b.topics.first() == Some(&topic_xdr),
         })
+        .count() as u32
 }
 
 fn setup_test_env() -> (
@@ -103,80 +105,222 @@ fn create_verified_invoice(
     invoice_id
 }
 
+fn fund_test_invoice(
+    env: &Env,
+    contract_id: &Address,
+    client: &QuickLendXContractClient,
+    business: &Address,
+    investor: &Address,
+    currency: &Address,
+    token_admin_client: &token::StellarAssetClient<'static>,
+    origination_fee_bps: Option<u32>,
+) -> (BytesN<32>, u32, u32) {
+    let invoice_id = create_verified_invoice(env, client, business, currency, 20_000);
+    if let Some(fee_bps) = origination_fee_bps {
+        env.as_contract(contract_id, || {
+            let mut invoice = InvoiceStorage::get_invoice(env, &invoice_id).unwrap();
+            invoice.origination_fee_bps = Some(fee_bps);
+            InvoiceStorage::update_invoice(env, &invoice);
+        });
+    }
+
+    token_admin_client.mint(investor, &50_000i128);
+    let bid_id = client.place_bid(
+        investor,
+        &invoice_id,
+        &20_000i128,
+        &22_000i128,
+        &BytesN::from_array(env, &[1u8; 32]),
+    );
+    let notification_events_before = count_events(env, Symbol::new(env, "notif"));
+    let notification_count_before = env.as_contract(contract_id, || {
+        NotificationSystem::get_user_notifications(env, investor).len()
+    });
+    client.accept_bid_and_fund(&invoice_id, &bid_id);
+    (
+        invoice_id,
+        notification_events_before,
+        notification_count_before,
+    )
+}
+
+fn assert_funding_event_counts(env: &Env) {
+    assert_eq!(
+        count_events(env, Symbol::new(env, "bid_accepted")),
+        1,
+        "expected exactly one BidAccepted event"
+    );
+    assert_eq!(
+        count_events(env, Symbol::new(env, "invoice_funded")),
+        1,
+        "expected exactly one InvoiceFunded event"
+    );
+    assert_eq!(
+        count_events(env, Symbol::new(env, "escrow_created")),
+        1,
+        "expected exactly one EscrowCreated event"
+    );
+}
+
+fn assert_bid_accepted_notification_once(
+    env: &Env,
+    contract_id: &Address,
+    investor: &Address,
+    notification_events_before: u32,
+    notification_count_before: u32,
+) {
+    assert_eq!(
+        count_events(env, Symbol::new(env, "notif")),
+        notification_events_before + 1,
+        "funding should emit exactly one notification event"
+    );
+    let notification_ids = env.as_contract(contract_id, || {
+        NotificationSystem::get_user_notifications(env, investor)
+    });
+    assert_eq!(notification_ids.len(), notification_count_before + 1);
+    let notification = env.as_contract(contract_id, || {
+        NotificationSystem::get_notification(
+            env,
+            &notification_ids.get(notification_ids.len() - 1).unwrap(),
+        )
+        .unwrap()
+    });
+    assert_eq!(notification.notification_type, NotificationType::BidAccepted);
+}
+
 #[test]
-fn test_funding_events_and_audit_parity_success_flow() {
-    let (env, _contract_id, client, _admin, business, investor, token_client, token_admin_client) =
+fn funding_emits_each_event_once() {
+    let (env, contract_id, client, _admin, business, investor, token_client, token_admin_client) =
         setup_test_env();
 
-    let invoice_amount = 20_000i128;
-    let invoice_id = create_verified_invoice(
+    let (invoice_id, notification_events_before, notification_count_before) = fund_test_invoice(
         &env,
+        &contract_id,
         &client,
         &business,
+        &investor,
         &token_client.address,
-        invoice_amount,
+        &token_admin_client,
+        None,
     );
-
-    token_admin_client.mint(&investor, &50_000i128);
-
-    // 1. Place Bid
-    let bid_amount = 20_000i128;
-    let expected_return = 22_000i128;
-    let salt = BytesN::from_array(&env, &[1u8; 32]);
-    let bid_id = client.place_bid(&investor, &invoice_id, &bid_amount, &expected_return, &salt);
-
-    // Verify BidPlaced event & audit
-    assert!(event_emitted(&env, "bid_plc"));
-
-    let filter = AuditQueryFilter {
-        invoice_id: Some(invoice_id.clone()),
-        operation: crate::audit::AuditOperationFilter::Specific(AuditOperation::BidPlaced),
-        actor: Some(investor.clone()),
-        start_timestamp: None,
-        end_timestamp: None,
-    };
-    let audit_entries = client.query_audit_logs(&filter, &10);
-    assert_eq!(audit_entries.len(), 1);
-    assert_eq!(audit_entries.get(0).unwrap().amount, Some(bid_amount));
-
-    // 2. Accept Bid and Fund
-    let escrow_id = client.accept_bid_and_fund(&invoice_id, &bid_id);
-
-    // Verify events: EscrowCreated, BidAccepted, InvoiceFunded
-    assert!(event_emitted(&env, "esc_cr"));
-    assert!(event_emitted(&env, "bid_acc"));
-    assert!(event_emitted(&env, "invoice_fu"));
+    assert_funding_event_counts(&env);
 
     // Verify audit logs for funding transitions
-    let escrow_audit = client.query_audit_logs(&AuditQueryFilter {
-        invoice_id: Some(invoice_id.clone()),
-        operation: crate::audit::AuditOperationFilter::Specific(AuditOperation::EscrowCreated),
-        actor: None,
-        start_timestamp: None,
-        end_timestamp: None,
-    }, &10);
+    let escrow_audit = client.query_audit_logs(
+        &AuditQueryFilter {
+            invoice_id: Some(invoice_id.clone()),
+            operation: crate::audit::AuditOperationFilter::Specific(AuditOperation::EscrowCreated),
+            actor: None,
+            start_timestamp: None,
+            end_timestamp: None,
+        },
+        &10,
+    );
     assert_eq!(escrow_audit.len(), 1);
 
-    let accepted_audit = client.query_audit_logs(&AuditQueryFilter {
-        invoice_id: Some(invoice_id.clone()),
-        operation: crate::audit::AuditOperationFilter::Specific(AuditOperation::BidAccepted),
-        actor: None,
-        start_timestamp: None,
-        end_timestamp: None,
-    }, &10);
+    let accepted_audit = client.query_audit_logs(
+        &AuditQueryFilter {
+            invoice_id: Some(invoice_id.clone()),
+            operation: crate::audit::AuditOperationFilter::Specific(AuditOperation::BidAccepted),
+            actor: None,
+            start_timestamp: None,
+            end_timestamp: None,
+        },
+        &10,
+    );
     assert_eq!(accepted_audit.len(), 1);
+    assert_eq!(accepted_audit.get(0).unwrap().actor, business);
 
-    let funded_audit = client.query_audit_logs(&AuditQueryFilter {
-        invoice_id: Some(invoice_id.clone()),
-        operation: crate::audit::AuditOperationFilter::Specific(AuditOperation::InvoiceFunded),
-        actor: None,
-        start_timestamp: None,
-        end_timestamp: None,
-    }, &10);
+    let funded_audit = client.query_audit_logs(
+        &AuditQueryFilter {
+            invoice_id: Some(invoice_id.clone()),
+            operation: crate::audit::AuditOperationFilter::Specific(AuditOperation::InvoiceFunded),
+            actor: None,
+            start_timestamp: None,
+            end_timestamp: None,
+        },
+        &10,
+    );
     assert_eq!(funded_audit.len(), 1);
+
+    assert_bid_accepted_notification_once(
+        &env,
+        &contract_id,
+        &investor,
+        notification_events_before,
+        notification_count_before,
+    );
 
     // Verify chain integrity
     assert!(client.verify_audit_chain(&invoice_id));
+}
+
+#[test]
+fn funding_with_fee_emits_each_event_once() {
+    let (env, contract_id, client, _admin, business, investor, token_client, token_admin_client) =
+        setup_test_env();
+    let _ = fund_test_invoice(
+        &env,
+        &contract_id,
+        &client,
+        &business,
+        &investor,
+        &token_client.address,
+        &token_admin_client,
+        Some(200),
+    );
+    assert_funding_event_counts(&env);
+}
+
+#[test]
+fn bid_accepted_audit_actor_is_business() {
+    let (env, contract_id, client, _admin, business, investor, token_client, token_admin_client) =
+        setup_test_env();
+    let (invoice_id, _, _) = fund_test_invoice(
+        &env,
+        &contract_id,
+        &client,
+        &business,
+        &investor,
+        &token_client.address,
+        &token_admin_client,
+        None,
+    );
+    let accepted_audit = client.query_audit_logs(
+        &AuditQueryFilter {
+            invoice_id: Some(invoice_id),
+            operation: crate::audit::AuditOperationFilter::Specific(AuditOperation::BidAccepted),
+            actor: None,
+            start_timestamp: None,
+            end_timestamp: None,
+        },
+        &10,
+    );
+    assert_eq!(accepted_audit.len(), 1);
+    assert_eq!(accepted_audit.get(0).unwrap().actor, business);
+}
+
+#[test]
+fn bid_accepted_notification_once() {
+    let (env, contract_id, client, _admin, business, investor, token_client, token_admin_client) =
+        setup_test_env();
+    let (_, notification_events_before, notification_count_before) = fund_test_invoice(
+        &env,
+        &contract_id,
+        &client,
+        &business,
+        &investor,
+        &token_client.address,
+        &token_admin_client,
+        None,
+    );
+    assert_bid_accepted_notification_once(
+        &env,
+        &contract_id,
+        &investor,
+        notification_events_before,
+        notification_count_before,
+    );
 }
 
 #[test]

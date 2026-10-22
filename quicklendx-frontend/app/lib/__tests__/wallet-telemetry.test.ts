@@ -359,6 +359,79 @@ describe("Wallet Telemetry - Service & Event Forwarding", () => {
     );
   });
 
+  it("preserves an injected provider during ordinary configuration updates", async () => {
+    const mockTrackEvent = jest.fn();
+    const service = new WalletTelemetryService({ enabled: true });
+
+    service.setProvider({
+      name: "test-provider",
+      trackEvent: mockTrackEvent,
+    });
+
+    service.configure({ enabled: true });
+
+    await service.trackEvent("wallet_connected");
+
+    expect(service.getProvider().name).toBe("test-provider");
+    expect(mockTrackEvent).toHaveBeenCalledTimes(1);
+    expect(mockTrackEvent).toHaveBeenCalledWith(
+      "wallet_connected",
+      expect.objectContaining({
+        timestamp: expect.any(Number),
+      })
+    );
+  });
+
+  it("replaces an injected provider when configuration explicitly overrides it", async () => {
+    const mockTrackEvent = jest.fn();
+    const service = new WalletTelemetryService({ enabled: true });
+
+    service.setProvider({
+      name: "test-provider",
+      trackEvent: mockTrackEvent,
+    });
+
+    service.configure({ enabled: true, provider: "noop" });
+
+    await service.trackEvent("wallet_connected");
+
+    expect(service.getProvider().name).toBe("noop");
+    expect(mockTrackEvent).not.toHaveBeenCalled();
+  });
+
+  it("does not track or identify when telemetry is disabled with an injected provider", async () => {
+    const mockTrackEvent = jest.fn();
+    const mockIdentify = jest.fn();
+    const service = new WalletTelemetryService({ enabled: true });
+
+    service.setProvider({
+      name: "test-provider",
+      trackEvent: mockTrackEvent,
+      identify: mockIdentify,
+    });
+
+    service.configure({ enabled: false });
+
+    await service.trackEvent("wallet_connected");
+    await service.identify("user-123");
+
+    expect(mockTrackEvent).not.toHaveBeenCalled();
+    expect(mockIdentify).not.toHaveBeenCalled();
+  });
+
+  it("clears the injected provider state when reset is called", () => {
+    const service = new WalletTelemetryService({ enabled: true });
+
+    service.setProvider({
+      name: "test-provider",
+      trackEvent: jest.fn(),
+    });
+
+    service.reset();
+
+    expect(service.getProvider().name).toBe("noop");
+  });
+
   it("handles provider runtime errors gracefully", async () => {
     const warnSpy = jest.spyOn(console, "warn").mockImplementation(() => {});
     const throwingProvider: WalletTelemetryProvider = {
