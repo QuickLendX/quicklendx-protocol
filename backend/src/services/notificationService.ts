@@ -12,6 +12,13 @@ import { config } from '../config';
 import { NotificationDedupCache } from './notificationDedupCache';
 import { auditService } from './auditService';
 import { alertRouter, Severity } from './alertRouter';
+import {
+  computeUnsubscribeToken,
+  sign,
+  verify,
+  markTokenUsed,
+} from './notificationTokens';
+import { Clock } from './clock';
 
 // Map NotificationType enum values to the notify_* column names
 const PREF_COLUMN: Record<NotificationType, string> = {
@@ -26,6 +33,7 @@ export class NotificationService {
   private transporter: Transporter;
   private dedupCache: NotificationDedupCache;
   private circuitBreaker: CircuitBreaker;
+  private pendingEmails = new Map<string, string>();
 
   private constructor() {
     this.dedupCache = new NotificationDedupCache(
@@ -135,39 +143,91 @@ export class NotificationService {
   // Email template (unchanged logic, kept private)
   // ---------------------------------------------------------------------------
 
-  private getEmailTemplate(event: NotificationEvent): NotificationTemplate {
+  /**
+   * Request an email change: stores pending email and returns 24h HMAC single-use verification token.
+   */
+  public requestEmailChange(
+    userId: string,
+    newEmail: string,
+    clockOrNow: Clock | number = Date.now()
+  ): { verificationToken: string; expiresAt: number } {
+    const now = typeof clockOrNow === 'number' ? clockOrNow : clockOrNow.now();
+    const expiresAt = now + 24 * 60 * 60 * 1000;
+    const token = sign(userId, 'verify_email', expiresAt);
+    this.pendingEmails.set(userId, newEmail);
+    return { verificationToken: token, expiresAt };
+  }
+
+  public getPendingEmail(userId: string): string | undefined {
+    return this.pendingEmails.get(userId);
+  }
+
+  public clearPendingEmail(userId: string): void {
+    this.pendingEmails.delete(userId);
+  }
+
+  /**
+   * Verifies the token and activates the pending email address.
+   */
+  public verifyAndActivateEmail(
+    userId: string,
+    token: string,
+    clockOrNow: Clock | number = Date.now()
+  ): { success: boolean; error?: string; status: number } {
+    const res = verify(userId, 'verify_email', token, clockOrNow);
+    if (!res.valid) {
+      return { success: false, error: res.error, status: res.status };
+    }
+
+    const pendingEmail = this.pendingEmails.get(userId);
+    if (!pendingEmail) {
+      return { success: false, error: 'NO_PENDING_EMAIL', status: 400 };
+    }
+
+    markTokenUsed(token);
+    this.updateUserPreferences(userId, { email_address: pendingEmail });
+    this.pendingEmails.delete(userId);
+
+    return { success: true, status: 200 };
+  }
+
+  public getEmailTemplate(event: NotificationEvent): NotificationTemplate {
     const baseUrl = process.env.FRONTEND_URL || 'https://quicklendx.com';
+    const unsubToken = computeUnsubscribeToken(event.user_id);
+    const unsubUrl = `${baseUrl}/api/v1/notifications/unsubscribe/${event.user_id}?token=${unsubToken}`;
+    const unsubHtml = `<p><a href="${unsubUrl}">Unsubscribe</a></p>`;
+    const unsubText = `\nUnsubscribe: ${unsubUrl}`;
 
     switch (event.type) {
       case NotificationType.InvoiceFunded:
         return {
           subject: 'Your Invoice Has Been Funded - QuickLendX',
-          html: `<p>Invoice ${event.invoice_id} funded for ${event.amount} XLM.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Invoice</a>`,
-          text: `Invoice ${event.invoice_id} funded for ${event.amount} XLM.\n${baseUrl}/invoices/${event.invoice_id}`,
+          html: `<p>Invoice ${event.invoice_id} funded for ${event.amount} XLM.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Invoice</a>${unsubHtml}`,
+          text: `Invoice ${event.invoice_id} funded for ${event.amount} XLM.\n${baseUrl}/invoices/${event.invoice_id}${unsubText}`,
         };
       case NotificationType.PaymentReceived:
         return {
           subject: 'Payment Received - QuickLendX',
-          html: `<p>Payment of ${event.amount} XLM received for invoice ${event.invoice_id}.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Invoice</a>`,
-          text: `Payment of ${event.amount} XLM received for invoice ${event.invoice_id}.\n${baseUrl}/invoices/${event.invoice_id}`,
+          html: `<p>Payment of ${event.amount} XLM received for invoice ${event.invoice_id}.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Invoice</a>${unsubHtml}`,
+          text: `Payment of ${event.amount} XLM received for invoice ${event.invoice_id}.\n${baseUrl}/invoices/${event.invoice_id}${unsubText}`,
         };
       case NotificationType.DisputeOpened:
         return {
           subject: 'Dispute Opened - QuickLendX',
-          html: `<p>A dispute has been opened for invoice ${event.invoice_id}.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Dispute</a>`,
-          text: `A dispute has been opened for invoice ${event.invoice_id}.\n${baseUrl}/invoices/${event.invoice_id}`,
+          html: `<p>A dispute has been opened for invoice ${event.invoice_id}.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Dispute</a>${unsubHtml}`,
+          text: `A dispute has been opened for invoice ${event.invoice_id}.\n${baseUrl}/invoices/${event.invoice_id}${unsubText}`,
         };
       case NotificationType.DisputeResolved:
         return {
           subject: 'Dispute Resolved - QuickLendX',
-          html: `<p>The dispute for invoice ${event.invoice_id} has been resolved.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Resolution</a>`,
-          text: `The dispute for invoice ${event.invoice_id} has been resolved.\n${baseUrl}/invoices/${event.invoice_id}`,
+          html: `<p>The dispute for invoice ${event.invoice_id} has been resolved.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Resolution</a>${unsubHtml}`,
+          text: `The dispute for invoice ${event.invoice_id} has been resolved.\n${baseUrl}/invoices/${event.invoice_id}${unsubText}`,
         };
       default:
         return {
           subject: 'QuickLendX Notification',
-          html: '<p>You have a new notification.</p>',
-          text: 'You have a new notification.',
+          html: `<p>You have a new notification.</p>${unsubHtml}`,
+          text: `You have a new notification.${unsubText}`,
         };
     }
   }

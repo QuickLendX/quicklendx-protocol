@@ -1,4 +1,5 @@
 import { Router } from "express";
+import apiKeyRoutes from "./api-keys";
 import invoiceRoutes from "./invoices";
 import bidRoutes from "./bids";
 import settlementRoutes from "./settlements";
@@ -27,6 +28,7 @@ import { eventIngestLimits } from "../../middleware/event-ingest-limits";
 const router = Router();
 const eventIdStore = new FileRawEventStore(new DefaultEventValidator());
 
+router.use("/api-keys", apiKeyRoutes);
 router.use("/invoices", invoiceRoutes);
 router.use("/bids", bidRoutes);
 router.use("/settlements", settlementRoutes);
