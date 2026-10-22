@@ -27,7 +27,7 @@ export type DatabaseErrorCode =
   | (string & {});
 
 export class DatabaseError extends Error {
-  readonly code: DatabaseErrorCode;
+  readonly code: string;
   readonly cause: unknown;
 
   constructor(message: string);
@@ -88,9 +88,9 @@ export interface DatabaseStatus {
 const DatabaseConstructor = Database as unknown as new (
   path: string,
   options?: object
-) => InstanceType<typeof Database>;
+) => ReturnType<typeof Database>;
 
-let dbInstance: InstanceType<typeof Database> | null = null;
+let dbInstance: ReturnType<typeof Database> | null = null;
 let _state: DatabaseState = 'uninitialized';
 let _lastOpenedAt: string | null = null;
 let _lastClosedAt: string | null = null;
@@ -99,7 +99,7 @@ let _lastErrorCode: DatabaseErrorCode | null = null;
 let _consecutiveFailures = 0;
 
 /** Centralized prepared statement cache: SQL string → compiled statement. */
-const statementCache = new Map<string, ReturnType<InstanceType<typeof Database>['prepare']>>();
+const statementCache = new Map<string, ReturnType<ReturnType<typeof Database>['prepare']>>();
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -257,16 +257,13 @@ let cacheEvicts = 0;
  * Get a singleton instance of the better‑sqlite3 database with sensible pragmas.
  */
 export function getDatabase() {
-  if (!dbInstance) {
-    const db = new DatabaseConstructor(process.env.DATABASE_PATH || '.data/dev.db');
-    // Apply performance pragmas.
-    db.pragma('journal_mode = WAL');
-    db.pragma('synchronous = NORMAL');
-    db.pragma('foreign_keys = ON');
-    db.pragma('busy_timeout = 5000');
-    dbInstance = db;
+  if (_state === 'opening') {
+    throw new DatabaseError('OPEN_FAILED', 'Database initialization is already in progress.');
   }
-
+  if (dbInstance && dbInstance.open === false) {
+    dbInstance = null;
+    clearStatementCache();
+  }
   // ── Fast path: already open ───────────────────────────────────────────────
   if (dbInstance !== null) {
     return dbInstance;
@@ -274,7 +271,7 @@ export function getDatabase() {
 
   // ── Slow path: open a new connection ─────────────────────────────────────
   _state = 'opening';
-  let fresh: InstanceType<typeof Database> | null = null;
+  let fresh: ReturnType<typeof Database> | null = null;
 
   try {
     const path = process.env.DATABASE_PATH || '.data/dev.db';
@@ -300,15 +297,18 @@ export function getDatabase() {
 
   // Apply configuration pragmas.  If any pragma fails we must not expose a
   // half-configured instance — close and rethrow.
+  let pragma = '';
   try {
-    applyPragmas(fresh);
+    for (pragma of ['journal_mode = WAL', 'synchronous = NORMAL', 'foreign_keys = ON', 'busy_timeout = 5000']) {
+      fresh.pragma(pragma);
+    }
   } catch (err) {
     try { fresh.close(); } catch { /* best-effort cleanup */ }
     _state = 'error';
     _lastErrorAt = new Date().toISOString();
     _consecutiveFailures++;
     _lastErrorCode = 'PRAGMA_FAILED';
-    throw err; // already a DatabaseError(PRAGMA_FAILED)
+    throw new DatabaseError('PRAGMA_FAILED', `Failed to apply pragma ${pragma}.`, err);
   }
 
   // ── Commit the instance ───────────────────────────────────────────────────
@@ -328,14 +328,9 @@ export function getDatabase() {
 /**
  * Retrieve a prepared statement with deterministic failure handling.
  *
- * 1. Cache‑hit returns the prepared statement after a cheap validation step.
- *    If validation fails due to a stale schema (`SQLITE_SCHEMA`) the entry is evicted
- *    and a fresh preparation is performed.
- * 2. Cache‑miss triggers a guarded preparation sequence:
- *    - Concurrency guard ensures only one preparation per SQL string.
- *    - Retry loop (max 3 attempts) handles transient `SQLITE_BUSY` errors.
- *    - Permission checks surface a `DatabasePermissionError` without caching.
- *    - Any other preparation error surfaces a `DatabasePrepareError`.
+ * Cached statements are returned without execution. Preparing a statement must
+ * never run writes or consume missing bind parameters; callers own execution.
+ * Preparation retries SQLITE_BUSY up to three times and wraps failures.
  *
  * The public signature is unchanged – callers receive the prepared statement or
  * a thrown error they can handle deterministically.
@@ -371,22 +366,10 @@ export function getPreparedStatement(sql: string): any {
     try {
       const db = getDatabase();
       const stmt = db.prepare(sql);
-      // Permission guard – attempt a harmless execution to surface read‑only errors.
-      try {
-        if (stmt.reader) {
-          stmt.get();
-        } else {
-          stmt.run();
-        }
-      } catch (permErr: any) {
-        if (permErr.code === 'SQLITE_READONLY') {
-          throw new DatabasePermissionError(sql, permErr);
-        }
-        // ignore other errors here
-      }
       statementCache.set(sql, stmt);
       return stmt;
     } catch (err: any) {
+      if (err.code === 'SQLITE_READONLY') throw new DatabasePermissionError(sql, err);
       if (err.code === 'SQLITE_BUSY') {
         if (attempt < maxAttempts - 1) {
           // simple synchronous back‑off
@@ -442,6 +425,10 @@ export function getPingStats() {
     misses: cacheMisses,
     evicts: cacheEvicts,
   };
+}
+
+export function getStatementCacheStats() {
+  return { size: statementCache.size, statements: Array.from(statementCache.keys()) };
 }
 
 /**

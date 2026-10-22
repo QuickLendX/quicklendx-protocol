@@ -22,7 +22,7 @@ mod test_init {
     use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
         testutils::{Address as _, Events},
-        Address, Env, Vec,
+        xdr, Address, Env, Symbol, TryFromVal, Vec,
     };
 
     fn setup() -> (Env, QuickLendXContractClient<'static>) {
@@ -54,6 +54,22 @@ mod test_init {
         (env, client, params)
     }
 
+    /// Number of events in `events` whose first topic is the symbol `name`.
+    fn count_topic(env: &Env, events: &soroban_sdk::testutils::ContractEvents, name: &str) -> usize {
+        let want = Symbol::new(env, name);
+        events
+            .events()
+            .iter()
+            .filter(|e| match &e.body {
+                xdr::ContractEventBody::V0(body) => body
+                    .topics
+                    .first()
+                    .and_then(|t| Symbol::try_from_val(env, t).ok())
+                    .map_or(false, |sym| sym == want),
+            })
+            .count()
+    }
+
     // ============================================================================
     // 1. Successful Initialization Tests
     // ============================================================================
@@ -74,7 +90,7 @@ mod test_init {
             "Protocol must be marked as initialized"
         );
         assert!(
-            AdminStorage::is_initialized(&env),
+            env.as_contract(&client.address, || AdminStorage::is_initialized(&env)),
             "Admin must be initialized"
         );
     }
@@ -93,7 +109,7 @@ mod test_init {
             "Admin must be stored correctly"
         );
         assert!(
-            AdminStorage::is_admin(&env, &params.admin),
+            env.as_contract(&client.address, || AdminStorage::is_admin(&env, &params.admin)),
             "Admin must be recognized by AdminStorage"
         );
     }
@@ -135,7 +151,7 @@ mod test_init {
 
         client.initialize(&params);
 
-        let config = ProtocolInitializer::get_protocol_config(&env);
+        let config = env.as_contract(&client.address, || ProtocolInitializer::get_protocol_config(&env));
         assert!(config.is_some(), "Protocol config must be stored");
 
         let config = config.unwrap();
@@ -173,12 +189,9 @@ mod test_init {
         client.initialize(&params);
 
         let events = env.events().all();
-        let init_events: Vec<_> = events
-            .iter()
-            .filter(|e| e.0 == (soroban_sdk::symbol_short!("proto_in"),))
-            .collect();
+        let init_events = count_topic(&env, &events, "protocol_initialized");
 
-        assert!(!init_events.is_empty(), "Initialization must emit event");
+        assert_eq!(init_events, 1, "Initialization must emit one event");
     }
 
     // ============================================================================
@@ -237,7 +250,7 @@ mod test_init {
         // Before initialization
         assert!(!client.is_initialized(), "Must return false before init");
         assert!(
-            !ProtocolInitializer::is_initialized(&env),
+            !env.as_contract(&client.address, || ProtocolInitializer::is_initialized(&env)),
             "Direct call must also return false"
         );
 
@@ -247,7 +260,7 @@ mod test_init {
 
         assert!(client.is_initialized(), "Must return true after init");
         assert!(
-            ProtocolInitializer::is_initialized(&env),
+            env.as_contract(&client.address, || ProtocolInitializer::is_initialized(&env)),
             "Direct call must also return true"
         );
     }
@@ -392,6 +405,10 @@ mod test_init {
         let (env, client) = setup();
         let mut params = create_valid_params(&env);
         params.max_due_date_days = 1;
+        // The grace period must fit inside the due-date horizon
+        // (protocol_limits::validate_protocol_limits_params), so a 1-day
+        // horizon needs a grace period of at most 1 day.
+        params.grace_period_seconds = 86_400;
 
         let result = client.try_initialize(&params);
         assert!(result.is_ok(), "One day max due date must succeed");
@@ -551,14 +568,15 @@ mod test_init {
 
         let result = client.try_set_protocol_config(
             &params.admin,
-            2_000_000, // new min amount
-            180,       // new max days
-            86400,     // new grace period (1 day)
+            &2_000_000i128, // new min amount
+            &180u64,        // new max days
+            &86400u64,      // new grace period (1 day)
+            &100u32,        // backfill batch size (unchanged)
         );
 
         assert!(result.is_ok(), "Protocol config update must succeed");
 
-        let config = ProtocolInitializer::get_protocol_config(&env).unwrap();
+        let config = env.as_contract(&client.address, || ProtocolInitializer::get_protocol_config(&env)).unwrap();
         assert_eq!(config.min_invoice_amount, 2_000_000);
         assert_eq!(config.max_due_date_days, 180);
         assert_eq!(config.grace_period_seconds, 86400);
@@ -632,12 +650,9 @@ mod test_init {
         client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64, &100u32);
 
         let events = env.events().all();
-        let config_events: Vec<_> = events
-            .iter()
-            .filter(|e| e.0 == (soroban_sdk::symbol_short!("proto_cfg"),))
-            .collect();
+        let config_events = count_topic(&env, &events, "proto_cfg");
 
-        assert!(!config_events.is_empty(), "Config update must emit event");
+        assert_eq!(config_events, 1, "Config update must emit one event");
     }
 
     #[test]
@@ -787,9 +802,9 @@ mod test_init {
 
     #[test]
     fn test_get_protocol_config_returns_none_before_init() {
-        let (env, _client) = setup();
+        let (env, client) = setup();
 
-        let config = ProtocolInitializer::get_protocol_config(&env);
+        let config = env.as_contract(&client.address, || ProtocolInitializer::get_protocol_config(&env));
         assert!(
             config.is_none(),
             "Config must be None before initialization"
@@ -798,9 +813,9 @@ mod test_init {
 
     #[test]
     fn test_get_protocol_config_returns_config_after_init() {
-        let (env, _client, params) = setup_initialized();
+        let (env, client, params) = setup_initialized();
 
-        let config = ProtocolInitializer::get_protocol_config(&env);
+        let config = env.as_contract(&client.address, || ProtocolInitializer::get_protocol_config(&env));
         assert!(config.is_some(), "Config must exist after initialization");
 
         let config = config.unwrap();
@@ -834,17 +849,17 @@ mod test_init {
         let (env, client, params) = setup_initialized();
 
         // Update protocol config
-        client.set_protocol_config(&params.admin, 2_000_000, 180, 86400, &100u32);
+        client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64, &100u32);
 
         // Update fee config
-        client.set_fee_config(&params.admin, 300);
+        client.set_fee_config(&params.admin, &300u32);
 
         // Update treasury
         let new_treasury = Address::generate(&env);
         client.set_treasury(&params.admin, &new_treasury);
 
         // Verify all updates
-        let config = ProtocolInitializer::get_protocol_config(&env).unwrap();
+        let config = env.as_contract(&client.address, || ProtocolInitializer::get_protocol_config(&env)).unwrap();
         assert_eq!(config.min_invoice_amount, 2_000_000);
         assert_eq!(config.max_due_date_days, 180);
         assert_eq!(config.grace_period_seconds, 86400);
@@ -862,7 +877,7 @@ mod test_init {
 
         // 1. Initial state
         assert!(!client.is_initialized());
-        assert!(!AdminStorage::is_initialized(&env));
+        assert!(!env.as_contract(&client.address, || AdminStorage::is_initialized(&env)));
 
         // 2. Initialize protocol
         let params = create_valid_params(&env);
@@ -870,18 +885,18 @@ mod test_init {
 
         // 3. Verify initialization
         assert!(client.is_initialized());
-        assert!(AdminStorage::is_initialized(&env));
+        assert!(env.as_contract(&client.address, || AdminStorage::is_initialized(&env)));
         assert_eq!(client.get_current_admin(), Some(params.admin.clone()));
 
         // 4. Update configurations
         client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64, &100u32);
-        client.set_fee_config(&params.admin, 300);
+        client.set_fee_config(&params.admin, &300u32);
 
         let new_treasury = Address::generate(&env);
         client.set_treasury(&params.admin, &new_treasury);
 
         // 5. Verify final state
-        let config = ProtocolInitializer::get_protocol_config(&env).unwrap();
+        let config = env.as_contract(&client.address, || ProtocolInitializer::get_protocol_config(&env)).unwrap();
         assert_eq!(config.min_invoice_amount, 2_000_000);
         assert_eq!(client.get_fee_bps(), 300);
         assert_eq!(client.get_treasury(), Some(new_treasury));
@@ -896,19 +911,19 @@ mod test_init {
         client.initialize(&params);
 
         // Verify admin integration
-        assert!(AdminStorage::is_admin(&env, &params.admin));
-        assert_eq!(AdminStorage::get_admin(&env), Some(params.admin.clone()));
+        assert!(env.as_contract(&client.address, || AdminStorage::is_admin(&env, &params.admin)));
+        assert_eq!(env.as_contract(&client.address, || AdminStorage::get_admin(&env)), Some(params.admin.clone()));
 
         // Transfer admin
         let new_admin = Address::generate(&env);
         client.transfer_admin(&params.admin, &new_admin);
 
         // Verify new admin can update config
-        let result = client.try_set_fee_config(&new_admin, 400);
+        let result = client.try_set_fee_config(&new_admin, &400u32);
         assert!(result.is_ok(), "New admin must be able to update config");
 
         // Verify old admin cannot update config
-        let result = client.try_set_fee_config(&params.admin, 500);
+        let result = client.try_set_fee_config(&params.admin, &500u32);
         assert_eq!(
             result,
             Err(Ok(QuickLendXError::NotAdmin)),
@@ -918,43 +933,27 @@ mod test_init {
 
     #[test]
     fn test_event_emission_comprehensive() {
+        // `env.events().all()` only holds the events of the most recent
+        // top-level invocation, so check each call right after it runs.
         let (env, client) = setup();
         let params = create_valid_params(&env);
 
-        // Initialize
         client.initialize(&params);
+        let events = env.events().all();
+        assert_eq!(count_topic(&env, &events, "protocol_initialized"), 1, "Must have one init event");
 
-        // Update configs
         client.set_protocol_config(&params.admin, &2_000_000i128, &180u64, &86400u64, &100u32);
-        client.set_fee_config(&params.admin, 300);
+        let events = env.events().all();
+        assert_eq!(count_topic(&env, &events, "proto_cfg"), 1, "Must have one config event");
+
+        client.set_fee_config(&params.admin, &300u32);
+        let events = env.events().all();
+        assert_eq!(count_topic(&env, &events, "fee_cfg"), 1, "Must have one fee event");
 
         let new_treasury = Address::generate(&env);
         client.set_treasury(&params.admin, &new_treasury);
-
         let events = env.events().all();
-
-        // Check for all expected events
-        let init_events: Vec<_> = events
-            .iter()
-            .filter(|e| e.0 == (soroban_sdk::symbol_short!("proto_in"),))
-            .collect();
-        let config_events: Vec<_> = events
-            .iter()
-            .filter(|e| e.0 == (soroban_sdk::symbol_short!("proto_cfg"),))
-            .collect();
-        let fee_events: Vec<_> = events
-            .iter()
-            .filter(|e| e.0 == (soroban_sdk::symbol_short!("fee_cfg"),))
-            .collect();
-        let treasury_events: Vec<_> = events
-            .iter()
-            .filter(|e| e.0 == (soroban_sdk::symbol_short!("trsr_upd"),))
-            .collect();
-
-        assert_eq!(init_events.len(), 1, "Must have one init event");
-        assert_eq!(config_events.len(), 1, "Must have one config event");
-        assert_eq!(fee_events.len(), 1, "Must have one fee event");
-        assert_eq!(treasury_events.len(), 1, "Must have one treasury event");
+        assert_eq!(count_topic(&env, &events, "trsr_upd"), 1, "Must have one treasury event");
     }
 
     // ============================================================================
@@ -983,9 +982,9 @@ mod test_init {
 
     #[test]
     fn test_get_version_stored_in_instance_storage() {
-        let (env, _client, _params) = setup_initialized();
+        let (env, client, _params) = setup_initialized();
         assert_eq!(
-            crate::init::ProtocolInitializer::get_version(&env),
+            env.as_contract(&client.address, || crate::init::ProtocolInitializer::get_version(&env)),
             crate::init::PROTOCOL_VERSION,
             "Stored version must match PROTOCOL_VERSION"
         );

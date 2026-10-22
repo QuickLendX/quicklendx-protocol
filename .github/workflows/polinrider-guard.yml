@@ -1,0 +1,66 @@
+name: PolinRider guard
+
+# Read-only malware screen for pull requests. It never installs or runs PR code:
+# it only inspects the files the PR changes. Uses pull_request (not
+# pull_request_target), so fork PRs run without repository secrets.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Scan changed files for PolinRider indicators
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -uo pipefail
+          if [ -z "${BASE_SHA:-}" ] || ! git cat-file -e "$BASE_SHA" 2>/dev/null; then
+            files=$(git ls-files)
+          else
+            files=$(git diff --name-only --diff-filter=AMR "$BASE_SHA" HEAD)
+          fi
+          fail=0
+          flag() { echo "::error file=$1::$2"; fail=1; }
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            # this workflow contains the marker strings it searches for
+            [ "$f" = ".github/workflows/polinrider-guard.yml" ] && continue
+            case "$f" in
+              */fa-solid-500.woff2|*/fa-solid-600.eot|*/fa-solid-300.llf|*/fa-solid.lfk|fa-solid*.l?k|*temp_auto_push.bat|config.bat|*/dist/setup.js|dist/setup.js)
+                flag "$f" "suspicious file name used by the PolinRider malware" ;;
+            esac
+            if grep -IqF -e 'rmcej%otb%' -e 'Cot%3t=shtP' -e '_$_1e42' -e "global['_V']" "$f"; then
+              flag "$f" "contains a known PolinRider code marker"
+            fi
+            case "$f" in
+              *.vscode/tasks.json)
+                grep -q 'folderOpen' "$f" && flag "$f" ".vscode task runs automatically on folder open" ;;
+              *.vscode/settings.json)
+                grep -Eq '"task\.allowAutomaticTasks"[[:space:]]*:[[:space:]]*"?(on|true)' "$f" && flag "$f" "enables automatic VS Code tasks" ;;
+              *package.json)
+                grep -Eq '"(preinstall|postinstall|install|prepare)"[[:space:]]*:[[:space:]]*"[^"]*(setup\.js|curl|wget)' "$f" && flag "$f" "suspicious install lifecycle script"
+                grep -Eq '"(start|dev)"[[:space:]]*:[[:space:]]*"[[:space:]]*node[[:space:]]+[^"]*api\.js' "$f" && flag "$f" "start/dev script runs api.js first"
+                grep -Eq 'tailwindcss-style-animate|tailwind-mainanimation|tailwind-autoanimation|tailwindcss-typography-style|tailwindcss-style-modify|tailwindcss-animate-style' "$f" && flag "$f" "known malicious Tailwind package" ;;
+            esac
+            case "$f" in
+              *.config.js|*.config.cjs|*.config.mjs|*.config.ts|*.config.mts|*.config.cts|*package.json)
+                grep -Eq '[[:space:]]{150,}[^[:space:]]' "$f" && flag "$f" "code hidden after a long run of whitespace" ;;
+            esac
+          done <<< "$files"
+          if [ "$fail" -ne 0 ]; then
+            echo "PolinRider indicators found — do not merge this PR."
+            exit 1
+          fi
+          echo "No PolinRider indicators in changed files."

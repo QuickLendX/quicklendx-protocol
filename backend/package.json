@@ -1,5 +1,5 @@
 {
-  "name": "quicklendx-backend",
+  "name": "@quicklendx/backend",
   "version": "0.1.0",
   "description": "",
   "private": true,
@@ -42,6 +42,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.19.0",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^2.1.9",

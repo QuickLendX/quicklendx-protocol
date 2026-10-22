@@ -236,55 +236,20 @@ proptest! {
     #![proptest_config(ProptestConfig::from_env())]
 
     #[test]
-    fn fuzz_ratings_at_or_below_max_accepts(count in 0u32..=MAX_RATINGS_PER_INVOICE) {
+    fn fuzz_investor_rating_is_single_and_authorized() {
         let (env, contract_id) = make_env();
         env.as_contract(&contract_id, || {
             let (mut inv, _) = make_invoice_unit(&env);
+            let investor = Address::generate(&env);
             inv.status = InvoiceStatus::Funded;
-            for i in 0..count {
-                let rater = Address::generate(&env);
-                let result = inv.add_rating(
-                    5,
-                    SStr::from_str(&env, "ok"),
-                    rater,
-                    i as u64 + 1,
-                );
-                prop_assert!(
-                    result.is_ok(),
-                    "rating {} of {} should succeed",
-                    i + 1,
-                    count
-                );
-            }
-            prop_assert_eq!(inv.ratings.len(), count);
-        });
-    }
-
-    #[test]
-    fn fuzz_ratings_above_max_rejects(extra in 1u32..=5u32) {
-        let (env, contract_id) = make_env();
-        env.as_contract(&contract_id, || {
-            let (mut inv, _) = make_invoice_unit(&env);
-            inv.status = InvoiceStatus::Funded;
-            for i in 0..MAX_RATINGS_PER_INVOICE {
-                let rater = Address::generate(&env);
-                inv.add_rating(5, SStr::from_str(&env, "ok"), rater, i as u64 + 1)
-                    .expect("pre-fill ratings must succeed");
-            }
-            // Any further add must fail, regardless of `extra` count
-            let overflow_rater = Address::generate(&env);
-            let result = inv.add_rating(
-                4,
-                SStr::from_str(&env, "overflow"),
-                overflow_rater,
-                9999,
-            );
-            prop_assert_eq!(
-                result,
-                Err(QuickLendXError::OperationNotAllowed),
-                "rating {} must return OperationNotAllowed",
-                MAX_RATINGS_PER_INVOICE + extra
-            );
+            inv.investor = Some(investor.clone());
+            let rater = Address::generate(&env);
+            let result = inv.add_rating(5, SStr::from_str(&env, "ok"), rater.clone(), 1);
+            prop_assert_eq!(result, Err(QuickLendXError::NotRater));
+            let investor_result = inv.add_rating(5, SStr::from_str(&env, "ok"), investor.clone(), 2);
+            prop_assert!(investor_result.is_ok(), "investor should be allowed to rate once");
+            let second_result = inv.add_rating(4, SStr::from_str(&env, "dup"), investor, 3);
+            prop_assert_eq!(second_result, Err(QuickLendXError::AlreadyRated));
         });
     }
 }
@@ -436,45 +401,25 @@ fn line_items_one_over_max_rejects_with_stable_error() {
 }
 
 #[test]
-fn ratings_exactly_at_max_accepts() {
+fn ratings_are_only_allowed_for_invoice_investor() {
     let (env, contract_id) = make_env();
     env.as_contract(&contract_id, || {
         let (mut inv, _) = make_invoice_unit(&env);
+        let investor = Address::generate(&env);
         inv.status = InvoiceStatus::Funded;
-        for i in 0..MAX_RATINGS_PER_INVOICE {
-            let rater = Address::generate(&env);
-            assert!(
-                inv.add_rating(5, SStr::from_str(&env, "ok"), rater, i as u64 + 1)
-                    .is_ok(),
-                "rating {} of {} should succeed",
-                i + 1,
-                MAX_RATINGS_PER_INVOICE
-            );
-        }
-        assert_eq!(inv.ratings.len(), MAX_RATINGS_PER_INVOICE);
-    });
-}
+        inv.investor = Some(investor.clone());
 
-#[test]
-fn ratings_one_over_max_rejects_with_stable_error() {
-    let (env, contract_id) = make_env();
-    env.as_contract(&contract_id, || {
-        let (mut inv, _) = make_invoice_unit(&env);
-        inv.status = InvoiceStatus::Funded;
-        for i in 0..MAX_RATINGS_PER_INVOICE {
-            let rater = Address::generate(&env);
-            inv.add_rating(5, SStr::from_str(&env, "ok"), rater, i as u64 + 1)
-                .unwrap();
-        }
-        let err = inv
-            .add_rating(
-                4,
-                SStr::from_str(&env, "overflow"),
-                Address::generate(&env),
-                9999,
-            )
-            .unwrap_err();
-        assert_eq!(err, QuickLendXError::OperationNotAllowed);
+        let third_party = Address::generate(&env);
+        assert_eq!(
+            inv.add_rating(5, SStr::from_str(&env, "ok"), third_party, 1),
+            Err(QuickLendXError::NotRater)
+        );
+
+        assert!(inv.add_rating(5, SStr::from_str(&env, "ok"), investor.clone(), 2).is_ok());
+        assert_eq!(
+            inv.add_rating(4, SStr::from_str(&env, "duplicate"), investor, 3),
+            Err(QuickLendXError::AlreadyRated)
+        );
     });
 }
 

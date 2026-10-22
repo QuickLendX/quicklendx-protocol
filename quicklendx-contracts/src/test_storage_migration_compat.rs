@@ -21,15 +21,25 @@ use soroban_sdk::testutils::Events as EventsTrait;
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
 use crate::storage::{StorageMigration, STORAGE_SCHEMA_VERSION};
+use crate::QuickLendXContract;
 
 // --- Helpers ---
 
-fn setup() -> (Env, Address) {
+fn setup() -> (Env, Address, Address) {
     let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
     env.mock_all_auths();
     env.ledger().set_timestamp(1_000);
     let admin = Address::generate(&env);
-    (env, admin)
+    (env, contract_id, admin)
+}
+
+fn with_contract<F, R>(env: &Env, f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    let contract_id = env.register_contract(None, crate::QuickLendXContract);
+    env.as_contract(&contract_id, f)
 }
 
 fn event_emitted(env: &Env, topic: &str) -> bool {
@@ -46,151 +56,178 @@ fn event_emitted(env: &Env, topic: &str) -> bool {
 
 #[test]
 fn test_fresh_contract_schema_version_is_zero() {
-    let (env, _admin) = setup();
-    assert_eq!(StorageMigration::get_schema_version(&env), 0);
-    assert!(!StorageMigration::is_migration_in_progress(&env));
-    assert_eq!(StorageMigration::get_migration_offset(&env), 0);
-    assert_eq!(StorageMigration::get_migration_records_migrated(&env), 0);
+    let (env, contract_id, _admin) = setup();
+    env.as_contract(&contract_id, || {
+        assert_eq!(StorageMigration::get_schema_version(&env), 0);
+        assert!(!StorageMigration::is_migration_in_progress(&env));
+        assert_eq!(StorageMigration::get_migration_offset(&env), 0);
+        assert_eq!(StorageMigration::get_migration_records_migrated(&env), 0);
+    });
 }
 
 #[test]
 fn test_set_schema_version_persists_and_emits() {
-    let (env, admin) = setup();
-    StorageMigration::set_schema_version(&env, 1, &admin);
-    assert_eq!(StorageMigration::get_schema_version(&env), 1);
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        StorageMigration::set_schema_version(&env, 1, &admin);
+        assert_eq!(StorageMigration::get_schema_version(&env), 1);
+    });
     assert!(event_emitted(&env, "schema_version_set"));
 }
 
 #[test]
 fn test_begin_migration_happy_path() {
-    let (env, admin) = setup();
-    StorageMigration::begin_migration(&env, &admin, 0, 1).expect("begin_migration should succeed");
-    assert!(StorageMigration::is_migration_in_progress(&env));
-    assert_eq!(
-        StorageMigration::get_pending_migration_version(&env),
-        Some(1)
-    );
-    assert_eq!(StorageMigration::get_migration_offset(&env), 0);
-    assert_eq!(StorageMigration::get_migration_records_migrated(&env), 0);
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        StorageMigration::begin_migration(&env, &admin, 0, 1)
+            .expect("begin_migration should succeed");
+        assert!(StorageMigration::is_migration_in_progress(&env));
+        assert_eq!(
+            StorageMigration::get_pending_migration_version(&env),
+            Some(1)
+        );
+        assert_eq!(StorageMigration::get_migration_offset(&env), 0);
+        assert_eq!(StorageMigration::get_migration_records_migrated(&env), 0);
+    });
     assert!(event_emitted(&env, "migration_started"));
 }
 
 #[test]
 fn test_migration_full_lifecycle() {
-    let (env, admin) = setup();
-    StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
-    StorageMigration::advance_migration_page(&env, 42, 42);
-    assert_eq!(StorageMigration::get_migration_offset(&env), 42);
-    assert_eq!(StorageMigration::get_migration_records_migrated(&env), 42);
-    StorageMigration::commit_migration(&env, &admin).unwrap();
-    assert_eq!(StorageMigration::get_schema_version(&env), 1);
-    assert!(!StorageMigration::is_migration_in_progress(&env));
-    assert!(StorageMigration::get_pending_migration_version(&env).is_none());
-    assert_eq!(StorageMigration::get_migration_offset(&env), 0);
-    assert_eq!(StorageMigration::get_migration_records_migrated(&env), 0);
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
+        StorageMigration::advance_migration_page(&env, 42, 42);
+        assert_eq!(StorageMigration::get_migration_offset(&env), 42);
+        assert_eq!(StorageMigration::get_migration_records_migrated(&env), 42);
+        StorageMigration::commit_migration(&env, &admin).unwrap();
+        assert_eq!(StorageMigration::get_schema_version(&env), 1);
+        assert!(!StorageMigration::is_migration_in_progress(&env));
+        assert!(StorageMigration::get_pending_migration_version(&env).is_none());
+        assert_eq!(StorageMigration::get_migration_offset(&env), 0);
+        assert_eq!(StorageMigration::get_migration_records_migrated(&env), 0);
+    });
     assert!(event_emitted(&env, "migration_completed"));
 }
 
 #[test]
 fn test_migration_rollback_clears_state() {
-    let (env, admin) = setup();
-    StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
-    StorageMigration::advance_migration_page(&env, 10, 10);
-    StorageMigration::rollback_migration(&env, &admin).unwrap();
-    assert_eq!(StorageMigration::get_schema_version(&env), 0);
-    assert!(!StorageMigration::is_migration_in_progress(&env));
-    assert!(StorageMigration::get_pending_migration_version(&env).is_none());
-    assert_eq!(StorageMigration::get_migration_offset(&env), 0);
-    assert_eq!(StorageMigration::get_migration_records_migrated(&env), 0);
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
+        StorageMigration::advance_migration_page(&env, 10, 10);
+        StorageMigration::rollback_migration(&env, &admin).unwrap();
+        assert_eq!(StorageMigration::get_schema_version(&env), 0);
+        assert!(!StorageMigration::is_migration_in_progress(&env));
+        assert!(StorageMigration::get_pending_migration_version(&env).is_none());
+        assert_eq!(StorageMigration::get_migration_offset(&env), 0);
+        assert_eq!(StorageMigration::get_migration_records_migrated(&env), 0);
+    });
     assert!(event_emitted(&env, "migration_rolled_back"));
 }
 
 #[test]
 fn test_begin_migration_rejects_concurrent() {
-    let (env, admin) = setup();
-    StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
-    let err = StorageMigration::begin_migration(&env, &admin, 0, 2).unwrap_err();
-    assert_eq!(err, crate::errors::QuickLendXError::OperationNotAllowed);
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
+        let err = StorageMigration::begin_migration(&env, &admin, 0, 2).unwrap_err();
+        assert_eq!(err, crate::errors::QuickLendXError::OperationNotAllowed);
+    });
 }
 
 #[test]
 fn test_begin_migration_rejects_wrong_schema_from() {
-    let (env, admin) = setup();
-    StorageMigration::set_schema_version(&env, 1, &admin);
-    let err = StorageMigration::begin_migration(&env, &admin, 0, 2).unwrap_err();
-    assert_eq!(err, crate::errors::QuickLendXError::OperationNotAllowed);
-    StorageMigration::begin_migration(&env, &admin, 1, 2).unwrap();
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        StorageMigration::set_schema_version(&env, 1, &admin);
+        let err = StorageMigration::begin_migration(&env, &admin, 0, 2).unwrap_err();
+        assert_eq!(err, crate::errors::QuickLendXError::OperationNotAllowed);
+        StorageMigration::begin_migration(&env, &admin, 1, 2).unwrap();
+    });
 }
 
 #[test]
 fn test_begin_migration_rejects_downgrade() {
-    let (env, admin) = setup();
-    let err_same = StorageMigration::begin_migration(&env, &admin, 0, 0).unwrap_err();
-    assert_eq!(
-        err_same,
-        crate::errors::QuickLendXError::OperationNotAllowed
-    );
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        let err_same = StorageMigration::begin_migration(&env, &admin, 0, 0).unwrap_err();
+        assert_eq!(
+            err_same,
+            crate::errors::QuickLendXError::OperationNotAllowed
+        );
+    });
 }
 
 #[test]
 fn test_commit_without_begin_fails() {
-    let (env, admin) = setup();
-    let err = StorageMigration::commit_migration(&env, &admin).unwrap_err();
-    assert_eq!(err, crate::errors::QuickLendXError::OperationNotAllowed);
-    assert_eq!(StorageMigration::get_schema_version(&env), 0);
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        let err = StorageMigration::commit_migration(&env, &admin).unwrap_err();
+        assert_eq!(err, crate::errors::QuickLendXError::OperationNotAllowed);
+        assert_eq!(StorageMigration::get_schema_version(&env), 0);
+    });
     assert!(!event_emitted(&env, "migration_completed"));
 }
 
 #[test]
 fn test_rollback_without_begin_fails() {
-    let (env, admin) = setup();
-    let err = StorageMigration::rollback_migration(&env, &admin).unwrap_err();
-    assert_eq!(err, crate::errors::QuickLendXError::OperationNotAllowed);
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        let err = StorageMigration::rollback_migration(&env, &admin).unwrap_err();
+        assert_eq!(err, crate::errors::QuickLendXError::OperationNotAllowed);
+    });
     assert!(!event_emitted(&env, "migration_rolled_back"));
 }
 
 #[test]
 fn test_migration_partial_progress_resumable() {
-    let (env, admin) = setup();
-    StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
-    StorageMigration::advance_migration_page(&env, 20, 20);
-    assert_eq!(StorageMigration::get_migration_offset(&env), 20);
-    assert_eq!(StorageMigration::get_migration_records_migrated(&env), 20);
-    StorageMigration::advance_migration_page(&env, 35, 15);
-    assert_eq!(StorageMigration::get_migration_offset(&env), 35);
-    assert_eq!(StorageMigration::get_migration_records_migrated(&env), 35);
-    StorageMigration::commit_migration(&env, &admin).unwrap();
-    assert_eq!(StorageMigration::get_schema_version(&env), 1);
-    assert!(!StorageMigration::is_migration_in_progress(&env));
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
+        StorageMigration::advance_migration_page(&env, 20, 20);
+        assert_eq!(StorageMigration::get_migration_offset(&env), 20);
+        assert_eq!(StorageMigration::get_migration_records_migrated(&env), 20);
+        StorageMigration::advance_migration_page(&env, 35, 15);
+        assert_eq!(StorageMigration::get_migration_offset(&env), 35);
+        assert_eq!(StorageMigration::get_migration_records_migrated(&env), 35);
+        StorageMigration::commit_migration(&env, &admin).unwrap();
+        assert_eq!(StorageMigration::get_schema_version(&env), 1);
+        assert!(!StorageMigration::is_migration_in_progress(&env));
+    });
 }
 
 #[test]
 fn test_migration_failure_event_and_resume() {
-    let (env, admin) = setup();
-    StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
-    StorageMigration::advance_migration_page(&env, 5, 5);
-    StorageMigration::record_migration_failure(&env, 0, 5, "timeout");
-    assert!(StorageMigration::is_migration_in_progress(&env));
-    assert_eq!(StorageMigration::get_migration_offset(&env), 5);
-    assert_eq!(StorageMigration::get_migration_records_migrated(&env), 5);
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
+        StorageMigration::advance_migration_page(&env, 5, 5);
+        StorageMigration::record_migration_failure(&env, 0, 5, "timeout");
+        assert!(StorageMigration::is_migration_in_progress(&env));
+        assert_eq!(StorageMigration::get_migration_offset(&env), 5);
+        assert_eq!(StorageMigration::get_migration_records_migrated(&env), 5);
+        StorageMigration::advance_migration_page(&env, 15, 10);
+        StorageMigration::commit_migration(&env, &admin).unwrap();
+        assert_eq!(StorageMigration::get_schema_version(&env), 1);
+        assert!(!StorageMigration::is_migration_in_progress(&env));
+    });
     assert!(event_emitted(&env, "migration_failed"));
-    StorageMigration::advance_migration_page(&env, 15, 10);
-    StorageMigration::commit_migration(&env, &admin).unwrap();
-    assert_eq!(StorageMigration::get_schema_version(&env), 1);
-    assert!(!StorageMigration::is_migration_in_progress(&env));
 }
 
 #[test]
 fn test_migration_multi_page_advance() {
-    let (env, admin) = setup();
-    StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
-    for i in 1u32..=5 {
-        StorageMigration::advance_migration_page(&env, i * 10, 10);
-    }
-    assert_eq!(StorageMigration::get_migration_records_migrated(&env), 50);
-    assert_eq!(StorageMigration::get_migration_offset(&env), 50);
-    StorageMigration::commit_migration(&env, &admin).unwrap();
-    assert_eq!(StorageMigration::get_schema_version(&env), 1);
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
+        for i in 1u32..=5 {
+            StorageMigration::advance_migration_page(&env, i * 10, 10);
+        }
+        assert_eq!(StorageMigration::get_migration_records_migrated(&env), 50);
+        assert_eq!(StorageMigration::get_migration_offset(&env), 50);
+        StorageMigration::commit_migration(&env, &admin).unwrap();
+        assert_eq!(StorageMigration::get_schema_version(&env), 1);
+    });
 }
 
 #[test]
@@ -201,7 +238,7 @@ fn test_legacy_data_survives_migration() {
     };
     use soroban_sdk::{BytesN, String, Vec};
 
-    let (env, admin) = setup();
+    let (env, contract_id, admin) = setup();
 
     let invoice_id = BytesN::from_array(&env, &[0xAAu8; 32]);
     let business = Address::generate(&env);
@@ -245,20 +282,23 @@ fn test_legacy_data_survives_migration() {
         late_payment_penalty_bps: None,
         early_payment_discount_bps: None,
     };
-    InvoiceStorage::store_invoice(&env, &legacy_invoice);
-    assert_eq!(StorageMigration::get_schema_version(&env), 0);
 
-    StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
-    StorageMigration::advance_migration_page(&env, 1, 1);
-    StorageMigration::commit_migration(&env, &admin).unwrap();
+    env.as_contract(&contract_id, || {
+        InvoiceStorage::store_invoice(&env, &legacy_invoice);
+        assert_eq!(StorageMigration::get_schema_version(&env), 0);
 
-    let retrieved = InvoiceStorage::get_invoice(&env, &invoice_id)
-        .expect("legacy invoice must still exist after migration");
-    assert_eq!(retrieved.amount, 5_000);
-    assert_eq!(retrieved.status, InvoiceStatus::Pending);
-    assert_eq!(retrieved.business, business);
-    assert_eq!(StorageMigration::get_schema_version(&env), 1);
-    assert!(!StorageMigration::is_migration_in_progress(&env));
+        StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
+        StorageMigration::advance_migration_page(&env, 1, 1);
+        StorageMigration::commit_migration(&env, &admin).unwrap();
+
+        let retrieved = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .expect("legacy invoice must still exist after migration");
+        assert_eq!(retrieved.amount, 5_000);
+        assert_eq!(retrieved.status, InvoiceStatus::Pending);
+        assert_eq!(retrieved.business, business);
+        assert_eq!(StorageMigration::get_schema_version(&env), 1);
+        assert!(!StorageMigration::is_migration_in_progress(&env));
+    });
 }
 
 #[test]
@@ -266,7 +306,7 @@ fn test_legacy_bid_survives_migration() {
     use crate::bid::{Bid, BidStatus, BidStorage};
     use soroban_sdk::{Address, BytesN};
 
-    let (env, admin) = setup();
+    let (env, contract_id, admin) = setup();
 
     let bid_id = BytesN::from_array(&env, &[0xBBu8; 32]);
     let invoice_id = BytesN::from_array(&env, &[0xAAu8; 32]);
@@ -283,20 +323,22 @@ fn test_legacy_bid_survives_migration() {
         expiration_timestamp: env.ledger().timestamp() + 86_400,
     };
 
-    BidStorage::store_bid(&env, &legacy_bid);
-    assert_eq!(StorageMigration::get_schema_version(&env), 0);
+    env.as_contract(&contract_id, || {
+        BidStorage::store_bid(&env, &legacy_bid);
+        assert_eq!(StorageMigration::get_schema_version(&env), 0);
 
-    StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
-    StorageMigration::advance_migration_page(&env, 1, 1);
-    StorageMigration::commit_migration(&env, &admin).unwrap();
+        StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
+        StorageMigration::advance_migration_page(&env, 1, 1);
+        StorageMigration::commit_migration(&env, &admin).unwrap();
 
-    let retrieved =
-        BidStorage::get_bid(&env, &bid_id).expect("legacy bid must still exist after migration");
-    assert_eq!(retrieved.bid_amount, 1_000);
-    assert_eq!(retrieved.status, BidStatus::Placed);
-    assert_eq!(retrieved.investor, investor);
-    assert_eq!(StorageMigration::get_schema_version(&env), 1);
-    assert!(!StorageMigration::is_migration_in_progress(&env));
+        let retrieved = BidStorage::get_bid(&env, &bid_id)
+            .expect("legacy bid must still exist after migration");
+        assert_eq!(retrieved.bid_amount, 1_000);
+        assert_eq!(retrieved.status, BidStatus::Placed);
+        assert_eq!(retrieved.investor, investor);
+        assert_eq!(StorageMigration::get_schema_version(&env), 1);
+        assert!(!StorageMigration::is_migration_in_progress(&env));
+    });
 }
 
 #[test]
@@ -311,8 +353,10 @@ fn test_storage_migration_key_snapshot() {
 
 #[test]
 fn test_migration_not_blocked_by_upgrade_state() {
-    let (env, admin) = setup();
-    StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
-    StorageMigration::commit_migration(&env, &admin).unwrap();
-    assert_eq!(StorageMigration::get_schema_version(&env), 1);
+    let (env, contract_id, admin) = setup();
+    env.as_contract(&contract_id, || {
+        StorageMigration::begin_migration(&env, &admin, 0, 1).unwrap();
+        StorageMigration::commit_migration(&env, &admin).unwrap();
+        assert_eq!(StorageMigration::get_schema_version(&env), 1);
+    });
 }

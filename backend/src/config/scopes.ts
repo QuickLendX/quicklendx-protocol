@@ -201,6 +201,12 @@ export function isValidScope(scope: string): boolean {
  * - Non-array input is a programming error and throws a TypeError naming
  *   the received type (never a misleading "valid" result).
  */
+export interface ScopeValidationResult { readonly valid: boolean; readonly invalid: readonly string[]; }
+
+function describeValueType(value: unknown): string {
+  return value === null ? 'null' : typeof value;
+}
+
 export function validateScopes(scopes: string[]): ScopeValidationResult {
   if (!Array.isArray(scopes)) {
     throw new TypeError(
