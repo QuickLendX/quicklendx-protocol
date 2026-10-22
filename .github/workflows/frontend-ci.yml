@@ -55,11 +55,10 @@ jobs:
         cd quicklendx-frontend
         npm audit --audit-level moderate
 
-    - name: Run tests (placeholder for future test framework)
+    - name: Run tests
       run: |
         cd quicklendx-frontend
-        echo "Tests will be implemented in future iterations"
-        # npm test
+        npm test -- --ci
 
   build:
     name: Build and Optimize

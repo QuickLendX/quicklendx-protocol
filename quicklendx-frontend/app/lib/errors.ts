@@ -77,13 +77,14 @@ export class NetworkError extends AppError {
   constructor(
     message: string,
     context?: Partial<ErrorContext>,
-    retryCount: number = 0
+    retryCount: number = 0,
+    serverCode?: string
   ) {
     super(
       message,
       ErrorCategory.NETWORK,
       ErrorSeverity.HIGH,
-      "NETWORK_ERROR",
+      serverCode ?? "NETWORK_ERROR",
       context,
       true,
       retryCount
@@ -93,12 +94,16 @@ export class NetworkError extends AppError {
 }
 
 export class ValidationError extends AppError {
-  constructor(message: string, context?: Partial<ErrorContext>) {
+  constructor(
+    message: string,
+    context?: Partial<ErrorContext>,
+    serverCode?: string
+  ) {
     super(
       message,
       ErrorCategory.VALIDATION,
       ErrorSeverity.MEDIUM,
-      "VALIDATION_ERROR",
+      serverCode ?? "VALIDATION_ERROR",
       context,
       false
     );
@@ -107,12 +112,16 @@ export class ValidationError extends AppError {
 }
 
 export class AuthenticationError extends AppError {
-  constructor(message: string, context?: Partial<ErrorContext>) {
+  constructor(
+    message: string,
+    context?: Partial<ErrorContext>,
+    serverCode?: string
+  ) {
     super(
       message,
       ErrorCategory.AUTHENTICATION,
       ErrorSeverity.HIGH,
-      "AUTH_ERROR",
+      serverCode ?? "AUTH_ERROR",
       context,
       true
     );
@@ -121,12 +130,16 @@ export class AuthenticationError extends AppError {
 }
 
 export class AuthorizationError extends AppError {
-  constructor(message: string, context?: Partial<ErrorContext>) {
+  constructor(
+    message: string,
+    context?: Partial<ErrorContext>,
+    serverCode?: string
+  ) {
     super(
       message,
       ErrorCategory.AUTHORIZATION,
       ErrorSeverity.HIGH,
-      "FORBIDDEN",
+      serverCode ?? "FORBIDDEN",
       context,
       false
     );
@@ -135,12 +148,16 @@ export class AuthorizationError extends AppError {
 }
 
 export class BusinessLogicError extends AppError {
-  constructor(message: string, context?: Partial<ErrorContext>) {
+  constructor(
+    message: string,
+    context?: Partial<ErrorContext>,
+    serverCode?: string
+  ) {
     super(
       message,
       ErrorCategory.BUSINESS_LOGIC,
       ErrorSeverity.MEDIUM,
-      "BUSINESS_ERROR",
+      serverCode ?? "BUSINESS_ERROR",
       context,
       false
     );
@@ -149,12 +166,16 @@ export class BusinessLogicError extends AppError {
 }
 
 export class SystemError extends AppError {
-  constructor(message: string, context?: Partial<ErrorContext>) {
+  constructor(
+    message: string,
+    context?: Partial<ErrorContext>,
+    serverCode?: string
+  ) {
     super(
       message,
       ErrorCategory.SYSTEM,
       ErrorSeverity.CRITICAL,
-      "SYSTEM_ERROR",
+      serverCode ?? "SYSTEM_ERROR",
       context,
       true
     );

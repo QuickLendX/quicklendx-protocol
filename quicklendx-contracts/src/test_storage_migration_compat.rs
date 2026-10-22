@@ -34,6 +34,14 @@ fn setup() -> (Env, Address, Address) {
     (env, contract_id, admin)
 }
 
+fn with_contract<F, R>(env: &Env, f: F) -> R
+where
+    F: FnOnce() -> R,
+{
+    let contract_id = env.register_contract(None, crate::QuickLendXContract);
+    env.as_contract(&contract_id, f)
+}
+
 fn event_emitted(env: &Env, topic: &str) -> bool {
     use soroban_sdk::xdr;
     use soroban_sdk::{Symbol, TryFromVal};

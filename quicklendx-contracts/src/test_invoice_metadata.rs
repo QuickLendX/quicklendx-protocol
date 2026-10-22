@@ -472,7 +472,7 @@ fn test_invalid_metadata_does_not_modify_state() {
         line_items: Vec::new(&env),
         notes: String::from_str(&env, ""),
     };
-    let result = client.try_update_invoice_metadata(&invoice.id, &invalid);
+    let result = client.try_update_invoice_metadata(&business, &invoice.id, &invalid);
     assert!(result.is_err());
 
     // Original metadata must be intact
@@ -640,7 +640,9 @@ fn test_add_rating_rejects_when_non_investor_attempts_rating() {
 }
 
 // ---------------------------------------------------------------------------
-// 17. Search index resolves after clearing metadata
+// 17. Customer / tax-id indexes resolve after clearing metadata
+// (`search_invoices` is not a contract entrypoint yet, so this goes through
+// the customer and tax-id index queries instead.)
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -652,14 +654,26 @@ fn test_search_index_resolves_after_clearing_metadata() {
     let client = QuickLendXContractClient::new(&env, &contract_id);
 
     let admin = Address::generate(&env);
-    client.set_admin(&admin);
+    client.initialize(&crate::init::InitializationParams {
+        admin: admin.clone(),
+        treasury: Address::generate(&env),
+        fee_bps: 200,
+        min_invoice_amount: 100,
+        max_due_date_days: 365,
+        grace_period_seconds: 604_800,
+        initial_currencies: Vec::new(&env),
+        corridors: Vec::new(&env),
+        backfill_max_batch_size: 100,
+    });
 
     let business = Address::generate(&env);
-    client.submit_kyc_application(&business, &String::from_str(&env, "KYC"));
-    client.verify_business(&admin, &business);
+    env.as_contract(&contract_id, || {
+        crate::verification::submit_kyc_application(&env, &business, String::from_str(&env, "KYC")).unwrap();
+        crate::verification::verify_business(&env, &admin, &business).unwrap();
+    });
 
     let currency = Address::generate(&env);
-    let invoice_id = client.upload_invoice(
+    let invoice_id = client.store_invoice(
         &business,
         &1000,
         &currency,
@@ -668,6 +682,9 @@ fn test_search_index_resolves_after_clearing_metadata() {
         &InvoiceCategory::Services,
         &Vec::new(&env),
         &None,
+        &None,
+        &None,
+        &BytesN::from_array(&env, &[1u8; 32]),
     );
 
     let mut items = Vec::new(&env);
@@ -686,25 +703,27 @@ fn test_search_index_resolves_after_clearing_metadata() {
         notes: String::from_str(&env, "Notes"),
     };
 
-    client.update_invoice_metadata(&invoice_id, &metadata);
+    client.update_invoice_metadata(&business, &invoice_id, &metadata);
 
-    let results = client.search_invoices(&String::from_str(&env, "SearchTarget"));
-    assert_eq!(results.len(), 1);
+    let customer = String::from_str(&env, "SearchTarget");
+    let tax_id = String::from_str(&env, "TAX-123");
+    assert_eq!(client.get_invoices_by_customer(&customer).len(), 1);
+    assert_eq!(client.get_invoices_by_tax_id(&tax_id).len(), 1);
 
-    client.clear_invoice_metadata(&invoice_id);
+    client.clear_invoice_metadata(&business, &invoice_id);
 
-    let results_after = client.search_invoices(&String::from_str(&env, "SearchTarget"));
     assert_eq!(
-        results_after.len(),
+        client.get_invoices_by_customer(&customer).len(),
         0,
         "Derived indexing data must not match post-clear"
     );
+    assert_eq!(client.get_invoices_by_tax_id(&tax_id).len(), 0);
 
-    let results_desc = client.search_invoices(&String::from_str(&env, "UniqueDescription"));
+    let stored = client.get_invoice(&invoice_id);
     assert_eq!(
-        results_desc.len(),
-        1,
+        stored.description,
+        String::from_str(&env, "UniqueDescription123"),
         "Base invoice properties must still resolve post-clear"
     );
-    assert_eq!(results_desc.get(0).unwrap().invoice_id, invoice_id);
+    assert_eq!(client.get_business_invoices(&business), soroban_sdk::vec![&env, invoice_id]);
 }

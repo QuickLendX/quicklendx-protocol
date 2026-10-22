@@ -8,6 +8,10 @@ autotests = false
 name = "wasm_build_size_budget"
 path = "tests/wasm_build_size_budget.rs"
 
+[[test]]
+name = "test_fees_boundary"
+path = "tests/test_fees_boundary.rs"
+
 [lib]
 # rlib for tests/integration; cdylib for WASM contract builds.
 crate-type = ["rlib", "cdylib"]

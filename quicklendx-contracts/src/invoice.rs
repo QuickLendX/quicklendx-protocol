@@ -48,6 +48,31 @@ impl Invoice {
         description: String,
         category: InvoiceCategory,
         tags: Vec<String>,
+    ) -> Result<Self, QuickLendXError> {
+        Self::new_with_fee_settings(
+            env,
+            business,
+            amount,
+            currency,
+            due_date,
+            description,
+            category,
+            tags,
+            None,
+            None,
+            None,
+        )
+    }
+
+    pub fn new_with_fee_settings(
+        env: &Env,
+        business: Address,
+        amount: i128,
+        currency: Address,
+        due_date: u64,
+        description: String,
+        category: InvoiceCategory,
+        tags: Vec<String>,
         origination_fee_bps: Option<u32>,
         late_payment_penalty_bps: Option<u32>,
         early_payment_discount_bps: Option<u32>,
@@ -59,6 +84,12 @@ impl Invoice {
 
         if due_date <= env.ledger().timestamp() {
             return Err(QuickLendXError::InvoiceDueDateInvalid);
+        }
+
+        if let Some(fee_bps) = origination_fee_bps {
+            if fee_bps > crate::init::MAX_FEE_BPS {
+                return Err(QuickLendXError::InvalidFeeBasisPoints);
+            }
         }
 
         if let Some(penalty_bps) = late_payment_penalty_bps {

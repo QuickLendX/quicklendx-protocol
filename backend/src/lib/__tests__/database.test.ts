@@ -1,6 +1,8 @@
 // Tests for deterministic getPreparedStatement implementation
 import { getPreparedStatement, getDatabase, clearStatementCache, DatabasePermissionError, DatabaseBusyError, DatabasePrepareError } from '../database';
 
+afterEach(() => jest.restoreAllMocks());
+
 // Helper to reset environment and cache between tests
 beforeEach(() => {
   clearStatementCache();
@@ -37,9 +39,7 @@ describe('failure boundaries', () => {
         run: () => ({}) as any,
       }));
 
-    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
-      prepare: mockPrepare,
-    } as any));
+    jest.spyOn(getDatabase(), 'prepare').mockImplementation(mockPrepare);
 
     const stmt = getPreparedStatement('SELECT 1');
     expect(stmt).toBeDefined();
@@ -52,28 +52,19 @@ describe('failure boundaries', () => {
       err.code = 'SQLITE_BUSY';
       throw err;
     });
-    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
-      prepare: mockPrepare,
-    } as any));
+    jest.spyOn(getDatabase(), 'prepare').mockImplementation(mockPrepare);
 
     expect(() => getPreparedStatement('SELECT 1')).toThrow(DatabaseBusyError);
     expect(mockPrepare).toHaveBeenCalledTimes(3);
   });
 
   test('throws DatabasePermissionError on read‑only error', () => {
-    const stmtMock = {
-      reader: true,
-      get: () => {
-        const err: any = new Error('readonly');
-        err.code = 'SQLITE_READONLY';
-        throw err;
-      },
-      run: () => ({}),
-    };
-    const mockPrepare = jest.fn(() => stmtMock);
-    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
-      prepare: mockPrepare,
-    } as any));
+    const mockPrepare = jest.fn(() => {
+      const err: any = new Error('readonly');
+      err.code = 'SQLITE_READONLY';
+      throw err;
+    });
+    jest.spyOn(getDatabase(), 'prepare').mockImplementation(mockPrepare);
 
     expect(() => getPreparedStatement('SELECT 1')).toThrow(DatabasePermissionError);
     // Statement should not be cached after permission error
@@ -87,10 +78,18 @@ describe('failure boundaries', () => {
       err.code = 'SQLITE_ERROR';
       throw err;
     });
-    jest.spyOn(require('../database'), 'getDatabase').mockImplementation(() => ({
-      prepare: mockPrepare,
-    } as any));
+    jest.spyOn(getDatabase(), 'prepare').mockImplementation(mockPrepare);
 
     expect(() => getPreparedStatement('BAD SQL')).toThrow(DatabasePrepareError);
   });
+});
+
+// Preparing or retrieving a cached write must not execute it without parameters.
+test('cached preparation never executes writes', () => {
+  const db = getDatabase();
+  db.exec('CREATE TABLE IF NOT EXISTS prepare_safety (value TEXT)');
+  const sql = 'INSERT INTO prepare_safety (value) VALUES (?)';
+  getPreparedStatement(sql).run('once');
+  getPreparedStatement(sql);
+  expect(db.prepare('SELECT value FROM prepare_safety').all()).toEqual([{ value: 'once' }]);
 });
