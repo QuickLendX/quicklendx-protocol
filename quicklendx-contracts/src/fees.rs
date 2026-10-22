@@ -566,6 +566,7 @@ impl FeeManager {
         is_active: bool,
     ) -> Result<FeeStructure, QuickLendXError> {
         admin.require_auth();
+        crate::AdminStorage::require_admin(env, admin)?;
         if base_fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
