@@ -6,7 +6,7 @@ const validSbom = () => ({
   metadata: {
     component: {
       type: "application",
-      name: "quicklendx-backend",
+      name: "@quicklendx/backend",
     },
   },
   components: [{ type: "library", name: "express" }],

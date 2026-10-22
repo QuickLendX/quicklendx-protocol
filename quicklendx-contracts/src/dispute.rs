@@ -2,8 +2,10 @@ use crate::admin::AdminStorage;
 use crate::arbiter::ArbiterStorage;
 use crate::dispute_timeline::{clear_under_review_timestamp, set_under_review_timestamp};
 use crate::errors::QuickLendXError;
+use crate::investment::InvestmentStorage;
+use crate::resolution_policy::{EscrowEffect, InvoiceEffect, InvestmentEffect, ResolutionPolicy};
 use crate::storage::{DataKey, InvoiceStorage};
-use crate::types::{Dispute, DisputeResolution, DisputeStatus};
+use crate::types::{Dispute, DisputeResolution, DisputeStatus, InvoiceStatus, InvestmentStatus};
 use crate::verification::{
     validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
     validate_dispute_resolution,
@@ -382,11 +384,19 @@ pub fn resolve_dispute(
     invoice.dispute.resolution = resolution.clone();
     invoice.dispute.resolved_by = admin.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
-    invoice.dispute.resolution_outcome = DisputeResolution::None;
+    invoice.dispute.resolution_outcome = DisputeResolution::Split;
     InvoiceStorage::update_invoice(env, &invoice);
 
     // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
     let _ = crate::notifications::NotificationSystem::notify_dispute_resolved(env, &invoice);
+
+    // Enact the outcome. A free-text ruling is deliberately mapped to
+    // `Split` (funds held, settlement/default blocked pending admin
+    // follow-up) instead of a release: the platform must never infer
+    // "release to business" from unstructured text — an arbiter who wants
+    // a release must call `resolve_dispute_structured` with an explicit
+    // outcome (issue #2963).
+    apply_resolution_policy(env, invoice_id, DisputeResolution::Split)?;
 
     Ok(())
 }
@@ -451,6 +461,107 @@ pub fn resolve_dispute_structured(
 
     // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
     let _ = crate::notifications::NotificationSystem::notify_dispute_resolved(env, &invoice);
+
+    // Enact the recorded outcome atomically: escrow, invoice and
+    // investment transitions follow `ResolutionPolicy::for_outcome`
+    // (issue #2963). Any error below aborts the whole invocation, so the
+    // outcome can never be stored without its consequences applied.
+    apply_resolution_policy(env, invoice_id, outcome)?;
+
+    Ok(())
+}
+
+/// Enact [`ResolutionPolicy::for_outcome(outcome)`] on escrow, invoice,
+/// and investment state.
+///
+/// Called by [`resolve_dispute_structured`] (and the unstructured
+/// [`resolve_dispute`], which maps to `Split`) once the resolution fields
+/// have been written. The policy table in [`crate::resolution_policy`]
+/// drives every transition below, so the spec and the enforcement cannot
+/// drift apart.
+///
+/// # Enforced effects (issue #2963)
+///
+/// | Outcome | Invoice | Escrow | Settlement | Investment |
+/// |---|---|---|---|---|
+/// | `FavorBusiness`, `Dismissed` | stays `Funded` | stays `Held` (released at settlement) | unblocked | stays `Active` |
+/// | `FavorInvestor` | → `Refunded` | refunded to investor | permanently blocked | → `Refunded` |
+/// | `Split`, `None` | stays `Funded` | stays `Held` | blocked until admin follow-up | stays `Active` |
+///
+/// Settlement/default blocking is enforced lazily by
+/// [`crate::settlement::require_no_blocking_resolution`], which the
+/// settlement and default paths consult; `Split`/`None` keep the escrow
+/// `Held` but forbid any later fund movement until a follow-up admin
+/// action.
+///
+/// # Authorization
+/// Internal — no `require_auth` here. The caller (resolution path) has
+/// already passed the admin **and** arbiter gates; the escrow refund uses
+/// [`crate::payments::refund_escrow_internal`] for the same reason.
+///
+/// # Errors
+/// | Error | Condition |
+/// |---|---|
+/// | [`QuickLendXError::InvoiceNotFound`] | `invoice_id` does not exist |
+/// | [`QuickLendXError::StorageKeyNotFound`] | `FavorInvestor` but no escrow record exists |
+/// | [`QuickLendXError::InvalidStatus`] | `FavorInvestor` but the escrow/investment is already terminal |
+pub fn apply_resolution_policy(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    outcome: DisputeResolution,
+) -> Result<(), QuickLendXError> {
+    let policy = ResolutionPolicy::for_outcome(outcome);
+
+    // 1. Escrow disposition.
+    match policy.escrow_effect {
+        EscrowEffect::RefundToInvestor => {
+            // Refund only when funds are actually held; a missing record
+            // simply leaves the invoice/investment transitions below to
+            // run, while an escrow in any other status is left untouched.
+            if let Some(escrow) =
+                crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+            {
+                if escrow.status == crate::payments::EscrowStatus::Held {
+                    crate::payments::refund_escrow_internal(env, invoice_id)?;
+                }
+            }
+        }
+        // `ReleaseToBusiness` (released later at settlement) and
+        // `HeldPendingAdmin` require no immediate escrow mutation.
+        EscrowEffect::ReleaseToBusiness | EscrowEffect::HeldPendingAdmin => {}
+    }
+
+    // 2. Invoice status transition.
+    match policy.invoice_effect {
+        InvoiceEffect::TransitionToRefunded => {
+            let mut invoice = InvoiceStorage::get_invoice(env, invoice_id)
+                .ok_or(QuickLendXError::InvoiceNotFound)?;
+            if invoice.status != InvoiceStatus::Refunded {
+                invoice.status = InvoiceStatus::Refunded;
+                InvoiceStorage::update_invoice(env, &invoice);
+            }
+        }
+        // `StaysFunded` and `PendingAdminAction` keep the current status.
+        InvoiceEffect::StaysFunded
+        | InvoiceEffect::PendingAdminAction
+        | InvoiceEffect::RevertToPreDisputeStatus => {}
+    }
+
+    // 3. Investment status transition.
+    match policy.investment_effect {
+        InvestmentEffect::TransitionToRefunded => {
+            if let Some(mut investment) =
+                InvestmentStorage::get_investment_by_invoice(env, invoice_id)
+            {
+                if investment.status == InvestmentStatus::Active {
+                    investment.status = InvestmentStatus::Refunded;
+                    InvestmentStorage::update_investment(env, &investment);
+                }
+            }
+        }
+        // `StaysActive` and `PendingAdminAction` keep the investment as-is.
+        InvestmentEffect::StaysActive | InvestmentEffect::PendingAdminAction => {}
+    }
 
     Ok(())
 }

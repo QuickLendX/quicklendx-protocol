@@ -29,6 +29,12 @@ import type {
 import { FailureBoundary } from "../../lib/failure-boundary";
 import type { AuthorizationService } from "../../services/authorization";
 import type { Clock } from "../../services/clock";
+import { SystemClock } from "../../services/clock";
+import type { Request, Response } from "express";
+import { z } from "zod";
+import { apiKeyService } from "../../services/api-key-service";
+import { auditLogService } from "../../services/audit-log";
+import { SCOPE_REGISTRY, hasRequiredScopes } from "../../config/scopes";
 
 const UUID_V4 =
   /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -70,7 +76,7 @@ export interface ApiKeysControllerOptions {
 }
 
 export class ApiKeysController {
-  private readonly apiKeys: ApiKeyService;
+  private readonly apiKeys: Pick<ApiKeyService, "getApiKey" | "revokeApiKey">;
   private readonly authz: AuthorizationService;
   private readonly clock: Clock;
   private readonly boundary: FailureBoundary;
@@ -78,7 +84,7 @@ export class ApiKeysController {
   private readonly onError?: (err: ApiKeyError) => void;
 
   constructor(
-    apiKeys: ApiKeyService,
+    apiKeys: Pick<ApiKeyService, "getApiKey" | "revokeApiKey">,
     authz: AuthorizationService,
     clock: Clock,
     opts: ApiKeysControllerOptions = {}
@@ -251,8 +257,8 @@ export class ApiKeysController {
               wasAlreadyRevoked: true,
             };
           }
-          // Still active but version drifted: retry (re-attempt revoke with
-          // the stale version; the OCC check will re-evaluate each attempt).
+          // Retry with the newly observed version after an active-key mutation.
+          existing = fresh;
           throw err;
         }
         throw err;
@@ -307,99 +313,118 @@ function validateKeyId(input: unknown, requestId: string): string {
   return trimmed;
 }
 
-/**
- * Rotate an API key's signing secret
- * POST /api/v1/keys/:id/rotate-signing-secret
- */
+function validateActorId(input: unknown, requestId: string): string {
+  if (typeof input !== "string" || !input.trim()) {
+    throw new ApiKeyError("UNAUTHORIZED", "Actor identity is required.", { requestId });
+  }
+  if (input.trim().length > MAX_ID_LENGTH) {
+    throw new ApiKeyError("UNAUTHORIZED", "Actor identity is too long.", { requestId });
+  }
+  return input.trim();
+}
+
+// Never serialize a service record directly: signing hashes are HMAC material.
+function publicKey(key: ApiKey) {
+  return {
+    id: key.id, name: key.name, prefix: key.prefix, scopes: key.scopes,
+    created_by: key.created_by, created_at: key.created_at, last_used_at: key.last_used_at,
+    expires_at: key.expires_at, revoked: key.revoked, status: key.status, version: key.version,
+    revokedAt: key.revokedAt, revokedBy: key.revokedBy, prev_secret_expires_at: key.prev_secret_expires_at,
+  };
+}
+
+function sendFailure(res: Response, error: unknown): void {
+  const status = error instanceof ApiKeyError ? {
+    VALIDATION_ERROR: 400, UNAUTHORIZED: 401, FORBIDDEN: 403, NOT_FOUND: 404,
+    CONFLICT: 409, TRANSIENT: 503, SYSTEM_ERROR: 500,
+  }[error.code] : 500;
+  res.status(status).json({ error: {
+    code: error instanceof ApiKeyError ? error.code : "SYSTEM_ERROR",
+    message: error instanceof ApiKeyError ? error.message : "API key operation failed.",
+  } });
+}
+
+function actor(req: Request): string {
+  if (!req.apiKey || !hasRequiredScopes(req.apiKey.scopes, ["admin:keys"])) {
+    throw new ApiKeyError("UNAUTHORIZED", "An admin API key is required.");
+  }
+  return req.apiKey.created_by;
+}
+function keyId(req: Request): string {
+  return validateKeyId(req.params.id, "api-key-management");
+}
+
+const createSchema = z.object({
+  name: z.string().trim().min(1).max(256), scopes: z.array(z.string()),
+  expires_at: z.string().datetime().nullable().optional(),
+});
+
+export async function createApiKey(req: Request, res: Response): Promise<void> {
+  try {
+    const created_by = actor(req);
+    const input = createSchema.safeParse(req.body);
+    if (!input.success) throw new ApiKeyError("VALIDATION_ERROR", "Invalid API key input.");
+    const key = await apiKeyService.createApiKey({ ...input.data, created_by }, req.ip);
+    res.status(201).json({ data: { ...publicKey(key), plaintext_key: key.plaintext_key,
+      plaintext_signing_secret: key.plaintext_signing_secret } });
+  } catch (error) { sendFailure(res, error); }
+}
+export async function listApiKeys(req: Request, res: Response): Promise<void> {
+  try {
+    actor(req);
+    const filters = z.object({ created_by: z.string().optional(), revoked: z.enum(["true", "false"]).optional() }).safeParse(req.query);
+    if (!filters.success) throw new ApiKeyError("VALIDATION_ERROR", "Invalid filters.");
+    const keys = await apiKeyService.listApiKeys({ created_by: filters.data.created_by,
+      revoked: filters.data.revoked === undefined ? undefined : filters.data.revoked === "true" });
+    res.json({ data: keys.map(publicKey) });
+  } catch (error) { sendFailure(res, error); }
+}
+export async function getApiKey(req: Request, res: Response): Promise<void> {
+  try {
+    actor(req);
+    const key = await apiKeyService.getApiKeyById(keyId(req));
+    if (!key) throw new ApiKeyError("NOT_FOUND", "API key not found.");
+    res.json({ data: publicKey(key) });
+  } catch (error) { sendFailure(res, error); }
+}
+export async function rotateApiKey(req: Request, res: Response): Promise<void> {
+  try {
+    const key = await apiKeyService.rotateApiKey(keyId(req), actor(req), req.ip);
+    res.json({ data: { ...publicKey(key), plaintext_key: key.plaintext_key,
+      plaintext_signing_secret: key.plaintext_signing_secret } });
+  } catch (error) { sendFailure(res, error); }
+}
+export async function revokeApiKey(req: Request, res: Response): Promise<void> {
+  try {
+    const actorId = actor(req);
+    // Per-request authorization avoids sharing an in-flight result across actors.
+    const controller = new ApiKeysController(apiKeyService, {
+      canAct: async candidate => candidate === actorId && !!req.apiKey && hasRequiredScopes(req.apiKey.scopes, ["admin:keys"]),
+    }, new SystemClock());
+    res.json({ data: await controller.revokeApiKey({ apiKeyId: keyId(req), actorId }) });
+  } catch (error) { sendFailure(res, error); }
+}
+export async function getKeyAuditLogs(req: Request, res: Response): Promise<void> {
+  try {
+    actor(req);
+    const id = keyId(req);
+    if (!await apiKeyService.getApiKeyById(id)) throw new ApiKeyError("NOT_FOUND", "API key not found.");
+    res.json({ data: auditLogService.getLogsForKey(id) });
+  } catch (error) { sendFailure(res, error); }
+}
+export function getScopes(_req: Request, res: Response): void {
+  try {
+    res.json({ data: SCOPE_REGISTRY, count: SCOPE_REGISTRY.length });
+  } catch {
+    console.error("[ApiKeys] Failed to serialize scopes");
+    res.status(500).json({ error: { message: "Failed to get scopes", code: "GET_SCOPES_ERROR" } });
+  }
+}
 export async function rotateApiKeySigningSecret(req: Request, res: Response): Promise<void> {
   try {
-    const { id } = req.params;
-
-    // Validate request body
-    const validation = rotateSigningSecretSchema.safeParse(req.body);
-    if (!validation.success) {
-      res.status(400).json({
-        error: {
-          message: 'Invalid request body',
-          code: 'VALIDATION_ERROR',
-          details: validation.error.errors,
-        },
-      });
-      return;
-    }
-
-    const { actor, grace_window_hours } = validation.data;
-    const ipAddress = (req.ip || req.socket.remoteAddress) as string | undefined;
-
-    // Failure-boundary guards
-    const existing = await apiKeyService.getApiKeyById(id);
-    if (!existing) {
-      res.status(404).json({
-        error: { message: 'API key not found', code: 'KEY_NOT_FOUND' },
-      });
-      return;
-    }
-    if (existing.revoked) {
-      res.status(403).json({
-        error: { message: 'API key is revoked', code: 'KEY_REVOKED' },
-      });
-      return;
-    }
-    if (existing.prev_secret_expires_at && new Date(existing.prev_secret_expires_at) > new Date()) {
-      res.status(409).json({
-        error: { message: 'Previous signing secret still active', code: 'GRACE_WINDOW_CONFLICT' },
-      });
-      return;
-    }
-
-    let key;
-    try {
-      key = await apiKeyService.rotateSigningSecret(id, actor, ipAddress, grace_window_hours);
-    } catch (svcErr: any) {
-      const isDbError = svcErr.message?.toLowerCase().includes('db') || svcErr.message?.toLowerCase().includes('database') || svcErr.message?.toLowerCase().includes('constraint');
-      const status = isDbError ? 500 : 400;
-      const code = isDbError ? 'ROTATE_SECRET_DB_ERROR' : 'ROTATE_SECRET_ERROR';
-      res.status(status).json({
-        error: { message: svcErr.message || 'Failed to rotate API key signing secret', code },
-      });
-      return;
-    }
-
-    res.json({
-      data: {
-        id: key.id,
-        name: key.name,
-        prefix: key.prefix,
-        scopes: key.scopes,
-        created_at: key.created_at,
-        expires_at: key.expires_at,
-        prev_secret_expires_at: key.prev_secret_expires_at,
-        key: key.plaintext_key, // Only returned once!
-        warning: 'Store this new secret securely. The old secret will expire after the grace window.',
-      },
-    });
-  } catch (error: any) {
-    console.error('[RotateApiKeySigningSecret] Unexpected error:', error);
-    res.status(500).json({
-      error: {
-        message: error.message || 'Internal server error',
-        code: 'UNEXPECTED_ERROR',
-      },
-    });
-  }
-  const trimmed = input.trim();
-  if (trimmed.length === 0) {
-    throw new ApiKeyError("UNAUTHORIZED", "Actor identity is required.", {
-      action: "revokeApiKey",
-      requestId,
-    });
-  }
-  if (trimmed.length > MAX_ID_LENGTH) {
-    throw new ApiKeyError("UNAUTHORIZED", "Actor identity is too long.", {
-      action: "revokeApiKey",
-      requestId,
-      cause: { length: input.length },
-    });
-  }
-  return trimmed;
+    const input = z.object({ grace_window_hours: z.number().min(0).max(168).optional() }).safeParse(req.body ?? {});
+    if (!input.success) throw new ApiKeyError("VALIDATION_ERROR", "Invalid grace window.");
+    const key = await apiKeyService.rotateSigningSecret(keyId(req), actor(req), req.ip, input.data.grace_window_hours);
+    res.json({ data: { ...publicKey(key), plaintext_signing_secret: key.plaintext_signing_secret } });
+  } catch (error) { sendFailure(res, error); }
 }

@@ -65,6 +65,19 @@ const activeKey = (overrides: Record<string, unknown> = {}) =>
 const revokedKey = (overrides: Record<string, unknown> = {}) =>
   buildRevokedApiKey({ id: KEY_ID, ownerId: OWNER_ID, ...overrides });
 
+it("retries with the fresh version when a signing-secret rotation races revocation", async () => {
+  const { controller, apiKeys, authz } = makeHarness();
+  authz.canActImpl = async () => true;
+  let reads = 0;
+  apiKeys.getApiKeyImpl = async () => activeKey({ version: ++reads });
+  apiKeys.revokeApiKeyImpl = async (id, actor, version) => {
+    if (version === 1) throw new ApiKeyError("CONFLICT", "Version changed");
+    return buildRevokedApiKey({ id, revokedBy: actor, version: 3 });
+  };
+  await expect(controller.revokeApiKey(okRequest())).resolves.toMatchObject({ success: true });
+  expect(apiKeys.calls.revokeApiKey.map(call => call.args[2])).toEqual([1, 2]);
+});
+
 describe("revokeApiKey — success path", () => {
   it("revokes an active key and reports the new state", async () => {
     const { clock, apiKeys, authz, controller } = makeHarness();
