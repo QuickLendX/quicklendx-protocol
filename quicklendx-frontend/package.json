@@ -5,12 +5,15 @@
   "scripts": {
     "dev": "next dev --turbopack",
     "build": "next build",
+    "build:e2e": "cross-env NEXT_PUBLIC_E2E=1 next build",
     "start": "next start",
-    "lint": "eslint .",
+    "lint": "cross-env ESLINT_USE_FLAT_CONFIG=false eslint .",
     "test": "jest --passWithNoTests",
-    "test:watch": "jest --watch"
+    "test:watch": "jest --watch",
+    "test:e2e": "cross-env NEXT_PUBLIC_E2E=1 playwright test"
   },
   "dependencies": {
+    "@stellar/freighter-api": "6.0.1",
     "axios": "^1.13.2",
     "next": "15.5.12",
     "react": "19.1.0",
@@ -20,14 +23,21 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
+    "@testing-library/react": "^16.3.3",
+    "@testing-library/user-event": "^14.6.8",
     "@types/jest": "^29.5.14",
+    "@types/jest-axe": "^3.5.9",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "cross-env": "^10.1.0",
     "eslint": "^9.38.0",
     "eslint-config-next": "^15.5.12",
     "jest": "^29",
+    "jest-environment-jsdom": "^29.7.0",
     "jest-environment-node": "^29",
     "prettier": "^3.6.2",
     "tailwindcss": "^4",
@@ -35,15 +45,52 @@
     "typescript": "^5"
   },
   "jest": {
-    "preset": "ts-jest",
-    "testEnvironment": "node",
-    "testMatch": [
-      "**/__tests__/**/*.test.ts",
-      "**/tests/**/*.test.ts"
-    ],
-    "moduleNameMapper": {
-      "^@/(.*)$": "<rootDir>/$1"
-    }
+    "projects": [
+      {
+        "displayName": "node",
+        "preset": "ts-jest",
+        "testEnvironment": "node",
+        "testMatch": [
+          "<rootDir>/app/**/*.test.ts",
+          "<rootDir>/**/__tests__/**/*.test.ts",
+          "<rootDir>/**/tests/**/*.test.ts"
+        ],
+        "transform": {
+          "^.+\\.tsx?$": [
+            "ts-jest",
+            {
+              "tsconfig": {
+                "jsx": "react-jsx"
+              }
+            }
+          ]
+        },
+        "moduleNameMapper": {
+          "^@/(.*)$": "<rootDir>/$1"
+        }
+      },
+      {
+        "displayName": "jsdom",
+        "preset": "ts-jest",
+        "testEnvironment": "jsdom",
+        "testMatch": [
+          "<rootDir>/app/**/*.test.tsx"
+        ],
+        "transform": {
+          "^.+\\.tsx?$": [
+            "ts-jest",
+            {
+              "tsconfig": {
+                "jsx": "react-jsx"
+              }
+            }
+          ]
+        },
+        "moduleNameMapper": {
+          "^@/(.*)$": "<rootDir>/$1"
+        }
+      }
+    ]
   },
   "overrides": {
     "minimatch": "^10.2.1",

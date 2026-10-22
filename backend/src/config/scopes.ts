@@ -185,20 +185,6 @@ export function isValidScope(scope: string): boolean {
 }
 
 /**
- * Validate an array of scopes
- */
-export function validateScopes(scopes: string[]): { valid: boolean; invalid: string[] } {
-  if (!Array.isArray(scopes)) {
-    return { valid: false, invalid: [] };
-  }
-  const invalid = scopes.filter(scope => !isValidScope(scope));
-  return {
-    valid: invalid.length === 0,
-    invalid,
-  };
-}
-
-/**
  * Validate an array of scopes against the registry.
  *
  * Deterministic failure boundary:
@@ -214,6 +200,12 @@ export function validateScopes(scopes: string[]): { valid: boolean; invalid: str
  * - Non-array input is a programming error and throws a TypeError naming
  *   the received type (never a misleading "valid" result).
  */
+export interface ScopeValidationResult { readonly valid: boolean; readonly invalid: readonly string[]; }
+
+function describeValueType(value: unknown): string {
+  return value === null ? 'null' : typeof value;
+}
+
 export function validateScopes(scopes: string[]): ScopeValidationResult {
   if (!Array.isArray(scopes)) {
     throw new TypeError(
@@ -288,21 +280,10 @@ function hasOnlyWellFormedScopes(scopes: unknown): scopes is string[] {
  * - The function never throws for any input, including `null`/`undefined`.
  */
 export function hasRequiredScopes(grantedScopes: string[], requiredScopes: string[]): boolean {
-  if (!Array.isArray(grantedScopes) || !Array.isArray(requiredScopes)) {
-    return false;
-  }
-
-  // Check for admin:* which grants everything
-  if (grantedScopes.includes('admin:*')) {
-    return true;
-  }
-
-  for (const required of requiredScopes) {
-    if (typeof required !== 'string' || required.length === 0) {
-      return false;
-    }
-    const [category] = required.split(':');
-
+  if (!hasOnlyWellFormedScopes(requiredScopes)) return false;
+  const granted = new Set(normalizeGrantedScopes(grantedScopes).filter(isWellFormedScope));
+  if (requiredScopes.length === 0 || granted.has('admin:*')) return true;
+  for (const requiredScope of requiredScopes) {
     // Check for exact match
     if (granted.has(requiredScope)) {
       continue;

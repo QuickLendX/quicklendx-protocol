@@ -55,6 +55,8 @@ pub enum AuditOperation {
     BidPlaced,
     BidAccepted,
     BidWithdrawn,
+    BidCancelled,
+    BidExpired,
     EscrowCreated,
     EscrowReleased,
     EscrowRefunded,
@@ -106,6 +108,8 @@ pub enum AuditOperation {
     InvestorFrozen,
     /// An investor was unfrozen (investment actions restored).
     InvestorUnfrozen,
+    BidCancelled,
+    BidExpired,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -127,6 +131,8 @@ pub enum OpType {
     BidPlaced,
     BidAccepted,
     BidWithdrawn,
+    BidCancelled,
+    BidExpired,
     EscrowCreated,
     EscrowReleased,
     EscrowRefunded,
@@ -155,6 +161,8 @@ pub enum OpType {
     KycRevoked,
     InvestorFrozen,
     InvestorUnfrozen,
+    BidCancelled,
+    BidExpired,
 }
 
 impl OpType {
@@ -172,6 +180,8 @@ impl OpType {
             OpType::BidPlaced => symbol_short!("bid_plc"),
             OpType::BidAccepted => symbol_short!("bid_acc"),
             OpType::BidWithdrawn => symbol_short!("bid_wdr"),
+            OpType::BidCancelled => symbol_short!("bid_cnl"),
+            OpType::BidExpired => symbol_short!("bid_exp"),
             OpType::EscrowCreated => symbol_short!("esc_cr"),
             OpType::EscrowReleased => symbol_short!("esc_rel"),
             OpType::EscrowRefunded => symbol_short!("esc_ref"),
@@ -200,6 +210,8 @@ impl OpType {
             OpType::KycRevoked => symbol_short!("kyc_rev"),
             OpType::InvestorFrozen => symbol_short!("inv_frz"),
             OpType::InvestorUnfrozen => symbol_short!("inv_unf"),
+            OpType::BidCancelled => symbol_short!("bid_cnl"),
+            OpType::BidExpired => symbol_short!("bid_exp"),
         }
     }
 
@@ -217,6 +229,8 @@ impl OpType {
             OpType::BidPlaced => 8,
             OpType::BidAccepted => 9,
             OpType::BidWithdrawn => 10,
+            OpType::BidCancelled => 39,
+            OpType::BidExpired => 40,
             OpType::EscrowCreated => 11,
             OpType::EscrowReleased => 12,
             OpType::EscrowRefunded => 13,
@@ -245,6 +259,8 @@ impl OpType {
             OpType::KycRevoked => 36,
             OpType::InvestorFrozen => 37,
             OpType::InvestorUnfrozen => 38,
+            OpType::BidCancelled => 39,
+            OpType::BidExpired => 40,
         }
     }
 }
@@ -263,6 +279,8 @@ impl From<AuditOperation> for OpType {
             AuditOperation::BidPlaced => OpType::BidPlaced,
             AuditOperation::BidAccepted => OpType::BidAccepted,
             AuditOperation::BidWithdrawn => OpType::BidWithdrawn,
+            AuditOperation::BidCancelled => OpType::BidCancelled,
+            AuditOperation::BidExpired => OpType::BidExpired,
             AuditOperation::EscrowCreated => OpType::EscrowCreated,
             AuditOperation::EscrowReleased => OpType::EscrowReleased,
             AuditOperation::EscrowRefunded => OpType::EscrowRefunded,
@@ -293,6 +311,8 @@ impl From<AuditOperation> for OpType {
             AuditOperation::KycRevoked => OpType::KycRevoked,
             AuditOperation::InvestorFrozen => OpType::InvestorFrozen,
             AuditOperation::InvestorUnfrozen => OpType::InvestorUnfrozen,
+            AuditOperation::BidCancelled => OpType::BidCancelled,
+            AuditOperation::BidExpired => OpType::BidExpired,
         }
     }
 }
@@ -569,6 +589,8 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::BidPlaced => 8,
         AuditOperation::BidAccepted => 9,
         AuditOperation::BidWithdrawn => 10,
+        AuditOperation::BidCancelled => 39,
+        AuditOperation::BidExpired => 40,
         AuditOperation::EscrowCreated => 11,
         AuditOperation::EscrowReleased => 12,
         AuditOperation::EscrowRefunded => 13,
@@ -597,6 +619,8 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::KycRevoked => 36,
         AuditOperation::InvestorFrozen => 37,
         AuditOperation::InvestorUnfrozen => 38,
+        AuditOperation::BidCancelled => 39,
+        AuditOperation::BidExpired => 40,
     }
 }
 
@@ -627,17 +651,29 @@ fn hash_audit_entry(env: &Env, entry: &AuditLogEntry) -> BytesN<32> {
 /// Each storage function appends data without modifying existing entries.
 pub struct AuditStorage;
 
+fn persist_set<K, V>(env: &Env, key: &K, value: &V)
+where
+    K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
+    V: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
+{
+    env.storage().persistent().set(key, value);
+    crate::storage::bump_persistent(env, key);
+}
+
+fn persist_remove<K>(env: &Env, key: &K)
+where
+    K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
+{
+    env.storage().persistent().remove(key);
+}
+
 impl AuditStorage {
     /// Return the expected `prev_hash` for the next entry in an invoice trail.
     pub fn last_entry_hash(env: &Env, invoice_id: &BytesN<32>) -> BytesN<32> {
-        let trail = Self::get_invoice_audit_trail(env, invoice_id);
-        if trail.is_empty() {
-            return AuditLogEntry::genesis_prev_hash(env);
-        }
-
-        let last_id = trail.get(trail.len() - 1).unwrap();
-        Self::get_audit_entry(env, &last_id)
-            .map(|entry| entry.entry_hash(env))
+        let key = (symbol_short!("aud_last"), invoice_id.clone());
+        env.storage()
+            .persistent()
+            .get(&key)
             .unwrap_or_else(|| AuditLogEntry::genesis_prev_hash(env))
     }
 
@@ -653,16 +689,24 @@ impl AuditStorage {
     pub fn first_audit_chain_divergence(env: &Env, invoice_id: &BytesN<32>) -> Option<u32> {
         let trail = Self::get_invoice_audit_trail(env, invoice_id);
         let mut expected_prev = AuditLogEntry::genesis_prev_hash(env);
+        let mut offset = 0u32;
 
-        for i in 0..trail.len() {
-            let audit_id = trail.get(i).unwrap();
-            let Some(entry) = Self::get_audit_entry(env, &audit_id) else {
-                return Some(i);
-            };
-            if entry.prev_hash != expected_prev || !entry.validate_integrity(env).unwrap_or(false) {
-                return Some(i);
+        while offset < trail.len() {
+            let chunk = Self::get_invoice_audit_trail_paged(env, invoice_id, offset, 32);
+            for (i, audit_id) in chunk.iter().enumerate() {
+                let idx = offset.saturating_add(i as u32);
+                let Some(entry) = Self::get_audit_entry(env, &audit_id) else {
+                    return Some(idx);
+                };
+                if entry.prev_hash != expected_prev || !entry.validate_integrity(env).unwrap_or(false) {
+                    return Some(idx);
+                }
+                expected_prev = entry.entry_hash(env);
             }
-            expected_prev = entry.entry_hash(env);
+            if chunk.is_empty() {
+                break;
+            }
+            offset = offset.saturating_add(chunk.len() as u32);
         }
 
         None
@@ -673,54 +717,77 @@ impl AuditStorage {
     /// This function **never overwrites** existing entries. It appends the new
     /// entry to multiple indices (by invoice, operation, actor, timestamp) to
     /// enable efficient queries without reordering.
-    ///
-    /// # Append-Only Guarantee
-    /// - Entry is stored with unique audit_id
-    /// - Entry is added to invoice trail (appended, never replaced)
-    /// - Entry is indexed by operation, actor, and timestamp (appended)
-    /// - Global entries list grows monotonically
-    ///
-    /// # Returns
-    /// The entry remains in storage unchanged and is only removed by explicit
-    /// cleanup (never by this function or any query).
     pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) {
-        // A correlation id is the immutable key. Reject duplicate appends rather
-        // than overwriting an existing committed record.
         if Self::get_audit_entry(env, &entry.operation_id).is_some() {
             panic!("duplicate observability operation id");
         }
 
-        // Store individual entry
-        env.storage().instance().set(&entry.audit_id, entry);
+        let entry_key = entry.audit_id.clone();
+        persist_set(env, &entry_key, entry);
+        crate::storage::bump_persistent(env, &entry_key);
 
-        // Add to invoice audit trail
+        let last_hash_key = (symbol_short!("aud_last"), entry.invoice_id.clone());
+        let prev_hash = env
+            .storage()
+            .persistent()
+            .get(&last_hash_key)
+            .unwrap_or_else(|| AuditLogEntry::genesis_prev_hash(env));
+        if prev_hash != entry.prev_hash {
+            // The persisted previous hash is authoritative for the next append.
+            // Keep the immutable entry data unchanged; only the on-chain chain metadata
+            // is updated to reflect the actual prior entry.
+        }
+        persist_set(env, &last_hash_key, &entry.entry_hash(env));
+
         Self::add_to_invoice_audit_trail(env, &entry.invoice_id, &entry.audit_id);
-
-        // Add to operation index
         Self::add_to_operation_index(env, &entry.operation, &entry.audit_id);
-
-        // Add to actor index
         Self::add_to_actor_index(env, &entry.actor, &entry.audit_id);
-
-        // Add to timestamp index
         Self::add_to_timestamp_index(env, entry.timestamp, &entry.audit_id);
-
-        // Add to global entries list
         Self::add_to_all_audit_entries(env, &entry.audit_id);
     }
 
     /// Get audit entry by ID
     pub fn get_audit_entry(env: &Env, audit_id: &BytesN<32>) -> Option<AuditLogEntry> {
-        env.storage().instance().get(audit_id)
+        if let Some(entry) = env.storage().persistent().get(audit_id) {
+            return Some(entry);
+        }
+        let legacy: Option<AuditLogEntry> = env.storage().instance().get(audit_id);
+        if let Some(entry) = legacy.clone() {
+            persist_set(env, audit_id, &entry);
+        }
+        legacy
     }
 
     /// Get audit trail for an invoice
     pub fn get_invoice_audit_trail(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
+        Self::get_invoice_audit_trail_paged(env, invoice_id, 0, u32::MAX)
+    }
+
+    pub fn get_invoice_audit_trail_paged(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<BytesN<32>> {
         let key = (symbol_short!("inv_aud"), invoice_id.clone());
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+        let trail: Vec<BytesN<32>> = if let Some(ids) = env.storage().persistent().get(&key) {
+            ids
+        } else {
+            let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
+            if let Some(ids) = legacy.clone() {
+                persist_set(env, &key, &ids);
+                ids
+            } else {
+                Vec::new(env)
+            }
+        };
+        let start = offset.min(trail.len() as u32);
+        let end = (start + limit.min(crate::MAX_QUERY_LIMIT)).min(trail.len() as u32);
+        let mut page = Vec::new(env);
+        for i in start..end {
+            page.push_back(trail.get(i as u32).unwrap());
+        }
+        page
     }
 
     /// Get audit entries by operation type
@@ -729,28 +796,77 @@ impl AuditStorage {
         operation: &AuditOperation,
     ) -> Vec<BytesN<32>> {
         let key = (symbol_short!("op_aud"), operation.clone());
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+        if let Some(ids) = env.storage().persistent().get(&key) {
+            return ids;
+        }
+        let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
+        if let Some(ids) = legacy.clone() {
+            persist_set(env, &key, &ids);
+            return ids;
+        }
+        Vec::new(env)
+    }
+
+    pub fn get_audit_entries_by_operation_paged(
+        env: &Env,
+        operation: &AuditOperation,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<BytesN<32>> {
+        Self::page_ids(env, &(symbol_short!("op_aud"), operation.clone()), offset, limit)
     }
 
     /// Get audit entries by actor
     pub fn get_audit_entries_by_actor(env: &Env, actor: &Address) -> Vec<BytesN<32>> {
         let key = (symbol_short!("act_aud"), actor.clone());
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+        if let Some(ids) = env.storage().persistent().get(&key) {
+            return ids;
+        }
+        let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
+        if let Some(ids) = legacy.clone() {
+            persist_set(env, &key, &ids);
+            return ids;
+        }
+        Vec::new(env)
     }
 
-    /// Query audit logs with filters
-    ///
-    /// **READ-ONLY**: This function never modifies any audit entries or indices.
-    /// It safely reads from existing data structures without side effects.
+    pub fn get_audit_entries_by_actor_paged(
+        env: &Env,
+        actor: &Address,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<BytesN<32>> {
+        Self::page_ids(env, &(symbol_short!("act_aud"), actor.clone()), offset, limit)
+    }
+
+    fn page_ids<K>(env: &Env, key: &K, offset: u32, limit: u32) -> Vec<BytesN<32>>
+    where
+        K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
+    {
+        let ids: Vec<BytesN<32>> = env.storage().persistent().get(key).unwrap_or_else(|| Vec::new(env));
+        let page_limit = limit.min(crate::MAX_QUERY_LIMIT);
+        let start = offset.min(ids.len() as u32);
+        let end = (start + page_limit).min(ids.len() as u32);
+        let mut page = Vec::new(env);
+        for i in start..end {
+            page.push_back(ids.get(i).unwrap());
+        }
+        page
+    }
+
+    /// Query audit logs with filters.
     pub fn query_audit_logs(
         env: &Env,
         filter: &AuditQueryFilter,
+        limit: u32,
+    ) -> Vec<AuditLogEntry> {
+        Self::query_audit_logs_paged(env, filter, 0, limit)
+    }
+
+    pub fn query_audit_logs_paged(
+        env: &Env,
+        filter: &AuditQueryFilter,
+        offset: u32,
         limit: u32,
     ) -> Vec<AuditLogEntry> {
         let capped_limit = limit.min(crate::MAX_QUERY_LIMIT);
@@ -761,25 +877,21 @@ impl AuditStorage {
             return results;
         }
 
-        // Start with invoice-specific entries if invoice_id is provided
         let audit_ids = if let Some(invoice_id) = &filter.invoice_id {
-            Self::get_invoice_audit_trail(env, invoice_id)
+            Self::get_invoice_audit_trail_paged(env, invoice_id, offset, capped_limit)
         } else if let AuditOperationFilter::Specific(operation) = &filter.operation {
-            Self::get_audit_entries_by_operation(env, operation)
+            Self::get_audit_entries_by_operation_paged(env, operation, offset, capped_limit)
         } else if let Some(actor) = &filter.actor {
-            Self::get_audit_entries_by_actor(env, actor)
+            Self::get_audit_entries_by_actor_paged(env, actor, offset, capped_limit)
         } else {
-            // Get all audit entries (expensive operation)
-            Self::get_all_audit_entries(env)
+            Self::get_all_audit_entries_paged(env, offset, capped_limit)
         };
 
         for audit_id in audit_ids.iter() {
             if count >= capped_limit {
                 break;
             }
-
             if let Some(entry) = Self::get_audit_entry(env, &audit_id) {
-                // Apply filters
                 if Self::matches_filter(&entry, filter) {
                     results.push_back(entry);
                     count += 1;
@@ -873,52 +985,139 @@ impl AuditStorage {
         let key = (symbol_short!("inv_aud"), invoice_id.clone());
         let mut trail = Self::get_invoice_audit_trail(env, invoice_id);
         trail.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &trail);
+        persist_set(env, &key, &trail);
     }
 
     fn add_to_operation_index(env: &Env, operation: &AuditOperation, audit_id: &BytesN<32>) {
         let key = (symbol_short!("op_aud"), operation.clone());
         let mut entries = Self::get_audit_entries_by_operation(env, operation);
         entries.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &entries);
+        persist_set(env, &key, &entries);
     }
 
     fn add_to_actor_index(env: &Env, actor: &Address, audit_id: &BytesN<32>) {
         let key = (symbol_short!("act_aud"), actor.clone());
         let mut entries = Self::get_audit_entries_by_actor(env, actor);
         entries.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &entries);
+        persist_set(env, &key, &entries);
     }
 
     fn add_to_timestamp_index(env: &Env, timestamp: u64, audit_id: &BytesN<32>) {
-        let day_key = timestamp / 86400; // Group by day
+        let day_key = timestamp / 86400;
         let key = (symbol_short!("ts_aud"), day_key);
         let mut entries: Vec<BytesN<32>> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&key)
             .unwrap_or_else(|| Vec::new(env));
         entries.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &entries);
+        persist_set(env, &key, &entries);
     }
 
     fn add_to_all_audit_entries(env: &Env, audit_id: &BytesN<32>) {
         let key = symbol_short!("all_aud");
         let mut all: Vec<BytesN<32>> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&key)
             .unwrap_or_else(|| Vec::new(env));
         all.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &all);
+        persist_set(env, &key, &all);
     }
 
     fn get_all_audit_entries(env: &Env) -> Vec<BytesN<32>> {
         let key = symbol_short!("all_aud");
-        env.storage()
+        if let Some(ids) = env.storage().persistent().get(&key) {
+            return ids;
+        }
+        let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
+        if let Some(ids) = legacy.clone() {
+            persist_set(env, &key, &ids);
+            return ids;
+        }
+        Vec::new(env)
+    }
+
+    fn get_all_audit_entries_paged(env: &Env, offset: u32, limit: u32) -> Vec<BytesN<32>> {
+        Self::page_ids(env, &symbol_short!("all_aud"), offset, limit)
+    }
+
+    pub fn migrate_legacy_audit_storage(env: &Env) -> u32 {
+        let legacy_all: Vec<BytesN<32>> = env
+            .storage()
             .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+            .get(&symbol_short!("all_aud"))
+            .unwrap_or_else(|| Vec::new(env));
+        let mut migrated = 0u32;
+
+        for audit_id in legacy_all.iter() {
+            if env.storage().persistent().get(&audit_id).is_none() {
+                if let Some(entry) = env.storage().instance().get(&audit_id) {
+                    persist_set(env, &audit_id, &entry);
+                    migrated = migrated.saturating_add(1);
+                }
+            }
+        }
+
+        let mut global_ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&symbol_short!("all_aud"))
+            .unwrap_or_else(|| Vec::new(env));
+        if global_ids.is_empty() {
+            global_ids = legacy_all.clone();
+            persist_set(env, &symbol_short!("all_aud"), &global_ids);
+        }
+
+        for audit_id in global_ids.iter() {
+            if let Some(entry) = Self::get_audit_entry(env, &audit_id) {
+                let invoice_key = (symbol_short!("inv_aud"), entry.invoice_id.clone());
+                let mut invoice_ids: Vec<BytesN<32>> = env
+                    .storage()
+                    .persistent()
+                    .get(&invoice_key)
+                    .unwrap_or_else(|| Vec::new(env));
+                if !invoice_ids.iter().any(|id| *id == audit_id) {
+                    invoice_ids.push_back(audit_id.clone());
+                    persist_set(env, &invoice_key, &invoice_ids);
+                }
+
+                let op_key = (symbol_short!("op_aud"), entry.operation.clone());
+                let mut op_ids: Vec<BytesN<32>> = env
+                    .storage()
+                    .persistent()
+                    .get(&op_key)
+                    .unwrap_or_else(|| Vec::new(env));
+                if !op_ids.iter().any(|id| *id == audit_id) {
+                    op_ids.push_back(audit_id.clone());
+                    persist_set(env, &op_key, &op_ids);
+                }
+
+                let actor_key = (symbol_short!("act_aud"), entry.actor.clone());
+                let mut actor_ids: Vec<BytesN<32>> = env
+                    .storage()
+                    .persistent()
+                    .get(&actor_key)
+                    .unwrap_or_else(|| Vec::new(env));
+                if !actor_ids.iter().any(|id| *id == audit_id) {
+                    actor_ids.push_back(audit_id.clone());
+                    persist_set(env, &actor_key, &actor_ids);
+                }
+
+                let day_key = (symbol_short!("ts_aud"), entry.timestamp / 86400);
+                let mut day_ids: Vec<BytesN<32>> = env
+                    .storage()
+                    .persistent()
+                    .get(&day_key)
+                    .unwrap_or_else(|| Vec::new(env));
+                if !day_ids.iter().any(|id| *id == audit_id) {
+                    day_ids.push_back(audit_id.clone());
+                    persist_set(env, &day_key, &day_ids);
+                }
+            }
+        }
+
+        migrated
     }
 
     fn matches_filter(entry: &AuditLogEntry, filter: &AuditQueryFilter) -> bool {
