@@ -54,6 +54,11 @@ NEXT_PUBLIC_RPC_URL=https://soroban-testnet.stellar.org:443
 
 # Optional: Analytics
 NEXT_PUBLIC_ANALYTICS_ID=your_analytics_id
+
+# API base URL (must include the full path prefix, e.g. /api/v1).
+# Defaults to http://localhost:3001/api/v1 when unset.
+# The backend mounts all v1 routes at /api/v1 (backend/src/app.ts).
+NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
 ```
 
 4. **Run development server**
@@ -131,6 +136,10 @@ Required environment variables:
 Optional:
 
 - `NEXT_PUBLIC_ANALYTICS_ID`: Analytics tracking ID
+- `NEXT_PUBLIC_API_URL`: Backend API base URL **including the `/api/v1` prefix**
+  (e.g. `http://localhost:3001/api/v1`). Defaults to `http://localhost:3001/api/v1` when
+  unset. Matches the v1 router mount in `backend/src/app.ts` and the server entry in
+  `backend/openapi.yaml`.
 
 ## 🧪 Testing
 
