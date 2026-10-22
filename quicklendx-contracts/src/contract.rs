@@ -879,6 +879,7 @@ impl QuickLendXContract {
         backup.status = BackupStatus::Archived;
         BackupStorage::update_backup(&env, &backup)?;
         BackupStorage::remove_from_backup_list(&env, &backup_id);
+        BackupStorage::purge_backup_data(&env, &backup_id);
         Ok(())
     }
 
