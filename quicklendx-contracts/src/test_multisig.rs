@@ -208,7 +208,7 @@ fn test_verify_op_invalid_owner_index() {
 }
 
 #[test]
-#[should_panic(expected = "HostError: Error(Crypto, InvalidHash)")]
+#[should_panic(expected = "HostError: Error(Crypto, InvalidInput)")]
 fn test_verify_op_invalid_signature() {
     let env = Env::default();
     let contract_id = env.register(MultisigContract, ());

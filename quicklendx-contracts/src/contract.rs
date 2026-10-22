@@ -341,10 +341,12 @@ impl QuickLendXContract {
         admin: Address,
         invoice_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(&env, &admin)?;
-        require_writable(&env)?;
-        let mut invoice = load_invoice(&env, &invoice_id)?;
-        invoice.verify(&env, admin);
+        investor.require_auth();
+        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        if invoice.investor != Some(investor.clone()) {
+            return Err(QuickLendXError::NotRater);
+        }
+        invoice.add_rating(rating, String::from_str(&env, "rating"), investor, env.ledger().timestamp())?;
         InvoiceStorage::update_invoice(&env, &invoice);
         Ok(())
     }
