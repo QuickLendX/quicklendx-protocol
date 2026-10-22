@@ -30,6 +30,8 @@ export const metadata: Metadata = {
   },
 };
 
+import { WalletProvider } from "@/app/lib/useWallet";
+
 export default function RootLayout({
   children,
 }: Readonly<{

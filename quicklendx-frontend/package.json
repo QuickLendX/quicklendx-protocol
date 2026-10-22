@@ -23,10 +23,9 @@
     "zod": "^3.22.4"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.64.1",
     "@tailwindcss/postcss": "^4",
-    "@testing-library/jest-dom": "^6.9.2",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
     "@types/jest": "^29.5.14",
@@ -53,27 +52,25 @@
         "testEnvironment": "node",
         "testMatch": [
           "**/__tests__/**/*.test.ts",
-          "**/tests/**/*.test.ts"
-        ],
-        "setupFilesAfterEnv": [
-          "<rootDir>/jest.node.setup.ts"
+          "**/tests/**/*.test.ts",
+          "**/app/business/settlements/[id]/_lib/view-model.test.ts"
         ],
         "moduleNameMapper": {
           "^@/(.*)$": "<rootDir>/$1"
         }
       },
       {
-        "displayName": "jsdom",
+        "displayName": "dom",
         "preset": "ts-jest",
         "testEnvironment": "jest-environment-jsdom",
         "testMatch": [
           "**/*.test.tsx"
         ],
-        "setupFilesAfterEnv": [
-          "<rootDir>/jest.setup.ts"
-        ],
+        "moduleNameMapper": {
+          "^@/(.*)$": "<rootDir>/$1"
+        },
         "transform": {
-          "^.+\\.tsx?$": [
+          "^.+\\.(ts|tsx)$": [
             "ts-jest",
             {
               "tsconfig": {
@@ -82,9 +79,9 @@
             }
           ]
         },
-        "moduleNameMapper": {
-          "^@/(.*)$": "<rootDir>/$1"
-        }
+        "setupFilesAfterEnv": [
+          "<rootDir>/tests/setup-dom.ts"
+        ]
       }
     ]
   },
