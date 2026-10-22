@@ -1,10 +1,11 @@
 declare module 'better-sqlite3' {
   interface Database {
+    readonly open: boolean;
     exec(sql: string): this;
     prepare(sql: string): Statement;
     pragma(pragma: string): any;
     close(): void;
-    transaction<T>(fn: () => T): () => T;
+    transaction<T>(fn: () => T): { (): T; immediate(): T };
   }
 
   interface Statement {

@@ -7,32 +7,22 @@ use crate::events::{emit_bid_expired, emit_bid_expiry_grace_updated, emit_bid_tt
 use crate::storage::{bump_persistent, extend_persistent_ttl};
 pub use crate::types::{Bid, BidStatus};
 
-/// Storage keys for the per-invoice bid index.
+/// Storage keys for indexed bid lookups.
 ///
-/// Instead of storing a single `Vec<BytesN<32>>` under one key (which causes
-/// O(n) read+write on every mutation), we use an indexed layout:
-///
-/// - `Count(invoice_id)` -> `u32` — number of bid entries for this invoice
-/// - `Entry(invoice_id, idx)` -> `BytesN<32>` — individual bid ID at position `idx`
-///
-/// This makes `add_bid_to_invoice` O(1) (write one entry + increment count)
-/// instead of O(n) (read full Vec, append, write full Vec), reducing gas
-/// on the hot bidding path.
+/// Uses an indexed layout (Count + Entry) to avoid O(n) read+write on vectors
+/// during hot paths like placing bids.
 #[derive(Clone)]
 #[contracttype]
 pub enum BidIndexKey {
     Count(BytesN<32>),
     Entry(BytesN<32>, u32),
+    AllBidsCount,
+    AllBidsEntry(u32),
+    InvestorBidsCount(Address),
+    InvestorBidsEntry(Address, u32),
 }
 
 // --- Bid TTL configuration ----------------------------------------------------
-//
-// TTL is stored in whole days and is admin-configurable within [MIN, MAX].
-// A zero TTL is explicitly rejected to prevent bids that expire immediately.
-// An extreme TTL (> MAX_BID_TTL_DAYS) is rejected to prevent bids that
-// effectively never expire, which would lock investor funds indefinitely.
-//
-// Default: 7 days  |  Min: 1 day  |  Max: 30 days
 pub const DEFAULT_BID_TTL_DAYS: u64 = 7;
 pub const MIN_BID_TTL_DAYS: u64 = 1;
 pub const MAX_BID_TTL_DAYS: u64 = 30;
@@ -42,136 +32,56 @@ const DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR: u32 = 20;
 const SECONDS_PER_DAY: u64 = 86400;
 
 // --- Bid expiry grace period -------------------------------------------------
-//
-// A stale `Placed` bid (one whose `expiration_timestamp` has already passed)
-// only becomes eligible for the permissionless cleanup entrypoints
-// (`cleanup_expired_bids` / `cleanup_expired_bids_paged`, and the lazy-refresh
-// helpers they share) once this additional grace window has also elapsed on
-// top of `expiration_timestamp`. The grace period exists purely to give the
-// investor (or the wider system) a buffer before a third party can force the
-// `Placed -> Expired` transition; it never affects acceptance or active-bid
-// counting, which continue to key off the raw `expiration_timestamp` via
-// `Bid::is_expired`.
-//
-// Admin-configurable within [MIN, MAX], mirroring the bid TTL knob above.
-// Default: 0 (matches the pre-existing behaviour of cleaning up immediately
-// at raw expiry) | Min: 0 | Max: 30 days.
 pub const DEFAULT_BID_EXPIRY_GRACE_SECONDS: u64 = 0;
 pub const MIN_BID_EXPIRY_GRACE_SECONDS: u64 = 0;
 pub const MAX_BID_EXPIRY_GRACE_SECONDS: u64 = 30 * SECONDS_PER_DAY;
 const BID_EXPIRY_GRACE_KEY: Symbol = symbol_short!("bid_grace");
 
-/// @notice Maximum number of active bids allowed per invoice.
-/// @dev An active bid is one in the `Placed` status. Limiting this prevents unbounded
-/// storage growth, keeping state reads and iterations highly efficient and within
-/// Soroban compute limits. Bids transitioning to terminal states (like Expired, Cancelled)
-/// are excluded from this limit, so new bids can replace old ones.
 pub const MAX_BIDS_PER_INVOICE: u32 = 50;
-
-/// Sentinel value meaning the investor active-bid limit is disabled (no cap).
 pub const INVESTOR_BID_LIMIT_DISABLED: u32 = 0;
 
-/// Snapshot of the current bid TTL configuration returned by `get_bid_ttl_config`.
-///
-/// Provides all bounds and the active value in a single call so off-chain
-/// clients and tests can assert the full configuration without multiple queries.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidTtlConfig {
-    /// Currently active TTL in days (admin-set or compile-time default).
     pub current_days: u64,
-    /// Minimum allowed TTL in days (compile-time constant: 1).
     pub min_days: u64,
-    /// Maximum allowed TTL in days (compile-time constant: 30).
     pub max_days: u64,
-    /// Compile-time default TTL in days (7).
     pub default_days: u64,
-    /// `true` when the admin has explicitly set a TTL; `false` when the
-    /// compile-time default is in use.
     pub is_custom: bool,
 }
 
-/// Snapshot of the current bid expiry grace-period configuration returned by
-/// `get_bid_expiry_grace_config`.
-///
-/// The grace period is added on top of a bid's `expiration_timestamp` before
-/// `cleanup_stale_bid` is allowed to auto-cancel it. See
-/// `docs/BID_EXPIRY_GRACE.md` for the full auto-cancellation flow.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidExpiryGraceConfig {
-    /// Currently active grace period in seconds (admin-set or compile-time default).
     pub current_seconds: u64,
-    /// Minimum allowed grace period in seconds (compile-time constant: 0).
     pub min_seconds: u64,
-    /// Maximum allowed grace period in seconds (compile-time constant: 30 days).
     pub max_seconds: u64,
-    /// Compile-time default grace period in seconds (0 — immediate cleanup).
     pub default_seconds: u64,
-    /// `true` when the admin has explicitly set a grace period; `false` when
-    /// the compile-time default is in use.
     pub is_custom: bool,
 }
 
-/// Snapshot of the current investor active-bid limit configuration.
-///
-/// Returned by [`BidStorage::get_bid_limit_config`] so that off-chain clients,
-/// dashboards, and tests can inspect the complete policy in a single call.
-///
-/// ### Interpreting `limit`
-///
-/// | `limit` value | Meaning                                                    |
-/// |---------------|------------------------------------------------------------|
-/// | `0`           | Limit is **disabled** - any number of open bids is allowed |
-/// | `n > 0`       | At most `n` concurrently `Placed` bids per investor        |
-///
-/// Use [`BidStorage::is_investor_bid_limit_active`] for a simple boolean check.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct BidLimitConfig {
-    /// Active limit value.  `0` means enforcement is disabled.
     pub limit: u32,
-    /// Compile-time default (`DEFAULT_MAX_ACTIVE_BIDS_PER_INVESTOR` = 20).
     pub default_limit: u32,
-    /// `true` when `limit == 0` (enforcement disabled).
     pub is_disabled: bool,
-    /// `true` when the admin has explicitly set a value (overriding the default).
     pub is_custom: bool,
 }
 
-// Removed duplicate BidStatus and Bid definitions.
-// Using definitions from crate::types.
-
 impl Bid {
-    /// @notice Returns whether a bid is expired at `current_timestamp`.
-    /// @dev Expiration is evaluated with an inclusive comparison:
-    ///      `current_timestamp >= expiration_timestamp`.
-    ///      This means a bid is valid until the second before expiry and
-    ///      becomes expired at the expiry timestamp. All cleanup and acceptance
-    ///      paths rely on this same predicate to avoid off-by-one divergence.
-    /// @param current_timestamp Current ledger timestamp.
-    /// @return true when the bid has reached or passed its expiry boundary.
     pub fn is_expired(&self, current_timestamp: u64) -> bool {
         current_timestamp >= self.expiration_timestamp
     }
 
-    /// @notice Returns whether a bid is eligible for permissionless cleanup
-    ///      (the `Placed -> Expired` transition performed by
-    ///      `cleanup_expired_bids`/`cleanup_expired_bids_paged` and the
-    ///      lazy-refresh helpers) at `current_timestamp`.
-    /// @dev A bid is excluded from acceptance and active-bid counting as soon
-    ///      as `is_expired` is true (no change there — see
-    ///      `docs/BID_EXPIRY_GRACE.md`), but the actual storage transition and
-    ///      index pruning are deferred until `grace_seconds` (the
-    ///      admin-configurable `bid_expiry_grace_seconds`) have also elapsed
-    ///      on top of `expiration_timestamp`. This gives the investor a
-    ///      buffer before any third party can force the cleanup.
-    /// @param current_timestamp Current ledger timestamp.
-    /// @param grace_seconds Configured grace window, from
-    ///      `BidStorage::get_bid_expiry_grace_seconds`.
-    /// @return true once `current_timestamp >= expiration_timestamp + grace_seconds`.
     pub fn is_cleanup_eligible(&self, current_timestamp: u64, grace_seconds: u64) -> bool {
         current_timestamp >= self.expiration_timestamp.saturating_add(grace_seconds)
+    }
+
+    /// Active means still in the Placed state and not yet expired at the
+    /// current ledger timestamp.
+    pub fn is_active(&self, current_timestamp: u64) -> bool {
+        self.status == BidStatus::Placed && !self.is_expired(current_timestamp)
     }
 
     /// Backward-compatible helper used by some tests: uses compile-time default.
@@ -179,7 +89,6 @@ impl Bid {
         now.saturating_add(DEFAULT_BID_TTL_DAYS.saturating_mul(SECONDS_PER_DAY))
     }
 
-    /// Compute default expiration using configured TTL (admin-configurable).
     pub fn default_expiration_with_env(env: &Env, now: u64) -> u64 {
         let days = BidStorage::get_bid_ttl_days(env);
         now.saturating_add(days.saturating_mul(SECONDS_PER_DAY))
@@ -187,37 +96,6 @@ impl Bid {
 }
 
 impl BidStatus {
-    /// Validate that a bid status transition is legal.
-    ///
-    /// `Placed` is the only non-terminal state and the only state with
-    /// outgoing edges. Every other state is reached at most once and is
-    /// immutable afterwards, with the single exception that an `Accepted` bid
-    /// may be voided to `Cancelled` when its escrow is refunded or its
-    /// investment is withdrawn.
-    ///
-    /// This is the single source of truth for bid lifecycle legality. Every
-    /// callable entry point that moves a bid (`withdraw_bid`, `cancel_bid`, the
-    /// accept/funding path, and the expiry flows) must consult it, so no path
-    /// (current or future) can produce an impossible backward transition or a
-    /// double-actioned terminal bid.
-    ///
-    /// ### Legal transition matrix
-    ///
-    /// | From      | To                                    | Driving entrypoint                              |
-    /// |-----------|---------------------------------------|-------------------------------------------------|
-    /// | Placed    | Accepted, Withdrawn, Cancelled, Expired | accept_bid, withdraw_bid, cancel_bid, cleanup  |
-    /// | Accepted  | Cancelled                             | refund_escrow_funds / withdraw_investment       |
-    /// | Withdrawn | *(terminal — no further moves)*       | -                                               |
-    /// | Cancelled | *(terminal — no further moves)*       | -                                               |
-    /// | Expired   | *(terminal — no further moves)*       | -                                               |
-    ///
-    /// Self-transitions and every other `(from, to)` pair are rejected: a bid
-    /// cannot be withdrawn twice, cancelled twice, accepted from a terminal
-    /// state, resurrected, or re-placed in place.
-    ///
-    /// # Returns
-    /// * `Ok(())` if the transition is legal.
-    /// * `Err(QuickLendXError::InvalidStatus)` if the transition is invalid.
     pub fn validate_transition(from: &BidStatus, to: &BidStatus) -> Result<(), QuickLendXError> {
         let allowed = match from {
             BidStatus::Placed => matches!(
@@ -240,40 +118,36 @@ impl BidStatus {
 
 pub struct BidStorage;
 
-const ALL_BIDS_KEY: Symbol = symbol_short!("all_bids");
-
 impl BidStorage {
-    fn all_bids_key() -> Symbol {
-        ALL_BIDS_KEY
-    }
-
     pub fn get_all_bids(env: &Env) -> Vec<BytesN<32>> {
-        let result: Vec<BytesN<32>> = env
-            .storage()
-            .persistent()
-            .get(&Self::all_bids_key())
-            .unwrap_or_else(|| Vec::new(env));
-        if !result.is_empty() {
-            extend_persistent_ttl(env, &Self::all_bids_key());
+        let count_key = BidIndexKey::AllBidsCount;
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        if count > 0 {
+            bump_persistent(env, &count_key);
         }
-        result
+        let mut bids = Vec::new(env);
+        let mut idx: u32 = 0;
+        while idx < count {
+            let entry_key = BidIndexKey::AllBidsEntry(idx);
+            if let Some(bid_id) = env.storage().persistent().get(&entry_key) {
+                bump_persistent(env, &entry_key);
+                bids.push_back(bid_id);
+            }
+            idx += 1;
+        }
+        bids
     }
 
     fn add_to_all_bids(env: &Env, bid_id: &BytesN<32>) {
-        let mut bids = Self::get_all_bids(env);
-        let mut exists = false;
-        for bid in bids.iter() {
-            if bid == *bid_id {
-                exists = true;
-                break;
-            }
-        }
-        if !exists {
-            bids.push_back(bid_id.clone());
-            env.storage().persistent().set(&Self::all_bids_key(), &bids);
-            extend_persistent_ttl(env, &Self::all_bids_key());
-        }
+        let count_key = BidIndexKey::AllBidsCount;
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        let entry_key = BidIndexKey::AllBidsEntry(count);
+        env.storage().persistent().set(&entry_key, bid_id);
+        bump_persistent(env, &entry_key);
+        env.storage().persistent().set(&count_key, &(count + 1));
+        bump_persistent(env, &count_key);
     }
+
     fn invoice_bid_count_key(invoice_id: &BytesN<32>) -> BidIndexKey {
         BidIndexKey::Count(invoice_id.clone())
     }
@@ -282,38 +156,33 @@ impl BidStorage {
         BidIndexKey::Entry(invoice_id.clone(), index)
     }
 
-    fn investor_bids_key(investor: &Address) -> (soroban_sdk::Symbol, Address) {
-        (symbol_short!("bid_inv"), investor.clone())
-    }
-
     pub fn get_bids_by_investor_all(env: &Env, investor: &Address) -> Vec<BytesN<32>> {
-        let key = Self::investor_bids_key(investor);
-        let result: Vec<BytesN<32>> = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env));
-        if !result.is_empty() {
-            extend_persistent_ttl(env, &key);
+        let count_key = BidIndexKey::InvestorBidsCount(investor.clone());
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        if count > 0 {
+            bump_persistent(env, &count_key);
         }
-        result
+        let mut bids = Vec::new(env);
+        let mut idx: u32 = 0;
+        while idx < count {
+            let entry_key = BidIndexKey::InvestorBidsEntry(investor.clone(), idx);
+            if let Some(bid_id) = env.storage().persistent().get(&entry_key) {
+                bump_persistent(env, &entry_key);
+                bids.push_back(bid_id);
+            }
+            idx += 1;
+        }
+        bids
     }
 
     fn add_to_investor_bids(env: &Env, investor: &Address, bid_id: &BytesN<32>) {
-        let key = Self::investor_bids_key(investor);
-        let mut bids = Self::get_bids_by_investor_all(env, investor);
-        let mut exists = false;
-        for bid in bids.iter() {
-            if bid == *bid_id {
-                exists = true;
-                break;
-            }
-        }
-        if !exists {
-            bids.push_back(bid_id.clone());
-            env.storage().persistent().set(&key, &bids);
-            extend_persistent_ttl(env, &key);
-        }
+        let count_key = BidIndexKey::InvestorBidsCount(investor.clone());
+        let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+        let entry_key = BidIndexKey::InvestorBidsEntry(investor.clone(), count);
+        env.storage().persistent().set(&entry_key, bid_id);
+        bump_persistent(env, &entry_key);
+        env.storage().persistent().set(&count_key, &(count + 1));
+        bump_persistent(env, &count_key);
     }
 
     pub fn store_bid(env: &Env, bid: &Bid) {
@@ -325,6 +194,7 @@ impl BidStorage {
         // Add to global index
         Self::add_to_all_bids(env, &bid.bid_id);
     }
+
     pub fn get_bid(env: &Env, bid_id: &BytesN<32>) -> Option<Bid> {
         let result = env.storage().persistent().get(bid_id);
         if result.is_some() {
@@ -332,11 +202,13 @@ impl BidStorage {
         }
         result
     }
+
     pub fn update_bid(env: &Env, bid: &Bid) {
         crate::assert_view_only!(env);
         env.storage().persistent().set(&bid.bid_id, bid);
         bump_persistent(env, &bid.bid_id);
     }
+
     pub fn get_bids_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
         let count_key = Self::invoice_bid_count_key(invoice_id);
         let count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
@@ -359,12 +231,13 @@ impl BidStorage {
     pub fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         let _ = Self::refresh_expired_bids(env, invoice_id);
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
+        let current_timestamp = env.ledger().timestamp();
         let mut active_count = 0u32;
         let mut idx: u32 = 0;
         while idx < bid_ids.len() {
             let bid_id = bid_ids.get(idx).unwrap();
             if let Some(bid) = Self::get_bid(env, &bid_id) {
-                if bid.status == BidStatus::Placed {
+                if bid.is_active(current_timestamp) {
                     active_count += 1;
                 }
             }
@@ -373,10 +246,6 @@ impl BidStorage {
         active_count
     }
 
-    /// Return the currently active bid TTL in days.
-    ///
-    /// Falls back to `DEFAULT_BID_TTL_DAYS` (7) when no admin override has
-    /// been stored, ensuring deterministic behaviour even on a fresh contract.
     pub fn get_bid_ttl_days(env: &Env) -> u64 {
         env.storage()
             .instance()
@@ -384,10 +253,6 @@ impl BidStorage {
             .unwrap_or(DEFAULT_BID_TTL_DAYS)
     }
 
-    /// Return the full TTL configuration snapshot.
-    ///
-    /// Includes the active value, compile-time bounds, the default, and a flag
-    /// indicating whether the admin has overridden the default.
     pub fn get_bid_ttl_config(env: &Env) -> BidTtlConfig {
         let stored: Option<u64> = env.storage().instance().get(&BID_TTL_KEY);
         BidTtlConfig {
@@ -399,26 +264,10 @@ impl BidStorage {
         }
     }
 
-    /// Admin-only: set bid TTL in days.
-    ///
-    /// ### Bounds
-    /// - Minimum: `MIN_BID_TTL_DAYS` (1) - prevents zero-TTL bids that expire
-    ///   immediately and can never be accepted.
-    /// - Maximum: `MAX_BID_TTL_DAYS` (30) - prevents extreme windows that
-    ///   would lock investor funds for unreasonably long periods.
-    ///
-    /// ### Errors
-    /// Returns `InvalidBidTtl` (not `InvalidAmount`) for a clear, auditable
-    /// error signal distinct from monetary validation failures.
-    ///
-    /// ### Events
-    /// Emits `ttl_upd` with the old value, new value, admin address, and
-    /// ledger timestamp so off-chain monitors can track every config change.
     pub fn set_bid_ttl_days(env: &Env, admin: &Address, days: u64) -> Result<u64, QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
 
-        // Explicit zero check first for a clear error message.
         if days == 0 {
             return Err(QuickLendXError::InvalidBidTtl);
         }
@@ -778,7 +627,6 @@ impl BidStorage {
             bump_persistent(env, &count_key);
         }
         let mut cleaned_count = 0u32;
-        let mut write_idx: u32 = 0;
         let mut read_idx: u32 = 0;
 
         while read_idx < old_count {
@@ -794,7 +642,7 @@ impl BidStorage {
                             || bid.status == BidStatus::Withdrawn
                             || bid.status == BidStatus::Cancelled;
 
-                        if is_terminal {
+                        if is_terminal || bid.status == BidStatus::Expired {
                             true
                         } else if bid.status == BidStatus::Placed
                             && bid.is_cleanup_eligible(current_timestamp, grace_seconds)
@@ -810,10 +658,7 @@ impl BidStorage {
                                 bid.bid_id.clone(),
                             );
                             cleaned_count = cleaned_count.saturating_add(1);
-                            false
-                        } else if bid.status == BidStatus::Expired {
-                            cleaned_count = cleaned_count.saturating_add(1);
-                            false
+                            true
                         } else {
                             true
                         }
@@ -823,34 +668,12 @@ impl BidStorage {
                     }
                 });
 
-            if should_keep {
-                if write_idx != read_idx {
-                    let src = Self::invoice_bid_entry_key(invoice_id, read_idx);
-                    let dst = Self::invoice_bid_entry_key(invoice_id, write_idx);
-                    if let Some(bid_id) = env.storage().persistent().get::<_, BytesN<32>>(&src) {
-                        bump_persistent(env, &src);
-                        env.storage().persistent().set(&dst, &bid_id);
-                        bump_persistent(env, &dst);
-                    }
-                }
-                write_idx += 1;
+            if !should_keep {
+                break;
             }
             read_idx += 1;
         }
 
-        // Remove stale entries beyond the new write_idx
-        while write_idx < old_count {
-            env.storage()
-                .persistent()
-                .remove(&Self::invoice_bid_entry_key(invoice_id, write_idx));
-            write_idx += 1;
-        }
-
-        if cleaned_count > 0 {
-            let new_count = old_count.saturating_sub(cleaned_count);
-            env.storage().persistent().set(&count_key, &new_count);
-            bump_persistent(env, &count_key);
-        }
         cleaned_count
     }
 
@@ -981,7 +804,7 @@ impl BidStorage {
                             || bid.status == BidStatus::Withdrawn
                             || bid.status == BidStatus::Cancelled;
 
-                        if is_terminal {
+                        if is_terminal || bid.status == BidStatus::Expired {
                             true
                         } else if bid.status == BidStatus::Placed
                             && bid.is_cleanup_eligible(current_timestamp, grace_seconds)
@@ -997,10 +820,7 @@ impl BidStorage {
                                 bid.bid_id.clone(),
                             );
                             cleaned_count = cleaned_count.saturating_add(1);
-                            false
-                        } else if bid.status == BidStatus::Expired {
-                            cleaned_count = cleaned_count.saturating_add(1);
-                            false
+                            true
                         } else {
                             true
                         }
@@ -1010,32 +830,16 @@ impl BidStorage {
                     }
                 });
 
-            if should_keep {
-                if write_idx != read_idx {
-                    let src = Self::invoice_bid_entry_key(invoice_id, read_idx);
-                    let dst = Self::invoice_bid_entry_key(invoice_id, write_idx);
-                    if let Some(bid_id) = env.storage().persistent().get::<_, BytesN<32>>(&src) {
-                        bump_persistent(env, &src);
-                        env.storage().persistent().set(&dst, &bid_id);
-                        bump_persistent(env, &dst);
-                    }
-                }
-                write_idx += 1;
+            if !should_keep {
+                break;
             }
             read_idx += 1;
         }
 
-        // Only update count if we processed the entire list (offset=0 and end_idx=old_count)
-        // Otherwise, the full cleanup will handle the final count update
-        if offset == 0 && end_idx == old_count && cleaned_count > 0 {
-            let new_count = old_count.saturating_sub(cleaned_count);
-            env.storage().persistent().set(&count_key, &new_count);
-            bump_persistent(env, &count_key);
-            (cleaned_count, new_count)
-        } else {
-            // For partial cleanup, return the cleaned count and current total
-            (cleaned_count, old_count.saturating_sub(cleaned_count))
-        }
+        // Expired bids remain in the invoice index for historical queries; we
+        // only transition them to `Expired` in storage and return the number
+        // that were newly marked expired.
+        (cleaned_count, old_count)
     }
 
     pub fn get_bid_records_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<Bid> {
@@ -1288,11 +1092,12 @@ impl BidStorage {
     /// maximum number of open bids per investor across all invoices.
     pub fn count_active_bids_by_investor(env: &Env, investor: &Address) -> u32 {
         let all_bids = Self::get_all_bids_by_investor(env, investor);
+        let current_timestamp = env.ledger().timestamp();
         let mut count: u32 = 0;
         let mut idx: u32 = 0;
         while idx < all_bids.len() {
             let bid = all_bids.get(idx).unwrap();
-            if bid.status == BidStatus::Placed {
+            if bid.is_active(current_timestamp) {
                 count = count.saturating_add(1);
             }
             idx = idx.saturating_add(1);
@@ -1358,18 +1163,17 @@ impl BidStorage {
         invoice_id: &BytesN<32>,
         current_timestamp: u64,
     ) -> bool {
+        let grace_seconds = Self::get_bid_expiry_grace_seconds(env);
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
         let mut idx: u32 = 0;
         while idx < bid_ids.len() {
             let bid_id = bid_ids.get(idx).unwrap();
             if let Some(bid) = Self::get_bid(env, &bid_id) {
-                // Every Expired bid must have a past deadline
-                if bid.status == BidStatus::Expired && bid.expiration_timestamp >= current_timestamp
-                {
+                if bid.status == BidStatus::Expired && bid.expiration_timestamp > current_timestamp {
                     return false;
                 }
-                // No Placed bid should remain past its deadline
-                if bid.status == BidStatus::Placed && bid.is_expired(current_timestamp) {
+                if bid.status == BidStatus::Placed && bid.is_cleanup_eligible(current_timestamp, grace_seconds)
+                {
                     return false;
                 }
             }

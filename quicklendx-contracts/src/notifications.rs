@@ -14,9 +14,15 @@ use soroban_sdk::{
     contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, Map, String, Vec,
 };
 
-/// Maximum number of idempotency keys to track in the bloom-resistant set.
-/// This provides protection against replay attacks while maintaining reasonable storage.
-const MAX_IDEMPOTENCY_KEYS: u32 = 10_000;
+/// TTL threshold in ledgers for temporary storage idempotency markers (~500 ledgers).
+pub const IDEMPOTENCY_TTL_THRESHOLD: u32 = 500;
+/// Extension target in ledgers for temporary storage idempotency markers (~1,000 ledgers).
+pub const IDEMPOTENCY_TTL_EXTEND_TO: u32 = 1_000;
+
+/// Deprecated constant preserved for backward-compatibility.
+/// Idempotency markers now expire automatically via temporary storage TTL.
+#[deprecated(note = "Idempotency markers are now evicted automatically via temporary storage TTL")]
+pub const MAX_IDEMPOTENCY_KEYS: u32 = 10_000;
 
 /// Notification types for different events
 #[contracttype]
@@ -389,34 +395,26 @@ pub struct NotificationSystem;
 impl NotificationSystem {
     /// Check if an idempotency key has been seen before.
     ///
-    /// Uses a bloom-resistant set stored in contract storage to track
-    /// previously-seen idempotency keys. This prevents duplicate notifications
-    /// from being emitted if a transaction is replayed.
+    /// Uses temporary storage to track previously-seen idempotency keys.
+    /// Temporary storage automatically expires after `IDEMPOTENCY_TTL_EXTEND_TO`
+    /// ledgers, preventing unbounded accumulation without requiring an instance-storage bloom set.
     fn has_seen_idempotency_key(env: &Env, key: &BytesN<32>) -> bool {
         let storage_key = DataKey::IdempotencyKey(key.clone());
-        env.storage().instance().has(&storage_key)
+        env.storage().temporary().has(&storage_key)
     }
 
-    /// Record an idempotency key as seen.
+    /// Record an idempotency key as seen in temporary storage.
     ///
-    /// Stores the key in the bloom-resistant set to prevent future replays.
-    /// If the set exceeds MAX_IDEMPOTENCY_KEYS, the oldest entries are pruned.
+    /// Sets the key with a temporary storage TTL to protect against replays
+    /// during the active ledger window while guaranteeing bounded contract state.
     fn record_idempotency_key(env: &Env, key: &BytesN<32>) {
         let storage_key = DataKey::IdempotencyKey(key.clone());
-        env.storage().instance().set(&storage_key, &true);
-
-        // Track the set size for potential pruning
-        let set_key = DataKey::IdempotencyKeySet;
-        let mut key_set: Vec<BytesN<32>> = env
-            .storage()
-            .instance()
-            .get(&set_key)
-            .unwrap_or_else(|| Vec::new(env));
-
-        if key_set.len() < MAX_IDEMPOTENCY_KEYS {
-            key_set.push_back(key.clone());
-            env.storage().instance().set(&set_key, &key_set);
-        }
+        env.storage().temporary().set(&storage_key, &true);
+        env.storage().temporary().extend_ttl(
+            &storage_key,
+            IDEMPOTENCY_TTL_THRESHOLD,
+            IDEMPOTENCY_TTL_EXTEND_TO,
+        );
     }
 
     /// Create and store a notification with idempotency protection.
@@ -489,16 +487,21 @@ impl NotificationSystem {
         Ok(notification.id)
     }
 
-    /// Store a notification
+    /// Store a notification in persistent storage with TTL extension.
     fn store_notification(env: &Env, notification: &Notification) {
         let key = Self::get_notification_key(&notification.id);
-        env.storage().instance().set(&key, notification);
+        env.storage().persistent().set(&key, notification);
+        crate::storage::extend_persistent_ttl(env, &key);
     }
 
-    /// Get a notification by ID
+    /// Get a notification by ID from persistent storage with TTL refresh.
     pub fn get_notification(env: &Env, notification_id: &BytesN<32>) -> Option<Notification> {
         let key = Self::get_notification_key(notification_id);
-        env.storage().instance().get(&key)
+        let result = env.storage().persistent().get(&key);
+        if result.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        result
     }
 
     /// Update notification status
@@ -531,32 +534,73 @@ impl NotificationSystem {
         Ok(())
     }
 
-    /// Get user notifications
+    /// Get user notifications from persistent storage with TTL refresh.
     pub fn get_user_notifications(env: &Env, user: &Address) -> Vec<BytesN<32>> {
         let key = Self::get_user_notifications_key(user);
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+        let result = env.storage().persistent().get(&key);
+        if result.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        result.unwrap_or_else(|| Vec::new(env))
     }
 
-    /// Get user notification preferences
+    /// Return a paginated slice of user notification IDs.
+    pub fn get_user_notifications_paged(
+        env: &Env,
+        user: &Address,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<BytesN<32>> {
+        let list = Self::get_user_notifications(env, user);
+        let total_count = list.len();
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut page = Vec::new(env);
+        let mut idx = start;
+        while idx < end {
+            if let Some(id) = list.get(idx) {
+                page.push_back(id);
+            }
+            idx = idx.saturating_add(1);
+        }
+        page
+    }
+
+    /// Return a paginated response with metadata for user notifications.
+    pub fn get_user_notifications_paginated(
+        env: &Env,
+        user: &Address,
+        offset: u32,
+        limit: u32,
+    ) -> crate::types::PaginatedBytes32Vec {
+        let items = Self::get_user_notifications_paged(env, user, offset, limit);
+        let total_count = Self::get_user_notifications(env, user).len();
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        crate::types::PaginatedBytes32Vec {
+            items,
+            total_count,
+            has_more,
+        }
+    }
+
+    /// Get user notification preferences from persistent storage with TTL refresh.
     pub fn get_user_preferences(env: &Env, user: &Address) -> NotificationPreferences {
         let key = DataKey::UserPreferences(user.clone());
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| NotificationPreferences::default_for_user(env, user.clone()))
+        let result = env.storage().persistent().get(&key);
+        if result.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        result.unwrap_or_else(|| NotificationPreferences::default_for_user(env, user.clone()))
     }
 
-    /// Update user notification preferences
+    /// Update user notification preferences in persistent storage with TTL refresh.
     pub fn update_user_preferences(
         env: &Env,
         user: &Address,
         preferences: NotificationPreferences,
     ) {
         let key = DataKey::UserPreferences(user.clone());
-        env.storage().instance().set(&key, &preferences);
+        env.storage().persistent().set(&key, &preferences);
+        crate::storage::extend_persistent_ttl(env, &key);
 
         // Emit preferences update event
         env.events()
@@ -626,7 +670,8 @@ impl NotificationSystem {
         let key = Self::get_user_notifications_key(user);
         let mut notifications = Self::get_user_notifications(env, user);
         notifications.push_back(notification_id.clone());
-        env.storage().instance().set(&key, &notifications);
+        env.storage().persistent().set(&key, &notifications);
+        crate::storage::extend_persistent_ttl(env, &key);
     }
 
     /// Retrieve and increment the instance-level monotonic notification counter.

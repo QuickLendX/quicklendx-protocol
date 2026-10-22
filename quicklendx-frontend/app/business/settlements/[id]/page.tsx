@@ -63,8 +63,6 @@ function formatDate(iso: string): string {
     day: "numeric",
     hour: "2-digit",
     minute: "2-digit",
-    timeZone: "UTC",
-    timeZoneName: "short",
   });
 }
 
@@ -287,7 +285,17 @@ export default function SettlementReceiptPage() {
 
   const handleDownloadJSON = async () => {
     // TODO: replace with authenticated fetch
-    const blob = new Blob([JSON.stringify({ receipt }, null, 2)], {
+    const exportReceipt = {
+      settlement_id: receipt.id,
+      settlement_date: receipt.settlementDate,
+      account_last4: receipt.transfer.accountLast4,
+      escrow_release: receipt.funding.escrowRelease
+        .split(',')[0]
+        ?.trim()
+        .toLowerCase(),
+      transfer: receipt.transfer,
+    };
+    const blob = new Blob([JSON.stringify(exportReceipt, null, 2)], {
       type: "application/json",
     });
     const url = URL.createObjectURL(blob);
@@ -295,7 +303,8 @@ export default function SettlementReceiptPage() {
     a.href = url;
     a.download = `${receiptId}.json`;
     a.click();
-    URL.revokeObjectURL(url);
+    // Keep the object URL alive until the browser has consumed the detached link.
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
     setLiveMsg("JSON downloaded.");
     setTimeout(() => setLiveMsg(""), 3000);
   };
@@ -322,7 +331,7 @@ export default function SettlementReceiptPage() {
       <div className="max-w-3xl mx-auto space-y-6">
         {/* Back link — hidden on print */}
         <Link
-          href="/"
+          href="/business/settlements"
           className="print:hidden inline-flex items-center gap-1 text-sm text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
         >
           <svg
@@ -340,7 +349,7 @@ export default function SettlementReceiptPage() {
               strokeLinejoin="round"
             />
           </svg>
-          Back to Home
+          Back to settlements
         </Link>
 
         {/* Header */}
@@ -677,7 +686,7 @@ export default function SettlementReceiptPage() {
         {/* Print-only footer */}
         <div className="hidden print:block mt-8 pt-4 border-t border-[#E2E8F0] text-xs text-[#64748B]">
           <p>Confidential — for authorised account holder only.</p>
-          <p suppressHydrationWarning>
+          <p>
             Printed on{" "}
             {new Date().toLocaleDateString("en-US", {
               year: "numeric",

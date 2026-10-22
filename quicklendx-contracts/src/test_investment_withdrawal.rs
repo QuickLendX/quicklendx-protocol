@@ -277,12 +277,19 @@ fn test_withdrawal_emits_events() {
     );
 
     let before = count_events_with_topic(&env, TOPIC_INVESTMENT_WITHDRAWN);
+    let refund_before = count_events_with_topic(&env, crate::events::TOPIC_ESCROW_REFUNDED);
     client.withdraw_investment(&invoice_id, &investor);
     let after = count_events_with_topic(&env, TOPIC_INVESTMENT_WITHDRAWN);
+    let refund_after = count_events_with_topic(&env, crate::events::TOPIC_ESCROW_REFUNDED);
     assert_eq!(
         after,
         before + 1,
         "withdrawal should emit exactly one InvestmentWithdrawn event"
+    );
+    assert_eq!(
+        refund_after,
+        refund_before + 1,
+        "withdrawal should emit exactly one EscrowRefunded event"
     );
 }
 

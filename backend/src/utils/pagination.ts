@@ -105,6 +105,17 @@ export function parsePaginationParams(query: {
   return { limit, cursor };
 }
 
+/** Build a stable scope string from the active filters. */
+export function paginationScope(
+  filters: Record<string, string | undefined>
+): string {
+  return Object.entries(filters)
+    .filter((entry): entry is [string, string] => entry[1] !== undefined)
+    .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+    .join("&");
+}
+
 export class PaginationError extends Error {
   constructor(message: string) {
     super(message);

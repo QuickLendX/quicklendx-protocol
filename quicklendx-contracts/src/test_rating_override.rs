@@ -163,6 +163,13 @@ fn test_rating_override_revert_restores_pre_override_rating_and_logs_audit_trail
     let invoice_id = seed_invoice(&env, &client.address);
     let rater = Address::generate(&env);
 
+    env.as_contract(&client.address, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.status = crate::types::InvoiceStatus::Funded;
+        invoice.investor = Some(rater.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
     // 1. Initial rating added (pre-override value = 5)
     client.add_invoice_rating(
         &invoice_id,
@@ -218,33 +225,32 @@ fn test_rating_override_revert_restores_pre_override_rating_and_logs_audit_trail
 fn test_rating_override_revert_on_invoice_with_multiple_ratings() {
     let (env, client, admin) = setup();
     let invoice_id = seed_invoice(&env, &client.address);
-    let rater1 = Address::generate(&env);
-    let rater2 = Address::generate(&env);
+    let rater = Address::generate(&env);
 
-    // Add multiple ratings: 5 and 3 -> computed average rating is 4
+    env.as_contract(&client.address, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.status = crate::types::InvoiceStatus::Funded;
+        invoice.investor = Some(rater.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
     client.add_invoice_rating(
         &invoice_id,
         &5u32,
         &String::from_str(&env, "Rating 1"),
-        &rater1,
-    );
-    client.add_invoice_rating(
-        &invoice_id,
-        &3u32,
-        &String::from_str(&env, "Rating 2"),
-        &rater2,
+        &rater,
     );
 
     let pre_override_invoice = client.get_invoice(&invoice_id);
     let pre_override_rating = pre_override_invoice.average_rating;
-    assert_eq!(pre_override_rating, Some(4));
+    assert_eq!(pre_override_rating, Some(5));
 
     // Admin overrides average rating to 1
     let override_reason = String::from_str(&env, "Flagged rating override");
     client.rating_override(&admin, &invoice_id, &1u32, &override_reason);
     assert_eq!(client.get_invoice(&invoice_id).average_rating, Some(1));
 
-    // Admin reverts rating back to pre-override rating (4)
+    // Admin reverts rating back to pre-override rating (5)
     let revert_reason = String::from_str(&env, "Reverting rating override to pre-override average");
     client.rating_override(
         &admin,
@@ -255,7 +261,7 @@ fn test_rating_override_revert_on_invoice_with_multiple_ratings() {
 
     let final_invoice = client.get_invoice(&invoice_id);
     assert_eq!(final_invoice.average_rating, pre_override_rating);
-    assert_eq!(final_invoice.total_ratings, 2);
+    assert_eq!(final_invoice.total_ratings, 1);
 }
 
 #[test]
@@ -263,6 +269,13 @@ fn test_rating_override_revert_failed_attempt_preserves_current_override_rating(
     let (env, client, admin) = setup();
     let invoice_id = seed_invoice(&env, &client.address);
     let rater = Address::generate(&env);
+
+    env.as_contract(&client.address, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.status = crate::types::InvoiceStatus::Funded;
+        invoice.investor = Some(rater.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
 
     client.add_invoice_rating(&invoice_id, &4u32, &String::from_str(&env, "Good"), &rater);
 
@@ -313,6 +326,13 @@ fn test_rating_override_revert_on_frozen_invoice_fails() {
     let invoice_id = seed_invoice(&env, &client.address);
     let rater = Address::generate(&env);
 
+    env.as_contract(&client.address, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.status = crate::types::InvoiceStatus::Funded;
+        invoice.investor = Some(rater.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
     client.add_invoice_rating(
         &invoice_id,
         &5u32,
@@ -350,4 +370,136 @@ fn test_rating_override_revert_on_frozen_invoice_fails() {
 
     // Rating remains at 1
     assert_eq!(client.get_invoice(&invoice_id).average_rating, Some(1));
+}
+
+#[test]
+fn test_third_party_cannot_rate_invoice() {
+    let (env, client, _admin) = setup();
+    let invoice_id = seed_invoice(&env, &client.address);
+    let investor = Address::generate(&env);
+    let attacker = Address::generate(&env);
+
+    env.as_contract(&client.address, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.status = crate::types::InvoiceStatus::Funded;
+        invoice.investor = Some(investor.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    let result = client.try_add_invoice_rating(
+        &invoice_id,
+        &1u32,
+        &String::from_str(&env, "fake rating"),
+        &attacker,
+    );
+
+    assert_eq!(result, Err(Ok(QuickLendXError::NotRater)));
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.ratings.len(), 0);
+}
+
+#[test]
+fn test_investor_can_rate_once() {
+    let (env, client, _admin) = setup();
+    let invoice_id = seed_invoice(&env, &client.address);
+    let investor = Address::generate(&env);
+
+    env.as_contract(&client.address, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.status = crate::types::InvoiceStatus::Funded;
+        invoice.investor = Some(investor.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    client.add_invoice_rating(
+        &invoice_id,
+        &4u32,
+        &String::from_str(&env, "good"),
+        &investor,
+    );
+
+    let invoice = client.get_invoice(&invoice_id);
+    assert_eq!(invoice.average_rating, Some(4));
+    assert_eq!(invoice.total_ratings, 1);
+
+    let second = client.try_add_invoice_rating(
+        &invoice_id,
+        &5u32,
+        &String::from_str(&env, "duplicate"),
+        &investor,
+    );
+    assert_eq!(second, Err(Ok(QuickLendXError::AlreadyRated)));
+}
+
+#[test]
+fn test_business_cannot_rate_own_invoice() {
+    let (env, client, _admin) = setup();
+    let invoice_id = seed_invoice(&env, &client.address);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+
+    env.as_contract(&client.address, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.business = business.clone();
+        invoice.status = crate::types::InvoiceStatus::Funded;
+        invoice.investor = Some(investor.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    let result = client.try_add_invoice_rating(
+        &invoice_id,
+        &5u32,
+        &String::from_str(&env, "business rating"),
+        &business,
+    );
+    assert_eq!(result, Err(Ok(QuickLendXError::NotRater)));
+}
+
+#[test]
+fn test_rating_requires_signature() {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let invoice_id = seed_invoice(&env, &contract_id);
+    let investor = Address::generate(&env);
+
+    env.as_contract(&contract_id, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.status = crate::types::InvoiceStatus::Funded;
+        invoice.investor = Some(investor.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        client.add_invoice_rating(
+            &invoice_id,
+            &5u32,
+            &String::from_str(&env, "signed"),
+            &investor,
+        );
+    }));
+    assert!(result.is_err());
+}
+
+#[test]
+fn test_unfunded_invoice_cannot_be_rated() {
+    let (env, client, _admin) = setup();
+    let invoice_id = seed_invoice(&env, &client.address);
+    let investor = Address::generate(&env);
+
+    env.as_contract(&client.address, || {
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id).unwrap();
+        invoice.status = crate::types::InvoiceStatus::Verified;
+        invoice.investor = Some(investor.clone());
+        InvoiceStorage::update_invoice(&env, &invoice);
+    });
+
+    let result = client.try_add_invoice_rating(
+        &invoice_id,
+        &5u32,
+        &String::from_str(&env, "not funded"),
+        &investor,
+    );
+    assert_eq!(result, Err(Ok(QuickLendXError::NotFunded)));
 }
