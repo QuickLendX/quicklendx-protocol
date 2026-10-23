@@ -10,7 +10,9 @@ use crate::protocol_limits::{
 use crate::storage::InvoiceStorage;
 use crate::types::BidStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
-use soroban_sdk::{contracttype, symbol_short, vec, Address, Bytes, Env, String, Vec};
+use soroban_sdk::{
+    contracttype, symbol_short, vec, Address, Bytes, Env, String, TryFromVal, Val, Vec,
+};
 
 /// Maximum normalized tags allowed on an invoice.
 pub const MAX_INVOICE_TAG_COUNT: u32 = 10;
@@ -20,6 +22,319 @@ pub const MAX_METADATA_LINE_ITEMS: u32 = 100;
 /// Check if actual investor KYC tier meets or exceeds required tier.
 pub fn is_investor_kyc_tier_sufficient(actual: u32, required: u32) -> bool {
     actual >= required
+}
+
+/// Namespaced persistent keys for KYC records. Business and investor
+/// records must never share the same storage key.
+#[contracttype]
+#[derive(Clone)]
+enum KycStorageKey {
+    BusinessRecord(Address),
+    InvestorRecord(Address),
+}
+
+/// Persistent, indexed KYC status lists.
+#[contracttype]
+#[derive(Clone, Copy, Eq, PartialEq)]
+pub(crate) enum KycIndexKind {
+    VerifiedBusinesses,
+    PendingBusinesses,
+    RejectedBusinesses,
+    VerifiedInvestors,
+    PendingInvestors,
+    RejectedInvestors,
+}
+
+#[contracttype]
+#[derive(Clone)]
+enum KycIndexKey {
+    Count(KycIndexKind),
+    Entry(KycIndexKind, u32),
+    Sorted(KycIndexKind),
+}
+
+fn kyc_index_legacy_key(kind: KycIndexKind) -> &'static str {
+    match kind {
+        KycIndexKind::VerifiedBusinesses => "verified_businesses",
+        KycIndexKind::PendingBusinesses => "pending_businesses",
+        KycIndexKind::RejectedBusinesses => "rejected_businesses",
+        KycIndexKind::VerifiedInvestors => "verified_investors",
+        KycIndexKind::PendingInvestors => "pending_investors",
+        KycIndexKind::RejectedInvestors => "rejected_investors",
+    }
+}
+
+fn kyc_submitted_at(env: &Env, kind: KycIndexKind, address: &Address) -> u64 {
+    match kind {
+        KycIndexKind::VerifiedBusinesses
+        | KycIndexKind::PendingBusinesses
+        | KycIndexKind::RejectedBusinesses => {
+            BusinessVerificationStorage::get_verification(env, address)
+                .map(|record| record.submitted_at)
+                .unwrap_or(0)
+        }
+        KycIndexKind::VerifiedInvestors
+        | KycIndexKind::PendingInvestors
+        | KycIndexKind::RejectedInvestors => InvestorVerificationStorage::get(env, address)
+            .map(|record| record.submitted_at)
+            .unwrap_or(0),
+    }
+}
+
+fn kyc_address_lex_gt(a: &Address, b: &Address) -> bool {
+    let a_bytes = a.to_string().to_bytes();
+    let b_bytes = b.to_string().to_bytes();
+    let common_len = a_bytes.len().min(b_bytes.len());
+
+    for i in 0..common_len {
+        let a_byte = a_bytes.get(i).unwrap_or(0);
+        let b_byte = b_bytes.get(i).unwrap_or(0);
+
+        if a_byte != b_byte {
+            return a_byte > b_byte;
+        }
+    }
+
+    a_bytes.len() > b_bytes.len()
+}
+
+fn ensure_kyc_index_sorted(env: &Env, kind: KycIndexKind) {
+    let sorted_key = KycIndexKey::Sorted(kind);
+
+    if env.storage().persistent().has(&sorted_key) {
+        crate::storage::extend_persistent_ttl(env, &sorted_key);
+        return;
+    }
+
+    let count_key = KycIndexKey::Count(kind);
+    let mut entries = if let Some(count) = env.storage().persistent().get::<_, u32>(&count_key) {
+        let mut result = Vec::new(env);
+        for i in 0..count {
+            if let Some(address) = env
+                .storage()
+                .persistent()
+                .get::<_, Address>(&KycIndexKey::Entry(kind, i))
+            {
+                result.push_back(address);
+            }
+        }
+        result
+    } else {
+        env.storage()
+            .instance()
+            .get(&kyc_index_legacy_key(kind))
+            .unwrap_or(Vec::new(env))
+    };
+
+    // One-time insertion sort by (submitted_at ASC, address ASC).
+    let mut i = 1u32;
+    while i < entries.len() {
+        let mut j = i;
+        while j > 0 {
+            let previous = entries.get(j - 1).unwrap();
+            let current = entries.get(j).unwrap();
+
+            let previous_time = kyc_submitted_at(env, kind, &previous);
+            let current_time = kyc_submitted_at(env, kind, &current);
+
+            let swap = previous_time > current_time
+                || (previous_time == current_time && kyc_address_lex_gt(&previous, &current));
+
+            if !swap {
+                break;
+            }
+
+            entries.set(j - 1, current);
+            entries.set(j, previous);
+            j -= 1;
+        }
+        i += 1;
+    }
+
+    // Persist the ordered entries.
+    for i in 0..entries.len() {
+        let entry_key = KycIndexKey::Entry(kind, i);
+        env.storage()
+            .persistent()
+            .set(&entry_key, &entries.get(i).unwrap());
+        crate::storage::extend_persistent_ttl(env, &entry_key);
+    }
+
+    let count = entries.len();
+    for i in count
+        ..env
+            .storage()
+            .persistent()
+            .get::<_, u32>(&count_key)
+            .unwrap_or(0)
+    {
+        env.storage()
+            .persistent()
+            .remove(&KycIndexKey::Entry(kind, i));
+    }
+
+    env.storage().persistent().set(&count_key, &count);
+    crate::storage::extend_persistent_ttl(env, &count_key);
+    env.storage().instance().remove(&kyc_index_legacy_key(kind));
+    env.storage().persistent().set(&sorted_key, &true);
+    crate::storage::extend_persistent_ttl(env, &sorted_key);
+}
+
+fn get_kyc_index(env: &Env, kind: KycIndexKind) -> Vec<Address> {
+    ensure_kyc_index_sorted(env, kind);
+
+    let count = env
+        .storage()
+        .persistent()
+        .get::<_, u32>(&KycIndexKey::Count(kind))
+        .unwrap_or(0);
+
+    let mut entries = Vec::new(env);
+    for i in 0..count {
+        let key = KycIndexKey::Entry(kind, i);
+        if let Some(address) = env.storage().persistent().get::<_, Address>(&key) {
+            crate::storage::extend_persistent_ttl(env, &key);
+            entries.push_back(address);
+        }
+    }
+
+    crate::storage::extend_persistent_ttl(env, &KycIndexKey::Count(kind));
+    entries
+}
+
+/// Read only the requested page of an ordered persistent KYC index.
+/// Returns (page entries, total entry count).
+pub(crate) fn get_kyc_index_page(
+    env: &Env,
+    kind: KycIndexKind,
+    offset: u32,
+    limit: u32,
+) -> (Vec<Address>, u32) {
+    ensure_kyc_index_sorted(env, kind);
+
+    let count_key = KycIndexKey::Count(kind);
+    let count = env
+        .storage()
+        .persistent()
+        .get::<_, u32>(&count_key)
+        .unwrap_or(0);
+
+    crate::storage::extend_persistent_ttl(env, &count_key);
+
+    let start = offset.min(count);
+    let end = start.saturating_add(limit).min(count);
+    let mut page = Vec::new(env);
+
+    for i in start..end {
+        let key = KycIndexKey::Entry(kind, i);
+        if let Some(address) = env.storage().persistent().get::<_, Address>(&key) {
+            crate::storage::extend_persistent_ttl(env, &key);
+            page.push_back(address);
+        }
+    }
+
+    (page, count)
+}
+
+fn add_to_kyc_index(env: &Env, kind: KycIndexKind, address: &Address) {
+    ensure_kyc_index_sorted(env, kind);
+
+    let count_key = KycIndexKey::Count(kind);
+    let mut count = env
+        .storage()
+        .persistent()
+        .get::<_, u32>(&count_key)
+        .unwrap_or(0);
+
+    // Avoid duplicate entries.
+    for i in 0..count {
+        if env
+            .storage()
+            .persistent()
+            .get::<_, Address>(&KycIndexKey::Entry(kind, i))
+            .map(|existing| existing == *address)
+            .unwrap_or(false)
+        {
+            return;
+        }
+    }
+
+    let submitted_at = kyc_submitted_at(env, kind, address);
+    let mut insert_at = count;
+
+    // Find the first entry that sorts after the new record.
+    for i in 0..count {
+        let existing_key = KycIndexKey::Entry(kind, i);
+        if let Some(existing) = env.storage().persistent().get::<_, Address>(&existing_key) {
+            let existing_time = kyc_submitted_at(env, kind, &existing);
+            let comes_after = existing_time > submitted_at
+                || (existing_time == submitted_at && kyc_address_lex_gt(&existing, address));
+
+            if comes_after {
+                insert_at = i;
+                break;
+            }
+        }
+    }
+
+    // Shift entries right to make room.
+    let mut i = count;
+    while i > insert_at {
+        let previous_key = KycIndexKey::Entry(kind, i - 1);
+        let destination_key = KycIndexKey::Entry(kind, i);
+
+        if let Some(previous) = env.storage().persistent().get::<_, Address>(&previous_key) {
+            env.storage().persistent().set(&destination_key, &previous);
+            crate::storage::extend_persistent_ttl(env, &destination_key);
+        }
+
+        i -= 1;
+    }
+
+    let new_key = KycIndexKey::Entry(kind, insert_at);
+    env.storage().persistent().set(&new_key, address);
+    crate::storage::extend_persistent_ttl(env, &new_key);
+
+    count += 1;
+    env.storage().persistent().set(&count_key, &count);
+    crate::storage::extend_persistent_ttl(env, &count_key);
+}
+
+fn remove_from_kyc_index(env: &Env, kind: KycIndexKind, address: &Address) {
+    ensure_kyc_index_sorted(env, kind);
+
+    let count_key = KycIndexKey::Count(kind);
+    let count = env
+        .storage()
+        .persistent()
+        .get::<_, u32>(&count_key)
+        .unwrap_or(0);
+
+    let mut write_index = 0u32;
+
+    for read_index in 0..count {
+        let read_key = KycIndexKey::Entry(kind, read_index);
+
+        if let Some(existing) = env.storage().persistent().get::<_, Address>(&read_key) {
+            if existing != *address {
+                if write_index != read_index {
+                    let write_key = KycIndexKey::Entry(kind, write_index);
+                    env.storage().persistent().set(&write_key, &existing);
+                    crate::storage::extend_persistent_ttl(env, &write_key);
+                }
+                write_index += 1;
+            }
+        }
+    }
+
+    for i in write_index..count {
+        env.storage()
+            .persistent()
+            .remove(&KycIndexKey::Entry(kind, i));
+    }
+
+    env.storage().persistent().set(&count_key, &write_index);
+    crate::storage::extend_persistent_ttl(env, &count_key);
 }
 
 #[contracttype]
@@ -80,6 +395,85 @@ pub struct InvestorVerification {
     pub last_activity: u64,
     pub rejection_reason: Option<String>,
     pub compliance_notes: Option<String>,
+}
+
+/// Migrates a bounded page of legacy KYC records keyed directly by Address.
+///
+/// Callers supply the addresses to process, allowing migration to resume
+/// across multiple transactions without attempting to enumerate storage.
+pub fn migrate_legacy_kyc_page(
+    env: &Env,
+    admin: &Address,
+    addresses: &Vec<Address>,
+) -> Result<u32, QuickLendXError> {
+    crate::admin::AdminStorage::require_admin_auth(env, admin)?;
+
+    let limit = crate::pagination::MAX_QUERY_LIMIT;
+    if addresses.len() > limit {
+        return Err(QuickLendXError::InvalidAmount);
+    }
+
+    let mut migrated = 0u32;
+
+    for address in addresses.iter() {
+        let raw_value: Option<Val> = env.storage().instance().get(&address);
+        let Some(raw_value) = raw_value else {
+            continue;
+        };
+
+        // Decode as a business record first. Failed decoding is handled as
+        // a Result, not an unchecked typed storage read.
+        if let Ok(record) = BusinessVerification::try_from_val(env, &raw_value) {
+            if record.business != address {
+                return Err(QuickLendXError::InvalidKYCStatus);
+            }
+
+            let key = KycStorageKey::BusinessRecord(address.clone());
+            if !env.storage().persistent().has(&key) {
+                BusinessVerificationStorage::store_verification(env, &record);
+            } else {
+                crate::storage::extend_persistent_ttl(env, &key);
+            }
+            env.storage().instance().remove(&address);
+            migrated += 1;
+            continue;
+        }
+
+        if let Ok(record) = InvestorVerification::try_from_val(env, &raw_value) {
+            if record.investor != address {
+                return Err(QuickLendXError::InvalidKYCStatus);
+            }
+
+            let key = KycStorageKey::InvestorRecord(address.clone());
+            if !env.storage().persistent().has(&key) {
+                InvestorVerificationStorage::store(env, &record);
+
+                match record.status {
+                    BusinessVerificationStatus::Verified => {
+                        InvestorVerificationStorage::add_to_verified_investors(env, &address);
+                    }
+                    BusinessVerificationStatus::Pending => {
+                        InvestorVerificationStorage::add_to_pending_investors(env, &address);
+                    }
+                    BusinessVerificationStatus::Rejected => {
+                        InvestorVerificationStorage::add_to_rejected_investors(env, &address);
+                    }
+                }
+            } else {
+                crate::storage::extend_persistent_ttl(env, &key);
+            }
+
+            env.storage().instance().remove(&address);
+            migrated += 1;
+            continue;
+        }
+
+        // Preserve unrecognized legacy data for investigation; never delete
+        // a key that could not be decoded and migrated safely.
+        return Err(QuickLendXError::InvalidKYCStatus);
+    }
+
+    Ok(migrated)
 }
 
 pub fn validate_risk_score(score: u32) -> Result<(), QuickLendXError> {
@@ -198,9 +592,9 @@ impl BusinessVerificationStorage {
     }
 
     pub fn store_verification(env: &Env, verification: &BusinessVerification) {
-        env.storage()
-            .instance()
-            .set(&verification.business, verification);
+        let key = KycStorageKey::BusinessRecord(verification.business.clone());
+        env.storage().persistent().set(&key, verification);
+        crate::storage::extend_persistent_ttl(env, &key);
 
         // Add to status-specific lists
         match verification.status {
@@ -216,9 +610,15 @@ impl BusinessVerificationStorage {
         }
     }
 
-    pub fn get_verification(env: &Env, business: &Address) -> Option<BusinessVerification> {
-        env.storage().instance().get(business)
+
+pub fn get_verification(env: &Env, business: &Address) -> Option<BusinessVerification> {
+    let key = KycStorageKey::BusinessRecord(business.clone());
+    let value = env.storage().persistent().get(&key);
+    if value.is_some() {
+        crate::storage::extend_persistent_ttl(env, &key);
     }
+    value
+}
 
     pub fn update_verification(
         env: &Env,
@@ -269,87 +669,39 @@ impl BusinessVerificationStorage {
     }
 
     pub fn get_verified_businesses(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::VERIFIED_BUSINESSES_KEY)
-            .unwrap_or(vec![env])
+        get_kyc_index(env, KycIndexKind::VerifiedBusinesses)
     }
 
     pub fn get_pending_businesses(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::PENDING_BUSINESSES_KEY)
-            .unwrap_or(vec![env])
+        get_kyc_index(env, KycIndexKind::PendingBusinesses)
     }
 
     pub fn get_rejected_businesses(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::REJECTED_BUSINESSES_KEY)
-            .unwrap_or(vec![env])
+        get_kyc_index(env, KycIndexKind::RejectedBusinesses)
     }
 
     fn add_to_verified_businesses(env: &Env, business: &Address) {
-        let mut verified = Self::get_verified_businesses(env);
-        verified.push_back(business.clone());
-        env.storage()
-            .instance()
-            .set(&Self::VERIFIED_BUSINESSES_KEY, &verified);
+        add_to_kyc_index(env, KycIndexKind::VerifiedBusinesses, business);
     }
 
     fn add_to_pending_businesses(env: &Env, business: &Address) {
-        let mut pending = Self::get_pending_businesses(env);
-        pending.push_back(business.clone());
-        env.storage()
-            .instance()
-            .set(&Self::PENDING_BUSINESSES_KEY, &pending);
+        add_to_kyc_index(env, KycIndexKind::PendingBusinesses, business);
     }
 
     fn add_to_rejected_businesses(env: &Env, business: &Address) {
-        let mut rejected = Self::get_rejected_businesses(env);
-        rejected.push_back(business.clone());
-        env.storage()
-            .instance()
-            .set(&Self::REJECTED_BUSINESSES_KEY, &rejected);
+        add_to_kyc_index(env, KycIndexKind::RejectedBusinesses, business);
     }
 
     fn remove_from_verified_businesses(env: &Env, business: &Address) {
-        let verified = Self::get_verified_businesses(env);
-        let mut new_verified = vec![env];
-        for addr in verified.iter() {
-            if addr != *business {
-                new_verified.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::VERIFIED_BUSINESSES_KEY, &new_verified);
+        remove_from_kyc_index(env, KycIndexKind::VerifiedBusinesses, business);
     }
 
     fn remove_from_pending_businesses(env: &Env, business: &Address) {
-        let pending = Self::get_pending_businesses(env);
-        let mut new_pending = vec![env];
-        for addr in pending.iter() {
-            if addr != *business {
-                new_pending.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::PENDING_BUSINESSES_KEY, &new_pending);
+        remove_from_kyc_index(env, KycIndexKind::PendingBusinesses, business);
     }
 
     fn remove_from_rejected_businesses(env: &Env, business: &Address) {
-        let rejected = Self::get_rejected_businesses(env);
-        let mut new_rejected = vec![env];
-        for addr in rejected.iter() {
-            if addr != *business {
-                new_rejected.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::REJECTED_BUSINESSES_KEY, &new_rejected);
+        remove_from_kyc_index(env, KycIndexKind::RejectedBusinesses, business);
     }
 
     /// @deprecated Use `admin::AdminStorage::initialize()` or `admin::AdminStorage::set_admin()` instead
@@ -575,14 +927,21 @@ impl InvestorVerificationStorage {
     }
 
     pub fn store(env: &Env, verification: &InvestorVerification) {
-        env.storage()
-            .instance()
-            .set(&verification.investor, verification);
+        let key = KycStorageKey::InvestorRecord(verification.investor.clone());
+        env.storage().persistent().set(&key, verification);
+        crate::storage::extend_persistent_ttl(env, &key);
     }
 
-    pub fn get(env: &Env, investor: &Address) -> Option<InvestorVerification> {
-        env.storage().instance().get(investor)
+
+pub fn get(env: &Env, investor: &Address) -> Option<InvestorVerification> {
+    let key = KycStorageKey::InvestorRecord(investor.clone());
+    let value = env.storage().persistent().get(&key);
+    if value.is_some() {
+        crate::storage::extend_persistent_ttl(env, &key);
     }
+    value
+}
+
 
     pub fn update(env: &Env, verification: &InvestorVerification) {
         let old_verification = Self::get(env, &verification.investor);
@@ -628,24 +987,15 @@ impl InvestorVerificationStorage {
     }
 
     pub fn get_verified_investors(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::VERIFIED_INVESTORS_KEY)
-            .unwrap_or(vec![env])
+        get_kyc_index(env, KycIndexKind::VerifiedInvestors)
     }
 
     pub fn get_pending_investors(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::PENDING_INVESTORS_KEY)
-            .unwrap_or(vec![env])
+        get_kyc_index(env, KycIndexKind::PendingInvestors)
     }
 
     pub fn get_rejected_investors(env: &Env) -> Vec<Address> {
-        env.storage()
-            .instance()
-            .get(&Self::REJECTED_INVESTORS_KEY)
-            .unwrap_or(vec![env])
+        get_kyc_index(env, KycIndexKind::RejectedInvestors)
     }
 
     pub fn get_investors_by_tier(env: &Env, tier: InvestorTier) -> Vec<Address> {
@@ -679,66 +1029,27 @@ impl InvestorVerificationStorage {
     }
 
     fn add_to_verified_investors(env: &Env, investor: &Address) {
-        let mut verified = Self::get_verified_investors(env);
-        verified.push_back(investor.clone());
-        env.storage()
-            .instance()
-            .set(&Self::VERIFIED_INVESTORS_KEY, &verified);
+        add_to_kyc_index(env, KycIndexKind::VerifiedInvestors, investor);
     }
 
     fn add_to_pending_investors(env: &Env, investor: &Address) {
-        let mut pending = Self::get_pending_investors(env);
-        pending.push_back(investor.clone());
-        env.storage()
-            .instance()
-            .set(&Self::PENDING_INVESTORS_KEY, &pending);
+        add_to_kyc_index(env, KycIndexKind::PendingInvestors, investor);
     }
 
     fn add_to_rejected_investors(env: &Env, investor: &Address) {
-        let mut rejected = Self::get_rejected_investors(env);
-        rejected.push_back(investor.clone());
-        env.storage()
-            .instance()
-            .set(&Self::REJECTED_INVESTORS_KEY, &rejected);
+        add_to_kyc_index(env, KycIndexKind::RejectedInvestors, investor);
     }
 
     fn remove_from_verified_investors(env: &Env, investor: &Address) {
-        let verified = Self::get_verified_investors(env);
-        let mut new_verified = vec![env];
-        for addr in verified.iter() {
-            if addr != *investor {
-                new_verified.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::VERIFIED_INVESTORS_KEY, &new_verified);
+        remove_from_kyc_index(env, KycIndexKind::VerifiedInvestors, investor);
     }
 
     fn remove_from_pending_investors(env: &Env, investor: &Address) {
-        let pending = Self::get_pending_investors(env);
-        let mut new_pending = vec![env];
-        for addr in pending.iter() {
-            if addr != *investor {
-                new_pending.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::PENDING_INVESTORS_KEY, &new_pending);
+        remove_from_kyc_index(env, KycIndexKind::PendingInvestors, investor);
     }
 
     fn remove_from_rejected_investors(env: &Env, investor: &Address) {
-        let rejected = Self::get_rejected_investors(env);
-        let mut new_rejected = vec![env];
-        for addr in rejected.iter() {
-            if addr != *investor {
-                new_rejected.push_back(addr);
-            }
-        }
-        env.storage()
-            .instance()
-            .set(&Self::REJECTED_INVESTORS_KEY, &new_rejected);
+        remove_from_kyc_index(env, KycIndexKind::RejectedInvestors, investor);
     }
 }
 

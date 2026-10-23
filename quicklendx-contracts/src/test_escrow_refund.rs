@@ -4,7 +4,22 @@ use super::*;
 use crate::invoice::InvoiceCategory;
 use crate::payments::EscrowStatus;
 #[cfg(test)]
-use soroban_sdk::{testutils::Address as _, token, Address, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Events as EventsTrait},
+    token, xdr, Address, Env, Symbol, TryFromVal,
+};
+
+fn count_events(env: &Env, topic: Symbol) -> u32 {
+    let topic_xdr = xdr::ScVal::try_from_val(env, &topic).expect("topic to xdr");
+    env.events()
+        .all()
+        .events()
+        .iter()
+        .filter(|event| match &event.body {
+            xdr::ContractEventBody::V0(body) => body.topics.first() == Some(&topic_xdr),
+        })
+        .count() as u32
+}
 
 fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let env = Env::default();
@@ -44,7 +59,7 @@ fn setup_token(
 }
 
 #[test]
-fn test_refund_transfers_and_updates_status() {
+fn refund_emits_once() {
     let (env, client, _, _) = setup_env();
     let contract_id = client.address.clone();
 
@@ -91,7 +106,13 @@ fn test_refund_transfers_and_updates_status() {
     assert_eq!(bal_after_lock, 9_000i128);
 
     // Refund escrow funds (initiated by business)
+    let refund_events_before = count_events(&env, Symbol::new(&env, "escrow_refunded"));
     client.refund_escrow_funds(&invoice_id, &business);
+    assert_eq!(
+        count_events(&env, Symbol::new(&env, "escrow_refunded")),
+        refund_events_before + 1,
+        "refund should emit exactly one EscrowRefunded event"
+    );
 
     // Escrow marked Refunded
     let escrow_status = client.get_escrow_status(&invoice_id);

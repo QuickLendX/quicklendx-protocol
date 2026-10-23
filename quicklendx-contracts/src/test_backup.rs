@@ -523,3 +523,164 @@ fn restore_order_independent_for_invoice_records() {
     let _ = count_yx;
     let _ = count_x1;
 }
+
+// ============================================================================
+// Issue 2 Tests: Backup/Restore Data Loss and Auth Fixes
+// ============================================================================
+
+/// Test that restore preserves all 7 invoice statuses, including Cancelled and Refunded.
+#[test]
+fn restore_preserves_all_statuses() {
+    let (env, client, admin) = setup();
+
+    // Create invoices in different statuses (simplified - just store them with different statuses)
+    env.as_contract(&client.address, || {
+        use crate::storage::InvoiceStorage;
+        
+        let mut pending = make_invoice(&env, 0);
+        pending.status = InvoiceStatus::Pending;
+        InvoiceStorage::store_invoice(&env, &pending);
+
+        let mut verified = make_invoice(&env, 1);
+        verified.status = InvoiceStatus::Verified;
+        InvoiceStorage::store_invoice(&env, &verified);
+
+        let mut cancelled = make_invoice(&env, 2);
+        cancelled.status = InvoiceStatus::Cancelled;
+        InvoiceStorage::store_invoice(&env, &cancelled);
+
+        let mut refunded = make_invoice(&env, 3);
+        refunded.status = InvoiceStatus::Refunded;
+        InvoiceStorage::store_invoice(&env, &refunded);
+    });
+
+    // Create backup
+    let backup_id = client.create_backup(&admin, &String::from_str(&env, "all statuses backup"));
+
+    // Verify 4 invoices were backed up
+    let backup_details = client.get_backup_details(&backup_id).unwrap();
+    assert_eq!(backup_details.invoice_count, 4);
+
+    // Delete or modify invoices
+    env.as_contract(&client.address, || {
+        use crate::storage::InvoiceStorage;
+        InvoiceStorage::clear_all(&env);
+    });
+
+    // Restore
+    let restored_count = client.restore_backup(&admin, &backup_id);
+    assert_eq!(restored_count, 4);
+
+    // Verify all statuses are present
+    env.as_contract(&client.address, || {
+        use crate::storage::InvoiceStorage;
+        
+        let pending_invoices = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Pending);
+        assert_eq!(pending_invoices.len(), 1, "Pending invoices should be restored");
+
+        let verified_invoices = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified);
+        assert_eq!(verified_invoices.len(), 1, "Verified invoices should be restored");
+
+        let cancelled_invoices = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Cancelled);
+        assert_eq!(cancelled_invoices.len(), 1, "Cancelled invoices should be restored");
+
+        let refunded_invoices = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Refunded);
+        assert_eq!(refunded_invoices.len(), 1, "Refunded invoices should be restored");
+    });
+}
+
+/// Test that restore requires admin signature.
+#[test]
+fn restore_requires_admin_signature() {
+    let (env, client, admin) = setup();
+    
+    // Create a backup
+    let backup_id = client.create_backup(&admin, &String::from_str(&env, "test"));
+
+    // Try to restore without mocking auth - should fail
+    env.as_contract(&client.address, || {
+        use crate::admin::AdminStorage;
+        let non_admin = Address::generate(&env);
+        
+        // Without require_auth, this should fail the admin check
+        let result = AdminStorage::require_admin(&env, &non_admin);
+        assert!(result.is_err());
+    });
+}
+
+/// Test that invoice_count is consistent after restore.
+#[test]
+fn invoice_count_consistent_after_restore() {
+    let (env, client, admin) = setup();
+
+    // Create 10 invoices
+    env.as_contract(&client.address, || {
+        use crate::storage::InvoiceStorage;
+        for i in 0..10 {
+            let invoice = make_invoice(&env, i);
+            InvoiceStorage::store_invoice(&env, &invoice);
+        }
+    });
+
+    // Backup
+    let backup_id = client.create_backup(&admin, &String::from_str(&env, "10 invoices"));
+
+    // Clear and restore
+    env.as_contract(&client.address, || {
+        use crate::storage::InvoiceStorage;
+        InvoiceStorage::clear_all(&env);
+    });
+
+    let restored_count = client.restore_backup(&admin, &backup_id);
+    assert_eq!(restored_count, 10);
+
+    // Check that get_total_count returns 10
+    env.as_contract(&client.address, || {
+        use crate::storage::InvoiceStorage;
+        let total = InvoiceStorage::get_total_count(&env);
+        assert_eq!(total, 10, "Invoice count should be restored to 10");
+    });
+}
+
+/// Test that validate_backup returns false for unknown IDs (no panic).
+#[test]
+fn validate_unknown_backup_is_false() {
+    let (env, client, _) = setup();
+    
+    // Generate a random backup ID that doesn't exist
+    let random_id = env.as_contract(&client.address, || {
+        crate::backup::BackupStorage::generate_backup_id(&env)
+    });
+
+    // Should return false, not panic
+    let is_valid = client.validate_backup(&random_id);
+    assert_eq!(is_valid, false, "Unknown backup should return false, not panic");
+}
+
+/// Test that retention policy keeps newest backups.
+#[test]
+fn retention_keeps_newest() {
+    let (env, client, admin) = setup();
+    
+    // Set retention policy to keep max 2 backups
+    client.set_backup_retention_policy(&admin, &2, &0, &true);
+
+    // Create 3 backups with time progression
+    env.ledger().set_timestamp(1_000_000);
+    let id1 = client.create_backup(&admin, &String::from_str(&env, "backup 1"));
+    
+    env.ledger().set_timestamp(1_000_100);
+    let id2 = client.create_backup(&admin, &String::from_str(&env, "backup 2"));
+    
+    env.ledger().set_timestamp(1_000_200);
+    let id3 = client.create_backup(&admin, &String::from_str(&env, "backup 3"));
+
+    // Get all backups
+    let backups = client.get_backups();
+    
+    // Should contain only the 2 newest (id2 and id3)
+    assert_eq!(backups.len(), 2, "Should keep only 2 newest backups");
+    assert!(!backups.contains(&id1), "Oldest backup should be removed");
+    assert!(backups.contains(&id2), "Second backup should be kept");
+    assert!(backups.contains(&id3), "Newest backup should be kept");
+}

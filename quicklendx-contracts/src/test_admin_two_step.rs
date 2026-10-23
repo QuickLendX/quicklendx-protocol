@@ -2,9 +2,9 @@
 
 #[cfg(test)]
 mod test_admin_two_step {
-    use crate::admin::{AdminStorage, ADMIN_INITIALIZED_KEY};
+    use crate::admin::AdminStorage;
     use crate::errors::QuickLendXError;
-    use crate::QuickLendXContract;
+    use crate::{QuickLendXContract, QuickLendXContractClient};
     use soroban_sdk::{
         symbol_short,
         testutils::{Address as _, Events},
@@ -33,15 +33,26 @@ mod test_admin_two_step {
         env.as_contract(contract_id, || AdminStorage::initialize(env, admin))
     }
 
+    /// Map a `try_*` client result back to the contract's own error type.
+    fn call<E: core::fmt::Debug, I: core::fmt::Debug>(
+        r: Result<Result<(), E>, Result<QuickLendXError, I>>,
+    ) -> Result<(), QuickLendXError> {
+        match r {
+            Ok(Ok(())) => Ok(()),
+            Err(Ok(e)) => Err(e),
+            other => panic!("unexpected invocation result: {:?}", other),
+        }
+    }
+
+    // State-changing operations go through the contract entrypoints so that
+    // auth and events are recorded per invocation.
     fn transfer_admin(
         env: &Env,
         contract_id: &Address,
         current_admin: &Address,
         new_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || {
-            AdminStorage::transfer_admin(env, current_admin, new_admin)
-        })
+        call(QuickLendXContractClient::new(env, contract_id).try_transfer_admin(current_admin, new_admin))
     }
 
     fn initiate_admin_transfer(
@@ -50,9 +61,10 @@ mod test_admin_two_step {
         current_admin: &Address,
         pending_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || {
-            AdminStorage::initiate_admin_transfer(env, current_admin, pending_admin)
-        })
+        call(
+            QuickLendXContractClient::new(env, contract_id)
+                .try_initiate_admin_transfer(current_admin, pending_admin),
+        )
     }
 
     fn accept_admin_transfer(
@@ -60,9 +72,7 @@ mod test_admin_two_step {
         contract_id: &Address,
         pending_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || {
-            AdminStorage::accept_admin_transfer(env, pending_admin)
-        })
+        call(QuickLendXContractClient::new(env, contract_id).try_accept_admin_transfer(pending_admin))
     }
 
     fn cancel_admin_transfer(
@@ -70,9 +80,7 @@ mod test_admin_two_step {
         contract_id: &Address,
         current_admin: &Address,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || {
-            AdminStorage::cancel_admin_transfer(env, current_admin)
-        })
+        call(QuickLendXContractClient::new(env, contract_id).try_cancel_admin_transfer(current_admin))
     }
 
     fn set_two_step_enabled(
@@ -81,9 +89,7 @@ mod test_admin_two_step {
         admin: &Address,
         enabled: bool,
     ) -> Result<(), QuickLendXError> {
-        env.as_contract(contract_id, || {
-            AdminStorage::set_two_step_enabled(env, admin, enabled)
-        })
+        call(QuickLendXContractClient::new(env, contract_id).try_set_two_step_enabled(admin, &enabled))
     }
 
     fn get_admin(env: &Env, contract_id: &Address) -> Option<Address> {
@@ -131,18 +137,21 @@ mod test_admin_two_step {
         let admin_2 = Address::generate(&env);
 
         // Enable two-step mode
+        // `env.events().all()` holds only the most recent invocation's events
+        // (reads through `as_contract` count too), so check topics first.
         set_two_step_enabled(&env, &contract_id, &admin_1, true).unwrap();
-        assert!(is_two_step_enabled(&env, &contract_id));
         assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_2st"));
+        assert!(is_two_step_enabled(&env, &contract_id));
 
         // Initiate transfer
         initiate_admin_transfer(&env, &contract_id, &admin_1, &admin_2).unwrap();
+        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_req"));
         assert_eq!(get_pending_admin(&env, &contract_id), Some(admin_2.clone()));
         assert!(is_transfer_locked(&env, &contract_id));
-        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_req"));
 
         // Accept transfer
         accept_admin_transfer(&env, &contract_id, &admin_2).unwrap();
+        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_trf"));
 
         // Verify state changes
         assert_eq!(get_admin(&env, &contract_id), Some(admin_2.clone()));
@@ -150,7 +159,6 @@ mod test_admin_two_step {
         assert!(!is_admin(&env, &contract_id, &admin_1));
         assert_eq!(get_pending_admin(&env, &contract_id), None);
         assert!(!is_transfer_locked(&env, &contract_id));
-        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_trf"));
     }
 
     /// Tests the cancel path: initiate -> cancel -> verify state reverted.
@@ -164,12 +172,12 @@ mod test_admin_two_step {
 
         // Cancel the pending transfer
         cancel_admin_transfer(&env, &contract_id, &admin_1).unwrap();
+        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_cnl"));
 
         // Verify state is reverted
         assert_eq!(get_admin(&env, &contract_id), Some(admin_1.clone()));
         assert_eq!(get_pending_admin(&env, &contract_id), None);
         assert!(!is_transfer_locked(&env, &contract_id));
-        assert_eq!(latest_topic_symbol(&env), symbol_short!("adm_cnl"));
     }
 
     /// Tests negative path: a third party cannot accept the pending transfer.
