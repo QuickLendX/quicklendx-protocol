@@ -48,6 +48,9 @@ const schema = z.object({
   INDEXER_INGEST_SECRET: isProduction
     ? z.string().min(32)
     : z.string().min(32).optional(),
+  NOTIFICATION_LINK_SECRET: isProduction
+    ? z.string().min(32)
+    : z.string().min(32).default("development-only-notification-link-secret-32-chars"),
   RPC_ALLOWED_HOSTS: z.string().default("soroban-testnet.stellar.org,soroban-mainnet.stellar.org,localhost"),
   RETENTION_RAW_EVENTS_DAYS: z.coerce.number().int().min(1).default(30),
   RETENTION_AUDIT_LOG_DAYS: z.coerce.number().int().min(1).default(90),
@@ -73,8 +76,18 @@ const schema = z.object({
 
 export type Config = z.infer<typeof schema>;
 
-function load(): Config {
-  const result = schema.safeParse(process.env);
+export function load(env: NodeJS.ProcessEnv = process.env): Config {
+  const isProd = env.NODE_ENV === "production";
+  const effectiveSchema = isProd
+    ? schema.extend({
+        NOTIFICATION_LINK_SECRET: z.string().min(32),
+        ADMIN_API_KEY: z.string().min(32),
+        EXPORT_SECRET: z.string().min(32),
+        INDEXER_INGEST_SECRET: z.string().min(32),
+      })
+    : schema;
+
+  const result = effectiveSchema.safeParse(env);
   if (!result.success) {
     const fields = result.error.issues.map((i) => i.path.join(".")).join(", ");
     throw new Error(`Invalid configuration: ${fields}`);

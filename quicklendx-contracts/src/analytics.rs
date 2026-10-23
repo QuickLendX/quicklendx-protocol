@@ -271,45 +271,63 @@ impl AnalyticsStorage {
     }
 
     pub fn store_user_behavior(env: &Env, user: &Address, behavior: &UserBehaviorMetrics) {
-        env.storage()
-            .instance()
-            .set(&Self::user_behavior_key(user), behavior);
+        let key = Self::user_behavior_key(user);
+        env.storage().persistent().set(&key, behavior);
+        crate::storage::extend_persistent_ttl(env, &key);
+    }
+
+    pub fn get_user_behavior(env: &Env, user: &Address) -> Option<UserBehaviorMetrics> {
+        let key = Self::user_behavior_key(user);
+        let res = env.storage().persistent().get(&key);
+        if res.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        res
     }
 
     pub fn store_business_report(env: &Env, report: &BusinessReport) {
-        env.storage()
-            .instance()
-            .set(&Self::business_report_key(&report.report_id), report);
+        let key = Self::business_report_key(&report.report_id);
+        env.storage().persistent().set(&key, report);
+        crate::storage::extend_persistent_ttl(env, &key);
     }
 
     pub fn get_business_report(env: &Env, report_id: &BytesN<32>) -> Option<BusinessReport> {
-        env.storage()
-            .instance()
-            .get(&Self::business_report_key(report_id))
+        let key = Self::business_report_key(report_id);
+        let report = env.storage().persistent().get(&key);
+        if report.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        report
     }
 
     pub fn store_investor_report(env: &Env, report: &InvestorReport) {
-        env.storage()
-            .instance()
-            .set(&Self::investor_report_key(&report.report_id), report);
+        let key = Self::investor_report_key(&report.report_id);
+        env.storage().persistent().set(&key, report);
+        crate::storage::extend_persistent_ttl(env, &key);
     }
 
     pub fn get_investor_report(env: &Env, report_id: &BytesN<32>) -> Option<InvestorReport> {
-        env.storage()
-            .instance()
-            .get(&Self::investor_report_key(report_id))
+        let key = Self::investor_report_key(report_id);
+        let report = env.storage().persistent().get(&key);
+        if report.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        report
     }
 
     pub fn store_investor_analytics(env: &Env, investor: &Address, analytics: &InvestorAnalytics) {
-        env.storage()
-            .instance()
-            .set(&Self::investor_analytics_key(investor), analytics);
+        let key = Self::investor_analytics_key(investor);
+        env.storage().persistent().set(&key, analytics);
+        crate::storage::extend_persistent_ttl(env, &key);
     }
 
     pub fn get_investor_analytics(env: &Env, investor: &Address) -> Option<InvestorAnalytics> {
-        env.storage()
-            .instance()
-            .get(&Self::investor_analytics_key(investor))
+        let key = Self::investor_analytics_key(investor);
+        let res = env.storage().persistent().get(&key);
+        if res.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        res
     }
 
     pub fn store_investor_performance(env: &Env, metrics: &InvestorPerformanceMetrics) {

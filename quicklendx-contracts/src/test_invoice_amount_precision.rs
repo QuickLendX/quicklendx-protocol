@@ -27,8 +27,7 @@
 use crate::errors::QuickLendXError;
 use crate::invoice_amount::{
     check_currency_scale, checked_fee_amount, validate_invoice_amount,
-    validate_invoice_amount_ceiling, BPS_DENOMINATOR, MAX_CURRENCY_DECIMALS,
-    MAX_INVOICE_AMOUNT,
+    validate_invoice_amount_ceiling, BPS_DENOMINATOR, MAX_CURRENCY_DECIMALS, MAX_INVOICE_AMOUNT,
 };
 
 // ============================================================================
@@ -65,7 +64,16 @@ fn oracle_fee(amount: i128, bps: u32) -> Option<i128> {
 /// `1_500_000`) and must be accepted.
 #[test]
 fn test_accepts_valid_amounts_across_scale() {
-    for amount in [1i128, 7, 10, 1_000, 1_000_000, 1_500_000, 123_456_789, MAX_INVOICE_AMOUNT] {
+    for amount in [
+        1i128,
+        7,
+        10,
+        1_000,
+        1_000_000,
+        1_500_000,
+        123_456_789,
+        MAX_INVOICE_AMOUNT,
+    ] {
         assert_eq!(
             validate_invoice_amount_ceiling(amount),
             Ok(()),
@@ -81,9 +89,7 @@ fn test_accepts_valid_amounts_across_scale() {
 fn test_max_invoice_amount_matches_documented_formula() {
     assert_eq!(MAX_INVOICE_AMOUNT, i128::MAX / 10_000);
     assert!(
-        MAX_INVOICE_AMOUNT
-            .checked_mul(BPS_DENOMINATOR)
-            .is_some(),
+        MAX_INVOICE_AMOUNT.checked_mul(BPS_DENOMINATOR).is_some(),
         "MAX_INVOICE_AMOUNT * 10_000 must fit in i128"
     );
     assert!(
@@ -308,7 +314,9 @@ fn test_boundary_sweep_against_oracle() {
 fn test_random_sweep_against_oracle() {
     let mut state: u64 = 0x2432_2026_0801;
     for _ in 0..2_000 {
-        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        state = state
+            .wrapping_mul(6364136223846793005)
+            .wrapping_add(1442695040888963407);
         let amount = (state as i128) ^ ((state >> 32) as i128).wrapping_shl(96);
         let expected = if oracle_accepts(amount) {
             Ok(())

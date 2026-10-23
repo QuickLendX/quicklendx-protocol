@@ -8,10 +8,18 @@
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
+use crate::pause::PauseReason;
 use soroban_sdk::{symbol_short, Address, BytesN, Env, Symbol};
+
+/// Minimum delay before a scheduled upgrade can be executed (48 hours).
+/// Prevents same-ledger execution and gives users a window to exit escrow
+/// if they do not trust the new code.
+pub const UPGRADE_DELAY_SECS: u64 = 48 * 60 * 60; // 48 hours
 
 const PENDING_UPGRADE_WASM_KEY: Symbol = symbol_short!("upg_wasm");
 const PENDING_UPGRADE_AT_KEY: Symbol = symbol_short!("upg_at");
+const PRE_UPGRADE_PAUSED_KEY: Symbol = symbol_short!("upg_paus");
+const PRE_UPGRADE_PAUSE_RSN_KEY: Symbol = symbol_short!("upg_prsn");
 
 pub struct UpgradeControl;
 
@@ -73,12 +81,26 @@ impl UpgradeControl {
         // detect the partial view.
         crate::backup::BackupStorage::require_no_pending_backfill(env)?;
 
+        // Store pre-existing pause state so we can restore it after cancel/execute
+        let was_paused = crate::pause::PauseControl::is_paused(env);
+        let prev_reason = crate::pause::PauseControl::pause_reason(env);
+        
+        env.storage()
+            .instance()
+            .set(&PRE_UPGRADE_PAUSED_KEY, &was_paused);
+        if let Some(reason) = prev_reason {
+            env.storage()
+                .instance()
+                .set(&PRE_UPGRADE_PAUSE_RSN_KEY, &reason);
+        }
+
+        let scheduled_at = env.ledger().timestamp();
         env.storage()
             .instance()
             .set(&PENDING_UPGRADE_WASM_KEY, wasm_hash);
         env.storage()
             .instance()
-            .set(&PENDING_UPGRADE_AT_KEY, &env.ledger().timestamp());
+            .set(&PENDING_UPGRADE_AT_KEY, &scheduled_at);
 
         // Auto-pause: block state mutations until the upgrade is resolved.
         crate::pause::PauseControl::apply_paused(
@@ -87,14 +109,14 @@ impl UpgradeControl {
             Some(crate::pause::PauseReason::PendingUpgrade),
         );
 
-        crate::events::emit_upgrade_scheduled(env, admin, wasm_hash);
+        let executable_at = scheduled_at.saturating_add(UPGRADE_DELAY_SECS);
+        crate::events::emit_upgrade_scheduled(env, admin, wasm_hash, executable_at);
         Ok(())
     }
 
     /// Cancel a pending upgrade without executing it.
     ///
-    /// Clears the upgrade state and un-pauses the contract so normal
-    /// operations can resume.
+    /// Clears the upgrade state and restores the pre-upgrade pause state.
     pub fn cancel_upgrade(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
@@ -108,11 +130,25 @@ impl UpgradeControl {
             .instance()
             .get(&PENDING_UPGRADE_WASM_KEY)
             .unwrap();
+        
+        // Restore the pause state that existed before scheduling
+        let was_paused: bool = env
+            .storage()
+            .instance()
+            .get(&PRE_UPGRADE_PAUSED_KEY)
+            .unwrap_or(false);
+        let prev_reason: Option<PauseReason> = env
+            .storage()
+            .instance()
+            .get(&PRE_UPGRADE_PAUSE_RSN_KEY);
+
         env.storage().instance().remove(&PENDING_UPGRADE_WASM_KEY);
         env.storage().instance().remove(&PENDING_UPGRADE_AT_KEY);
+        env.storage().instance().remove(&PRE_UPGRADE_PAUSED_KEY);
+        env.storage().instance().remove(&PRE_UPGRADE_PAUSE_RSN_KEY);
 
-        // Restore write access.
-        crate::pause::PauseControl::apply_paused(env, false, None);
+        // Restore the pause state from before the upgrade was scheduled
+        crate::pause::PauseControl::apply_paused(env, was_paused, prev_reason);
 
         crate::events::emit_upgrade_cancelled(env, admin, &wasm_hash);
         Ok(())
@@ -121,8 +157,9 @@ impl UpgradeControl {
     /// Execute a pending WASM upgrade.
     ///
     /// Replaces the contract code with the new WASM blob identified by
-    /// the hash stored during [`schedule_upgrade`].  After this call the
-    /// contract runs the new code and writes are re-enabled.
+    /// the hash stored during [`schedule_upgrade`]. Can only be called
+    /// after the timelock delay has elapsed. After this call the
+    /// contract runs the new code and the pre-upgrade pause state is restored.
     pub fn execute_upgrade(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
@@ -133,9 +170,35 @@ impl UpgradeControl {
             .get(&PENDING_UPGRADE_WASM_KEY)
             .ok_or(QuickLendXError::OperationNotAllowed)?;
 
+        let scheduled_at: u64 = env
+            .storage()
+            .instance()
+            .get(&PENDING_UPGRADE_AT_KEY)
+            .unwrap_or(0);
+
+        // Enforce the timelock: upgrade cannot execute until delay has elapsed
+        let now = env.ledger().timestamp();
+        if now < scheduled_at.saturating_add(UPGRADE_DELAY_SECS) {
+            return Err(QuickLendXError::UpgradeTimelockNotElapsed);
+        }
+
+        // Restore the pause state that existed before scheduling
+        let was_paused: bool = env
+            .storage()
+            .instance()
+            .get(&PRE_UPGRADE_PAUSED_KEY)
+            .unwrap_or(false);
+        let prev_reason: Option<PauseReason> = env
+            .storage()
+            .instance()
+            .get(&PRE_UPGRADE_PAUSE_RSN_KEY);
+
         env.storage().instance().remove(&PENDING_UPGRADE_WASM_KEY);
         env.storage().instance().remove(&PENDING_UPGRADE_AT_KEY);
-        crate::pause::PauseControl::apply_paused(env, false, None);
+        env.storage().instance().remove(&PRE_UPGRADE_PAUSED_KEY);
+        env.storage().instance().remove(&PRE_UPGRADE_PAUSE_RSN_KEY);
+
+        crate::pause::PauseControl::apply_paused(env, was_paused, prev_reason);
 
         crate::events::emit_upgrade_executed(env, admin, &wasm_hash);
 

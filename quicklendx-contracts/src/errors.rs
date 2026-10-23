@@ -164,7 +164,7 @@ pub enum QuickLendXError {
     /// A treasury rotation was cancelled but no rotation was pending.
     NoPendingTreasuryRotation = 1858,
 
-    // Dispute (1900-1906)
+    // Dispute (1900-1908)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeNotFound = 1900,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -181,6 +181,13 @@ pub enum QuickLendXError {
     InvalidDisputeEvidence = 1906,
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     DisputeActive = 1907,
+    /// A resolved dispute outcome forbids further fund movement on this
+    /// invoice:
+    /// - `FavorInvestor` — escrow was refunded to the investor; settlement
+    ///   can never proceed.
+    /// - `Split` — funds are held pending a follow-up admin action.
+    /// Distinct from `DisputeActive` (1907), which covers *open* disputes.
+    DisputeResolutionBlocksSettlement = 1908,
 
     // Notification (2000-2002)
     /// BREAKING: Do not renumber this variant. public ABI consumption.
@@ -280,6 +287,10 @@ pub enum QuickLendXError {
     /// or storage writes so that an oversized payload is rejected cheaply.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     InputTooLarge = 2221,
+    /// Attempted to execute a scheduled upgrade before the timelock delay elapsed.
+    /// The upgrade can only be executed after scheduled_at + UPGRADE_DELAY_SECS.
+    /// BREAKING: Do not renumber this variant. public ABI consumption.
+    UpgradeTimelockNotElapsed = 2222,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -369,6 +380,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::InvalidDisputeReason => symbol_short!("DSP_RN"),
             QuickLendXError::InvalidDisputeEvidence => symbol_short!("DSP_EV"),
             QuickLendXError::DisputeActive => symbol_short!("DSP_ACT"),
+            QuickLendXError::DisputeResolutionBlocksSettlement => symbol_short!("DSP_RBLK"),
             // Notification
             QuickLendXError::NotificationNotFound => symbol_short!("NOT_NF"),
             QuickLendXError::NotificationBlocked => symbol_short!("NOT_BL"),
@@ -402,6 +414,7 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::BidStale => symbol_short!("BID_STL"),
             QuickLendXError::MutationLimitExceeded => symbol_short!("MUT_LIM"),
             QuickLendXError::InputTooLarge => symbol_short!("IN_TOO_L"),
+            QuickLendXError::UpgradeTimelockNotElapsed => symbol_short!("UPG_TLK"),
         }
     }
 }

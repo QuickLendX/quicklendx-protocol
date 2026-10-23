@@ -443,15 +443,33 @@ fn check_bid_withdrawal_refund_accounting(env: &Env) -> InvariantCheck {
                     }
                 };
 
-                if invoice.funded_amount != bid.bid_amount
+                let origination_fee = match crate::invoice_amount::checked_fee_amount(
+                    bid.bid_amount,
+                    invoice.origination_fee_bps.unwrap_or(0),
+                ) {
+                    Ok(fee) => fee,
+                    Err(_) => {
+                        passed = false;
+                        break;
+                    }
+                };
+                let expected_net_amount = match bid.bid_amount.checked_sub(origination_fee) {
+                    Some(amount) => amount,
+                    None => {
+                        passed = false;
+                        break;
+                    }
+                };
+
+                if invoice.funded_amount != expected_net_amount
                     || invoice.investor != Some(bid.investor.clone())
                     || escrow.invoice_id != bid.invoice_id
                     || escrow.investor != bid.investor
-                    || escrow.amount != bid.bid_amount
+                    || escrow.amount != expected_net_amount
                     || escrow.status != expected_escrow_status
                     || investment.invoice_id != bid.invoice_id
                     || investment.investor != bid.investor
-                    || investment.amount != bid.bid_amount
+                    || investment.amount != expected_net_amount
                     || investment.status != expected_investment_status
                 {
                     passed = false;
@@ -475,16 +493,34 @@ fn check_bid_withdrawal_refund_accounting(env: &Env) -> InvariantCheck {
                         }
                     };
 
+                let origination_fee = match crate::invoice_amount::checked_fee_amount(
+                    bid.bid_amount,
+                    invoice.origination_fee_bps.unwrap_or(0),
+                ) {
+                    Ok(fee) => fee,
+                    Err(_) => {
+                        passed = false;
+                        break;
+                    }
+                };
+                let expected_net_amount = match bid.bid_amount.checked_sub(origination_fee) {
+                    Some(amount) => amount,
+                    None => {
+                        passed = false;
+                        break;
+                    }
+                };
+
                 if invoice.funded_amount != 0
                     || invoice.funded_at.is_some()
                     || invoice.investor.is_some()
                     || escrow.invoice_id != bid.invoice_id
                     || escrow.investor != bid.investor
-                    || escrow.amount != bid.bid_amount
+                    || escrow.amount != expected_net_amount
                     || escrow.status != EscrowStatus::Refunded
                     || investment.invoice_id != bid.invoice_id
                     || investment.investor != bid.investor
-                    || investment.amount != bid.bid_amount
+                    || investment.amount != expected_net_amount
                     || investment.status != InvestmentStatus::Refunded
                 {
                     passed = false;

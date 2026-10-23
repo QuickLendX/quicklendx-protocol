@@ -106,7 +106,7 @@ pub const MAX_KYC_DATA_LENGTH: u32 = 4096; // bytes, after encryption
 ```
 
 **Reference implementation**: See
-[`quicklendx-backend/docs/secrets.md`](../quicklendx-backend/docs/secrets.md)
+[`backend/docs/secrets.md`](../backend/docs/secrets.md)
 and [`docs/security/kyc-keys.md`](security/kyc-keys.md) for the full key
 hierarchy, rotation procedure, and `EncryptedRecord` schema.
 
