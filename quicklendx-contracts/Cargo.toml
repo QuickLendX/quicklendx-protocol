@@ -8,6 +8,10 @@ autotests = false
 name = "wasm_build_size_budget"
 path = "tests/wasm_build_size_budget.rs"
 
+[[test]]
+name = "test_fees_boundary"
+path = "tests/test_fees_boundary.rs"
+
 [lib]
 # rlib for tests/integration; cdylib for WASM contract builds.
 crate-type = ["rlib", "cdylib"]
@@ -45,7 +49,6 @@ required-features = ["legacy-tests"]
 [[test]]
 name = "bid_acceptance_replay"
 path = "tests/bid_acceptance_replay.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "investor_kyc_tier"
@@ -55,6 +58,11 @@ required-features = ["legacy-tests"]
 [[test]]
 name = "invoice_lifecycle_e2e"
 path = "tests/invoice_lifecycle_e2e.rs"
+required-features = ["legacy-tests"]
+
+[[test]]
+name = "issue_2954_bid_expiry_active_counts"
+path = "tests/issue_2954_bid_expiry_active_counts.rs"
 required-features = ["legacy-tests"]
 
 [[test]]

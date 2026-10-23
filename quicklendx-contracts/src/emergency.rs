@@ -13,6 +13,7 @@ use crate::admin::AdminStorage;
 use crate::audit::{address_to_audit_string, log_operation, AuditOperation, CONFIG_AUDIT_SENTINEL};
 use crate::errors::QuickLendXError;
 use crate::payments::{transfer_funds, EscrowStorage};
+use crate::vesting::VestingStorage;
 use soroban_sdk::{contracttype, symbol_short, token, Address, BytesN, Env};
 
 /// Default timelock: 24 hours. Withdrawal can only be executed after this delay.
@@ -90,9 +91,14 @@ impl EmergencyWithdraw {
         token: &Address,
         amount: i128,
     ) -> Result<(), QuickLendXError> {
-        // Emergency withdrawal protects live Held escrows. For token T, execution
-        // may withdraw only current contract balance minus the completed Held
-        // escrow reserve for T; missing or incomplete reserve state fails closed.
+        // Emergency withdrawal protects both live Held escrows and unreleased
+        // vesting balances. For token T, execution may withdraw only:
+        //
+        //   withdrawable = balance(T)
+        //                  - escrow_held_reserve(T)
+        //                  - outstanding_vesting(T)
+        //
+        // Missing or incomplete escrow reserve state fails closed.
         let contract = env.current_contract_address();
         let token_client = token::Client::new(env, token);
         if !EscrowStorage::is_held_reserve_complete(env, token) {
@@ -101,12 +107,22 @@ impl EmergencyWithdraw {
 
         let balance = token_client.balance(&contract);
         let held_reserve = EscrowStorage::get_held_reserve(env, token);
+        let outstanding_vesting = VestingStorage::get_outstanding_vesting(env, token);
 
         if balance < held_reserve {
             return Err(QuickLendXError::EmergencyWithdrawInsufficientBalance);
         }
 
-        let withdrawable = balance - held_reserve;
+        // Subtract escrow reserve; result is always >= 0 from the check above.
+        let after_escrow = balance - held_reserve;
+
+        // Subtract vesting reserve; use checked_sub so that if the counter
+        // somehow exceeds the remaining balance (e.g. stale state) we fail
+        // closed rather than allowing a negative withdrawable value.
+        let withdrawable = after_escrow
+            .checked_sub(outstanding_vesting)
+            .unwrap_or(0)
+            .max(0);
 
         if amount > withdrawable {
             return Err(QuickLendXError::EmergencyWithdrawInsufficientBalance);

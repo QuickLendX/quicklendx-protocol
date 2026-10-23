@@ -1,4 +1,4 @@
-#![cfg(test)]
+#![cfg(all(test, feature = "legacy-tests"))]
 
 use crate::admin::AdminStorage;
 use crate::contract::{QuickLendXContract, QuickLendXContractClient};

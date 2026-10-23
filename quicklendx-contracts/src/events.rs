@@ -892,6 +892,12 @@ pub struct ProtocolInitialized {
     pub timestamp: u64,
 }
 
+#[contractevent]
+pub struct ScanItemFailed {
+    pub invoice_id: BytesN<32>,
+    pub error_code: u32,
+}
+
 // ============================================================================
 // Pause Control Events
 
@@ -915,6 +921,14 @@ pub fn emit_paused(env: &Env, admin: &Address) {
 pub fn emit_unpaused(env: &Env, admin: &Address) {
     Unpaused {
         admin: admin.clone(),
+    }
+    .publish(env);
+}
+
+pub fn emit_scan_item_failed(env: &Env, invoice_id: &BytesN<32>, error_code: u32) {
+    ScanItemFailed {
+        invoice_id: invoice_id.clone(),
+        error_code,
     }
     .publish(env);
 }
@@ -2004,10 +2018,10 @@ pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
 // ── Upgrade events ──────────────────────────────────────────────────────────
 
 /// Emitted when an admin schedules a WASM contract upgrade.
-pub fn emit_upgrade_scheduled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>) {
+pub fn emit_upgrade_scheduled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>, executable_at: u64) {
     env.events().publish(
         (symbol_short!("upg_sch"),),
-        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp()),
+        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp(), executable_at),
     );
 }
 

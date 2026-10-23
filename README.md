@@ -14,7 +14,7 @@ QuickLendX is a monorepo containing the complete protocol stack for decentralize
 ## Packages
 
 - `quicklendx-contracts/`: Smart contracts and contract tests for the QuickLendX protocol.
-- `quicklendx-backend/`: Backend services, API schema, and server implementation.
+- `backend/`: Canonical backend API service, source, tests, and OpenAPI schema.
 - `quicklendx-frontend/`: Next.js frontend application for user interaction.
 
 ## Getting Started
@@ -25,18 +25,23 @@ QuickLendX is a monorepo containing the complete protocol stack for decentralize
 cd quicklendx-contracts
 cargo build
 cargo test
+```
 
 ### Backend
 
-cd quicklendx-backend
+```bash
+cd backend
 npm ci
 npm run dev
+```
 
 ### Frontend
 
+```bash
 cd quicklendx-frontend
 npm ci
 npm run dev
+```
 
 ## Documentation
 
@@ -51,7 +56,7 @@ npm run dev
 •  docs/QLX_INVOICE_TAXONOMY.md : Canonical invoice categories and statuses with transition examples.
 •  quicklendx-contracts/README.md : Smart contract-specific documentation.
 •  quicklendx-contracts/docs/contracts/deterministic-time.md : Smart contract deterministic ledger time semantics.
-•  quicklendx-backend/README.md : Backend-specific documentation.
+•  backend/README.md : Backend-specific documentation.
 •  backend/docs/REPLAY_RUNBOOK.md : Step-by-step operator runbook for replaying ingestion from a specific ledger — covers reorg recovery, gap backfill, force rebuild after schema
 migration, and troubleshooting stuck runs.
 •  quicklendx-frontend/README.md : Frontend-specific documentation.
@@ -86,13 +91,18 @@ npm run dev
 - `quicklendx-contracts/docs/contracts/deterministic-time.md`: Smart contract deterministic ledger time semantics.
 - [`docs/README.md`](docs/README.md): Full documentation index — **start here**.
 - [`docs/contracts/contributor-guide.md`](docs/contracts/contributor-guide.md): Contract contributor guide (module layout, lifecycle, error/event stability contracts, test patterns, WASM budget).
-- [`quicklendx-backend/docs/contributor-guide.md`](quicklendx-backend/docs/contributor-guide.md): Backend contributor guide (module layout, request pipeline, export/audit wiring, how to add an endpoint).
+- [`backend/docs/contributor-guide.md`](backend/docs/contributor-guide.md): Backend contributor guide (module layout, request pipeline, and how to add an endpoint).
 - [`docs/AUDIT_PREP.md`](docs/AUDIT_PREP.md): Security audit preparation checklist for contributors.
 - [Default Flow Diagram](docs/DEFAULT_FLOW_DIAGRAM.md): State-machine diagram from invoice past-due through default to recovery — grace period, finality guards, dispute interception, and a concrete ledger-timestamp walkthrough.
 - [`docs/INVOICE_LIFECYCLE_DIAGRAM.md`](docs/INVOICE_LIFECYCLE_DIAGRAM.md): Full invoice state machine — all statuses, transitions, entrypoints, and invariants in one diagram. Start here when debugging invoice state issues. Closes #1946.
 - [`docs/OFF_CHAIN_SIGNATURES.md`](docs/OFF_CHAIN_SIGNATURES.md): Threat model and implementation notes for every off-chain signed operation (KYC payloads, cursor attestations, dispute evidence). Closes #1894.
 - `quicklendx-contracts/README.md`: Smart contract build, deploy, and API reference.
-- `quicklendx-backend/README.md`: Backend-specific documentation.
+- `backend/README.md`: Backend-specific documentation.
+- [`backend/docs/runbooks.md`](backend/docs/runbooks.md): Scheduler operation and lease behavior.
+- [`backend/docs/configuration.md`](backend/docs/configuration.md): Backend configuration variables and defaults.
+- [`backend/docs/exports.md`](backend/docs/exports.md): Canonical export workflow and endpoints.
+- [`backend/docs/observability.md`](backend/docs/observability.md): Backend ingest-lag monitoring and alerts.
+- [`backend/docs/secrets.md`](backend/docs/secrets.md): Local secrets and committed-secret scanning.
 - `backend/docs/REPLAY_RUNBOOK.md`: Step-by-step operator runbook for replaying ingestion from a specific ledger — covers reorg recovery, gap backfill, force rebuild after schema migration, and troubleshooting stuck runs.
 - `quicklendx-frontend/README.md`: Frontend-specific documentation.
 - `docs/PLATFORM_FEES.md`: Fee schedule and tenant override documentation.

@@ -402,6 +402,10 @@ fn test_error_code_insurance_not_active() {
 fn test_error_code_active_dispute_exists() {
     assert_snapshot_entry("ActiveDisputeExists", QuickLendXError::ActiveDisputeExists as u32);
 }
+#[test]
+fn test_error_code_upgrade_timelock_not_elapsed() {
+    assert_snapshot_entry("UpgradeTimelockNotElapsed", QuickLendXError::UpgradeTimelockNotElapsed as u32);
+}
 
 // ---------------------------------------------------------------------------
 // Helper: parse snapshot and assert a specific entry
