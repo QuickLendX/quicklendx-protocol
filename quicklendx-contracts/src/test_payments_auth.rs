@@ -154,6 +154,8 @@ fn test_refund_escrow_cross_tenant_rejected() {
 fn test_release_and_refund_escrow_missing_state_handled() {
     let (env, contract_id) = setup();
     let invoice_id = BytesN::from_array(&env, &[1u8; 32]);
+    let business = Address::generate(&env);
+    let actual_investor = Address::generate(&env);
 
     env.as_contract(&contract_id, || {
         // Missing escrow gracefully errors out rather than panic/unwrap

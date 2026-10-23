@@ -272,6 +272,7 @@ pub struct Invoice {
     pub metadata_line_items: Vec<LineItemRecord>,
     pub category: InvoiceCategory,
     pub tags: Vec<String>,
+    /// Net amount placed in escrow after deducting any origination fee.
     pub funded_amount: i128,
     pub funded_at: Option<u64>,
     pub investor: Option<Address>,
@@ -283,6 +284,9 @@ pub struct Invoice {
     pub dispute: Dispute,
     pub total_paid: i128,
     pub payment_history: Vec<PaymentRecord>,
+    /// Origination fee deducted from a gross bid, capped at `init::MAX_FEE_BPS`
+    /// (10%). The fee is returned if the held escrow is refunded and becomes
+    /// distributable only after escrow release or invoice default.
     pub origination_fee_bps: Option<u32>,
     /// Per-invoice late payment penalty in basis points (0–5000 bps, i.e. 0–50%).
     /// When `Some`, this overrides the global `LATE_FEE_SURCHARGE_BPS` constant
@@ -368,6 +372,7 @@ pub struct Bid {
     pub bid_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
     pub investor: Address,
+    /// Gross amount supplied by the investor before any invoice origination fee.
     pub bid_amount: i128,
     pub expected_return: i128,
     pub timestamp: u64,
@@ -382,6 +387,7 @@ pub struct Investment {
     pub investment_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
     pub investor: Address,
+    /// Net principal actually held in escrow and funded to the business.
     pub amount: i128,
     pub funded_at: u64,
     pub status: InvestmentStatus,

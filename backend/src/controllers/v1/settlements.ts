@@ -1,9 +1,14 @@
 import { Request, Response, NextFunction } from "express";
 import { Settlement, SettlementStatus } from "../../types/contract";
-import { applyCacheHeaders, CC_LONG } from "../../middleware/cache-headers";
+import { applyCacheHeaders, CC_LONG, CC_SHORT } from "../../middleware/cache-headers";
 import { labelRecord } from "../../services/versioningService";
 import { freshnessService } from "../../services/freshnessService";
-import { parsePaginationParams, PaginationError } from "../../utils/pagination";
+import {
+  applyPagination,
+  PaginationError,
+  parsePaginationParams,
+  paginationScope,
+} from "../../utils/pagination";
 import { settlementOrchestrator } from "../../services/settlementOrchestrator";
 import { assertSettlementId, assertInvoiceId } from "../../lib/entityId";
 
@@ -25,7 +30,7 @@ export const getSettlements = async (
   next: NextFunction
 ) => {
   try {
-    parsePaginationParams(req.query);
+    const params = parsePaginationParams(req.query);
 
     const invoice_id = Array.isArray(req.query.invoice_id)
       ? req.query.invoice_id[0]
@@ -47,30 +52,42 @@ export const getSettlements = async (
 
     if (status) filters.status = status as SettlementStatus;
 
-    let settlements;
+    let page;
     try {
-      settlements = settlementOrchestrator.list(filters);
+      page = settlementOrchestrator.listPage({
+        filters,
+        limit: params.limit,
+        cursor: params.cursor,
+      });
     } catch (err: any) {
       const msg = err && err.message ? String(err.message) : "";
       if (process.env.NODE_ENV === "test" && /no such table/i.test(msg)) {
-        settlements = MOCK_SETTLEMENTS.filter((s) => {
+        const settlements = MOCK_SETTLEMENTS.filter((s) => {
           if (filters.invoice_id && s.invoice_id !== filters.invoice_id) return false;
           if (filters.status && s.status !== filters.status) return false;
           return true;
         });
+        page = applyPagination(
+          settlements,
+          "timestamp",
+          params,
+          paginationScope(filters)
+        );
       } else {
         throw err;
       }
     }
 
     const body = {
-      data: settlements,
+      data: page.data,
+      next_cursor: page.next_cursor,
+      has_more: page.has_more,
       freshness: freshnessService.getFreshness(),
     };
 
     if (
       applyCacheHeaders(req, res, {
-        cacheControl: CC_LONG,
+        cacheControl: CC_SHORT,
         body,
       })
     ) {

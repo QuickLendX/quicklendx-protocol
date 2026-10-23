@@ -4,6 +4,8 @@
 
 This guide defines the unified voice, terminology, and formatting conventions for QuickLendX. Our UI copy must be calm, precise, and devoid of misleading guarantees. This ensures that users—both businesses and investors—understand the financial risks, obligations, and system states accurately.
 
+> **Note:** For specific guidance on emoji usage in UI copy, see the [Emoji Usage Guide](emojis.md).
+
 ## Voice and Tone
 
 **Calm and Objective**

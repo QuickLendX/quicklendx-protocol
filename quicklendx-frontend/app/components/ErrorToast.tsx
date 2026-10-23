@@ -7,6 +7,12 @@ import { AppError, ErrorCategory, ErrorSeverity } from "../lib/errors";
 interface ErrorToastProps {
   error: AppError;
   toastId?: string;
+  /**
+   * Callback invoked by the "Retry" action. The action is only rendered when
+   * this is supplied, the error is retryable and the retry budget is not
+   * exhausted.
+   */
+  onRetry?: () => Promise<void> | void;
 }
 
 // --- Severity icons (inline SVG, no extra deps). currentColor lets the
@@ -139,16 +145,51 @@ const CATEGORY_LABELS: Record<ErrorCategory, string> = {
   [ErrorCategory.EXTERNAL_SERVICE]: "Service Error",
 };
 
-export const ErrorToast: React.FC<ErrorToastProps> = ({ error, toastId }) => {
+export const ErrorToast: React.FC<ErrorToastProps> = ({
+  error,
+  toastId,
+  onRetry,
+}) => {
   const visual =
     SEVERITY_VISUALS[error.severity] ?? SEVERITY_VISUALS[ErrorSeverity.LOW];
   const label = CATEGORY_LABELS[error.category] ?? "Error";
   const { Icon } = visual;
 
-  const handleRetry = () => {
+  // A retry is only offered when there is something to retry with, the error
+  // is retryable, and the retry budget has not been exhausted.
+  const canRetry = Boolean(onRetry) && error.retryable && error.retryCount < 3;
+
+  const handleRetry = async () => {
+    if (!onRetry) {
+      return;
+    }
+
     toast.dismiss(toastId);
-    // Retry handoff stays with the error handler; surface immediate feedback.
-    toast.success("Retrying operation...");
+
+    try {
+      await onRetry();
+    } catch (retryError) {
+      const message =
+        retryError instanceof Error
+          ? retryError.message
+          : "The operation could not be completed.";
+
+      // Surface the failed attempt as a fresh toast carrying the incremented
+      // retry count, so the budget keeps decreasing and the user can try again
+      // while retries remain.
+      ErrorToastManager.getInstance().showError(
+        new AppError(
+          message,
+          error.category,
+          error.severity,
+          error.code,
+          error.context,
+          error.retryable,
+          error.retryCount + 1
+        ),
+        { onRetry }
+      );
+    }
   };
 
   return (
@@ -171,7 +212,7 @@ export const ErrorToast: React.FC<ErrorToastProps> = ({ error, toastId }) => {
         <p className="mt-0.5 break-words text-xs text-[#334155]">
           {error.message}
         </p>
-        {error.retryable && error.retryCount < 3 && (
+        {canRetry && (
           <button
             type="button"
             onClick={handleRetry}
@@ -210,6 +251,11 @@ export class ErrorToastManager {
     options?: {
       duration?: number;
       dismissible?: boolean;
+      /**
+       * Enables the toast's "Retry" action. When omitted the toast is
+       * informational only and no retry affordance is rendered.
+       */
+      onRetry?: () => Promise<void> | void;
       position?:
         | "top-right"
         | "top-center"
@@ -234,17 +280,22 @@ export class ErrorToastManager {
     const dismissible = options?.dismissible ?? true;
     const position = options?.position ?? "top-right";
 
-    toast.custom((t) => <ErrorToast error={error} toastId={t.id} />, {
-      id: toastId,
-      duration: dismissible ? duration : Infinity,
-      position,
-      style: {
-        background: "transparent",
-        padding: 0,
-        margin: 0,
-        boxShadow: "none",
-      },
-    });
+    toast.custom(
+      (t) => (
+        <ErrorToast error={error} toastId={t.id} onRetry={options?.onRetry} />
+      ),
+      {
+        id: toastId,
+        duration: dismissible ? duration : Infinity,
+        position,
+        style: {
+          background: "transparent",
+          padding: 0,
+          margin: 0,
+          boxShadow: "none",
+        },
+      }
+    );
 
     this.activeToasts.add(toastId);
 
