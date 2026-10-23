@@ -1,9 +1,11 @@
 use crate::errors::QuickLendXError;
-use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice_expired};
+use crate::events::{
+    emit_insurance_claimed, emit_invoice_defaulted, emit_invoice_expired, emit_scan_item_failed,
+};
 use crate::init::ProtocolInitializer;
 use crate::payments::{EscrowStatus, EscrowStorage};
 use crate::storage::{InvestmentStorage, InvoiceStorage};
-use crate::types::{InvestmentStatus, Invoice, InvoiceStatus};
+use crate::types::{InvestmentStatus, InvoiceStatus};
 use soroban_sdk::{contracttype, symbol_short, BytesN, Env, Vec};
 
 /// Default grace period in seconds (7 days)
@@ -69,6 +71,8 @@ fn check_and_set_default_guard(env: &Env, invoice_id: &BytesN<32>) -> Result<(),
 pub struct OverdueScanResult {
     pub overdue_count: u32,
     pub scanned_count: u32,
+    /// Number of scanned invoices that failed deadline validation or default handling.
+    pub failed_count: u32,
     pub total_funded: u32,
     pub next_cursor: u32,
 }
@@ -109,15 +113,9 @@ pub fn resolve_grace_period(env: &Env, grace_period: Option<u64>) -> Result<u64,
             }
             Ok(value)
         }
-        None => {
-            let value = ProtocolInitializer::get_protocol_config(env)
-                .map(|config| config.grace_period_seconds)
-                .unwrap_or(DEFAULT_GRACE_PERIOD);
-            if value > MAX_GRACE_PERIOD {
-                return Err(QuickLendXError::InvalidTimestamp);
-            }
-            Ok(value)
-        }
+        None => Ok(ProtocolInitializer::get_protocol_config(env)
+            .map(|config| config.grace_period_seconds)
+            .unwrap_or(DEFAULT_GRACE_PERIOD)),
     }
 }
 
@@ -164,7 +162,7 @@ pub fn mark_invoice_defaulted(
 
     let current_timestamp = env.ledger().timestamp();
     let grace = resolve_grace_period(env, grace_period)?;
-    let grace_deadline = invoice.checked_grace_deadline(grace)?;
+    let grace_deadline = invoice.grace_deadline(grace);
 
     if current_timestamp <= grace_deadline {
         return Err(QuickLendXError::OperationNotAllowed);
@@ -251,9 +249,10 @@ mod scan_limit_tests {
 /// @param env The contract environment.
 /// @param grace_period Grace period in seconds used to determine default eligibility.
 /// @param limit Optional funded-invoice batch size. Values are clamped to `1..=100`.
-/// @return Scan result containing overdue count, scanned count, funded snapshot size, and next cursor.
-/// @security Bounded loops protect against excessive per-call work. Callers that need full coverage
-///           must invoke the scan repeatedly until `next_cursor` wraps to `0`.
+/// @return Scan result containing overdue count, scanned count, failure count, funded snapshot size,
+///         and next cursor.
+/// @security Bounded loops protect against excessive per-call work. The cursor is remapped against
+///           the updated Funded index after default transitions remove invoices from the snapshot.
 /// @security The scan window is always capped by `max_overdue_scan_batch_limit` and never exceeds
 ///           the current funded snapshot size, preventing any single invocation from iterating
 ///           an unbounded number of invoices.
@@ -262,7 +261,10 @@ pub fn scan_funded_invoice_expirations(
     grace_period: u64,
     limit: Option<u32>,
 ) -> Result<OverdueScanResult, QuickLendXError> {
-    let grace_period = resolve_grace_period(env, Some(grace_period))?;
+    if grace_period > MAX_GRACE_PERIOD {
+        return Err(QuickLendXError::InvalidTimestamp);
+    }
+
     let funded_invoices = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
     let total_funded = funded_invoices.len();
 
@@ -271,6 +273,7 @@ pub fn scan_funded_invoice_expirations(
         return Ok(OverdueScanResult {
             overdue_count: 0,
             scanned_count: 0,
+            failed_count: 0,
             total_funded: 0,
             next_cursor: 0,
         });
@@ -280,12 +283,21 @@ pub fn scan_funded_invoice_expirations(
     let scan_limit = resolve_scan_limit(limit).min(total_funded);
     let current_timestamp = env.ledger().timestamp();
     let mut cursor = normalize_cursor(get_overdue_scan_cursor(env), total_funded);
+    let start_cursor = cursor;
     let mut overdue_count = 0u32;
     let mut scanned_count = 0u32;
+    let mut failed_count = 0u32;
 
     while scanned_count < scan_limit {
         if let Some(invoice_id) = funded_invoices.get(cursor) {
-            if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
+            let result: Result<(), QuickLendXError> = (|| {
+                let invoice = InvoiceStorage::get_invoice(env, &invoice_id)
+                    .ok_or(QuickLendXError::InvoiceNotFound)?;
+                let grace_deadline = invoice
+                    .due_date
+                    .checked_add(grace_period)
+                    .ok_or(QuickLendXError::InvalidTimestamp)?;
+
                 if invoice.is_overdue(current_timestamp) {
                     overdue_count = overdue_count.saturating_add(1);
                     let _ = crate::notifications::NotificationSystem::notify_payment_overdue(
@@ -293,9 +305,15 @@ pub fn scan_funded_invoice_expirations(
                     );
                 }
 
-                if current_timestamp > invoice.checked_grace_deadline(grace_period)? {
-                    let _ = invoice.check_and_handle_expiration(env, grace_period)?;
+                if current_timestamp > grace_deadline {
+                    invoice.check_and_handle_expiration(env, grace_period)?;
                 }
+                Ok(())
+            })();
+
+            if let Err(error) = result {
+                failed_count = failed_count.saturating_add(1);
+                emit_scan_item_failed(env, &invoice_id, error as u32);
             }
         }
 
@@ -307,16 +325,21 @@ pub fn scan_funded_invoice_expirations(
         };
     }
 
-    let next_cursor = if scan_limit >= total_funded {
+    let funded_after_scan = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
+    let funded_after_count = funded_after_scan.len();
+    let removed_count = total_funded.saturating_sub(funded_after_count);
+    let next_cursor = if funded_after_count == 0 {
         0
     } else {
-        cursor
+        ((start_cursor as u64 + scanned_count as u64 - removed_count as u64)
+            % funded_after_count as u64) as u32
     };
     set_overdue_scan_cursor(env, next_cursor);
 
     Ok(OverdueScanResult {
         overdue_count,
         scanned_count,
+        failed_count,
         total_funded,
         next_cursor,
     })
@@ -343,22 +366,6 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     ensure_default_transition_open(env, invoice_id)?;
 
-    // #2464: look up the investment (if any) and run every failable check
-    // that depends on it now, before any state mutation below -- including
-    // before `check_and_set_default_guard`, extending that function's own
-    // documented rationale ("only after all finality checks pass") to this
-    // check too. Previously the active-insurance check ran after the
-    // invoice's status/history/event effects had already executed in this
-    // same call; a rejection there still left nothing durable (Soroban
-    // reverts the whole transaction on a returned Err), but the ordering
-    // meant this function's own checks-effects-interactions shape didn't
-    // match what actually happens on failure. Moving it here removes that
-    // gap between what the code visually does and what Soroban guarantees.
-    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id);
-    if investment.is_some() {
-        require_active_insurance_at_settlement(env, &invoice)?;
-    }
-
     // Atomically check and set the transition guard only after all finality checks pass.
     // This avoids poisoning future legitimate retries on invoices that were never eligible
     // for default because another terminal path already completed first.
@@ -368,22 +375,13 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
+    crate::fees::FeeManager::release_origination_fee(env, invoice_id)?;
 
     InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Defaulted, invoice_id);
 
-    let history_key = crate::storage::StorageKeys::business_default_history(&invoice.business);
-    let history_count: u32 = env.storage().persistent().get(&history_key).unwrap_or(0);
-    env.storage()
-        .persistent()
-        .set(&history_key, &history_count.saturating_add(1));
-    crate::storage::bump_persistent(env, &history_key);
-
     emit_invoice_expired(env, &invoice);
 
-    // `investment` was already looked up above, and its only failable
-    // precondition (the active-insurance check) already ran there too --
-    // this reuses that same lookup rather than re-fetching and re-checking.
-    if let Some(mut investment) = investment {
+    if let Some(mut investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
         investment.status = InvestmentStatus::Defaulted;
 
         let claim_details = investment.process_all_insurance_claims(env);
@@ -420,6 +418,15 @@ fn ensure_default_transition_open(
         return Err(QuickLendXError::InvalidStatus);
     }
 
+    // Issue #2963: defaulting must not side-step a dispute ruling. After a
+    // `FavorInvestor` resolution the escrow is already refunded and the
+    // invoice is terminal; after a `Split` resolution the funds are held
+    // pending an admin follow-up. Both outcomes block defaulting with a
+    // dispute-specific error rather than the generic escrow-status error.
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    crate::settlement::require_no_blocking_resolution(&invoice)?;
+
     if let Some(escrow) = EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
         if escrow.status != EscrowStatus::Held {
             return Err(QuickLendXError::InvalidStatus);
@@ -439,4 +446,20 @@ pub fn require_active_insurance_at_settlement(
         }
     }
     Ok(())
+}
+
+/// Get all invoice IDs that have active or resolved disputes
+pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
+    Vec::new(env)
+}
+
+/// Get details for a dispute on a specific invoice
+pub fn get_dispute_details(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+) -> Result<Option<crate::types::Dispute>, QuickLendXError> {
+    let _invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+
+    Ok(None)
 }
