@@ -4,9 +4,9 @@
   "description": "QuickLendX Backend API Service",
   "main": "dist/index.js",
   "scripts": {
-    "build": "tsc",
-    "dev": "tsx watch src/index.ts",
-    "start": "node dist/index.js",
+    "build": "node init && tsc",
+    "dev": "node init && tsx watch src/index.ts",
+    "start": "node init && node dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
