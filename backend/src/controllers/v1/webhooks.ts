@@ -4,7 +4,12 @@ import { WebhookSecretError } from "../../services/webhookSecretService";
 import {
   RegisterSubscriberRequestSchema,
   InitiateRotationRequestSchema,
+  WebhookSubscriberSecret,
 } from "../../types/webhook";
+import { auditLogService } from "../../services/auditLogService";
+import { roleFromScopes } from "../../config/scopes";
+import { AdminRole } from "../../types/rbac";
+import type { RequestWithAdminContext } from "../../middleware/rbac";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -46,6 +51,77 @@ function handleError(
   next(forwardedError);
 }
 
+function getCallerKeyId(req: Request): string {
+  return (
+    req.apiKey?.id ||
+    req.apiKey?.created_by ||
+    (req.apiKey as any)?.ownerId ||
+    ""
+  );
+}
+
+function getCallerAdminRole(req: Request): AdminRole | null {
+  const adminCtx = (req as RequestWithAdminContext).adminContext;
+  if (adminCtx?.role) return adminCtx.role;
+  const apiKeyRole = (req.apiKey as any)?.role;
+  if (apiKeyRole) return apiKeyRole;
+  if (req.apiKey?.scopes) {
+    const role = roleFromScopes(req.apiKey.scopes);
+    if (role) return role;
+  }
+  return null;
+}
+
+function isAdminOverride(req: Request): { isAdmin: boolean; role: AdminRole | null } {
+  const role = getCallerAdminRole(req);
+  if (role === "security_admin" || role === "super_admin") {
+    return { isAdmin: true, role };
+  }
+  return { isAdmin: false, role: null };
+}
+
+function assertSubscriberAccess(
+  req: Request,
+  subscriberId: string,
+  action: string
+): { record?: WebhookSubscriberSecret; isAdmin: boolean; role: AdminRole | null } {
+  const record = webhookSecretService.getRecord(subscriberId);
+
+  const { isAdmin, role } = isAdminOverride(req);
+  if (isAdmin) {
+    auditLogService.recordAdminAction({
+      action,
+      role: role!,
+      method: req.method,
+      path: req.path,
+      ip: req.ip || "unknown",
+      outcome: "performed",
+      metadata: { subscriber_id: subscriberId, subscriberId },
+    });
+    return { record, isAdmin: true, role };
+  }
+
+  const callerKeyId = getCallerKeyId(req);
+  if (record && record.owner_key_id && record.owner_key_id !== "default") {
+    const isOwner =
+      Boolean(callerKeyId) &&
+      (record.owner_key_id === callerKeyId ||
+        (req.apiKey?.created_by && record.owner_key_id === req.apiKey.created_by) ||
+        ((req.apiKey as any)?.ownerId && record.owner_key_id === (req.apiKey as any).ownerId));
+
+    if (!isOwner) {
+      // Return 404 to prevent enumerating subscriber existence
+      throw new WebhookSecretError(
+        "Subscriber not found",
+        "SUBSCRIBER_NOT_FOUND",
+        404
+      );
+    }
+  }
+
+  return { record, isAdmin: false, role: null };
+}
+
 // ---------------------------------------------------------------------------
 // Controllers
 // ---------------------------------------------------------------------------
@@ -75,10 +151,26 @@ export const registerSubscriber = async (
     }
 
     const { subscriber_id, grace_period_seconds, algorithm } = parsed.data;
+    const ownerKeyId = getCallerKeyId(req) || "default";
+
+    const { isAdmin, role } = isAdminOverride(req);
+    if (isAdmin) {
+      auditLogService.recordAdminAction({
+        action: "webhook_secret_register",
+        role: role!,
+        method: req.method,
+        path: req.path,
+        ip: req.ip || "unknown",
+        outcome: "performed",
+        metadata: { subscriber_id, subscriberId: subscriber_id },
+      });
+    }
+
     const result = webhookSecretService.registerSubscriber(
       subscriber_id,
       grace_period_seconds,
-      algorithm
+      algorithm,
+      ownerKeyId
     );
 
     res.status(201).json({
@@ -106,6 +198,7 @@ export const getSubscriber = async (
 ): Promise<void> => {
   try {
     const subscriberId = req.params["subscriberId"] as string;
+    assertSubscriberAccess(req, subscriberId, "webhook_secret_get");
     const view = webhookSecretService.getSubscriberView(subscriberId);
     res.json(view);
   } catch (err) {
@@ -116,7 +209,7 @@ export const getSubscriber = async (
 /**
  * POST /api/v1/webhooks/subscribers/:subscriberId/rotate
  *
- * Initiates a secret rotation.  Returns the new pending secret **once**.
+ * Initiates a secret rotation. Returns the new pending secret **once**.
  * Both the old and new secrets are accepted during the grace window.
  */
 export const initiateRotation = async (
@@ -139,6 +232,8 @@ export const initiateRotation = async (
       return;
     }
 
+    assertSubscriberAccess(req, subscriberId, "webhook_secret_rotate");
+
     const result = webhookSecretService.initiateRotation(
       subscriberId,
       parsed.data.grace_period_seconds
@@ -154,7 +249,7 @@ export const initiateRotation = async (
  * POST /api/v1/webhooks/subscribers/:subscriberId/rotate/finalize
  *
  * Finalizes the rotation: promotes the pending secret to primary and
- * discards the old secret.  After this call only the new secret is valid.
+ * discards the old secret. After this call only the new secret is valid.
  */
 export const finalizeRotation = async (
   req: Request,
@@ -163,6 +258,7 @@ export const finalizeRotation = async (
 ): Promise<void> => {
   try {
     const subscriberId = req.params["subscriberId"] as string;
+    assertSubscriberAccess(req, subscriberId, "webhook_secret_finalize");
     const result = webhookSecretService.finalizeRotation(subscriberId);
     res.json(result);
   } catch (err) {
@@ -182,6 +278,7 @@ export const cancelRotation = async (
 ): Promise<void> => {
   try {
     const subscriberId = req.params["subscriberId"] as string;
+    assertSubscriberAccess(req, subscriberId, "webhook_secret_cancel");
     const view = webhookSecretService.cancelRotation(subscriberId);
     res.json(view);
   } catch (err) {
