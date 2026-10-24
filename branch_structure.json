@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "main",
+    "origin",
+    "security/issue-2886-security-disputes-evidence-upload-accepts-any"
+  ],
+  "parent": {
+    "main": null,
+    "origin": "main",
+    "security/issue-2886-security-disputes-evidence-upload-accepts-any": "main"
+  },
+  "order": [
+    "main",
+    "origin",
+    "security/issue-2886-security-disputes-evidence-upload-accepts-any"
+  ]
+}
