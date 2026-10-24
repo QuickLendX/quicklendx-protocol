@@ -32,7 +32,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd quicklendx-frontend
-        npm ci
+        npm install
 
     - name: Run TypeScript type checking
       run: |

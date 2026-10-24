@@ -50,7 +50,7 @@ export default {
     const columns = await ctx.db.all<Array<{ colname: string }>>(
       `PRAGMA table_info(backfill_audit)`
     );
-    const hasInvoiceId = columns.some((col) => col.colname === "invoice_id");
+    const hasInvoiceId = columns.some((col) => col.name === "invoice_id");
 
     if (!hasInvoiceId) {
       await ctx.db.exec(`
@@ -60,10 +60,10 @@ export default {
     }
   },
   down: async (ctx: MigrationContext): Promise<void> => {
-    const columns = await ctx.db.all<Array<{ colname: string }>>(
+    const columns = await ctx.db.all<Array<{ name: string }>>(
       `PRAGMA table_info(backfill_audit)`
     );
-    const hasInvoiceId = columns.some((col) => col.colnname === "invoice_id");
+    const hasInvoiceId = columns.some((col) => col.name === "invoice_id");
 
     if (hasInvoiceId) {
       await ctx.db.exec(`
@@ -75,10 +75,10 @@ export default {
   validate: async (ctx: MigrationContext): Promise<string[]> => {
     const warnings: string[] = [];
 
-    const columns = await ctx.db.all<Array<{ colname: string }>>(
+    const columns = await ctx.db.all<Array<{ name: string }>>(
       `PRAGMA table_info(backfill_audit)`
     );
-    const hasInvoiceId = columns.some((col) => col.colname === "invoice_id");
+    const hasInvoiceId = columns.some((col) => col.name === "invoice_id");
     if (hasInvoiceId) {
       warnings.push("Column invoice_id already exists — migration will be idempotent no-op.");
     }

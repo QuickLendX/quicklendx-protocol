@@ -203,7 +203,7 @@ pub fn admin_mark_invoice_defaulted(
     ensure_default_transition_open(env, invoice_id)?;
 
     let current_timestamp = env.ledger().timestamp();
-    let grace = resolve_grace_period(env, Some(grace_period))?;
+    let grace = resolve_grace_period(env, None)?;
     let grace_deadline = invoice.checked_grace_deadline(grace)?;
 
     if current_timestamp <= grace_deadline {
