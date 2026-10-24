@@ -90,10 +90,6 @@ pub enum AuditOperation {
     ProtocolPaused,
     /// Protocol contract unpaused.
     ProtocolUnpaused,
-    /// Emergency withdrawal initiated.
-    EmergencyWithdrawalInitiated,
-    /// Emergency withdrawal executed.
-    EmergencyWithdrawalExecuted,
     /// Emergency withdrawal cancelled.
     EmergencyWithdrawalCancelled,
     /// Pending treasury address rotation cancelled.
@@ -110,10 +106,6 @@ pub enum AuditOperation {
     InvestorFrozen,
     /// An investor was unfrozen (investment actions restored).
     InvestorUnfrozen,
-    /// A placed bid was cancelled by its investor (Placed -> Cancelled).
-    BidCancelled,
-    /// A placed bid transitioned to Expired (via TTL/grace cleanup).
-    BidExpired,
 }
 
 /// Typed operation types used by audit-log emission.

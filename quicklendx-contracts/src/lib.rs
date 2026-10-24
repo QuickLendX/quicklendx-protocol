@@ -635,7 +635,7 @@ pub const MAX_QUERY_LIMIT: u32 = 50;
 // Contract definition
 // ============================================================================
 
-use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{contract, contractimpl, Address, BytesN, Env, String, Symbol, Vec};
 
 use crate::admin::AdminStorage;
 use crate::arbiter::ArbiterStorage;
@@ -647,6 +647,13 @@ use crate::storage::InvoiceStorage;
 use crate::types::{
     Dispute, DisputeResolution, DisputeStatus, Investment, InvoiceCategory, InvoiceStatus,
 };
+use crate::analytics::{
+    AnalyticsSnapshot, BusinessReport, InvestorReport, PerformanceMetrics, PlatformMetrics,
+    ReportPeriod,
+};
+
+#[cfg(test)]
+mod test_analytics_consistency;
 
 #[contract]
 pub struct QuickLendXContract;
@@ -1379,5 +1386,59 @@ impl QuickLendXContract {
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<types::Invoice, errors::QuickLendXError> {
         storage::InvoiceStorage::get(&env, &invoice_id)
             .ok_or(errors::QuickLendXError::InvoiceNotFound)
+    }
+
+    // --- Analytics entrypoints ---
+
+    pub fn generate_business_report(
+        env: Env,
+        business: Address,
+        period: ReportPeriod,
+    ) -> BusinessReport {
+        business.require_auth();
+        analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
+    }
+
+    pub fn generate_investor_report(
+        env: Env,
+        investor: Address,
+        period: ReportPeriod,
+    ) -> InvestorReport {
+        investor.require_auth();
+        analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
+    }
+
+    pub fn get_business_report(env: Env, report_id: Symbol) -> Option<BusinessReport> {
+        analytics::AnalyticsStorage::get_business_report(&env, &report_id)
+    }
+
+    pub fn get_investor_report(env: Env, report_id: Symbol) -> Option<InvestorReport> {
+        analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
+    }
+
+    pub fn get_platform_metrics(env: Env) -> PlatformMetrics {
+        analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
+    }
+
+    pub fn get_performance_metrics(env: Env) -> PerformanceMetrics {
+        analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
+    }
+
+    pub fn export_analytics_snapshot(env: Env) -> AnalyticsSnapshot {
+        analytics::AnalyticsCalculator::export_analytics_snapshot(&env)
+    }
+
+    // --- Dispute entrypoints (minimal surface for analytics tests) ---
+
+    pub fn open_dispute(env: Env, invoice_id: Symbol) -> Symbol {
+        dispute::open_dispute(&env, &invoice_id)
+    }
+
+    pub fn put_dispute_under_review_sym(env: Env, dispute_id: Symbol) {
+        dispute::put_under_review(&env, &dispute_id)
+    }
+
+    pub fn resolve_dispute_sym(env: Env, dispute_id: Symbol) {
+        dispute::resolve_dispute(&env, &dispute_id)
     }
 }
