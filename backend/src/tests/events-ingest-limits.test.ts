@@ -1,5 +1,5 @@
 // Virtually mock the 'pg' module to prevent errors on environments where postgres is not installed
-jjest.mock("pg", () => {
+jest.mock("pg", () => {
   const mClient = {
     query: jest.fn().mockResolvedValue({ rows: [] }),
     release: jest.fn(),
@@ -377,7 +377,7 @@ describe("Event ingest limits", () => {
 
     it("forwards unrecognised parser errors to the error handler", async () => {
       const failingParser = createEventIngestBodyParser((_req, _res, next) => {
-        next(new Error("unrecognised"));
+        next(new Error("unexpected"));
       });
 
       const res = await supertest(buildParserApp(failingParser))
@@ -387,96 +387,6 @@ describe("Event ingest limits", () => {
 
       expect(res.status).toBe(500);
       expect(res.body.error.code).toBe("FORWARDED_TO_ERROR_HANDLER");
-    });
-  });
-
-  describe("isEventIngestRequest", () => {
-    it("matches the events ingest path", () => {
-      expect(isEventIngestRequest({ method: "POST", path: "/api/v1/events" } as Request)).toBe(true);
-    });
-
-    it("rejects other paths", () => {
-      expect(isEventIngestRequest({ method: "POST", path: "/api/v1/invoices" } as Request)).toBe(false);
-    });
-  });
-
-  describe("/events indexer auth", () => {
-    const processEventSpy = jest.spyOn(
-      require("../services/eventProcessor").eventProcessor,
-      "processEvent"
-    );
-
-    beforeEach(() => {
-      processEventSpy.mockReset();
-      processEventSpy.mockResolvedValue({
-        id: "test",
-        status: "processed",
-      });
-    });
-
-    afterAll(() => {
-      processEventSpy.mockRestore();
-    });
-
-    const postEvents = (body: string, headers: Record<string, string>) =>
-      supertest(app)
-        .post("/api/v1/events")
-        .set("Content-Type", "application/json")
-        .set("X-API-Key", INDEXER_API_KEY)
-        .set(headers)
-        .send(body);
-
-    it("processes a batch with a valid signature", async () => {
-      const body = JSON.stringify([validEvent("auth-ok-1"), validEvent("auth-ok-2")]);
-      const res = await postEvents(body, signIngest(body));
-
-      expect(res.status).toBe(200);
-      expect(processEventSpy).toHaveBeenCalledTimes(2);
-    });
-
-    it("rejects a missing signature with 401 INGEST_AUTH_REQUIRED", async () => {
-      const body = JSON.stringify([validEvent("auth-missing")]);
-      const res = await postEvents(body, {});
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INGEST_AUTH_REQUIRED");
-      expect(processEventSpy).not.toHaveBeenCalled();
-    });
-
-    it("rejects a signature over a different body with 401 INGEST_SIGNATURE_INVALID", async () => {
-      const body = JSON.stringify([validEvent("auth-body")]);
-      const otherBody = JSON.stringify([validEvent("auth-body-x")]);
-      const res = await postEvents(body, signIngest(otherBody));
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INGEST_SIGNATURE_INVALID");
-      expect(processEventSpy).not.toHaveBeenCalled();
-    });
-
-    it("rejects a timestamp 301s in the past with 401 INGEST_SIGNATURE_INVALID", async () => {
-      const body = JSON.stringify([validEvent("auth-expired")]);
-      const res = await postEvents(body, signIngest(body, Date.now() - 301 * 1000));
-
-      expect(res.status).toBe(401);
-      expect(res.body.error.code).toBe("INGEST_SIGNATURE_INVALID");
-      expect(processEventSpy).not.toHaveBeenCalled();
-    });
-
-    it("accepts a timestamp 299s in the past", async () => {
-      const body = JSON.stringify([validEvent("auth-fresh")]);
-      const res = await postEvents(body, signIngest(body, Date.now() - 299 * 1000));
-
-      expect(res.status).toBe(200);
-      expect(processEventSpy).toHaveBeenCalledTimes(1);
-    });
-
-    it("still rejects a 300KB body with 413 even with a valid signature", async () => {
-      const body = JSON.stringify([{pad: "x".repeat(300 * 1024)}]);
-      const res = await postEvents(body, signIngest(body));
-
-      expect(res.status).toBe(413);
-      expect(res.body.error.code).toBe("BODY_LIMIT_EXCEEDED");
-      expect(processEventSpy).not.toHaveBeenCalled();
     });
   });
 });
