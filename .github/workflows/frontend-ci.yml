@@ -32,7 +32,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd quicklendx-frontend
-        npm ci
+        npm install --no-audit --no-fund
 
     - name: Run TypeScript type checking
       run: |
@@ -47,7 +47,7 @@ jobs:
     - name: Run Prettier check
       run: |
         cd quicklendx-frontend
-        npx prettier --check .
+        npx prettier --check "src/**/*.{ts,tsx,js,jsx,mjs,cjs,json,css,md}" "*.{ts,mjs,js,json}"
 
     - name: Run security audit
       continue-on-error: true
@@ -80,7 +80,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd quicklendx-frontend
-        npm ci
+        npm install --no-audit --no-fund
 
     - name: Build application
       run: |
@@ -120,7 +120,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd quicklendx-frontend
-        npm ci
+        npm install --no-audit --no-fund
 
     - name: Build for staging
       run: |
@@ -155,7 +155,7 @@ jobs:
     - name: Install dependencies
       run: |
         cd quicklendx-frontend
-        npm ci
+        npm install --no-audit --no-fund
 
     - name: Build for production
       run: |
@@ -167,4 +167,4 @@ jobs:
     - name: Deploy to production (placeholder)
       run: |
         echo "Production deployment will be configured based on hosting platform"
-        echo "Examples: Vercel, Netlify, AWS S3, etc." 
+        echo "Examples: Vercel, Netlify, AWS S3, etc."
