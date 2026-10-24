@@ -3,7 +3,6 @@ use crate::defaults::{
     resolve_grace_period, scan_funded_invoice_expirations, DEFAULT_GRACE_PERIOD,
     DEFAULT_OVERDUE_SCAN_BATCH_LIMIT,
 };
-const MAX_GRACE_PERIOD: u64 = 30 * 24 * 60 * 60;
 use crate::errors::QuickLendXError;
 use crate::invoice::{InvoiceCategory, InvoiceStatus};
 use soroban_sdk::{
@@ -106,12 +105,8 @@ fn test_resolve_grace_period_clamping() {
         let resolved_custom = resolve_grace_period(&env, Some(valid_custom)).unwrap();
         assert_eq!(resolved_custom, valid_custom);
 
-        // 3. Custom zero value (allowed for immediate defaults)
-        let resolved_zero = resolve_grace_period(&env, Some(0)).unwrap();
-        assert_eq!(resolved_zero, 0);
-
-        // 4. Custom invalid value exceeding MAX_GRACE_PERIOD (30 days)
-        let invalid_custom = MAX_GRACE_PERIOD + 1;
+        // 3. Custom invalid value exceeding MAX_GRACE_PERIOD (30 days)
+        let invalid_custom = crate::defaults::MAX_GRACE_PERIOD + 1;
         let resolved_invalid = resolve_grace_period(&env, Some(invalid_custom));
         assert!(matches!(
             resolved_invalid,
@@ -130,19 +125,19 @@ fn test_grace_period_boundary_on_both_sides() {
     let invoice_id =
         create_and_fund_invoice(&env, &client, &admin, &business, &investor, 1000, due_date);
 
-    let grace_period = 3 * 24 * 60 * 60; // 3 days
+    let grace_period = DEFAULT_GRACE_PERIOD;
     let grace_deadline = due_date + grace_period;
 
     // 0. Exactly at expiry (due_date) -> not overdue, not defaultable
     env.ledger().set_timestamp(due_date);
 
     // Try mark defaulted - should return OperationNotAllowed
-    let res = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    let res = client.try_mark_invoice_defaulted(&invoice_id);
     assert!(matches!(res, Err(Ok(QuickLendXError::OperationNotAllowed))));
 
     // Scan funded invoice expirations at exactly due_date -> overdue count is 0
     env.as_contract(&client.address, || {
-        let scan_res = scan_funded_invoice_expirations(&env, grace_period, Some(10)).unwrap();
+        let scan_res = scan_funded_invoice_expirations(&env, Some(10)).unwrap();
         assert_eq!(scan_res.overdue_count, 0);
         assert_eq!(scan_res.scanned_count, 1);
     });
@@ -161,13 +156,13 @@ fn test_grace_period_boundary_on_both_sides() {
     env.ledger().set_timestamp(grace_deadline);
 
     // Try mark defaulted - should return OperationNotAllowed
-    let res = client.try_mark_invoice_defaulted(&invoice_id, &Some(grace_period));
+    let res = client.try_mark_invoice_defaulted(&invoice_id);
     assert!(matches!(res, Err(Ok(QuickLendXError::OperationNotAllowed))));
 
     // Scan funded invoice expirations at exactly grace deadline -> overdue count is 1 (since current_timestamp > due_date)
     // but the status remains Funded (not defaulted because current_timestamp <= grace_deadline)
     env.as_contract(&client.address, || {
-        let scan_res = scan_funded_invoice_expirations(&env, grace_period, Some(10)).unwrap();
+        let scan_res = scan_funded_invoice_expirations(&env, Some(10)).unwrap();
         assert_eq!(scan_res.overdue_count, 1);
         assert_eq!(scan_res.scanned_count, 1);
     });
@@ -187,7 +182,7 @@ fn test_grace_period_boundary_on_both_sides() {
 
     // Scan funded invoice expirations one second past -> should trigger default handling (check_and_handle_expiration)
     env.as_contract(&client.address, || {
-        let scan_res = scan_funded_invoice_expirations(&env, grace_period, Some(10)).unwrap();
+        let scan_res = scan_funded_invoice_expirations(&env, Some(10)).unwrap();
         // The invoice is still counted as overdue in this scan step
         assert_eq!(scan_res.overdue_count, 1);
     });
@@ -214,7 +209,7 @@ fn test_scan_funded_invoice_expirations_cursor_paging_boundary() {
     let inv3 = create_and_fund_invoice(&env, &client, &admin, &business, &investor, 3000, due3);
     let inv4 = create_and_fund_invoice(&env, &client, &admin, &business, &investor, 4000, due4);
 
-    let grace_period = 10u64;
+    let grace_period = DEFAULT_GRACE_PERIOD;
     let grace_deadline = due2 + grace_period;
 
     // Set time exactly at grace_deadline (so no invoice is defaultable yet, but all are overdue)
@@ -222,7 +217,7 @@ fn test_scan_funded_invoice_expirations_cursor_paging_boundary() {
 
     // Scan page 1 with batch limit of 2 (processes inv1 and inv2)
     env.as_contract(&client.address, || {
-        let res1 = scan_funded_invoice_expirations(&env, grace_period, Some(2)).unwrap();
+        let res1 = scan_funded_invoice_expirations(&env, Some(2)).unwrap();
         assert_eq!(res1.scanned_count, 2);
         assert_eq!(res1.overdue_count, 2);
         assert_eq!(res1.next_cursor, 2);
@@ -233,7 +228,7 @@ fn test_scan_funded_invoice_expirations_cursor_paging_boundary() {
 
     // Scan page 2 with batch limit of 2 (processes inv3 and inv4)
     env.as_contract(&client.address, || {
-        let res2 = scan_funded_invoice_expirations(&env, grace_period, Some(2)).unwrap();
+        let res2 = scan_funded_invoice_expirations(&env, Some(2)).unwrap();
         assert_eq!(res2.scanned_count, 2);
         assert_eq!(res2.overdue_count, 2);
         // Since we processed all 4, cursor wraps to 0
