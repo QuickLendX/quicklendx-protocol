@@ -236,7 +236,8 @@ impl FeeManager {
 
     pub fn initialize(env: &Env, admin: &Address) -> Result<(), QuickLendXError> {
         // Explicit admin authorization: the caller must be the designated admin.
-        crate::AdminStorage::require_admin_auth(env, admin)?;
+        admin.require_auth();
+        crate::admin::AdminStorage::require_admin(env, admin)?;
 
         // Guard: reject re-initialization to prevent overwriting live fee config.
         if env.storage().instance().has(&FEES_INIT_KEY) {

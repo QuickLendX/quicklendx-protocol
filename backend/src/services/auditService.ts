@@ -61,7 +61,7 @@ class AuditService {
   ): AuditEntry {
     // Stamp the originating request id from async-local-storage so the audit
     // entry can be traced back to the inbound API call. An explicit value on
-    // the entry wins; otherwise we fall back to the active request context.
+    // the entry wins otherwise we fall back to the active request context.
     const requestId = entry.requestId ?? getCorrelationId() ?? undefined;
     const timestamp = new Date().toISOString();
     const filePath = this.logFilePath(timestamp.slice(0, 10));

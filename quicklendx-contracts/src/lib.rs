@@ -7,6 +7,8 @@ extern crate alloc;
 // ============================================================================
 
 pub mod admin;
+pub mod address_summary;
+pub mod analytics;
 pub mod arbiter;
 pub mod audit;
 pub mod backpressure;
@@ -61,14 +63,18 @@ pub mod vesting;
 #[cfg(feature = "diagnostics")]
 pub mod diagnostics;
 
-pub mod address_summary;
-pub mod analytics;
-
 // scratch_events is internal
 mod scratch_events;
 
+// Benchmark code only compiles for tests or the testutils feature.
+#[cfg(any(test, feature = "testutils"))]
+pub mod bench;
+
 /// Shared test utilities accessible from integration tests.
 pub mod test_utils;
+
+// Constants that are used across modules
+pub const MAX_QUERY_LIMIT: u32 = 100;
 
 // ============================================================================
 // Test modules

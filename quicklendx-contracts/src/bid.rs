@@ -787,7 +787,6 @@ impl BidStorage {
 
         let end_idx = (offset + capped_limit).min(old_count);
         let mut cleaned_count = 0u32;
-        let mut write_idx: u32 = offset;
         let mut read_idx: u32 = offset;
 
         // Process only the requested range [offset, end_idx)
