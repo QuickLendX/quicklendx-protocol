@@ -725,7 +725,7 @@ pub fn settle_invoice(
     env: &Env,
     invoice_id: &BytesN<32>,
     payment_amount: i128,
-    snap: &crate::types::Investment,
+    _snap: &crate::types::Investment,
     business: &Address,
 ) -> Result<(), QuickLendXError> {
     if payment_amount <= 0 {

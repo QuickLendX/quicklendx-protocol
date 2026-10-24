@@ -850,7 +850,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_amount: i128,
         expected_return: i128,
-        salt: BytesN<32>,
+        _salt: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         check_and_record_mutation(&env, &investor)?;
