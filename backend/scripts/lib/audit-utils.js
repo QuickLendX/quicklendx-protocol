@@ -1,4 +1,4 @@
-"strict";
+"use strict";
 
 const SEVERITY_ORDER = ["low", "moderate", "high", "critical"];
 
