@@ -18,6 +18,13 @@ pub mod defaults;
 pub mod dispute;
 pub mod dispute_timeline;
 pub mod errors;
+/// Invoice amount precision and overflow validation (Issue #2432).
+///
+/// See the module docs for the exact integer rules, invariants, compatibility
+/// impact, and security assumptions. The invoice lifecycle entrypoints
+/// (`contract.rs::store_invoice`, `invoice.rs::Invoice::new`) route their
+/// amount checks through this module.
+pub mod invoice_amount;
 pub mod escrow;
 pub mod events;
 pub mod fees;
@@ -31,7 +38,6 @@ pub mod invariants;
 pub mod investment;
 pub mod investment_queries;
 pub mod invoice;
-pub mod invoice_amount;
 pub mod invoice_search;
 pub mod kyc_policy;
 pub mod maintenance;
@@ -844,7 +850,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_amount: i128,
         expected_return: i128,
-        salt: BytesN<32>,
+        _salt: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         check_and_record_mutation(&env, &investor)?;
