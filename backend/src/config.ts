@@ -43,6 +43,11 @@ const schema = z.object({
   EXPORT_SECRET: isProduction
     ? z.string().min(32)
     : z.string().min(32).default("development-only-export-secret-32-chars"),
+  // HMAC-SHA256 secret used to authenticate the indexer event ingest route.
+  // Required in production (min 32 chars); optional in dev/test.
+  INDEXER_INGEST_SECRET: isProduction
+    ? z.string().min(32)
+    : z.string().min(32).optional(),
   NOTIFICATION_LINK_SECRET: isProduction
     ? z.string().min(32)
     : z.string().min(32).default("development-only-notification-link-secret-32-chars"),
@@ -58,7 +63,7 @@ const schema = z.object({
   // Alert routing configuration
   ALERT_ROUTES_JSON: z.string().optional(),
   ALERT_DEDUPE_WINDOW_MS: z.coerce.number().int().min(0).default(15 * 60 * 1000), // 15 minutes
-  MAX_NOTIFICATION_DEDUP_ENTRIES: z.coerce.number().int().min(1).default(10_000),
+  MAX_NOTIFICATION_DED_ENTRIES: z.coerce.number().int().min(1).default(10_000),
   NOTIFICATION_DEDUP_TTL_MS: z.coerce.number().int().min(1).default(24 * 60 * 60 * 1000),
   PAGERDUTY_INTEGRATION_KEY: isProduction
     ? z.string().min(1).optional()
@@ -78,6 +83,7 @@ export function load(env: NodeJS.ProcessEnv = process.env): Config {
         NOTIFICATION_LINK_SECRET: z.string().min(32),
         ADMIN_API_KEY: z.string().min(32),
         EXPORT_SECRET: z.string().min(32),
+        INDEXER_INGEST_SECRET: z.string().min(32),
       })
     : schema;
 
