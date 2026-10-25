@@ -137,7 +137,8 @@ export class WebhookSecretService {
   public registerSubscriber(
     subscriberId: string,
     gracePeriodSeconds: number = 3600,
-    algorithm: "hmac-sha256" | "ed25519" = "hmac-sha256"
+    algorithm: "hmac-sha256" | "ed25519" = "hmac-sha256",
+    ownerKeyId: string = "default"
   ): { view: SubscriberSecretPublicView; initial_secret: string } {
     if (this.store.has(subscriberId)) {
       throw new WebhookSecretError(
@@ -162,6 +163,7 @@ export class WebhookSecretService {
 
     const record: WebhookSubscriberSecret = {
       subscriber_id: subscriberId,
+      owner_key_id: ownerKeyId,
       primary_secret: primarySecret,
       pending_secret: null,
       pending_created_at: null,
@@ -178,6 +180,16 @@ export class WebhookSecretService {
       view: this.toPublicView(record),
       initial_secret: initialSecret,
     };
+  }
+
+  /**
+   * Returns the public (non-secret) view of a subscriber's secret state.
+   */
+  /**
+   * Returns the subscriber record if it exists, or undefined.
+   */
+  public getRecord(subscriberId: string): WebhookSubscriberSecret | undefined {
+    return this.store.get(subscriberId);
   }
 
   /**
@@ -505,7 +517,7 @@ export class WebhookSecretService {
     return record;
   }
 
-  private toPublicView(
+  public toPublicView(
     record: WebhookSubscriberSecret
   ): SubscriberSecretPublicView {
     return {
@@ -517,6 +529,7 @@ export class WebhookSecretService {
       algorithm: record.algorithm,
       created_at: record.created_at,
       updated_at: record.updated_at,
+      owner_key_id: record.owner_key_id,
     };
   }
 

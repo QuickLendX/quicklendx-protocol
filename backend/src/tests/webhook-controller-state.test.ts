@@ -21,8 +21,33 @@ beforeEach(() => {
   jest.spyOn(webhookSecretService, "finalizeRotation").mockImplementation(service.finalizeRotation.bind(service));
   jest.spyOn(webhookSecretService, "cancelRotation").mockImplementation(service.cancelRotation.bind(service));
   jest.spyOn(webhookSecretService, "verifySignature").mockImplementation(service.verifySignature.bind(service));
+  jest.spyOn(webhookSecretService, "getRecord").mockImplementation(service.getRecord.bind(service));
   app = express();
   app.use(express.json());
+  app.use((req, _res, next) => {
+    req.apiKey = {
+      id: "test-owner",
+      name: "Test Key",
+      prefix: "qlx_test",
+      scopes: ["webhooks:manage"],
+      created_by: "test-owner",
+      created_at: new Date().toISOString(),
+      last_used_at: null,
+      expires_at: null,
+      revoked: false,
+      signing_secret_hash: null,
+      prev_signing_secret_hash: null,
+      prev_secret_expires_at: null,
+      ownerId: "test-owner",
+      permissions: ["webhooks:manage"],
+      status: "active",
+      version: 1,
+      createdAt: Date.now(),
+      revokedAt: null,
+      revokedBy: null,
+    };
+    next();
+  });
   app.use("/webhooks", webhookRouter);
   app.use(errorHandler);
 });
