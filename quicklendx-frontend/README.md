@@ -52,8 +52,12 @@ NEXT_PUBLIC_NETWORK=testnet
 # RPC Configuration
 NEXT_PUBLIC_RPC_URL=https://soroban-testnet.stellar.org:443
 
-# Optional: Analytics
-NEXT_PUBLIC_ANALYTICS_ID=your_analytics_id
+# Optional: Analytics & Telemetry (Opt-in only)
+NEXT_PUBLIC_ANALYTICS_ENABLED=true
+NEXT_PUBLIC_ANALYTICS_PROVIDER=mixpanel # mixpanel | ga | self-hosted | noop
+NEXT_PUBLIC_MIXPANEL_TOKEN=your_mixpanel_project_token # required for mixpanel
+# NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX # required for ga (format: G-XXXXXXXX)
+# NEXT_PUBLIC_ANALYTICS_ENDPOINT=https://your-domain.com/api/analytics/events # required for self-hosted (HTTPS in production)
 
 # API base URL (must include the full path prefix, e.g. /api/v1).
 # Defaults to http://localhost:3001/api/v1 when unset.
@@ -135,9 +139,13 @@ Required environment variables:
 - `NEXT_PUBLIC_NETWORK`: Network (testnet/mainnet)
 - `NEXT_PUBLIC_RPC_URL`: Soroban RPC endpoint
 
-Optional:
+Optional Analytics & Telemetry:
 
-- `NEXT_PUBLIC_ANALYTICS_ID`: Analytics tracking ID
+- `NEXT_PUBLIC_ANALYTICS_ENABLED`: Set to `"true"` to enable telemetry (opt-in only, disabled by default).
+- `NEXT_PUBLIC_ANALYTICS_PROVIDER`: Analytics provider (`"noop"`, `"mixpanel"`, `"ga"` / `"google-analytics"`, or `"self-hosted"`).
+- `NEXT_PUBLIC_MIXPANEL_TOKEN`: Project token for Mixpanel (required when provider is `"mixpanel"`).
+- `NEXT_PUBLIC_GA_MEASUREMENT_ID`: Google Analytics GA4 measurement ID matching `/^G-[A-Z0-9]{4,}$/` (required when provider is `"ga"`).
+- `NEXT_PUBLIC_ANALYTICS_ENDPOINT`: HTTP endpoint for self-hosted analytics (required when provider is `"self-hosted"`, must use HTTPS in production).
 - `NEXT_PUBLIC_API_URL`: Backend API base URL **including the `/api/v1` prefix**
   (e.g. `http://localhost:3001/api/v1`). Defaults to `http://localhost:3001/api/v1` when
   unset. Matches the v1 router mount in `backend/src/app.ts` and the server entry in

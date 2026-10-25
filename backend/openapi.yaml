@@ -1178,6 +1178,147 @@ paths:
         "403":
           description: Insufficient admin role permissions
 
+  /webhooks/subscribers:
+    post:
+      summary: Register a webhook subscriber
+      description: Registers a new webhook subscriber with initial signing secret. Requires webhooks:manage scope.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - subscriber_id
+              properties:
+                subscriber_id:
+                  type: string
+                grace_period_seconds:
+                  type: integer
+                  default: 3600
+                algorithm:
+                  type: string
+                  enum: [hmac-sha256, ed25519]
+                  default: hmac-sha256
+      responses:
+        "201":
+          description: Subscriber successfully registered
+        "400":
+          description: Invalid request body
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          description: Insufficient permissions (requires webhooks:manage)
+        "409":
+          description: Subscriber already exists
+
+  /webhooks/subscribers/{subscriberId}:
+    get:
+      summary: Get webhook subscriber state
+      description: Returns public rotation state. Requires ownership or security_admin / super_admin role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Public rotation state
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          description: Insufficient permissions (requires webhooks:manage)
+        "404":
+          description: Subscriber not found
+
+  /webhooks/subscribers/{subscriberId}/rotate:
+    post:
+      summary: Initiate webhook secret rotation
+      description: Generates a new pending secret. Requires ownership or security_admin / super_admin role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriberId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                grace_period_seconds:
+                  type: integer
+                  default: 3600
+      responses:
+        "202":
+          description: Rotation initiated
+        "400":
+          description: Invalid request body
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          description: Insufficient permissions (requires webhooks:manage)
+        "404":
+          description: Subscriber not found
+        "409":
+          description: Rotation already in progress
+
+  /webhooks/subscribers/{subscriberId}/rotate/finalize:
+    post:
+      summary: Finalize webhook secret rotation
+      description: Promotes pending secret to primary. Requires ownership or security_admin / super_admin role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rotation finalized
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          description: Insufficient permissions (requires webhooks:manage)
+        "404":
+          description: Subscriber not found
+        "409":
+          description: No rotation in progress
+
+  /webhooks/subscribers/{subscriberId}/rotate/cancel:
+    post:
+      summary: Cancel webhook secret rotation
+      description: Cancels pending rotation. Requires ownership or security_admin / super_admin role.
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: subscriberId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Rotation canceled
+        "401":
+          $ref: '#/components/responses/Unauthorized'
+        "403":
+          description: Insufficient permissions (requires webhooks:manage)
+        "404":
+          description: Subscriber not found
+        "409":
+          description: No rotation in progress
+
 components:
   securitySchemes:
     BearerAuth:

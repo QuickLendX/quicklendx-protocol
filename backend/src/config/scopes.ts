@@ -82,6 +82,11 @@ export const SCOPE_REGISTRY: ScopeDefinition[] = [
     description: 'Create and update settlements',
     category: 'write',
   },
+  {
+    scope: 'webhooks:manage',
+    description: 'Manage webhook subscribers and secret rotation',
+    category: 'write',
+  },
 
   // Admin scopes
   {

@@ -1,9 +1,16 @@
 /**
  * Wallet Telemetry & Analytics Provider Module
  *
- * Provides a configurable telemetry provider interface with real implementations
- * (Mixpanel, Google Analytics, Self-Hosted HTTP) and fallback No-op for
- * development / disabled states.
+ * Provides a configurable, privacy-preserving telemetry provider interface with
+ * implementations for Mixpanel, Google Analytics (GA4), Self-Hosted HTTP,
+ * and fallback No-op for development or disabled states.
+ *
+ * Privacy Guarantees:
+ * - Telemetry is opt-in only (NEXT_PUBLIC_ANALYTICS_ENABLED="true").
+ * - Raw Stellar addresses are never transmitted; SHA-256("qlx:" + address) 16-hex hashes are used instead.
+ * - Raw extension error messages are never transmitted; only classified failure reasons are allowed.
+ * - Unknown or sensitive event properties outside each event's typed allowlist are dropped.
+ * - No Authorization / Bearer tokens are sent from client-side bundles.
  */
 
 // ---------------------------------------------------------------------------
@@ -17,6 +24,13 @@ export type TelemetryProviderType =
   | "google-analytics"
   | "self-hosted"
   | "custom";
+
+export type WalletFailureReason =
+  | "not_installed"
+  | "rejected"
+  | "timeout"
+  | "sdk_unavailable"
+  | "unknown";
 
 export interface WalletTelemetryEventProps {
   [key: string]: unknown;
@@ -40,14 +54,18 @@ export interface WalletTelemetryProvider {
 }
 
 export interface WalletTelemetryConfig {
-  /** Explicit enable/disable toggle */
+  /** Explicit enable/disable toggle (opt-in only) */
   enabled?: boolean;
   /** Selected provider type */
   provider?: TelemetryProviderType;
-  /** Self-hosted or backend analytics endpoint */
+  /** Self-hosted analytics endpoint (required for self-hosted provider) */
   endpoint?: string;
-  /** Mixpanel token or tracking ID */
+  /** Mixpanel token or tracking ID (backward compatible alias) */
   apiKey?: string;
+  /** Mixpanel project token */
+  mixpanelToken?: string;
+  /** Google Analytics measurement ID (e.g. G-XXXXX) */
+  gaMeasurementId?: string;
   /** Enable debug console logging */
   debug?: boolean;
   /** Default metadata properties attached to all events */
@@ -73,12 +91,203 @@ declare global {
 }
 
 // ---------------------------------------------------------------------------
+// Hashing & Sanitization Utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * Computes a privacy-preserving address hash:
+ * The first 16 lowercase hex characters of SHA-256("qlx:" + address).
+ */
+export async function hashAddress(address: string): Promise<string> {
+  if (!address) return "";
+  const encoder = new TextEncoder();
+  const data = encoder.encode(`qlx:${address}`);
+
+  let subtle: SubtleCrypto | undefined = globalThis.crypto?.subtle;
+  if (!subtle && typeof window !== "undefined") {
+    subtle = window.crypto?.subtle;
+  }
+  if (!subtle) {
+    try {
+      const nodeCrypto = require("node:crypto");
+      subtle = nodeCrypto.webcrypto?.subtle;
+    } catch {
+      // ignore
+    }
+  }
+
+  if (!subtle) {
+    throw new Error("crypto.subtle is not available");
+  }
+
+  const hashBuffer = await subtle.digest("SHA-256", data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  return hex.slice(0, 16);
+}
+
+const VALID_FAILURE_REASONS: ReadonlySet<WalletFailureReason> =
+  new Set<WalletFailureReason>([
+    "not_installed",
+    "rejected",
+    "timeout",
+    "sdk_unavailable",
+    "unknown",
+  ]);
+
+/**
+ * Maps an error string or Error instance to a safe WalletFailureReason enum.
+ * Never leaks the raw error message.
+ */
+export function mapErrorToReason(error?: unknown): WalletFailureReason {
+  if (!error) return "unknown";
+  if (
+    typeof error === "string" &&
+    VALID_FAILURE_REASONS.has(error as WalletFailureReason)
+  ) {
+    return error as WalletFailureReason;
+  }
+
+  const errStr = (
+    typeof error === "string"
+      ? error
+      : (error as any)?.message || (error as any)?.code || String(error)
+  ).toLowerCase();
+
+  if (
+    errStr.includes("not_installed") ||
+    errStr.includes("not installed") ||
+    errStr.includes("freighter is not installed")
+  ) {
+    return "not_installed";
+  }
+  if (
+    errStr.includes("rejected") ||
+    errStr.includes("declined") ||
+    errStr.includes("denied") ||
+    errStr.includes("cancel")
+  ) {
+    return "rejected";
+  }
+  if (errStr.includes("timeout") || errStr.includes("timed out")) {
+    return "timeout";
+  }
+  if (
+    errStr.includes("sdk_unavailable") ||
+    errStr.includes("sdk unavailable") ||
+    errStr.includes("sdk_not_found") ||
+    errStr.includes("sdk not found")
+  ) {
+    return "sdk_unavailable";
+  }
+  return "unknown";
+}
+
+/**
+ * Strict allowlist of property keys allowed for each standard wallet event.
+ */
+export const EVENT_PROPERTY_ALLOWLIST: Record<string, ReadonlySet<string>> = {
+  wallet_connect_attempt: new Set([
+    "walletType",
+    "network",
+    "source",
+    "timestamp",
+  ]),
+  wallet_connected: new Set([
+    "address_hash",
+    "walletType",
+    "network",
+    "source",
+    "timestamp",
+  ]),
+  wallet_connect_failed: new Set([
+    "reason",
+    "walletType",
+    "network",
+    "timestamp",
+  ]),
+  wallet_disconnected: new Set([
+    "address_hash",
+    "network",
+    "reason",
+    "timestamp",
+  ]),
+  wallet_network_changed: new Set([
+    "network",
+    "previousNetwork",
+    "address_hash",
+    "timestamp",
+  ]),
+};
+
+/**
+ * Sanitizes event properties according to event allowlist rules.
+ * - Hashes any raw address to address_hash.
+ * - Maps any raw error to a safe failure reason.
+ * - Drops unknown property keys.
+ */
+export async function sanitizeEventProps(
+  name: string,
+  props?: Record<string, unknown>,
+  defaultProps?: Record<string, unknown>
+): Promise<Record<string, unknown>> {
+  const merged: Record<string, unknown> = {
+    ...(defaultProps || {}),
+    ...(props || {}),
+  };
+
+  const allowedKeys = EVENT_PROPERTY_ALLOWLIST[name];
+  const defaultKeys = defaultProps ? Object.keys(defaultProps) : [];
+  const sanitized: Record<string, unknown> = {};
+
+  // Process address -> address_hash
+  if ("address" in merged && merged.address) {
+    try {
+      sanitized.address_hash = await hashAddress(String(merged.address));
+    } catch {
+      // ignore
+    }
+  } else if ("address_hash" in merged && merged.address_hash) {
+    sanitized.address_hash = String(merged.address_hash);
+  }
+
+  // Process error / reason for wallet_connect_failed
+  if (name === "wallet_connect_failed") {
+    if ("error" in merged && merged.error) {
+      sanitized.reason = mapErrorToReason(merged.error);
+    } else if ("reason" in merged && merged.reason) {
+      sanitized.reason = mapErrorToReason(merged.reason);
+    } else {
+      sanitized.reason = "unknown";
+    }
+  }
+
+  for (const [key, value] of Object.entries(merged)) {
+    // Explicitly forbidden raw identifier keys
+    if (key === "address" || key === "error") {
+      continue;
+    }
+    // If the event has a defined allowlist, keep only allowed or configured default keys
+    if (allowedKeys) {
+      if (allowedKeys.has(key) || defaultKeys.includes(key)) {
+        sanitized[key] = value;
+      }
+    } else {
+      // Custom event without a strict predefined allowlist
+      sanitized[key] = value;
+    }
+  }
+
+  return sanitized;
+}
+
+// ---------------------------------------------------------------------------
 // Provider Implementations
 // ---------------------------------------------------------------------------
 
 /**
  * No-Op Telemetry Provider
- * Used in development or when analytics is disabled.
+ * Used when analytics is disabled or unconfigured.
  */
 export class NoopTelemetryProvider implements WalletTelemetryProvider {
   readonly name = "noop";
@@ -107,6 +316,7 @@ export class NoopTelemetryProvider implements WalletTelemetryProvider {
 /**
  * Mixpanel Telemetry Provider
  * Forwards events to window.mixpanel or via configured API endpoint.
+ * Requires NEXT_PUBLIC_MIXPANEL_TOKEN.
  */
 export class MixpanelTelemetryProvider implements WalletTelemetryProvider {
   readonly name = "mixpanel";
@@ -175,6 +385,7 @@ export class MixpanelTelemetryProvider implements WalletTelemetryProvider {
 
 /**
  * Google Analytics (GA4 / gtag) Telemetry Provider
+ * Requires NEXT_PUBLIC_GA_MEASUREMENT_ID matching /^G-[A-Z0-9]{4,}$/.
  */
 export class GoogleAnalyticsTelemetryProvider implements WalletTelemetryProvider {
   readonly name = "google-analytics";
@@ -217,14 +428,12 @@ export class GoogleAnalyticsTelemetryProvider implements WalletTelemetryProvider
 /**
  * Self-Hosted HTTP Analytics Service Provider
  * Sends telemetry events directly to QuickLendX's analytics service / endpoint.
+ * Sends no Authorization header in any configuration.
  */
 export class SelfHostedTelemetryProvider implements WalletTelemetryProvider {
   readonly name = "self-hosted";
 
-  constructor(
-    private readonly endpoint: string = "/api/analytics/events",
-    private readonly apiKey?: string
-  ) {}
+  constructor(private readonly endpoint: string = "/api/analytics/events") {}
 
   async trackEvent(
     name: string,
@@ -238,9 +447,6 @@ export class SelfHostedTelemetryProvider implements WalletTelemetryProvider {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
       };
-      if (this.apiKey) {
-        headers["Authorization"] = `Bearer ${this.apiKey}`;
-      }
 
       await fetch(this.endpoint, {
         method: "POST",
@@ -312,70 +518,89 @@ export class CustomTelemetryProvider implements WalletTelemetryProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Configuration Resolver
+// Configuration Resolver & Factory
 // ---------------------------------------------------------------------------
 
+const GA_MEASUREMENT_ID_REGEX = /^G-[A-Z0-9]{4,}$/;
+
 /**
- * Reads telemetry configuration from environment variables.
+ * Reads telemetry configuration strictly from public environment variables.
+ * Telemetry is opt-in only: enabled ONLY when NEXT_PUBLIC_ANALYTICS_ENABLED === "true".
  */
 export function resolveConfigFromEnv(): WalletTelemetryConfig {
   const envEnabled =
     typeof process !== "undefined"
-      ? (process.env.NEXT_PUBLIC_ANALYTICS_ENABLED ??
-        process.env.ANALYTICS_ENABLED)
+      ? process.env.NEXT_PUBLIC_ANALYTICS_ENABLED
       : undefined;
 
   const nodeEnv =
     typeof process !== "undefined" ? process.env.NODE_ENV : "development";
 
-  // Enabled determination: explicit env var > nodeEnv (disabled in dev/test by default unless explicit)
-  const enabled =
-    envEnabled !== undefined
-      ? envEnabled === "true" || envEnabled === "1"
-      : nodeEnv === "production";
-
-  const rawProvider =
-    typeof process !== "undefined"
-      ? (
-          process.env.NEXT_PUBLIC_ANALYTICS_PROVIDER ??
-          process.env.ANALYTICS_PROVIDER ??
-          "self-hosted"
-        ).toLowerCase()
-      : "self-hosted";
-
-  let provider: TelemetryProviderType = "noop";
-  if (rawProvider === "mixpanel") {
-    provider = "mixpanel";
-  } else if (rawProvider === "ga" || rawProvider === "google-analytics") {
-    provider = "ga";
-  } else if (rawProvider === "self-hosted") {
-    provider = "self-hosted";
-  } else if (rawProvider === "noop") {
-    provider = "noop";
-  } else {
-    provider = "self-hosted";
+  if (envEnabled !== "true") {
+    return {
+      enabled: false,
+      provider: "noop",
+      debug: nodeEnv === "development",
+    };
   }
+
+  const rawProvider = (
+    typeof process !== "undefined"
+      ? (process.env.NEXT_PUBLIC_ANALYTICS_PROVIDER ?? "noop")
+      : "noop"
+  ).toLowerCase();
+
+  const mixpanelToken =
+    typeof process !== "undefined"
+      ? process.env.NEXT_PUBLIC_MIXPANEL_TOKEN
+      : undefined;
+
+  const gaMeasurementId =
+    typeof process !== "undefined"
+      ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID
+      : undefined;
 
   const endpoint =
     typeof process !== "undefined"
-      ? (process.env.NEXT_PUBLIC_ANALYTICS_ENDPOINT ??
-        process.env.ANALYTICS_ENDPOINT ??
-        "/api/analytics/events")
-      : "/api/analytics/events";
-
-  const apiKey =
-    typeof process !== "undefined"
-      ? (process.env.NEXT_PUBLIC_MIXPANEL_TOKEN ??
-        process.env.MIXPANEL_TOKEN ??
-        process.env.NEXT_PUBLIC_ANALYTICS_API_KEY ??
-        process.env.ANALYTICS_API_KEY)
+      ? process.env.NEXT_PUBLIC_ANALYTICS_ENDPOINT
       : undefined;
 
+  let provider: TelemetryProviderType = "noop";
+
+  if (rawProvider === "mixpanel") {
+    if (mixpanelToken) {
+      provider = "mixpanel";
+    } else {
+      provider = "noop";
+    }
+  } else if (rawProvider === "ga" || rawProvider === "google-analytics") {
+    if (gaMeasurementId && GA_MEASUREMENT_ID_REGEX.test(gaMeasurementId)) {
+      provider = "ga";
+    } else {
+      console.warn(
+        `[wallet-telemetry] Invalid or missing Google Analytics measurement ID: "${gaMeasurementId}". Falling back to noop.`
+      );
+      provider = "noop";
+    }
+  } else if (rawProvider === "self-hosted") {
+    if (!endpoint) {
+      provider = "noop";
+    } else if (nodeEnv === "production" && !endpoint.startsWith("https:")) {
+      provider = "noop";
+    } else {
+      provider = "self-hosted";
+    }
+  } else {
+    provider = "noop";
+  }
+
   return {
-    enabled,
+    enabled: provider !== "noop",
     provider,
     endpoint,
-    apiKey,
+    apiKey: mixpanelToken,
+    mixpanelToken,
+    gaMeasurementId,
     debug: nodeEnv === "development",
   };
 }
@@ -386,20 +611,43 @@ export function resolveConfigFromEnv(): WalletTelemetryConfig {
 export function createProviderFromConfig(
   config: WalletTelemetryConfig
 ): WalletTelemetryProvider {
-  if (!config.enabled || config.provider === "noop") {
+  if (!config.enabled || config.provider === "noop" || !config.provider) {
     return new NoopTelemetryProvider(config.debug);
   }
 
   switch (config.provider) {
-    case "mixpanel":
-      return new MixpanelTelemetryProvider(config.apiKey, config.endpoint);
+    case "mixpanel": {
+      const token = config.mixpanelToken ?? config.apiKey;
+      if (!token) {
+        return new NoopTelemetryProvider(config.debug);
+      }
+      return new MixpanelTelemetryProvider(token, config.endpoint);
+    }
     case "ga":
-    case "google-analytics":
-      return new GoogleAnalyticsTelemetryProvider(config.apiKey);
-    case "self-hosted":
-      return new SelfHostedTelemetryProvider(config.endpoint, config.apiKey);
+    case "google-analytics": {
+      const measurementId = config.gaMeasurementId ?? config.apiKey;
+      if (!measurementId || !GA_MEASUREMENT_ID_REGEX.test(measurementId)) {
+        console.warn(
+          `[wallet-telemetry] Invalid or missing Google Analytics measurement ID: "${measurementId}". Falling back to noop.`
+        );
+        return new NoopTelemetryProvider(config.debug);
+      }
+      return new GoogleAnalyticsTelemetryProvider(measurementId);
+    }
+    case "self-hosted": {
+      if (!config.endpoint) {
+        return new NoopTelemetryProvider(config.debug);
+      }
+      const nodeEnv =
+        typeof process !== "undefined" ? process.env.NODE_ENV : "development";
+      if (nodeEnv === "production" && !config.endpoint.startsWith("https:")) {
+        return new NoopTelemetryProvider(config.debug);
+      }
+      return new SelfHostedTelemetryProvider(config.endpoint);
+    }
+    case "custom":
     default:
-      return new SelfHostedTelemetryProvider(config.endpoint, config.apiKey);
+      return new NoopTelemetryProvider(config.debug);
   }
 }
 
@@ -412,9 +660,7 @@ export class WalletTelemetryService {
   private provider: WalletTelemetryProvider;
   /**
    * True when the active provider was supplied explicitly (via
-   * `setProvider`) instead of being derived from the configuration. An
-   * explicitly supplied provider survives a `configure()` call that does not
-   * name a provider type.
+   * `setProvider`) instead of being derived from configuration.
    */
   private hasCustomProvider = false;
 
@@ -428,9 +674,6 @@ export class WalletTelemetryService {
   configure(config: Partial<WalletTelemetryConfig>): void {
     this.config = { ...this.config, ...config };
 
-    // Keep an explicitly injected provider unless the caller asked for a
-    // specific provider type. Otherwise every `configure({ enabled: true })`
-    // would silently swap the injected provider for a config-derived one.
     if (this.hasCustomProvider && config.provider === undefined) {
       return;
     }
@@ -462,14 +705,13 @@ export class WalletTelemetryService {
 
   /** Reset service to defaults (useful in testing) */
   reset(): void {
-    this.providerWasInjected = false;
     const envConfig = resolveConfigFromEnv();
     this.config = envConfig;
     this.hasCustomProvider = false;
     this.provider = createProviderFromConfig(this.config);
   }
 
-  /** Track event through active provider */
+  /** Track event through active provider with sanitization & hashing */
   async trackEvent(
     name: string,
     props?: Record<string, unknown>
@@ -478,27 +720,31 @@ export class WalletTelemetryService {
       return;
     }
 
-    const payload = {
-      ...this.config.defaultProperties,
-      ...props,
-      timestamp: Date.now(),
-    };
-
     try {
+      const sanitized = await sanitizeEventProps(
+        name,
+        props,
+        this.config.defaultProperties
+      );
+      const payload = {
+        ...sanitized,
+        timestamp: Date.now(),
+      };
       await this.provider.trackEvent(name, payload);
     } catch (err) {
       console.warn(`[wallet-telemetry] Error tracking event "${name}":`, err);
     }
   }
 
-  /** Identify user session */
+  /** Identify user session using privacy-preserving address hash */
   async identify(
     userId: string,
     traits?: Record<string, unknown>
   ): Promise<void> {
     if (!this.config.enabled) return;
     try {
-      await this.provider.identify?.(userId, traits);
+      const hashedId = await hashAddress(userId);
+      await this.provider.identify?.(hashedId, traits);
     } catch (err) {
       console.warn("[wallet-telemetry] Error identifying user:", err);
     }
@@ -565,7 +811,8 @@ export interface WalletConnectAttemptProps {
 }
 
 export interface WalletConnectedProps {
-  address: string;
+  address?: string;
+  address_hash?: string;
   walletType?: string;
   network?: string;
   source?: string;
@@ -573,15 +820,16 @@ export interface WalletConnectedProps {
 }
 
 export interface WalletConnectFailedProps {
-  error: string;
+  error?: string;
+  reason?: WalletFailureReason | string;
   walletType?: string;
   network?: string;
-  reason?: string;
   [key: string]: unknown;
 }
 
 export interface WalletDisconnectedProps {
   address?: string;
+  address_hash?: string;
   network?: string;
   reason?: string;
   [key: string]: unknown;
@@ -591,6 +839,7 @@ export interface WalletNetworkChangedProps {
   network: string;
   previousNetwork?: string;
   address?: string;
+  address_hash?: string;
   [key: string]: unknown;
 }
 

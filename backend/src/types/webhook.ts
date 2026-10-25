@@ -25,6 +25,8 @@ export enum WebhookSecretStatus {
 export interface WebhookSubscriberSecret {
   /** Unique subscriber identifier (opaque string, e.g. UUID). */
   subscriber_id: string;
+  /** Owning API key identifier or principal. */
+  owner_key_id: string;
   /** The currently active signing secret (hex or PEM private key). */
   primary_secret: string;
   /** A newly generated secret awaiting promotion (hex or PEM private key), or null. */
@@ -93,6 +95,7 @@ export type RegisterSubscriberRequest = z.infer<
 
 export interface SubscriberSecretPublicView {
   subscriber_id: string;
+  owner_key_id?: string;
   status: WebhookSecretStatus;
   /** Whether a pending secret currently exists. */
   has_pending_secret: boolean;
