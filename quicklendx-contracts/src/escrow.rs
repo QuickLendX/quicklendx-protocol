@@ -314,7 +314,6 @@ pub fn accept_bid_and_fund_with_key(
     }
 
     let escrow_id = accept_bid_and_fund(env, invoice_id, bid_id)?;
-
     store_bid_acceptance_record(
         env,
         request_key,
@@ -324,7 +323,6 @@ pub fn accept_bid_and_fund_with_key(
             escrow_id: escrow_id.clone(),
         },
     );
-
     Ok(escrow_id)
 }
 

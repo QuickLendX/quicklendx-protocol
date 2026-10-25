@@ -1,0 +1,18 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "feat/issue-2938-feat-analytics-expose-analytics-report",
+    "main",
+    "origin"
+  ],
+  "parent": {
+    "feat/issue-2938-feat-analytics-expose-analytics-report": "main",
+    "main": null,
+    "origin": "main"
+  },
+  "order": [
+    "main",
+    "feat/issue-2938-feat-analytics-expose-analytics-report",
+    "origin"
+  ]
+}

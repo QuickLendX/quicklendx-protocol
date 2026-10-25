@@ -725,7 +725,7 @@ pub fn settle_invoice(
     env: &Env,
     invoice_id: &BytesN<32>,
     payment_amount: i128,
-    snap: &crate::types::Investment,
+    _snap: &crate::types::Investment,
     business: &Address,
 ) -> Result<(), QuickLendXError> {
     if payment_amount <= 0 {
@@ -970,7 +970,7 @@ fn require_settlement_currency_allowed(
 fn settle_invoice_internal(
     env: &Env,
     invoice_id: &BytesN<32>,
-    business: &Address,
+    _business: &Address,
 ) -> Result<(), QuickLendXError> {
     // Double-finalization guard: reject if already settled.
     if is_finalized(env, invoice_id) {
