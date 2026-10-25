@@ -807,13 +807,14 @@ impl InvoiceStorage {
             .remove(&DataKey::Invoice(invoice_id.clone()));
     }
 
-    pub fn clear_all(env: &Env) {
-        crate::governance::require_no_open_governance_proposal(env).unwrap();
+    pub fn clear_all(env: &Env) -> Result<(), QuickLendXError> {
+        crate::governance::require_no_open_governance_proposal(env)?;
         let ids = Self::get_all_invoice_ids(env);
         for id in ids.iter() {
             Self::delete_invoice(env, &id);
         }
-        StorageManager::clear_all_mappings(env);
+        StorageManager::clear_all_mappings(env)?;
+        Ok(())
     }
 
     pub fn get_all_invoice_ids(env: &Env) -> Vec<BytesN<32>> {
@@ -1223,8 +1224,8 @@ pub struct StorageManager;
 const VIEW_ONLY_KEY: Symbol = symbol_short!("view_onl");
 
 impl StorageManager {
-    pub fn clear_all_mappings(env: &Env) {
-        crate::governance::require_no_open_governance_proposal(env).unwrap();
+    pub fn clear_all_mappings(env: &Env) -> Result<(), QuickLendXError> {
+        crate::governance::require_no_open_governance_proposal(env)?;
         env.storage()
             .persistent()
             .remove(&StorageKeys::invoice_count());
@@ -1232,6 +1233,7 @@ impl StorageManager {
         env.storage()
             .persistent()
             .remove(&StorageKeys::investment_count());
+        Ok(())
     }
 
     /// Return `true` if the current context is marked as view-only.

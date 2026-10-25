@@ -1083,7 +1083,7 @@ fn clear_all_removes_invoice_records() {
     InvoiceStorage::store_invoice(&env, &inv);
 
     assert!(InvoiceStorage::get_invoice(&env, &id).is_some());
-    InvoiceStorage::clear_all(&env);
+    InvoiceStorage::clear_all(&env).unwrap();
     assert!(InvoiceStorage::get_invoice(&env, &id).is_none());
 }
 
@@ -1093,7 +1093,7 @@ fn clear_all_empties_status_buckets() {
     let inv = make_invoice(&env, 1);
     InvoiceStorage::store_invoice(&env, &inv);
 
-    InvoiceStorage::clear_all(&env);
+    InvoiceStorage::clear_all(&env).unwrap();
 
     let pending = InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Pending);
     assert_eq!(
@@ -1109,7 +1109,7 @@ fn clear_all_empties_category_index() {
     let inv = make_invoice(&env, 2);
     InvoiceStorage::store_invoice(&env, &inv);
 
-    InvoiceStorage::clear_all(&env);
+    InvoiceStorage::clear_all(&env).unwrap();
 
     // After clear the category index for Services must be empty.
     let key = (

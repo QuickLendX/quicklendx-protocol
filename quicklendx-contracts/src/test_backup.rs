@@ -564,7 +564,7 @@ fn restore_preserves_all_statuses() {
     // Delete or modify invoices
     env.as_contract(&client.address, || {
         use crate::storage::InvoiceStorage;
-        InvoiceStorage::clear_all(&env);
+        InvoiceStorage::clear_all(&env).unwrap();
     });
 
     // Restore
@@ -628,7 +628,7 @@ fn invoice_count_consistent_after_restore() {
     // Clear and restore
     env.as_contract(&client.address, || {
         use crate::storage::InvoiceStorage;
-        InvoiceStorage::clear_all(&env);
+        InvoiceStorage::clear_all(&env).unwrap();
     });
 
     let restored_count = client.restore_backup(&admin, &backup_id);
