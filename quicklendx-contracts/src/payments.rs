@@ -4,8 +4,8 @@
 
 use crate::errors::QuickLendXError;
 use crate::events::emit_escrow_created;
-use crate::storage::{extend_persistent_ttl, InvoiceStorage};
-use crate::types::RebuildReport;
+use crate::storage::{extend_persistent_ttl, InvestmentStorage, InvoiceStorage};
+use crate::types::{InvestmentStatus, RebuildReport};
 use soroban_sdk::token;
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, TryFromVal, Val, Vec};
 
@@ -750,8 +750,19 @@ fn validate_and_prepare_escrow(
 
     require_matching_currency_precision(env, currency, amount)?;
 
-    if EscrowStorage::get_escrow_by_invoice(env, invoice_id).is_some() {
-        return Err(QuickLendXError::InvoiceAlreadyFunded);
+    // Reject only a *live* escrow or investment. Terminal records from a prior
+    // funding cycle are kept for audit and must not block re-funding after an
+    // investor withdrawal returns the invoice to the market.
+    if let Some(escrow) = EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
+        if escrow.status == EscrowStatus::Held {
+            return Err(QuickLendXError::InvoiceAlreadyFunded);
+        }
+    }
+
+    if let Some(investment) = InvestmentStorage::get_investment_by_invoice(env, invoice_id) {
+        if investment.status == InvestmentStatus::Active {
+            return Err(QuickLendXError::InvoiceAlreadyFunded);
+        }
     }
 
     let invoice =
@@ -763,6 +774,13 @@ fn validate_and_prepare_escrow(
 
     if invoice.currency != *currency {
         return Err(QuickLendXError::InvalidCurrency);
+    }
+
+    // The invoice must be back in a fundable state (Verified with no funding
+    // fields). This keeps terminal invoices from being re-funded even though
+    // their old escrow is terminal, while allowing re-funding after a withdrawal.
+    if !invoice.is_available_for_funding() {
+        return Err(QuickLendXError::InvalidStatus);
     }
 
     EscrowStorage::require_no_active_reserve_repair(env, currency)?;
@@ -811,10 +829,12 @@ fn write_escrow_record(
 
 /// Create escrow: transfer `amount` from investor to contract and store escrow record.
 ///
-/// ## One-Escrow-Per-Invoice Guard
-/// If an escrow record already exists for `invoice_id` (regardless of its status),
-/// this function returns [`QuickLendXError::InvoiceAlreadyFunded`] **before** any
-/// token transfer occurs. This is the innermost uniqueness guard; see also
+/// ## One-Live-Escrow-Per-Invoice Guard
+/// If a **`Held`** escrow record already exists for `invoice_id`, or an `Active`
+/// investment exists, this function returns [`QuickLendXError::InvoiceAlreadyFunded`]
+/// **before** any token transfer occurs. Terminal escrows (`Released`, `Refunded`)
+/// and terminal investments are retained as audit history and do not block a new
+/// funding cycle. This is the innermost uniqueness guard; see also
 /// `escrow::load_accept_bid_context` for the outer guard and `test_escrow_uniqueness.rs`
 /// for the full attack-vector test suite.
 ///
@@ -824,7 +844,8 @@ fn write_escrow_record(
 /// # Errors
 /// * [`QuickLendXError::InvalidAmount`] - `amount` is zero or negative.
 /// * [`QuickLendXError::InvalidStatus`] - reserve repair is active for this token.
-/// * [`QuickLendXError::InvoiceAlreadyFunded`] - an escrow record already exists for this invoice.
+/// * [`QuickLendXError::InvoiceAlreadyFunded`] - a live (`Held`) escrow or `Active`
+///   investment already exists for this invoice.
 /// * [`QuickLendXError::InsufficientFunds`] - investor balance is below `amount`.
 /// * [`QuickLendXError::OperationNotAllowed`] - investor has not approved the contract for `amount`.
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; no funds moved and
