@@ -45,12 +45,13 @@ yarn install
 Create a `.env.local` file in the `quicklendx-frontend` directory:
 
 ```bash
-# Contract Configuration
-NEXT_PUBLIC_CONTRACT_ID=your_contract_id_here
+# Contract Configuration (optional until a contract is deployed)
+# NEXT_PUBLIC_CONTRACT_ID=C<55 uppercase Stellar base32 characters>
 NEXT_PUBLIC_NETWORK=testnet
 
 # RPC Configuration
 NEXT_PUBLIC_RPC_URL=https://soroban-testnet.stellar.org:443
+NEXT_PUBLIC_HORIZON_URL=https://horizon-testnet.stellar.org
 
 # Optional: Analytics & Telemetry (Opt-in only)
 NEXT_PUBLIC_ANALYTICS_ENABLED=true
@@ -133,11 +134,14 @@ The `next.config.ts` file contains Next.js configuration. Key settings:
 
 ### Environment Variables
 
-Required environment variables:
+Stellar network settings are validated by `app/lib/stellar/network.ts`:
 
-- `NEXT_PUBLIC_CONTRACT_ID`: Deployed contract ID
-- `NEXT_PUBLIC_NETWORK`: Network (testnet/mainnet)
-- `NEXT_PUBLIC_RPC_URL`: Soroban RPC endpoint
+- `NEXT_PUBLIC_NETWORK`: `testnet` by default; accepts `public` or `mainnet` (`mainnet` aliases `public`).
+- `NEXT_PUBLIC_RPC_URL`: Optional; defaults to the network's Soroban RPC endpoint.
+- `NEXT_PUBLIC_HORIZON_URL`: Optional; defaults to the network's Horizon endpoint.
+- `NEXT_PUBLIC_CONTRACT_ID`: Optional; when set, must match `C` followed by 55 uppercase Stellar base32 characters.
+- Public network RPC and Horizon URLs must use HTTPS. Passphrases and explorer hosts are selected from the network setting.
+- Invalid settings throw during startup/build outside production. Production logs the configuration error once and falls back to testnet.
 
 Optional Analytics & Telemetry:
 

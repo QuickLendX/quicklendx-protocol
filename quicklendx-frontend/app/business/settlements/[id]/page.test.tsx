@@ -17,6 +17,7 @@ const mockSettlement: dataFetcher.Settlement = {
   amount: "50000000000",
   payer: "GBBXKXTNVC3QDNK7LVHRWCNVMCLK4QNKR4IQHZXR4IQHZXR4KZ",
   recipient: "GBSXVD727UNXJZ7ZM4VCXBTK3UMPXR7O6LLXS7XVOECGDYH3XFNV7C5K",
+  stellar_tx_hash: "a".repeat(64),
   timestamp: 1777390800,
   status: "Paid",
 };
@@ -98,6 +99,44 @@ describe("SettlementReceiptPage component", () => {
     // Check amount
     expect(screen.getByText("50000000000 USDC")).toBeInTheDocument();
     expect(screen.getByText("✓ Settled")).toBeInTheDocument();
+  });
+
+  it("renders an explorer link only for a valid transaction hash", async () => {
+    render(
+      <WalletProvider initialAddress={mockInvoice.business}>
+        <SettlementReceiptPage />
+      </WalletProvider>
+    );
+
+    const transactionLink = await screen.findByRole("link", {
+      name: "View transaction",
+    });
+    expect(transactionLink.getAttribute("href")).toMatch(
+      /^https:\/\/[^/]+\/explorer\/(?:public|testnet)\/tx\//
+    );
+    expect(transactionLink.getAttribute("href")?.endsWith("a".repeat(64))).toBe(
+      true
+    );
+
+  });
+
+  it("renders an invalid transaction hash as text without a link", async () => {
+    const invalidHash = "../../account/GBAD";
+    getSettlementSpy.mockResolvedValue({
+      ...mockSettlement,
+      stellar_tx_hash: invalidHash,
+    });
+
+    render(
+      <WalletProvider initialAddress={mockInvoice.business}>
+        <SettlementReceiptPage />
+      </WalletProvider>
+    );
+
+    expect(await screen.findByText(invalidHash)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "View transaction" })
+    ).not.toBeInTheDocument();
   });
 
   it("stranger: with an unrelated address, renders no-access message and no amounts appear", async () => {

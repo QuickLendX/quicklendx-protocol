@@ -4,6 +4,11 @@ import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams, notFound } from "next/navigation";
 import { isHexId } from "../../../lib/ids";
+import {
+  explorerAccountUrl,
+  explorerTxUrl,
+  invoicePath,
+} from "../../../lib/stellar/links";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -673,6 +678,13 @@ export default function SettlementReceiptPage() {
     return null;
   }
 
+  const invoiceHref = invoicePath(viewModel.invoice.id);
+  const payerHref = explorerAccountUrl(viewModel.payer);
+  const recipientHref = explorerAccountUrl(viewModel.recipient);
+  const transactionHref = viewModel.stellarTxHash
+    ? explorerTxUrl(viewModel.stellarTxHash)
+    : null;
+
   return (
     <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 print:bg-white print:py-4">
       <div className="max-w-3xl mx-auto space-y-6">
@@ -723,12 +735,16 @@ export default function SettlementReceiptPage() {
         <Block title="Invoice Details">
           <dl className="space-y-0">
             <Row label="Invoice ID">
-              <Link
-                href={`/business/invoices/${viewModel.invoice.id}`}
-                className="text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
-              >
-                {viewModel.invoice.id}
-              </Link>
+              {invoiceHref ? (
+                <Link
+                  href={invoiceHref}
+                  className="text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+                >
+                  {viewModel.invoice.id}
+                </Link>
+              ) : (
+                <span className="font-mono">{viewModel.invoice.id}</span>
+              )}
             </Row>
             <Row label="Invoice Amount">
               <span className="font-mono">
@@ -755,14 +771,18 @@ export default function SettlementReceiptPage() {
             </Row>
             <Row label="Payer">
               <span className="inline-flex items-center gap-1.5 font-mono">
-                <a
-                  href={`https://stellar.expert/explorer/testnet/account/${viewModel.payer}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
-                >
-                  {truncateAddress(viewModel.payer)}
-                </a>
+                {payerHref ? (
+                  <a
+                    href={payerHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+                  >
+                    {truncateAddress(viewModel.payer)}
+                  </a>
+                ) : (
+                  <span>{truncateAddress(viewModel.payer)}</span>
+                )}
                 <CopyButton
                   value={viewModel.payer}
                   label="Copy payer address"
@@ -771,20 +791,40 @@ export default function SettlementReceiptPage() {
             </Row>
             <Row label="Recipient">
               <span className="inline-flex items-center gap-1.5 font-mono">
-                <a
-                  href={`https://stellar.expert/explorer/testnet/account/${viewModel.recipient}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
-                >
-                  {truncateAddress(viewModel.recipient)}
-                </a>
+                {recipientHref ? (
+                  <a
+                    href={recipientHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+                  >
+                    {truncateAddress(viewModel.recipient)}
+                  </a>
+                ) : (
+                  <span>{truncateAddress(viewModel.recipient)}</span>
+                )}
                 <CopyButton
                   value={viewModel.recipient}
                   label="Copy recipient address"
                 />
               </span>
             </Row>
+            {viewModel.stellarTxHash && (
+              <Row label="Transaction">
+                {transactionHref ? (
+                  <a
+                    href={transactionHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-[#2563EB] hover:underline focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+                  >
+                    View transaction
+                  </a>
+                ) : (
+                  <span className="font-mono">{viewModel.stellarTxHash}</span>
+                )}
+              </Row>
+            )}
           </dl>
         </Block>
 
