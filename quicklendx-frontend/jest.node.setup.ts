@@ -3,6 +3,11 @@ import {
   createProviderFromConfig,
 } from "./app/lib/wallet-telemetry";
 
+if (!globalThis.crypto?.subtle) {
+  const { webcrypto } = require("node:crypto");
+  (globalThis as any).crypto = webcrypto;
+}
+
 const originalStringify = JSON.stringify;
 JSON.stringify = function (
   value: unknown,
