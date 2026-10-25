@@ -108,6 +108,14 @@ describe('hasRequiredScopes — success paths', () => {
     expect(hasRequiredScopes([], [])).toBe(true);
     expect(hasRequiredScopes(['read:users'], [])).toBe(true);
   });
+
+  it('validates webhooks:manage scope and matching behavior', () => {
+    expect(isValidScope('webhooks:manage')).toBe(true);
+    expect(hasRequiredScopes(['webhooks:manage'], ['webhooks:manage'])).toBe(true);
+    expect(hasRequiredScopes(['admin:*'], ['webhooks:manage'])).toBe(true);
+    expect(hasRequiredScopes(['webhooks:*'], ['webhooks:manage'])).toBe(true);
+    expect(hasRequiredScopes(['read:*'], ['webhooks:manage'])).toBe(false);
+  });
 });
 
 describe('hasRequiredScopes — rejection paths', () => {
