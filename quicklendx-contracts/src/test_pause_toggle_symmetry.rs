@@ -7,11 +7,8 @@
 //! ## Pause toggle symmetry
 //! 1. `unpause_when_already_unpaused_is_a_no_op` — idempotent in the *off*
 //!    direction; no spurious `unpaused` event is emitted.
-//! 2. `pause_auto_expires_after_max_pause_duration` — advancing the ledger
-//!    past `paused_at + MAX_PAUSE_DURATION` automatically clears the flag
-//!    without an explicit admin call.
-//! 3. `writes_unblocked_after_auto_expiry` — after auto-expiry the contract
-//!    accepts mutations again.
+//! 2. `pause_does_not_expire` — a pause remains active after seven days.
+//! 3. Read checks do not mutate pause storage or enable writes.
 //! 4. `non_admin_cannot_unpause` — the unpause path requires admin auth just
 //!    like the pause path.
 //! 5. `pause_then_unpause_emits_exactly_one_event_each` — full round-trip
@@ -96,17 +93,16 @@ fn unpause_when_already_unpaused_is_a_no_op() {
     );
 }
 
-/// The pause flag is automatically cleared once the ledger timestamp advances
-/// past `paused_at + MAX_PAUSE_DURATION`, without any admin action.
+/// A pause remains active after the former seven-day expiry window.
 #[test]
-fn pause_auto_expires_after_max_pause_duration() {
+fn pause_does_not_expire() {
     let env = Env::default();
     let (client, admin) = setup(&env);
 
     client.pause(&admin);
     assert!(client.is_paused(), "paused after explicit pause");
 
-    // Advance the clock to exactly the expiry boundary — still paused at N.
+    // Advance to and beyond the former expiry boundary.
     let paused_at = env.ledger().timestamp();
     env.ledger().set_timestamp(paused_at + MAX_PAUSE_DURATION);
     assert!(
@@ -114,19 +110,18 @@ fn pause_auto_expires_after_max_pause_duration() {
         "still paused at exactly the expiry boundary (inclusive)"
     );
 
-    // One second past the boundary — auto-expires.
+    // One second past the old expiry boundary — it remains paused.
     env.ledger()
         .set_timestamp(paused_at + MAX_PAUSE_DURATION + 1);
     assert!(
-        !client.is_paused(),
-        "auto-expires one second past MAX_PAUSE_DURATION"
+        client.is_paused(),
+        "a pause does not silently expire"
     );
 }
 
-/// After auto-expiry, mutating entrypoints should succeed again — the auto-clear
-/// in `is_paused` is not just a read signal, it lifts the real gate.
+/// After seven days, reads and writes remain governed by the explicit pause.
 #[test]
-fn writes_unblocked_after_auto_expiry() {
+fn writes_remain_blocked_after_seven_days() {
     let env = Env::default();
     let (client, admin) = setup(&env);
     let business = Address::generate(&env);
@@ -150,27 +145,23 @@ fn writes_unblocked_after_auto_expiry() {
         "store_invoice must be blocked while paused"
     );
 
-    // Advance past the duration — auto-expiry occurs.
+    // Advance past the former expiry duration. Reads must not clear the flag.
     let paused_at = env.ledger().timestamp();
     env.ledger()
         .set_timestamp(paused_at + MAX_PAUSE_DURATION + 1);
-    assert!(!client.is_paused(), "auto-expired");
+    assert!(client.is_paused(), "pause remains active");
 
-    // Same call now succeeds.
-    let invoice_id = client.store_invoice(
+    // Writes stay blocked until an explicit admin unpause.
+    let result = client.try_store_invoice(
         &business,
         &1_000i128,
         &currency,
         &(env.ledger().timestamp() + 86_400),
-        &String::from_str(&env, "Unblocked after expiry"),
+        &String::from_str(&env, "Still blocked after seven days"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
     );
-    let invoice = client.get_invoice(&invoice_id);
-    assert_eq!(
-        invoice.amount, 1_000i128,
-        "invoice stored successfully after auto-expiry"
-    );
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::ContractPaused);
 }
 
 /// `unpause` requires admin auth — a non-admin address must be rejected.
