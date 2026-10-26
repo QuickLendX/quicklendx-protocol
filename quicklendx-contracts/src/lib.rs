@@ -712,6 +712,10 @@ impl QuickLendXContract {
         PauseControl::is_paused(&env)
     }
 
+    pub fn is_entrypoint_paused(env: Env, entrypoint: String) -> bool {
+        PauseControl::is_entrypoint_paused(&env, entrypoint)
+    }
+
     // =========================================================================
     // KYC / Verification
     // =========================================================================
