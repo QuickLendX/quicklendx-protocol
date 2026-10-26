@@ -40,6 +40,7 @@ describe("ErrorToast", () => {
     });
 
     expect(await screen.findByText("x")).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Retry" })
     ).not.toBeInTheDocument();
