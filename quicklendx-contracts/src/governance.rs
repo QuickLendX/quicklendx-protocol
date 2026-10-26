@@ -17,7 +17,9 @@
 
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
 
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
+use crate::storage::{extend_instance_ttl, extend_persistent_ttl};
 
 // ---------------------------------------------------------------------------
 // Data types
@@ -77,6 +79,7 @@ fn increment_active_proposals(env: &Env) {
     env.storage()
         .instance()
         .set(&active_proposals_key(), &count);
+    extend_instance_ttl(env);
 }
 
 fn decrement_active_proposals(env: &Env) {
@@ -84,6 +87,7 @@ fn decrement_active_proposals(env: &Env) {
     env.storage()
         .instance()
         .set(&active_proposals_key(), &count);
+    extend_instance_ttl(env);
 }
 
 /// Enforces that no governance proposal is currently active.
@@ -95,12 +99,12 @@ pub fn require_no_open_governance_proposal(env: &Env) -> Result<(), QuickLendXEr
     Ok(())
 }
 
-/// Returns the instance-storage key for a proposal.
+/// Returns the persistent-storage key for a proposal.
 fn proposal_key(proposal_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
     (symbol_short!("gov_prop"), proposal_id.clone())
 }
 
-/// Returns the instance-storage key for the set of addresses that have already
+/// Returns the persistent-storage key for the set of addresses that have already
 /// voted on a proposal (prevents double-voting).
 fn voted_key(proposal_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
     (symbol_short!("gov_vot"), proposal_id.clone())
@@ -143,13 +147,25 @@ pub trait Governable {
     /// status is `Passed`.  Implementations must be idempotent where possible.
     fn execute_proposal(env: &Env, proposal_id: &BytesN<32>) -> Result<(), QuickLendXError>;
 
+    /// Whether an address may submit a proposal. Contracts can override this
+    /// to support an explicit allowlist; the safe default is the current admin.
+    fn is_eligible_proposer(env: &Env, proposer: &Address) -> bool {
+        AdminStorage::is_admin(env, proposer)
+    }
+
+    /// Whether an address may vote. Contracts can override this to support an
+    /// explicit electorate; the safe default is the current admin.
+    fn is_eligible_voter(env: &Env, voter: &Address) -> bool {
+        AdminStorage::is_admin(env, voter)
+    }
+
     // ------------------------------------------------------------------
     // Default implementations — override only if the protocol requires it
     // ------------------------------------------------------------------
 
     /// Submit a new proposal.
     ///
-    /// Stores the proposal in instance storage keyed by `proposal_id`.
+    /// Stores the proposal in persistent storage keyed by `proposal_id`.
     /// Returns `OperationNotAllowed` if a proposal with the same id already
     /// exists (idempotency guard).
     fn submit_proposal(
@@ -159,8 +175,12 @@ pub trait Governable {
     ) -> Result<Proposal, QuickLendXError> {
         proposer.require_auth();
 
+        if !Self::is_eligible_proposer(env, proposer) {
+            return Err(QuickLendXError::NotAdmin);
+        }
+
         let key = proposal_key(&proposal_id);
-        if env.storage().instance().has(&key) {
+        if env.storage().persistent().has(&key) {
             return Err(QuickLendXError::OperationNotAllowed);
         }
 
@@ -178,12 +198,14 @@ pub trait Governable {
             status: ProposalStatus::Active,
         };
 
-        env.storage().instance().set(&key, &proposal);
+        env.storage().persistent().set(&key, &proposal);
+        extend_persistent_ttl(env, &key);
         // Initialise empty voter set
         let empty: Vec<Address> = Vec::new(env);
-        env.storage()
-            .instance()
-            .set(&voted_key(&proposal_id), &empty);
+        let voter_key = voted_key(&proposal_id);
+        env.storage().persistent().set(&voter_key, &empty);
+        extend_persistent_ttl(env, &voter_key);
+        increment_active_proposals(env);
 
         Ok(proposal)
     }
@@ -202,12 +224,17 @@ pub trait Governable {
     ) -> Result<(), QuickLendXError> {
         voter.require_auth();
 
+        if !Self::is_eligible_voter(env, voter) {
+            return Err(QuickLendXError::NotAdmin);
+        }
+
         let key = proposal_key(proposal_id);
         let mut proposal: Proposal = env
             .storage()
-            .instance()
+            .persistent()
             .get(&key)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        extend_persistent_ttl(env, &key);
 
         if proposal.status != ProposalStatus::Active {
             return Err(QuickLendXError::InvalidStatus);
@@ -220,22 +247,25 @@ pub trait Governable {
         let voted_key = voted_key(proposal_id);
         let mut voters: Vec<Address> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&voted_key)
             .unwrap_or_else(|| Vec::new(env));
+        extend_persistent_ttl(env, &voted_key);
 
         if voters.contains(voter) {
             return Err(QuickLendXError::OperationNotAllowed);
         }
         voters.push_back(voter.clone());
-        env.storage().instance().set(&voted_key, &voters);
+        env.storage().persistent().set(&voted_key, &voters);
+        extend_persistent_ttl(env, &voted_key);
 
         if in_favour {
             proposal.votes_for = proposal.votes_for.saturating_add(1);
         } else {
             proposal.votes_against = proposal.votes_against.saturating_add(1);
         }
-        env.storage().instance().set(&key, &proposal);
+        env.storage().persistent().set(&key, &proposal);
+        extend_persistent_ttl(env, &key);
 
         Ok(())
     }
@@ -252,9 +282,10 @@ pub trait Governable {
         let key = proposal_key(proposal_id);
         let mut proposal: Proposal = env
             .storage()
-            .instance()
+            .persistent()
             .get(&key)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        extend_persistent_ttl(env, &key);
 
         if proposal.status != ProposalStatus::Active {
             return Err(QuickLendXError::InvalidStatus);
@@ -272,7 +303,8 @@ pub trait Governable {
             ProposalStatus::Rejected
         };
 
-        env.storage().instance().set(&key, &proposal);
+        env.storage().persistent().set(&key, &proposal);
+        extend_persistent_ttl(env, &key);
         decrement_active_proposals(env);
 
         Ok(proposal.status)
@@ -287,16 +319,17 @@ pub trait Governable {
         let key = proposal_key(proposal_id);
         let mut proposal: Proposal = env
             .storage()
-            .instance()
+            .persistent()
             .get(&key)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        extend_persistent_ttl(env, &key);
 
         // Auto-finalize if still active and window closed.
         if proposal.status == ProposalStatus::Active
             && env.ledger().sequence() > proposal.voting_ends_at_ledger
         {
             Self::finalize_proposal(env, proposal_id)?;
-            proposal = env.storage().instance().get(&key).unwrap();
+            proposal = env.storage().persistent().get(&key).unwrap();
         }
 
         if proposal.status != ProposalStatus::Passed {
@@ -306,17 +339,22 @@ pub trait Governable {
         Self::execute_proposal(env, proposal_id)?;
 
         proposal.status = ProposalStatus::Executed;
-        env.storage().instance().set(&key, &proposal);
+        env.storage().persistent().set(&key, &proposal);
+        extend_persistent_ttl(env, &key);
 
         Ok(())
     }
 
     /// Read the current state of a proposal without mutating anything.
     fn get_proposal(env: &Env, proposal_id: &BytesN<32>) -> Result<Proposal, QuickLendXError> {
-        env.storage()
-            .instance()
-            .get(&proposal_key(proposal_id))
-            .ok_or(QuickLendXError::StorageKeyNotFound)
+        let key = proposal_key(proposal_id);
+        let proposal = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        extend_persistent_ttl(env, &key);
+        Ok(proposal)
     }
 }
 

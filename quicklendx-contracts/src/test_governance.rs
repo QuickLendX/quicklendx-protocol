@@ -4,13 +4,44 @@ use soroban_sdk::testutils::Address as _;
 use soroban_sdk::testutils::{Address as _, Ledger};
 use soroban_sdk::{Address, BytesN, Env};
 
+use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::governance::{Governable, Proposal, ProposalStatus};
+use crate::storage::{InvoiceStorage, StorageManager};
 use crate::QuickLendXContract;
 
 struct TestGovernance;
 
 impl Governable for TestGovernance {
+    fn quorum() -> u64 {
+        3
+    }
+
+    fn voting_period_ledgers() -> u32 {
+        10
+    }
+
+    fn execute_proposal(env: &Env, proposal_id: &BytesN<32>) -> Result<(), QuickLendXError> {
+        env.storage()
+            .instance()
+            .set(&crate::admin::ADMIN_KEY, proposal_id);
+        Ok(())
+    }
+
+    // The existing lifecycle tests use an explicitly open test electorate.
+    // The secure defaults are exercised by SecureGovernance below.
+    fn is_eligible_proposer(_env: &Env, _proposer: &Address) -> bool {
+        true
+    }
+
+    fn is_eligible_voter(_env: &Env, _voter: &Address) -> bool {
+        true
+    }
+}
+
+struct SecureGovernance;
+
+impl Governable for SecureGovernance {
     fn quorum() -> u64 {
         3
     }
@@ -33,6 +64,13 @@ fn setup() -> (Env, Address) {
     env.ledger().set_sequence_number(1000);
     let contract_id = env.register(QuickLendXContract, ());
     (env, contract_id)
+}
+
+fn setup_with_admin() -> (Env, Address, Address) {
+    let (env, contract_id) = setup();
+    let admin = Address::generate(&env);
+    env.as_contract(&contract_id, || AdminStorage::initialize(&env, &admin).unwrap());
+    (env, contract_id, admin)
 }
 
 fn proposal_id(env: &Env, n: u8) -> BytesN<32> {
@@ -82,6 +120,39 @@ fn get_proposal(
     id: &BytesN<32>,
 ) -> Result<Proposal, QuickLendXError> {
     env.as_contract(contract_id, || TestGovernance::get_proposal(env, id))
+}
+
+fn submit_secure_proposal(
+    env: &Env,
+    contract_id: &Address,
+    proposer: &Address,
+    id: BytesN<32>,
+) -> Result<Proposal, QuickLendXError> {
+    env.as_contract(contract_id, || SecureGovernance::submit_proposal(env, proposer, id))
+}
+
+fn cast_secure_vote(
+    env: &Env,
+    contract_id: &Address,
+    voter: &Address,
+    id: &BytesN<32>,
+    in_favour: bool,
+) -> Result<(), QuickLendXError> {
+    env.as_contract(contract_id, || {
+        SecureGovernance::cast_vote(env, voter, id, in_favour)
+    })
+}
+
+fn finalize_secure_proposal(
+    env: &Env,
+    contract_id: &Address,
+    id: &BytesN<32>,
+) -> Result<ProposalStatus, QuickLendXError> {
+    env.as_contract(contract_id, || SecureGovernance::finalize_proposal(env, id))
+}
+
+fn secure_governance_guard(env: &Env, contract_id: &Address) -> Result<(), QuickLendXError> {
+    env.as_contract(contract_id, || crate::governance::require_no_open_governance_proposal(env))
 }
 
 // ============================================================================
@@ -505,4 +576,93 @@ fn require_no_open_governance_proposal_blocks_destructive_ops() {
         let res = crate::governance::require_no_open_governance_proposal(&env);
         assert!(res.is_ok());
     });
+}
+
+#[test]
+fn open_proposal_blocks_guard() {
+    let (env, contract_id, admin) = setup_with_admin();
+    let id = proposal_id(&env, 21);
+
+    submit_secure_proposal(&env, &contract_id, &admin, id.clone()).unwrap();
+    assert_eq!(
+        secure_governance_guard(&env, &contract_id),
+        Err(QuickLendXError::PendingGovernanceProposal),
+    );
+
+    env.ledger().set_sequence_number(1011);
+    finalize_secure_proposal(&env, &contract_id, &id).unwrap();
+    assert_eq!(secure_governance_guard(&env, &contract_id), Ok(()));
+}
+
+#[test]
+fn counter_tracks_multiple() {
+    let (env, contract_id, admin) = setup_with_admin();
+    let ids = [proposal_id(&env, 31), proposal_id(&env, 32), proposal_id(&env, 33)];
+    for id in &ids {
+        submit_secure_proposal(&env, &contract_id, &admin, id.clone()).unwrap();
+    }
+
+    env.ledger().set_sequence_number(1011);
+    finalize_secure_proposal(&env, &contract_id, &ids[0]).unwrap();
+    finalize_secure_proposal(&env, &contract_id, &ids[1]).unwrap();
+    assert_eq!(
+        finalize_secure_proposal(&env, &contract_id, &ids[0]),
+        Err(QuickLendXError::InvalidStatus),
+    );
+    assert_eq!(
+        secure_governance_guard(&env, &contract_id),
+        Err(QuickLendXError::PendingGovernanceProposal),
+    );
+
+    finalize_secure_proposal(&env, &contract_id, &ids[2]).unwrap();
+    assert_eq!(secure_governance_guard(&env, &contract_id), Ok(()));
+}
+
+#[test]
+fn random_address_cannot_propose() {
+    let (env, contract_id, _admin) = setup_with_admin();
+    let random_address = Address::generate(&env);
+
+    assert_eq!(
+        submit_secure_proposal(&env, &contract_id, &random_address, proposal_id(&env, 41))
+            .unwrap_err(),
+        QuickLendXError::NotAdmin,
+    );
+    assert_eq!(secure_governance_guard(&env, &contract_id), Ok(()));
+}
+
+#[test]
+fn ineligible_voter_rejected() {
+    let (env, contract_id, admin) = setup_with_admin();
+    let id = proposal_id(&env, 51);
+    let random_voter = Address::generate(&env);
+    submit_secure_proposal(&env, &contract_id, &admin, id.clone()).unwrap();
+
+    assert_eq!(
+        cast_secure_vote(&env, &contract_id, &random_voter, &id, true),
+        Err(QuickLendXError::NotAdmin),
+    );
+    let proposal = env.as_contract(&contract_id, || SecureGovernance::get_proposal(&env, &id))
+        .unwrap();
+    assert_eq!(proposal.votes_for, 0);
+    assert_eq!(proposal.votes_against, 0);
+}
+
+#[test]
+fn clear_all_with_open_proposal_errors() {
+    let (env, contract_id, admin) = setup_with_admin();
+    submit_secure_proposal(&env, &contract_id, &admin, proposal_id(&env, 61)).unwrap();
+
+    assert_eq!(
+        env.as_contract(&contract_id, || InvoiceStorage::clear_all(&env)),
+        Err(QuickLendXError::PendingGovernanceProposal),
+    );
+    assert_eq!(
+        env.as_contract(&contract_id, || StorageManager::clear_all_mappings(&env)),
+        Err(QuickLendXError::PendingGovernanceProposal),
+    );
+    assert_eq!(
+        secure_governance_guard(&env, &contract_id),
+        Err(QuickLendXError::PendingGovernanceProposal),
+    );
 }

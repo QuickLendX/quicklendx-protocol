@@ -420,7 +420,7 @@ impl BackupStorage {
             let restored_count = data.len();
 
             //  Step 2: atomically clear all existing invoice state
-            crate::storage::InvoiceStorage::clear_all(env);
+            crate::storage::InvoiceStorage::clear_all(env)?;
 
             //  Step 3: re-register every invoice, rebuilding all indexes
             for invoice in data.iter() {
