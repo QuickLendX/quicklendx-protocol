@@ -138,6 +138,29 @@ describe("ApiClient", () => {
       expect(result.headers["Content-Type"]).toBeUndefined();
     });
 
+    it("keeps request IDs off headers and adds them to error context", async () => {
+      const cfg = requestOnFulfilled({
+        method: "get",
+        headers: {},
+        url: "/health",
+      });
+      expect(cfg.headers["X-Request-ID"]).toBeUndefined();
+      expect(cfg.requestId).toMatch(/^req_/);
+
+      const err = makeAxiosError({
+        config: cfg,
+        response: {
+          status: 500,
+          data: "server error",
+          headers: {},
+        },
+      });
+
+      await expect(responseOnRejected(err)).rejects.toMatchObject({
+        context: { additionalData: { requestId: cfg.requestId } },
+      });
+    });
+
     it("CSRF token is the same non-empty value across multiple write requests in the same session", () => {
       _resetCsrfToken();
       const r1 = requestOnFulfilled({ method: "post", headers: {}, url: "/a" });

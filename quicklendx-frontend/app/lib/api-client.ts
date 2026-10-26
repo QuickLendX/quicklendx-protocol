@@ -5,6 +5,7 @@ import axios, {
   AxiosError,
 } from "axios";
 import { z } from "zod";
+import { newId } from "./id";
 import {
   AppError,
   NetworkError,
@@ -86,6 +87,8 @@ type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;
 
 const CSRF_METHODS = new Set(["post", "put", "patch", "delete"]);
 
+type RequestConfigWithId = AxiosRequestConfig & { requestId?: string };
+
 // ---------------------------------------------------------------------------
 // ApiClient
 // ---------------------------------------------------------------------------
@@ -118,8 +121,9 @@ class ApiClient {
           config.headers.Authorization = `Bearer ${token}`;
         }
 
-        // Add request ID for tracking
-        config.headers["X-Request-ID"] = this.generateRequestId();
+        // Keep the ID client-side for error analytics. Sending it as a custom
+        // header triggers a CORS preflight on cross-origin requests.
+        (config as RequestConfigWithId).requestId = this.generateRequestId();
 
         // CSRF token + Content-Type for all state-changing methods.
         // The backend's csrf.ts checks for X-CSRF-Token when Origin is present
@@ -161,6 +165,11 @@ class ApiClient {
     const config = error.config;
     const response = error.response;
     const request = error.request;
+    const requestId = (config as RequestConfigWithId | undefined)?.requestId;
+    const withRequestId = (additionalData: Record<string, unknown>) => ({
+      ...additionalData,
+      ...(requestId ? { requestId } : {}),
+    });
 
     // ------------------------------------------------------------------
     // 1. Timeout – must be checked BEFORE the generic no-response branch
@@ -172,10 +181,10 @@ class ApiClient {
         "Request timed out. Please try again.",
         {
           action: config?.method?.toUpperCase() || "UNKNOWN",
-          additionalData: {
+          additionalData: withRequestId({
             url: config?.url,
             timeout: config?.timeout,
-          },
+          }),
         },
         0
       );
@@ -189,10 +198,10 @@ class ApiClient {
         "Network connection failed. Please check your internet connection.",
         {
           action: config?.method?.toUpperCase() || "UNKNOWN",
-          additionalData: {
+          additionalData: withRequestId({
             url: config?.url,
             timeout: config?.timeout,
-          },
+          }),
         }
       );
     }
@@ -229,12 +238,12 @@ class ApiClient {
             serverMessage ?? fallbackMessage,
             {
               action: method,
-              additionalData: {
+              additionalData: withRequestId({
                 url,
                 ...(serverDetails !== undefined
                   ? { details: serverDetails }
                   : {}),
-              },
+              }),
             },
             serverCode
           );
@@ -244,7 +253,7 @@ class ApiClient {
             serverMessage ?? "Authentication required. Please log in again.",
             {
               action: method,
-              additionalData: { url },
+              additionalData: withRequestId({ url }),
             },
             serverCode
           );
@@ -255,7 +264,7 @@ class ApiClient {
               "You do not have permission to perform this action.",
             {
               action: method,
-              additionalData: { url },
+              additionalData: withRequestId({ url }),
             },
             serverCode
           );
@@ -265,7 +274,7 @@ class ApiClient {
             serverMessage ?? "The requested resource was not found.",
             {
               action: method,
-              additionalData: { url },
+              additionalData: withRequestId({ url }),
             },
             serverCode
           );
@@ -275,12 +284,12 @@ class ApiClient {
             serverMessage ?? fallbackMessage,
             {
               action: method,
-              additionalData: {
+              additionalData: withRequestId({
                 url,
                 ...(serverDetails !== undefined
                   ? { details: serverDetails }
                   : {}),
-              },
+              }),
             },
             serverCode
           );
@@ -290,10 +299,10 @@ class ApiClient {
             serverMessage ?? "Too many requests. Please try again later.",
             {
               action: method,
-              additionalData: {
+              additionalData: withRequestId({
                 url,
                 retryAfter: response.headers["retry-after"],
-              },
+              }),
             },
             0, // Don't retry rate limit errors
             serverCode
@@ -307,7 +316,7 @@ class ApiClient {
             serverMessage ?? "Server error. Please try again later.",
             {
               action: method,
-              additionalData: { url, status },
+              additionalData: withRequestId({ url, status }),
             },
             serverCode
           );
@@ -317,7 +326,7 @@ class ApiClient {
             serverMessage ?? `Unexpected error (${status})`,
             {
               action: method,
-              additionalData: { url, status },
+              additionalData: withRequestId({ url, status }),
             },
             serverCode
           );
@@ -329,10 +338,10 @@ class ApiClient {
     // ------------------------------------------------------------------
     return new SystemError("An unexpected error occurred.", {
       action: config?.method?.toUpperCase() || "UNKNOWN",
-      additionalData: {
+      additionalData: withRequestId({
         url: config?.url,
         originalError: error.message,
-      },
+      }),
     });
   }
 
@@ -344,10 +353,7 @@ class ApiClient {
   }
 
   private generateRequestId(): string {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
-      return `req_${crypto.randomUUID()}`;
-    }
-    return `req_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+    return newId("req");
   }
 
   private getRequestKey(config: AxiosRequestConfig): string {

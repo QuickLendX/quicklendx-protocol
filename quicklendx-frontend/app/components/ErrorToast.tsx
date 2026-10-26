@@ -1,7 +1,7 @@
 "use client";
 
-import { randomUUID } from "crypto";
 import toast from "react-hot-toast";
+import { newId } from "../lib/id";
 import { AppError, ErrorCategory, ErrorSeverity } from "../lib/errors";
 
 interface ErrorToastProps {
@@ -265,7 +265,7 @@ export class ErrorToastManager {
         | "bottom-left";
     }
   ): string {
-    const toastId = `error-${randomUUID()}`;
+    const toastId = newId("error");
 
     // Auto-dismiss timing per severity (docs/ux/toasts.md). Critical errors
     // persist until manually dismissed so they cannot be missed.
