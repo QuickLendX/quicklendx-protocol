@@ -920,8 +920,8 @@ impl InvestorVerificationStorage {
         }
 
         if let Some(v) = verification {
-            Self::store(env, &v);
-            Self::add_to_pending_investors(env, investor);
+            // Move the address between status indexes atomically with its record.
+            Self::update(env, &v);
         }
         Ok(())
     }
@@ -1312,6 +1312,9 @@ pub fn reject_business(
     reason: String,
 ) -> Result<(), QuickLendXError> {
     check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
+    if reason.len() == 0 {
+        return Err(QuickLendXError::InvalidDescription);
+    }
     // Only admin can reject businesses
     admin.require_auth();
     if !BusinessVerificationStorage::is_admin(env, admin) {
@@ -1636,9 +1639,19 @@ pub fn verify_investor(
     let mut verification =
         InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
 
+    if matches!(verification.status, BusinessVerificationStatus::Verified) {
+        return Err(QuickLendXError::KYCAlreadyVerified);
+    }
+    BusinessVerificationStorage::validate_state_transition(
+        Some(verification.status.clone()),
+        BusinessVerificationStatus::Verified,
+    )?;
+
     match verification.status {
-        BusinessVerificationStatus::Verified => return Err(QuickLendXError::KYCAlreadyVerified),
-        BusinessVerificationStatus::Pending | BusinessVerificationStatus::Rejected => {
+        BusinessVerificationStatus::Verified | BusinessVerificationStatus::Rejected => {
+            return Err(QuickLendXError::InvalidKYCStatus)
+        }
+        BusinessVerificationStatus::Pending => {
             // Calculate risk score and determine tier
             let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
             validate_risk_score(risk_score)?;
@@ -1662,7 +1675,7 @@ pub fn verify_investor(
                 env,
                 crate::audit::AuditOperation::KycVerified,
                 admin.clone(),
-                Some(String::from_str(env, "Pending")),
+            Some(String::from_str(env, "Pending")),
                 Some(String::from_str(env, "Verified")),
                 Some(String::from_str(env, "investor")),
             );
@@ -1685,6 +1698,9 @@ pub fn reject_investor(
     reason: String,
 ) -> Result<(), QuickLendXError> {
     check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
+    if reason.len() == 0 {
+        return Err(QuickLendXError::InvalidDescription);
+    }
     admin.require_auth();
     if !crate::admin::AdminStorage::is_admin(env, admin) {
         return Err(QuickLendXError::NotAdmin);
@@ -1741,6 +1757,9 @@ pub fn revoke_investor_kyc(
     reason: String,
 ) -> Result<(), QuickLendXError> {
     check_string_length(&reason, MAX_REJECTION_REASON_LENGTH)?;
+    if reason.len() == 0 {
+        return Err(QuickLendXError::InvalidDescription);
+    }
     admin.require_auth();
     if !crate::admin::AdminStorage::is_admin(env, admin) {
         return Err(QuickLendXError::NotAdmin);

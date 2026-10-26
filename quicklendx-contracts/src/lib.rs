@@ -750,6 +750,33 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    pub fn reject_business(
+        env: Env,
+        business: Address,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        crate::verification::reject_business(&env, &admin, &business, reason)
+    }
+
+    pub fn reject_investor(
+        env: Env,
+        investor: Address,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        crate::verification::reject_investor(&env, &admin, &investor, reason)
+    }
+
+    pub fn revoke_investor_kyc(
+        env: Env,
+        investor: Address,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        crate::verification::revoke_investor_kyc(&env, &admin, &investor, reason)
+    }
+
     // =========================================================================
     // Invoice lifecycle
     // =========================================================================

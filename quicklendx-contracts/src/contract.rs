@@ -569,6 +569,15 @@ impl QuickLendXContract {
         crate::verification::reject_investor(&env, &admin, &investor, reason)
     }
 
+    pub fn revoke_investor_kyc(
+        env: Env,
+        investor: Address,
+        reason: String,
+    ) -> Result<(), QuickLendXError> {
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        crate::verification::revoke_investor_kyc(&env, &admin, &investor, reason)
+    }
+
     pub fn get_businesses_paged(
         env: Env,
         status: crate::verification::BusinessVerificationStatus,

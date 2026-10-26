@@ -39,6 +39,41 @@ mod test_investor_kyc {
         (env, client, admin)
     }
 
+    fn assert_in_exactly_one_investor_status_list(
+        client: &QuickLendXContractClient,
+        investor: &Address,
+    ) {
+        let memberships = [
+            client.get_verified_investors().contains(investor),
+            client.get_pending_investors().contains(investor),
+            client.get_rejected_investors().contains(investor),
+        ];
+        assert_eq!(memberships.iter().filter(|&&present| present).count(), 1);
+    }
+
+    fn assert_investor_indexes_match_record(
+        client: &QuickLendXContractClient,
+        investor: &Address,
+    ) {
+        let memberships = [
+            client.get_verified_investors().contains(investor),
+            client.get_pending_investors().contains(investor),
+            client.get_rejected_investors().contains(investor),
+        ];
+        match client.get_investor_verification(investor) {
+            Some(record) => {
+                assert_eq!(memberships.iter().filter(|&&present| present).count(), 1);
+                let expected = match record.status {
+                    BusinessVerificationStatus::Verified => 0,
+                    BusinessVerificationStatus::Pending => 1,
+                    BusinessVerificationStatus::Rejected => 2,
+                };
+                assert!(memberships[expected]);
+            }
+            None => assert!(!memberships.iter().any(|present| *present)),
+        }
+    }
+
     // Helper: Create verified invoice for bidding tests
     fn create_verified_invoice(
         env: &Env,
@@ -107,7 +142,7 @@ mod test_investor_kyc {
 
     #[test]
     fn test_investor_kyc_resubmission_after_rejection() {
-        let (env, client, admin) = setup();
+        let (env, client, _admin) = setup();
         let investor = Address::generate(&env);
         let kyc_data = String::from_str(&env, "Valid KYC data");
 
@@ -132,6 +167,118 @@ mod test_investor_kyc {
             verification.unwrap().status,
             BusinessVerificationStatus::Pending
         );
+    }
+
+    #[test]
+    fn revoked_investor_cannot_be_reverified() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        client.submit_investor_kyc(&investor, &String::from_str(&env, "Valid KYC data"));
+        client.verify_investor(&investor, &50_000i128);
+        client.revoke_investor_kyc(&investor, &String::from_str(&env, "Sanctions review"));
+
+        let err = client
+            .try_verify_investor(&investor, &50_000i128)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::InvalidKYCStatus);
+        assert_eq!(
+            client.get_investor_verification(&investor).unwrap().status,
+            BusinessVerificationStatus::Rejected
+        );
+        assert_in_exactly_one_investor_status_list(&client, &investor);
+    }
+
+    #[test]
+    fn rejected_then_resubmit_then_verify_indexes() {
+        let (env, client, _admin) = setup();
+        let investor = Address::generate(&env);
+        client.submit_investor_kyc(&investor, &String::from_str(&env, "Initial KYC data"));
+        assert_in_exactly_one_investor_status_list(&client, &investor);
+        client.reject_investor(&investor, &String::from_str(&env, "Needs updated documents"));
+        assert_in_exactly_one_investor_status_list(&client, &investor);
+
+        client.submit_investor_kyc(&investor, &String::from_str(&env, "Updated KYC data"));
+        assert_in_exactly_one_investor_status_list(&client, &investor);
+        assert!(client.get_rejected_investors().iter().all(|addr| addr != investor));
+
+        client.verify_investor(&investor, &50_000i128);
+        assert_in_exactly_one_investor_status_list(&client, &investor);
+    }
+
+    #[test]
+    fn empty_rejection_reasons_are_rejected_without_state_changes() {
+        let (env, client, _admin) = setup();
+        let business = Address::generate(&env);
+        let investor = Address::generate(&env);
+        let verified_investor = Address::generate(&env);
+
+        client.submit_kyc_application(&business, &String::from_str(&env, "Business KYC"));
+        let err = client
+            .try_reject_business(&business, &String::from_str(&env, ""))
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::InvalidDescription);
+        assert_eq!(
+            client
+                .get_business_verification_status(&business)
+                .unwrap()
+                .status,
+            BusinessVerificationStatus::Pending
+        );
+
+        client.submit_investor_kyc(&investor, &String::from_str(&env, "Investor KYC"));
+        let err = client
+            .try_reject_investor(&investor, &String::from_str(&env, ""))
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::InvalidDescription);
+        assert_eq!(
+            client.get_investor_verification(&investor).unwrap().status,
+            BusinessVerificationStatus::Pending
+        );
+
+        client.submit_investor_kyc(&verified_investor, &String::from_str(&env, "Investor KYC"));
+        client.verify_investor(&verified_investor, &50_000i128);
+        let err = client
+            .try_revoke_investor_kyc(&verified_investor, &String::from_str(&env, ""))
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(err, QuickLendXError::InvalidDescription);
+        assert_eq!(
+            client
+                .get_investor_verification(&verified_investor)
+                .unwrap()
+                .status,
+            BusinessVerificationStatus::Verified
+        );
+    }
+
+    #[cfg(feature = "fuzz-tests")]
+    proptest::proptest! {
+        #![proptest_config(proptest::test_runner::Config::with_cases(128))]
+
+        #[test]
+        fn investor_status_indexes_hold_for_random_lifecycle_sequences(
+            actions in proptest::collection::vec((0u8..5, 0usize..5), 1..80)
+        ) {
+            let (env, client, _admin) = setup();
+            let investors: [Address; 5] = core::array::from_fn(|_| Address::generate(&env));
+            let reason = String::from_str(&env, "Property-test rejection reason");
+
+            for (action, index) in actions {
+                let investor = &investors[index];
+                match action {
+                    0 | 4 => { let _ = client.try_submit_investor_kyc(investor, &String::from_str(&env, "Property KYC data")); }
+                    1 => { let _ = client.try_verify_investor(investor, &50_000i128); }
+                    2 => { let _ = client.try_reject_investor(investor, &reason); }
+                    _ => { let _ = client.try_revoke_investor_kyc(investor, &reason); }
+                }
+                for candidate in investors.iter() {
+                    assert_investor_indexes_match_record(&client, candidate);
+                }
+            }
+        }
     }
 
     #[test]
