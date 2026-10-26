@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { invoicePath } from "../../../lib/stellar/links";
 import type { Settlement } from "../_lib/data";
 import { SettlementRowSkeleton } from "./SettlementRowSkeleton";
 
@@ -11,6 +12,23 @@ function shortInvoiceId(invoiceId: string): string {
   return invoiceId.length > 12
     ? `${invoiceId.slice(0, 6)}…${invoiceId.slice(-4)}`
     : invoiceId;
+}
+
+function InvoiceLink({ invoiceId }: { invoiceId: string }) {
+  const href = invoicePath(invoiceId);
+  return href ? (
+    <Link
+      href={href}
+      title={invoiceId}
+      className="font-mono text-blue-800 underline decoration-blue-300 underline-offset-2 hover:text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-600"
+    >
+      {shortInvoiceId(invoiceId)}
+    </Link>
+  ) : (
+    <span className="font-mono" title={invoiceId}>
+      {shortInvoiceId(invoiceId)}
+    </span>
+  );
 }
 
 function shortDate(timestamp: number): string {
@@ -85,13 +103,7 @@ export function SettlementsTable({ rows, loading }: SettlementsTableProps) {
                     </time>
                   </td>
                   <td data-label="Invoice #" className="px-4 py-4">
-                    <Link
-                      href={`/business/invoices/${encodeURIComponent(settlement.invoice_id)}`}
-                      title={settlement.invoice_id}
-                      className="font-mono text-blue-800 underline decoration-blue-300 underline-offset-2 hover:text-blue-950 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                    >
-                      {shortInvoiceId(settlement.invoice_id)}
-                    </Link>
+                    <InvoiceLink invoiceId={settlement.invoice_id} />
                   </td>
                   <td data-label="Amount" className="px-4 py-4">
                     <span title={settlement.amount}>{settlement.amount}</span>

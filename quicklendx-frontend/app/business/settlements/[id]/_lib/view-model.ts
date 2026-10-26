@@ -9,6 +9,7 @@ export interface ReceiptViewModel {
   settledAmount: string;
   payer: string;
   recipient: string;
+  stellarTxHash?: string;
   invoice: {
     id: string;
     amount: string;
@@ -66,6 +67,9 @@ export function toReceiptViewModel(
     settledAmount: settlement.amount,
     payer: settlement.payer,
     recipient: settlement.recipient,
+    ...(settlement.stellar_tx_hash
+      ? { stellarTxHash: settlement.stellar_tx_hash }
+      : {}),
     invoice: {
       id: invoice.id,
       amount: invoice.amount,

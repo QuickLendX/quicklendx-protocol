@@ -10,6 +10,8 @@
 
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useWallet } from "../lib/wallet/WalletProvider";
+import { explorerAccountUrl } from "../lib/stellar/links";
+import { getNetworkConfig } from "../lib/stellar/network";
 import {
   trackWalletConnectAttempt,
   trackWalletConnected,
@@ -49,10 +51,6 @@ export interface WalletConnectProps {
 export function truncateAddress(address: string): string {
   if (address.length <= 13) return address;
   return `${address.slice(0, 6)}\u2026${address.slice(-4)}`;
-}
-
-function explorerUrl(address: string, network: "public" | "testnet"): string {
-  return `https://stellar.expert/explorer/${network}/account/${address}`;
 }
 
 export const CopyButton: React.FC<{ value: string }> = ({ value }) => {
@@ -178,53 +176,57 @@ export const CopyButton: React.FC<{ value: string }> = ({ value }) => {
 
 const AddressPill: React.FC<{
   address: string;
-  network: "public" | "testnet";
   onClick: () => void;
-}> = ({ address, network, onClick }) => (
-  <button
-    type="button"
-    onClick={onClick}
-    className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#E2E8F0] bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#2563EB] text-sm font-mono text-[#0F172A]"
-    aria-label="Wallet connected — click to open account menu"
-  >
-    <span className="h-2 w-2 rounded-full bg-[#10B981]" aria-hidden="true" />
-    <span>{truncateAddress(address)}</span>
-    <CopyButton value={address} />
-    <a
-      href={explorerUrl(address, network)}
-      target="_blank"
-      rel="noopener noreferrer"
-      aria-label={`View account ${address} on Stellar Expert (opens in new tab)`}
-      onClick={(e) => e.stopPropagation()}
-      className="text-neutral-500 hover:text-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+}> = ({ address, onClick }) => {
+  const accountHref = explorerAccountUrl(address);
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#E2E8F0] bg-white hover:bg-neutral-50 focus:outline-none focus:ring-2 focus:ring-[#2563EB] text-sm font-mono text-[#0F172A]"
+      aria-label="Wallet connected — click to open account menu"
     >
-      <svg
-        width="14"
-        height="14"
-        viewBox="0 0 16 16"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-        />
-        <path
-          d="M10 2h4v4M14 2l-6 6"
-          stroke="currentColor"
-          strokeWidth="1.5"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        />
-      </svg>
-    </a>
-  </button>
-);
+      <span className="h-2 w-2 rounded-full bg-[#10B981]" aria-hidden="true" />
+      <span>{truncateAddress(address)}</span>
+      <CopyButton value={address} />
+      {accountHref && (
+        <a
+          href={accountHref}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`View account ${address} on Stellar Expert (opens in new tab)`}
+          onClick={(e) => e.stopPropagation()}
+          className="text-neutral-500 hover:text-[#2563EB] focus:outline-none focus:ring-2 focus:ring-[#2563EB] rounded"
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 16 16"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path
+              d="M7 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1V9"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+            />
+            <path
+              d="M10 2h4v4M14 2l-6 6"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+          </svg>
+        </a>
+      )}
+    </button>
+  );
+};
 
 export const WalletConnect: React.FC<WalletConnectProps> = ({
-  expectedNetwork = "testnet",
+  expectedNetwork = getNetworkConfig().network,
   onConnect,
   onDisconnect,
 }) => {
@@ -387,7 +389,6 @@ export const WalletConnect: React.FC<WalletConnectProps> = ({
         <div className="relative">
           <AddressPill
             address={address}
-            network={expectedNetwork}
             onClick={() => setAccountMenuOpen((v) => !v)}
           />
           {accountMenuOpen && (

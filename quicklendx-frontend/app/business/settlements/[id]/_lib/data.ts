@@ -11,6 +11,7 @@ export const SettlementSchema = z.object({
   amount: z.string(), // i128 as string
   payer: z.string(),
   recipient: z.string(),
+  stellar_tx_hash: z.string().optional(),
   timestamp: z.number(), // unix timestamp (seconds or ms)
   status: SettlementStatusSchema,
   contract_version: z.number().optional(),

@@ -38,10 +38,16 @@ function makeProps(overrides?: Partial<ConfirmActionProps>): ConfirmActionProps 
     lockUntilDate: new Date(Date.now() + 86_400_000 * 7),
     fees: defaultFees,
     collateralisationRatio: 1.15,
-    stellarExplorerUrl: "https://stellar.expert/explorer/testnet/account/GTEST",
+    txHash: "a".repeat(64),
     ...overrides,
   };
 }
+
+it("does not render an explorer link for an invalid transaction hash", () => {
+  render(<ConfirmAction {...makeProps({ txHash: "../../account/GBAD" })} />);
+
+  expect(screen.queryByText("View on Stellar Explorer")).not.toBeInTheDocument();
+});
 
 // Mock react-hot-toast so it doesn't error in jsdom
 jest.mock("react-hot-toast", () => ({

@@ -9,6 +9,7 @@ import React, {
   useState,
 } from "react";
 import toast from "react-hot-toast";
+import { explorerTxUrl } from "../lib/stellar/links";
 import { Dialog } from "./Dialog";
 
 // ---------------------------------------------------------------------------
@@ -39,7 +40,7 @@ export interface ConfirmActionProps {
   lockUntilDate: Date;
   fees: FeeLineItem[];
   collateralisationRatio: number; // e.g. 1.08 = 108%
-  stellarExplorerUrl: string;
+  txHash?: string;
 
   /** Ref to the element that triggered the dialog — focus returns here on close. */
   triggerRef?: React.RefObject<HTMLElement | null>;
@@ -201,7 +202,7 @@ interface CommitmentSummaryProps {
   lockUntilDate: Date;
   fees: FeeLineItem[];
   collateralisationRatio: number;
-  stellarExplorerUrl: string;
+  txHash?: string;
 }
 
 const CommitmentSummary: React.FC<CommitmentSummaryProps> = ({
@@ -211,12 +212,13 @@ const CommitmentSummary: React.FC<CommitmentSummaryProps> = ({
   lockUntilDate,
   fees,
   collateralisationRatio,
-  stellarExplorerUrl,
+  txHash,
 }) => {
   const netPayout =
     lockedAmountXlm - fees.reduce((sum, f) => sum + f.amount, 0);
   const isLowCollateral = collateralisationRatio < LOW_COLLATERAL_THRESHOLD;
   const collateralPct = Math.round(collateralisationRatio * 100);
+  const stellarExplorerUrl = txHash ? explorerTxUrl(txHash) : null;
 
   return (
     <section
@@ -284,15 +286,17 @@ const CommitmentSummary: React.FC<CommitmentSummaryProps> = ({
         </p>
       )}
 
-      <a
-        href={stellarExplorerUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="inline-flex items-center gap-1 text-blue-600 underline text-xs focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 rounded"
-      >
-        View on Stellar Explorer
-        <span aria-hidden="true">↗</span>
-      </a>
+      {stellarExplorerUrl && (
+        <a
+          href={stellarExplorerUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 text-blue-600 underline text-xs focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-1 rounded"
+        >
+          View on Stellar Explorer
+          <span aria-hidden="true">↗</span>
+        </a>
+      )}
     </section>
   );
 };
@@ -476,7 +480,7 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
   lockUntilDate,
   fees,
   collateralisationRatio,
-  stellarExplorerUrl,
+  txHash,
   triggerRef,
 }) => {
   const [state, dispatch] = useReducer(dialogReducer, { phase: "idle" });
@@ -676,7 +680,7 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
             lockUntilDate={lockUntilDate}
             fees={fees}
             collateralisationRatio={collateralisationRatio}
-            stellarExplorerUrl={stellarExplorerUrl}
+            txHash={txHash}
           />
 
           {state.phase === "error" && (
