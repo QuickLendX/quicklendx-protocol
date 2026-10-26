@@ -38,7 +38,10 @@ describe("Stellar network configuration", () => {
   });
 
   it("rejects an insecure public RPC URL in development", () => {
-    process.env.NODE_ENV = "development";
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "development",
+      configurable: true,
+    });
     process.env.NEXT_PUBLIC_NETWORK = "public";
     process.env.NEXT_PUBLIC_RPC_URL = "http://rpc.example";
 
@@ -48,7 +51,10 @@ describe("Stellar network configuration", () => {
   });
 
   it("rejects malformed contract IDs in development", () => {
-    process.env.NODE_ENV = "development";
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "development",
+      configurable: true,
+    });
     process.env.NEXT_PUBLIC_CONTRACT_ID = "XYZ";
 
     expect(() => jest.isolateModules(() => require("../network"))).toThrow(
@@ -57,7 +63,10 @@ describe("Stellar network configuration", () => {
   });
 
   it("logs once and falls back to testnet for invalid production settings", () => {
-    process.env.NODE_ENV = "production";
+    Object.defineProperty(process.env, "NODE_ENV", {
+      value: "production",
+      configurable: true,
+    });
     process.env.NEXT_PUBLIC_CONTRACT_ID = "XYZ";
     const errorSpy = jest.spyOn(console, "error").mockImplementation(() => {});
     let config: NetworkConfig | undefined;

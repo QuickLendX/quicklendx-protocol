@@ -13,7 +13,7 @@
 import React, { createRef } from "react";
 import { render, screen, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ConfirmAction, ConfirmActionProps } from "../../app/components/ConfirmAction";
+import { ConfirmAction, ConfirmActionProps } from "../ConfirmAction";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -22,12 +22,14 @@ import { ConfirmAction, ConfirmActionProps } from "../../app/components/ConfirmA
 const defaultFees = [
   {
     label: "Platform fee",
-    amount: 0.0050000,
+    amount: 0.005,
     isEstimate: false,
   },
 ];
 
-function makeProps(overrides?: Partial<ConfirmActionProps>): ConfirmActionProps {
+function makeProps(
+  overrides?: Partial<ConfirmActionProps>
+): ConfirmActionProps {
   return {
     isOpen: true,
     onClose: jest.fn(),
@@ -46,7 +48,9 @@ function makeProps(overrides?: Partial<ConfirmActionProps>): ConfirmActionProps 
 it("does not render an explorer link for an invalid transaction hash", () => {
   render(<ConfirmAction {...makeProps({ txHash: "../../account/GBAD" })} />);
 
-  expect(screen.queryByText("View on Stellar Explorer")).not.toBeInTheDocument();
+  expect(
+    screen.queryByText("View on Stellar Explorer")
+  ).not.toBeInTheDocument();
 });
 
 // Mock react-hot-toast so it doesn't error in jsdom
@@ -143,16 +147,18 @@ describe("ConfirmAction — focus return on close", () => {
     const onClose = jest.fn();
 
     const { rerender } = render(
-      <ConfirmAction
-        {...makeProps({ onConfirm, onClose, triggerRef })}
-      />
+      <ConfirmAction {...makeProps({ onConfirm, onClose, triggerRef })} />
     );
 
     // Click "Confirm acceptance" twice with gap (two-step button)
-    const twoStepBtn = screen.getByRole("button", { name: /confirm acceptance/i });
+    const twoStepBtn = screen.getByRole("button", {
+      name: /confirm acceptance/i,
+    });
     await user.click(twoStepBtn);
     // Wait for the reset timer gap (500ms min)
-    await act(async () => { await new Promise((r) => setTimeout(r, 600)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 600));
+    });
     await user.click(twoStepBtn);
 
     // Wait for onConfirm and close to run
@@ -186,19 +192,23 @@ describe("ConfirmAction — focus return on close", () => {
     const onClose = jest.fn();
 
     const { rerender } = render(
-      <ConfirmAction
-        {...makeProps({ onConfirm, onClose, triggerRef })}
-      />
+      <ConfirmAction {...makeProps({ onConfirm, onClose, triggerRef })} />
     );
 
     // Trigger submission via two-step button
-    const twoStepBtn = screen.getByRole("button", { name: /confirm acceptance/i });
+    const twoStepBtn = screen.getByRole("button", {
+      name: /confirm acceptance/i,
+    });
     await user.click(twoStepBtn);
-    await act(async () => { jest.advanceTimersByTime(600); });
+    await act(async () => {
+      jest.advanceTimersByTime(600);
+    });
     await user.click(twoStepBtn);
 
     // Advance past server timeout (10 000 ms)
-    await act(async () => { jest.advanceTimersByTime(10_100); });
+    await act(async () => {
+      jest.advanceTimersByTime(10_100);
+    });
 
     // "Dismiss" button should now be visible
     const dismissBtn = await screen.findByRole("button", { name: /dismiss/i });
