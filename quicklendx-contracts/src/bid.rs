@@ -78,6 +78,25 @@ impl Bid {
         current_timestamp >= self.expiration_timestamp.saturating_add(grace_seconds)
     }
 
+    /// Returns true when the bid is past its expiry plus the configured grace
+    /// period, using the grace value stored by the admin (default 0).
+    pub fn is_cleanup_eligible_with_env(&self, env: &Env, current_timestamp: u64) -> bool {
+        let grace = BidStorage::get_bid_expiry_grace_seconds(env);
+        self.is_cleanup_eligible(current_timestamp, grace)
+    }
+
+    /// Returns true when the bid is still within its expiry grace window and
+    /// therefore must not be treated as expired by default entrypoints.
+    pub fn is_within_grace_with_env(&self, env: &Env, current_timestamp: u64) -> bool {
+        !self.is_cleanup_eligible_with_env(env, current_timestamp)
+    }
+
+    /// Active under the configured grace period: still Placed and not yet past
+    /// expiry plus grace. Default entrypoints must use this instead of `is_active`.
+    pub fn is_active_with_env(&self, env: &Env, current_timestamp: u64) -> bool {
+        self.status == BidStatus::Placed && self.is_within_grace_with_env(env, current_timestamp)
+    }
+
     /// Active means still in the Placed state and not yet expired at the
     /// current ledger timestamp.
     pub fn is_active(&self, current_timestamp: u64) -> bool {
@@ -787,7 +806,6 @@ impl BidStorage {
 
         let end_idx = (offset + capped_limit).min(old_count);
         let mut cleaned_count = 0u32;
-        let mut write_idx: u32 = offset;
         let mut read_idx: u32 = offset;
 
         // Process only the requested range [offset, end_idx)

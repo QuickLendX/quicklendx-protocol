@@ -1,0 +1,21 @@
+{
+  "default_branch": "main",
+  "branches": [
+    "feat/issue-2932-feat-defaults-expose-invoice-default-handling",
+    "main",
+    "origin",
+    "security/issue-2904-security-ingest-post-api-v1-events-accepts"
+  ],
+  "parent": {
+    "feat/issue-2932-feat-defaults-expose-invoice-default-handling": "main",
+    "main": null,
+    "origin": "main",
+    "security/issue-2904-security-ingest-post-api-v1-events-accepts": "main"
+  },
+  "order": [
+    "main",
+    "feat/issue-2932-feat-defaults-expose-invoice-default-handling",
+    "origin",
+    "security/issue-2904-security-ingest-post-api-v1-events-accepts"
+  ]
+}

@@ -56,9 +56,6 @@ pub enum AuditOperation {
     BidAccepted,
     BidCancelled,
     BidExpired,
-    BidWithdrawn,
-    BidCancelled,
-    BidExpired,
     EscrowCreated,
     EscrowReleased,
     EscrowRefunded,
@@ -110,10 +107,6 @@ pub enum AuditOperation {
     InvestorFrozen,
     /// An investor was unfrozen (investment actions restored).
     InvestorUnfrozen,
-    /// A placed bid was cancelled by its investor (Placed -> Cancelled).
-    BidCancelled,
-    /// A placed bid transitioned to Expired (via TTL/grace cleanup).
-    BidExpired,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -135,8 +128,6 @@ pub enum OpType {
     BidPlaced,
     BidAccepted,
     BidWithdrawn,
-    BidCancelled,
-    BidExpired,
     EscrowCreated,
     EscrowReleased,
     EscrowRefunded,
@@ -214,8 +205,6 @@ impl OpType {
             OpType::KycRevoked => symbol_short!("kyc_rev"),
             OpType::InvestorFrozen => symbol_short!("inv_frz"),
             OpType::InvestorUnfrozen => symbol_short!("inv_unf"),
-            OpType::BidCancelled => symbol_short!("bid_can"),
-            OpType::BidExpired => symbol_short!("bid_exp"),
         }
     }
 
@@ -282,9 +271,9 @@ impl From<AuditOperation> for OpType {
             AuditOperation::InvoiceRated => OpType::InvoiceRated,
             AuditOperation::BidPlaced => OpType::BidPlaced,
             AuditOperation::BidAccepted => OpType::BidAccepted,
-            AuditOperation::BidWithdrawn
-            | AuditOperation::BidCancelled
-            | AuditOperation::BidExpired => OpType::BidWithdrawn,
+            AuditOperation::BidWithdrawn => OpType::BidWithdrawn,
+            AuditOperation::BidCancelled => OpType::BidCancelled,
+            AuditOperation::BidExpired => OpType::BidExpired,
             AuditOperation::EscrowCreated => OpType::EscrowCreated,
             AuditOperation::EscrowReleased => OpType::EscrowReleased,
             AuditOperation::EscrowRefunded => OpType::EscrowRefunded,
@@ -592,9 +581,7 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::InvoiceRated => 7,
         AuditOperation::BidPlaced => 8,
         AuditOperation::BidAccepted => 9,
-        AuditOperation::BidWithdrawn
-        | AuditOperation::BidCancelled
-        | AuditOperation::BidExpired => 10,
+        AuditOperation::BidWithdrawn => 10,
         AuditOperation::EscrowCreated => 11,
         AuditOperation::EscrowReleased => 12,
         AuditOperation::EscrowRefunded => 13,

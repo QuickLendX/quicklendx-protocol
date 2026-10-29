@@ -1,4 +1,4 @@
-/**
+/*
  * v003_hotfix_add_invoice_id_to_backfill_audit
  *
  * Author: QuickLendX Engineering
@@ -47,30 +47,39 @@ export default {
     required_approvals: 2,
   },
   up: async (ctx: MigrationContext): Promise<void> => {
-    await ctx.db.exec(`
-      ALTER TABLE backfill_audit
-      ADD COLUMN invoice_id TEXT
-    `);
+    const columns = await ctx.db.all<Array<{ name: string }>>(
+      `PRAGMA table_info(backfill_audit)`
+    );
+    const hasInvoiceId = columns.some((col) => col.name === "invoice_id");
 
-    await ctx.db.exec(`
-      UPDATE backfill_audit
-      SET invoice_id = NULL
-      WHERE invoice_id IS NULL
-    `);
+    if (!hasInvoiceId) {
+      await ctx.db.exec(`
+        ALTER TABLE backfill_audit
+        ADD COLUMN invoice_id TEXT
+      `);
+    }
   },
   down: async (ctx: MigrationContext): Promise<void> => {
-    await ctx.db.exec(`
-      ALTER TABLE backfill_audit
-      DROP COLUMN invoice_id
-    `);
+    const columns = await ctx.db.all<Array<{ name: string }>>(
+      `PRAGMA table_info(backfill_audit)`
+    );
+    const hasInvoiceId = columns.some((col) => col.name === "invoice_id");
+
+    if (hasInvoiceId) {
+      await ctx.db.exec(`
+        ALTER TABLE backfill_audit
+        DROP COLUMN invoice_id
+      `);
+    }
   },
   validate: async (ctx: MigrationContext): Promise<string[]> => {
     const warnings: string[] = [];
 
-    const existing = await ctx.db.get<{ name: string }>(
-      `PRAGMA table_info(backfill_audit) WHERE name = 'invoice_id'`
+    const columns = await ctx.db.all<Array<{ name: string }>>(
+      `PRAGMA table_info(backfill_audit)`
     );
-    if (existing) {
+    const hasInvoiceId = columns.some((col) => col.name === "invoice_id");
+    if (hasInvoiceId) {
       warnings.push("Column invoice_id already exists — migration will be idempotent no-op.");
     }
 
