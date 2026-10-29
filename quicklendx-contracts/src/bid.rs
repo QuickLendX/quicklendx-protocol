@@ -85,6 +85,18 @@ impl Bid {
         self.is_cleanup_eligible(current_timestamp, grace)
     }
 
+    /// Returns true when the bid is still within its expiry grace window and
+    /// therefore must not be treated as expired by default entrypoints.
+    pub fn is_within_grace_with_env(&self, env: &Env, current_timestamp: u64) -> bool {
+        !self.is_cleanup_eligible_with_env(env, current_timestamp)
+    }
+
+    /// Active under the configured grace period: still Placed and not yet past
+    /// expiry plus grace. Default entrypoints must use this instead of `is_active`.
+    pub fn is_active_with_env(&self, env: &Env, current_timestamp: u64) -> bool {
+        self.status == BidStatus::Placed && self.is_within_grace_with_env(env, current_timestamp)
+    }
+
     /// Active means still in the Placed state and not yet expired at the
     /// current ledger timestamp.
     pub fn is_active(&self, current_timestamp: u64) -> bool {

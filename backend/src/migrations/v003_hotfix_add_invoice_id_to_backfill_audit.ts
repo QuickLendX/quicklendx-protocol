@@ -47,7 +47,7 @@ export default {
     required_approvals: 2,
   },
   up: async (ctx: MigrationContext): Promise<void> => {
-    const columns = await ctx.db.all<Array<{ colname: string }>>(
+    const columns = await ctx.db.all<Array<{ name: string }>>(
       `PRAGMA table_info(backfill_audit)`
     );
     const hasInvoiceId = columns.some((col) => col.name === "invoice_id");
