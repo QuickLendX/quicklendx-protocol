@@ -87,7 +87,7 @@ fuzz_target!(|input: Input| {
         if let Some(investment) = client.get_investment(&invoice_id) {
             let invoice = client.get_invoice(&invoice_id);
             assert_eq!(invoice.funded_amount, investment.amount);
-            assert!(client.get_escrow_details(&invoice_id).is_ok());
+            assert!(client.try_get_escrow_details(&invoice_id).is_ok());
         }
     }
 });
