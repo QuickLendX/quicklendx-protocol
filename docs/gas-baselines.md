@@ -6,7 +6,7 @@ This document explains the purpose, workflow, and security considerations of the
 
 The gas regression harness in `quicklendx-contracts/tests/gas_regression.rs` verifies that every contract entrypoint's resource footprint (CPU instructions, disk reads, and disk writes) remains bounded and matches known baseline estimates within a strict tolerance gate (default: **3%**).
 
-- **Baselines Storage**: Baselines are persisted in [gas-baseline.toml](file:///c:/Users/user/Documents/quicklendx-protocol-2/quicklendx-contracts/scripts/gas-baseline.toml).
+- **Baselines Storage**: Baselines are persisted in [gas-baseline.toml](../quicklendx-contracts/scripts/gas-baseline.toml).
 - **Tolerance**: Defaults to **3%**. It can be overridden at runtime via the `GAS_TOLERANCE` environment variable (e.g. `GAS_TOLERANCE=0.05` for 5%).
 - **Verification Gate**: Integration tests fail if any entrypoint/scenario exceeds its registered baseline plus the allowed tolerance, preventing accidental resource inflation.
 
@@ -17,7 +17,7 @@ The gas regression harness in `quicklendx-contracts/tests/gas_regression.rs` ver
 ### 1. Reviewing Diffs in Pull Requests
 
 When reviewing pull requests:
-- Inspect changes to [gas-baseline.toml](file:///c:/Users/user/Documents/quicklendx-protocol-2/quicklendx-contracts/scripts/gas-baseline.toml).
+- Inspect changes to [gas-baseline.toml](../quicklendx-contracts/scripts/gas-baseline.toml).
 - Legitimately modified code paths (e.g. adding new validation steps or indices) may slightly increase the baselines.
 - Bumps to baseline values must be accompanied by technical explanation in the PR. Silently regressing performance is rejected.
 
