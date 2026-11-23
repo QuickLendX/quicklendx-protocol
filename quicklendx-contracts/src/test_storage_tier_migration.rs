@@ -13,8 +13,11 @@ use soroban_sdk::{
     Address, BytesN, Env, String,
 };
 
+use crate::analytics::{AnalyticsStorage, BusinessReport, TimePeriod};
 use crate::dispute::{add_to_dispute_index, get_dispute_index, get_invoices_with_disputes_paged};
-use crate::fees::{FeeManager, VolumeTier};
+use crate::fees::{FeeManager, FeeType, VolumeTier};
+use crate::types::InvoiceCategory;
+use soroban_sdk::Map;
 use crate::notifications::{
     DataKey as NotificationDataKey, NotificationPriority, NotificationSystem, NotificationType,
 };
@@ -200,5 +203,65 @@ fn migration_progress_uses_declared_storage_keys_and_clears_on_commit() {
         assert!(!env.storage().instance().has(&symbol_short!("mig_ver")));
         assert!(!env.storage().persistent().has(&symbol_short!("mig_off")));
         assert!(!env.storage().persistent().has(&symbol_short!("mig_rec")));
+    });
+}
+
+#[test]
+fn production_fee_revenue_and_business_reports_are_persistent() {
+    let (env, contract_id) = setup();
+    let user = Address::generate(&env);
+    env.ledger().set_timestamp(2_592_000);
+    let period = 1u64;
+
+    env.as_contract(&contract_id, || {
+        let mut fees = Map::new(&env);
+        fees.set(FeeType::Platform, 250);
+        FeeManager::collect_fees(&env, &user, fees, 250).unwrap();
+
+        let analytics = FeeManager::get_analytics(&env, period).unwrap();
+        assert_eq!(analytics.total_fees, 250);
+        assert_eq!(analytics.total_transactions, 1);
+        assert_eq!(FeeManager::get_user_volume(&env, &user).total_volume, 250);
+
+        let mut report_ids = soroban_sdk::Vec::new(&env);
+        for i in 0..10u32 {
+            let mut bytes = [0u8; 32];
+            bytes[28..32].copy_from_slice(&i.to_be_bytes());
+            let report_id = BytesN::from_array(&env, &bytes);
+            let report = BusinessReport {
+                report_id: report_id.clone(),
+                business_address: Address::generate(&env),
+                period: TimePeriod::Monthly,
+                start_date: 1,
+                end_date: 2,
+                invoices_uploaded: 5,
+                invoices_funded: 3,
+                total_volume: 50_000,
+                average_funding_time: 60,
+                success_rate: 80,
+                default_rate: 5,
+                category_breakdown: soroban_sdk::Vec::from_array(
+                    &env,
+                    [(InvoiceCategory::Services, 3)],
+                ),
+                rating_average: None,
+                total_ratings: 0,
+                generated_at: env.ledger().timestamp(),
+            };
+            AnalyticsStorage::store_business_report(&env, &report);
+            report_ids.push_back(report_id);
+        }
+
+        for report_id in report_ids.iter() {
+            let key = (symbol_short!("biz_rpt"), report_id.clone());
+            assert!(env.storage().persistent().has(&key));
+            assert!(!env.storage().instance().has(&key));
+            assert_eq!(
+                AnalyticsStorage::get_business_report(&env, &report_id)
+                    .unwrap()
+                    .invoices_funded,
+                3
+            );
+        }
     });
 }
