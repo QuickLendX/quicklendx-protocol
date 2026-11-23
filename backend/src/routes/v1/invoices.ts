@@ -10,11 +10,12 @@ import {
   invoiceIdParamSchema,
   invoiceIdParamForDisputesSchema,
 } from "../../validators/invoices";
+import { optionalApiKeyAuth } from "../../middleware/api-key-auth";
 
 const router = Router();
 
-router.get("/", createQueryValidationMiddleware(getInvoicesQuerySchema), invoiceController.getInvoices);
-router.get("/:id", createParamsValidationMiddleware(invoiceIdParamSchema), invoiceController.getInvoiceById);
+router.get("/", createQueryValidationMiddleware(getInvoicesQuerySchema), optionalApiKeyAuth, invoiceController.getInvoices);
+router.get("/:id", createParamsValidationMiddleware(invoiceIdParamSchema), optionalApiKeyAuth, invoiceController.getInvoiceById);
 router.get("/:id/disputes", createParamsValidationMiddleware(invoiceIdParamForDisputesSchema), disputeController.getDisputes);
 
 router.post("/", invoiceController.createInvoice);
