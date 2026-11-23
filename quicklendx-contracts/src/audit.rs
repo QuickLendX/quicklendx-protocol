@@ -721,9 +721,9 @@ impl AuditStorage {
     /// This function **never overwrites** existing entries. It appends the new
     /// entry to multiple indices (by invoice, operation, actor, timestamp) to
     /// enable efficient queries without reordering.
-    pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) {
+    pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) -> Result<(), QuickLendXError> {
         if Self::get_audit_entry(env, &entry.operation_id).is_some() {
-            panic!("duplicate observability operation id");
+            return Err(QuickLendXError::AuditIntegrityError);
         }
 
         let entry_key = entry.audit_id.clone();
@@ -748,6 +748,7 @@ impl AuditStorage {
         Self::add_to_actor_index(env, &entry.actor, &entry.audit_id);
         Self::add_to_timestamp_index(env, entry.timestamp, &entry.audit_id);
         Self::add_to_all_audit_entries(env, &entry.audit_id);
+        Ok(())
     }
 
     /// Get audit entry by ID
@@ -1173,7 +1174,7 @@ pub fn log_operation(
     new_value: Option<String>,
     amount: Option<i128>,
     additional_data: Option<String>,
-) {
+) -> Result<(), QuickLendXError> {
     let entry = AuditLogEntry::new(
         env,
         invoice_id,
@@ -1184,7 +1185,7 @@ pub fn log_operation(
         amount,
         additional_data,
     );
-    AuditStorage::store_audit_entry(env, &entry);
+    AuditStorage::store_audit_entry(env, &entry)
 }
 
 /// Append an audit entry that reuses a committed event's correlation id.
@@ -1198,7 +1199,7 @@ pub fn log_operation_with_id(
     amount: Option<i128>,
     additional_data: Option<String>,
     operation_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     let entry = AuditLogEntry::new_with_operation_id(
         env,
         invoice_id,
@@ -1210,7 +1211,7 @@ pub fn log_operation_with_id(
         additional_data,
         operation_id,
     );
-    AuditStorage::store_audit_entry(env, &entry);
+    AuditStorage::store_audit_entry(env, &entry)
 }
 
 /// Convenience wrapper for log_operation (used by invoice helpers).
@@ -1223,7 +1224,7 @@ pub fn log_invoice_operation(
     new_value: Option<String>,
     amount: Option<i128>,
     additional_data: Option<String>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1233,11 +1234,11 @@ pub fn log_invoice_operation(
         new_value,
         amount,
         additional_data,
-    );
+    )
 }
 
 /// Log invoice creation
-pub fn log_invoice_created(env: &Env, invoice: &Invoice) {
+pub fn log_invoice_created(env: &Env, invoice: &Invoice) -> Result<(), QuickLendXError> {
     log_invoice_operation(
         env,
         invoice.id.clone(),
@@ -1247,7 +1248,7 @@ pub fn log_invoice_created(env: &Env, invoice: &Invoice) {
         Some(String::from_str(env, "Invoice created")),
         Some(invoice.amount),
         Some(invoice.description.clone()),
-    );
+    )
 }
 
 /// Log invoice status change
@@ -1257,7 +1258,7 @@ pub fn log_invoice_status_change(
     actor: Address,
     _old_status: InvoiceStatus,
     _new_status: InvoiceStatus,
-) {
+) -> Result<(), QuickLendXError> {
     let old_value = String::from_str(env, "Status changed");
     let new_value = String::from_str(env, "Status updated");
 
@@ -1270,11 +1271,16 @@ pub fn log_invoice_status_change(
         Some(new_value),
         None,
         None,
-    );
+    )
 }
 
 /// Log invoice funding
-pub fn log_invoice_funded(env: &Env, invoice_id: BytesN<32>, investor: Address, amount: i128) {
+pub fn log_invoice_funded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    investor: Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
     log_invoice_operation(
         env,
         invoice_id,
@@ -1284,7 +1290,7 @@ pub fn log_invoice_funded(env: &Env, invoice_id: BytesN<32>, investor: Address, 
         Some(String::from_str(env, "Funded")),
         Some(amount),
         None,
-    );
+    )
 }
 
 /// Log payment processing
@@ -1294,7 +1300,7 @@ pub fn log_payment_processed(
     actor: Address,
     amount: i128,
     payment_type: String,
-) {
+) -> Result<(), QuickLendXError> {
     log_invoice_operation(
         env,
         invoice_id,
@@ -1304,7 +1310,7 @@ pub fn log_payment_processed(
         Some(String::from_str(env, "Payment processed")),
         Some(amount),
         Some(payment_type),
-    );
+    )
 }
 
 /// Log a committed payment using the same `operation_id` as the protocol event.
@@ -1315,7 +1321,7 @@ pub fn log_payment_processed_with_id(
     amount: i128,
     additional_data: String,
     operation_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation_with_id(
         env,
         invoice_id,
@@ -1326,11 +1332,15 @@ pub fn log_payment_processed_with_id(
         Some(amount),
         Some(additional_data),
         operation_id,
-    );
+    )
 }
 
 /// Log invoice refund
-pub fn log_invoice_refunded(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+pub fn log_invoice_refunded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1340,11 +1350,16 @@ pub fn log_invoice_refunded(env: &Env, invoice_id: BytesN<32>, actor: Address) {
         Some(String::from_str(env, "Refunded")),
         None,
         None,
-    );
+    )
 }
 
 /// Log invoice uploaded (business flow).
-pub fn log_invoice_uploaded(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+pub fn log_invoice_uploaded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1354,11 +1369,15 @@ pub fn log_invoice_uploaded(env: &Env, invoice_id: BytesN<32>, actor: Address, a
         Some(String::from_str(env, "Invoice uploaded")),
         Some(amount),
         None,
-    );
+    )
 }
 
 /// Log invoice verified (admin).
-pub fn log_invoice_verified(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+pub fn log_invoice_verified(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1368,11 +1387,15 @@ pub fn log_invoice_verified(env: &Env, invoice_id: BytesN<32>, actor: Address) {
         Some(String::from_str(env, "Invoice verified")),
         None,
         None,
-    );
+    )
 }
 
 /// Log invoice cancelled.
-pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+pub fn log_invoice_cancelled(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1382,7 +1405,7 @@ pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) 
         Some(String::from_str(env, "Invoice cancelled")),
         None,
         None,
-    );
+    )
 }
 
 /// Human-readable correlation string that ties an audit entry to the bid that
@@ -1414,7 +1437,7 @@ pub fn log_bid_placed(
     actor: Address,
     bid_amount: i128,
     bid_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1424,7 +1447,7 @@ pub fn log_bid_placed(
         Some(String::from_str(env, "Bid placed")),
         Some(bid_amount),
         Some(bid_correlation(env, &bid_id)),
-    );
+    )
 }
 
 /// Log bid accepted.
@@ -1434,7 +1457,7 @@ pub fn log_bid_accepted(
     actor: Address,
     amount: i128,
     bid_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1444,11 +1467,16 @@ pub fn log_bid_accepted(
         Some(String::from_str(env, "Bid accepted")),
         Some(amount),
         Some(bid_correlation(env, &bid_id)),
-    );
+    )
 }
 
 /// Log bid withdrawn.
-pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
+pub fn log_bid_withdrawn(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    bid_id: BytesN<32>,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1458,11 +1486,16 @@ pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_
         Some(String::from_str(env, "Bid withdrawn")),
         None,
         Some(bid_correlation(env, &bid_id)),
-    );
+    )
 }
 
 /// Log bid cancelled (Placed -> Cancelled).
-pub fn log_bid_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
+pub fn log_bid_cancelled(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    bid_id: BytesN<32>,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1472,7 +1505,7 @@ pub fn log_bid_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_
         Some(String::from_str(env, "Bid cancelled")),
         None,
         Some(bid_correlation(env, &bid_id)),
-    );
+    )
 }
 
 /// Log bid expired (Placed -> Expired via TTL/grace cleanup).
@@ -1486,7 +1519,7 @@ pub fn log_bid_expired(
     actor: Address,
     amount: i128,
     bid_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1496,7 +1529,7 @@ pub fn log_bid_expired(
         Some(String::from_str(env, "Bid expired")),
         Some(amount),
         Some(bid_correlation(env, &bid_id)),
-    );
+    )
 }
 
 /// Log escrow created.
@@ -1506,7 +1539,7 @@ pub fn log_escrow_created(
     actor: Address,
     amount: i128,
     _escrow_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1516,7 +1549,7 @@ pub fn log_escrow_created(
         Some(String::from_str(env, "Escrow created")),
         Some(amount),
         None,
-    );
+    )
 }
 
 /// Log escrow released.
@@ -1526,7 +1559,7 @@ pub fn log_escrow_released(
     actor: Address,
     amount: i128,
     _escrow_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1536,7 +1569,7 @@ pub fn log_escrow_released(
         Some(String::from_str(env, "Escrow released")),
         Some(amount),
         None,
-    );
+    )
 }
 
 /// Log escrow refunded.
@@ -1546,7 +1579,7 @@ pub fn log_escrow_refunded(
     actor: Address,
     amount: i128,
     _escrow_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1556,11 +1589,16 @@ pub fn log_escrow_refunded(
         Some(String::from_str(env, "Escrow refunded")),
         Some(amount),
         None,
-    );
+    )
 }
 
 /// Log settlement completed (full payment).
-pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+pub fn log_settlement_completed(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1570,7 +1608,7 @@ pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Addres
         Some(String::from_str(env, "Settlement completed")),
         Some(amount),
         None,
-    );
+    )
 }
 
 // ─── Config-change audit helpers ─────────────────────────────────────────────
@@ -1657,9 +1695,9 @@ pub(crate) fn address_to_audit_string(env: &Env, addr: &Address) -> String {
 /// chained in the same tamper-evident, append-only trail keyed by
 /// `CONFIG_AUDIT_SENTINEL`.
 ///
-/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
-/// guarantee the preceding storage write and this audit append both commit or
-/// both roll back — there is no partial-success scenario.
+/// **Atomicity**: audit errors are propagated to the calling contract method.
+/// Soroban transaction semantics guarantee the preceding storage write and
+/// this audit append both commit or both roll back.
 pub(crate) fn log_config_change(
     env: &Env,
     operation: AuditOperation,
@@ -1667,7 +1705,7 @@ pub(crate) fn log_config_change(
     param: &str,
     old_value: Option<String>,
     new_value: Option<String>,
-) {
+) -> Result<(), QuickLendXError> {
     let sentinel = BytesN::from_array(env, &CONFIG_AUDIT_SENTINEL);
     log_operation(
         env,
@@ -1678,7 +1716,7 @@ pub(crate) fn log_config_change(
         new_value,
         None,
         Some(String::from_str(env, param)),
-    );
+    )
 }
 
 /// Append a KYC-related audit entry to the shared `KYC_AUDIT_SENTINEL` trail.
@@ -1688,9 +1726,9 @@ pub(crate) fn log_config_change(
 /// participant-identity lifecycle on the same hash-chain infrastructure used
 /// for invoice and config trails.
 ///
-/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
-/// guarantee the preceding storage write and this audit append both commit or
-/// both roll back — there is no partial-success scenario.
+/// **Atomicity**: audit errors are propagated to the calling contract method.
+/// Soroban transaction semantics guarantee the preceding storage write and
+/// this audit append both commit or both roll back.
 pub(crate) fn log_kyc_operation(
     env: &Env,
     operation: AuditOperation,
@@ -1698,7 +1736,7 @@ pub(crate) fn log_kyc_operation(
     old_value: Option<String>,
     new_value: Option<String>,
     additional_data: Option<String>,
-) {
+) -> Result<(), QuickLendXError> {
     let sentinel = BytesN::from_array(env, &KYC_AUDIT_SENTINEL);
     log_operation(
         env,
@@ -1709,5 +1747,5 @@ pub(crate) fn log_kyc_operation(
         new_value,
         None,
         additional_data,
-    );
+    )
 }

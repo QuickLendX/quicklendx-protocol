@@ -640,7 +640,7 @@ impl FeeManager {
                 max_fee,
                 is_active,
             )),
-        );
+        )?;
 
         Ok(updated_structure)
     }
@@ -1065,7 +1065,7 @@ impl FeeManager {
                 config.platform_share_bps,
                 config.min_distribution_amount,
             )),
-        );
+        )?;
 
         // Emit configuration event for audit trail
         crate::events::emit_platform_fee_config_updated(

@@ -1210,7 +1210,7 @@ fn test_storage_integrity_audit_lifecycle() {
         
         // Advance time and cleanup
         env.ledger().set_timestamp(1500);
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
+        BidStorage::cleanup_expired_bids(&env, &invoice_id).expect("expired bid cleanup should succeed");
         
         StorageIntegrityAudit::audit_all(&env).expect("Audit after cleanup should pass");
     });
