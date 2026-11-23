@@ -2,7 +2,11 @@
 
 import React, { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { fetchBestBid, fetchInvoices } from "../lib/api/endpoints";
+import {
+  ApiNetworkError,
+  fetchBestBid,
+  fetchInvoices,
+} from "../lib/api/endpoints";
 import { FreshnessBanner } from "../components/FreshnessBanner";
 import { InvoiceCard } from "../components/InvoiceCard";
 import { BestBidBadge } from "./_components/BestBidBadge";
@@ -69,28 +73,40 @@ function MarketplaceContent() {
 
   // Initial load
   useEffect(() => {
-    let isMounted = true;
+    const controller = new AbortController();
     async function load() {
       try {
         setLoading(true);
         setError(null);
-        const res = await fetchInvoices({ status: "Verified" });
-        if (!isMounted) return;
+        const res = await fetchInvoices({
+          status: "Verified",
+          signal: controller.signal,
+        });
+        if (controller.signal.aborted) return;
         const publicList = res.data.map(toPublicInvoice);
         setInvoices(publicList);
         setNextCursor(res.next_cursor);
         setHasMore(res.has_more);
         if (res.freshness) setFreshness(res.freshness);
-      } catch (err: any) {
-        if (!isMounted) return;
-        setError(err.message || "Failed to load marketplace invoices");
+      } catch (err: unknown) {
+        if (
+          controller.signal.aborted ||
+          (err instanceof ApiNetworkError && err.isAborted)
+        ) {
+          return;
+        }
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load marketplace invoices"
+        );
       } finally {
-        if (isMounted) setLoading(false);
+        if (!controller.signal.aborted) setLoading(false);
       }
     }
     load();
     return () => {
-      isMounted = false;
+      controller.abort();
     };
   }, []);
 
