@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useParams, notFound } from "next/navigation";
+import Dialog from "@/app/components/Dialog";
 import { isHexId } from "../../../lib/ids";
 
 export default function DisputeResponsePage() {
@@ -9,17 +10,18 @@ export default function DisputeResponsePage() {
   const disputeId =
     typeof params?.id === "string" ? (params.id as string) : undefined;
 
+  const [selectedOption, setSelectedOption] = useState("");
+  const [showConfirmation, setShowConfirmation] = useState(false);
+
+  // Ref to "Submit Response" button so focus returns there when modal closes
+  const submitBtnRef = useRef<HTMLButtonElement>(null);
+
   // Reject malformed identifiers before any API call is made: dispute ids are
   // on-chain hex strings (`0x` + hex digits, see
   // `backend/src/validators/shared.ts` `hexStringSchema`).
   if (disputeId !== undefined && !isHexId(disputeId)) {
     notFound();
   }
-  const [selectedOption, setSelectedOption] = useState("");
-  const [showConfirmation, setShowConfirmation] = useState(false);
-
-  // Ref to "Submit Response" button so focus returns there when modal closes
-  const submitBtnRef = useRef<HTMLButtonElement>(null);
 
   const options = [
     {
