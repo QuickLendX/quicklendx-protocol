@@ -5,12 +5,6 @@ edition = "2021"
 publish = false
 
 [[bin]]
-name = "contracttype_roundtrip"
-path = "fuzz_targets/contracttype_roundtrip.rs"
-test = false
-doc = false
-
-[[bin]]
 name = "accept_bid_and_fund"
 path = "fuzz_targets/accept_bid_and_fund.rs"
 test = false
