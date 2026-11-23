@@ -9,7 +9,7 @@ use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, 
 #[derive(Arbitrary, Debug)]
 struct Input {
     amount: u16,
-    operations: Vec<Operation>,
+    operations: std::vec::Vec<Operation>,
 }
 
 #[derive(Arbitrary, Debug)]
@@ -88,7 +88,7 @@ fuzz_target!(|input: Input| {
         // Once acceptance succeeds, the invoice must be funded and an
         // investment record must exist. Repeated acceptance must not panic.
         if let Some(investment) = client.get_investment(&invoice_id) {
-            let invoice = client.get_invoice(&invoice_id).unwrap();
+            let invoice = client.get_invoice(&invoice_id);
             assert_eq!(invoice.funded_amount, investment.amount);
             assert!(client.try_get_escrow_details(&invoice_id).is_ok());
         }
