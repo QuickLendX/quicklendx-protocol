@@ -5,6 +5,10 @@ The backend reads and validates environment variables in
 secret values are not included in validation errors. The defaults below reflect
 the schema in that file.
 
+Boolean variables accept only `true`, `false`, `1`, or `0`. Any other value
+(for example `yes` or `on`) is rejected at startup with an error naming the
+field only.
+
 | Variable | Default | Purpose |
 |---|---|---|
 | `NODE_ENV` | `development` | `development`, `test`, or `production` |
@@ -19,7 +23,7 @@ the schema in that file.
 | `EXPORT_DIR` | `.data/exports` | Generated export directory |
 | `EXPORT_TTL_MS` | `3600000` | Export link lifetime |
 | `ARCHIVE_DIR` | `.data/archives` | Archive output directory |
-| `ARCHIVE_ENABLED` | `false` | Archive feature toggle |
+| `ARCHIVE_ENABLED` | `false` | Archive feature toggle (`true`, `false`, `1`, or `0`) |
 | `EXPOSURE_CAP_PER_INVESTOR_USD` | `10000000000` | Investor exposure ceiling |
 | `ADMIN_API_KEY` | unset | Required in production; at least 32 characters |
 | `WEBHOOK_SECRET` | unset | Required in production; at least 16 characters |
