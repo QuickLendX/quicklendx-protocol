@@ -42,19 +42,7 @@ yarn install
 
 3. **Set up environment variables**
 
-Create a `.env.local` file in the `quicklendx-frontend` directory:
-
-```bash
-# Contract Configuration
-NEXT_PUBLIC_CONTRACT_ID=your_contract_id_here
-NEXT_PUBLIC_NETWORK=testnet
-
-# RPC Configuration
-NEXT_PUBLIC_RPC_URL=https://soroban-testnet.stellar.org:443
-
-# Optional: Analytics
-NEXT_PUBLIC_ANALYTICS_ID=your_analytics_id
-```
+Copy `.env.example` to `.env.local` in the `quicklendx-frontend` directory, then adjust the values for your environment. `.env.local` is ignored by Git.
 
 4. **Run development server**
 
@@ -122,15 +110,12 @@ The `next.config.ts` file contains Next.js configuration. Key settings:
 
 ### Environment Variables
 
-Required environment variables:
-
-- `NEXT_PUBLIC_CONTRACT_ID`: Deployed contract ID
-- `NEXT_PUBLIC_NETWORK`: Network (testnet/mainnet)
-- `NEXT_PUBLIC_RPC_URL`: Soroban RPC endpoint
-
-Optional:
-
-- `NEXT_PUBLIC_ANALYTICS_ID`: Analytics tracking ID
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api/v1` | Base URL for the API. Include the `/api/v1` prefix. |
+| `NEXT_PUBLIC_NETWORK` | `testnet` | Stellar network (`testnet` or `mainnet`). |
+| `NEXT_PUBLIC_E2E` | `false` | Enables end-to-end testing behavior when set to `true`. |
+| `NEXT_PUBLIC_ENABLE_NEW_INVOICE_ROUTE` | `false` | Enables the new business invoice route when set to `true`. |
 
 ## 🧪 Testing
 
