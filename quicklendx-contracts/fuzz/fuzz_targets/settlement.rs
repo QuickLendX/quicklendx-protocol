@@ -18,6 +18,7 @@ struct Input {
 struct PaymentAttempt {
     amount: i32,
     full_settlement: bool,
+    partial_payment: bool,
     stale_snapshot: bool,
 }
 
@@ -68,21 +69,30 @@ fuzz_target!(|input: Input| {
         &(invoice_amount + 500),
         &BytesN::from_array(&env, &[9u8; 32]),
     );
-    client.accept_bid(&invoice_id, &bid_id);
+    let funding = client.try_accept_bid(&invoice_id, &bid_id);
+    assert!(matches!(funding, Ok(Ok(_))), "funding fixture must succeed");
 
-    for attempt in input.payments.into_iter().take(16) {
+    for (index, attempt) in input.payments.into_iter().take(16).enumerate() {
         let Some(mut snapshot) = client.get_investment(&invoice_id) else {
             panic!("accepted bid must create an investment");
         };
         if attempt.stale_snapshot {
             snapshot.amount = snapshot.amount.saturating_add(1);
         }
-        let payment = if attempt.full_settlement {
-            invoice_amount
+        if attempt.partial_payment {
+            let payment = 1 + (attempt.amount.unsigned_abs() as i128 % (invoice_amount - 1));
+            // The contract requires a 64-character hexadecimal transaction
+            // nonce and rejects re-use, so derive a unique nonce per attempt.
+            let nonce = String::from_str(&env, &format!("{:064x}", index + 1));
+            let _ = client.try_process_partial_payment(&invoice_id, &payment, &nonce);
         } else {
-            1 + (attempt.amount.unsigned_abs() as i128 % (invoice_amount - 1))
-        };
-        let _ = client.try_settle_invoice(&invoice_id, &payment, &snapshot);
+            let payment = if attempt.full_settlement {
+                client.get_invoice_progress(&invoice_id).remaining_due
+            } else {
+                1 + (attempt.amount.unsigned_abs() as i128 % (invoice_amount - 1))
+            };
+            let _ = client.try_settle_invoice(&invoice_id, &payment, &snapshot);
+        }
 
         // Query endpoints must remain usable after both successful and
         // rejected payment attempts, and page size must remain bounded.
