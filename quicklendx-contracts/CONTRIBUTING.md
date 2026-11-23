@@ -110,6 +110,21 @@ Before opening a PR, ensure:
 3. **Lint is clean:** `cargo clippy --workspace --all-targets -- -D warnings`
 4. **Format is clean:** `cargo fmt --all`
 5. **WASM size within budget:** `./scripts/check-wasm-size.sh`
+6. **Entrypoint docs match contract:** `./scripts/check-entrypoint-docs.sh` (ensures `README.md` entrypoint table matches `src/lib.rs` without compiling)
+
+### 📋 Verifying Entrypoint Documentation
+
+To check that all exported contract functions in `src/lib.rs` are documented in `README.md`:
+
+```bash
+# From quicklendx-contracts directory
+./scripts/check-entrypoint-docs.sh
+
+# View help and options
+./scripts/check-entrypoint-docs.sh --help
+```
+
+The script runs without compiling the contract and reports any missing or extra entrypoints with exit code 1.
 
 ---
 
