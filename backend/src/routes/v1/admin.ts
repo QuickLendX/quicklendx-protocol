@@ -10,6 +10,7 @@ import { requireAdminRoles } from "../../middleware/rbac";
 import { OPERATIONS_WRITE_ROLES, SUPPORT_READ_ROLES } from "../../types/rbac";
 import { featureFlagService } from "../../services/featureFlagService";
 import { auditLogService } from "../../services/auditLogService";
+import { webhookDeliveryRepo } from "../../services/webhookDeliveryRepo";
 
 const router = Router();
 
@@ -230,6 +231,127 @@ router.delete(
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to delete feature flag";
       res.status(500).json({ error: { message, code: "FEATURE_FLAG_ERROR" } });
+    }
+  }
+);
+
+// ---------------------------------------------------------------------------
+// Webhook Dead-Letter Endpoints
+// ---------------------------------------------------------------------------
+
+/**
+ * GET /api/v1/admin/webhooks/dead-letters
+ *
+ * List exhausted and permanently failed webhook deliveries with pagination.
+ * Requires: support, operations_admin, or super_admin.
+ */
+router.get(
+  "/webhooks/dead-letters",
+  requireAdminRoles(SUPPORT_READ_ROLES, "list_webhook_dead_letters"),
+  (req: Request, res: Response) => {
+    try {
+      const limitRaw = req.query["limit"];
+      const offsetRaw = req.query["offset"];
+
+      const limit = typeof limitRaw === "string" ? parseInt(limitRaw, 10) : undefined;
+      const offset = typeof offsetRaw === "string" ? parseInt(offsetRaw, 10) : undefined;
+
+      const result = webhookDeliveryRepo.listDeadLetters({
+        limit: Number.isFinite(limit) ? limit : undefined,
+        offset: Number.isFinite(offset) ? offset : undefined,
+      });
+
+      res.json({
+        dead_letters: result.entries,
+        deadLetters: result.entries,
+        entries: result.entries,
+        data: result.entries,
+        pagination: {
+          limit: result.limit,
+          offset: result.offset,
+          total: result.total,
+          hasMore: result.hasMore,
+          has_more: result.hasMore,
+        },
+        total: result.total,
+      });
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "Failed to list dead letters";
+      res.status(500).json({ error: { message, code: "DEAD_LETTER_ERROR" } });
+    }
+  }
+);
+
+/**
+ * POST /api/v1/admin/webhooks/dead-letters/:id/replay
+ *
+ * Re-enqueue a dead-letter delivery with a fresh attempt count.
+ * Requires: operations_admin or super_admin.
+ * Replay re-enqueues once; subsequent replays return 409 Conflict.
+ */
+router.post(
+  "/webhooks/dead-letters/:id/replay",
+  requireAdminRoles(OPERATIONS_WRITE_ROLES, "replay_webhook_dead_letter"),
+  (req: Request, res: Response) => {
+    try {
+      const { id } = req.params as { id: string };
+
+      const result = webhookDeliveryRepo.replayDeadLetter(id);
+      if (!result) {
+        res.status(404).json({
+          error: {
+            message: `Dead letter "${id}" not found`,
+            code: "NOT_FOUND",
+          },
+        });
+        return;
+      }
+
+      const adminContext = (req as any).adminContext as
+        | { role: string; envName: string }
+        | undefined;
+      const ip =
+        (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
+        req.ip ||
+        "unknown";
+
+      auditLogService.recordAdminAction({
+        action: "WEBHOOK_DEAD_LETTER_REPLAY",
+        role: (adminContext?.role as any) ?? "operations_admin",
+        method: req.method,
+        path: req.path,
+        ip,
+        metadata: {
+          deadLetterId: id,
+          reEnqueuedDeliveryId: result.newDelivery.id,
+          eventType: result.deadLetter.eventType,
+        },
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Dead letter replayed and re-enqueued successfully",
+        dead_letter: result.deadLetter,
+        delivery: result.newDelivery,
+      });
+    } catch (err: any) {
+      if (
+        err?.code === "ALREADY_REPLAYED" ||
+        err?.message?.includes("already been replayed")
+      ) {
+        res.status(409).json({
+          error: {
+            message: err.message || "Dead letter has already been replayed",
+            code: "ALREADY_REPLAYED",
+          },
+        });
+        return;
+      }
+
+      const message =
+        err instanceof Error ? err.message : "Failed to replay dead letter";
+      res.status(500).json({ error: { message, code: "REPLAY_ERROR" } });
     }
   }
 );
