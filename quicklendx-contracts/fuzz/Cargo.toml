@@ -11,14 +11,27 @@ test = false
 doc = false
 
 [[bin]]
-name = "validate_fuzzer"
-path = "validate_fuzzer.rs"
+name = "accept_bid_and_fund"
+path = "fuzz_targets/accept_bid_and_fund.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "settlement"
+path = "fuzz_targets/settlement.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "paged_queries"
+path = "fuzz_targets/paged_queries.rs"
 test = false
 doc = false
 
 [dependencies]
+arbitrary = { version = "1", features = ["derive"] }
 libfuzzer-sys = "0.4"
-soroban-sdk = { version = "25.1.1", features = ["alloc"] }
+soroban-sdk = { version = "25.1.1", features = ["alloc", "testutils"] }
 
 [dependencies.quicklendx-contracts]
 path = ".."
