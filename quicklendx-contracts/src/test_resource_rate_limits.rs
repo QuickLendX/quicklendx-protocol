@@ -51,9 +51,9 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
 }
 
 fn make_desc(env: &Env, len: usize) -> Bytes {
-    let mut v = soroban_sdk::vec![&env, 0u8; len];
+    let mut v = Bytes::new(env);
     for i in 0..len {
-        v.set(i as u32, (i % 256) as u8);
+        v.push_back((i % 256) as u8);
     }
     v
 }
@@ -63,9 +63,9 @@ fn make_long_desc(env: &Env) -> Bytes {
 }
 
 fn make_kyc_blob(env: &Env, len: usize) -> Bytes {
-    let mut v = soroban_sdk::vec![&env, 0u8; len];
+    let mut v = Bytes::new(env);
     for i in 0..len {
-        v.set(i as u32, (i % 128) as u8);
+        v.push_back((i % 128) as u8);
     }
     v
 }

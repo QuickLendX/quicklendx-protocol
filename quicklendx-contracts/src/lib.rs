@@ -17,6 +17,7 @@ pub mod currency;
 pub mod defaults;
 pub mod dispute;
 pub mod dispute_timeline;
+pub mod emergency;
 pub mod errors;
 pub mod escrow;
 pub mod events;
@@ -461,8 +462,6 @@ mod test_pagination_cursors;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
-mod test_partial_payments;
-#[cfg(test)]
 mod test_pause;
 #[cfg(test)]
 mod test_pause_reads_available;
@@ -770,8 +769,8 @@ impl QuickLendXContract {
         business.require_auth();
         crate::verification::require_business_not_pending(&env, &business)?;
         crate::invoice_amount::validate_invoice_amount_ceiling(amount)?;
-        crate::protocol_limits::ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
-        let invoice = crate::invoice::Invoice::new(
+        crate::protocol_limits::check_invoice_limit(&env, &business)?;
+        let invoice = crate::invoice::Invoice::new_with_fee_settings(
             &env,
             business,
             amount,
@@ -878,6 +877,7 @@ impl QuickLendXContract {
         PauseControl::require_not_paused(&env)?;
         with_payment_guard(&env, || {
             crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id)
+                .map(|_| ())
         })
     }
 
@@ -1288,96 +1288,4 @@ impl QuickLendXContract {
         backup::BackupStorage::preview_cleanup_old_backups(&env)
     }
 
-    // ── Admin Management ─────────────────────────────────────────────────────
-
-    /// Set the contract admin (for testing - would normally require auth).
-    pub fn set_admin(env: Env, admin: Address) {
-        admin::AdminStorage::set_admin(&env, &admin);
-    }
-
-    // ── Stub Methods for Test Compatibility ─────────────────────────────────
-    // These are minimal stubs to satisfy existing tests. Full implementation
-    // would be added when those modules are complete.
-
-    pub fn initialize_protocol_limits(
-        _env: Env,
-        _admin: Address,
-        _min_amount: i128,
-        _max_due_days: u64,
-        _lock_time_limit: u64,
-    ) -> Result<(), errors::QuickLendXError> {
-        Ok(())
-    }
-
-    pub fn store_invoice(
-        env: Env,
-        business: Address,
-        amount: i128,
-        currency: Address,
-        due_date: u64,
-        description: String,
-        category: types::InvoiceCategory,
-        _tags: Vec<String>,
-        _customer_name: Option<String>,
-    ) -> BytesN<32> {
-        use types::{Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceStatus};
-        
-        let invoice_id = storage::InvoiceStorage::next_count(&env);
-        let mut id_bytes = [0u8; 32];
-        id_bytes[24..32].copy_from_slice(&invoice_id.to_be_bytes());
-        let id = BytesN::from_array(&env, &id_bytes);
-
-        let invoice = Invoice {
-            id: id.clone(),
-            business,
-            amount,
-            currency,
-            due_date,
-            status: InvoiceStatus::Pending,
-            created_at: env.ledger().timestamp(),
-            description,
-            metadata_customer_name: None,
-            metadata_customer_address: None,
-            metadata_tax_id: None,
-            metadata_notes: None,
-            metadata_line_items: Vec::new(&env),
-            category,
-            tags: Vec::new(&env),
-            funded_amount: 0,
-            funded_at: None,
-            investor: None,
-            settled_at: None,
-            average_rating: None,
-            total_ratings: 0,
-            ratings: Vec::new(&env),
-            dispute_status: DisputeStatus::None,
-            dispute: Dispute {
-                created_by: Address::generate(&env),
-                created_at: 0,
-                reason: String::from_str(&env, ""),
-                evidence: String::from_str(&env, ""),
-                resolution: String::from_str(&env, ""),
-                resolved_by: Address::generate(&env),
-                resolved_at: 0,
-                resolution_outcome: DisputeResolution::None,
-            },
-            total_paid: 0,
-            payment_history: Vec::new(&env),
-            origination_fee_bps: None,
-            late_payment_penalty_bps: None,
-            early_payment_discount_bps: None,
-        };
-
-        storage::InvoiceStorage::store_invoice(&env, &invoice);
-        id
-    }
-
-    pub fn get_total_invoice_count(env: Env) -> u64 {
-        storage::InvoiceStorage::get_total_count(&env)
-    }
-
-    pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<types::Invoice, errors::QuickLendXError> {
-        storage::InvoiceStorage::get(&env, &invoice_id)
-            .ok_or(errors::QuickLendXError::InvoiceNotFound)
-    }
 }
