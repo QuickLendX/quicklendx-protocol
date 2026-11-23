@@ -188,9 +188,12 @@ If a proptest test fails:
 
 ## libFuzzer targets (Issue #3051)
 
-The standalone libFuzzer harnesses exercise the contract's public bid/funding,
-settlement-read, and pagination entrypoints with bounded structured inputs.
-They complement the deterministic and proptest coverage above.
+The standalone libFuzzer harnesses exercise the public bid-acceptance wrapper,
+settlement query/attempt paths, and the shared overflow-safe pagination
+primitives with bounded structured inputs. The contract-facing targets start
+from an empty test environment, so missing-state rejections are expected; the
+pagination target directly checks bounds, caps, and slice consistency. They
+complement the deterministic and proptest coverage above.
 
 ### Build and run
 
