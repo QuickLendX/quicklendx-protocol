@@ -4,6 +4,9 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
+[package.metadata]
+cargo-fuzz = true
+
 [[bin]]
 name = "accept_bid_and_fund"
 path = "fuzz_targets/accept_bid_and_fund.rs"
