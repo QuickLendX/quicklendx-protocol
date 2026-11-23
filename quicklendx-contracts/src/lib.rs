@@ -421,6 +421,8 @@ mod test_invoice_state_matrix;
 #[cfg(test)]
 mod test_kyc_lifecycle_enforcement;
 #[cfg(test)]
+mod test_kyc_policy;
+#[cfg(test)]
 mod test_ledger_timestamp_consistency;
 #[cfg(test)]
 mod test_lifecycle;
