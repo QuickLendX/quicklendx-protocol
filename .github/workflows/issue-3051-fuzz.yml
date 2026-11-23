@@ -1,0 +1,30 @@
+name: Issue 3051 fuzz target build
+
+on:
+  push:
+    paths:
+      - "quicklendx-contracts/**"
+      - ".github/workflows/issue-3051-fuzz.yml"
+  pull_request:
+    paths:
+      - "quicklendx-contracts/**"
+      - ".github/workflows/issue-3051-fuzz.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install nightly Rust
+        run: rustup toolchain install nightly --profile minimal
+
+      - name: Install cargo-fuzz
+        run: cargo +stable install cargo-fuzz --locked
+
+      - name: Build all maintained fuzz targets
+        working-directory: quicklendx-contracts
+        run: cargo +nightly fuzz build
