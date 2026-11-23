@@ -35,4 +35,6 @@ regression_margin = 0.10
 # Absolute ceiling in bytes (CI gate; raised pending size reduction work).
 # Must match WASM_SIZE_BUDGET_BYTES in tests/wasm_build_size_budget.rs
 # and MAX_BYTES in scripts/check-wasm-size.sh.
+# Open: the documented budget (256 KiB / 262,144 B in README.md and AGENTS.md)
+# is not yet met; hard_budget_bytes stays at 655360 until feature-gating lands.
 hard_budget_bytes = 655360

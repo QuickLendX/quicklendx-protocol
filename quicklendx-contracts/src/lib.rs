@@ -62,6 +62,9 @@ pub mod vesting;
 #[cfg(feature = "diagnostics")]
 pub mod diagnostics;
 
+// Non-core modules gated behind the `analytics-exports` and `backup-tools` features
+// so that the release WASM excludes them by default. See Cargo.toml [features].
+
 pub mod address_summary;
 pub mod analytics;
 

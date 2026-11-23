@@ -38,6 +38,9 @@ legacy-tests = []
 # Feature-gated logging and structured diagnostics
 diagnostics = []
 testutils = ["soroban-sdk/testutils"]
+# Non-core modules (analytics exports, backups, audit queries). Off for the
+# release WASM; enabled by default for development and test builds.
+extended-modules = []
 
 # Integration tests written against the full contract API; the crate root is
 # currently a stub, so they only build with the `legacy-tests` feature.
