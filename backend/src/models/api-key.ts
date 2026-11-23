@@ -1,18 +1,78 @@
-import crypto from 'crypto';
+/**
+ * API key domain models for the QuickLendX backend.
+ *
+ * Invariants:
+ * - `id` is a non-secret, opaque identifier (UUIDv4). It is safe to log.
+ * - Plaintext is returned only by creation/rotation, never persisted or logged.
+ *   Signing hashes are internal HMAC material and must not reach HTTP reads.
+ * - `version` is an optimistic-concurrency token (monotonically increasing).
+ *   Credential mutations bump it; usage telemetry does not invalidate readers.
+ */
+import crypto from "node:crypto";
+
+export type ApiKeyStatus = "active" | "revoked" | "expired";
 
 export interface ApiKey {
-  id: string;
-  key_hash: string;
-  prev_signing_secret_hash: string | null;
-  prefix: string;
-  name: string;
-  scopes: string[];
-  created_at: string;
-  last_used_at: string | null;
-  expires_at: string | null;
-  prev_secret_expires_at: string | null;
-  revoked: boolean;
-  created_by: string;
+  readonly prefix: string;
+  readonly scopes: string[];
+  readonly created_by: string;
+  readonly created_at: string;
+  readonly last_used_at: string | null;
+  readonly expires_at: string | null;
+  readonly revoked: boolean;
+  readonly signing_secret_hash: string | null;
+  readonly prev_signing_secret_hash: string | null;
+  readonly prev_secret_expires_at: string | null;
+  readonly id: string;
+  readonly name: string;
+  readonly ownerId: string;
+  readonly permissions: readonly string[];
+  readonly status: ApiKeyStatus;
+  /** Optimistic-concurrency version. Incremented on credential mutations. */
+  readonly version: number;
+  readonly createdAt: number;
+  readonly revokedAt: number | null;
+  readonly revokedBy: string | null;
+}
+
+/** A key that has been revoked. `revokedAt`/`revokedBy` are always present. */
+export interface RevokedApiKey extends ApiKey {
+  readonly status: "revoked";
+  readonly revokedAt: number;
+  readonly revokedBy: string;
+}
+
+/**
+ * Service contract for API key persistence.
+ *
+ * `revokeApiKey` is atomic with respect to the provided `expectedVersion`:
+ * if the stored key's version has advanced since the caller read it, the call
+ * MUST be rejected with an `ApiKeyError` (code `"CONFLICT"`) so the caller can
+ * re-read and recover (see `ApiKeysController.revokeApiKey`).
+ */
+export interface ApiKeyService {
+  createApiKey(input: ApiKeyCreateInput, ip?: string): Promise<ApiKeyWithPlaintext>;
+  verifyApiKey(plaintext: string): Promise<ApiKey | null>;
+  getApiKeyById(id: string): Promise<ApiKey | null>;
+  listApiKeys(filters?: { created_by?: string; revoked?: boolean }): Promise<ApiKey[]>;
+  updateLastUsed(id: string, endpoint: string, ip?: string): Promise<void>;
+  rotateApiKey(id: string, actor: string, ip?: string): Promise<ApiKeyWithPlaintext>;
+  rotateSigningSecret(id: string, actor: string, ip?: string, graceHours?: number): Promise<ApiKey & { plaintext_signing_secret: string }>;
+  /** Returns the key by id, or `null` when absent. Never returns secret material. */
+  getApiKey(id: string): Promise<ApiKey | null>;
+  /**
+   * Atomically revokes the key owned by `revokedBy`.
+   * @throws {ApiKeyError} code `"CONFLICT"` when `expectedVersion` is supplied
+   *   and no longer matches the stored version (stale read).
+   * @throws {ApiKeyError} code `"NOT_FOUND"` when the key does not exist.
+   * Idempotent: revoking an already-revoked key returns the current
+   * record without error.
+   */
+  revokeApiKey(
+    id: string,
+    revokedBy: string,
+    expectedVersion?: number
+  ): Promise<RevokedApiKey>;
 }
 
 export interface ApiKeyCreateInput {
@@ -24,44 +84,19 @@ export interface ApiKeyCreateInput {
 
 export interface ApiKeyWithPlaintext extends ApiKey {
   plaintext_key: string;
+  plaintext_signing_secret: string;
 }
 
-/**
- * Generate a cryptographically secure API key
- * Format: qlx_<env>_<random>
- */
 export function generateApiKey(): { key: string; prefix: string; hash: string } {
-  const env = process.env.NODE_ENV === 'production' ? 'live' : 'test';
-  const randomBytes = crypto.randomBytes(32);
-  const randomPart = randomBytes.toString('base64url');
-  const key = `qlx_${env}_${randomPart}`;
-  
-  // Extract prefix (first 15 characters for display)
-  const prefix = key.substring(0, 15); // qlx_live_xxxxx or qlx_test_xxxxx
-  
-  // Hash the key using SHA-256
-  const hash = hashApiKey(key);
-  
-  return { key, prefix, hash };
+  const key = `qlx_${crypto.randomBytes(32).toString("base64url")}`;
+  return { key, prefix: key.slice(0, 15), hash: hashApiKey(key) };
 }
 
-/**
- * Hash an API key using SHA-256
- */
 export function hashApiKey(key: string): string {
-  return crypto.createHash('sha256').update(key).digest('hex');
+  return crypto.createHash("sha256").update(key).digest("hex");
 }
 
-/**
- * Timing-safe comparison to prevent timing attacks
- */
-export function timingSafeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) {
-    return false;
-  }
-  
-  const bufferA = Buffer.from(a, 'hex');
-  const bufferB = Buffer.from(b, 'hex');
-  
-  return crypto.timingSafeEqual(bufferA, bufferB);
+export function timingSafeCompare(left: string, right: string): boolean {
+  if (!/^[a-f0-9]{64}$/.test(left) || !/^[a-f0-9]{64}$/.test(right)) return false;
+  return crypto.timingSafeEqual(Buffer.from(left, "hex"), Buffer.from(right, "hex"));
 }

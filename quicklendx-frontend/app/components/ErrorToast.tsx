@@ -1,11 +1,18 @@
 "use client";
 
+import { randomUUID } from "crypto";
 import toast from "react-hot-toast";
 import { AppError, ErrorCategory, ErrorSeverity } from "../lib/errors";
 
 interface ErrorToastProps {
   error: AppError;
   toastId?: string;
+  /**
+   * Callback invoked by the "Retry" action. The action is only rendered when
+   * this is supplied, the error is retryable and the retry budget is not
+   * exhausted.
+   */
+  onRetry?: () => Promise<void> | void;
 }
 
 // --- Severity icons (inline SVG, no extra deps). currentColor lets the
@@ -14,8 +21,18 @@ interface ErrorToastProps {
 type IconProps = { className?: string };
 
 const AlertOctagonIcon: React.FC<IconProps> = ({ className }) => (
-  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <polygon points="7.86 2 16.14 2 22 7.86 22 16.14 16.14 22 7.86 22 2 16.14 2 7.86" />
     <line x1="12" y1="8" x2="12" y2="12" />
     <line x1="12" y1="16" x2="12.01" y2="16" />
@@ -23,8 +40,18 @@ const AlertOctagonIcon: React.FC<IconProps> = ({ className }) => (
 );
 
 const AlertTriangleIcon: React.FC<IconProps> = ({ className }) => (
-  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
     <line x1="12" y1="9" x2="12" y2="13" />
     <line x1="12" y1="17" x2="12.01" y2="17" />
@@ -32,8 +59,18 @@ const AlertTriangleIcon: React.FC<IconProps> = ({ className }) => (
 );
 
 const InfoIcon: React.FC<IconProps> = ({ className }) => (
-  <svg className={className} width="20" height="20" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    width="20"
+    height="20"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <circle cx="12" cy="12" r="10" />
     <line x1="12" y1="16" x2="12" y2="12" />
     <line x1="12" y1="8" x2="12.01" y2="8" />
@@ -41,8 +78,18 @@ const InfoIcon: React.FC<IconProps> = ({ className }) => (
 );
 
 const CloseIcon: React.FC<IconProps> = ({ className }) => (
-  <svg className={className} width="16" height="16" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+  <svg
+    className={className}
+    width="16"
+    height="16"
+    viewBox="0 0 24 24"
+    fill="none"
+    stroke="currentColor"
+    strokeWidth="2"
+    strokeLinecap="round"
+    strokeLinejoin="round"
+    aria-hidden="true"
+  >
     <line x1="18" y1="6" x2="6" y2="18" />
     <line x1="6" y1="6" x2="18" y2="18" />
   </svg>
@@ -61,10 +108,30 @@ type SeverityVisual = {
 };
 
 const SEVERITY_VISUALS: Record<ErrorSeverity, SeverityVisual> = {
-  [ErrorSeverity.CRITICAL]: { accent: "#EF4444", Icon: AlertOctagonIcon, role: "alert", ariaLive: "assertive" },
-  [ErrorSeverity.HIGH]: { accent: "#EF4444", Icon: AlertTriangleIcon, role: "alert", ariaLive: "assertive" },
-  [ErrorSeverity.MEDIUM]: { accent: "#F59E0B", Icon: AlertTriangleIcon, role: "status", ariaLive: "polite" },
-  [ErrorSeverity.LOW]: { accent: "#3B82F6", Icon: InfoIcon, role: "status", ariaLive: "polite" },
+  [ErrorSeverity.CRITICAL]: {
+    accent: "#EF4444",
+    Icon: AlertOctagonIcon,
+    role: "alert",
+    ariaLive: "assertive",
+  },
+  [ErrorSeverity.HIGH]: {
+    accent: "#EF4444",
+    Icon: AlertTriangleIcon,
+    role: "alert",
+    ariaLive: "assertive",
+  },
+  [ErrorSeverity.MEDIUM]: {
+    accent: "#F59E0B",
+    Icon: AlertTriangleIcon,
+    role: "status",
+    ariaLive: "polite",
+  },
+  [ErrorSeverity.LOW]: {
+    accent: "#3B82F6",
+    Icon: InfoIcon,
+    role: "status",
+    ariaLive: "polite",
+  },
 };
 
 const CATEGORY_LABELS: Record<ErrorCategory, string> = {
@@ -78,15 +145,51 @@ const CATEGORY_LABELS: Record<ErrorCategory, string> = {
   [ErrorCategory.EXTERNAL_SERVICE]: "Service Error",
 };
 
-export const ErrorToast: React.FC<ErrorToastProps> = ({ error, toastId }) => {
-  const visual = SEVERITY_VISUALS[error.severity] ?? SEVERITY_VISUALS[ErrorSeverity.LOW];
+export const ErrorToast: React.FC<ErrorToastProps> = ({
+  error,
+  toastId,
+  onRetry,
+}) => {
+  const visual =
+    SEVERITY_VISUALS[error.severity] ?? SEVERITY_VISUALS[ErrorSeverity.LOW];
   const label = CATEGORY_LABELS[error.category] ?? "Error";
   const { Icon } = visual;
 
-  const handleRetry = () => {
+  // A retry is only offered when there is something to retry with, the error
+  // is retryable, and the retry budget has not been exhausted.
+  const canRetry = Boolean(onRetry) && error.retryable && error.retryCount < 3;
+
+  const handleRetry = async () => {
+    if (!onRetry) {
+      return;
+    }
+
     toast.dismiss(toastId);
-    // Retry handoff stays with the error handler; surface immediate feedback.
-    toast.success("Retrying operation...");
+
+    try {
+      await onRetry();
+    } catch (retryError) {
+      const message =
+        retryError instanceof Error
+          ? retryError.message
+          : "The operation could not be completed.";
+
+      // Surface the failed attempt as a fresh toast carrying the incremented
+      // retry count, so the budget keeps decreasing and the user can try again
+      // while retries remain.
+      ErrorToastManager.getInstance().showError(
+        new AppError(
+          message,
+          error.category,
+          error.severity,
+          error.code,
+          error.context,
+          error.retryable,
+          error.retryCount + 1
+        ),
+        { onRetry }
+      );
+    }
   };
 
   return (
@@ -106,8 +209,10 @@ export const ErrorToast: React.FC<ErrorToastProps> = ({ error, toastId }) => {
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-[#0F172A]">{label}</p>
-        <p className="mt-0.5 break-words text-xs text-[#334155]">{error.message}</p>
-        {error.retryable && error.retryCount < 3 && (
+        <p className="mt-0.5 break-words text-xs text-[#334155]">
+          {error.message}
+        </p>
+        {canRetry && (
           <button
             type="button"
             onClick={handleRetry}
@@ -146,6 +251,11 @@ export class ErrorToastManager {
     options?: {
       duration?: number;
       dismissible?: boolean;
+      /**
+       * Enables the toast's "Retry" action. When omitted the toast is
+       * informational only and no retry affordance is rendered.
+       */
+      onRetry?: () => Promise<void> | void;
       position?:
         | "top-right"
         | "top-center"
@@ -155,7 +265,7 @@ export class ErrorToastManager {
         | "bottom-left";
     }
   ): string {
-    const toastId = `error-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    const toastId = `error-${randomUUID()}`;
 
     // Auto-dismiss timing per severity (docs/ux/toasts.md). Critical errors
     // persist until manually dismissed so they cannot be missed.
@@ -170,17 +280,22 @@ export class ErrorToastManager {
     const dismissible = options?.dismissible ?? true;
     const position = options?.position ?? "top-right";
 
-    toast.custom((t) => <ErrorToast error={error} toastId={t.id} />, {
-      id: toastId,
-      duration: dismissible ? duration : Infinity,
-      position,
-      style: {
-        background: "transparent",
-        padding: 0,
-        margin: 0,
-        boxShadow: "none",
-      },
-    });
+    toast.custom(
+      (t) => (
+        <ErrorToast error={error} toastId={t.id} onRetry={options?.onRetry} />
+      ),
+      {
+        id: toastId,
+        duration: dismissible ? duration : Infinity,
+        position,
+        style: {
+          background: "transparent",
+          padding: 0,
+          margin: 0,
+          boxShadow: "none",
+        },
+      }
+    );
 
     this.activeToasts.add(toastId);
 

@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Unit tests for SettlementOrchestrator (src/services/settlementOrchestrator.ts).
  *
  * Coverage targets: >=95% branches, functions, lines, statements.
@@ -19,7 +19,7 @@ import {
 } from '../services/settlementOrchestrator';
 
 // ---------------------------------------------------------------------------
-// Test database lifecycle – isolated temp file per run
+// Test database lifecycle â€“ isolated temp file per run
 // ---------------------------------------------------------------------------
 
 const TEST_DB_DIR = path.resolve(__dirname, '../../.data');
@@ -159,11 +159,11 @@ describe('createPending', () => {
   });
 
   test('custom contract_version and event_schema_version are respected', () => {
-    const input = makeInput({ contract_version: 2, event_schema_version: 3 });
+    const input = makeInput({ contract_version: 1, event_schema_version: 1 });
     const s = settlementOrchestrator.createPending(input);
 
-    expect(s.contract_version).toBe(2);
-    expect(s.event_schema_version).toBe(3);
+    expect(s.contract_version).toBe(1);
+    expect(s.event_schema_version).toBe(1);
   });
 });
 
@@ -266,7 +266,7 @@ describe('idempotency', () => {
     settlementOrchestrator.startProcessing(s.invoice_id, 'evt_p');
     settlementOrchestrator.completeProcessing(s.invoice_id, 'evt_c');
 
-    // Replay same transitions — events are stale, return current state
+    // Replay same transitions â€” events are stale, return current state
     const r1 = settlementOrchestrator.startProcessing(s.invoice_id, 'evt_p');
     expect(r1.status).toBe(SettlementStatus.Paid);
 

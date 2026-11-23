@@ -68,9 +68,14 @@ export const csrfMiddleware = (
     return;
   }
 
-  // 2. Verify custom CSRF token header
+  // 2. Verify custom CSRF token header.
+  // The token is required only for browser-driven requests (those that carry
+  // an Origin header): browsers always attach Origin to state-changing
+  // fetches, while machine-to-machine clients send neither Origin nor token
+  // and are not subject to cross-site request forgery. Content-type and
+  // origin checks below still apply to every non-exempt request.
   const csrfToken = req.headers["x-csrf-token"];
-  if (!csrfToken) {
+  if (originHeader !== undefined && !csrfToken) {
     res.status(403).json({
       error: {
         message: "Missing CSRF token",

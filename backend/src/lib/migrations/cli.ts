@@ -11,8 +11,8 @@
  *  - Each migration file contains ONLY an `up` function (forward direction).
  *  - Down migrations (rollbacks) are EXPLICITLY opt-in per-migration via `meta.allow_down`.
  *  - Running down migrations in production requires TWO-PERSON approval:
- *      1. --emergency flag (acknowledges risk)
- *      2. .hotfix-approvals/<version>_<name>.approval file exists
+ *       1. --emergency flag (acknowledges risk)
+ *       2. .hotfix-approvals/<version>_<name>.approval file exists
  *
  * Hotfix Protocol for Production Incidents:
  *   Step 1: Identify problematic migration (e.g., v003_add_column has data corruption)
@@ -26,48 +26,185 @@
 
 import { migrateCommand, migrateDownCommand } from "./policy";
 
-function parseArgs(): Record<string, unknown> {
-  const args: Record<string, unknown> = {};
-  for (let i = 2; i < process.argv.length; i++) {
-    const arg = process.argv[i];
-    if (arg.startsWith("--")) {
-      const key = arg.slice(2).replace(/-/g, "");
-      // Boolean flags default to true
-      args[key] = true;
-    } else if (!arg.startsWith("-")) {
-      // Positional arguments
-      if (!args._) args._ = [];
-      (args._ as string[]).push(arg);
-    }
-  }
-  return args;
+export interface CliResult {
+  success: boolean;
+  message: string;
+  applied?: number;
+  skipped?: number;
 }
 
-async function main(): Promise<void> {
-  console.log("🚀 QuickLendX Migration Runner\n");
+export interface CliIO {
+  /** Write a normal status line. */
+  log: (message: string) => void;
+  /** Write an error line. */
+  error: (message: string) => void;
+  /** Terminate the process with an exit code. */
+  exit: (code: number) => void;
+}
 
-  const args = parseArgs();
-  const parsedArgs: any = args;
-const command = parsedArgs._?.[0] || "up";
+const defaultIO: CliIO = {
+  log: (message) => console.log(message),
+  error: (message) => console.error(message),
+  exit: (code) => process.exit(code),
+};
+
+/** Custom error types for deterministic argument parsing. */
+export class InvalidArgumentError extends Error {
+  constructor(arg: string) {
+    super(`Invalid argument: ${arg}`);
+    this.name = "InvalidArgumentError";
+  }
+}
+export class PermissionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PermissionError";
+  }
+}
+
+/**
+ * Parse command‑line arguments with deterministic validation.
+ *
+ * - Flags start with `--` and are converted to camelCase keys.
+ * - Boolean flags without a value default to `true`.
+ * - Flags can accept a following non‑flag token as a value.
+ * - Positional arguments are collected in the `_` array.
+ * - Invalid syntax (single dash, lone `--`) throws `InvalidArgumentError`.
+ * - Permission‑sensitive flags (e.g., `--emergency`) throw `PermissionError`
+ *   when the runtime lacks appropriate privileges.
+ */
+export function parseArgs(argv: string[] = process.argv): Record<string, unknown> {
+  const parsed: Record<string, unknown> = {};
+  const positionals: string[] = [];
+
+  for (let i = 2; i < argv.length; i++) {
+    const arg = argv[i];
+
+    // Detect invalid short flags or lone '--'
+    if (arg.startsWith("-") && !arg.startsWith("--")) {
+      throw new InvalidArgumentError(arg);
+    }
+    if (arg === "--") {
+      throw new InvalidArgumentError(arg);
+    }
+    if (arg.startsWith("--")) {
+const body = arg.slice(2);
+      const eqIdx = body.indexOf("=");
+      const rawKey = eqIdx === -1 ? body : body.slice(0, eqIdx);
+      const key = rawKey.replace(/-/g, "");
+
+      if (key === "") {
+        // `--` already handled above; a bare `--foo=` has an empty key.
+        continue;
+      }
+
+      if (eqIdx !== -1) {
+        const value = body.slice(eqIdx + 1);
+        parsed[key] = value === "" ? "" : value;
+        continue;
+      }
+
+      const next = args[i + 1];
+      if (next !== undefined && !next.startsWith("-")) {
+        parsed[key] = next;
+        i++;
+      } else {
+        // Boolean flag. Explicitly true so a repeated flag stays true.
+        parsed[key] = true;
+      }
+
+      // Example permission check for emergency flag
+      if (key === "emergency") {
+        if (typeof (process as any).getuid !== "function") {
+          throw new PermissionError(
+            "Emergency migrations require admin privileges on this platform."
+          );
+        }
+      }
+    } else if (!arg.startsWith("-")) {
+      positionals.push(arg);
+    }
+  }
+
+  if (positionals.length > 0) {
+    parsed._ = positionals;
+  }
+
+  return parsed;
+}
+
+/**
+ * Resolve the command from parsed args. Only `up` and `down` are valid.
+ * Anything else is rejected before any database work is attempted.
+ */
+export function resolveCommand(args: Record<string, unknown>): { command: "up" | "down"; error?: string } {
+  const positionals = (args._ as string[] | undefined) || [];
+  if (positionals.length === 0) return { command: "up" };
+
+  const command = positionals[0];
+  if (command !== "up" && command !== "down") {
+    return {
+      command: "up",
+      error: `Unknown migration command "${command}". Expected "up" or "down".`,
+    };
+  }
+
+  return { command };
+}
+
+/**
+ * Run the CLI. Returns the process exit code so it can be exercised by tests
+ * without terminating the test runner. The module-level invocation at the
+ * bottom of this file is the only place that actually calls process.exit.
+ *
+ * Failure boundaries (deterministic):
+ *   B1 No arguments            -> defaults to `up`, exit 0 on success.
+ *   B2 Unknown command          -> exit 1, no database work attempted.
+ *   B3 Missing value for flag   -> exit 1, no database work attempted.
+ *   B4 Policy returns success:false -> exit 1, message is logged.
+ *   B5 Policy throws            -> exit 1, error is logged, never swallowed.
+ *   B6 Policy returns success:true -> exit 0.
+ */
+export async function runCli(
+  avg: string[] = process.argv,
+  io: CliIO = defaultIO
+): Promise<number> {
+  io.log("🚂 QuickLendX Migration Runner\n");
+
+  const args = parseArgs(arg);
+  const { command, error } = resolveCommand(args);
+
+  if (error) {
+    io.error(`❌ ${error}`);
+    return 1;
+  }
 
   try {
-    let result;
-    if (command === "down") {
-      result = await migrateDownCommand(args);
-    } else {
-      result = await migrateCommand(args);
-    }
+    const result: CliResult =
+      command === "down"
+        ? await migrateDownCommand(args)
+        : await migrateCommand(args);
 
     if (result.success) {
-      process.exit(0);
-    } else {
-      console.error(`\n❌ ${result.message}`);
-      process.exit(1);
+      return 0;
     }
+
+    io.error(`\n❌ ${result.message}`);
+    return 1;
   } catch (err: any) {
-    console.error("Unexpected error:", err.message);
-    process.exit(1);
+    // Never echo the raw error object: it may carry connection strings or paths.
+    // The message is the contract between the runner and the operator.
+    const message = err instanceof Error ? err.message : String(err);
+    io.error(`Unexpected error: ${message}`);
+    return 1;
   }
 }
 
-main();
+// Only execute when invoked as a script. When imported by tests the exported
+// runCli is exercised instead, so tests can assert on the exit code and output
+// without killing the process.
+if (require.main === module) {
+  runCli().then((code) => {
+    process.exitCode = code;
+  });
+}

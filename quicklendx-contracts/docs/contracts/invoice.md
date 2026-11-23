@@ -19,12 +19,15 @@ Attaches a rating (1-5) and feedback description.
 - `InvalidRating` if the score is `< 1` or `> 5`.
 - `AlreadyRated` if the investor previously left feedback.
 
-### `get_invoice_rating_stats() -> InvoiceRatingStats`
-Returns a unified `InvoiceRatingStats` object detailing:
+### `ratings_snapshot(env: &Env, invoice_id: BytesN<32>) -> RatingsSnapshot`
+Returns a unified `RatingsSnapshot` object detailing:
+- `schema_version`
+- `invoice_id`
 - `average_rating`
 - `total_ratings`
 - `highest_rating`
 - `lowest_rating`
+- `ledger_sequence`
 
 ### `InvoiceStorage::get_invoices_with_rating_above(env: &Env, threshold: u32) -> Vec<BytesN<32>>`
 Fetches a list of invoice IDs that hold an average score equal to or exceeding the provided `threshold`. Extremely helpful for building premium front-end explorer tabs.

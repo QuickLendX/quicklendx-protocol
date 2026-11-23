@@ -31,7 +31,7 @@ pub enum DataKey {
 pub struct ProtocolConfig {
     /// Minimum invoice amount in the protocol's base unit (must be > 0).
     /// **Inclusivity**: Inclusive (amount >= min_invoice_amount).
-    pub min_invoice_amount: i128,
+    pub min_invoice_amount: u128,
     /// Maximum number of days until an invoice is due (1–730).
     /// **Inclusivity**: Inclusive (days <= max_due_date_days).
     pub max_due_date_days: u32,

@@ -257,7 +257,7 @@ Router
 Run the full test suite:
 
 ```bash
-node node_modules/jest/bin/jest.js --coverage --forceExit
+npm test
 ```
 
 Key test files:
@@ -267,3 +267,46 @@ Key test files:
 | `src/tests/lagMonitor.test.ts` | Unit tests for lag calculation, threshold validation, env var config |
 | `src/tests/degradedGuard.test.ts` | Unit + integration tests for endpoint gating (503/201) |
 | `src/tests/statusInjector.test.ts` | Schema stability, `_system` injection, array passthrough |
+| `src/tests/ingestion-fault.test.ts` | Ingestion unit-of-work tests with transient/partial commit database failures |
+| `src/tests/webhook-delivery-fault.test.ts` | Webhook egress security and stream body byte limit tests with DNS mock |
+| `src/tests/rpc-circuit-fault.test.ts` | Stellar RPC client circuit transitions (CLOSED -> OPEN -> HALF_OPEN) and retries |
+
+---
+
+## Fault Injection Harness
+
+To ensure the backend can recover gracefully from transient infra outages (e.g. database errors, partial writes, network resets, and DNS resolution failures), a fault injection harness is available under [faultInjector.ts](file:///c:/Users/USER/OneDrive/Documents/GitHub/quicklendx-protocol/backend/src/tests/helpers/faultInjector.ts).
+
+### Harness Component Wrappers
+
+1. **`FaultyIngestionStore`**: Wraps any `IngestionStore` implementation.
+   - `setShouldFailCommit(fail, error)`: Forces `commitBatch` to fail.
+   - `setPartialCommitCount(count)`: Simulates "mid-batch" failures by only persisting `count` events while the transaction fails and the cursor remains unadvanced.
+   - `setShouldFailGetCursor(fail, error)`: Simulates database read failures.
+   - `setShouldFailRollback(fail, error)`: Simulates database rollback failures during reorgs.
+
+2. **`FaultyFetch`**: Temporarily replaces the global `fetch` with a queue of simulated HTTP response statuses or network errors.
+   - `queueFailure({ error, status, body })`: Queues a specific failure (e.g. status code 502/503/429 or connection error) for the next call.
+   - `restore()`: Reinstates the original global fetch.
+
+3. **`FaultyDns`**: Temporarily replaces `dns.lookup` to return private/blocked addresses or DNS errors.
+   - `setup(resolveToIps, shouldFail)`: Customizes what IPs the lookup returns or flags failure.
+   - `restore()`: Reinstates the original `dns.lookup` function.
+
+### Example Harness Usage
+
+```typescript
+import { FaultyDns } from "./helpers/faultInjector";
+
+const faultyDns = new FaultyDns();
+beforeEach(() => {
+  // Overrides dns.lookup globally
+  faultyDns.setup(["127.0.0.1"]); 
+});
+
+afterEach(() => {
+  // Essential: cleans up to avoid leaking mock to other tests
+  faultyDns.restore(); 
+});
+```
+

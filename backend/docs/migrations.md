@@ -475,7 +475,7 @@ Rolled back v003 via `npm run migrate -- --allow-down --emergency`
 - [ ] Require dry-run against production clone before hotfix merge
 
 ## Approval Records
-- [Approval file](.hotfix-approvals/003_hotfix_add_invoice_id.approval) signed by alice, bob
+- Approval file `.hotfix-approvals/003_hotfix_add_invoice_id.approval` signed by alice and bob
 ```
 
 ---
@@ -552,3 +552,177 @@ const MIGRATIONS_DIR = process.env.NODE_ENV === "production"
 **Last Updated:** 2026-04-26  
 **Owner:** QuickLendX Platform Team  
 **Review Cadence:** Quarterly or after any hotfix incident
+
+---
+
+## Version Renumbering Incident — 2026-10 (Closes #1063)
+
+### What Happened
+
+Six parallel PRs each chose version 6 as the "next" number against an old base,
+and four chose version 11. This produced the following collisions:
+
+| Old filename | Old version | New filename | New version | Reason |
+|---|---|---|---|---|
+| `v006_create_invoices_table.ts` | 6 | `v006_create_invoices_table.ts` | **6** | Kept; invoices must precede bids (FK target) |
+| `v006_create_bids.ts` | 6 | `v007_create_bids.ts` | **7** | Depends on invoices; moved to 7 |
+| `v006_create_api_keys.ts` | 6 | `v008_create_api_keys.ts` | **8** | No dependency on invoices/bids; moved to 8 |
+| `v006_kyc_records.ts` | 6 | `v009_kyc_records.ts` | **9** | Syntax fixed (TS1128 + double RELEASE); moved to 9 |
+| `v006_webhook_deliveries.ts` | 6 | `v010_webhook_deliveries.ts` | **10** | No FK dependencies; moved to 10 |
+| `v006_backfill_progress.ts` | 6 | *(deleted)* | — | Duplicate of v011; v011 copy retained (stricter validate) |
+| `v007_create_settlements.ts` | 7 | `v011_create_settlements.ts` | **11** | Shifted +4 to make room for the v006 group |
+| `v008_create_notifications.ts` | 8 | `v012_create_notifications.ts` | **12** | Shifted +4 |
+| `v009_create_webhook_queue.ts` | 9 | `v013_create_webhook_queue.ts` | **13** | Shifted +4 |
+| `v010_add_api_key_rotation.ts` | 10 | `v014_add_api_key_rotation.ts` | **14** | Shifted +4; depends on v008 api_keys |
+| `v011_add_signing_secret_hash.ts` | 11 | `v015_add_signing_secret_hash.ts` | **15** | Renamed; depends on v008 api_keys |
+| `v011_backfill_progress.ts` | 11 | `v016_backfill_progress.ts` | **16** | Surviving copy (stricter validate); shifted +5 |
+| `v011_freshness_state.ts` | 11 | `v017_freshness_state.ts` | **17** | Shifted +6 |
+| `v011_raw_events_unique.ts` | 11 | `v018_raw_events_unique.ts` | **18** | Shifted +7 |
+| `v012_feature_flags.ts` | 12 | `v019_feature_flags.ts` | **19** | Shifted +7 |
+
+The `CREATE INDEX` statements in `v006_create_invoices_table.ts` were also
+updated to include `IF NOT EXISTS` so the migration is re-runnable.
+
+### Operator Runbook: Moving a Database Already Migrated Under the Old Numbering
+
+Any database that was migrated using the old collision-affected version numbers
+will have rows in `_migrations` that no longer correspond to any migration file.
+This runbook describes how to correct the `_migrations` ledger so the runner
+can proceed.
+
+**Prerequisites**
+
+- A backup of the database has been created and verified.
+- All services using the database have been stopped.
+- You have SQLite write access to the target database.
+
+**Step 1 — Identify which old versions were recorded**
+
+```sql
+SELECT version, name, applied_at FROM _migrations ORDER BY version ASC;
+```
+
+Expected output for a fully-migrated old database (before renumbering):
+
+```
+version | name
+--------+----------------------------------------
+1       | initial_schema
+2       | add_webhook_event_type_index
+3       | hotfix_add_invoice_id_to_backfill_audit
+4       | add_index_to_backend_audit_log
+5       | backfill_audit_log_metadata_to_json
+6       | backfill_progress            ← old duplicate v006
+6       | create_api_keys              ← old duplicate v006
+6       | create_bids                  ← old duplicate v006
+6       | create_invoices_table        ← old duplicate v006
+6       | create_kyc_records           ← old duplicate v006
+6       | webhook_deliveries           ← old duplicate v006
+7       | create_settlements
+8       | create_notifications
+9       | create_webhook_queue
+10      | add_api_key_rotation
+11      | add_signing_secret_hash      ← old duplicate v011
+11      | backfill_progress            ← old duplicate v011
+11      | freshness_state              ← old duplicate v011
+11      | raw_events_unique            ← old duplicate v011
+12      | feature_flags
+```
+
+Note: the runner's UNIQUE constraint on `version` means only one row per
+version can exist. If the old runner rejected the duplicates loudly (the
+intended behavior), your database may only have v1–v5 applied and nothing
+from the colliding set.
+
+**Step 2 — Rename the old version rows to the new numbers**
+
+Run the following SQL **in a single transaction** after verifying your backup:
+
+```sql
+BEGIN IMMEDIATE;
+
+-- Remove the duplicate backfill_progress entry (the v006 copy was deleted).
+-- Keep whichever row matches the surviving migration (name = 'backfill_progress').
+-- If both are present due to a permissive runner, delete the lower-version one.
+DELETE FROM _migrations WHERE version = 6 AND name = 'backfill_progress';
+
+-- Renumber the surviving v006 group -----------------------------------------
+UPDATE _migrations SET version = 7  WHERE version = 6 AND name = 'create_bids';
+UPDATE _migrations SET version = 8  WHERE version = 6 AND name = 'create_api_keys';
+UPDATE _migrations SET version = 9  WHERE version = 6 AND name = 'create_kyc_records';
+UPDATE _migrations SET version = 10 WHERE version = 6 AND name = 'webhook_deliveries';
+-- v006 create_invoices_table stays at version 6; no UPDATE needed.
+
+-- Renumber the old v007–v012 group -------------------------------------------
+UPDATE _migrations SET version = 11 WHERE version = 7  AND name = 'create_settlements';
+UPDATE _migrations SET version = 12 WHERE version = 8  AND name = 'create_notifications';
+UPDATE _migrations SET version = 13 WHERE version = 9  AND name = 'create_webhook_queue';
+UPDATE _migrations SET version = 14 WHERE version = 10 AND name = 'add_api_key_rotation';
+
+-- Renumber the old v011 collision group --------------------------------------
+UPDATE _migrations SET version = 15 WHERE version = 11 AND name = 'add_signing_secret_hash';
+UPDATE _migrations SET version = 16 WHERE version = 11 AND name = 'backfill_progress';
+UPDATE _migrations SET version = 17 WHERE version = 11 AND name = 'freshness_state';
+UPDATE _migrations SET version = 18 WHERE version = 11 AND name = 'raw_events_unique';
+
+-- Renumber feature_flags -----------------------------------------------------
+UPDATE _migrations SET version = 19 WHERE version = 12 AND name = 'feature_flags';
+
+COMMIT;
+```
+
+**Step 3 — Verify the ledger**
+
+```sql
+SELECT version, name FROM _migrations ORDER BY version ASC;
+```
+
+Expected output after the renumbering:
+
+```
+version | name
+--------+------------------------------
+1       | initial_schema
+2       | add_webhook_event_type_index
+3       | hotfix_add_invoice_id_to_backfill_audit
+4       | add_index_to_backend_audit_log
+5       | backfill_audit_log_metadata_to_json
+6       | create_invoices_table
+7       | create_bids
+8       | create_api_keys
+9       | create_kyc_records
+10      | webhook_deliveries
+11      | create_settlements
+12      | create_notifications
+13      | create_webhook_queue
+14      | add_api_key_rotation
+15      | add_signing_secret_hash
+16      | backfill_progress
+17      | freshness_state
+18      | raw_events_unique
+19      | feature_flags
+```
+
+**Step 4 — Run the migrate command to apply any remaining pending migrations**
+
+```bash
+cd backend
+npm run migrate -- --dry-run   # preview
+npm run migrate                # apply
+```
+
+**Important notes**
+
+- The `_migrations.checksum` column stores the SHA-256 of the original file
+  content. After renumbering, the checksums stored for v6–v12 will not match
+  the new files (which have different version numbers and comments). If the
+  runner performs checksum verification, you must regenerate the checksums or
+  bypass verification with `--skip-checksum-verify` for a one-time recovery
+  run only.
+- Never run this SQL in production without completing Steps 1–4 in a staging
+  environment first.
+- After recovery, remove this runbook's "Step 2" SQL from your operator
+  runbook and replace it with the current `_migrations` table contents so
+  future operators do not repeat the transformation.
+
+---

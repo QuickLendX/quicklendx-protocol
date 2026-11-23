@@ -26,7 +26,9 @@ Business Report Consistency Checks section below.
 ## Access Control
 
 - **Admin functions** require `admin.require_auth()` — the admin address must be set via `set_admin`.
-- **Report generation** requires the caller to authenticate as the business owner or investor.
+- **Report generation** is currently unauthenticated at the contract level; callers supply
+  the `business` / `investor` address as an argument and the contract does not call
+  `require_auth()` on that address in the report entrypoints.
 - **Read-only functions** are publicly accessible.
 
 ## Storage Keys
@@ -123,8 +125,8 @@ An invoice is counted in a report if and only if
 
 | Function                                               | Effect                                        | Auth           |
 | ------------------------------------------------------ | --------------------------------------------- | -------------- |
-| `generate_business_report(business, period)`           | Generates, stores and returns business report | Business owner |
-| `generate_investor_report(investor, period)`           | Generates, stores and returns investor report | Investor       |
+| `generate_business_report(business, period)`           | Generates, stores and returns business report | None           |
+| `generate_investor_report(investor, period)`           | Generates, stores and returns investor report | None           |
 | `update_user_behavior_metrics(user)`                   | Recalculates and stores user behavior         | User           |
 | `calculate_investor_analytics(investor)`               | Calculates, stores and returns analytics      | Investor       |
 | `update_investor_analytics(investor, amount, success)` | Records investment outcome                    | Investor       |
@@ -132,7 +134,8 @@ An invoice is counted in a report if and only if
 
 ## Security Notes
 
-- All write endpoints enforce authorization (admin or owner).
+- Not every write endpoint is authorization-gated: report generation writes snapshots
+  without authenticating the `business` / `investor` address argument.
 - Metrics calculations use `saturating_add`/`saturating_div` to prevent overflow.
 - Rates are expressed in **basis points** (10000 = 100%).
 - Report IDs are SHA-256 hashes ensuring uniqueness.

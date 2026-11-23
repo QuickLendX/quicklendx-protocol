@@ -14,7 +14,7 @@
 //!
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
-use soroban_sdk::{symbol_short, Address, Env, Vec};
+use soroban_sdk::{symbol_short, Address, Env, String, Vec};
 
 const WHITELIST_KEY: soroban_sdk::Symbol = symbol_short!("curr_wl");
 
@@ -36,12 +36,19 @@ impl CurrencyWhitelist {
     ///
     /// # Errors
     /// - `NotAdmin` - `admin` does not match the stored admin or no admin is set.
+    /// - `InvalidCurrency` - `currency` is the admin address, zero address, or self.
     pub fn add_currency(
         env: &Env,
         admin: &Address,
         currency: &Address,
     ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(env, admin)?;
+
+        // Ensure currency is not a reserved address
+        let zero = Self::zero_address(env);
+        if currency == admin || currency == &zero || currency == &env.current_contract_address() {
+            return Err(QuickLendXError::InvalidCurrency);
+        }
 
         let mut list = Self::get_whitelisted_currencies(env);
         if list.iter().any(|a| a == *currency) {
@@ -50,6 +57,66 @@ impl CurrencyWhitelist {
         list.push_back(currency.clone());
         env.storage().instance().set(&WHITELIST_KEY, &list);
         Ok(())
+    }
+
+    /// Add multiple token addresses to the whitelist in a single admin call.
+    ///
+    /// # Parameters
+    /// - `env`        - Soroban execution environment.
+    /// - `admin`      - Address that must match the stored contract admin.
+    /// - `currencies` - Token contract addresses to add.
+    ///
+    /// # Behaviour
+    /// - Returns a `Vec<bool>` of the same length as `currencies`:
+    ///   `true` at index i = currency[i] was newly added;
+    ///   `false` at index i = currency[i] was already present (idempotent, skipped).
+    /// - Duplicates within the input are handled against the evolving list:
+    ///   the first occurrence is added (`true`), subsequent occurrences are skipped (`false`).
+    /// - Empty input returns an empty result with no storage write.
+    /// - Admin auth is enforced before any mutation.
+    ///
+    /// # Errors
+    /// - `NotAdmin` - `admin` does not match the stored admin.
+    /// - `OperationNotAllowed` - no admin has been initialised.
+    pub fn add_currencies_batch(
+        env: &Env,
+        admin: &Address,
+        currencies: &Vec<Address>,
+    ) -> Result<Vec<bool>, QuickLendXError> {
+        AdminStorage::require_admin(env, admin)?;
+
+        // Reject reserved addresses in batch
+        let zero = Self::zero_address(env);
+        let contract_addr = env.current_contract_address();
+        for currency in currencies.iter() {
+            if currency == *admin || currency == zero || currency == contract_addr {
+                return Err(QuickLendXError::InvalidCurrency);
+            }
+        }
+
+        let mut results: Vec<bool> = Vec::new(env);
+        if currencies.is_empty() {
+            return Ok(results);
+        }
+
+        let mut list = Self::get_whitelisted_currencies(env);
+        let mut any_added = false;
+
+        for currency in currencies.iter() {
+            if list.iter().any(|a| a == currency) {
+                results.push_back(false);
+            } else {
+                list.push_back(currency.clone());
+                results.push_back(true);
+                any_added = true;
+            }
+        }
+
+        if any_added {
+            env.storage().instance().set(&WHITELIST_KEY, &list);
+        }
+
+        Ok(results)
     }
 
     /// Remove a token address from the whitelist (admin only).
@@ -88,6 +155,64 @@ impl CurrencyWhitelist {
         Ok(())
     }
 
+    /// Remove multiple token addresses from the whitelist in a single admin call.
+    ///
+    /// # Parameters
+    /// - `env`        - Soroban execution environment.
+    /// - `admin`      - Address that must match the stored contract admin.
+    /// - `currencies` - Token contract addresses to remove.
+    ///
+    /// # Behaviour
+    /// - Returns a `Vec<bool>` of the same length as `currencies`:
+    ///   `true` at index i = currency[i] was present and has been removed;
+    ///   `false` at index i = currency[i] was not in the whitelist (no-op for that item).
+    /// - If the same address appears more than once in the input, all positions return
+    ///   `true` when the address was present, but the physical removal happens only once.
+    /// - Empty input returns an empty result with no storage write.
+    /// - Admin auth is enforced before any mutation.
+    ///
+    /// # Errors
+    /// - `NotAdmin` - `admin` does not match the stored admin or no admin is set.
+    pub fn remove_currencies_batch(
+        env: &Env,
+        admin: &Address,
+        currencies: &Vec<Address>,
+    ) -> Result<Vec<bool>, QuickLendXError> {
+        let current_admin = AdminStorage::get_admin(env).ok_or(QuickLendXError::NotAdmin)?;
+        if *admin != current_admin {
+            return Err(QuickLendXError::NotAdmin);
+        }
+        admin.require_auth();
+
+        let mut results: Vec<bool> = Vec::new(env);
+        if currencies.is_empty() {
+            return Ok(results);
+        }
+
+        let list = Self::get_whitelisted_currencies(env);
+        let mut to_remove: Vec<Address> = Vec::new(env);
+
+        for currency in currencies.iter() {
+            let was_present = list.iter().any(|a| a == currency);
+            results.push_back(was_present);
+            if was_present && !to_remove.iter().any(|a: Address| a == currency) {
+                to_remove.push_back(currency.clone());
+            }
+        }
+
+        if !to_remove.is_empty() {
+            let mut new_list: Vec<Address> = Vec::new(env);
+            for a in list.iter() {
+                if !to_remove.iter().any(|r: Address| r == a) {
+                    new_list.push_back(a);
+                }
+            }
+            env.storage().instance().set(&WHITELIST_KEY, &new_list);
+        }
+
+        Ok(results)
+    }
+
     /// Return `true` if `currency` is present in the whitelist.
     ///
     /// # Parameters
@@ -112,6 +237,14 @@ impl CurrencyWhitelist {
             .unwrap_or_else(|| Vec::new(env))
     }
 
+    /// Returns the canonical zero address used for validation.
+    fn zero_address(env: &Env) -> Address {
+        Address::from_string(&String::from_str(
+            env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        ))
+    }
+
     /// Assert that `currency` is permitted, respecting empty-list backward compatibility.
     ///
     /// # Parameters
@@ -126,7 +259,7 @@ impl CurrencyWhitelist {
     /// - `InvalidCurrency` - whitelist is non-empty and `currency` is not in it.
     pub fn require_allowed_currency(env: &Env, currency: &Address) -> Result<(), QuickLendXError> {
         let list = Self::get_whitelisted_currencies(env);
-        if list.len() == 0 {
+        if list.is_empty() {
             return Ok(());
         }
         if Self::is_allowed_currency(env, currency) {
@@ -199,32 +332,35 @@ impl CurrencyWhitelist {
         Self::get_whitelisted_currencies(env).len()
     }
 
-    /// @notice Return a paginated slice of the whitelist with hard cap enforcement
+    /// @notice Return a paginated slice of the whitelist with metadata.
     /// @param env The contract environment
     /// @param offset Starting index for pagination (0-based)
     /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
-    /// @return Vector of whitelisted currency addresses
+    /// @return [`PaginatedCurrencies`] with items, total_count, and has_more
     /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
-    pub fn get_whitelisted_currencies_paged(env: &Env, offset: u32, limit: u32) -> Vec<Address> {
-        // Import MAX_QUERY_LIMIT from parent module
-        const MAX_QUERY_LIMIT: u32 = 100;
-
-        // Validate query parameters for security
-        if offset > u32::MAX - MAX_QUERY_LIMIT {
-            return Vec::new(env);
-        }
-
-        let capped_limit = limit.min(MAX_QUERY_LIMIT);
+    pub fn get_whitelisted_currencies_paged(
+        env: &Env,
+        offset: u32,
+        limit: u32,
+    ) -> crate::types::PaginatedCurrencies {
         let list = Self::get_whitelisted_currencies(env);
+        let total_count = list.len();
+
         let mut page: Vec<Address> = Vec::new(env);
-        let len = list.len();
-        let end = (offset + capped_limit).min(len);
-        if offset >= len {
-            return page;
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut idx = start;
+        while idx < end {
+            if let Some(addr) = list.get(idx) {
+                page.push_back(addr);
+            }
+            idx = idx.saturating_add(1);
         }
-        for i in offset..end {
-            page.push_back(list.get(i).unwrap());
+
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        crate::types::PaginatedCurrencies {
+            items: page,
+            total_count,
+            has_more,
         }
-        page
     }
 }

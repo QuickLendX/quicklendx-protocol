@@ -47,17 +47,30 @@ const AUDIT_ROUTES: { [route: string]: AuditContext } = {
 };
 
 function getAuditContext(req: Request): AuditContext | undefined {
-  const key = `${req.method}:${req.path}`;
-  return AUDIT_ROUTES[key];
+  if (!req) return undefined;
+  const method = (req.method || "").toUpperCase();
+  const path = req.path || "";
+  const origPath = req.originalUrl ? req.originalUrl.split("?")[0] : "";
+
+  return (
+    AUDIT_ROUTES[`${method}:${path}`] ||
+    AUDIT_ROUTES[`${method}:${origPath}`]
+  );
 }
 
 function getClientIp(req: Request): string {
-  return (
-    (req.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ||
-    (req.headers["x-real-ip"] as string) ||
-    req.socket.remoteAddress ||
-    "unknown"
-  );
+  if (!req || !req.headers) return "unknown";
+  const xff = req.headers["x-forwarded-for"];
+  const xffStr = Array.isArray(xff) ? xff[0] : xff;
+  if (xffStr && typeof xffStr === "string") {
+    const ip = xffStr.split(",")[0]?.trim();
+    if (ip) return ip;
+  }
+  const xRealIp = req.headers["x-real-ip"];
+  if (xRealIp && typeof xRealIp === "string") {
+    return xRealIp.trim();
+  }
+  return req.socket?.remoteAddress || "unknown";
 }
 
 export function auditMiddleware(
@@ -65,54 +78,92 @@ export function auditMiddleware(
   res: Response,
   next: NextFunction
 ): void {
-  const ctx = getAuditContext(req);
-  if (!ctx) {
-    next();
-    return;
-  }
-
-  const originalJson = res.json.bind(res);
-  const startTime = Date.now();
-  let logged = false;
-
-  res.json = function (
-    body: unknown
-  ): Response {
-    if (logged) return originalJson(body);
-    logged = true;
-
-    const success = res.statusCode >= 200 && res.statusCode < 400;
-    const effect = ctx.describeEffect(
-      req.body as Record<string, unknown>,
-      res
-    );
-
-    try {
-let errorMsg: string | undefined = undefined;
-        if (!success && typeof body === "object" && body !== null) {
-          const msg = (body as { error?: { message?: string } }).error?.message;
-          if (msg) errorMsg = msg;
-        }
-
-        auditService.append({
-          actor: req.actor || "unknown",
-          operation: ctx.operation,
-          params: req.body as Record<string, unknown>,
-          redactedParams: redactSensitiveFields(req.body as Record<string, unknown>),
-          ip: getClientIp(req),
-          userAgent: req.headers["user-agent"] || "unknown",
-          effect,
-          success,
-          errorMessage: errorMsg,
-        });
-    } catch (err) {
-      console.error("[Audit] Failed to write audit entry:", err);
+  try {
+    const ctx = getAuditContext(req);
+    if (!ctx) {
+      next();
+      return;
     }
 
-    return originalJson(body);
-  };
+    let logged = false;
 
-  next();
+    const recordAuditEntry = (body?: unknown) => {
+      if (logged) return;
+      logged = true;
+
+      try {
+        const rawParams =
+          req?.body && typeof req.body === "object" && !Array.isArray(req.body)
+            ? (req.body as Record<string, unknown>)
+            : {};
+
+        let effect = "unknown";
+        try {
+          effect = ctx.describeEffect(rawParams, res);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          effect = `[Effect description failed: ${msg}]`;
+        }
+
+        const statusCode = res.statusCode || 200;
+        const success = statusCode >= 200 && statusCode < 400;
+
+        let errorMessage: string | undefined = undefined;
+        if (!success) {
+          if (typeof body === "object" && body !== null) {
+            const b = body as Record<string, unknown>;
+            if (b.error && typeof b.error === "object" && (b.error as Record<string, unknown>).message) {
+              errorMessage = String((b.error as Record<string, unknown>).message);
+            } else if (typeof b.error === "string") {
+              errorMessage = b.error;
+            } else if (typeof b.message === "string") {
+              errorMessage = b.message;
+            }
+          } else if (typeof body === "string" && body.trim().length > 0) {
+            errorMessage = body;
+          }
+        }
+
+        const actor = (req && req.actor) || "unknown";
+        const userAgent = (req && req.headers && req.headers["user-agent"]) || "unknown";
+
+        auditService.append({
+          actor,
+          operation: ctx.operation,
+          params: rawParams,
+          redactedParams: redactSensitiveFields(rawParams),
+          ip: getClientIp(req),
+          userAgent: typeof userAgent === "string" ? userAgent : "unknown",
+          effect,
+          success,
+          errorMessage,
+        });
+      } catch (err) {
+        console.error("[Audit] Failed to write audit entry:", err);
+      }
+    };
+
+    const originalJson = res.json.bind(res);
+    res.json = function (body: unknown): Response {
+      recordAuditEntry(body);
+      return originalJson(body);
+    };
+
+    const originalSend = res.send.bind(res);
+    res.send = function (body?: unknown): Response {
+      recordAuditEntry(body);
+      return originalSend(body);
+    };
+
+    res.once("finish", () => {
+      recordAuditEntry();
+    });
+
+    next();
+  } catch (err) {
+    console.error("[Audit] Error in auditMiddleware setup:", err);
+    next();
+  }
 }
 
 export function registerAuditRoute(
@@ -120,5 +171,5 @@ export function registerAuditRoute(
   path: string,
   ctx: AuditContext
 ): void {
-  AUDIT_ROUTES[`${method}:${path}`] = ctx;
+  AUDIT_ROUTES[`${method.toUpperCase()}:${path}`] = ctx;
 }

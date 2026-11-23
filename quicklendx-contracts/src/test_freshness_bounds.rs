@@ -19,7 +19,7 @@ fn index_lag_seconds(
 ) -> i64 {
     env.ledger().set_timestamp(current);
 
-    let result = client.get_freshness(&100u32, &indexed, &0u32);
+    let result = client.get_freshness(&100u32, &indexed, &0u32).unwrap();
     let lag = result
         .get(String::from_str(env, "index_lag_seconds"))
         .unwrap();

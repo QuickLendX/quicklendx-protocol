@@ -1,16 +1,19 @@
 import * as fs from "fs";
 import * as path from "path";
 import { ulid } from "ulid";
+import { getCorrelationId } from "../lib/requestContext";
 import {
   AuditEntry,
   AuditEntrySchema,
   AuditQuerySchema,
   AuditQuery,
   AuditQueryResponse,
-  AuditOperation,
+  AUDIT_CHAIN_GENESIS_HASH,
+  computeEntryHash,
 } from "../types/audit";
 
 const MAX_LINE_BYTES = 10 * 1024;
+const MAX_QUERY_LIMIT = 1000;
 
 function getAuditDir(): string {
   return process.env.AUDIT_DIR || "audit_logs";
@@ -53,14 +56,38 @@ class AuditService {
     return ulid();
   }
 
-  append(entry: Omit<AuditEntry, "id" | "timestamp">): AuditEntry {
-    const full: AuditEntry = {
+  append(
+    entry: Omit<AuditEntry, "id" | "timestamp" | "prevHash" | "entryHash">
+  ): AuditEntry {
+    // Stamp the originating request id from async-local-storage so the audit
+    // entry can be traced back to the inbound API call. An explicit value on
+    // the entry wins; otherwise we fall back to the active request context.
+    const requestId = entry.requestId ?? getCorrelationId() ?? undefined;
+    const timestamp = new Date().toISOString();
+    const filePath = this.logFilePath(timestamp.slice(0, 10));
+    let prevHash = AUDIT_CHAIN_GENESIS_HASH;
+    if (fs.existsSync(filePath)) {
+      const lines = fs.readFileSync(filePath, "utf8").split("\n").filter(Boolean);
+      if (lines.length > 0) {
+        try {
+          const previous = AuditEntrySchema.parse(JSON.parse(lines[lines.length - 1]));
+          prevHash = previous.entryHash;
+        } catch {
+          // Keep the genesis hash when the last line is malformed.
+        }
+      }
+    }
+
+    const full = {
       ...entry,
+      requestId,
       id: this.generateId(),
-      timestamp: new Date().toISOString(),
+      timestamp,
+      prevHash,
     };
 
-    const validated = AuditEntrySchema.parse(full);
+    const entryHash = computeEntryHash(full as AuditEntry);
+    const validated = AuditEntrySchema.parse({ ...full, entryHash });
     const line = JSON.stringify(validated);
 
     if (line.length > MAX_LINE_BYTES) {
@@ -69,7 +96,6 @@ class AuditService {
       );
     }
 
-    const filePath = this.logFilePath(validated.timestamp.slice(0, 10));
     fs.appendFileSync(filePath, line + "\n", "utf8");
 
     return validated;
@@ -119,14 +145,19 @@ class AuditService {
     );
 
     const total = filtered.length;
-    const page = filtered.slice(params.offset, params.offset + params.limit);
+    const safeLimit = Math.min(
+      Math.max(0, Math.floor(params.limit)),
+      MAX_QUERY_LIMIT
+    );
+    const safeOffset = Math.max(0, Math.floor(params.offset));
+    const page = filtered.slice(safeOffset, safeOffset + safeLimit);
 
     return {
       entries: page,
       total,
-      limit: params.limit,
-      offset: params.offset,
-      hasMore: params.offset + params.limit < total,
+      limit: safeLimit,
+      offset: safeOffset,
+      hasMore: safeOffset + safeLimit < total,
     };
   }
 
@@ -146,6 +177,46 @@ class AuditService {
       cur = d.toISOString().slice(0, 10);
     }
     return dates;
+  }
+
+  verifyChain(date: string): { ok: boolean; brokenAt?: number } {
+    const filePath = this.logFilePath(date);
+    if (!fs.existsSync(filePath)) {
+      return { ok: true }; 
+    }
+
+    const fileContent = fs.readFileSync(filePath, "utf8").trim();
+    if (!fileContent) {
+      return { ok: true };
+    }
+
+    const lines = fileContent.split("\n").filter(line => line.trim());
+    let expectedPrevHash = AUDIT_CHAIN_GENESIS_HASH;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const lineNumber = i + 1;
+      let entry: AuditEntry;
+
+      try {
+        entry = AuditEntrySchema.parse(JSON.parse(line));
+      } catch (e) {
+        return { ok: false, brokenAt: lineNumber }; 
+      }
+
+      if (entry.prevHash !== expectedPrevHash) {
+        return { ok: false, brokenAt: lineNumber }; 
+      }
+
+      const actualEntryHash = computeEntryHash(entry);
+      if (actualEntryHash !== entry.entryHash) {
+        return { ok: false, brokenAt: lineNumber }; 
+      }
+
+      expectedPrevHash = entry.entryHash;
+    }
+
+    return { ok: true };
   }
 
   getEntriesForTest(): AuditEntry[] {
@@ -258,6 +329,8 @@ export const auditService = {
     AuditService.getInstance().append(...args),
   query: (...args: Parameters<AuditService["query"]>) =>
     AuditService.getInstance().query(...args),
+  verifyChain: (...args: Parameters<AuditService["verifyChain"]>) =>
+    AuditService.getInstance().verifyChain(...args),
   getEntriesForTest: () => AuditService.getInstance().getEntriesForTest(),
   clearAll: () => AuditService.getInstance().clearAll(),
   setAuditDir: (...args: Parameters<AuditService["setAuditDir"]>) =>

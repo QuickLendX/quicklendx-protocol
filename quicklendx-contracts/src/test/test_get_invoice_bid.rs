@@ -75,7 +75,7 @@ fn create_and_verify_invoice(
         &description,
         &category,
         &Vec::new(env),
-    );
+        &None);
 
     // Verify the invoice
     let _ = client.try_verify_invoice(&invoice_id);
@@ -92,7 +92,7 @@ fn place_bid(
     bid_amount: i128,
     expected_return: i128,
 ) -> BytesN<32> {
-    client.place_bid(investor, invoice_id, &bid_amount, &expected_return)
+    client.place_bid(investor, invoice_id, &bid_amount, &expected_return, &BytesN::from_array(&env, &[0u8; 32]))
 }
 
 // ============================================================================
@@ -119,7 +119,7 @@ fn test_get_invoice_ok_with_correct_data() {
         &description,
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Test get_invoice - should return Ok with correct data
     let result = client.try_get_invoice(&invoice_id);
@@ -229,12 +229,7 @@ fn test_get_invoice_err_nonexistent_invoice() {
     let nonexistent_id = BytesN::from_array(&env, &[1u8; 32]);
 
     let result = client.try_get_invoice(&nonexistent_id);
-    assert!(
-        result.is_err(),
-        "get_invoice should fail for nonexistent invoice"
-    );
-
-    let err = result.unwrap_err().unwrap();
+    let err = result.unwrap().unwrap_err();
     assert_eq!(
         err,
         QuickLendXError::InvoiceNotFound,
@@ -254,12 +249,7 @@ fn test_get_invoice_err_multiple_random_bytesn32() {
         let random_id = BytesN::from_array(&env, &random_bytes);
 
         let result = client.try_get_invoice(&random_id);
-        assert!(
-            result.is_err(),
-            "get_invoice should fail for random ID {}",
-            i
-        );
-        let err = result.unwrap_err().unwrap();
+        let err = result.unwrap().unwrap_err();
         assert_eq!(err, QuickLendXError::InvoiceNotFound);
     }
 }
@@ -317,7 +307,7 @@ fn test_get_invoice_ok_with_tags() {
         &description,
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
 
     // Retrieve and validate tags
     let invoice = client.try_get_invoice(&invoice_id).unwrap().unwrap();

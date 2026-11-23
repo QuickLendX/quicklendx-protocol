@@ -9,6 +9,7 @@ This document outlines the KYC (Know Your Customer) data handling policy for the
 - **Logs and backups are sensitive surfaces**: All logs containing any user data must be treated as sensitive
 - **Least privilege**: Access to KYC data should be restricted to authorized personnel only
 - **No accidental PII leakage**: All outputs (API responses, logs, errors) must be validated for PII before release
+- **Key rotation support**: Must support rotating encryption keys without data loss
 
 ## Data Classification
 
@@ -47,19 +48,46 @@ This document outlines the KYC (Know Your Customer) data handling policy for the
 - **Cipher**: AES-256-GCM
 - **Key Derivation**: PBKDF2 with 100,000 iterations
 - **Salt**: SHA-256 hash of application-specific salt
-- **IV**: Random 16-byte IV for each encryption
+- **IV**: Random 12-byte (96-bit) IV for each encryption
+
+### Envelope Formats
+
+#### V1 (Legacy)
+- Format: `<iv><authTag><encryptedData>` (hex-encoded)
+- No key version information
+
+#### V2 (Current)
+- Format: `v2:<keyId>:<iv>:<authTag>:<encryptedData>` (hex-encoded parts separated by colons)
+- Includes key version for key rotation support
 
 ### Key Management
 
 ```typescript
-// Initialize with master key from environment
+// Initialize with single key (backward compatible)
 initializeEncryption(process.env.KYC_ENCRYPTION_KEY);
+
+// Initialize with key ring for rotation
+initializeEncryption({
+  activeKeyId: "v2",
+  keys: {
+    "v1": process.env.KYC_ENCRYPTION_KEY_V1,
+    "v2": process.env.KYC_ENCRYPTION_KEY_V2
+  }
+});
 ```
 
 In production, integrate with a Key Management Service (KMS) such as:
 - AWS KMS
 - Google Cloud KMS
 - HashiCorp Vault
+
+### Key Rotation
+
+To rotate keys:
+1. Add new key to key ring configuration
+2. Run migration script: `cd backend && DRY_RUN=true ts-node scripts/rotate-kyc-keys.ts`
+3. If dry run succeeds, run with `DRY_RUN=false` to apply changes
+4. Set new key as active in configuration
 
 ## Access Logging
 
@@ -100,6 +128,14 @@ API responses must not include raw sensitive data. Use the redaction utilities:
 const safeResponse = redactPii(kycData);
 res.json(safeResponse);
 ```
+
+### Invoice Creation (KYC Gating)
+
+To prevent unverified businesses from hitting the on-chain contracts and wasting RPC calls, the `POST /api/v1/invoices` endpoint is gated by a KYC check.
+
+- If the business's KYC status is not `verified`, the request is rejected with a `403 Forbidden` (`KYC_NOT_VERIFIED`).
+- If the business's KYC status is `verified` but the verification is older than 12 months, the request is rejected with a `403 Forbidden` (`KYC_NOT_VERIFIED`).
+- The error response does not leak whether the business exists in the system to prevent enumeration attacks.
 
 ## Testing Requirements
 

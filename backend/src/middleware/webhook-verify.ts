@@ -12,6 +12,9 @@ export const WEBHOOK_SIGNATURE_HEADER = "x-webhook-signature";
 /** Header name carrying the subscriber identifier. */
 export const WEBHOOK_SUBSCRIBER_HEADER = "x-webhook-subscriber-id";
 
+/** Header name carrying the signature algorithm. */
+export const WEBHOOK_ALGORITHM_HEADER = "x-webhook-signature-algorithm";
+
 // ---------------------------------------------------------------------------
 // Augment Express Request
 // ---------------------------------------------------------------------------
@@ -33,8 +36,8 @@ declare global {
 // ---------------------------------------------------------------------------
 
 /**
- * Express middleware that verifies an incoming webhook request's HMAC-SHA256
- * signature against the subscriber's current secret(s).
+ * Express middleware that verifies an incoming webhook request's signature
+ * (HMAC-SHA256 or Ed25519) against the subscriber's current secret(s)/key(s).
  *
  * During a rotation grace window both the primary and pending secrets are
  * accepted, enabling zero-downtime key rollover for integrators.
@@ -44,6 +47,7 @@ declare global {
  *     **before** this middleware so that `req.body` is a raw Buffer.
  *   - The caller must set `X-Webhook-Subscriber-Id` and
  *     `X-Webhook-Signature` headers.
+ *   - If negotiated, `X-Webhook-Signature-Algorithm` must be set to `"ed25519"`.
  *
  * On success the middleware calls `next()` and attaches:
  *   - `req.webhookSubscriberId`
@@ -62,6 +66,7 @@ export function webhookVerifyMiddleware(
 ): void {
   const subscriberId = req.headers[WEBHOOK_SUBSCRIBER_HEADER];
   const signature = req.headers[WEBHOOK_SIGNATURE_HEADER];
+  const algoHeader = req.headers[WEBHOOK_ALGORITHM_HEADER];
 
   // Validate required headers.
   if (!subscriberId || typeof subscriberId !== "string") {
@@ -96,11 +101,30 @@ export function webhookVerifyMiddleware(
           "utf8"
         );
 
+  // Negotiate signature algorithm.
+  let algo: "hmac-sha256" | "ed25519" = "hmac-sha256";
+  if (algoHeader !== undefined) {
+    if (typeof algoHeader === "string" && (algoHeader === "hmac-sha256" || algoHeader === "ed25519")) {
+      algo = algoHeader;
+    } else {
+      // Unknown algorithm - run dummy check to preserve timing-safe error response
+      webhookSecretService.dummyVerifyHmac(rawBody);
+      res.status(401).json({
+        error: {
+          message: "Webhook signature verification failed",
+          code: "INVALID_WEBHOOK_SIGNATURE",
+        },
+      });
+      return;
+    }
+  }
+
   try {
     const result = webhookSecretService.verifySignature(
       subscriberId,
       rawBody,
-      signature
+      signature,
+      algo
     );
 
     if (!result.valid) {
@@ -122,6 +146,16 @@ export function webhookVerifyMiddleware(
     if (err instanceof WebhookSecretError) {
       // Treat subscriber-not-found as 401 to avoid subscriber enumeration.
       const status = err.code === "SUBSCRIBER_NOT_FOUND" ? 401 : err.status;
+
+      if (err.code === "SUBSCRIBER_NOT_FOUND") {
+        // Run dummy signature verification to match execution time
+        if (algo === "ed25519") {
+          webhookSecretService.dummyVerifyEd25519(rawBody);
+        } else {
+          webhookSecretService.dummyVerifyHmac(rawBody);
+        }
+      }
+
       res.status(status).json({
         error: {
           // Generic message for 401 to avoid leaking subscriber existence.

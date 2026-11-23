@@ -39,6 +39,7 @@ fn make_dispute(env: &Env) -> Dispute {
         resolution: String::from_str(env, ""),
         resolved_by: Address::generate(env),
         resolved_at: 0,
+        resolution_outcome: DisputeResolution::None,
     }
 }
 
@@ -83,6 +84,9 @@ fn make_invoice(env: &Env) -> Invoice {
         dispute: make_dispute(env),
         total_paid: 0,
         payment_history: Vec::new(env),
+        origination_fee_bps: None,
+        late_payment_penalty_bps: None,
+        early_payment_discount_bps: None,
     }
 }
 
@@ -715,6 +719,7 @@ fn test_dispute_unresolved_state() {
         resolution: String::from_str(&env, ""),
         resolved_by: Address::generate(&env),
         resolved_at: 0,
+        resolution_outcome: DisputeResolution::None,
     };
     assert_eq!(d.resolved_at, 0);
     assert_eq!(d.resolution, String::from_str(&env, ""));

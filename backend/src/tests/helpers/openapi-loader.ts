@@ -402,9 +402,12 @@ function buildPathParams(
   const placeholders = [...pathTemplate.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
   if (placeholders.length === 0) return [];
 
-  // Gather parameter definitions from the path-item level
-  const paramDefs: Array<{ name: string; in: string; example?: unknown }> =
+  // Gather parameter definitions from the path-item level and the
+  // operation level (OpenAPI allows parameters at either level; this spec
+  // declares path parameters on the operation).
+  const pathLevelParams =
     (pathItem["parameters"] as Array<{ name: string; in: string; example?: unknown }> | undefined) ?? [];
+  const paramDefs: Array<{ name: string; in: string; example?: unknown }> = pathLevelParams;
 
   return placeholders.map((name) => {
     const def = paramDefs.find((p) => p.in === "path" && p.name === name);

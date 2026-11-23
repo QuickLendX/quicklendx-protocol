@@ -32,6 +32,7 @@ export const statusFilterSchema = z.object({
 export const getInvoicesQuerySchema = z.object({
   business: stellarAddressSchema.optional(),
   status: z.enum(["Pending", "Verified", "Funded", "Paid", "Defaulted", "Cancelled"]).optional(),
+  cursor: z.string().optional(),
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().min(0).optional().default(20),
 });
@@ -50,6 +51,7 @@ export const getBidsQuerySchema = z.object({
 
 export const getSettlementsQuerySchema = z.object({
   invoice_id: hexStringSchema.optional(),
+  cursor: z.string().optional(),
   page: z.coerce.number().int().positive().optional().default(1),
   limit: z.coerce.number().int().min(0).optional().default(20),
 });

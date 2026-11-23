@@ -1,6 +1,13 @@
 import crypto from 'crypto';
 import { getDatabase, getPreparedStatement } from '../lib/database';
 import { Settlement, SettlementStatus } from '../types/contract';
+import {
+  CursorPayload,
+  PageResult,
+  PaginationError,
+  encodeCursor,
+  paginationScope,
+} from '../utils/pagination';
 
 export class IllegalTransitionError extends Error {
   constructor(from: SettlementStatus, to: SettlementStatus) {
@@ -41,8 +48,8 @@ function toSettlement(row: any): Settlement {
     recipient: row.recipient,
     timestamp: row.timestamp,
     status: row.status as SettlementStatus,
-    contract_version: row.contract_version,
-    event_schema_version: row.event_schema_version,
+    contract_version: row.contract_version ?? VERSIONED_DEFAULTS.contract_version,
+    event_schema_version: row.event_schema_version ?? VERSIONED_DEFAULTS.event_schema_version,
     indexed_at: row.indexed_at,
   };
 }
@@ -81,13 +88,23 @@ class SettlementOrchestrator {
     const cv = input.contract_version ?? VERSIONED_DEFAULTS.contract_version;
     const esv = input.event_schema_version ?? VERSIONED_DEFAULTS.event_schema_version;
 
-    db.prepare(`
-      INSERT INTO settlements (id, invoice_id, amount, payer, recipient, timestamp, status, contract_version, event_schema_version, indexed_at, created_at, updated_at, event_id)
+    if (!Number.isSafeInteger(cv) || cv < 1 || !Number.isSafeInteger(esv) || esv < 1) {
+      throw new Error("Settlement versions must be positive safe integers");
+    }
+
+    const insertResult = db.prepare(`
+      INSERT OR IGNORE INTO settlements (id, invoice_id, amount, payer, recipient, timestamp, status, contract_version, event_schema_version, indexed_at, created_at, updated_at, event_id)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id, input.invoice_id, input.amount, input.payer, input.recipient,
       input.timestamp, SettlementStatus.Pending, cv, esv, now, now, now, input.event_id,
     );
+
+    if (insertResult.changes === 0) {
+      // A concurrent request created this event first; return the existing record.
+      const existingAfterRace = db.prepare('SELECT * FROM settlements WHERE event_id = ?').get(input.event_id) as any;
+      return toSettlement(existingAfterRace);
+    }
 
     return this.getById(id)!;
   }
@@ -161,11 +178,15 @@ class SettlementOrchestrator {
 
     const now = new Date().toISOString();
     const updated = db.prepare(`
-      UPDATE settlements SET status = ?, updated_at = ?, event_id = ? WHERE id = ?
-    `).run(to, now, eventId, row.id);
+      UPDATE settlements
+      SET status = ?, updated_at = ?, event_id = ?
+      WHERE id = ? AND status = ?
+    `).run(to, now, eventId, row.id, current);
 
     if (updated.changes === 0) {
-      throw new Error(`Failed to update settlement ${row.id}`);
+      // Another concurrent transition won. Return the current state.
+      const latest = db.prepare('SELECT * FROM settlements WHERE id = ?').get(row.id) as any;
+      return toSettlement(latest);
     }
 
     return this.getById(row.id)!;
@@ -204,6 +225,59 @@ class SettlementOrchestrator {
 
     const rows = this.getDb().prepare(sql).all(...params) as any[];
     return rows.map(toSettlement);
+  }
+
+  /**
+   * List a bounded page of settlements in timestamp-descending, id-ascending order.
+   */
+  listPage({
+    filters = {},
+    limit,
+    cursor,
+  }: {
+    filters?: { invoice_id?: string; status?: SettlementStatus };
+    limit: number;
+    cursor: CursorPayload | null;
+  }): PageResult<Settlement> {
+    const scope = paginationScope(filters);
+    if (cursor && cursor.scope !== scope) {
+      throw new PaginationError("cursor scope mismatch");
+    }
+
+    const clauses: string[] = [];
+    const params: unknown[] = [];
+    if (filters.invoice_id) {
+      clauses.push("invoice_id = ?");
+      params.push(filters.invoice_id);
+    }
+    if (filters.status) {
+      clauses.push("status = ?");
+      params.push(filters.status);
+    }
+    if (cursor) {
+      clauses.push("(timestamp < ? OR (timestamp = ? AND id > ?))");
+      params.push(cursor.sort_val, cursor.sort_val, cursor.id);
+    }
+
+    let sql = "SELECT * FROM settlements";
+    if (clauses.length > 0) {
+      sql += ` WHERE ${clauses.join(" AND ")}`;
+    }
+    sql += " ORDER BY timestamp DESC, id ASC LIMIT ?";
+
+    const rows = this.getDb().prepare(sql).all(...params, limit + 1) as any[];
+    const has_more = rows.length > limit;
+    const data = rows.slice(0, limit).map(toSettlement);
+    const last = data[data.length - 1];
+
+    return {
+      data,
+      has_more,
+      next_cursor:
+        has_more && last
+          ? encodeCursor({ id: last.id, sort_val: last.timestamp, scope })
+          : null,
+    };
   }
 
   /**

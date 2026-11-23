@@ -70,6 +70,10 @@ guard, which must reject a second default attempt with
 Implementation notes:
 
 - `defaults::mark_invoice_defaulted` remains the canonical default path.
+- Default eligibility is strict: timestamps at `due_date + grace_period` are
+  still ineligible; only a timestamp after that checked deadline may trigger
+  the transition. Deadline overflow and stored grace values above the protocol
+  maximum fail with `InvalidTimestamp` rather than extending the window.
 - `defaults::handle_default` must refuse defaulting once settlement has finalized
   or the escrow status is no longer `Held`.
 - Any admin/testing shortcut that wants to produce `Defaulted` must route through

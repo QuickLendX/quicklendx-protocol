@@ -34,7 +34,7 @@ cargo install --locked stellar-cli@23.0.0
 
 ---
 
-### 🧪Running Project
+### 🧪 Running Project
 
 - From the root of the project, run the following command:
 
@@ -49,6 +49,22 @@ This compiles the contract using the top-level workspace configuration.
 ```bash
 cargo test
 ```
+
+### 🔗 Auto-generated TypeScript Bindings
+
+The build pipeline automatically generates **TypeScript client bindings** from the compiled WASM contract. These bindings provide type-safe interfaces for interacting with the deployed contract and are consumed by `quicklendx-frontend`.
+
+**How it works:**
+
+- Running `make build` (or just `make`) performs two steps:
+  1. Compiles the contract to WASM via `stellar contract build`
+  2. Generates TypeScript bindings into the `bindings/` directory
+- Running `make bindings` regenerates bindings from an existing WASM artifact (idempotent — safe to re-run)
+- Running `make wasm` compiles the WASM without regenerating bindings
+
+**If the `stellar` CLI does not support the `bindings typescript` subcommand**, the step is skipped gracefully with a diagnostic — no build failure.
+
+**Generated files are gitignored** and must be regenerated locally. Any code referencing the bindings imports should import from `bindings/` (relative to this crate).
 
 ### 🔬 Running Fuzz Tests
 
@@ -82,6 +98,40 @@ cargo test --features fuzz-tests fuzz_store_invoice_valid_ranges
 - All critical math operations are tested for overflow/underflow
 - State consistency is verified after each operation
 - Invalid inputs must return errors, never panic
+
+---
+
+### 🛠️ Makefile Targets
+
+The `Makefile` in `quicklendx-contracts` provides convenient phony targets for fast local development and CI:
+
+| Target | Command | Description |
+|---|---|---|
+| `make check` | `cargo check --lib` | Fast compilation check of the library without building WASM |
+| `make lint` | `cargo clippy --lib -- -D warnings` | Run Clippy linter with warnings treated as errors |
+| `make fmt-check` | `cargo fmt --all -- --check` | Verify formatting without modifying files |
+| `make fmt` | `cargo fmt --all` | Format all Rust source code |
+| `make test-lib` | `cargo test --lib` | Run unit tests directly without compiling WASM |
+| `make test` | `cargo test` (builds WASM first) | Full test suite execution |
+| `make size` | `./scripts/check-wasm-size.sh` | Verify WASM build size budget |
+| `make ci` | `fmt-check check lint test-lib size` | Run all standard fast CI checks |
+| `make build` | Builds WASM and bindings | Compile contract WASM and generate client bindings |
+| `make clean` | `cargo clean` and remove `bindings/` | Clean build artifacts and generated bindings |
+
+---
+
+### 🧹 Before Submitting
+
+Before opening a PR, ensure all checks pass:
+
+- **Run all CI checks:** `make ci` (runs `fmt-check`, `check`, `lint`, `test-lib`, and `size`)
+- Or run checks individually:
+  1. **Formatting:** `make fmt-check` (or `make fmt` to auto-format)
+  2. **Compilation check:** `make check`
+  3. **Lint:** `make lint`
+  4. **Tests:** `make test-lib` (or `make test` for full WASM + test suite)
+  5. **WASM size within budget:** `make size` (or `./scripts/check-wasm-size.sh`)
+  6. **Build succeeds:** `make build` compiles WASM and regenerates bindings
 
 ---
 

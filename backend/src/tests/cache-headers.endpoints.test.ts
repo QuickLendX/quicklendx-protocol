@@ -83,11 +83,11 @@ describe("Conditional Caching & ETag Integration Tests", () => {
     });
   });
 
-  describe("CC_LONG tier endpoints (Settlements)", () => {
-    it("should return CC_LONG, ETag, and Last-Modified headers for settlements list", async () => {
+  describe("Settlement caching", () => {
+    it("should return CC_SHORT, ETag, and Last-Modified headers for settlements list", async () => {
       const res = await supertest(app).get("/api/v1/settlements");
       expect(res.status).toBe(200);
-      expect(res.headers["cache-control"]).toBe(CC_LONG);
+      expect(res.headers["cache-control"]).toBe(CC_SHORT);
       expect(res.headers["etag"]).toBeDefined();
       expect(res.headers["last-modified"]).toBeDefined();
 

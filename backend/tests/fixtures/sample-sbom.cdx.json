@@ -6,7 +6,7 @@
     "timestamp": "2026-04-26T00:00:00.000Z",
     "component": {
       "type": "application",
-      "name": "quicklendx-backend",
+      "name": "@quicklendx/backend",
       "version": "1.0.0"
     }
   },
