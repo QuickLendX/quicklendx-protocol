@@ -1,4 +1,3 @@
-<<<<<<< feature/542-max-invoice-limit-status-aware
 # Protocol Limits
 
 This document describes the protocol limits enforced by the QuickLendX contract to ensure system stability and prevent abuse.

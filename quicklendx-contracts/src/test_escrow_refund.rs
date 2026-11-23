@@ -4,7 +4,22 @@ use super::*;
 use crate::invoice::InvoiceCategory;
 use crate::payments::EscrowStatus;
 #[cfg(test)]
-use soroban_sdk::{testutils::Address as _, token, Address, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Events as EventsTrait},
+    token, xdr, Address, Env, Symbol, TryFromVal,
+};
+
+fn count_events(env: &Env, topic: Symbol) -> u32 {
+    let topic_xdr = xdr::ScVal::try_from_val(env, &topic).expect("topic to xdr");
+    env.events()
+        .all()
+        .events()
+        .iter()
+        .filter(|event| match &event.body {
+            xdr::ContractEventBody::V0(body) => body.topics.first() == Some(&topic_xdr),
+        })
+        .count() as u32
+}
 
 fn setup_env() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let env = Env::default();
@@ -44,7 +59,7 @@ fn setup_token(
 }
 
 #[test]
-fn test_refund_transfers_and_updates_status() {
+fn refund_emits_once() {
     let (env, client, _, _) = setup_env();
     let contract_id = client.address.clone();
 
@@ -65,7 +80,7 @@ fn test_refund_transfers_and_updates_status() {
         &String::from_str(&env, "Refund test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // Prepare investor and place bid
@@ -79,7 +94,7 @@ fn test_refund_transfers_and_updates_status() {
         &10_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
 
     // Accept (creates escrow)
     client.accept_bid(&invoice_id, &bid_id);
@@ -91,7 +106,13 @@ fn test_refund_transfers_and_updates_status() {
     assert_eq!(bal_after_lock, 9_000i128);
 
     // Refund escrow funds (initiated by business)
+    let refund_events_before = count_events(&env, Symbol::new(&env, "escrow_refunded"));
     client.refund_escrow_funds(&invoice_id, &business);
+    assert_eq!(
+        count_events(&env, Symbol::new(&env, "escrow_refunded")),
+        refund_events_before + 1,
+        "refund should emit exactly one EscrowRefunded event"
+    );
 
     // Escrow marked Refunded
     let escrow_status = client.get_escrow_status(&invoice_id);
@@ -123,7 +144,7 @@ fn test_refund_idempotency_and_release_blocked() {
         &String::from_str(&env, "Refund idempotency invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // Investor setup and bid
@@ -135,7 +156,7 @@ fn test_refund_idempotency_and_release_blocked() {
         &10_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Refund once
@@ -151,6 +172,8 @@ fn test_refund_idempotency_and_release_blocked() {
     );
 
     // Attempt to release after refund should fail
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     let release_result = client.try_release_escrow_funds(&invoice_id);
     assert!(
         release_result.is_err(),
@@ -184,7 +207,7 @@ fn test_refund_authorization_current_behavior_and_security_note() {
         &String::from_str(&env, "Auth behavior invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
     client.verify_investor(&investor, &10_000i128);
@@ -194,7 +217,7 @@ fn test_refund_authorization_current_behavior_and_security_note() {
         &10_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Now call refund without mocking auth: should succeed under current code
@@ -229,7 +252,7 @@ fn test_refund_fails_when_caller_is_neither_admin_nor_business() {
         &String::from_str(&env, "Stranger Auth Check"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
@@ -241,7 +264,7 @@ fn test_refund_fails_when_caller_is_neither_admin_nor_business() {
         &10_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Call refund using stranger address
@@ -271,7 +294,7 @@ fn test_refund_exact_amount_recipient_and_idempotency() {
         &String::from_str(&env, "Exact refund amount invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
@@ -282,7 +305,7 @@ fn test_refund_exact_amount_recipient_and_idempotency() {
         &10_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     let investor_balance_before_refund = token_client.balance(&investor);
@@ -323,7 +346,7 @@ fn test_refund_fails_if_invoice_status_not_funded() {
         &String::from_str(&env, "Unfunded Status Check"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     let result = client.try_refund_escrow_funds(&invoice_id, &admin);
@@ -353,7 +376,7 @@ fn test_refund_events_emitted_correctly() {
         &String::from_str(&env, "Event Emitting Invoice"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     client.submit_investor_kyc(&investor, &String::from_str(&env, "kyc"));
@@ -364,7 +387,7 @@ fn test_refund_events_emitted_correctly() {
         &10_000i128,
         &(env.ledger().sequence() + 10_000),
     );
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     let escrow_details = client.get_escrow_details(&invoice_id);

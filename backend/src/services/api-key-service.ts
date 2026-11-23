@@ -1,302 +1,227 @@
-import crypto from 'crypto';
-import { db, DbApiKey } from '../db/database';
-import {
-  ApiKey,
-  ApiKeyCreateInput,
-  ApiKeyWithPlaintext,
-  generateApiKey,
-  hashApiKey,
-  timingSafeCompare,
-} from '../models/api-key';
-import { validateScopes } from '../config/scopes';
-import { auditLogService } from './audit-log';
+/**
+ * In-memory, single-process implementation of `ApiKeyService`.
+ *
+ * - Optimistic concurrency: `revokeApiKey` rejects with `CONFLICT` when the
+ *   stored `version` differs from `expectedVersion` (if provided), proving the
+ *   caller operated on a stale read.
+ * - Idempotent: revoking an already-revoked/expired key returns the current
+ *   record without mutating state, so repeated/concurrent callers converge.
+ * - Secret material is never materialized or returned.
+ */
+import { ApiKeyError } from "../errors/api-key-error";
+import { SystemClock, type Clock } from "./clock";
 
-export class ApiKeyService {
-  /**
-   * Create a new API key
-   */
-  async createApiKey(
-    input: ApiKeyCreateInput,
-    ipAddress?: string
-  ): Promise<ApiKeyWithPlaintext> {
-    // Validate scopes
-    const scopeValidation = validateScopes(input.scopes);
-    if (!scopeValidation.valid) {
-      throw new Error(
-        `Invalid scopes: ${scopeValidation.invalid.join(', ')}`
-      );
-    }
+type Store = Pick<typeof db, "createApiKey" | "getApiKeyById" | "getApiKeyByPrefix" | "listApiKeys" | "updateApiKey" | "transaction">;
+type Audit = Pick<typeof auditLogService, "logCreated" | "logUsed" | "logRotated" | "logRevoked">;
 
-    // Validate expiration date if provided
-    if (input.expires_at) {
-      const expiresAt = new Date(input.expires_at);
-      if (isNaN(expiresAt.getTime())) {
-        throw new Error('Invalid expires_at date format');
-      }
-      if (expiresAt <= new Date()) {
-        throw new Error('expires_at must be in the future');
-      }
-    }
+/** Synchronous SQLite transactions keep read/version/write atomic. */
+export class ApiKeyService implements ServiceContract {
+  constructor(protected readonly store: Store = db, protected readonly clock: Clock = new SystemClock(),
+    private readonly audit: Audit = auditLogService) {}
 
-    // Generate key
-    const { key, prefix, hash } = generateApiKey();
-    const id = crypto.randomUUID();
-    const now = new Date().toISOString();
-
-    const dbKey: DbApiKey = {
-      id,
-      key_hash: hash,
-      prefix,
-      name: input.name,
-      scopes: JSON.stringify(input.scopes),
-      created_at: now,
-      last_used_at: null,
-      expires_at: input.expires_at || null,
-      prev_signing_secret_hash: null,
-      prev_secret_expires_at: null,
-      revoked: 0,
-      created_by: input.created_by,
-    };
-
-    db.createApiKey(dbKey);
-
-    // Log creation event
-    await auditLogService.logCreated(id, input.created_by, ipAddress);
-
-    // Return the key with plaintext (only time it's ever returned)
+  protected decode(row: DbApiKey): ApiKey {
+    const scopes: string[] = JSON.parse(row.scopes);
+    const revoked = row.revoked !== 0;
+    const expired = row.expires_at !== null && Date.parse(row.expires_at) <= this.clock.now();
     return {
-      ...this.dbKeyToApiKey(dbKey),
-      plaintext_key: key,
+      id: row.id, name: row.name, prefix: row.prefix, scopes,
+      created_by: row.created_by, created_at: row.created_at,
+      last_used_at: row.last_used_at, expires_at: row.expires_at, revoked,
+      signing_secret_hash: row.signing_secret_hash, prev_signing_secret_hash: row.prev_signing_secret_hash,
+      prev_secret_expires_at: row.prev_secret_expires_at,
+      status: revoked ? "revoked" : expired ? "expired" : "active", version: row.version ?? 1,
+      revokedAt: row.revoked_at ?? null, revokedBy: row.revoked_by ?? null,
+      // Compatibility projections for the existing revoke controller.
+      ownerId: row.created_by, permissions: [...scopes], createdAt: Date.parse(row.created_at),
     };
   }
 
-  /**
-   * Verify an API key and return the key record if valid
-   */
-  async verifyApiKey(plaintextKey: string): Promise<ApiKey | null> {
-    // Extract prefix from the key
-    const prefix = plaintextKey.substring(0, 15);
-
-    // Look up by prefix
-    const dbKey = db.getApiKeyByPrefix(prefix);
-    if (!dbKey) {
-      return null;
-    }
-
-    // Hash the provided key
-    const providedHash = hashApiKey(plaintextKey);
-
-    // Timing-safe comparison
-    let isValid = timingSafeCompare(providedHash, dbKey.key_hash);
-    
-    // Check grace window for previous secret
-    if (!isValid && dbKey.prev_signing_secret_hash && dbKey.prev_secret_expires_at) {
-      const prevExpiresAt = new Date(dbKey.prev_secret_expires_at);
-      if (prevExpiresAt > new Date()) {
-        isValid = timingSafeCompare(providedHash, dbKey.prev_signing_secret_hash);
-      }
-    }
-
-    if (!isValid) {
-      return null;
-    }
-
-    // Check if revoked
-    if (dbKey.revoked === 1) {
-      return null;
-    }
-
-    // Check if expired
-    if (dbKey.expires_at) {
-      const expiresAt = new Date(dbKey.expires_at);
-      if (expiresAt <= new Date()) {
-        return null;
-      }
-    }
-
-    return this.dbKeyToApiKey(dbKey);
+  private requireRow(id: string): DbApiKey {
+    const row = this.store.getApiKeyById(id);
+    if (!row) throw new ApiKeyError("NOT_FOUND", "API key not found.", { apiKeyId: id });
+    return row;
   }
 
-  /**
-   * Update last_used_at timestamp (async, non-blocking)
-   */
-  async updateLastUsed(keyId: string, endpoint: string, ipAddress?: string): Promise<void> {
-    setImmediate(() => {
-      try {
-        const now = new Date().toISOString();
-        db.updateApiKey(keyId, { last_used_at: now });
+  private requireActive(row: DbApiKey): void {
+    if (this.decode(row).status !== "active") throw new ApiKeyError("FORBIDDEN", "API key is revoked or expired.");
+  }
 
-        // Log usage event
-        const key = db.getApiKeyById(keyId);
-        if (key) {
-          auditLogService.logUsed(keyId, key.created_by, endpoint, ipAddress);
-        }
-      } catch (error) {
-        console.error('[ApiKeyService] Failed to update last_used_at:', error);
+  private newKey(input: ApiKeyCreateInput): { row: DbApiKey; plaintext: ApiKeyWithPlaintext } {
+    if (!input.name?.trim() || !input.created_by?.trim() || !Array.isArray(input.scopes) ||
+      !validateScopes(input.scopes).valid || (input.expires_at != null &&
+      (!Number.isFinite(Date.parse(input.expires_at)) || Date.parse(input.expires_at) <= this.clock.now()))) {
+      throw new ApiKeyError("VALIDATION_ERROR", "Invalid API key input.");
+    }
+    const credential = generateApiKey();
+    const secret = crypto.randomBytes(32).toString("base64url");
+    const row: DbApiKey = {
+      id: crypto.randomUUID(), name: input.name, prefix: credential.prefix, key_hash: credential.hash,
+      scopes: JSON.stringify(input.scopes), created_by: input.created_by,
+      created_at: new Date(this.clock.now()).toISOString(), last_used_at: null,
+      expires_at: input.expires_at ?? null, revoked: 0, signing_secret_hash: hashApiKey(secret),
+      prev_signing_secret_hash: null, prev_secret_expires_at: null, version: 1, revoked_at: null, revoked_by: null,
+    };
+    return { row, plaintext: { ...this.decode(row), plaintext_key: credential.key, plaintext_signing_secret: secret } };
+  }
+
+  async createApiKey(input: ApiKeyCreateInput, ip?: string): Promise<ApiKeyWithPlaintext> {
+    const { row, plaintext } = this.newKey(input);
+    this.store.createApiKey(row);
+    await this.audit.logCreated(row.id, input.created_by, ip);
+    return plaintext;
+  }
+
+  async verifyApiKey(plaintext: string): Promise<ApiKey | null> {
+    if (typeof plaintext !== "string" || !/^qlx_[A-Za-z0-9_-]{32,}$/.test(plaintext)) return null;
+    const row = this.store.getApiKeyByPrefix(plaintext.slice(0, 15));
+    if (!row || !timingSafeCompare(hashApiKey(plaintext), row.key_hash)) return null;
+    const key = this.decode(row);
+    return key.status === "active" ? key : null;
+  }
+
+  async getApiKeyById(id: string): Promise<ApiKey | null> {
+    const row = this.store.getApiKeyById(id);
+    return row ? this.decode(row) : null;
+  }
+  getApiKey(id: string): Promise<ApiKey | null> { return this.getApiKeyById(id); }
+  async listApiKeys(filters: { created_by?: string; revoked?: boolean } = {}): Promise<ApiKey[]> {
+    return this.store.listApiKeys(filters).map(row => this.decode(row));
+  }
+  async updateLastUsed(id: string, endpoint: string, ip?: string): Promise<void> {
+    const row = this.store.getApiKeyById(id);
+    if (!row) return;
+    this.store.updateApiKey(id, { last_used_at: new Date(this.clock.now()).toISOString() });
+    await this.audit.logUsed(id, row.created_by, endpoint, ip);
+  }
+  async revokeApiKey(id: string, actor: string, expectedVersion?: number): Promise<RevokedApiKey> {
+    let changed = false;
+    const result = this.store.transaction(() => {
+      const row = this.requireRow(id);
+      if (expectedVersion !== undefined && expectedVersion !== (row.version ?? 1)) {
+        throw new ApiKeyError("CONFLICT", "API key version changed; re-read and retry.", { apiKeyId: id, actorId: actor });
       }
+      if (row.revoked) return this.decode(row) as RevokedApiKey;
+      const updates = { revoked: 1, version: (row.version ?? 1) + 1, revoked_at: this.clock.now(), revoked_by: actor };
+      this.store.updateApiKey(id, updates);
+      changed = true;
+      return this.decode({ ...row, ...updates }) as RevokedApiKey;
     });
+    if (changed) await this.audit.logRevoked(id, actor);
+    return result;
   }
-
-  /**
-   * Rotate an API key
-   */
-  async rotateApiKey(
-    keyId: string,
-    actor: string,
-    ipAddress?: string
-  ): Promise<ApiKeyWithPlaintext> {
-    const oldKey = db.getApiKeyById(keyId);
-    if (!oldKey) {
-      throw new Error('API key not found');
-    }
-
-    if (oldKey.revoked === 1) {
-      throw new Error('Cannot rotate a revoked key');
-    }
-
-    // Generate new key
-    const { key, prefix, hash } = generateApiKey();
-    const newId = crypto.randomUUID();
-    const now = new Date().toISOString();
-
-    const scopes = JSON.parse(oldKey.scopes);
-
-    const newDbKey: DbApiKey = {
-      id: newId,
-      key_hash: hash,
-      prefix,
-      name: oldKey.name,
-      scopes: oldKey.scopes,
-      created_at: now,
-      last_used_at: null,
-      expires_at: oldKey.expires_at,
-      prev_signing_secret_hash: null,
-      prev_secret_expires_at: null,
-      revoked: 0,
-      created_by: oldKey.created_by,
-    };
-
-    // Create new key
-    db.createApiKey(newDbKey);
-
-    // Revoke old key immediately
-    db.updateApiKey(keyId, { revoked: 1 });
-
-    // Log rotation event
-    await auditLogService.logRotated(keyId, newId, actor, ipAddress);
-
-    return {
-      ...this.dbKeyToApiKey(newDbKey),
-      plaintext_key: key,
-    };
-  }
-
-  /**
-   * Rotate an API key's signing secret only (retains same key ID),
-   * with a grace period for the old secret.
-   */
-  async rotateSigningSecret(
-    keyId: string,
-    actor: string,
-    ipAddress?: string,
-    graceWindowHours: number = 24
-  ): Promise<ApiKeyWithPlaintext> {
-    const oldKey = db.getApiKeyById(keyId);
-    if (!oldKey) {
-      throw new Error('API key not found');
-    }
-
-    if (oldKey.revoked === 1) {
-      throw new Error('Cannot rotate a revoked key');
-    }
-
-    // Generate new key bytes but retain the same prefix so existing prefixes are stable
-    // Wait, generating a new key creates a new prefix. But prefix is tied to the plaintext key.
-    // If we keep the same prefix, the first 15 chars are the same, but the random part changes.
-    // Actually, generateApiKey generates a fully random key and derives the prefix from it.
-    // If we rotate the signing secret, we can either generate a fully new key (new prefix)
-    // or keep the old prefix and just replace the rest.
-    // Let's generate a new key but replace the prefix with the old prefix to keep it stable.
-    const randomBytes = crypto.randomBytes(32).toString('base64url');
-    // Ensure the new plaintext key starts with the old prefix so existing logs/UI still match
-    const newPlaintextKey = oldKey.prefix + randomBytes;
-    const newHash = hashApiKey(newPlaintextKey);
-
-    const prevSecretExpiresAt = new Date(Date.now() + graceWindowHours * 60 * 60 * 1000).toISOString();
-
-    db.updateApiKey(keyId, {
-      key_hash: newHash,
-      prev_signing_secret_hash: oldKey.key_hash,
-      prev_secret_expires_at: prevSecretExpiresAt,
+  async rotateApiKey(id: string, actor: string, ip?: string): Promise<ApiKeyWithPlaintext> {
+    const result = this.store.transaction(() => {
+      const old = this.requireRow(id);
+      this.requireActive(old);
+      const { row, plaintext } = this.newKey({ name: old.name, scopes: JSON.parse(old.scopes),
+        created_by: old.created_by, expires_at: old.expires_at });
+      this.store.createApiKey(row);
+      this.store.updateApiKey(id, { revoked: 1, version: (old.version ?? 1) + 1,
+        revoked_at: this.clock.now(), revoked_by: actor });
+      return plaintext;
     });
-
-    // We use 'rotated' for this as well, or we can use a new event type. 
-    // The schema allows 'rotated', let's stick to it.
-    await auditLogService.logRotated(keyId, keyId, actor, ipAddress);
-
-    const updatedDbKey = db.getApiKeyById(keyId)!;
-
-    return {
-      ...this.dbKeyToApiKey(updatedDbKey),
-      plaintext_key: newPlaintextKey,
-    };
+    await this.audit.logRotated(id, result.id, actor, ip);
+    return result;
   }
-
-  /**
-   * Revoke an API key
-   */
-  async revokeApiKey(keyId: string, actor: string, ipAddress?: string): Promise<void> {
-    const key = db.getApiKeyById(keyId);
-    if (!key) {
-      throw new Error('API key not found');
+  async rotateSigningSecret(id: string, actor: string, ip?: string, graceHours = 24): Promise<ApiKey & { plaintext_signing_secret: string }> {
+    if (!Number.isFinite(graceHours) || graceHours < 0 || graceHours > 168) {
+      throw new ApiKeyError("VALIDATION_ERROR", "Grace hours must be between 0 and 168.");
     }
-
-    if (key.revoked === 1) {
-      throw new Error('API key is already revoked');
-    }
-
-    db.updateApiKey(keyId, { revoked: 1 });
-
-    // Log revocation event
-    await auditLogService.logRevoked(keyId, actor, ipAddress);
-  }
-
-  /**
-   * Get an API key by ID
-   */
-  async getApiKeyById(keyId: string): Promise<ApiKey | null> {
-    const dbKey = db.getApiKeyById(keyId);
-    return dbKey ? this.dbKeyToApiKey(dbKey) : null;
-  }
-
-  /**
-   * List API keys
-   */
-  async listApiKeys(filters?: { created_by?: string; revoked?: boolean }): Promise<ApiKey[]> {
-    const dbKeys = db.listApiKeys(filters);
-    return dbKeys.map(k => this.dbKeyToApiKey(k));
-  }
-
-  /**
-   * Convert database key to API key model
-   */
-  private dbKeyToApiKey(dbKey: DbApiKey): ApiKey {
-    return {
-      id: dbKey.id,
-      key_hash: dbKey.key_hash,
-      prefix: dbKey.prefix,
-      name: dbKey.name,
-      scopes: JSON.parse(dbKey.scopes),
-      created_at: dbKey.created_at,
-      last_used_at: dbKey.last_used_at,
-      expires_at: dbKey.expires_at,
-      prev_signing_secret_hash: dbKey.prev_signing_secret_hash,
-      prev_secret_expires_at: dbKey.prev_secret_expires_at,
-      revoked: dbKey.revoked === 1,
-      created_by: dbKey.created_by,
-    };
+    const result = this.store.transaction(() => {
+      const row = this.requireRow(id);
+      this.requireActive(row);
+      if (row.prev_secret_expires_at && Date.parse(row.prev_secret_expires_at) > this.clock.now()) {
+        throw new ApiKeyError("CONFLICT", "Previous signing secret is still active.");
+      }
+      const secret = crypto.randomBytes(32).toString("base64url");
+      const updates = { signing_secret_hash: hashApiKey(secret), prev_signing_secret_hash: row.signing_secret_hash,
+        prev_secret_expires_at: new Date(this.clock.now() + graceHours * 3600000).toISOString(), version: (row.version ?? 1) + 1 };
+      this.store.updateApiKey(id, updates);
+      return { ...this.decode({ ...row, ...updates }), plaintext_signing_secret: secret };
+    });
+    await this.audit.logRotated(id, id, actor, ip);
+    return result;
   }
 }
 
-// Singleton instance
+export interface CreateApiKeyInput {
+  id: string; name: string; ownerId: string; permissions?: readonly string[];
+  status?: "active" | "expired"; createdAt?: number;
+}
+
+export class InMemoryApiKeyService implements ApiKeyService {
+  private readonly keys = new Map<string, ApiKey>();
+  private readonly clock: Clock;
+
+  constructor(clock: Clock) {
+    this.clock = clock;
+  }
+
+  /** Seed a key for a test/seed scenario. */
+  create(input: CreateApiKeyInput): void {
+    const now = input.createdAt ?? this.clock.now();
+    const status: ApiKey["status"] = input.status ?? "active";
+    const key: ApiKey = {
+      id: input.id,
+      name: input.name,
+      ownerId: input.ownerId,
+      permissions: input.permissions ?? [],
+      status,
+      version: 1,
+      createdAt: now,
+      revokedAt: status === "active" ? null : now,
+      revokedBy: status === "active" ? null : input.ownerId,
+    };
+    this.keys.set(input.id, key);
+  }
+
+  async getApiKey(id: string): Promise<ApiKey | null> {
+    const key = this.keys.get(id);
+    return key ? { ...key } : null;
+  }
+
+  async revokeApiKey(
+    id: string,
+    revokedBy: string,
+    expectedVersion?: number
+  ): Promise<RevokedApiKey> {
+    const existing = this.keys.get(id);
+    if (!existing) {
+      throw new ApiKeyError(
+        "NOT_FOUND",
+        "The requested API key was not found.",
+        { action: "revokeApiKey", apiKeyId: id, actorId: revokedBy }
+      );
+    }
+
+    // Stale read: another mutation advanced the version since we last read.
+    if (expectedVersion !== undefined && existing.version !== expectedVersion) {
+      throw new ApiKeyError(
+        "CONFLICT",
+        "API key version changed; re-read and retry.",
+        {
+          action: "revokeApiKey",
+          apiKeyId: id,
+          actorId: revokedBy,
+          cause: { expectedVersion, actualVersion: existing.version },
+        }
+      },
+    }, clock, { logCreated: async () => {}, logUsed: async () => {}, logRotated: async () => {}, logRevoked: async () => {} });
+    this.keys = keys;
+  }
+  create(input: CreateApiKeyInput): void {
+    const time = input.createdAt ?? this.clock.now();
+    this.store.createApiKey({
+      id: input.id, name: input.name, prefix: input.id, key_hash: hashApiKey(crypto.randomUUID()),
+      scopes: JSON.stringify(input.permissions ?? []), created_by: input.ownerId,
+      created_at: new Date(time).toISOString(), last_used_at: null,
+      expires_at: input.status === "expired" ? new Date(time).toISOString() : null,
+      revoked: 0, signing_secret_hash: null, prev_signing_secret_hash: null, prev_secret_expires_at: null,
+      version: 1, revoked_at: input.status === "expired" ? time : null,
+      revoked_by: input.status === "expired" ? input.ownerId : null,
+    });
+  }
+  get size(): number { return this.keys.size; }
+}
+
 export const apiKeyService = new ApiKeyService();

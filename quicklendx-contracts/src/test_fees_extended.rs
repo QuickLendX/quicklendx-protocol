@@ -79,8 +79,9 @@ fn test_transaction_fee_with_small_amount() {
 
     client.initialize_fee_system(&admin);
 
-    let fees = client.calculate_transaction_fees(&user, &1, &false, &false);
-    assert!(fees >= 0);
+    // Amount 1 cannot cover default minimum fees (250) and returns InvalidAmount
+    let result = client.try_calculate_transaction_fees(&user, &1, &false, &false);
+    assert_eq!(result, Err(Ok(QuickLendXError::InvalidAmount)));
 }
 
 // ============================================================================
@@ -249,13 +250,17 @@ fn test_transaction_fee_small_amount_uses_minimums_before_modifiers() {
 
     client.initialize_fee_system(&admin);
 
-    let regular_fees = client.calculate_transaction_fees(&user, &1, &false, &false);
-    let early_fees = client.calculate_transaction_fees(&user, &1, &true, &false);
+    let regular_fees = client.calculate_transaction_fees(&user, &1_000, &false, &false);
+    let early_fees = client.calculate_transaction_fees(&user, &1_000, &true, &false);
 
     // Base fees clamp to configured minimums: 100 + 50 + 100 = 250
     // Early discount applies after clamp on Platform only: 100 -> 90
     assert_eq!(regular_fees, 250);
     assert_eq!(early_fees, 240);
+
+    // Amount 1 cannot cover the 250 fee, so it rejects with InvalidAmount
+    let small_result = client.try_calculate_transaction_fees(&user, &1, &false, &false);
+    assert_eq!(small_result, Err(Ok(QuickLendXError::InvalidAmount)));
 }
 
 /// Large-amount calculations should clamp to maximums before discounts are applied.

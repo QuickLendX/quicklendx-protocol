@@ -21,7 +21,7 @@
 ///    `PauseState`; the state struct is not mutated.
 /// 8. **ALL_ENTRYPOINTS coverage** — the `ALL_ENTRYPOINTS` slice covers every
 ///    `EP_*` constant used in the tests.
-use crate::events::{PauseBlockedEvent, TOPIC_PAUSE_BLOCKED, VecEmitter};
+use crate::events::{PauseBlockedEvent, VecEmitter, TOPIC_PAUSE_BLOCKED};
 use crate::pause::{
     PauseError, PauseState, ALL_ENTRYPOINTS, EP_BID_PLACEMENT, EP_ESCROW_RELEASE,
     EP_INVESTMENT_ACTION, EP_INVOICE_UPLOAD, EP_SETTLEMENT_INITIATION,

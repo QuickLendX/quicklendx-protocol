@@ -2,9 +2,12 @@
 
 This document describes the accepted event schemas for the POST `/api/v1/events` endpoint. Send either a single event object or an array of event objects. Unknown or malformed events are rejected with a structured 400 response and raw payload values are not echoed in validation errors.
 
+> **Note for Operators:** For recommendations on which events to alert on and reasonable volume thresholds, see the [Monitoring Guide](MONITORING.md).
+
 ## Supported Event Types
 
 ### InvoiceSettled
+
 ```
 {
   "id": "string (unique)",
@@ -12,11 +15,14 @@ This document describes the accepted event schemas for the POST `/api/v1/events`
   "txHash": "string",
   "type": "InvoiceSettled",
   "payload": {
-    "invoice_id": "string",
-    "business": "string",
-    "investor": "string",
-    "amount": "string",
-    ...
+    "invoice_id":      "string",
+    "amount":          "string",
+    "ledger":          number,
+    "business":        "string",
+    "investor":        "string",
+    "investor_return": "string",
+    "platform_fee":    "string",
+    "timestamp":       number
   },
   "timestamp": number,
   "complianceHold": boolean,
@@ -25,6 +31,7 @@ This document describes the accepted event schemas for the POST `/api/v1/events`
 ```
 
 ### PaymentRecorded
+
 ```
 {
   "id": "string (unique)",
@@ -44,6 +51,7 @@ This document describes the accepted event schemas for the POST `/api/v1/events`
 ```
 
 ### DisputeCreated
+
 ```
 {
   "id": "string (unique)",
@@ -62,6 +70,7 @@ This document describes the accepted event schemas for the POST `/api/v1/events`
 ```
 
 ### DisputeResolved
+
 ```
 {
   "id": "string (unique)",
@@ -80,6 +89,7 @@ This document describes the accepted event schemas for the POST `/api/v1/events`
 ```
 
 ## Validation Rules
+
 - All fields are required unless marked optional.
 - Unknown event types are rejected.
 - Each event must have a stable unique `id`; replaying a previously processed `id` is a no-op.
@@ -88,11 +98,13 @@ This document describes the accepted event schemas for the POST `/api/v1/events`
 - No raw event payloads are echoed in error responses.
 
 ## Response Shape
+
 Successful events return `status: "processed"`. Duplicate events return `status: "duplicate"` and do not trigger notifications again. Invalid items return `status: "rejected"` with sanitized validation errors.
 
 Mixed batches return a per-event `results` array. If any item is rejected, the HTTP status is 400 while valid non-duplicate items in the same batch may still be processed.
 
 ## Example Batch
+
 ```
 [
   { ...InvoiceSettled },

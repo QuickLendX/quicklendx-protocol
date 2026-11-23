@@ -43,6 +43,7 @@ mod tests {
             &String::from_str(env, "Invoice for settlement tests"),
             &InvoiceCategory::Services,
             &Vec::new(env),
+            &None,
         );
         client.verify_invoice(&invoice_id);
         client.submit_investor_kyc(&investor, &String::from_str(env, "investor-kyc"));
@@ -52,6 +53,7 @@ mod tests {
             &invoice_id,
             &invoice_amount,
             &(invoice_amount + 100),
+            &BytesN::from_array(&env, &[0u8; 32]),
         );
         client.accept_bid(&invoice_id, &bid_id);
         (invoice_id, business, investor, currency)
@@ -63,7 +65,7 @@ mod tests {
         env.mock_all_auths();
         let contract_id = env.register(QuickLendXContract, ());
         let client = QuickLendXContractClient::new(&env, &contract_id);
-        
+
         let invoice_amount = 1_000;
         let (invoice_id, _business, investor, currency) =
             setup_funded_invoice(&env, &client, &contract_id, invoice_amount);
@@ -74,7 +76,7 @@ mod tests {
         // Make partial payments
         env.ledger().set_timestamp(2_000);
         client.process_partial_payment(&invoice_id, &400, &String::from_str(&env, "pay-1"));
-        
+
         env.ledger().set_timestamp(2_100);
         client.process_partial_payment(&invoice_id, &300, &String::from_str(&env, "pay-2"));
 
@@ -91,7 +93,7 @@ mod tests {
         // Verify finalization
         let invoice = client.get_invoice(&invoice_id);
         assert_eq!(invoice.status, InvoiceStatus::Paid);
-        
+
         let finalized = env.as_contract(&contract_id, || {
             is_invoice_finalized(&env, &invoice_id).unwrap()
         });
@@ -99,8 +101,11 @@ mod tests {
 
         // Assert balances (investor should have received back their investment)
         let investor_balance_after = token_client.balance(&investor);
-        assert!(investor_balance_after > investor_balance_before, "Investor should have received funds");
-        
+        assert!(
+            investor_balance_after > investor_balance_before,
+            "Investor should have received funds"
+        );
+
         // Assert no further payment
         let result = client.try_process_partial_payment(
             &invoice_id,

@@ -72,6 +72,7 @@ This document defines the typed error surface for `QuickLendXError`, the validat
 | 2200 | `TokenTransferFailed` | Underlying token contract transfer or transfer-from failed. |
 | 2201 | `MaintenanceModeActive` | Mutating operation was attempted while maintenance mode is enabled. |
 | 2202 | `DuplicateDefaultTransition` | Default transition was attempted more than once for the same invoice. |
+| 2207 | `ActiveDisputeExists` | Report/analytics-snapshot generation (`export_analytics_snapshot`) was attempted while an invoice has an unresolved (`Disputed` or `UnderReview`) dispute. |
 
 ## Input validation strategy
 

@@ -34,7 +34,7 @@ cargo install --locked stellar-cli@23.0.0
 
 ---
 
-### 🧪Running Project
+### 🧪 Running Project
 
 - From the root of the project, run the following command:
 
@@ -49,6 +49,22 @@ This compiles the contract using the top-level workspace configuration.
 ```bash
 cargo test
 ```
+
+### 🔗 Auto-generated TypeScript Bindings
+
+The build pipeline automatically generates **TypeScript client bindings** from the compiled WASM contract. These bindings provide type-safe interfaces for interacting with the deployed contract and are consumed by `quicklendx-frontend`.
+
+**How it works:**
+
+- Running `make build` (or just `make`) performs two steps:
+  1. Compiles the contract to WASM via `stellar contract build`
+  2. Generates TypeScript bindings into the `bindings/` directory
+- Running `make bindings` regenerates bindings from an existing WASM artifact (idempotent — safe to re-run)
+- Running `make wasm` compiles the WASM without regenerating bindings
+
+**If the `stellar` CLI does not support the `bindings typescript` subcommand**, the step is skipped gracefully with a diagnostic — no build failure.
+
+**Generated files are gitignored** and must be regenerated locally. Any code referencing the bindings imports should import from `bindings/` (relative to this crate).
 
 ### 🔬 Running Fuzz Tests
 
@@ -82,6 +98,18 @@ cargo test --features fuzz-tests fuzz_store_invoice_valid_ranges
 - All critical math operations are tested for overflow/underflow
 - State consistency is verified after each operation
 - Invalid inputs must return errors, never panic
+
+---
+
+### 🧹 Before Submitting
+
+Before opening a PR, ensure:
+
+1. **Build succeeds:** `make build` compiles WASM and regenerates bindings
+2. **Tests pass:** `cargo test` runs the full suite
+3. **Lint is clean:** `cargo clippy --workspace --all-targets -- -D warnings`
+4. **Format is clean:** `cargo fmt --all`
+5. **WASM size within budget:** `./scripts/check-wasm-size.sh`
 
 ---
 

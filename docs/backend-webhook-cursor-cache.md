@@ -158,6 +158,32 @@ swap for Redis). Key design decisions:
 |-----------|---------|-----------|
 | `invoiceDetailKey(id)` | `invoice:<id>` | Any invoice event |
 | `bestBidKey(id)` | `best_bid:<id>` | Any bid or invoice event |
+| `invoiceKeyPrefix(id)` | `invoice:<id>:` | Bulk invalidation only (delimiter-terminated) |
+| `bidKeyPrefix(id)` | `best_bid:<id>:` | Bulk invalidation only (delimiter-terminated) |
+
+The bulk-invalidation prefixes are **delimiter-terminated**, and
+`invalidateInvoice(id)` deletes the exact keys *and* the delimited prefixes.
+`invalidateInvoice("0xab")` therefore evicts `invoice:0xab` and
+`best_bid:0xab` but leaves `invoice:0xabc` and `best_bid:0xabc` untouched.
+
+### Consistency guarantee
+
+Every cache key carries a monotonically increasing **generation**. An
+invalidation bumps the generation of every key it affects – including keys
+that are not cached yet but have a fetch in flight – before it touches the
+store. A fetch captures the generation of its key before it starts and only
+writes to the store while that generation is still current.
+
+A fetch that lost the race against an invalidation is **never cached**: its
+value is handed back to the caller with `is_stale: true` so the caller can
+surface the freshness warning, and the next read refetches. Financial data is
+never served silently stale.
+
+Fetches are **single-flight per key**: concurrent misses share one fetch, and
+at most one background revalidation runs per key at a time. A rejected fetch
+releases the slot, so the next read retries instead of replaying the failure.
+`flush()` additionally bumps a global epoch, so a fetch that was in flight
+during a full re-index cannot repopulate the cache with pre-flush data.
 
 ### Usage
 

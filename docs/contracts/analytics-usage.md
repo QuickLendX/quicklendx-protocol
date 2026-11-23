@@ -21,9 +21,10 @@ The analytics module provides comprehensive metrics and reporting for the QuickL
 - **get_financial_metrics (period)**: Get financial statistics for a specified period (total volume, fees, profits, average return rate, volume by category).
 
 ### 5. Business & Investor Reports
-- **generate_business_report (auth)**: Authenticated businesses can generate detailed reports for a given period (invoices, funding, volume, category breakdown, ratings, etc.).
-- **generate_investor_report (auth)**: Authenticated investors can generate reports for a given period (investments, returns, success/default rates, risk tolerance, portfolio diversity).
+- **generate_business_report**: Generates a detailed business report for a given period (invoices, funding, volume, category breakdown, ratings, etc.).
+- **generate_investor_report**: Generates an investor report for a given period (investments, returns, success/default rates, risk tolerance, portfolio diversity).
 - **get_business_report / get_investor_report**: Retrieve stored reports by ID.
+- For lifecycle, retention, and storage semantics, see [`docs/QLX_REPORT_LIFECYCLE.md`](../QLX_REPORT_LIFECYCLE.md).
 
 ### 6. Analytics Summary
 - **get_analytics_summary**: Returns a tuple of platform and performance metrics for quick overview.
@@ -61,13 +62,13 @@ let metrics = contract.get_financial_metrics(&TimePeriod::Monthly);
 
 ### Business Report
 ```rust
-let report = contract.generate_business_report(&business_address, &TimePeriod::Quarterly); // Requires business auth
+let report = contract.generate_business_report(&business_address, &TimePeriod::Quarterly);
 let stored = contract.get_business_report(&report.report_id);
 ```
 
 ### Investor Report
 ```rust
-let report = contract.generate_investor_report(&investor_address, &TimePeriod::Yearly); // Requires investor auth
+let report = contract.generate_investor_report(&investor_address, &TimePeriod::Yearly);
 let stored = contract.get_investor_report(&report.report_id);
 ```
 

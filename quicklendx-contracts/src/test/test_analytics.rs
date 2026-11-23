@@ -68,7 +68,7 @@ fn upload(
         &String::from_str(env, desc),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    )
+        &None)
 }
 
 // ─── 1–9: TimePeriod edge arithmetic (pure — no contract needed) ──────────────

@@ -36,7 +36,13 @@ const accessLogs: AccessLogEntry[] = [];
 const MAX_LOGS = 10000;
 
 /**
- * Log an access event to sensitive data
+ * Log an access event to sensitive data.
+ *
+ * Failure-boundary invariants:
+ * - The in-memory ring-buffer push and MAX_LOGS trim always complete first so
+ *   the entry is never silently lost even if console.log throws.
+ * - console.log failures are swallowed and emitted to console.error to avoid
+ *   a broken logging transport taking down a live request.
  */
 export function logAccess(entry: Omit<AccessLogEntry, "timestamp" | "correlationId">): void {
   const correlationId = getCorrelationId();
@@ -46,6 +52,8 @@ export function logAccess(entry: Omit<AccessLogEntry, "timestamp" | "correlation
     timestamp: new Date().toISOString()
   };
 
+  // Persist to ring-buffer before attempting any I/O so the record is never
+  // lost even when the console transport below throws.
   accessLogs.push(logEntry);
 
   // Trim old logs to prevent memory issues
@@ -53,9 +61,16 @@ export function logAccess(entry: Omit<AccessLogEntry, "timestamp" | "correlation
     accessLogs.shift();
   }
 
-  // In production, this would send to a logging service (e.g., Winston, ELK stack)
-  const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
-  console.log(`${correlationPrefix}[ACCESS] ${logEntry.action.toUpperCase()} ${logEntry.resource} - User: ${logEntry.userId || "anonymous"} - IP: ${logEntry.ipAddress || "unknown"}`);
+  // In production, this would send to a logging service (e.g., Winston, ELK stack).
+  // Guard against a broken/replaced console implementation so that a transport
+  // failure never propagates into the caller (e.g. the res.json override).
+  try {
+    const correlationPrefix = correlationId ? `[${correlationId}] ` : "";
+    console.log(`${correlationPrefix}[ACCESS] ${logEntry.action.toUpperCase()} ${logEntry.resource} - User: ${logEntry.userId || "anonymous"} - IP: ${logEntry.ipAddress || "unknown"}`);
+  } catch (err) {
+    // Swallow console failures — diagnostics only; do not crash the caller.
+    try { console.error("[access-log] console.log transport error (swallowed):", err); } catch { /* nothing */ }
+  }
 }
 
 /**
@@ -119,36 +134,47 @@ export function accessLogMiddleware(
     // Capture original json method
     const originalJson = res.json.bind(res);
 
-    // Override json to capture response data
+    // Override json to capture response data.
+    //
+    // Failure-boundary invariant: logAccess errors (transport failures, thrown
+    // hooks, etc.) MUST NOT prevent originalJson from being called.  The
+    // response must always be delivered to the client regardless of what the
+    // access-log subsystem does.
     res.json = function(body: any) {
-      // Identify fields in request
-      const requestData = { ...req.query, ...req.body };
-      const { allSensitive, piiFields } = identifySensitiveFields(requestData);
+      try {
+        // Identify fields in request
+        const requestData = { ...req.query, ...(req.body ?? {}) };
+        const { allSensitive, piiFields } = identifySensitiveFields(requestData);
 
-      // Identify fields in response
-      let responseSensitive: string[] = [];
-      let responsePii: string[] = [];
-      
-      if (body && typeof body === "object") {
-        const responseFields = identifySensitiveFields(body);
-        responseSensitive = responseFields.allSensitive;
-        responsePii = responseFields.piiFields;
+        // Identify fields in response
+        let responseSensitive: string[] = [];
+        let responsePii: string[] = [];
+
+        if (body && typeof body === "object") {
+          const responseFields = identifySensitiveFields(body);
+          responseSensitive = responseFields.allSensitive;
+          responsePii = responseFields.piiFields;
+        }
+
+        // Log the access
+        logAccess({
+          action,
+          resource,
+          resourceId: typeof req.params.id === "string" ? req.params.id : undefined,
+          userId: getUserId(req),
+          ipAddress: getClientIp(req),
+          userAgent: req.headers["user-agent"],
+          fields: [...allSensitive, ...responseSensitive],
+          sensitiveFields: responseSensitive,
+          piiFields: responsePii,
+          status: res.statusCode >= 200 && res.statusCode < 400 ? "success" : "failure",
+          error: res.statusCode >= 400 ? `HTTP ${res.statusCode}` : undefined
+        });
+      } catch (err) {
+        // Swallow logging errors — diagnostics only; the response must still
+        // be delivered so that a broken access-log never causes a 500.
+        try { console.error("[access-log] accessLogMiddleware logging error (swallowed):", err); } catch { /* nothing */ }
       }
-
-      // Log the access
-      logAccess({
-        action,
-        resource,
-        resourceId: typeof req.params.id === "string" ? req.params.id : undefined,
-        userId: getUserId(req),
-        ipAddress: getClientIp(req),
-        userAgent: req.headers["user-agent"],
-        fields: [...allSensitive, ...responseSensitive],
-        sensitiveFields: responseSensitive,
-        piiFields: responsePii,
-        status: res.statusCode >= 200 && res.statusCode < 400 ? "success" : "failure",
-        error: res.statusCode >= 400 ? `HTTP ${res.statusCode}` : undefined
-      });
 
       return originalJson(body);
     };

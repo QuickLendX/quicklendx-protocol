@@ -515,3 +515,12 @@ Consequences:
 - **Deterministic**: identical inputs always produce identical outputs (no randomness, no timestamp dependency in the formula).
 - **Admin-gated config**: only the admin address can change `fee_bps`; all changes emit an auditable event.
 - **Immediate effect**: fee config changes apply to the very next `calculate_profit` call with no delay or buffering.
+
+---
+
+## Related Documentation
+
+- [Platform Fee & Treasury Split Operations Guide](./platform-fee-ops.md)
+- [Revenue Split Architecture](./revenue-split.md)
+- [Access Control Matrix](./access-control.md)
+

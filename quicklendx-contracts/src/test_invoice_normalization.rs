@@ -38,7 +38,7 @@ fn make_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &tags,
-    )
+        &None)
 }
 
 // ----------------------------------------------------------------------------
@@ -95,7 +95,7 @@ fn test_whitespace_only_tag_rejected() {
         &String::from_str(&env, "Spaces test"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidTag);
 }
@@ -119,7 +119,7 @@ fn test_case_duplicate_tags_rejected_at_creation() {
         &String::from_str(&env, "Dup test"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidTag);
 }
@@ -143,7 +143,7 @@ fn test_whitespace_duplicate_tags_rejected_at_creation() {
         &String::from_str(&env, "Pad dup test"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidTag);
 }

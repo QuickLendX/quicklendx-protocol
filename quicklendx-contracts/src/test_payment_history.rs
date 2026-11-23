@@ -62,11 +62,18 @@ fn test_payment_history_deduplication() {
     let nonce = String::from_str(&env, "duplicate_nonce");
     let timestamp = env.ledger().timestamp();
 
-    // First payment
+    // First payment succeeds
     client.record_payment(&invoice_id, &1000, &timestamp, &nonce);
     
-    // Duplicate payment (same nonce)
-    client.record_payment(&invoice_id, &1000, &timestamp, &nonce);
+    // Duplicate payment (same nonce) must be rejected
+    let result = client.try_record_payment(&invoice_id, &1000, &timestamp, &nonce);
+    assert!(result.is_err(), "Duplicate nonce must be rejected");
+    let err = result.unwrap_err();
+    assert_eq!(
+        err,
+        Ok(QuickLendXError::DuplicateNonce),
+        "Expected DuplicateNonce error"
+    );
 
     // Should only have 1 record
     let records = client.get_payment_records(&invoice_id, &0, &10);
@@ -94,13 +101,13 @@ fn setup_test_invoice(
         &String::from_str(env, "Test"),
         &crate::invoice::InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     
     client.submit_investor_kyc(investor, &String::from_str(env, "Investor KYC"));
     client.verify_investor(investor, &10000);
     
-    let bid_id = client.place_bid(investor, &invoice_id, &5000, &10000);
+    let bid_id = client.place_bid(investor, &invoice_id, &5000, &10000, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
     
     invoice_id

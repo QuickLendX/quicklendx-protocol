@@ -88,3 +88,66 @@ loss**. Once Soroban host reclaims an expired entry:
 There is **no recovery mechanism** for entries that have been garbage-collected
 by the host. Operators must ensure the weekly extension job is reliable and
 monitored.
+
+## Pruning Terminal Invoices
+
+`prune_terminal_invoices` removes fully-resolved (terminal-state) invoices from
+persistent storage after a configurable retention window. This bounds long-term
+storage costs and reduces the number of keys touched by each TTL-extension sweep.
+
+### Eligible statuses
+
+Only invoices in a **terminal status** may be pruned:
+
+| Status      | Terminal timestamp field      |
+|-------------|-------------------------------|
+| `Paid`      | `settled_at`                  |
+| `Defaulted` | `created_at` (fallback)       |
+| `Cancelled` | `created_at` (fallback)       |
+| `Refunded`  | `created_at` (fallback)       |
+
+Invoices in `Pending`, `Verified`, or `Funded` status are **never** pruned,
+regardless of age. This safety guard protects active and disputed invoices.
+
+### Retention window
+
+The caller supplies `older_than_secs` — a minimum age in ledger seconds. An
+invoice is pruned only when:
+
+```
+terminal_timestamp + older_than_secs < current_ledger_timestamp
+```
+
+A value of `0` prunes all terminal invoices (useful for testing or full cleanup).
+A value of `30 * 24 * 3600` (~30 days) matches the protocol's
+`PERSISTENT_TTL_THRESHOLD` and is the recommended production setting.
+
+### Irreversibility
+
+Pruning removes the invoice record **and all secondary index entries** (status,
+business, customer, tax_id, tag, category) from persistent storage. **There is no
+undo.** Operators should test with a dry-run retention window (e.g., 10 years)
+to inspect which invoices would be affected before running with a real window.
+
+### Pagination
+
+The prune is paginated with a max page size of 100. Pass `next_offset` from the
+returned `PruneReport` as `offset` on the next call. Because pruning deletes
+entries, the offset may shift between pages; callers should restart from
+`offset = 0` when a page returns `scanned = 0`.
+
+### Entrypoint
+
+```rust
+fn prune_terminal_invoices(
+    env: Env,
+    admin: Address,
+    older_than_secs: u64,
+    offset: u32,
+    limit: u32,
+) -> Result<PruneReport, QuickLendXError>
+```
+
+- **Authorization**: admin-only (checked via `AdminStorage::require_admin`).
+- **Returns**: `PruneReport { scanned, pruned, next_offset }`.
+- **Safe**: never touches non-terminal invoices regardless of age.

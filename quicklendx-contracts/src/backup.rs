@@ -1,11 +1,12 @@
 use crate::errors::QuickLendXError;
 use crate::types::Invoice;
-use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, Vec, TryFromVal};
+use soroban_sdk::{contracttype, symbol_short, BytesN, Env, String, TryFromVal, Vec};
 
 const RETENTION_POLICY_KEY: soroban_sdk::Symbol = symbol_short!("bkup_pol");
 const BACKUP_COUNTER_KEY: soroban_sdk::Symbol = symbol_short!("bkup_cnt");
 const BACKUP_LIST_KEY: soroban_sdk::Symbol = symbol_short!("backups");
 const BACKUP_DATA_KEY: soroban_sdk::Symbol = symbol_short!("bkup_data");
+pub const PENDING_BACKFILL_KEY: soroban_sdk::Symbol = symbol_short!("pf_back");
 const MAX_BACKUP_DESCRIPTION_LENGTH: u32 = 128;
 
 /// A stored snapshot of all invoices at a point in time.
@@ -79,6 +80,18 @@ impl Default for BackupRetentionPolicy {
 /// point for restoring data.
 pub struct BackupStorage;
 
+/// Report returned by the backup cleanup dry-run.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BackupCleanupDryRunReport {
+    /// Number of backups that would be purged.
+    pub would_purge_count: u32,
+    /// Number of backups that would survive.
+    pub would_retain_count: u32,
+    /// Auto-cleanup is disabled; no actual purge would occur.
+    pub cleanup_disabled: bool,
+}
+
 impl BackupStorage {
     fn validate_backup_metadata(
         backup: &Backup,
@@ -88,7 +101,7 @@ impl BackupStorage {
             return Err(QuickLendXError::StorageError);
         }
 
-        if backup.description.len() == 0 || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
+        if backup.description.is_empty() || backup.description.len() > MAX_BACKUP_DESCRIPTION_LENGTH
         {
             return Err(QuickLendXError::InvalidDescription);
         }
@@ -112,7 +125,7 @@ impl BackupStorage {
         env.storage()
             .instance()
             .get(&RETENTION_POLICY_KEY)
-            .unwrap_or_else(|| BackupRetentionPolicy::default())
+            .unwrap_or_default()
     }
 
     /// Set the backup retention policy (admin only - caller must enforce auth).
@@ -173,10 +186,13 @@ impl BackupStorage {
     pub fn get_backup(env: &Env, backup_id: &BytesN<32>) -> Option<Backup> {
         let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)?;
 
-        if let Ok(map) = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val) {
+        if let Ok(map) =
+            soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
+        {
             let version_key = soroban_sdk::Symbol::new(env, "format_version");
             if map.contains_key(version_key.clone()) {
-                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v)) {
+                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v))
+                {
                     if version == 2 {
                         Backup::try_from_val(env, &raw_val).ok()
                     } else if version == 1 {
@@ -198,20 +214,26 @@ impl BackupStorage {
     }
 
     /// Verify version of a stored backup and reject unsupported/malformed payloads.
-    pub fn verify_backup_version(env: &Env, backup_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
+    pub fn verify_backup_version(
+        env: &Env,
+        backup_id: &BytesN<32>,
+    ) -> Result<u32, QuickLendXError> {
         let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-        if let Ok(map) = soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val) {
+        if let Ok(map) =
+            soroban_sdk::Map::<soroban_sdk::Symbol, soroban_sdk::Val>::try_from_val(env, &raw_val)
+        {
             let version_key = soroban_sdk::Symbol::new(env, "format_version");
             if map.contains_key(version_key.clone()) {
-                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v)) {
+                if let Some(Ok(version)) = map.get(version_key).map(|v| u32::try_from_val(env, &v))
+                {
                     if version == 2 {
                         Ok(2)
                     } else if version == 1 {
                         Ok(1)
                     } else {
-                        Err(QuickLendXError::BackupVersionUnsupported)
+                        Err(QuickLendXError::BackfillInProgress)
                     }
                 } else {
                     Err(QuickLendXError::StorageError)
@@ -266,21 +288,34 @@ impl BackupStorage {
     /// Store the invoice payload for a backup.
     pub fn store_backup_data(env: &Env, backup_id: &BytesN<32>, invoices: &Vec<Invoice>) {
         let key = (BACKUP_DATA_KEY, backup_id.clone());
-        env.storage().instance().set(&key, invoices);
+        env.storage().persistent().set(&key, invoices);
+        crate::storage::bump_persistent(env, &key);
     }
 
     /// Retrieve the invoice payload for a backup.
     pub fn get_backup_data(env: &Env, backup_id: &BytesN<32>) -> Option<Vec<Invoice>> {
         let key = (BACKUP_DATA_KEY, backup_id.clone());
-        env.storage().instance().get(&key)
+        if let Some(data) = env.storage().persistent().get(&key) {
+            return Some(data);
+        }
+        let legacy: Option<Vec<Invoice>> = env.storage().instance().get(&key);
+        if let Some(data) = legacy.clone() {
+            env.storage().persistent().set(&key, &data);
+            crate::storage::bump_persistent(env, &key);
+        }
+        legacy
+    }
+
+    pub fn purge_backup_data(env: &Env, backup_id: &BytesN<32>) {
+        let data_key = (BACKUP_DATA_KEY, backup_id.clone());
+        env.storage().persistent().remove(&data_key);
     }
 
     /// Delete a backup record and its stored invoice payload.
     pub fn purge_backup(env: &Env, backup_id: &BytesN<32>) {
         Self::remove_from_backup_list(env, backup_id);
         env.storage().instance().remove(backup_id);
-        let data_key = (BACKUP_DATA_KEY, backup_id.clone());
-        env.storage().instance().remove(&data_key);
+        Self::purge_backup_data(env, backup_id);
     }
 
     /// Validate backup data integrity.
@@ -292,16 +327,17 @@ impl BackupStorage {
     /// 4. Every invoice in the payload has a positive `amount`.
     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
         let _version = Self::verify_backup_version(env, backup_id)?;
-        let backup = Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let backup = Self::get_backup(env, backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         // Validate metadata alone first (cheap).
         Self::validate_backup_metadata(&backup, None)?;
 
         // Fetch the payload and validate together with the count.
-        let data =
-            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let data = Self::get_backup_data(env, backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-        if data.len() as u32 != backup.invoice_count {
+        if data.len() != backup.invoice_count {
             return Err(QuickLendXError::StorageError);
         }
 
@@ -344,7 +380,12 @@ impl BackupStorage {
     ///         this step does not matter because `store_invoice` is
     ///         self-contained.
     ///
-    /// Step 4  Mark the backup as Archived
+    /// Step 4  Restore invoice_count
+    ///         ----------------------
+    ///         Sets invoice_count to match the number of restored invoices,
+    ///         ensuring health/diagnostics totals are consistent.
+    ///
+    /// Step 5  Mark the backup as Archived
     ///         ----------------------------
     ///         Prevents the same backup from being restored twice, which
     ///         could cause duplicate invoice registrations if the store is
@@ -353,7 +394,7 @@ impl BackupStorage {
     ///
     /// # Errors
     ///
-    /// Returns an error *only* in step 1.  Steps 2-4 are infallible on a
+    /// Returns an error *only* in step 1.  Steps 2-5 are infallible on a
     /// well-formed Soroban environment; panics in those steps indicate a
     /// platform bug, not a contract bug.
     ///
@@ -368,31 +409,42 @@ impl BackupStorage {
     ///   indexes, causing ghost entries in status/category/tag buckets for
     ///   any invoices that existed before the restore.
     pub fn restore_from_backup(env: &Env, backup_id: &BytesN<32>) -> Result<u32, QuickLendXError> {
-        //  Step 1: validate before mutating anything
+        // Step 1: validate before mutating anything.
         Self::validate_backup(env, backup_id)?;
 
         // Fetch the validated payload.
-        let data =
-            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let data = Self::get_backup_data(env, backup_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-        let restored_count = data.len();
+        let restore_outcome: Result<u32, QuickLendXError> = (|| {
+            let restored_count = data.len();
 
-        //  Step 2: atomically clear all existing invoice state
-        crate::storage::InvoiceStorage::clear_all(env);
+            //  Step 2: atomically clear all existing invoice state
+            crate::storage::InvoiceStorage::clear_all(env);
 
-        //  Step 3: re-register every invoice, rebuilding all indexes
-        for invoice in data.iter() {
-            crate::storage::InvoiceStorage::store_invoice(env, &invoice);
-        }
+            //  Step 3: re-register every invoice, rebuilding all indexes
+            for invoice in data.iter() {
+                crate::storage::InvoiceStorage::store_invoice(env, &invoice);
+            }
 
-        // Step 4: mark the backup as archived to prevent re-use
-        if let Some(mut backup) = Self::get_backup(env, backup_id) {
-            backup.status = BackupStatus::Archived;
-            // Ignore the result - the restore itself has already succeeded.
-            let _ = Self::update_backup(env, &backup);
-        }
+            // Step 4: restore invoice_count to the restored invoice count
+            crate::storage::InvoiceStorage::set_total_count(env, restored_count);
 
-        Ok(restored_count)
+            // Step 5: mark the backup as archived to prevent re-use
+            if let Some(mut backup) = Self::get_backup(env, backup_id) {
+                backup.status = BackupStatus::Archived;
+                // Ignore the result - the restore itself has already succeeded.
+                let _ = Self::update_backup(env, &backup);
+            }
+
+            Ok(restored_count)
+        })();
+
+        // Always clear the in-progress flag, even on failure, so the contract
+        // is not stuck in "backfilling" forever.
+        env.storage().instance().remove(&PENDING_BACKFILL_KEY);
+
+        restore_outcome
     }
 
     /// Clean up old backups based on the retention policy.
@@ -464,6 +516,101 @@ impl BackupStorage {
         }
 
         Ok(removed_count)
+    }
+
+    /// Preview which backups `cleanup_old_backups` would purge without mutating state.
+    ///
+    /// Returns a `BackupCleanupDryRunReport` describing how many entries would be
+    /// removed and how many would survive under the current retention policy.
+    pub fn preview_cleanup_old_backups(env: &Env) -> BackupCleanupDryRunReport {
+        let policy = Self::get_retention_policy(env);
+
+        if !policy.auto_cleanup_enabled {
+            return BackupCleanupDryRunReport {
+                would_purge_count: 0,
+                would_retain_count: Self::get_all_backups(env).len(),
+                cleanup_disabled: true,
+            };
+        }
+
+        let backups = Self::get_all_backups(env);
+        let current_time = env.ledger().timestamp();
+        let mut active: Vec<(BytesN<32>, u64)> = Vec::new(env);
+
+        for backup_id in backups.iter() {
+            if let Some(backup) = Self::get_backup(env, &backup_id) {
+                if backup.status == BackupStatus::Active {
+                    active.push_back((backup_id, backup.timestamp));
+                }
+            }
+        }
+
+        // Sort oldest first (bubble sort, same as cleanup_old_backups).
+        let len = active.len();
+        for i in 0..len {
+            for j in 0..len.saturating_sub(i + 1) {
+                if active.get(j).unwrap().1 > active.get(j + 1).unwrap().1 {
+                    let tmp = active.get(j).unwrap().clone();
+                    active.set(j, active.get(j + 1).unwrap().clone());
+                    active.set(j + 1, tmp);
+                }
+            }
+        }
+
+        let mut would_purge: u32 = 0;
+
+        // Count age-expired entries.
+        if policy.max_age_seconds > 0 {
+            let mut i = 0;
+            while i < active.len() {
+                let age = current_time.saturating_sub(active.get(i).unwrap().1);
+                if age > policy.max_age_seconds {
+                    would_purge = would_purge.saturating_add(1);
+                    active.remove(i);
+                } else {
+                    i += 1;
+                }
+            }
+        }
+
+        // Count oldest entries exceeding max_backups.
+        if policy.max_backups > 0 {
+            while active.len() > policy.max_backups {
+                would_purge = would_purge.saturating_add(1);
+                active.remove(0);
+            }
+        }
+
+        BackupCleanupDryRunReport {
+            would_purge_count: would_purge,
+            would_retain_count: active.len(),
+            cleanup_disabled: false,
+        }
+    }
+
+    /// Returns true when a destructive backfill operation is currently
+    /// mutating invoice state (between validate and archive in
+    /// `restore_from_backup`).
+    ///
+    /// Used by the WASM upgrade guard to refuse migration while a backfill is
+    /// in progress: the new contract code would otherwise come online reading
+    /// partially-restored state with no signal that it is partial.
+    pub fn is_pending_backfill(env: &Env) -> bool {
+        env.storage()
+            .instance()
+            .get(&PENDING_BACKFILL_KEY)
+            .unwrap_or(false)
+    }
+
+    /// Guard: reject any operation that must not race an in-flight backfill.
+    ///
+    /// Returns `QuickLendXError::BackfillInProgress` while a backfill holds
+    /// the in-progress flag; `Ok(())` once the flag has been cleared.
+    pub fn require_no_pending_backfill(env: &Env) -> Result<(), QuickLendXError> {
+        if Self::is_pending_backfill(env) {
+            return Err(QuickLendXError::BackfillInProgress);
+        }
+        Ok(())
     }
 
     /// Retrieve all invoices from storage across all possible statuses.

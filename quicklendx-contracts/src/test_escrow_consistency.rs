@@ -51,11 +51,11 @@ fn create_funded_invoice_with_escrow_for_tests(
         &String::from_str(env, "Test invoice for escrow consistency"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     
     // Create bid and accept to create escrow
-    let bid_id = client.place_bid(investor, &invoice_id, &escrow_amount, &(invoice_amount + 100));
+    let bid_id = client.place_bid(investor, &invoice_id, &escrow_amount, &(invoice_amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
     
     (invoice_id, bid_id)
@@ -129,6 +129,8 @@ fn test_escrow_status_consistency_released_state() {
     );
     
     // Release escrow
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
     
     // Test: Status and details should be consistent for Released state
@@ -208,6 +210,8 @@ fn test_escrow_status_consistency_multiple_operations() {
     assert_eq!(details1.status, EscrowStatus::Held);
     
     // Release escrow
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
     
     // Test: Status should be Released after release
@@ -282,7 +286,7 @@ fn test_escrow_status_consistency_with_real_token_transfers() {
         &String::from_str(&env, "Test invoice with real escrow"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
     
     // Setup and verify investor
@@ -291,7 +295,7 @@ fn test_escrow_status_consistency_with_real_token_transfers() {
     client.verify_investor(&admin, &investor, &5000i128);
     
     // Place bid and accept to create real escrow
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1200i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1200i128, &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
     
     // Test: Real escrow should be created and consistent
@@ -342,6 +346,8 @@ fn test_escrow_status_consistency_state_transitions() {
     previous_details = Some(details1.clone());
     
     // After release: Released state
+    client.approve_early_escrow_release(&invoice_id, &business);
+    client.approve_early_escrow_release(&invoice_id, &investor);
     client.release_escrow_funds(&invoice_id);
     let (status2, details2) = get_escrow_status_and_details(&env, &client, &invoice_id);
     assert_eq!(status2, EscrowStatus::Released);
@@ -438,6 +444,8 @@ fn test_escrow_status_consistency_with_multiple_invoices() {
     );
     
     // Release first escrow
+    client.approve_early_escrow_release(&invoice_id1, &business);
+    client.approve_early_escrow_release(&invoice_id1, &investor);
     client.release_escrow_funds(&invoice_id1);
     
     // Test: Each escrow should have consistent status/details independently

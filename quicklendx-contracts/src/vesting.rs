@@ -10,9 +10,13 @@ use soroban_sdk::{contracttype, symbol_short, Address, Env, Symbol};
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::payments::transfer_funds;
+use crate::storage::extend_persistent_ttl;
 
 const VESTING_COUNTER_KEY: Symbol = symbol_short!("vest_cnt");
 const VESTING_KEY: Symbol = symbol_short!("vest");
+/// Per-token outstanding vesting reserve key: tracks the total amount of token
+/// held in the contract that is still owed to vesting beneficiaries.
+const VESTING_RESERVE_KEY: Symbol = symbol_short!("vest_res");
 
 /// Events emitted by the vesting module.
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -85,6 +89,92 @@ impl VestingStorage {
             .persistent()
             .set(&Self::key(schedule.id), schedule);
     }
+
+    // -----------------------------------------------------------------------
+    // Per-token outstanding vesting reserve
+    // -----------------------------------------------------------------------
+
+    fn reserve_key(token: &Address) -> (Symbol, Address) {
+        (VESTING_RESERVE_KEY, token.clone())
+    }
+
+    /// Return the total amount of `token` currently owed to vesting beneficiaries.
+    /// Returns 0 if no counter has been stored yet.
+    pub fn get_outstanding_vesting(env: &Env, token: &Address) -> i128 {
+        let key = Self::reserve_key(token);
+        let result: Option<i128> = env.storage().persistent().get(&key);
+        if let Some(v) = result {
+            extend_persistent_ttl(env, &key);
+            v.max(0)
+        } else {
+            0
+        }
+    }
+
+    /// Increase the outstanding vesting reserve for `token` by `amount`.
+    /// Called when a new vesting schedule is created.
+    pub(crate) fn outstanding_vesting_increase(
+        env: &Env,
+        token: &Address,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        if amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        let key = Self::reserve_key(token);
+        let current: i128 = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(0i128)
+            .max(0);
+        let new_value = current
+            .checked_add(amount)
+            .ok_or(QuickLendXError::ArithmeticOverflow)?;
+        env.storage().persistent().set(&key, &new_value);
+        extend_persistent_ttl(env, &key);
+        Ok(())
+    }
+
+    /// Decrease the outstanding vesting reserve for `token` by `amount`.
+    /// Called when tokens are released to a beneficiary.
+    /// Saturates to zero rather than underflowing (defensive: keeps emergency
+    /// guard fail-closed if state is ever inconsistent).
+    pub(crate) fn outstanding_vesting_decrease(
+        env: &Env,
+        token: &Address,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        if amount <= 0 {
+            return Err(QuickLendXError::InvalidAmount);
+        }
+        let key = Self::reserve_key(token);
+        let current: i128 = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .unwrap_or(0i128)
+            .max(0);
+        // If the counter would go below zero, clamp to zero (defensive guard).
+        let new_value = current.saturating_sub(amount).max(0);
+        env.storage().persistent().set(&key, &new_value);
+        extend_persistent_ttl(env, &key);
+        Ok(())
+    }
+}
+
+/// Aggregated vesting summary for a single beneficiary across all their schedules.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct VestingSummary {
+    /// Number of schedules belonging to this user.
+    pub grant_count: u32,
+    /// Sum of `total_amount` across all schedules.
+    pub total_granted: i128,
+    /// Sum of `released_amount` across all schedules.
+    pub total_released: i128,
+    /// Sum of currently releasable amounts across all schedules.
+    pub total_releasable: i128,
 }
 
 pub struct Vesting;
@@ -193,6 +283,9 @@ impl Vesting {
         let contract = env.current_contract_address();
         transfer_funds(env, &token, admin, &contract, total_amount)?;
 
+        // Track the custodied amount so emergency withdrawal cannot sweep it.
+        VestingStorage::outstanding_vesting_increase(env, &token, total_amount)?;
+
         VestingStorage::store(env, &schedule);
         env.events().publish(
             (symbol_short!("vesting"), symbol_short!("created")),
@@ -213,6 +306,44 @@ impl Vesting {
     /// Return the vesting schedule, if present.
     pub fn get_schedule(env: &Env, id: u64) -> Option<VestingSchedule> {
         VestingStorage::get(env, id)
+    }
+
+    /// Return an aggregated summary of all vesting schedules for `user`.
+    ///
+    /// Scans every schedule from id 1 up to the current counter value and
+    /// collects those whose `beneficiary` matches `user`.  Returns a zeroed
+    /// `VestingSummary` when no matching schedule exists.
+    pub fn get_summary_for_user(env: &Env, user: &Address) -> VestingSummary {
+        let max_id: u64 = env
+            .storage()
+            .instance()
+            .get(&VESTING_COUNTER_KEY)
+            .unwrap_or(0);
+
+        let mut grant_count: u32 = 0;
+        let mut total_granted: i128 = 0;
+        let mut total_released: i128 = 0;
+        let mut total_releasable: i128 = 0;
+
+        for id in 1..=max_id {
+            if let Some(schedule) = VestingStorage::get(env, id) {
+                if &schedule.beneficiary == user {
+                    grant_count = grant_count.saturating_add(1);
+                    total_granted = total_granted.saturating_add(schedule.total_amount);
+                    total_released = total_released.saturating_add(schedule.released_amount);
+                    if let Ok(r) = Self::releasable_amount(env, &schedule) {
+                        total_releasable = total_releasable.saturating_add(r);
+                    }
+                }
+            }
+        }
+
+        VestingSummary {
+            grant_count,
+            total_granted,
+            total_released,
+            total_releasable,
+        }
     }
 
     /// Calculate total vested amount for a schedule at current time.
@@ -301,8 +432,7 @@ impl Vesting {
     pub fn release(env: &Env, beneficiary: &Address, id: u64) -> Result<i128, QuickLendXError> {
         beneficiary.require_auth();
 
-        let mut schedule =
-            VestingStorage::get(env, id).ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let mut schedule = VestingStorage::get(env, id).unwrap();
 
         if &schedule.beneficiary != beneficiary {
             return Err(QuickLendXError::Unauthorized);
@@ -322,6 +452,9 @@ impl Vesting {
         }
         let contract = env.current_contract_address();
         transfer_funds(env, &schedule.token, &contract, beneficiary, releasable)?;
+
+        // Reduce the outstanding reserve now that tokens have left the contract.
+        VestingStorage::outstanding_vesting_decrease(env, &schedule.token, releasable)?;
 
         schedule.released_amount = schedule
             .released_amount

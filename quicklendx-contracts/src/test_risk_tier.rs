@@ -10,7 +10,7 @@
 #[cfg(test)]
 mod test_risk_tier_calculation {
     use crate::verification::{
-        calculate_investment_limit, calculate_investor_risk_score, determine_investor_tier,
+        calculate_investment_limit, calculate_investor_risk_score, compute_investor_tier,
         determine_risk_level, InvestorRiskLevel, InvestorTier, InvestorVerificationStorage,
     };
     use crate::{QuickLendXContract, QuickLendXContractClient};
@@ -194,7 +194,7 @@ mod test_risk_tier_calculation {
 
         InvestorVerificationStorage::update(&env, &v);
 
-        let tier = determine_investor_tier(&env, &investor, 10).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 10).unwrap();
         assert_eq!(tier, InvestorTier::VIP, "Should be VIP tier");
     }
 
@@ -214,7 +214,7 @@ mod test_risk_tier_calculation {
 
         InvestorVerificationStorage::update(&env, &v);
 
-        let tier = determine_investor_tier(&env, &investor, 20).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 20).unwrap();
         assert_eq!(tier, InvestorTier::Platinum, "Should be Platinum tier");
     }
 
@@ -234,7 +234,7 @@ mod test_risk_tier_calculation {
 
         InvestorVerificationStorage::update(&env, &v);
 
-        let tier = determine_investor_tier(&env, &investor, 40).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 40).unwrap();
         assert_eq!(tier, InvestorTier::Gold, "Should be Gold tier");
     }
 
@@ -254,7 +254,7 @@ mod test_risk_tier_calculation {
 
         InvestorVerificationStorage::update(&env, &v);
 
-        let tier = determine_investor_tier(&env, &investor, 55).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 55).unwrap();
         assert_eq!(tier, InvestorTier::Silver, "Should be Silver tier");
     }
 
@@ -263,7 +263,7 @@ mod test_risk_tier_calculation {
         let (env, _client, _admin) = setup();
         let investor = Address::generate(&env);
 
-        let tier = determine_investor_tier(&env, &investor, 70).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 70).unwrap();
         assert_eq!(
             tier,
             InvestorTier::Basic,
@@ -287,7 +287,7 @@ mod test_risk_tier_calculation {
 
         InvestorVerificationStorage::update(&env, &v);
 
-        let tier = determine_investor_tier(&env, &investor, 10).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 10).unwrap();
         assert_eq!(tier, InvestorTier::VIP, "Risk score 10 should be VIP");
     }
 
@@ -307,7 +307,7 @@ mod test_risk_tier_calculation {
 
         InvestorVerificationStorage::update(&env, &v);
 
-        let tier = determine_investor_tier(&env, &investor, 11).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 11).unwrap();
         assert_ne!(tier, InvestorTier::VIP, "Risk score 11 should not be VIP");
     }
 
@@ -327,7 +327,7 @@ mod test_risk_tier_calculation {
 
         InvestorVerificationStorage::update(&env, &v);
 
-        let tier = determine_investor_tier(&env, &investor, 20).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 20).unwrap();
         assert_eq!(
             tier,
             InvestorTier::Platinum,
@@ -351,7 +351,7 @@ mod test_risk_tier_calculation {
 
         InvestorVerificationStorage::update(&env, &v);
 
-        let tier = determine_investor_tier(&env, &investor, 40).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 40).unwrap();
         assert_eq!(tier, InvestorTier::Gold, "Risk score 40 should be Gold");
     }
 
@@ -371,7 +371,7 @@ mod test_risk_tier_calculation {
 
         InvestorVerificationStorage::update(&env, &v);
 
-        let tier = determine_investor_tier(&env, &investor, 60).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 60).unwrap();
         assert_eq!(tier, InvestorTier::Silver, "Risk score 60 should be Silver");
     }
 
@@ -391,7 +391,7 @@ mod test_risk_tier_calculation {
 
         InvestorVerificationStorage::update(&env, &v);
 
-        let tier = determine_investor_tier(&env, &investor, 61).unwrap();
+        let tier = compute_investor_tier(&env, &investor, 61).unwrap();
         assert_eq!(tier, InvestorTier::Basic, "Risk score 61 should be Basic");
     }
 

@@ -1,7 +1,7 @@
 # QuickLendX — Complete Event Schema Reference
 
 This document is the canonical reference for every event emitted by the
-QuickLendX protocol.  Indexers should treat field names, topic strings, and
+QuickLendX protocol. Indexers should treat field names, topic strings, and
 ordering as stable unless a breaking-change notice appears in the changelog.
 
 ---
@@ -39,12 +39,27 @@ Emitted when an invoice is fully settled.
   "type": "InvoiceSettled",
   "payload": {
     "invoice_id": "string",
-    "business":   "string",
-    "investor":   "string",
-    "amount":     "string"
+    "amount": "string",
+    "ledger": 0,
+    "business": "string",
+    "investor": "string",
+    "investor_return": "string",
+    "platform_fee": "string",
+    "timestamp": 0
   }
 }
 ```
+
+| Field             | Type     | Description                                                        |
+| ----------------- | -------- | ------------------------------------------------------------------ |
+| `invoice_id`      | `string` | Unique 32-byte invoice identifier (hex-encoded)                    |
+| `amount`          | `string` | Total amount settled (sum of all payments applied to this invoice) |
+| `ledger`          | `number` | Ledger sequence number at the time of settlement                   |
+| `business`        | `string` | Address of the business that owns the invoice                      |
+| `investor`        | `string` | Address of the investor who funded the invoice                     |
+| `investor_return` | `string` | Amount returned to the investor after fees                         |
+| `platform_fee`    | `string` | Platform fee collected                                             |
+| `timestamp`       | `number` | Ledger timestamp at emission time (seconds since epoch)            |
 
 ---
 
@@ -57,8 +72,8 @@ Emitted when a partial or full payment is recorded against an invoice.
   "type": "PaymentRecorded",
   "payload": {
     "invoice_id": "string",
-    "payer":      "string",
-    "amount":     "string"
+    "payer": "string",
+    "amount": "string"
   }
 }
 ```
@@ -74,7 +89,7 @@ Emitted when a dispute is opened for an invoice.
   "type": "DisputeCreated",
   "payload": {
     "invoice_id": "string",
-    "initiator":  "string"
+    "initiator": "string"
   }
 }
 ```
@@ -89,7 +104,7 @@ Emitted when an active dispute is resolved.
 {
   "type": "DisputeResolved",
   "payload": {
-    "invoice_id":  "string",
+    "invoice_id": "string",
     "resolved_by": "string"
   }
 }
@@ -102,10 +117,10 @@ Emitted when an active dispute is resolved.
 ### PauseBlocked
 
 Emitted on **every** call that `require_unpaused` rejects because the
-protocol is currently paused.  One event is emitted per blocked invocation —
+protocol is currently paused. One event is emitted per blocked invocation —
 there is no deduplication.
 
-**Topic constant**: `events::TOPIC_PAUSE_BLOCKED = "PauseBlocked"`  
+**Topic constant**: `events::TOPIC_PAUSE_BLOCKED = "PauseBlocked"`
 **Source module**: `src/pause.rs` → `PauseState::require_unpaused`
 
 ```json
@@ -113,29 +128,29 @@ there is no deduplication.
   "type": "PauseBlocked",
   "payload": {
     "entrypoint": "string",
-    "caller":     0,
-    "ledger_ts":  0
+    "caller": 0,
+    "ledger_ts": 0
   }
 }
 ```
 
 #### Payload fields
 
-| Field | Type | Description |
-|---|---|---|
-| `entrypoint` | `string` | Stable symbol of the blocked entrypoint (see table below) |
-| `caller` | `u64` | Numeric account ID whose call was rejected |
-| `ledger_ts` | `u64` | Ledger timestamp (seconds since epoch) at the point of rejection |
+| Field        | Type     | Description                                                      |
+| ------------ | -------- | ---------------------------------------------------------------- |
+| `entrypoint` | `string` | Stable symbol of the blocked entrypoint (see table below)        |
+| `caller`     | `u64`    | Numeric account ID whose call was rejected                       |
+| `ledger_ts`  | `u64`    | Ledger timestamp (seconds since epoch) at the point of rejection |
 
 #### `entrypoint` values
 
-| Value | Protected action |
-|---|---|
-| `"invoice_upload"` | Business uploads a new invoice |
-| `"bid_placement"` | Investor places a bid on an invoice |
-| `"settlement_initiation"` | Business initiates invoice settlement |
-| `"escrow_release"` | Business triggers escrow release |
-| `"investment_action"` | Investor takes a general investment action |
+| Value                     | Protected action                           |
+| ------------------------- | ------------------------------------------ |
+| `"invoice_upload"`        | Business uploads a new invoice             |
+| `"bid_placement"`         | Investor places a bid on an invoice        |
+| `"settlement_initiation"` | Business initiates invoice settlement      |
+| `"escrow_release"`        | Business triggers escrow release           |
+| `"investment_action"`     | Investor takes a general investment action |
 
 #### Indexer notes
 
@@ -161,12 +176,12 @@ there is no deduplication.
 
 ## Response shape
 
-| Outcome | HTTP status | `status` field |
-|---|---|---|
-| Accepted and processed | 200 | `"processed"` |
-| Known duplicate | 200 | `"duplicate"` |
-| Validation failure | 400 | `"rejected"` |
+| Outcome                | HTTP status | `status` field |
+| ---------------------- | ----------- | -------------- |
+| Accepted and processed | 200         | `"processed"`  |
+| Known duplicate        | 200         | `"duplicate"`  |
+| Validation failure     | 400         | `"rejected"`   |
 
-Mixed batches return a per-event `results` array.  If any item is rejected
+Mixed batches return a per-event `results` array. If any item is rejected
 the HTTP status is 400; valid non-duplicate items in the same batch may still
 be processed.

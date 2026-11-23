@@ -1,4 +1,6 @@
-import { describe, expect, it, beforeEach } from "@jest/globals";
+import { describe, expect, it, beforeEach, afterAll } from "@jest/globals";
+import path from "path";
+import { promises as fs } from "fs";
 import {
   createRetentionWorker,
   RetentionDependencies,
@@ -171,8 +173,9 @@ function makeWorker(overrides: {
     snapshotsMs: 14 * DAY_MS,
     batchSize: 2,
     intervalMs: 60_000,
-    archiveDir: "/tmp/retention-tests",
+    archiveDir: path.join(__dirname, "fixtures", "retention-tests"),
     actor: "system:retention-worker",
+    archiveEnabled: true,
     ...overrides.policy,
   };
 
@@ -187,8 +190,21 @@ function makeWorker(overrides: {
 }
 
 describe("RetentionWorker", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     jest.restoreAllMocks();
+    try {
+      await fs.rm(path.join(__dirname, "fixtures", "retention-tests"), { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
+  });
+
+  afterAll(async () => {
+    try {
+      await fs.rm(path.join(__dirname, "fixtures", "retention-tests"), { recursive: true, force: true });
+    } catch {
+      // ignore
+    }
   });
 
   it("records a zero-purge run and leaves stores unchanged when nothing expired", async () => {
@@ -317,7 +333,9 @@ describe("RetentionWorker", () => {
     expect(auditStore.entries.map((entry) => entry.id)).toEqual(["audit-1"]);
     expect(snapshotStore.records.map((record) => record.invoiceId)).toEqual(["inv-1"]);
     expect(appendedAudits).toHaveLength(0);
-    expect(archivedFiles).toHaveLength(3);
+    // Since raw-events now uses gzip archiving and writes directly to files,
+    // only audit logs and snapshots use the old archiveWriter.
+    expect(archivedFiles).toHaveLength(2);
   });
 
   it("does not mutate stores or write audit summaries during dry runs", async () => {

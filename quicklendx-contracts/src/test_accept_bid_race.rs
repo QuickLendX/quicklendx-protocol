@@ -55,7 +55,6 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     let _ = client.try_initialize_admin(&admin);
-    client.set_admin(&admin);
     (env, client, admin)
 }
 
@@ -125,8 +124,11 @@ fn upload_and_verify_invoice(
         &String::from_str(env, "Test invoice for race regression"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
+        &None,
+        &None,
     );
-    client.verify_invoice(&invoice_id);
+    client.verify_invoice(&client.get_admin(), &invoice_id);
     invoice_id
 }
 
@@ -137,7 +139,13 @@ fn place_bid(
     invoice_id: &BytesN<32>,
     amount: i128,
 ) -> BytesN<32> {
-    client.place_bid(investor, invoice_id, &amount, &(amount / 10))
+    client.place_bid(
+        investor,
+        invoice_id,
+        &amount,
+        &(amount / 10),
+        &BytesN::from_array(&client.env, &[0u8; 32]),
+    )
 }
 
 // ============================================================================
@@ -159,7 +167,7 @@ fn build_two_investor_race() -> (
     Address,
 ) {
     let (env, client, admin) = setup();
-    let contract_id = env.current_contract_address();
+    let contract_id = client.address.clone();
 
     let investor_a = verified_investor(&env, &client, &admin, 500_000);
     let investor_b = verified_investor(&env, &client, &admin, 500_000);
@@ -212,7 +220,10 @@ fn test_race_ordering_a_wins() {
 
     // ── Ordering: A first ────────────────────────────────────────────────────
     let result_a = client.try_accept_bid_and_fund(&invoice_id, &bid_id_a);
-    assert!(result_a.is_ok(), "First acceptance (A) must succeed; got: {result_a:?}");
+    assert!(
+        result_a.is_ok(),
+        "First acceptance (A) must succeed; got: {result_a:?}"
+    );
 
     // ── B's call arrives second ───────────────────────────────────────────────
     let result_b = client.try_accept_bid_and_fund(&invoice_id, &bid_id_b);
@@ -223,8 +234,7 @@ fn test_race_ordering_a_wins() {
 
     let err_b = result_b.unwrap_err().unwrap();
     assert!(
-        err_b == QuickLendXError::InvoiceAlreadyFunded
-            || err_b == QuickLendXError::InvalidStatus,
+        err_b == QuickLendXError::InvoiceAlreadyFunded || err_b == QuickLendXError::InvalidStatus,
         "Second acceptance must return InvoiceAlreadyFunded or InvalidStatus; got: {err_b:?}"
     );
 
@@ -277,7 +287,10 @@ fn test_race_ordering_b_wins() {
 
     // ── Ordering: B first ────────────────────────────────────────────────────
     let result_b = client.try_accept_bid_and_fund(&invoice_id, &bid_id_b);
-    assert!(result_b.is_ok(), "First acceptance (B) must succeed; got: {result_b:?}");
+    assert!(
+        result_b.is_ok(),
+        "First acceptance (B) must succeed; got: {result_b:?}"
+    );
 
     // ── A's call arrives second ───────────────────────────────────────────────
     let result_a = client.try_accept_bid_and_fund(&invoice_id, &bid_id_a);
@@ -288,8 +301,7 @@ fn test_race_ordering_b_wins() {
 
     let err_a = result_a.unwrap_err().unwrap();
     assert!(
-        err_a == QuickLendXError::InvoiceAlreadyFunded
-            || err_a == QuickLendXError::InvalidStatus,
+        err_a == QuickLendXError::InvoiceAlreadyFunded || err_a == QuickLendXError::InvalidStatus,
         "Second acceptance must return InvoiceAlreadyFunded or InvalidStatus; got: {err_a:?}"
     );
 
@@ -328,14 +340,10 @@ fn test_race_same_bid_both_orderings() {
 
     // Replay / second call must fail.
     let second = client.try_accept_bid_and_fund(&invoice_id, &bid_id_a);
-    assert!(
-        second.is_err(),
-        "Repeated accept of the same bid must fail"
-    );
+    assert!(second.is_err(), "Repeated accept of the same bid must fail");
     let err = second.unwrap_err().unwrap();
     assert!(
-        err == QuickLendXError::InvoiceAlreadyFunded
-            || err == QuickLendXError::InvalidStatus,
+        err == QuickLendXError::InvoiceAlreadyFunded || err == QuickLendXError::InvalidStatus,
         "Repeated accept must return InvoiceAlreadyFunded or InvalidStatus; got: {err:?}"
     );
 }
@@ -424,7 +432,10 @@ fn test_race_idempotent_after_accept() {
 
     // Try with a different bid — must also fail.
     let other = client.try_accept_bid_and_fund(&invoice_id, &bid_id_b);
-    assert!(other.is_err(), "Accepting a different bid on a funded invoice must fail");
+    assert!(
+        other.is_err(),
+        "Accepting a different bid on a funded invoice must fail"
+    );
 }
 
 // ============================================================================
@@ -509,13 +520,11 @@ fn test_race_three_concurrent_investors() {
     let err_b = rb.unwrap_err().unwrap();
     let err_c = rc.unwrap_err().unwrap();
     assert!(
-        err_b == QuickLendXError::InvoiceAlreadyFunded
-            || err_b == QuickLendXError::InvalidStatus,
+        err_b == QuickLendXError::InvoiceAlreadyFunded || err_b == QuickLendXError::InvalidStatus,
         "B error must be InvoiceAlreadyFunded or InvalidStatus; got {err_b:?}"
     );
     assert!(
-        err_c == QuickLendXError::InvoiceAlreadyFunded
-            || err_c == QuickLendXError::InvalidStatus,
+        err_c == QuickLendXError::InvoiceAlreadyFunded || err_c == QuickLendXError::InvalidStatus,
         "C error must be InvoiceAlreadyFunded or InvalidStatus; got {err_c:?}"
     );
 
@@ -593,7 +602,11 @@ fn test_race_accept_after_refund() {
 
     // No new escrow, no new investment.
     let inv_b = client.get_investments_by_investor(&investor_b);
-    assert_eq!(inv_b.len(), 0, "Investor B must have zero investments after post-refund rejection");
+    assert_eq!(
+        inv_b.len(),
+        0,
+        "Investor B must have zero investments after post-refund rejection"
+    );
     assert_eq!(
         token_client.balance(&contract_id),
         0,

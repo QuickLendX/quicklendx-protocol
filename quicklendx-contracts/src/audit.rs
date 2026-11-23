@@ -34,9 +34,10 @@
 //! See `src/test_audit.rs` for comprehensive integrity tests.
 
 use crate::errors::QuickLendXError;
+use crate::observability::OBSERVABILITY_SCHEMA_VERSION;
 use crate::types::{Invoice, InvoiceStatus};
 use soroban_sdk::{
-    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
+    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Symbol, Vec,
 };
 
 /// Audit operation types
@@ -53,16 +54,294 @@ pub enum AuditOperation {
     InvoiceRated,
     BidPlaced,
     BidAccepted,
+    BidCancelled,
+    BidExpired,
     BidWithdrawn,
+    BidCancelled,
+    BidExpired,
     EscrowCreated,
     EscrowReleased,
     EscrowRefunded,
     PaymentProcessed,
     SettlementCompleted,
+    /// Admin updated protocol-level config (min_invoice_amount / max_due_date_days / grace_period_seconds).
+    ConfigProtocolChanged,
+    /// Admin updated the global fee basis-point rate.
+    ConfigFeeChanged,
+    /// Admin changed the treasury address.
+    ConfigTreasuryChanged,
+    /// Admin updated a FeeStructure entry (bps / min_fee / max_fee / is_active).
+    ConfigFeeStructureChanged,
+    /// Admin reconfigured revenue-distribution shares.
+    ConfigRevenueDistributionChanged,
+    /// Admin manually overrode an invoice's computed average rating.
+    RatingOverridden,
+    /// Admin subsystem initialized.
+    AdminInitialized,
+    /// Admin role transferred.
+    AdminTransferred,
+    /// Two-step admin transfer initiated.
+    AdminTransferInitiated,
+    /// Two-step admin transfer cancelled.
+    AdminTransferCancelled,
+    /// Two-step transfer mode updated.
+    AdminTwoStepUpdated,
+    /// Protocol contract paused.
+    ProtocolPaused,
+    /// Protocol contract unpaused.
+    ProtocolUnpaused,
+    /// Emergency withdrawal initiated.
+    EmergencyWithdrawalInitiated,
+    /// Emergency withdrawal executed.
+    EmergencyWithdrawalExecuted,
+    /// Emergency withdrawal cancelled.
+    EmergencyWithdrawalCancelled,
+    /// Pending treasury address rotation cancelled.
+    TreasuryRotationCancelled,
+    /// A business or investor submitted a KYC application (first time or resubmission).
+    KycSubmitted,
+    /// Admin verified (approved) a business or investor KYC record.
+    KycVerified,
+    /// Admin rejected a pending business or investor KYC record.
+    KycRejected,
+    /// Admin revoked a previously verified investor's KYC.
+    KycRevoked,
+    /// An investor was frozen (all investment actions blocked).
+    InvestorFrozen,
+    /// An investor was unfrozen (investment actions restored).
+    InvestorUnfrozen,
+    /// A placed bid was cancelled by its investor (Placed -> Cancelled).
+    BidCancelled,
+    /// A placed bid transitioned to Expired (via TTL/grace cleanup).
+    BidExpired,
+}
+
+/// Typed operation types used by audit-log emission.
+///
+/// Mirrors [`AuditOperation`] but provides a `to_symbol()` conversion for
+/// Soroban event topics, so downstream consumers can match on a typed enum
+/// rather than free-form strings.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum OpType {
+    InvoiceCreated,
+    InvoiceUploaded,
+    InvoiceVerified,
+    InvoiceFunded,
+    InvoicePaid,
+    InvoiceDefaulted,
+    InvoiceStatusChanged,
+    InvoiceRated,
+    BidPlaced,
+    BidAccepted,
+    BidWithdrawn,
+    BidCancelled,
+    BidExpired,
+    EscrowCreated,
+    EscrowReleased,
+    EscrowRefunded,
+    PaymentProcessed,
+    SettlementCompleted,
+    ConfigProtocolChanged,
+    ConfigFeeChanged,
+    ConfigTreasuryChanged,
+    ConfigFeeStructureChanged,
+    ConfigRevenueDistributionChanged,
+    RatingOverridden,
+    AdminInitialized,
+    AdminTransferred,
+    AdminTransferInitiated,
+    AdminTransferCancelled,
+    AdminTwoStepUpdated,
+    ProtocolPaused,
+    ProtocolUnpaused,
+    EmergencyWithdrawalInitiated,
+    EmergencyWithdrawalExecuted,
+    EmergencyWithdrawalCancelled,
+    TreasuryRotationCancelled,
+    KycSubmitted,
+    KycVerified,
+    KycRejected,
+    KycRevoked,
+    InvestorFrozen,
+    InvestorUnfrozen,
+    BidCancelled,
+    BidExpired,
+}
+
+impl OpType {
+    /// Return the Soroban `Symbol` used as the event topic / discriminator.
+    pub fn to_symbol(&self) -> Symbol {
+        match self {
+            OpType::InvoiceCreated => symbol_short!("inv_crt"),
+            OpType::InvoiceUploaded => symbol_short!("inv_up"),
+            OpType::InvoiceVerified => symbol_short!("inv_ver"),
+            OpType::InvoiceFunded => symbol_short!("inv_fnd"),
+            OpType::InvoicePaid => symbol_short!("inv_pd"),
+            OpType::InvoiceDefaulted => symbol_short!("inv_def"),
+            OpType::InvoiceStatusChanged => symbol_short!("inv_stch"),
+            OpType::InvoiceRated => symbol_short!("inv_rt"),
+            OpType::BidPlaced => symbol_short!("bid_plc"),
+            OpType::BidAccepted => symbol_short!("bid_acc"),
+            OpType::BidWithdrawn => symbol_short!("bid_wdr"),
+            OpType::BidCancelled => symbol_short!("bid_cnl"),
+            OpType::BidExpired => symbol_short!("bid_exp"),
+            OpType::EscrowCreated => symbol_short!("esc_cr"),
+            OpType::EscrowReleased => symbol_short!("esc_rel"),
+            OpType::EscrowRefunded => symbol_short!("esc_ref"),
+            OpType::PaymentProcessed => symbol_short!("pay_prc"),
+            OpType::SettlementCompleted => symbol_short!("stl_cmp"),
+            OpType::ConfigProtocolChanged => symbol_short!("cfg_prt"),
+            OpType::ConfigFeeChanged => symbol_short!("cfg_fee"),
+            OpType::ConfigTreasuryChanged => symbol_short!("cfg_trs"),
+            OpType::ConfigFeeStructureChanged => symbol_short!("cfg_fstr"),
+            OpType::ConfigRevenueDistributionChanged => symbol_short!("cfg_rev"),
+            OpType::RatingOverridden => symbol_short!("rt_over"),
+            OpType::AdminInitialized => symbol_short!("adm_init"),
+            OpType::AdminTransferred => symbol_short!("adm_trf"),
+            OpType::AdminTransferInitiated => symbol_short!("adm_req"),
+            OpType::AdminTransferCancelled => symbol_short!("adm_cnl"),
+            OpType::AdminTwoStepUpdated => symbol_short!("adm_2st"),
+            OpType::ProtocolPaused => symbol_short!("paused"),
+            OpType::ProtocolUnpaused => symbol_short!("unpaused"),
+            OpType::EmergencyWithdrawalInitiated => symbol_short!("emg_init"),
+            OpType::EmergencyWithdrawalExecuted => symbol_short!("emg_exec"),
+            OpType::EmergencyWithdrawalCancelled => symbol_short!("emg_cnl"),
+            OpType::TreasuryRotationCancelled => symbol_short!("tr_rot_cn"),
+            OpType::KycSubmitted => symbol_short!("kyc_sub"),
+            OpType::KycVerified => symbol_short!("kyc_ver"),
+            OpType::KycRejected => symbol_short!("kyc_rej"),
+            OpType::KycRevoked => symbol_short!("kyc_rev"),
+            OpType::InvestorFrozen => symbol_short!("inv_frz"),
+            OpType::InvestorUnfrozen => symbol_short!("inv_unf"),
+            OpType::BidCancelled => symbol_short!("bid_can"),
+            OpType::BidExpired => symbol_short!("bid_exp"),
+        }
+    }
+
+    /// Numeric tag used for hash-chain computation.
+    pub fn tag(&self) -> u8 {
+        match self {
+            OpType::InvoiceCreated => 0,
+            OpType::InvoiceUploaded => 1,
+            OpType::InvoiceVerified => 2,
+            OpType::InvoiceFunded => 3,
+            OpType::InvoicePaid => 4,
+            OpType::InvoiceDefaulted => 5,
+            OpType::InvoiceStatusChanged => 6,
+            OpType::InvoiceRated => 7,
+            OpType::BidPlaced => 8,
+            OpType::BidAccepted => 9,
+            OpType::BidWithdrawn => 10,
+            OpType::BidCancelled => 39,
+            OpType::BidExpired => 40,
+            OpType::EscrowCreated => 11,
+            OpType::EscrowReleased => 12,
+            OpType::EscrowRefunded => 13,
+            OpType::PaymentProcessed => 14,
+            OpType::SettlementCompleted => 15,
+            OpType::ConfigProtocolChanged => 16,
+            OpType::ConfigFeeChanged => 17,
+            OpType::ConfigTreasuryChanged => 18,
+            OpType::ConfigFeeStructureChanged => 19,
+            OpType::ConfigRevenueDistributionChanged => 20,
+            OpType::RatingOverridden => 21,
+            OpType::AdminInitialized => 22,
+            OpType::AdminTransferred => 23,
+            OpType::AdminTransferInitiated => 24,
+            OpType::AdminTransferCancelled => 25,
+            OpType::AdminTwoStepUpdated => 26,
+            OpType::ProtocolPaused => 27,
+            OpType::ProtocolUnpaused => 28,
+            OpType::EmergencyWithdrawalInitiated => 29,
+            OpType::EmergencyWithdrawalExecuted => 30,
+            OpType::EmergencyWithdrawalCancelled => 31,
+            OpType::TreasuryRotationCancelled => 32,
+            OpType::KycSubmitted => 33,
+            OpType::KycVerified => 34,
+            OpType::KycRejected => 35,
+            OpType::KycRevoked => 36,
+            OpType::InvestorFrozen => 37,
+            OpType::InvestorUnfrozen => 38,
+            OpType::BidCancelled => 39,
+            OpType::BidExpired => 40,
+        }
+    }
+}
+
+impl From<AuditOperation> for OpType {
+    fn from(op: AuditOperation) -> Self {
+        match op {
+            AuditOperation::InvoiceCreated => OpType::InvoiceCreated,
+            AuditOperation::InvoiceUploaded => OpType::InvoiceUploaded,
+            AuditOperation::InvoiceVerified => OpType::InvoiceVerified,
+            AuditOperation::InvoiceFunded => OpType::InvoiceFunded,
+            AuditOperation::InvoicePaid => OpType::InvoicePaid,
+            AuditOperation::InvoiceDefaulted => OpType::InvoiceDefaulted,
+            AuditOperation::InvoiceStatusChanged => OpType::InvoiceStatusChanged,
+            AuditOperation::InvoiceRated => OpType::InvoiceRated,
+            AuditOperation::BidPlaced => OpType::BidPlaced,
+            AuditOperation::BidAccepted => OpType::BidAccepted,
+            AuditOperation::BidWithdrawn
+            | AuditOperation::BidCancelled
+            | AuditOperation::BidExpired => OpType::BidWithdrawn,
+            AuditOperation::EscrowCreated => OpType::EscrowCreated,
+            AuditOperation::EscrowReleased => OpType::EscrowReleased,
+            AuditOperation::EscrowRefunded => OpType::EscrowRefunded,
+            AuditOperation::PaymentProcessed => OpType::PaymentProcessed,
+            AuditOperation::SettlementCompleted => OpType::SettlementCompleted,
+            AuditOperation::ConfigProtocolChanged => OpType::ConfigProtocolChanged,
+            AuditOperation::ConfigFeeChanged => OpType::ConfigFeeChanged,
+            AuditOperation::ConfigTreasuryChanged => OpType::ConfigTreasuryChanged,
+            AuditOperation::ConfigFeeStructureChanged => OpType::ConfigFeeStructureChanged,
+            AuditOperation::ConfigRevenueDistributionChanged => {
+                OpType::ConfigRevenueDistributionChanged
+            }
+            AuditOperation::RatingOverridden => OpType::RatingOverridden,
+            AuditOperation::AdminInitialized => OpType::AdminInitialized,
+            AuditOperation::AdminTransferred => OpType::AdminTransferred,
+            AuditOperation::AdminTransferInitiated => OpType::AdminTransferInitiated,
+            AuditOperation::AdminTransferCancelled => OpType::AdminTransferCancelled,
+            AuditOperation::AdminTwoStepUpdated => OpType::AdminTwoStepUpdated,
+            AuditOperation::ProtocolPaused => OpType::ProtocolPaused,
+            AuditOperation::ProtocolUnpaused => OpType::ProtocolUnpaused,
+            AuditOperation::EmergencyWithdrawalInitiated => OpType::EmergencyWithdrawalInitiated,
+            AuditOperation::EmergencyWithdrawalExecuted => OpType::EmergencyWithdrawalExecuted,
+            AuditOperation::EmergencyWithdrawalCancelled => OpType::EmergencyWithdrawalCancelled,
+            AuditOperation::TreasuryRotationCancelled => OpType::TreasuryRotationCancelled,
+            AuditOperation::KycSubmitted => OpType::KycSubmitted,
+            AuditOperation::KycVerified => OpType::KycVerified,
+            AuditOperation::KycRejected => OpType::KycRejected,
+            AuditOperation::KycRevoked => OpType::KycRevoked,
+            AuditOperation::InvestorFrozen => OpType::InvestorFrozen,
+            AuditOperation::InvestorUnfrozen => OpType::InvestorUnfrozen,
+            AuditOperation::BidCancelled => OpType::BidCancelled,
+            AuditOperation::BidExpired => OpType::BidExpired,
+        }
+    }
 }
 
 /// Fixed genesis sentinel for invoice-local audit hash chains.
 pub const AUDIT_CHAIN_GENESIS: [u8; 32] = [0u8; 32];
+
+/// Fixed sentinel `invoice_id` for all admin config-change audit entries.
+///
+/// Config changes are not scoped to any invoice; they share this virtual trail
+/// so every `set_protocol_config`, `set_fee_config`, `set_treasury`,
+/// `update_fee_structure`, and `configure_revenue_distribution` call chains its
+/// entry with the same hash-link ordering guarantee as invoice-local trails.
+///
+/// Distinct from `AUDIT_CHAIN_GENESIS` (`[0u8; 32]`) to prevent overlap
+/// between the per-invoice genesis sentinel and the config trail key.
+pub const CONFIG_AUDIT_SENTINEL: [u8; 32] = [0xCFu8; 32];
+
+/// Fixed sentinel `invoice_id` for all KYC-related audit entries.
+///
+/// KYC operations (submit, verify, reject, revoke, freeze, unfreeze) are not
+/// scoped to any invoice. They share this virtual trail so every KYC audit
+/// entry chains with the same hash-link ordering guarantee as invoice-local
+/// and config-change trails.
+pub const KYC_AUDIT_SENTINEL: [u8; 32] = [0x4Bu8; 32]; // 'K' for KYC
 
 /// Audit log entry structure
 ///
@@ -71,6 +350,10 @@ pub const AUDIT_CHAIN_GENESIS: [u8; 32] = [0u8; 32];
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct AuditLogEntry {
+    /// Version of the event/audit schema used for this record.
+    pub schema_version: u32,
+    /// Correlation id shared with the committed protocol event.
+    pub operation_id: BytesN<32>,
     pub audit_id: BytesN<32>,
     pub invoice_id: BytesN<32>,
     pub operation: AuditOperation,
@@ -149,14 +432,43 @@ impl AuditLogEntry {
         amount: Option<i128>,
         additional_data: Option<String>,
     ) -> Self {
-        let audit_id = Self::generate_audit_id(env);
+        let operation_id = crate::observability::allocate_operation_id(env);
+        Self::new_with_operation_id(
+            env,
+            invoice_id,
+            operation,
+            actor,
+            old_value,
+            new_value,
+            amount,
+            additional_data,
+            operation_id,
+        )
+    }
+
+    /// Create an audit entry that shares a caller-supplied correlation id.
+    ///
+    /// `operation_id` must already be unique. The audit storage key is the same
+    /// id so event and audit records can be reconciled 1:1.
+    pub fn new_with_operation_id(
+        env: &Env,
+        invoice_id: BytesN<32>,
+        operation: AuditOperation,
+        actor: Address,
+        old_value: Option<String>,
+        new_value: Option<String>,
+        amount: Option<i128>,
+        additional_data: Option<String>,
+        operation_id: BytesN<32>,
+    ) -> Self {
         let timestamp = env.ledger().timestamp();
         let block_height = env.ledger().sequence();
-
         let prev_hash = AuditStorage::last_entry_hash(env, &invoice_id);
 
         Self {
-            audit_id,
+            schema_version: OBSERVABILITY_SCHEMA_VERSION,
+            audit_id: operation_id.clone(),
+            operation_id,
             invoice_id,
             operation,
             actor,
@@ -171,7 +483,8 @@ impl AuditLogEntry {
         }
     }
 
-    /// Generate unique audit ID
+    /// Generate unique audit ID (legacy helper retained for source compatibility).
+    #[allow(dead_code)]
     fn generate_audit_id(env: &Env) -> BytesN<32> {
         let timestamp = env.ledger().timestamp();
         let sequence = env.ledger().sequence();
@@ -203,6 +516,11 @@ impl AuditLogEntry {
 
     /// Validate audit log entry integrity
     pub fn validate_integrity(&self, env: &Env) -> Result<bool, QuickLendXError> {
+        if self.schema_version != OBSERVABILITY_SCHEMA_VERSION || self.operation_id != self.audit_id
+        {
+            return Ok(false);
+        }
+
         // Check timestamp is not in future
         if self.timestamp > env.ledger().timestamp() {
             return Ok(false);
@@ -274,18 +592,47 @@ fn operation_tag(operation: &AuditOperation) -> u8 {
         AuditOperation::InvoiceRated => 7,
         AuditOperation::BidPlaced => 8,
         AuditOperation::BidAccepted => 9,
-        AuditOperation::BidWithdrawn => 10,
+        AuditOperation::BidWithdrawn
+        | AuditOperation::BidCancelled
+        | AuditOperation::BidExpired => 10,
         AuditOperation::EscrowCreated => 11,
         AuditOperation::EscrowReleased => 12,
         AuditOperation::EscrowRefunded => 13,
         AuditOperation::PaymentProcessed => 14,
         AuditOperation::SettlementCompleted => 15,
+        AuditOperation::ConfigProtocolChanged => 16,
+        AuditOperation::ConfigFeeChanged => 17,
+        AuditOperation::ConfigTreasuryChanged => 18,
+        AuditOperation::ConfigFeeStructureChanged => 19,
+        AuditOperation::ConfigRevenueDistributionChanged => 20,
+        AuditOperation::RatingOverridden => 21,
+        AuditOperation::AdminInitialized => 22,
+        AuditOperation::AdminTransferred => 23,
+        AuditOperation::AdminTransferInitiated => 24,
+        AuditOperation::AdminTransferCancelled => 25,
+        AuditOperation::AdminTwoStepUpdated => 26,
+        AuditOperation::ProtocolPaused => 27,
+        AuditOperation::ProtocolUnpaused => 28,
+        AuditOperation::EmergencyWithdrawalInitiated => 29,
+        AuditOperation::EmergencyWithdrawalExecuted => 30,
+        AuditOperation::EmergencyWithdrawalCancelled => 31,
+        AuditOperation::TreasuryRotationCancelled => 32,
+        AuditOperation::KycSubmitted => 33,
+        AuditOperation::KycVerified => 34,
+        AuditOperation::KycRejected => 35,
+        AuditOperation::KycRevoked => 36,
+        AuditOperation::InvestorFrozen => 37,
+        AuditOperation::InvestorUnfrozen => 38,
+        AuditOperation::BidCancelled => 39,
+        AuditOperation::BidExpired => 40,
     }
 }
 
 fn hash_audit_entry(env: &Env, entry: &AuditLogEntry) -> BytesN<32> {
     let mut preimage = Bytes::new(env);
     preimage.append(&Bytes::from_slice(env, AuditLogEntry::HASH_DOMAIN_TAG));
+    preimage.append(&Bytes::from_array(env, &entry.schema_version.to_be_bytes()));
+    preimage.append(&entry.operation_id.clone().to_xdr(env));
     preimage.append(&entry.prev_hash.clone().to_xdr(env));
     preimage.append(&entry.audit_id.clone().to_xdr(env));
     preimage.append(&entry.invoice_id.clone().to_xdr(env));
@@ -308,17 +655,29 @@ fn hash_audit_entry(env: &Env, entry: &AuditLogEntry) -> BytesN<32> {
 /// Each storage function appends data without modifying existing entries.
 pub struct AuditStorage;
 
+fn persist_set<K, V>(env: &Env, key: &K, value: &V)
+where
+    K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
+    V: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
+{
+    env.storage().persistent().set(key, value);
+    crate::storage::bump_persistent(env, key);
+}
+
+fn persist_remove<K>(env: &Env, key: &K)
+where
+    K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
+{
+    env.storage().persistent().remove(key);
+}
+
 impl AuditStorage {
     /// Return the expected `prev_hash` for the next entry in an invoice trail.
     pub fn last_entry_hash(env: &Env, invoice_id: &BytesN<32>) -> BytesN<32> {
-        let trail = Self::get_invoice_audit_trail(env, invoice_id);
-        if trail.is_empty() {
-            return AuditLogEntry::genesis_prev_hash(env);
-        }
-
-        let last_id = trail.get(trail.len() - 1).unwrap();
-        Self::get_audit_entry(env, &last_id)
-            .map(|entry| entry.entry_hash(env))
+        let key = (symbol_short!("aud_last"), invoice_id.clone());
+        env.storage()
+            .persistent()
+            .get(&key)
             .unwrap_or_else(|| AuditLogEntry::genesis_prev_hash(env))
     }
 
@@ -334,16 +693,24 @@ impl AuditStorage {
     pub fn first_audit_chain_divergence(env: &Env, invoice_id: &BytesN<32>) -> Option<u32> {
         let trail = Self::get_invoice_audit_trail(env, invoice_id);
         let mut expected_prev = AuditLogEntry::genesis_prev_hash(env);
+        let mut offset = 0u32;
 
-        for i in 0..trail.len() {
-            let audit_id = trail.get(i).unwrap();
-            let Some(entry) = Self::get_audit_entry(env, &audit_id) else {
-                return Some(i);
-            };
-            if entry.prev_hash != expected_prev || !entry.validate_integrity(env).unwrap_or(false) {
-                return Some(i);
+        while offset < trail.len() {
+            let chunk = Self::get_invoice_audit_trail_paged(env, invoice_id, offset, 32);
+            for (i, audit_id) in chunk.iter().enumerate() {
+                let idx = offset.saturating_add(i as u32);
+                let Some(entry) = Self::get_audit_entry(env, &audit_id) else {
+                    return Some(idx);
+                };
+                if entry.prev_hash != expected_prev || !entry.validate_integrity(env).unwrap_or(false) {
+                    return Some(idx);
+                }
+                expected_prev = entry.entry_hash(env);
             }
-            expected_prev = entry.entry_hash(env);
+            if chunk.is_empty() {
+                break;
+            }
+            offset = offset.saturating_add(chunk.len() as u32);
         }
 
         None
@@ -354,48 +721,77 @@ impl AuditStorage {
     /// This function **never overwrites** existing entries. It appends the new
     /// entry to multiple indices (by invoice, operation, actor, timestamp) to
     /// enable efficient queries without reordering.
-    ///
-    /// # Append-Only Guarantee
-    /// - Entry is stored with unique audit_id
-    /// - Entry is added to invoice trail (appended, never replaced)
-    /// - Entry is indexed by operation, actor, and timestamp (appended)
-    /// - Global entries list grows monotonically
-    ///
-    /// # Returns
-    /// The entry remains in storage unchanged and is only removed by explicit
-    /// cleanup (never by this function or any query).
     pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) {
-        // Store individual entry
-        env.storage().instance().set(&entry.audit_id, entry);
+        if Self::get_audit_entry(env, &entry.operation_id).is_some() {
+            panic!("duplicate observability operation id");
+        }
 
-        // Add to invoice audit trail
+        let entry_key = entry.audit_id.clone();
+        persist_set(env, &entry_key, entry);
+        crate::storage::bump_persistent(env, &entry_key);
+
+        let last_hash_key = (symbol_short!("aud_last"), entry.invoice_id.clone());
+        let prev_hash = env
+            .storage()
+            .persistent()
+            .get(&last_hash_key)
+            .unwrap_or_else(|| AuditLogEntry::genesis_prev_hash(env));
+        if prev_hash != entry.prev_hash {
+            // The persisted previous hash is authoritative for the next append.
+            // Keep the immutable entry data unchanged; only the on-chain chain metadata
+            // is updated to reflect the actual prior entry.
+        }
+        persist_set(env, &last_hash_key, &entry.entry_hash(env));
+
         Self::add_to_invoice_audit_trail(env, &entry.invoice_id, &entry.audit_id);
-
-        // Add to operation index
         Self::add_to_operation_index(env, &entry.operation, &entry.audit_id);
-
-        // Add to actor index
         Self::add_to_actor_index(env, &entry.actor, &entry.audit_id);
-
-        // Add to timestamp index
         Self::add_to_timestamp_index(env, entry.timestamp, &entry.audit_id);
-
-        // Add to global entries list
         Self::add_to_all_audit_entries(env, &entry.audit_id);
     }
 
     /// Get audit entry by ID
     pub fn get_audit_entry(env: &Env, audit_id: &BytesN<32>) -> Option<AuditLogEntry> {
-        env.storage().instance().get(audit_id)
+        if let Some(entry) = env.storage().persistent().get(audit_id) {
+            return Some(entry);
+        }
+        let legacy: Option<AuditLogEntry> = env.storage().instance().get(audit_id);
+        if let Some(entry) = legacy.clone() {
+            persist_set(env, audit_id, &entry);
+        }
+        legacy
     }
 
     /// Get audit trail for an invoice
     pub fn get_invoice_audit_trail(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
+        Self::get_invoice_audit_trail_paged(env, invoice_id, 0, u32::MAX)
+    }
+
+    pub fn get_invoice_audit_trail_paged(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<BytesN<32>> {
         let key = (symbol_short!("inv_aud"), invoice_id.clone());
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+        let trail: Vec<BytesN<32>> = if let Some(ids) = env.storage().persistent().get(&key) {
+            ids
+        } else {
+            let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
+            if let Some(ids) = legacy.clone() {
+                persist_set(env, &key, &ids);
+                ids
+            } else {
+                Vec::new(env)
+            }
+        };
+        let start = offset.min(trail.len() as u32);
+        let end = (start + limit.min(crate::MAX_QUERY_LIMIT)).min(trail.len() as u32);
+        let mut page = Vec::new(env);
+        for i in start..end {
+            page.push_back(trail.get(i as u32).unwrap());
+        }
+        page
     }
 
     /// Get audit entries by operation type
@@ -404,28 +800,77 @@ impl AuditStorage {
         operation: &AuditOperation,
     ) -> Vec<BytesN<32>> {
         let key = (symbol_short!("op_aud"), operation.clone());
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+        if let Some(ids) = env.storage().persistent().get(&key) {
+            return ids;
+        }
+        let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
+        if let Some(ids) = legacy.clone() {
+            persist_set(env, &key, &ids);
+            return ids;
+        }
+        Vec::new(env)
+    }
+
+    pub fn get_audit_entries_by_operation_paged(
+        env: &Env,
+        operation: &AuditOperation,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<BytesN<32>> {
+        Self::page_ids(env, &(symbol_short!("op_aud"), operation.clone()), offset, limit)
     }
 
     /// Get audit entries by actor
     pub fn get_audit_entries_by_actor(env: &Env, actor: &Address) -> Vec<BytesN<32>> {
         let key = (symbol_short!("act_aud"), actor.clone());
-        env.storage()
-            .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+        if let Some(ids) = env.storage().persistent().get(&key) {
+            return ids;
+        }
+        let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
+        if let Some(ids) = legacy.clone() {
+            persist_set(env, &key, &ids);
+            return ids;
+        }
+        Vec::new(env)
     }
 
-    /// Query audit logs with filters
-    ///
-    /// **READ-ONLY**: This function never modifies any audit entries or indices.
-    /// It safely reads from existing data structures without side effects.
+    pub fn get_audit_entries_by_actor_paged(
+        env: &Env,
+        actor: &Address,
+        offset: u32,
+        limit: u32,
+    ) -> Vec<BytesN<32>> {
+        Self::page_ids(env, &(symbol_short!("act_aud"), actor.clone()), offset, limit)
+    }
+
+    fn page_ids<K>(env: &Env, key: &K, offset: u32, limit: u32) -> Vec<BytesN<32>>
+    where
+        K: soroban_sdk::IntoVal<Env, soroban_sdk::Val>,
+    {
+        let ids: Vec<BytesN<32>> = env.storage().persistent().get(key).unwrap_or_else(|| Vec::new(env));
+        let page_limit = limit.min(crate::MAX_QUERY_LIMIT);
+        let start = offset.min(ids.len() as u32);
+        let end = (start + page_limit).min(ids.len() as u32);
+        let mut page = Vec::new(env);
+        for i in start..end {
+            page.push_back(ids.get(i).unwrap());
+        }
+        page
+    }
+
+    /// Query audit logs with filters.
     pub fn query_audit_logs(
         env: &Env,
         filter: &AuditQueryFilter,
+        limit: u32,
+    ) -> Vec<AuditLogEntry> {
+        Self::query_audit_logs_paged(env, filter, 0, limit)
+    }
+
+    pub fn query_audit_logs_paged(
+        env: &Env,
+        filter: &AuditQueryFilter,
+        offset: u32,
         limit: u32,
     ) -> Vec<AuditLogEntry> {
         let capped_limit = limit.min(crate::MAX_QUERY_LIMIT);
@@ -436,25 +881,21 @@ impl AuditStorage {
             return results;
         }
 
-        // Start with invoice-specific entries if invoice_id is provided
         let audit_ids = if let Some(invoice_id) = &filter.invoice_id {
-            Self::get_invoice_audit_trail(env, invoice_id)
+            Self::get_invoice_audit_trail_paged(env, invoice_id, offset, capped_limit)
         } else if let AuditOperationFilter::Specific(operation) = &filter.operation {
-            Self::get_audit_entries_by_operation(env, operation)
+            Self::get_audit_entries_by_operation_paged(env, operation, offset, capped_limit)
         } else if let Some(actor) = &filter.actor {
-            Self::get_audit_entries_by_actor(env, actor)
+            Self::get_audit_entries_by_actor_paged(env, actor, offset, capped_limit)
         } else {
-            // Get all audit entries (expensive operation)
-            Self::get_all_audit_entries(env)
+            Self::get_all_audit_entries_paged(env, offset, capped_limit)
         };
 
         for audit_id in audit_ids.iter() {
             if count >= capped_limit {
                 break;
             }
-
             if let Some(entry) = Self::get_audit_entry(env, &audit_id) {
-                // Apply filters
                 if Self::matches_filter(&entry, filter) {
                     results.push_back(entry);
                     count += 1;
@@ -477,9 +918,10 @@ impl AuditStorage {
     /// **exactly match** the results of a full audit query (with capped limit).
     pub fn get_audit_stats(env: &Env) -> AuditStats {
         let all_entries = Self::get_all_audit_entries(env);
-        let total_entries = all_entries.len() as u32;
+        let total_entries = all_entries.len();
 
-        let operations_count = Vec::new(env);
+        // Initialize operation counters vector
+        let mut operations_count: Vec<(AuditOperation, u32)> = Vec::new(env);
         let mut unique_actors: Vec<Address> = Vec::new(env);
         let mut min_timestamp = u64::MAX;
         let mut max_timestamp = 0u64;
@@ -490,7 +932,6 @@ impl AuditStorage {
                 if !unique_actors.iter().any(|a| a == entry.actor) {
                     unique_actors.push_back(entry.actor.clone());
                 }
-
                 // Update timestamp range
                 if entry.timestamp < min_timestamp {
                     min_timestamp = entry.timestamp;
@@ -498,13 +939,27 @@ impl AuditStorage {
                 if entry.timestamp > max_timestamp {
                     max_timestamp = entry.timestamp;
                 }
+                // Increment operation counters
+                let mut found = false;
+                for i in 0..operations_count.len() {
+                    let (op, mut cnt) = operations_count.get(i).unwrap();
+                    if op == entry.operation {
+                        cnt += 1;
+                        operations_count.set(i, (op, cnt));
+                        found = true;
+                        break;
+                    }
+                }
+                if !found {
+                    operations_count.push_back((entry.operation.clone(), 1));
+                }
             }
         }
 
         AuditStats {
             total_entries,
             operations_count,
-            unique_actors: unique_actors.len() as u32,
+            unique_actors: unique_actors.len(),
             date_range: (min_timestamp, max_timestamp),
         }
     }
@@ -534,52 +989,139 @@ impl AuditStorage {
         let key = (symbol_short!("inv_aud"), invoice_id.clone());
         let mut trail = Self::get_invoice_audit_trail(env, invoice_id);
         trail.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &trail);
+        persist_set(env, &key, &trail);
     }
 
     fn add_to_operation_index(env: &Env, operation: &AuditOperation, audit_id: &BytesN<32>) {
         let key = (symbol_short!("op_aud"), operation.clone());
         let mut entries = Self::get_audit_entries_by_operation(env, operation);
         entries.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &entries);
+        persist_set(env, &key, &entries);
     }
 
     fn add_to_actor_index(env: &Env, actor: &Address, audit_id: &BytesN<32>) {
         let key = (symbol_short!("act_aud"), actor.clone());
         let mut entries = Self::get_audit_entries_by_actor(env, actor);
         entries.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &entries);
+        persist_set(env, &key, &entries);
     }
 
     fn add_to_timestamp_index(env: &Env, timestamp: u64, audit_id: &BytesN<32>) {
-        let day_key = timestamp / 86400; // Group by day
+        let day_key = timestamp / 86400;
         let key = (symbol_short!("ts_aud"), day_key);
         let mut entries: Vec<BytesN<32>> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&key)
             .unwrap_or_else(|| Vec::new(env));
         entries.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &entries);
+        persist_set(env, &key, &entries);
     }
 
     fn add_to_all_audit_entries(env: &Env, audit_id: &BytesN<32>) {
         let key = symbol_short!("all_aud");
         let mut all: Vec<BytesN<32>> = env
             .storage()
-            .instance()
+            .persistent()
             .get(&key)
             .unwrap_or_else(|| Vec::new(env));
         all.push_back(audit_id.clone());
-        env.storage().instance().set(&key, &all);
+        persist_set(env, &key, &all);
     }
 
     fn get_all_audit_entries(env: &Env) -> Vec<BytesN<32>> {
         let key = symbol_short!("all_aud");
-        env.storage()
+        if let Some(ids) = env.storage().persistent().get(&key) {
+            return ids;
+        }
+        let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
+        if let Some(ids) = legacy.clone() {
+            persist_set(env, &key, &ids);
+            return ids;
+        }
+        Vec::new(env)
+    }
+
+    fn get_all_audit_entries_paged(env: &Env, offset: u32, limit: u32) -> Vec<BytesN<32>> {
+        Self::page_ids(env, &symbol_short!("all_aud"), offset, limit)
+    }
+
+    pub fn migrate_legacy_audit_storage(env: &Env) -> u32 {
+        let legacy_all: Vec<BytesN<32>> = env
+            .storage()
             .instance()
-            .get(&key)
-            .unwrap_or_else(|| Vec::new(env))
+            .get(&symbol_short!("all_aud"))
+            .unwrap_or_else(|| Vec::new(env));
+        let mut migrated = 0u32;
+
+        for audit_id in legacy_all.iter() {
+            if env.storage().persistent().get(&audit_id).is_none() {
+                if let Some(entry) = env.storage().instance().get(&audit_id) {
+                    persist_set(env, &audit_id, &entry);
+                    migrated = migrated.saturating_add(1);
+                }
+            }
+        }
+
+        let mut global_ids: Vec<BytesN<32>> = env
+            .storage()
+            .persistent()
+            .get(&symbol_short!("all_aud"))
+            .unwrap_or_else(|| Vec::new(env));
+        if global_ids.is_empty() {
+            global_ids = legacy_all.clone();
+            persist_set(env, &symbol_short!("all_aud"), &global_ids);
+        }
+
+        for audit_id in global_ids.iter() {
+            if let Some(entry) = Self::get_audit_entry(env, &audit_id) {
+                let invoice_key = (symbol_short!("inv_aud"), entry.invoice_id.clone());
+                let mut invoice_ids: Vec<BytesN<32>> = env
+                    .storage()
+                    .persistent()
+                    .get(&invoice_key)
+                    .unwrap_or_else(|| Vec::new(env));
+                if !invoice_ids.iter().any(|id| *id == audit_id) {
+                    invoice_ids.push_back(audit_id.clone());
+                    persist_set(env, &invoice_key, &invoice_ids);
+                }
+
+                let op_key = (symbol_short!("op_aud"), entry.operation.clone());
+                let mut op_ids: Vec<BytesN<32>> = env
+                    .storage()
+                    .persistent()
+                    .get(&op_key)
+                    .unwrap_or_else(|| Vec::new(env));
+                if !op_ids.iter().any(|id| *id == audit_id) {
+                    op_ids.push_back(audit_id.clone());
+                    persist_set(env, &op_key, &op_ids);
+                }
+
+                let actor_key = (symbol_short!("act_aud"), entry.actor.clone());
+                let mut actor_ids: Vec<BytesN<32>> = env
+                    .storage()
+                    .persistent()
+                    .get(&actor_key)
+                    .unwrap_or_else(|| Vec::new(env));
+                if !actor_ids.iter().any(|id| *id == audit_id) {
+                    actor_ids.push_back(audit_id.clone());
+                    persist_set(env, &actor_key, &actor_ids);
+                }
+
+                let day_key = (symbol_short!("ts_aud"), entry.timestamp / 86400);
+                let mut day_ids: Vec<BytesN<32>> = env
+                    .storage()
+                    .persistent()
+                    .get(&day_key)
+                    .unwrap_or_else(|| Vec::new(env));
+                if !day_ids.iter().any(|id| *id == audit_id) {
+                    day_ids.push_back(audit_id.clone());
+                    persist_set(env, &day_key, &day_ids);
+                }
+            }
+        }
+
+        migrated
     }
 
     fn matches_filter(entry: &AuditLogEntry, filter: &AuditQueryFilter) -> bool {
@@ -641,6 +1183,32 @@ pub fn log_operation(
         new_value,
         amount,
         additional_data,
+    );
+    AuditStorage::store_audit_entry(env, &entry);
+}
+
+/// Append an audit entry that reuses a committed event's correlation id.
+pub fn log_operation_with_id(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    amount: Option<i128>,
+    additional_data: Option<String>,
+    operation_id: BytesN<32>,
+) {
+    let entry = AuditLogEntry::new_with_operation_id(
+        env,
+        invoice_id,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        amount,
+        additional_data,
+        operation_id,
     );
     AuditStorage::store_audit_entry(env, &entry);
 }
@@ -739,6 +1307,28 @@ pub fn log_payment_processed(
     );
 }
 
+/// Log a committed payment using the same `operation_id` as the protocol event.
+pub fn log_payment_processed_with_id(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    additional_data: String,
+    operation_id: BytesN<32>,
+) {
+    log_operation_with_id(
+        env,
+        invoice_id,
+        AuditOperation::PaymentProcessed,
+        actor,
+        None,
+        Some(String::from_str(env, "Payment processed")),
+        Some(amount),
+        Some(additional_data),
+        operation_id,
+    );
+}
+
 /// Log invoice refund
 pub fn log_invoice_refunded(env: &Env, invoice_id: BytesN<32>, actor: Address) {
     log_operation(
@@ -795,13 +1385,35 @@ pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) 
     );
 }
 
+/// Human-readable correlation string that ties an audit entry to the bid that
+/// produced it, so downstream systems can match the emitted bid event
+/// (`BidPlaced`/`BidAccepted`/... which carry `bid_id`) to its audit record.
+fn bid_correlation(env: &Env, bid_id: &BytesN<32>) -> String {
+    let mut hex_bytes = alloc::vec::Vec::new();
+    for byte in bid_id.to_array().iter() {
+        let high = byte >> 4;
+        let low = byte & 0x0F;
+        hex_bytes.push(nibble_to_hex(high));
+        hex_bytes.push(nibble_to_hex(low));
+    }
+    String::from_str(env, &(core::str::from_utf8(&hex_bytes).unwrap_or("")))
+}
+
+fn nibble_to_hex(nibble: u8) -> u8 {
+    if nibble < 10 {
+        b'0' + nibble
+    } else {
+        b'a' + (nibble - 10)
+    }
+}
+
 /// Log bid placed.
 pub fn log_bid_placed(
     env: &Env,
     invoice_id: BytesN<32>,
     actor: Address,
     bid_amount: i128,
-    _bid_id: BytesN<32>,
+    bid_id: BytesN<32>,
 ) {
     log_operation(
         env,
@@ -811,12 +1423,18 @@ pub fn log_bid_placed(
         None,
         Some(String::from_str(env, "Bid placed")),
         Some(bid_amount),
-        None,
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
 /// Log bid accepted.
-pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+pub fn log_bid_accepted(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    bid_id: BytesN<32>,
+) {
     log_operation(
         env,
         invoice_id,
@@ -825,12 +1443,12 @@ pub fn log_bid_accepted(env: &Env, invoice_id: BytesN<32>, actor: Address, amoun
         None,
         Some(String::from_str(env, "Bid accepted")),
         Some(amount),
-        None,
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
 /// Log bid withdrawn.
-pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid_id: BytesN<32>) {
+pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
     log_operation(
         env,
         invoice_id,
@@ -839,7 +1457,45 @@ pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, _bid
         None,
         Some(String::from_str(env, "Bid withdrawn")),
         None,
+        Some(bid_correlation(env, &bid_id)),
+    );
+}
+
+/// Log bid cancelled (Placed -> Cancelled).
+pub fn log_bid_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidCancelled,
+        actor,
         None,
+        Some(String::from_str(env, "Bid cancelled")),
+        None,
+        Some(bid_correlation(env, &bid_id)),
+    );
+}
+
+/// Log bid expired (Placed -> Expired via TTL/grace cleanup).
+///
+/// The actor is the bid's investor: expiry is a self-triggered transition of
+/// that bid's lifecycle, and using a real address keeps the audit entry
+/// attributable without inventing a synthetic system address.
+pub fn log_bid_expired(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    bid_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::BidExpired,
+        actor,
+        None,
+        Some(String::from_str(env, "Bid expired")),
+        Some(amount),
+        Some(bid_correlation(env, &bid_id)),
     );
 }
 
@@ -863,6 +1519,46 @@ pub fn log_escrow_created(
     );
 }
 
+/// Log escrow released.
+pub fn log_escrow_released(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowReleased,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow released")),
+        Some(amount),
+        None,
+    );
+}
+
+/// Log escrow refunded.
+pub fn log_escrow_refunded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+    _escrow_id: BytesN<32>,
+) {
+    log_operation(
+        env,
+        invoice_id,
+        AuditOperation::EscrowRefunded,
+        actor,
+        None,
+        Some(String::from_str(env, "Escrow refunded")),
+        Some(amount),
+        None,
+    );
+}
+
 /// Log settlement completed (full payment).
 pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
     log_operation(
@@ -874,5 +1570,144 @@ pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Addres
         Some(String::from_str(env, "Settlement completed")),
         Some(amount),
         None,
+    );
+}
+
+// ─── Config-change audit helpers ─────────────────────────────────────────────
+
+/// Write a u64 as ASCII decimal digits into `buf`, returning the byte count.
+///
+/// `buf` must be at least 20 bytes. Used by config-change audit serialization.
+pub(crate) fn write_u64_to_buf(buf: &mut [u8], mut value: u64) -> usize {
+    let mut tmp = [0u8; 20];
+    let mut len = 0usize;
+    if value == 0 {
+        tmp[0] = b'0';
+        len = 1;
+    } else {
+        while value > 0 {
+            tmp[len] = b'0' + (value % 10) as u8;
+            value /= 10;
+            len += 1;
+        }
+    }
+    for i in 0..len {
+        buf[i] = tmp[len - 1 - i];
+    }
+    len
+}
+
+/// Write an i128 as ASCII decimal digits into `buf`, returning the byte count.
+///
+/// `buf` must be at least 41 bytes (sign + up to 39 decimal digits).
+pub(crate) fn write_i128_to_buf(buf: &mut [u8], value: i128) -> usize {
+    let (neg, mut abs) = if value < 0 {
+        (true, (value as u128).wrapping_neg())
+    } else {
+        (false, value as u128)
+    };
+    let mut tmp = [0u8; 40];
+    let mut len = 0usize;
+    if abs == 0 {
+        tmp[0] = b'0';
+        len = 1;
+    } else {
+        while abs > 0 {
+            tmp[len] = b'0' + (abs % 10) as u8;
+            abs /= 10;
+            len += 1;
+        }
+    }
+    let start = if neg {
+        buf[0] = b'-';
+        1
+    } else {
+        0
+    };
+    for i in 0..len {
+        buf[start + i] = tmp[len - 1 - i];
+    }
+    start + len
+}
+
+/// Encode the first 18 XDR bytes of an `Address` as a 36-character hex string.
+///
+/// 18 bytes = 144 bits of identity — sufficient to uniquely identify any Stellar
+/// account or contract address encountered on-chain. Result fits comfortably
+/// within `MAX_DESCRIPTION_LENGTH`.
+pub(crate) fn address_to_audit_string(env: &Env, addr: &Address) -> String {
+    let xdr = addr.clone().to_xdr(env);
+    let hex = b"0123456789abcdef";
+    let mut buf = [0u8; 36];
+    let take = (xdr.len() as usize).min(18);
+    for i in 0..take {
+        let byte = xdr.get(i as u32).unwrap_or(0);
+        buf[i * 2] = hex[(byte >> 4) as usize];
+        buf[i * 2 + 1] = hex[(byte & 0x0f) as usize];
+    }
+    String::from_str(
+        env,
+        core::str::from_utf8(&buf[..take * 2]).unwrap_or("addr"),
+    )
+}
+
+/// Append a config-change audit entry to the shared `CONFIG_AUDIT_SENTINEL` trail.
+///
+/// All five admin config mutations route through here so every param change is
+/// chained in the same tamper-evident, append-only trail keyed by
+/// `CONFIG_AUDIT_SENTINEL`.
+///
+/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
+/// guarantee the preceding storage write and this audit append both commit or
+/// both roll back — there is no partial-success scenario.
+pub(crate) fn log_config_change(
+    env: &Env,
+    operation: AuditOperation,
+    actor: Address,
+    param: &str,
+    old_value: Option<String>,
+    new_value: Option<String>,
+) {
+    let sentinel = BytesN::from_array(env, &CONFIG_AUDIT_SENTINEL);
+    log_operation(
+        env,
+        sentinel,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        None,
+        Some(String::from_str(env, param)),
+    );
+}
+
+/// Append a KYC-related audit entry to the shared `KYC_AUDIT_SENTINEL` trail.
+///
+/// Every KYC state transition (submit, verify, reject, revoke, freeze, unfreeze)
+/// calls this function so the append-only audit log captures the full
+/// participant-identity lifecycle on the same hash-chain infrastructure used
+/// for invoice and config trails.
+///
+/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
+/// guarantee the preceding storage write and this audit append both commit or
+/// both roll back — there is no partial-success scenario.
+pub(crate) fn log_kyc_operation(
+    env: &Env,
+    operation: AuditOperation,
+    actor: Address,
+    old_value: Option<String>,
+    new_value: Option<String>,
+    additional_data: Option<String>,
+) {
+    let sentinel = BytesN::from_array(env, &KYC_AUDIT_SENTINEL);
+    log_operation(
+        env,
+        sentinel,
+        operation,
+        actor,
+        old_value,
+        new_value,
+        None,
+        additional_data,
     );
 }

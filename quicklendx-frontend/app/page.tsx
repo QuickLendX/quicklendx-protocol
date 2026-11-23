@@ -45,15 +45,25 @@ export default function Home() {
                 <li>• Track invoice status</li>
               </ul>
             </div>
-            <div className="p-4 bg-indigo-50 rounded-lg">
-              <h3 className="font-semibold text-gray-800 mb-2">
-                For Investors
-              </h3>
-              <ul className="text-sm text-gray-600 space-y-1">
-                <li>• Browse available invoices</li>
-                <li>• Place competitive bids</li>
-                <li>• Track investments and returns</li>
-              </ul>
+            <div className="p-4 bg-indigo-50 rounded-lg flex flex-col justify-between">
+              <div>
+                <h3 className="font-semibold text-gray-800 mb-2">
+                  For Investors
+                </h3>
+                <ul className="text-sm text-gray-600 space-y-1">
+                  <li>• Browse available invoices</li>
+                  <li>• Place competitive bids</li>
+                  <li>• Track investments and returns</li>
+                </ul>
+              </div>
+              <div className="mt-4">
+                <a
+                  href="/invest"
+                  className="inline-block text-xs font-semibold text-indigo-700 hover:text-indigo-900 underline"
+                >
+                  Invest →
+                </a>
+              </div>
             </div>
           </div>
         </div>
