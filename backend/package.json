@@ -46,7 +46,9 @@
     "@types/node": "^20.19.0",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^2.1.9",
+    "jest": "^30.0.0",
     "supertest": "^7.3.1",
+    "ts-jest": "^29.4.15",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }

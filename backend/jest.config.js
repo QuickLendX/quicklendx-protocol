@@ -82,7 +82,6 @@ export default {
     "src/tests/rbac.tokens.test.ts",
     "src/tests/ingestion-fault.test.ts",
     "src/tests/api-key-rotation.test.ts",
-    "src/tests/alert-router.test.ts",
     "src/tests/entity-id.test.ts",
   ],
 };
