@@ -1,39 +1,39 @@
-//! Fuzz pagination offsets, limits and invoice identifiers.
+//! Fuzz the overflow-safe pagination primitives used by query endpoints.
 #![no_main]
 
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
-use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::{BytesN, Env};
+use quicklendx_contracts::pagination::{
+    calculate_safe_bounds, cap_query_limit, paginate_slice, MAX_QUERY_LIMIT,
+};
 
 #[derive(Arbitrary, Debug)]
 struct Input {
+    items: Vec<u32>,
     queries: Vec<Query>,
 }
 
 #[derive(Arbitrary, Debug)]
 struct Query {
-    invoice_id: [u8; 32],
     offset: u32,
     limit: u32,
 }
 
 fuzz_target!(|input: Input| {
-    let env = Env::default();
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
+    // Bound input allocations and the number of queries per iteration.
+    let items: Vec<u32> = input.items.into_iter().take(256).collect();
 
     for query in input.queries.into_iter().take(32) {
-        let invoice_id = BytesN::from_array(&env, &query.invoice_id);
-        let page = client.get_ranked_bids_paged(&invoice_id, &query.offset, &query.limit);
-        assert!(page.items.len() <= 50, "paged bid query exceeded its hard cap");
-        if !page.has_more {
-            assert!(page.items.len() as u32 <= page.total_count);
-        }
-        let _ = client.try_get_payment_records(
-            &invoice_id,
-            &query.offset,
-            &query.limit,
-        );
+        let size = items.len() as u32;
+        let (start, end) = calculate_safe_bounds(query.offset, query.limit, size);
+        assert!(start <= end);
+        assert!(end <= size);
+        assert!(end - start <= MAX_QUERY_LIMIT);
+        assert!(cap_query_limit(query.limit) <= MAX_QUERY_LIMIT);
+
+        let page = paginate_slice(&items, query.offset, query.limit);
+        assert!(page.len() <= MAX_QUERY_LIMIT as usize);
+        assert_eq!(page.len(), (end - start) as usize);
+        assert_eq!(page, items[start as usize..end as usize]);
     }
 });
