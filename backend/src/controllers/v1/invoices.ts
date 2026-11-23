@@ -14,7 +14,7 @@ import { assertInvoiceId } from "../../lib/entityId";
 
 export const MOCK_INVOICES: any[] = [
   {
-    id: "mock-invoice-1",
+    id: "inv_01ARZ3NDEKTSV4RRFFQ69G5FAV",
     business: "mock-business",
     status: "Pending",
     created_at: "2026-06-01T00:00:00Z",

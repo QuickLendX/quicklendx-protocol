@@ -497,9 +497,6 @@ export function getPingStats() {
   };
 }
 
-export function getStatementCacheStats() {
-  return { size: statementCache.size, statements: Array.from(statementCache.keys()) };
-}
 
 /**
  * Simple health probe – deterministic, never throws.
