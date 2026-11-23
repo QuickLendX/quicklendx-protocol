@@ -1,5 +1,5 @@
-import { z } from 'zod';
-import { Page } from './schemas';
+import { z } from "zod";
+import { Page } from "./schemas";
 
 export type Page<T> = {
   data: T[];
@@ -15,7 +15,7 @@ export type Page<T> = {
  */
 export async function* paginate<T>(
   fetchPage: (cursor?: string) => Promise<Page<T>>,
-  maxPages = 50,
+  maxPages = 50
 ): AsyncGenerator<T[], void, unknown> {
   let cursor: string | undefined = undefined;
   let pagesFetched = 0;

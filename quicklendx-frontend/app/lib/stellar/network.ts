@@ -30,8 +30,7 @@ const PASSPHRASES: Record<StellarNetwork, string> = {
  */
 export function getNetworkConfig(): NetworkConfig {
   const raw = process.env.NEXT_PUBLIC_NETWORK ?? "testnet";
-  const network: StellarNetwork =
-    raw === "public" ? "public" : "testnet";
+  const network: StellarNetwork = raw === "public" ? "public" : "testnet";
 
   return {
     network,
