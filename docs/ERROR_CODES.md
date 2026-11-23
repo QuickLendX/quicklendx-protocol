@@ -41,7 +41,7 @@ below is stable. **Do not renumber any variant marked "public ABI" in the source
 | 1004  | `InvoiceDueDateInvalid` | `INV_DI`   | Due date is zero, in the past, or exceeds the configured horizon. |
 | 1005  | `InvoiceNotFunded` | `INV_NFD`  | Settlement or post-funding action was attempted before the invoice was funded. |
 | 1006  | `InvoiceAlreadyDefaulted` | `INV_AD`   | Default processing was run on an invoice already in the default lifecycle. |
-| 1007  | `InvoiceFrozen` | *(missing from Symbol map)* | Invoice is frozen and cannot be acted on. Raised in `contract.rs` and `settlement.rs`. |
+| 1007  | `InvoiceFrozen` | `INV_FZ`  | Invoice is frozen and cannot be acted on. Raised in `contract.rs` and `settlement.rs`. |
 
 ### Authorization — 1100–1104
 
@@ -62,7 +62,7 @@ below is stable. **Do not renumber any variant marked "public ABI" in the source
 | 1202  | `InvalidCurrency` | `INV_CR`  | Currency is not on the whitelist or fails validation. |
 | 1203  | `InvalidTimestamp` | `INV_TM`  | Timestamp is malformed or outside the accepted window. |
 | 1204  | `InvalidDescription` | `INV_DS`  | Free-form string input is empty or exceeds the byte limit. |
-| 1205  | `SelfTransfer` | *(missing from Symbol map)* | The caller attempted to transfer tokens to their own address. |
+| 1205  | `SelfTransfer` | `SELF_TF` | The caller attempted to transfer tokens to their own address. |
 
 ### Storage — 1300–1301
 
@@ -177,7 +177,7 @@ below is stable. **Do not renumber any variant marked "public ABI" in the source
 | 2201  | `MaintenanceModeActive` | `MAINT`    | A mutating operation was attempted during maintenance mode. |
 | 2202  | `DuplicateDefaultTransition` | `DEF_DUP`  | A default transition was run more than once for the same invoice. |
 | 2203  | `BackupVersionUnsupported` | `BKP_VER`  | The backup data version is not supported by the current contract. |
-| 2204  | `DuplicateBid` | *(missing from Symbol map)* | A duplicate bid was detected (idempotency check). |
+| 2204  | `DuplicateBid` | `DUP_BID` | A duplicate bid was detected (idempotency check). |
 
 ---
 

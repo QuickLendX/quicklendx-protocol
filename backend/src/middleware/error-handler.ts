@@ -41,6 +41,11 @@ export function redactSensitiveFields(obj: unknown): unknown {
   return result;
 }
 
+/**
+ * Error handler middleware.
+ * Logs sanitized error details and returns a JSON error response.
+ * Only development mode exposes `details` to the client.
+ */
 export const errorHandler = (
   err: AppError,
   req: Request,
