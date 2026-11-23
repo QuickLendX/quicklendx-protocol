@@ -360,3 +360,204 @@ fn test_migration_not_blocked_by_upgrade_state() {
         assert_eq!(StorageMigration::get_schema_version(&env), 1);
     });
 }
+
+// --- MigrationRunner tests ---
+
+fn setup_runner() -> (Env, crate::QuickLendXContractClient<'static>, Address, Address) {
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    env.mock_all_auths();
+    env.ledger().set_timestamp(10_000);
+    let admin = Address::generate(&env);
+    let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+    env.as_contract(&contract_id, || {
+        crate::admin::AdminStorage::initialize(&env, &admin).unwrap();
+    });
+    (env, client, contract_id, admin)
+}
+
+fn seed_invoices(env: &Env, contract_id: &Address, count: u8) {
+    use crate::storage::InvoiceStorage;
+    use crate::types::{Invoice, InvoiceCategory, InvoiceStatus};
+    use soroban_sdk::{BytesN, String, Vec};
+
+    let business = Address::generate(env);
+    let currency = Address::generate(env);
+    env.as_contract(contract_id, || {
+        for i in 0..count {
+            let mut raw = [0u8; 32];
+            raw[0] = i.wrapping_add(1);
+            let id = BytesN::from_array(env, &raw);
+            let inv = Invoice {
+                id,
+                business: business.clone(),
+                amount: 1_000,
+                currency: currency.clone(),
+                due_date: 100_000,
+                status: InvoiceStatus::Pending,
+                created_at: env.ledger().timestamp(),
+                description: String::from_str(env, "migration test invoice"),
+                metadata_customer_name: None,
+                metadata_customer_address: None,
+                metadata_tax_id: None,
+                metadata_notes: None,
+                funded_amount: 0,
+                investor: None,
+                settled_at: None,
+                average_rating: None,
+                total_ratings: 0,
+                ratings: Vec::new(env),
+                category: InvoiceCategory::Services,
+                tags: Vec::new(env),
+                dispute_status: crate::types::DisputeStatus::None,
+                dispute: crate::types::Dispute {
+                    created_by: business.clone(),
+                    created_at: 0,
+                    reason: String::from_str(env, ""),
+                    evidence: String::from_str(env, ""),
+                    resolution: String::from_str(env, ""),
+                    resolved_by: business.clone(),
+                    resolved_at: 0,
+                },
+                total_paid: 0,
+                payment_history: Vec::new(env),
+            };
+            InvoiceStorage::store_invoice(env, &inv);
+        }
+    });
+}
+
+#[test]
+fn test_migration_runner_crash_resume_dry_run_and_record() {
+    let (env, client, contract_id, admin) = setup_runner();
+    seed_invoices(&env, &contract_id, 5);
+
+    let plan = client.migration_plan(&admin, &0, &1);
+    assert_eq!(plan.schema_from, 0);
+    assert_eq!(plan.schema_to, 1);
+    assert_eq!(plan.total_records, 5);
+    assert!(!plan.already_completed);
+
+    // Dry-run must not mutate offset, records_migrated, or emit events.
+    let events_before_dry = env.events().all().events().len();
+    let dry = client.migration_dry_run(&admin, &2);
+    assert_eq!(dry.current_offset, 0);
+    assert_eq!(dry.next_offset, 2);
+    assert_eq!(dry.would_process, 2);
+    assert_eq!(dry.remaining_after_step, 3);
+    assert_eq!(dry.total_records, 5);
+    assert!(!dry.would_complete);
+    assert_eq!(env.events().all().events().len(), events_before_dry);
+
+    let status_after_dry = client.migration_status();
+    assert!(status_after_dry.in_progress);
+    assert_eq!(status_after_dry.offset, 0);
+    assert_eq!(status_after_dry.records_migrated, 0);
+
+    // Step 1: process 2 records.
+    let step1 = client.migration_run_step(&admin, &2);
+    assert_eq!(step1.processed, 2);
+    assert_eq!(step1.offset, 2);
+    assert!(!step1.completed);
+
+    // Simulate crash/interruption and resume at a later ledger timestamp.
+    env.ledger().set_timestamp(10_500);
+    let step2 = client.migration_run_step(&admin, &2);
+    assert_eq!(step2.processed, 2);
+    assert_eq!(step2.offset, 4);
+    assert!(!step2.completed);
+
+    // Final step: remaining 1 record completes and commits.
+    env.ledger().set_timestamp(11_000);
+    let step3 = client.migration_run_step(&admin, &2);
+    assert_eq!(step3.processed, 1);
+    assert_eq!(step3.offset, 5);
+    assert!(step3.completed);
+
+    let final_status = client.migration_status();
+    assert_eq!(final_status.current_version, 1);
+    assert!(!final_status.in_progress);
+    assert_eq!(final_status.pending_version, None);
+
+    let record = client
+        .get_migration_record(&1)
+        .expect("per-version record must be stored");
+    assert_eq!(record.schema_from, 0);
+    assert_eq!(record.schema_to, 1);
+    assert_eq!(record.records_migrated, 5);
+    assert_eq!(record.started_at, 10_000);
+    assert_eq!(record.completed_at, 11_000);
+    assert_eq!(record.initiated_by, admin);
+    assert_eq!(record.completed_by, admin);
+}
+
+#[test]
+fn test_migration_runner_idempotent_rerun() {
+    let (_env, client, _contract_id, admin) = setup_runner();
+
+    let plan1 = client.migration_plan(&admin, &0, &1);
+    assert!(!plan1.already_completed);
+    let step = client.migration_run_step(&admin, &10);
+    assert!(step.completed);
+
+    // Re-running plan for the already-completed version is an idempotent no-op.
+    let plan2 = client.migration_plan(&admin, &0, &1);
+    assert!(plan2.already_completed);
+    assert_eq!(plan2.total_records, 0);
+    assert!(!client.migration_status().in_progress);
+}
+
+#[test]
+fn test_migration_runner_rejects_double_start() {
+    let (_env, client, _contract_id, admin) = setup_runner();
+
+    client.migration_plan(&admin, &0, &1);
+    let res = client.try_migration_plan(&admin, &0, &1);
+    assert_eq!(res, Err(Ok(crate::errors::QuickLendXError::OperationNotAllowed)));
+}
+
+#[test]
+fn test_migration_runner_rejects_wrong_admin() {
+    let (env, client, _contract_id, admin) = setup_runner();
+    let intruder = Address::generate(&env);
+
+    assert_eq!(
+        client.try_migration_plan(&intruder, &0, &1),
+        Err(Ok(crate::errors::QuickLendXError::NotAdmin))
+    );
+
+    client.migration_plan(&admin, &0, &1);
+
+    assert_eq!(
+        client.try_migration_dry_run(&intruder, &5),
+        Err(Ok(crate::errors::QuickLendXError::NotAdmin))
+    );
+    assert_eq!(
+        client.try_migration_run_step(&intruder, &5),
+        Err(Ok(crate::errors::QuickLendXError::NotAdmin))
+    );
+    assert_eq!(
+        client.try_migration_rollback(&intruder),
+        Err(Ok(crate::errors::QuickLendXError::NotAdmin))
+    );
+}
+
+#[test]
+fn test_migration_runner_rejects_zero_limit_and_bounds_large_limit() {
+    let (env, client, contract_id, admin) = setup_runner();
+    seed_invoices(&env, &contract_id, 3);
+    client.migration_plan(&admin, &0, &1);
+
+    assert_eq!(
+        client.try_migration_dry_run(&admin, &0),
+        Err(Ok(crate::errors::QuickLendXError::OperationNotAllowed))
+    );
+    assert_eq!(
+        client.try_migration_run_step(&admin, &0),
+        Err(Ok(crate::errors::QuickLendXError::OperationNotAllowed))
+    );
+
+    let dry = client.migration_dry_run(&admin, &10_000);
+    assert_eq!(dry.would_process, 3);
+    assert!(dry.would_complete);
+}
