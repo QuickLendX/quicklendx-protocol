@@ -43,9 +43,11 @@
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.19.0",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^2.1.9",
+    "js-yaml": "^4.1.0",
     "supertest": "^7.3.1",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
