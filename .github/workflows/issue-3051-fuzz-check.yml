@@ -1,0 +1,24 @@
+name: Issue 3051 fuzz target validation
+
+on:
+  push:
+    branches:
+      - fuzz/issue-3051-operation-targets
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install stable and nightly Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install nightly Rust
+        uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz
+      - name: Build fuzz targets
+        working-directory: quicklendx-contracts
+        run: cargo +nightly fuzz build
