@@ -60,7 +60,6 @@ export default {
     "src/tests/perf/soak.test.ts",
     "src/tests/openapi-contract.test.ts",
     "src/tests/kyc-service.kms.test.ts",
-    "tests/openapi-conformance.test.ts",
     "tests/openapi-example-validation.test.ts",
     "tests/tenant-isolation.test.ts",
     "src/utils/pagination.properties.test.ts",
