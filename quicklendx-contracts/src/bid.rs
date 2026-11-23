@@ -546,8 +546,23 @@ impl BidStorage {
         // so expired bids would never actually be pruned and every later sweep
         // would re-scan them (violating the bounded-index invariant).
         if active.len() < bid_ids.len() {
-            let key = Self::investor_bids_key(investor);
-            env.storage().persistent().set(&key, &active);
+            let count_key = BidIndexKey::InvestorBidsCount(investor.clone());
+            let old_count: u32 = env.storage().persistent().get(&count_key).unwrap_or(0);
+            let new_count = active.len();
+            let mut idx: u32 = 0;
+            for bid_id in active.iter() {
+                let entry_key = BidIndexKey::InvestorBidsEntry(investor.clone(), idx);
+                env.storage().persistent().set(&entry_key, &bid_id);
+                bump_persistent(env, &entry_key);
+                idx += 1;
+            }
+            while idx < old_count {
+                let entry_key = BidIndexKey::InvestorBidsEntry(investor.clone(), idx);
+                env.storage().persistent().remove(&entry_key);
+                idx += 1;
+            }
+            env.storage().persistent().set(&count_key, &new_count);
+            bump_persistent(env, &count_key);
         }
 
         newly_expired

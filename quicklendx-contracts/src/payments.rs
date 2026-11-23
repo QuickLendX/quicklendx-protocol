@@ -1042,6 +1042,18 @@ pub fn release_escrow(
     release_escrow_internal(env, invoice_id)
 }
 
+/// Refund held escrow funds to the investor without a caller identity.
+///
+/// Used by internal resolution paths (for example dispute policy
+/// application) whose caller has already passed the admin and arbiter
+/// gates. Delegates to [`refund_escrow`], which performs no auth itself.
+pub(crate) fn refund_escrow_internal(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+) -> Result<(), QuickLendXError> {
+    refund_escrow(env, invoice_id, &env.current_contract_address())
+}
+
 /// Refund escrow funds to investor (contract -> investor). Escrow must be Held.
 ///
 /// # Errors

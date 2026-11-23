@@ -73,13 +73,12 @@ pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {
-    let ttl = env.storage().persistent().get_ttl(key);
-
-    if ttl < PERSISTENT_BUMP_THRESHOLD {
-        env.storage()
-            .persistent()
-            .extend_ttl(key, PERSISTENT_BUMP_THRESHOLD, PERSISTENT_EXTEND_TO);
-    }
+    // `extend_ttl` is already a no-op while the entry's TTL is at or above
+    // the threshold, so no separate TTL read is needed (`get_ttl` exists
+    // only in the SDK's testutils).
+    env.storage()
+        .persistent()
+        .extend_ttl(key, PERSISTENT_BUMP_THRESHOLD, PERSISTENT_EXTEND_TO);
 }
 
 pub fn bump_persistent<T>(env: &Env, key: &T)

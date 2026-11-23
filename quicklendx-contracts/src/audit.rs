@@ -54,8 +54,6 @@ pub enum AuditOperation {
     InvoiceRated,
     BidPlaced,
     BidAccepted,
-    BidCancelled,
-    BidExpired,
     BidWithdrawn,
     BidCancelled,
     BidExpired,
@@ -110,10 +108,6 @@ pub enum AuditOperation {
     InvestorFrozen,
     /// An investor was unfrozen (investment actions restored).
     InvestorUnfrozen,
-    /// A placed bid was cancelled by its investor (Placed -> Cancelled).
-    BidCancelled,
-    /// A placed bid transitioned to Expired (via TTL/grace cleanup).
-    BidExpired,
 }
 
 /// Typed operation types used by audit-log emission.
@@ -165,8 +159,6 @@ pub enum OpType {
     KycRevoked,
     InvestorFrozen,
     InvestorUnfrozen,
-    BidCancelled,
-    BidExpired,
 }
 
 impl OpType {
@@ -1055,8 +1047,12 @@ impl AuditStorage {
         let mut migrated = 0u32;
 
         for audit_id in legacy_all.iter() {
-            if env.storage().persistent().get(&audit_id).is_none() {
-                if let Some(entry) = env.storage().instance().get(&audit_id) {
+            if !env.storage().persistent().has(&audit_id) {
+                if let Some(entry) = env
+                    .storage()
+                    .instance()
+                    .get::<_, AuditLogEntry>(&audit_id)
+                {
                     persist_set(env, &audit_id, &entry);
                     migrated = migrated.saturating_add(1);
                 }
@@ -1081,7 +1077,7 @@ impl AuditStorage {
                     .persistent()
                     .get(&invoice_key)
                     .unwrap_or_else(|| Vec::new(env));
-                if !invoice_ids.iter().any(|id| *id == audit_id) {
+                if !invoice_ids.iter().any(|id| id == audit_id) {
                     invoice_ids.push_back(audit_id.clone());
                     persist_set(env, &invoice_key, &invoice_ids);
                 }
@@ -1092,7 +1088,7 @@ impl AuditStorage {
                     .persistent()
                     .get(&op_key)
                     .unwrap_or_else(|| Vec::new(env));
-                if !op_ids.iter().any(|id| *id == audit_id) {
+                if !op_ids.iter().any(|id| id == audit_id) {
                     op_ids.push_back(audit_id.clone());
                     persist_set(env, &op_key, &op_ids);
                 }
@@ -1103,7 +1099,7 @@ impl AuditStorage {
                     .persistent()
                     .get(&actor_key)
                     .unwrap_or_else(|| Vec::new(env));
-                if !actor_ids.iter().any(|id| *id == audit_id) {
+                if !actor_ids.iter().any(|id| id == audit_id) {
                     actor_ids.push_back(audit_id.clone());
                     persist_set(env, &actor_key, &actor_ids);
                 }
@@ -1114,7 +1110,7 @@ impl AuditStorage {
                     .persistent()
                     .get(&day_key)
                     .unwrap_or_else(|| Vec::new(env));
-                if !day_ids.iter().any(|id| *id == audit_id) {
+                if !day_ids.iter().any(|id| id == audit_id) {
                     day_ids.push_back(audit_id.clone());
                     persist_set(env, &day_key, &day_ids);
                 }
