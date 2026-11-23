@@ -101,6 +101,21 @@ cargo test --features fuzz-tests fuzz_store_invoice_valid_ranges
 
 ---
 
+### Checking Contract Features
+
+From `quicklendx-contracts/`, run:
+
+```bash
+bash scripts/check-features.sh
+```
+
+The script checks the library and test targets for the default configuration,
+`testutils`, `diagnostics`, `testutils,diagnostics`, and `fuzz-tests`. It prints a
+pass/fail table and exits with a failure status if any check fails. This checks
+compilation; run `cargo test` to execute tests.
+
+---
+
 ### 🧹 Before Submitting
 
 Before opening a PR, ensure:
@@ -110,6 +125,7 @@ Before opening a PR, ensure:
 3. **Lint is clean:** `cargo clippy --workspace --all-targets -- -D warnings`
 4. **Format is clean:** `cargo fmt --all`
 5. **WASM size within budget:** `./scripts/check-wasm-size.sh`
+6. **Feature matrix compiles:** `bash scripts/check-features.sh`
 
 ---
 
