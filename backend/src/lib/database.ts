@@ -497,7 +497,6 @@ export function getPingStats() {
   };
 }
 
-
 /**
  * Simple health probe – deterministic, never throws.
  */
