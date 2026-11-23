@@ -88,7 +88,7 @@ fuzz_target!(|input: Input| {
         // Once acceptance succeeds, the invoice must be funded and an
         // investment record must exist. Repeated acceptance must not panic.
         if let Some(investment) = client.get_investment(&invoice_id) {
-            let invoice = client.get_invoice(&invoice_id);
+            let invoice = client.get_invoice(&invoice_id).unwrap();
             assert_eq!(invoice.funded_amount, investment.amount);
             assert!(client.try_get_escrow_details(&invoice_id).is_ok());
         }
