@@ -69,8 +69,29 @@ fuzz_target!(|input: Input| {
         &BytesN::from_array(&env, &[7u8; 32]),
     );
 
-    // Guarantee each fuzz iteration reaches the successful funding path once.
-    client.accept_bid(&invoice_id, &bid_id);
+    // Use the fallible client entrypoint: contract-level rejections must be
+    // treated as fuzz outcomes, not as panics from the generated client.
+    let first_accept = client.try_accept_bid(&invoice_id, &bid_id);
+    let funded = matches!(first_accept, Ok(Ok(_)));
+
+    // A successful acceptance must create one consistent funded state. A
+    // rejected/failed call must leave the verified invoice and investor funds
+    // untouched; this also catches partial state changes.
+    if funded {
+        let investment = client.get_investment(&invoice_id)
+            .expect("successful acceptance must create an investment");
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.funded_amount, investment.amount);
+        assert!(client.try_get_escrow_details(&invoice_id).is_ok());
+        assert_eq!(token_client.balance(&contract_id), investment.amount);
+    } else {
+        let invoice = client.get_invoice(&invoice_id);
+        assert_eq!(invoice.funded_amount, 0);
+        assert!(invoice.investor.is_none());
+        assert!(client.get_investment(&invoice_id).is_none());
+        assert!(client.try_get_escrow_details(&invoice_id).is_err());
+        assert_eq!(token_client.balance(&contract_id), 0);
+    }
 
     for operation in input.operations.into_iter().take(16) {
         match operation {
