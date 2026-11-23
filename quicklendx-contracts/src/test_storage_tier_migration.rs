@@ -125,11 +125,17 @@ fn production_notification_pagination_returns_all_records_once() {
         assert_eq!(page3.len(), 20);
 
         for id in page1.iter() {
-            assert!(!page2.contains(id));
-            assert!(!page3.contains(id));
+            for other in page2.iter() {
+                assert_ne!(id, other);
+            }
+            for other in page3.iter() {
+                assert_ne!(id, other);
+            }
         }
         for id in page2.iter() {
-            assert!(!page3.contains(id));
+            for other in page3.iter() {
+                assert_ne!(id, other);
+            }
         }
         assert_eq!(
             NotificationSystem::get_user_notifications(&env, &recipient).len(),
@@ -141,8 +147,6 @@ fn production_notification_pagination_returns_all_records_once() {
 #[test]
 fn dispute_index_is_persistent_deduplicated_and_paged() {
     let (env, contract_id) = setup();
-    let ids: soroban_sdk::Vec<BytesN<32>> = soroban_sdk::Vec::new(&env);
-
     env.as_contract(&contract_id, || {
         for i in 0..120u32 {
             let mut bytes = [0u8; 32];
@@ -167,8 +171,6 @@ fn dispute_index_is_persistent_deduplicated_and_paged() {
         assert_eq!(page2.len(), 50);
         assert_eq!(page3.len(), 20);
     });
-
-    let _ = ids;
 }
 
 #[test]
