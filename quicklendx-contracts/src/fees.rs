@@ -5,6 +5,7 @@
 use crate::audit::{log_config_change, write_i128_to_buf, write_u64_to_buf, AuditOperation};
 use crate::errors::QuickLendXError;
 use crate::events;
+use crate::types::PlatformFeeConfig;
 use soroban_sdk::{
     contracttype, symbol_short, vec, Address, BytesN, Env, Map, String, Symbol, Vec,
 };
