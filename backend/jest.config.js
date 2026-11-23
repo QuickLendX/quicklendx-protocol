@@ -64,7 +64,6 @@ export default {
     "tests/openapi-example-validation.test.ts",
     "tests/tenant-isolation.test.ts",
     "src/utils/pagination.properties.test.ts",
-    "src/tests/conditional-write.test.ts",
     "src/tests/bids.test.ts",
     "src/tests/migration-integration.test.ts",
     "src/tests/streaming-exports.test.ts",
