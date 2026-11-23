@@ -17,6 +17,7 @@ struct Input {
 #[derive(Arbitrary, Debug)]
 struct PaymentAttempt {
     amount: i32,
+    full_settlement: bool,
     stale_snapshot: bool,
 }
 
@@ -76,13 +77,21 @@ fuzz_target!(|input: Input| {
         if attempt.stale_snapshot {
             snapshot.amount = snapshot.amount.saturating_add(1);
         }
-        let payment = attempt.amount as i128;
-        let payment = payment.max(0).min(invoice_amount.saturating_mul(2));
+        let payment = if attempt.full_settlement {
+            invoice_amount
+        } else {
+            1 + (attempt.amount.unsigned_abs() as i128 % (invoice_amount - 1))
+        };
         let _ = client.try_settle_invoice(&invoice_id, &payment, &snapshot);
 
         // Query endpoints must remain usable after both successful and
         // rejected payment attempts, and page size must remain bounded.
-        let _ = client.try_get_invoice_progress(&invoice_id);
+        if let Ok(Ok(progress)) = client.try_get_invoice_progress(&invoice_id) {
+            assert!(progress.total_paid >= 0);
+            assert!(progress.total_paid <= progress.total_due);
+            assert!(progress.remaining_due >= 0);
+            assert_eq!(progress.total_paid + progress.remaining_due, progress.total_due);
+        }
         let _ = client.try_get_payment_count(&invoice_id);
         let records = client.try_get_payment_records(&invoice_id, &0u32, &u32::MAX);
         if let Ok(Ok(records)) = records {
