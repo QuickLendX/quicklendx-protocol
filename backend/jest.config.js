@@ -65,7 +65,6 @@ export default {
     "tests/tenant-isolation.test.ts",
     "src/utils/pagination.properties.test.ts",
     "src/tests/conditional-write.test.ts",
-    "src/tests/bids.test.ts",
     "src/tests/migration-integration.test.ts",
     "src/tests/streaming-exports.test.ts",
     "src/tests/load-shedding-concurrency.test.ts",
