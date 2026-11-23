@@ -61,9 +61,8 @@ const BID_ACCEPTANCE_RECORD_KEY: Symbol = symbol_short!("bid_acc");
 
 /// Look up a durable bid-acceptance record by request key.
 fn get_bid_acceptance_record(env: &Env, request_key: &BytesN<32>) -> Option<BidAcceptanceRecord> {
-    env.storage()
-        .persistent()
-        .get(&(BID_ACCEPTANCE_RECORD_KEY, request_key.clone()))
+    let key = (BID_ACCEPTANCE_RECORD_KEY, request_key.clone());
+    crate::storage::persistent_get(env, &key)
 }
 
 /// Persist a durable bid-acceptance record and extend its TTL so it does not

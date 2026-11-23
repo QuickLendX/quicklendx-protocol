@@ -73,17 +73,17 @@ pub mod test_utils;
 // ============================================================================
 
 #[cfg(test)]
-mod test_settlement;
+mod test_dispute;
+#[cfg(test)]
+mod test_dispute_arbiter;
+#[cfg(test)]
+mod test_dispute_timeline;
 #[cfg(test)]
 mod test_partial_payments;
 #[cfg(test)]
 mod test_payment_history;
 #[cfg(test)]
-mod test_dispute;
-#[cfg(test)]
-mod test_dispute_timeline;
-#[cfg(test)]
-mod test_dispute_arbiter;
+mod test_settlement;
 
 // The remaining test modules (already present in the codebase)
 #[cfg(test)]
@@ -451,9 +451,9 @@ mod test_notifications;
 #[cfg(test)]
 mod test_operational_limits;
 #[cfg(test)]
-mod test_overflow;
-#[cfg(test)]
 mod test_overdue_expiration;
+#[cfg(test)]
+mod test_overflow;
 #[cfg(test)]
 mod test_pagination_cursors;
 #[cfg(test)]
@@ -558,6 +558,8 @@ mod test_storage;
 mod test_storage_key_layout;
 #[cfg(test)]
 mod test_storage_migration_compat;
+#[cfg(test)]
+mod test_storage_ttl;
 #[cfg(test)]
 mod test_store_invoice_auth;
 #[cfg(test)]
@@ -681,7 +683,11 @@ impl QuickLendXContract {
         crate::fees::FeeManager::get_platform_fee_config(&env)
     }
 
-    pub fn calculate_profit(env: Env, investment_amount: i128, payment_amount: i128) -> (i128, i128) {
+    pub fn calculate_profit(
+        env: Env,
+        investment_amount: i128,
+        payment_amount: i128,
+    ) -> (i128, i128) {
         crate::profits::calculate_profit(&env, investment_amount, payment_amount)
     }
 
@@ -740,7 +746,11 @@ impl QuickLendXContract {
 
     /// Verify investor with investment limit. Admin is read from storage
     /// (matches test usage: `client.verify_investor(investor, limit)`).
-    pub fn verify_investor(env: Env, investor: Address, limit: i128) -> Result<(), QuickLendXError> {
+    pub fn verify_investor(
+        env: Env,
+        investor: Address,
+        limit: i128,
+    ) -> Result<(), QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         crate::verification::verify_investor(&env, &admin, &investor, limit)?;
         Ok(())
@@ -785,7 +795,10 @@ impl QuickLendXContract {
         Ok(id)
     }
 
-    pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<crate::types::Invoice, QuickLendXError> {
+    pub fn get_invoice(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<crate::types::Invoice, QuickLendXError> {
         InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
     }
 
@@ -873,8 +886,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         with_payment_guard(&env, || {
-            crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id)
-                .map(|_| ())
+            crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id).map(|_| ())
         })
     }
 
@@ -969,8 +981,9 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         // Verify the caller-supplied snapshot is fresh.
-        let stored = crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let stored =
+            crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::StorageKeyNotFound)?;
         if stored.investment_id != snap.investment_id || stored.amount != snap.amount {
             return Err(QuickLendXError::StaleInvestmentSnapshot);
         }
@@ -1092,10 +1105,7 @@ impl QuickLendXContract {
     }
 
     /// Filter dispute-indexed invoices by their current dispute status.
-    pub fn get_invoices_by_dispute_status(
-        env: Env,
-        status: DisputeStatus,
-    ) -> Vec<BytesN<32>> {
+    pub fn get_invoices_by_dispute_status(env: Env, status: DisputeStatus) -> Vec<BytesN<32>> {
         crate::dispute::get_invoices_by_dispute_status(&env, &status)
     }
 
@@ -1179,7 +1189,11 @@ impl QuickLendXContract {
     /// Create a backup of all invoices across all statuses.
     ///
     /// Returns the backup ID.
-    pub fn create_backup(env: Env, admin: Address, description: String) -> Result<BytesN<32>, errors::QuickLendXError> {
+    pub fn create_backup(
+        env: Env,
+        admin: Address,
+        description: String,
+    ) -> Result<BytesN<32>, errors::QuickLendXError> {
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
 
@@ -1189,7 +1203,7 @@ impl QuickLendXContract {
 
         let all_invoices = backup::BackupStorage::get_all_invoices(&env);
         let backup_id = backup::BackupStorage::generate_backup_id(&env);
-        
+
         let backup = backup::Backup {
             backup_id: backup_id.clone(),
             timestamp: env.ledger().timestamp(),
@@ -1212,7 +1226,11 @@ impl QuickLendXContract {
     ///
     /// Clears all existing invoices and restores from the backup snapshot.
     /// Returns the number of invoices restored.
-    pub fn restore_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<u32, errors::QuickLendXError> {
+    pub fn restore_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<u32, errors::QuickLendXError> {
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         backup::BackupStorage::restore_from_backup(&env, &backup_id)
@@ -1239,7 +1257,11 @@ impl QuickLendXContract {
     }
 
     /// Archive a backup (mark it as no longer active).
-    pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), errors::QuickLendXError> {
+    pub fn archive_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), errors::QuickLendXError> {
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         governance::require_no_open_governance_proposal(&env)?;
@@ -1284,5 +1306,4 @@ impl QuickLendXContract {
     pub fn preview_cleanup_backups(env: Env) -> backup::BackupCleanupDryRunReport {
         backup::BackupStorage::preview_cleanup_old_backups(&env)
     }
-
 }
