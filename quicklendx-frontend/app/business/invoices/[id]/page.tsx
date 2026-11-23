@@ -267,7 +267,7 @@ export default function BusinessInvoiceDetailPage() {
               <span className="text-xs font-semibold text-[#64748B] uppercase tracking-wider">
                 Tags:
               </span>
-              {invoice.tags.map((tag) => (
+              {invoice.tags.map((tag: string) => (
                 <span
                   key={tag}
                   className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#F8FAFC] text-[#0F172A] border border-[#E2E8F0]"
