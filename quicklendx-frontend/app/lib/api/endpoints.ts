@@ -63,6 +63,24 @@ export const RankedBidsResponseSchema = z.object({
   data: z.array(BidSchema),
 });
 
+// Mirrors PortfolioEntry in backend/src/controllers/v1/portfolio.ts and
+// the PortfolioEntry / PortfolioPageResult schemas in backend/openapi.yaml.
+export const PortfolioEntrySchema = z.object({
+  id: z.string(),
+  investor: z.string(),
+  invoice_id: z.string(),
+  invested_amount: z.string(),
+  expected_return: z.string(),
+  status: z.enum(["Active", "Completed", "Defaulted", "Refunded"]),
+  invested_at: z.number(),
+});
+
+export const PortfolioPageSchema = z.object({
+  data: z.array(PortfolioEntrySchema),
+  next_cursor: z.string().nullable(),
+  has_more: z.boolean(),
+});
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
@@ -148,4 +166,23 @@ export async function fetchRankedBids(
   const json = await res.json();
   const parsed = RankedBidsResponseSchema.parse(json);
   return parsed.data;
+}
+
+/**
+ * GET /portfolio?investor=&cursor= (cursor-paginated, sorted by invested_at DESC).
+ * Pass the previous response's next_cursor to fetch the following page.
+ */
+export async function listPortfolio(
+  investor: string,
+  cursor?: string | null
+): Promise<z.infer<typeof PortfolioPageSchema>> {
+  const query = new URLSearchParams({ investor });
+  if (cursor) query.set("cursor", cursor);
+
+  const res = await fetch(`${API_BASE_URL}/portfolio?${query.toString()}`);
+  if (!res.ok) {
+    throw new Error(`Failed to fetch portfolio: HTTP ${res.status}`);
+  }
+  const json = await res.json();
+  return PortfolioPageSchema.parse(json);
 }
