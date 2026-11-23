@@ -82,14 +82,14 @@ fuzz_target!(|input: Input| {
             .expect("successful acceptance must create an investment");
         let invoice = client.get_invoice(&invoice_id);
         assert_eq!(invoice.funded_amount, investment.amount);
-        assert!(client.try_get_escrow_details(&invoice_id).is_ok());
+        assert!(matches!(client.try_get_escrow_details(&invoice_id), Ok(Ok(_))));
         assert_eq!(token_client.balance(&contract_id), investment.amount);
     } else {
         let invoice = client.get_invoice(&invoice_id);
         assert_eq!(invoice.funded_amount, 0);
         assert!(invoice.investor.is_none());
         assert!(client.get_investment(&invoice_id).is_none());
-        assert!(client.try_get_escrow_details(&invoice_id).is_err());
+        assert!(!matches!(client.try_get_escrow_details(&invoice_id), Ok(Ok(_))));
         assert_eq!(token_client.balance(&contract_id), 0);
     }
 
