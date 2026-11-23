@@ -69,6 +69,9 @@ fuzz_target!(|input: Input| {
         &BytesN::from_array(&env, &[7u8; 32]),
     );
 
+    // Guarantee each fuzz iteration reaches the successful funding path once.
+    client.accept_bid(&invoice_id, &bid_id);
+
     for operation in input.operations.into_iter().take(16) {
         match operation {
             Operation::Accept | Operation::AcceptAgain => {
