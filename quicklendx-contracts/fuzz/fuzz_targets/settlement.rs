@@ -11,7 +11,7 @@ use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, String, 
 
 #[derive(Arbitrary, Debug)]
 struct Input {
-    payments: Vec<PaymentAttempt>,
+    payments: std::vec::Vec<PaymentAttempt>,
 }
 
 #[derive(Arbitrary, Debug)]
