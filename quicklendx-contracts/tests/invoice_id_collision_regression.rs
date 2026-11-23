@@ -1,5 +1,3 @@
-#![cfg(feature = "legacy-tests")]
-
 use core::convert::TryInto;
 
 use quicklendx_contracts::{types::InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
