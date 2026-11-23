@@ -64,9 +64,6 @@ pub mod diagnostics;
 pub mod address_summary;
 pub mod analytics;
 
-// scratch_events is internal
-mod scratch_events;
-
 /// Shared test utilities accessible from integration tests.
 pub mod test_utils;
 
