@@ -447,6 +447,49 @@ impl BackupStorage {
         restore_outcome
     }
 
+    /// Collect active `(backup_id, timestamp)` pairs sorted oldest-first,
+    /// breaking equal-timestamp ties deterministically by `backup_id`.
+    fn collect_sorted_active_backups(env: &Env) -> Vec<(BytesN<32>, u64)> {
+        let backups = Self::get_all_backups(env);
+        let mut sorted: Vec<(BytesN<32>, u64)> = Vec::new(env);
+
+        for backup_id in backups.iter() {
+            if let Some(backup) = Self::get_backup(env, &backup_id) {
+                if backup.status == BackupStatus::Active {
+                    Self::insert_backup_sorted(&mut sorted, backup_id, backup.timestamp);
+                }
+            }
+        }
+
+        sorted
+    }
+
+    /// Insert `(backup_id, timestamp)` into `sorted` maintaining ascending
+    /// `(timestamp, backup_id)` order without panicking.
+    fn insert_backup_sorted(
+        sorted: &mut Vec<(BytesN<32>, u64)>,
+        backup_id: BytesN<32>,
+        timestamp: u64,
+    ) {
+        let mut low: u32 = 0;
+        let mut high: u32 = sorted.len();
+
+        while low < high {
+            let mid = low + (high - low) / 2;
+            if let Some((mid_id, mid_ts)) = sorted.get(mid) {
+                if (mid_ts, &mid_id) <= (timestamp, &backup_id) {
+                    low = mid + 1;
+                } else {
+                    high = mid;
+                }
+            } else {
+                break;
+            }
+        }
+
+        sorted.insert(low, (backup_id, timestamp));
+    }
+
     /// Clean up old backups based on the retention policy.
     ///
     /// Removes backups that exceed `max_age_seconds`, then removes the oldest
@@ -461,45 +504,26 @@ impl BackupStorage {
             return Ok(0);
         }
 
-        let backups = Self::get_all_backups(env);
         let current_time = env.ledger().timestamp();
         let mut removed_count = 0u32;
-
-        // Build (backup_id, timestamp) pairs for active backups only.
-        let mut backup_timestamps = Vec::new(env);
-        for backup_id in backups.iter() {
-            if let Some(backup) = Self::get_backup(env, &backup_id) {
-                if backup.status == BackupStatus::Active {
-                    backup_timestamps.push_back((backup_id, backup.timestamp));
-                }
-            }
-        }
-
-        // Bubble sort: oldest first.
-        let len = backup_timestamps.len();
-        for i in 0..len {
-            for j in 0..len - i - 1 {
-                if backup_timestamps.get(j).unwrap().1 > backup_timestamps.get(j + 1).unwrap().1 {
-                    let temp = backup_timestamps.get(j).unwrap().clone();
-                    backup_timestamps.set(j, backup_timestamps.get(j + 1).unwrap().clone());
-                    backup_timestamps.set(j + 1, temp);
-                }
-            }
-        }
+        let mut backup_timestamps = Self::collect_sorted_active_backups(env);
 
         // Remove backups that exceed max age.
         if policy.max_age_seconds > 0 {
             let mut i = 0;
             while i < backup_timestamps.len() {
-                let (backup_id, timestamp) = backup_timestamps.get(i).unwrap();
-                let age = current_time.saturating_sub(timestamp);
+                if let Some((backup_id, timestamp)) = backup_timestamps.get(i) {
+                    let age = current_time.saturating_sub(timestamp);
 
-                if age > policy.max_age_seconds {
-                    Self::purge_backup(env, &backup_id);
-                    backup_timestamps.remove(i);
-                    removed_count = removed_count.saturating_add(1);
+                    if age > policy.max_age_seconds {
+                        Self::purge_backup(env, &backup_id);
+                        backup_timestamps.remove(i);
+                        removed_count = removed_count.saturating_add(1);
+                    } else {
+                        i += 1;
+                    }
                 } else {
-                    i += 1;
+                    break;
                 }
             }
         }
@@ -533,42 +557,24 @@ impl BackupStorage {
             };
         }
 
-        let backups = Self::get_all_backups(env);
         let current_time = env.ledger().timestamp();
-        let mut active: Vec<(BytesN<32>, u64)> = Vec::new(env);
-
-        for backup_id in backups.iter() {
-            if let Some(backup) = Self::get_backup(env, &backup_id) {
-                if backup.status == BackupStatus::Active {
-                    active.push_back((backup_id, backup.timestamp));
-                }
-            }
-        }
-
-        // Sort oldest first (bubble sort, same as cleanup_old_backups).
-        let len = active.len();
-        for i in 0..len {
-            for j in 0..len.saturating_sub(i + 1) {
-                if active.get(j).unwrap().1 > active.get(j + 1).unwrap().1 {
-                    let tmp = active.get(j).unwrap().clone();
-                    active.set(j, active.get(j + 1).unwrap().clone());
-                    active.set(j + 1, tmp);
-                }
-            }
-        }
-
+        let mut active = Self::collect_sorted_active_backups(env);
         let mut would_purge: u32 = 0;
 
         // Count age-expired entries.
         if policy.max_age_seconds > 0 {
             let mut i = 0;
             while i < active.len() {
-                let age = current_time.saturating_sub(active.get(i).unwrap().1);
-                if age > policy.max_age_seconds {
-                    would_purge = would_purge.saturating_add(1);
-                    active.remove(i);
+                if let Some((_, timestamp)) = active.get(i) {
+                    let age = current_time.saturating_sub(timestamp);
+                    if age > policy.max_age_seconds {
+                        would_purge = would_purge.saturating_add(1);
+                        active.remove(i);
+                    } else {
+                        i += 1;
+                    }
                 } else {
-                    i += 1;
+                    break;
                 }
             }
         }
