@@ -349,6 +349,8 @@ mod test_incident;
 #[cfg(test)]
 mod test_init;
 #[cfg(test)]
+mod test_contract_init_admin;
+#[cfg(test)]
 mod test_init_debug;
 #[cfg(test)]
 mod test_init_invariants;
@@ -521,6 +523,8 @@ mod test_replay_guard;
 #[cfg(test)]
 mod test_require_business_active;
 #[cfg(test)]
+mod test_resolution_policy_enforcement;
+#[cfg(test)]
 mod test_require_valid_business_kyc_tier;
 #[cfg(test)]
 mod test_require_valid_invoice_category;
@@ -554,6 +558,8 @@ mod test_settlement_history_reconstruction;
 mod test_snapshot;
 #[cfg(test)]
 mod test_storage;
+#[cfg(test)]
+mod test_storage_tier_migration;
 #[cfg(test)]
 mod test_storage_key_layout;
 #[cfg(test)]
