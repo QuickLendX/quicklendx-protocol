@@ -1,17 +1,24 @@
-//! Structured settlement/read-sequence fuzzing.
+//! Structured settlement operation-sequence fuzzing.
 #![no_main]
 
 use arbitrary::Arbitrary;
 use libfuzzer_sys::fuzz_target;
-use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
-use soroban_sdk::{BytesN, Env};
+use quicklendx_contracts::{
+    types::{Investment, InvestmentStatus},
+    QuickLendXContract, QuickLendXContractClient,
+};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
 
 #[derive(Arbitrary, Debug)]
 struct Input {
-    invoice_ids: Vec<[u8; 32]>,
-    amounts: Vec<i64>,
-    offsets: Vec<u32>,
-    limits: Vec<u32>,
+    operations: Vec<Operation>,
+}
+
+#[derive(Arbitrary, Debug)]
+enum Operation {
+    ReadProgress { invoice: [u8; 32] },
+    ReadPayments { invoice: [u8; 32], offset: u32, limit: u32 },
+    AttemptSettlement { invoice: [u8; 32], investment: [u8; 32], amount: i64 },
 }
 
 fuzz_target!(|input: Input| {
@@ -19,23 +26,34 @@ fuzz_target!(|input: Input| {
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
+    let investor = Address::generate(&env);
 
-    // Keep each iteration small; malformed IDs and amounts must be handled as
-    // ordinary contract errors rather than host panics.
-    for (index, raw_id) in input.invoice_ids.into_iter().take(16).enumerate() {
-        let invoice_id = BytesN::from_array(&env, &raw_id);
-        let _ = client.try_get_invoice_progress(&invoice_id);
-        let _ = client.try_get_payment_count(&invoice_id);
-
-        let amount = input.amounts.get(index).copied().unwrap_or_default() as i128;
-        let _ = client.try_get_payment_records(
-            &invoice_id,
-            &input.offsets.get(index).copied().unwrap_or_default(),
-            &input.limits.get(index).copied().unwrap_or_default(),
-        );
-
-        // A settlement call with a nonexistent snapshot cannot mutate state;
-        // progress/count reads above exercise the settlement storage boundary.
-        let _ = amount;
+    for operation in input.operations.into_iter().take(16) {
+        match operation {
+            Operation::ReadProgress { invoice } => {
+                let invoice = BytesN::from_array(&env, &invoice);
+                let _ = client.try_get_invoice_progress(&invoice);
+                let _ = client.try_get_payment_count(&invoice);
+            }
+            Operation::ReadPayments { invoice, offset, limit } => {
+                let invoice = BytesN::from_array(&env, &invoice);
+                let _ = client.try_get_payment_records(&invoice, &offset, &limit);
+            }
+            Operation::AttemptSettlement { invoice, investment, amount } => {
+                let invoice_id = BytesN::from_array(&env, &invoice);
+                let snapshot = Investment {
+                    investment_id: BytesN::from_array(&env, &investment),
+                    invoice_id: invoice_id.clone(),
+                    investor: investor.clone(),
+                    amount: amount as i128,
+                    funded_at: 0,
+                    status: InvestmentStatus::Active,
+                    insurance: Vec::new(&env),
+                };
+                // A missing/stale snapshot must be rejected cleanly without
+                // mutating payment or escrow state.
+                let _ = client.try_settle_invoice(&invoice_id, &(amount as i128), &snapshot);
+            }
+        }
     }
 });
