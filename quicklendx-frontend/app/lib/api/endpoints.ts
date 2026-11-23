@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { FreshnessMetadata } from "../../invest/_lib/view-model";
+import { env } from "../env";
 
 const FreshnessSchema = z.object({
   lastIndexedLedger: z.number(),
@@ -63,8 +64,7 @@ export const RankedBidsResponseSchema = z.object({
   data: z.array(BidSchema),
 });
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+const API_BASE_URL = env.NEXT_PUBLIC_API_URL;
 
 export async function fetchInvoices(params?: {
   status?: string;

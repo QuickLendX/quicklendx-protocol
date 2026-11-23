@@ -9,6 +9,8 @@
  *   const { network, passphrase } = getNetworkConfig();
  */
 
+import { env } from "../env";
+
 export type StellarNetwork = "testnet" | "public";
 
 export interface NetworkConfig {
@@ -29,9 +31,7 @@ const PASSPHRASES: Record<StellarNetwork, string> = {
  * Call this on both the server and the client — it never accesses `window`.
  */
 export function getNetworkConfig(): NetworkConfig {
-  const raw = process.env.NEXT_PUBLIC_NETWORK ?? "testnet";
-  const network: StellarNetwork =
-    raw === "public" ? "public" : "testnet";
+  const network: StellarNetwork = env.NEXT_PUBLIC_NETWORK;
 
   return {
     network,

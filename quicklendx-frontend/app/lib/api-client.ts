@@ -5,6 +5,7 @@ import axios, {
   AxiosError,
 } from "axios";
 import { z } from "zod";
+import { env } from "./env";
 import {
   AppError,
   NetworkError,
@@ -31,7 +32,7 @@ import {
  * NEXT_PUBLIC_API_URL, when set, must include the full prefix including /api/v1.
  */
 const API_CONFIG = {
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1",
+  baseURL: env.NEXT_PUBLIC_API_URL,
   timeout: 10000,
   retryAttempts: 3,
   retryDelay: 1000,
