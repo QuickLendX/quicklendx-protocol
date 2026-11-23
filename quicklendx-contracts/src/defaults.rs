@@ -1,5 +1,7 @@
 use crate::errors::QuickLendXError;
-use crate::events::{emit_insurance_claimed, emit_invoice_defaulted, emit_invoice_expired};
+use crate::events::{
+    emit_insurance_claimed, emit_invoice_defaulted, emit_invoice_expired, emit_scan_item_failed,
+};
 use crate::init::ProtocolInitializer;
 use crate::payments::{EscrowStatus, EscrowStorage};
 use crate::storage::{InvestmentStorage, InvoiceStorage};
@@ -69,6 +71,8 @@ fn check_and_set_default_guard(env: &Env, invoice_id: &BytesN<32>) -> Result<(),
 pub struct OverdueScanResult {
     pub overdue_count: u32,
     pub scanned_count: u32,
+    /// Number of scanned invoices that failed deadline validation or default handling.
+    pub failed_count: u32,
     pub total_funded: u32,
     pub next_cursor: u32,
 }
@@ -209,8 +213,33 @@ fn normalize_cursor(cursor: u32, funded_count: u32) -> u32 {
 fn resolve_scan_limit(limit: Option<u32>) -> u32 {
     limit
         .unwrap_or(DEFAULT_OVERDUE_SCAN_BATCH_LIMIT)
-        .max(1)
-        .min(MAX_OVERDUE_SCAN_BATCH_LIMIT)
+        .clamp(1, MAX_OVERDUE_SCAN_BATCH_LIMIT)
+}
+
+#[cfg(test)]
+mod scan_limit_tests {
+    use super::{resolve_scan_limit, MAX_OVERDUE_SCAN_BATCH_LIMIT};
+
+    #[test]
+    fn zero_scan_limit_is_clamped_to_one() {
+        assert_eq!(resolve_scan_limit(Some(0)), 1);
+    }
+
+    #[test]
+    fn maximum_scan_limit_is_accepted() {
+        assert_eq!(
+            resolve_scan_limit(Some(MAX_OVERDUE_SCAN_BATCH_LIMIT)),
+            MAX_OVERDUE_SCAN_BATCH_LIMIT
+        );
+    }
+
+    #[test]
+    fn scan_limit_above_maximum_is_clamped() {
+        assert_eq!(
+            resolve_scan_limit(Some(MAX_OVERDUE_SCAN_BATCH_LIMIT + 1)),
+            MAX_OVERDUE_SCAN_BATCH_LIMIT
+        );
+    }
 }
 
 /// @notice Scans funded invoices in a deterministic bounded window for overdue/default handling.
@@ -220,9 +249,10 @@ fn resolve_scan_limit(limit: Option<u32>) -> u32 {
 /// @param env The contract environment.
 /// @param grace_period Grace period in seconds used to determine default eligibility.
 /// @param limit Optional funded-invoice batch size. Values are clamped to `1..=100`.
-/// @return Scan result containing overdue count, scanned count, funded snapshot size, and next cursor.
-/// @security Bounded loops protect against excessive per-call work. Callers that need full coverage
-///           must invoke the scan repeatedly until `next_cursor` wraps to `0`.
+/// @return Scan result containing overdue count, scanned count, failure count, funded snapshot size,
+///         and next cursor.
+/// @security Bounded loops protect against excessive per-call work. The cursor is remapped against
+///           the updated Funded index after default transitions remove invoices from the snapshot.
 /// @security The scan window is always capped by `max_overdue_scan_batch_limit` and never exceeds
 ///           the current funded snapshot size, preventing any single invocation from iterating
 ///           an unbounded number of invoices.
@@ -231,6 +261,10 @@ pub fn scan_funded_invoice_expirations(
     grace_period: u64,
     limit: Option<u32>,
 ) -> Result<OverdueScanResult, QuickLendXError> {
+    if grace_period > MAX_GRACE_PERIOD {
+        return Err(QuickLendXError::InvalidTimestamp);
+    }
+
     let funded_invoices = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
     let total_funded = funded_invoices.len();
 
@@ -239,6 +273,7 @@ pub fn scan_funded_invoice_expirations(
         return Ok(OverdueScanResult {
             overdue_count: 0,
             scanned_count: 0,
+            failed_count: 0,
             total_funded: 0,
             next_cursor: 0,
         });
@@ -248,12 +283,21 @@ pub fn scan_funded_invoice_expirations(
     let scan_limit = resolve_scan_limit(limit).min(total_funded);
     let current_timestamp = env.ledger().timestamp();
     let mut cursor = normalize_cursor(get_overdue_scan_cursor(env), total_funded);
+    let start_cursor = cursor;
     let mut overdue_count = 0u32;
     let mut scanned_count = 0u32;
+    let mut failed_count = 0u32;
 
     while scanned_count < scan_limit {
         if let Some(invoice_id) = funded_invoices.get(cursor) {
-            if let Some(invoice) = InvoiceStorage::get_invoice(env, &invoice_id) {
+            let result: Result<(), QuickLendXError> = (|| {
+                let invoice = InvoiceStorage::get_invoice(env, &invoice_id)
+                    .ok_or(QuickLendXError::InvoiceNotFound)?;
+                let grace_deadline = invoice
+                    .due_date
+                    .checked_add(grace_period)
+                    .ok_or(QuickLendXError::InvalidTimestamp)?;
+
                 if invoice.is_overdue(current_timestamp) {
                     overdue_count = overdue_count.saturating_add(1);
                     let _ = crate::notifications::NotificationSystem::notify_payment_overdue(
@@ -261,9 +305,15 @@ pub fn scan_funded_invoice_expirations(
                     );
                 }
 
-                if current_timestamp > invoice.grace_deadline(grace_period) {
-                    let _ = invoice.check_and_handle_expiration(env, grace_period)?;
+                if current_timestamp > grace_deadline {
+                    invoice.check_and_handle_expiration(env, grace_period)?;
                 }
+                Ok(())
+            })();
+
+            if let Err(error) = result {
+                failed_count = failed_count.saturating_add(1);
+                emit_scan_item_failed(env, &invoice_id, error as u32);
             }
         }
 
@@ -275,16 +325,21 @@ pub fn scan_funded_invoice_expirations(
         };
     }
 
-    let next_cursor = if scan_limit >= total_funded {
+    let funded_after_scan = InvoiceStorage::get_invoices_by_status(env, InvoiceStatus::Funded);
+    let funded_after_count = funded_after_scan.len();
+    let removed_count = total_funded.saturating_sub(funded_after_count);
+    let next_cursor = if funded_after_count == 0 {
         0
     } else {
-        cursor
+        ((start_cursor as u64 + scanned_count as u64 - removed_count as u64)
+            % funded_after_count as u64) as u32
     };
     set_overdue_scan_cursor(env, next_cursor);
 
     Ok(OverdueScanResult {
         overdue_count,
         scanned_count,
+        failed_count,
         total_funded,
         next_cursor,
     })
@@ -320,6 +375,7 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     invoice.mark_as_defaulted();
     InvoiceStorage::update_invoice(env, &invoice);
+    crate::fees::FeeManager::release_origination_fee(env, invoice_id)?;
 
     InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Defaulted, invoice_id);
 
@@ -347,6 +403,10 @@ pub fn handle_default(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLen
 
     emit_invoice_defaulted(env, &invoice);
 
+    // Lifecycle trigger: emits `NotificationType::InvoiceDefaulted` to business
+    // and investor after the default transition is fully persisted.
+    let _ = crate::notifications::NotificationSystem::notify_invoice_defaulted(env, &invoice);
+
     Ok(())
 }
 
@@ -357,6 +417,15 @@ fn ensure_default_transition_open(
     if crate::settlement::is_invoice_finalized(env, invoice_id)? {
         return Err(QuickLendXError::InvalidStatus);
     }
+
+    // Issue #2963: defaulting must not side-step a dispute ruling. After a
+    // `FavorInvestor` resolution the escrow is already refunded and the
+    // invoice is terminal; after a `Split` resolution the funds are held
+    // pending an admin follow-up. Both outcomes block defaulting with a
+    // dispute-specific error rather than the generic escrow-status error.
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    crate::settlement::require_no_blocking_resolution(&invoice)?;
 
     if let Some(escrow) = EscrowStorage::get_escrow_by_invoice(env, invoice_id) {
         if escrow.status != EscrowStatus::Held {

@@ -1,12 +1,24 @@
-import nodemailer from 'nodemailer';
+import nodemailer, { Transporter } from 'nodemailer';
 import { ulid } from 'ulid';
 import { getDatabase, getPreparedStatement } from '../lib/database';
+import { CircuitBreaker } from '../lib/circuitBreaker';
 import {
   NotificationEvent,
   NotificationType,
   UserNotificationPreferences,
   NotificationTemplate,
 } from '../types/contract';
+import { config } from '../config';
+import { NotificationDedupCache } from './notificationDedupCache';
+import { auditService } from './auditService';
+import { alertRouter, Severity } from './alertRouter';
+import {
+  computeUnsubscribeToken,
+  sign,
+  verify,
+  markTokenUsed,
+} from './notificationTokens';
+import { Clock } from './clock';
 
 // Map NotificationType enum values to the notify_* column names
 const PREF_COLUMN: Record<NotificationType, string> = {
@@ -18,9 +30,16 @@ const PREF_COLUMN: Record<NotificationType, string> = {
 
 export class NotificationService {
   private static instance: NotificationService;
-  private transporter: nodemailer.Transporter;
+  private transporter: Transporter;
+  private dedupCache: NotificationDedupCache;
+  private circuitBreaker: CircuitBreaker;
+  private pendingEmails = new Map<string, string>();
 
   private constructor() {
+    this.dedupCache = new NotificationDedupCache(
+      config.MAX_NOTIFICATION_DEDUP_ENTRIES,
+      config.NOTIFICATION_DEDUP_TTL_MS,
+    );
     this.transporter = nodemailer.createTransport({
       host: process.env.SMTP_HOST || 'smtp.gmail.com',
       port: parseInt(process.env.SMTP_PORT || '587'),
@@ -29,6 +48,15 @@ export class NotificationService {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+    });
+
+    this.circuitBreaker = new CircuitBreaker({
+      retries: 3,
+      initialDelayMs: 1000,
+      maxDelayMs: 30000,
+      failureThreshold: 5,
+      resetTimeoutMs: 30000,
+      maxConcurrency: 50,
     });
   }
 
@@ -115,39 +143,91 @@ export class NotificationService {
   // Email template (unchanged logic, kept private)
   // ---------------------------------------------------------------------------
 
-  private getEmailTemplate(event: NotificationEvent): NotificationTemplate {
+  /**
+   * Request an email change: stores pending email and returns 24h HMAC single-use verification token.
+   */
+  public requestEmailChange(
+    userId: string,
+    newEmail: string,
+    clockOrNow: Clock | number = Date.now()
+  ): { verificationToken: string; expiresAt: number } {
+    const now = typeof clockOrNow === 'number' ? clockOrNow : clockOrNow.now();
+    const expiresAt = now + 24 * 60 * 60 * 1000;
+    const token = sign(userId, 'verify_email', expiresAt);
+    this.pendingEmails.set(userId, newEmail);
+    return { verificationToken: token, expiresAt };
+  }
+
+  public getPendingEmail(userId: string): string | undefined {
+    return this.pendingEmails.get(userId);
+  }
+
+  public clearPendingEmail(userId: string): void {
+    this.pendingEmails.delete(userId);
+  }
+
+  /**
+   * Verifies the token and activates the pending email address.
+   */
+  public verifyAndActivateEmail(
+    userId: string,
+    token: string,
+    clockOrNow: Clock | number = Date.now()
+  ): { success: boolean; error?: string; status: number } {
+    const res = verify(userId, 'verify_email', token, clockOrNow);
+    if (!res.valid) {
+      return { success: false, error: res.error, status: res.status };
+    }
+
+    const pendingEmail = this.pendingEmails.get(userId);
+    if (!pendingEmail) {
+      return { success: false, error: 'NO_PENDING_EMAIL', status: 400 };
+    }
+
+    markTokenUsed(token);
+    this.updateUserPreferences(userId, { email_address: pendingEmail });
+    this.pendingEmails.delete(userId);
+
+    return { success: true, status: 200 };
+  }
+
+  public getEmailTemplate(event: NotificationEvent): NotificationTemplate {
     const baseUrl = process.env.FRONTEND_URL || 'https://quicklendx.com';
+    const unsubToken = computeUnsubscribeToken(event.user_id);
+    const unsubUrl = `${baseUrl}/api/v1/notifications/unsubscribe/${event.user_id}?token=${unsubToken}`;
+    const unsubHtml = `<p><a href="${unsubUrl}">Unsubscribe</a></p>`;
+    const unsubText = `\nUnsubscribe: ${unsubUrl}`;
 
     switch (event.type) {
       case NotificationType.InvoiceFunded:
         return {
           subject: 'Your Invoice Has Been Funded - QuickLendX',
-          html: `<p>Invoice ${event.invoice_id} funded for ${event.amount} XLM.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Invoice</a>`,
-          text: `Invoice ${event.invoice_id} funded for ${event.amount} XLM.\n${baseUrl}/invoices/${event.invoice_id}`,
+          html: `<p>Invoice ${event.invoice_id} funded for ${event.amount} XLM.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Invoice</a>${unsubHtml}`,
+          text: `Invoice ${event.invoice_id} funded for ${event.amount} XLM.\n${baseUrl}/invoices/${event.invoice_id}${unsubText}`,
         };
       case NotificationType.PaymentReceived:
         return {
           subject: 'Payment Received - QuickLendX',
-          html: `<p>Payment of ${event.amount} XLM received for invoice ${event.invoice_id}.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Invoice</a>`,
-          text: `Payment of ${event.amount} XLM received for invoice ${event.invoice_id}.\n${baseUrl}/invoices/${event.invoice_id}`,
+          html: `<p>Payment of ${event.amount} XLM received for invoice ${event.invoice_id}.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Invoice</a>${unsubHtml}`,
+          text: `Payment of ${event.amount} XLM received for invoice ${event.invoice_id}.\n${baseUrl}/invoices/${event.invoice_id}${unsubText}`,
         };
       case NotificationType.DisputeOpened:
         return {
           subject: 'Dispute Opened - QuickLendX',
-          html: `<p>A dispute has been opened for invoice ${event.invoice_id}.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Dispute</a>`,
-          text: `A dispute has been opened for invoice ${event.invoice_id}.\n${baseUrl}/invoices/${event.invoice_id}`,
+          html: `<p>A dispute has been opened for invoice ${event.invoice_id}.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Dispute</a>${unsubHtml}`,
+          text: `A dispute has been opened for invoice ${event.invoice_id}.\n${baseUrl}/invoices/${event.invoice_id}${unsubText}`,
         };
       case NotificationType.DisputeResolved:
         return {
           subject: 'Dispute Resolved - QuickLendX',
-          html: `<p>The dispute for invoice ${event.invoice_id} has been resolved.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Resolution</a>`,
-          text: `The dispute for invoice ${event.invoice_id} has been resolved.\n${baseUrl}/invoices/${event.invoice_id}`,
+          html: `<p>The dispute for invoice ${event.invoice_id} has been resolved.</p><a href="${baseUrl}/invoices/${event.invoice_id}">View Resolution</a>${unsubHtml}`,
+          text: `The dispute for invoice ${event.invoice_id} has been resolved.\n${baseUrl}/invoices/${event.invoice_id}${unsubText}`,
         };
       default:
         return {
           subject: 'QuickLendX Notification',
-          html: '<p>You have a new notification.</p>',
-          text: 'You have a new notification.',
+          html: `<p>You have a new notification.</p>${unsubHtml}`,
+          text: `You have a new notification.${unsubText}`,
         };
     }
   }
@@ -175,9 +255,16 @@ export class NotificationService {
    * - If no row exists → insert 'pending', attempt send, update to 'sent'/'failed'.
    */
   public async processNotification(event: NotificationEvent): Promise<void> {
-    // Fast-path: already delivered
+    const cacheKey = `${event.id}:${event.user_id}`;
+
+    // Ultra-fast path: in-memory dedup cache (avoids DB hit entirely)
+    if (this.dedupCache.has(cacheKey)) {
+      return;
+    }
+
+    // Fast-path: already delivered (durable DB check)
     if (this.isNotificationSent(event.id, event.user_id)) {
-      // debug-level only — no PII
+      this.dedupCache.add(cacheKey);
       return;
     }
 
@@ -187,22 +274,54 @@ export class NotificationService {
     if (!preferences || !preferences.email_enabled || !preferences.email_address) {
       // No preferences row or email disabled — treat as opted-out, mark sent to avoid retry spam
       this.markSent(rowId);
+      this.dedupCache.add(cacheKey);
       return;
     }
 
     if (!preferences.notifications[event.type]) {
       // Notification type disabled for this user
       this.markSent(rowId);
+      this.dedupCache.add(cacheKey);
       return;
     }
 
     const template = this.getEmailTemplate(event);
 
     try {
-      await this.sendEmail(preferences.email_address, template);
+      await this.circuitBreaker.execute(async () => {
+        await this.sendEmail(preferences.email_address as string, template);
+      });
       this.markSent(rowId);
+      this.dedupCache.add(cacheKey);
     } catch (error: any) {
       this.markFailed(rowId, error?.message ?? String(error));
+      
+      auditService.append({
+        actor: "system",
+        operation: "NOTIFICATION_DELIVERY_FAILED",
+        params: {
+          eventId: event.id,
+          userId: event.user_id,
+          error: error?.message ?? String(error),
+        },
+        redactedParams: {
+          eventId: event.id,
+          userId: event.user_id,
+          error: error?.message ?? String(error),
+        },
+        ip: "127.0.0.1",
+        userAgent: "system-notification",
+        effect: "circuit_breaker_mark_failed",
+        success: false,
+        errorMessage: error?.message ?? String(error),
+      });
+
+      await alertRouter.routeAlert(
+        `notification-drop-${event.id}`,
+        Severity.HIGH,
+        `Permanent notification drop for event ${event.id}: ${error?.message ?? String(error)}`
+      ).catch(() => {});
+
       throw error;
     }
   }
@@ -282,6 +401,14 @@ export class NotificationService {
    */
   public getUserPreferencesPublic(userId: string): UserNotificationPreferences | null {
     return this.getUserPreferences(userId);
+  }
+
+  /**
+   * Close the SMTP transport during graceful shutdown so in-flight sends
+   * complete and no new ones start.
+   */
+  public closeTransport(): void {
+    this.transporter.close();
   }
 }
 

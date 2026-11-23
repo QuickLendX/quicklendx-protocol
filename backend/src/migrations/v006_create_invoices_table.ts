@@ -30,8 +30,8 @@ const schema = `
     indexed_at TEXT NOT NULL
   );
 
-  CREATE INDEX idx_invoices_business ON invoices(business);
-  CREATE INDEX idx_invoices_status ON invoices(status);
+  CREATE INDEX IF NOT EXISTS idx_invoices_business ON invoices(business);
+  CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status);
 `;
 
 export default {

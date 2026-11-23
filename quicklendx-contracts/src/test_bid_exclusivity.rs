@@ -89,12 +89,12 @@ fn second_accept_on_funded_invoice_is_rejected() {
         &String::from_str(&env, "Exclusivity test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
     // Two investors bid
-    let bid_a = client.place_bid(&investor_a, &invoice_id, &amount, &(amount + 100));
-    let bid_b = client.place_bid(&investor_b, &invoice_id, &amount, &(amount + 150));
+    let bid_a = client.place_bid(&investor_a, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_b = client.place_bid(&investor_b, &invoice_id, &amount, &(amount + 150), &BytesN::from_array(&env, &[0u8; 32]));
 
     // Accept first bid - should succeed
     client.accept_bid(&invoice_id, &bid_a);
@@ -127,10 +127,10 @@ fn double_accept_same_bid_is_rejected() {
         &String::from_str(&env, "Double accept test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100));
+    let bid_id = client.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
     client.accept_bid(&invoice_id, &bid_id);
 
     // Second accept of same bid should fail
@@ -165,11 +165,11 @@ fn accepting_one_bid_does_not_modify_other_bids_status() {
         &String::from_str(&env, "Isolation test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     client.verify_invoice(&invoice_id);
 
-    let bid_a = client.place_bid(&investor_a, &invoice_id, &amount, &(amount + 100));
-    let bid_b = client.place_bid(&investor_b, &invoice_id, &amount, &(amount + 200));
+    let bid_a = client.place_bid(&investor_a, &invoice_id, &amount, &(amount + 100), &BytesN::from_array(&env, &[0u8; 32]));
+    let bid_b = client.place_bid(&investor_b, &invoice_id, &amount, &(amount + 200), &BytesN::from_array(&env, &[0u8; 32]));
 
     // Accept bid A
     client.accept_bid(&invoice_id, &bid_a);
@@ -211,9 +211,9 @@ fn accept_bid_on_pending_invoice_is_rejected() {
         &String::from_str(&env, "Pending test"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
     // Invoice is Pending (not verified) - place_bid should fail
-    let result = client.try_place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    let result = client.try_place_bid(&investor, &invoice_id, &1000i128, &1100i128, &BytesN::from_array(&env, &[0u8; 32]));
     assert!(result.is_err());
 }
 
@@ -234,11 +234,11 @@ fn accept_bid_requires_verified_invoice_status() {
         &String::from_str(&env, "Status check"),
         &InvoiceCategory::Services,
         &Vec::new(&env),
-    );
+        &None);
 
     // Verify and place bid
     client.verify_invoice(&invoice_id);
-    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128);
+    let bid_id = client.place_bid(&investor, &invoice_id, &1000i128, &1100i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     // Accept - this funds the invoice
     client.accept_bid(&invoice_id, &bid_id);

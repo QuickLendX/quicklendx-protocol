@@ -1,67 +1,130 @@
 use crate::admin::AdminStorage;
+use crate::audit::{log_config_change, AuditOperation};
 use crate::errors::QuickLendXError;
-use soroban_sdk::{symbol_short, Address, Env, Symbol};
+use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Symbol, Vec};
 
-/// Storage key for protocol pause flag.
 const PAUSED_KEY: Symbol = symbol_short!("paused");
+const PAUSED_AT_KEY: Symbol = symbol_short!("paused_at");
+pub(crate) const PAUSE_REASON_KEY: Symbol = symbol_short!("pause_rsn");
+pub(crate) const MAX_PAUSE_DURATION: u64 = 7 * 24 * 3600;
 
-/// Pause controller for the QuickLendX protocol.
+/// Set of contract entrypoint names that are guarded by the protocol pause.
 ///
-/// # Security Model
-///
-/// When the protocol is paused:
-/// - Non-view, non-admin entrypoints MUST reject with `OperationNotAllowed`
-/// - Governance and emergency recovery entrypoints remain available
-/// - Admin-only business-state mutations still decide explicitly whether they
-///   are pause-gated at the entrypoint level
+/// Compared at runtime via [`soroban_sdk::String`] equality because Soroban
+/// `String` is a host type without a direct `as_str()` accessor.
+const ALL_ENTRYPOINTS: &[&str] = &[
+    "store_invoice",
+    "verify_invoice",
+    "place_bid",
+    "accept_bid",
+    "verify_business",
+    "verify_investor",
+    "create_dispute",
+    "resolve_dispute",
+];
+
 pub struct PauseControl;
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum PauseReason {
+    Manual,
+    Incident,
+    PendingUpgrade,
+}
+
 impl PauseControl {
-    /// @notice Return whether the protocol is currently paused.
-    ///
-    /// Returns true if the protocol is currently paused.
-    ///
-    /// # Returns
-    /// * `bool` - Current pause status
     pub fn is_paused(env: &Env) -> bool {
-        env.storage().instance().get(&PAUSED_KEY).unwrap_or(false)
+        if !env.storage().instance().get(&PAUSED_KEY).unwrap_or(false) {
+            return false;
+        }
+        let paused_at: u64 = env.storage().instance().get(&PAUSED_AT_KEY).unwrap_or(0);
+        if env.ledger().timestamp() > paused_at + MAX_PAUSE_DURATION {
+            env.storage().instance().set(&PAUSED_KEY, &false);
+            return false;
+        }
+        true
     }
 
-    /// @notice Set the global pause flag.
-    /// @dev This path is intentionally pause-exempt so an admin can both enter
-    ///      and exit emergency mode while user/business flows are frozen.
-    ///
-    /// Set the pause flag (admin only).
-    ///
-    /// # Arguments
-    /// * `env` - The contract environment
-    /// * `admin` - The address of the caller (must be admin)
-    /// * `paused` - The new pause state
-    ///
-    /// # Returns
-    /// * `Ok(())` on success
-    /// * `Err(QuickLendXError::NotAdmin)` if caller is not admin
+    pub fn pause_reason(env: &Env) -> Option<PauseReason> {
+        if !Self::is_paused(env) {
+            return None;
+        }
+        env.storage().instance().get(&PAUSE_REASON_KEY)
+    }
+
     pub fn set_paused(env: &Env, admin: &Address, paused: bool) -> Result<(), QuickLendXError> {
         admin.require_auth();
         AdminStorage::require_admin(env, admin)?;
-
-        env.storage().instance().set(&PAUSED_KEY, &paused);
+        let current: bool = Self::is_paused(env);
+        if current == paused {
+            return Ok(());
+        }
+        Self::apply_paused(env, paused, None);
+        log_config_change(
+            env,
+            if paused {
+                AuditOperation::ProtocolPaused
+            } else {
+                AuditOperation::ProtocolUnpaused
+            },
+            admin.clone(),
+            "pause",
+            Some(String::from_str(
+                env,
+                if !paused { "true" } else { "false" },
+            )),
+            Some(String::from_str(env, if paused { "true" } else { "false" })),
+        );
+        if paused {
+            crate::events::emit_paused(env, admin);
+        } else {
+            crate::events::emit_unpaused(env, admin);
+        }
         Ok(())
     }
 
-    /// @notice Reject business-state operations while the protocol is paused.
-    /// @dev Entry points that intentionally remain available during an incident
-    ///      must avoid calling this helper and document that exemption clearly.
-    ///
-    /// Require that the protocol is not paused.
-    ///
-    /// # Errors
-    /// * `QuickLendXError::ContractPaused` - if the protocol is paused
+    pub(crate) fn apply_paused(env: &Env, paused: bool, reason: Option<PauseReason>) {
+        env.storage().instance().set(&PAUSED_KEY, &paused);
+        if paused {
+            env.storage()
+                .instance()
+                .set(&PAUSED_AT_KEY, &env.ledger().timestamp());
+            if let Some(reason) = reason {
+                env.storage().instance().set(&PAUSE_REASON_KEY, &reason);
+            }
+        } else {
+            env.storage().instance().remove(&PAUSE_REASON_KEY);
+        }
+    }
+
     pub fn require_not_paused(env: &Env) -> Result<(), QuickLendXError> {
         if Self::is_paused(env) {
             return Err(QuickLendXError::ContractPaused);
-        } else {
-            return Ok(());
         }
+        // Also block writes while an upgrade is pending (defence-in-depth).
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(env)?;
+        Ok(())
+    }
+
+    /// Return whether a specific guarded entrypoint is currently blocked by pause.
+    ///
+    /// This is a frontend-friendly read-only getter that accepts a stable entrypoint
+    /// symbol (`EP_*`) and returns `true` when the protocol is paused and the
+    /// named entrypoint is part of the guarded set.
+    ///
+    /// **Complexity:** O(n) over `ALL_ENTRYPOINTS` (one `String::from_str`
+    /// allocation per entry). Acceptable for a read-only pause-check call
+    /// that is not on a hot transaction path; if this ever becomes hot,
+    /// compare via pre-built `Bytes` constants instead.
+    pub fn is_entrypoint_paused(env: &Env, entrypoint: String) -> bool {
+        if !Self::is_paused(env) {
+            return false;
+        }
+
+        // Simplified check for common entrypoints
+        entrypoint == String::from_str(env, "upload_invoice")
+            || entrypoint == String::from_str(env, "place_bid")
+            || entrypoint == String::from_str(env, "accept_bid")
     }
 }

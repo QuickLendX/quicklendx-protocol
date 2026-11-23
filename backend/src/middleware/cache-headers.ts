@@ -134,10 +134,15 @@ export function isNotModified(
   const ifNoneMatch = req.headers["if-none-match"];
   if (ifNoneMatch) {
     // Support comma-separated list of ETags and the wildcard "*".
+    //
+    // RFC 7232 §3.3 (and this module's policy doc, backend/docs/caching.md):
+    // If-None-Match takes precedence, and a recipient MUST ignore
+    // If-Modified-Since when the request contains If-None-Match. Returning the
+    // ETag verdict directly — instead of falling through to If-Modified-Since on
+    // a mismatch — is what makes that precedence hold for every combination of
+    // the two headers.
     const tags = ifNoneMatch.split(",").map((t) => t.trim());
-    if (tags.includes("*") || tags.includes(etag)) {
-      return true;
-    }
+    return tags.includes("*") || tags.includes(etag);
   }
 
   const ifModifiedSince = req.headers["if-modified-since"];
@@ -209,4 +214,162 @@ export function applyCacheHeaders(
   }
 
   return isNotModified(req, etag, lastModified);
+}
+
+// ---------------------------------------------------------------------------
+// Conditional-write precondition support (If-Match / If-Unmodified-Since)
+// ---------------------------------------------------------------------------
+
+export interface ConditionalWriteOptions {
+  /** When true, a missing If-Match header is rejected with 400. Default false. */
+  required?: boolean;
+  /** Resource last-modified date for If-Unmodified-Since comparison. */
+  lastModified?: Date | null;
+}
+
+/**
+ * Normalizes an ETag string by stripping weak indicator (W/) and surrounding double quotes,
+ * and trimming whitespace.
+ */
+function normalizeETag(etag: string): string {
+  let cleaned = etag.trim();
+  if (cleaned.startsWith("W/")) {
+    cleaned = cleaned.substring(2).trim();
+  }
+  if (cleaned.startsWith('"') && cleaned.endsWith('"') && cleaned.length >= 2) {
+    cleaned = cleaned.substring(1, cleaned.length - 1);
+  }
+  return cleaned;
+}
+
+/**
+ * Checks if a specific raw If-Match tag matches the given server etag.
+ * Per RFC 7232 §3.1: If-Match MUST use strong comparison function for state-changing calls.
+ * Weak ETags (prefixed with W/) cannot satisfy If-Match strong comparison.
+ */
+function matchesIfMatchTag(rawTag: string, serverETag: string): boolean {
+  const trimmed = rawTag.trim();
+  if (trimmed === "*") return true;
+  if (trimmed.startsWith("W/")) return false;
+
+  const tagVal = normalizeETag(trimmed);
+  const serverVal = normalizeETag(serverETag);
+  return tagVal === serverVal;
+}
+
+/**
+ * Evaluates If-Match / If-Unmodified-Since preconditions for write requests.
+ *
+ * Returns `true` when the response has already been sent (caller must stop).
+ * Returns `false` when the caller should proceed with the write.
+ *
+ * Must be called BEFORE any state mutation so that a failed precondition
+ * does not produce a side-effect.
+ */
+export function assertConditionalWrite(
+  req: Request,
+  res: Response,
+  etag: string | null,
+  options?: ConditionalWriteOptions
+): boolean {
+  try {
+    const rawIfMatch = req?.headers?.["if-match"];
+    const ifMatch = Array.isArray(rawIfMatch) ? rawIfMatch.join(",") : rawIfMatch;
+
+    if (ifMatch !== undefined) {
+      const trimmedIfMatch = ifMatch.trim();
+      if (trimmedIfMatch === "") {
+        if (options?.required) {
+          res.setHeader("Cache-Control", CC_NO_STORE);
+          res.status(400).json({
+            error: {
+              message: "If-Match header is required",
+              code: "PRECONDITION_REQUIRED",
+            },
+          });
+          return true;
+        }
+        res.setHeader("Cache-Control", CC_NO_STORE);
+        res.status(412).json({
+          error: {
+            message: "Precondition Failed: resource has been modified",
+            code: "PRECONDITION_FAILED",
+          },
+        });
+        return true;
+      }
+
+      if (etag === null || etag === undefined) {
+        res.setHeader("Cache-Control", CC_NO_STORE);
+        res.status(412).json({
+          error: {
+            message: "Precondition Failed: resource has been modified",
+            code: "PRECONDITION_FAILED",
+          },
+        });
+        return true;
+      }
+
+      const tags = trimmedIfMatch.split(",").map((t) => t.trim()).filter(Boolean);
+      const isWildcard = tags.includes("*");
+
+      const hasMatch = isWildcard || tags.some((tag) => matchesIfMatchTag(tag, etag));
+
+      if (!hasMatch) {
+        res.setHeader("Cache-Control", CC_NO_STORE);
+        res.status(412).json({
+          error: {
+            message: "Precondition Failed: resource has been modified",
+            code: "PRECONDITION_FAILED",
+          },
+        });
+        return true;
+      }
+
+      // RFC 7232 §3.4: MUST ignore If-Unmodified-Since if If-Match is present.
+      return false;
+    }
+
+    if (options?.required) {
+      res.setHeader("Cache-Control", CC_NO_STORE);
+      res.status(400).json({
+        error: {
+          message: "If-Match header is required",
+          code: "PRECONDITION_REQUIRED",
+        },
+      });
+      return true;
+    }
+
+    const rawIfUnmodifiedSince = req?.headers?.["if-unmodified-since"];
+    const ifUnmodifiedSince = Array.isArray(rawIfUnmodifiedSince) ? rawIfUnmodifiedSince[0] : rawIfUnmodifiedSince;
+
+    if (ifUnmodifiedSince && options?.lastModified) {
+      const lm = options.lastModified;
+      if (lm instanceof Date && !isNaN(lm.getTime())) {
+        const since = new Date(ifUnmodifiedSince);
+        if (!isNaN(since.getTime()) && lm > since) {
+          res.setHeader("Cache-Control", CC_NO_STORE);
+          res.status(412).json({
+            error: {
+              message: "Precondition Failed: resource has been modified",
+              code: "PRECONDITION_FAILED",
+            },
+          });
+          return true;
+        }
+      }
+    }
+
+    return false;
+  } catch (err) {
+    res.setHeader("Cache-Control", CC_NO_STORE);
+    res.status(400).json({
+      error: {
+        message: "Invalid conditional write request headers",
+        code: "INVALID_PRECONDITION_HEADER",
+      },
+    });
+    return true;
+  }
 }

@@ -14,7 +14,7 @@ export interface AuditLogEntry {
 
 /**
  * Audit logging service for API key events
- * Logs are written asynchronously to avoid blocking request processing
+" * Logs are written asynchronously to avoid blocking request processing
  */
 export class AuditLogService {
   /**
@@ -93,7 +93,7 @@ export class AuditLogService {
     await this.logEvent({
       event_type: 'revoked',
       key_id: keyId,
-      actor,
+      actor: actor,
       ip_address: ipAddress,
     });
   }

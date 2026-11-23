@@ -452,3 +452,119 @@ describe("webhookVerifyMiddleware – matched_secret null coalescing", () => {
     ).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Webhook delivery persistence via WebhookQueueService
+// ---------------------------------------------------------------------------
+
+import { WebhookQueueService } from "../services/webhookQueueService";
+import { getDatabase, closeDatabase } from "../lib/database";
+import path from "path";
+import crypto from "crypto";
+
+const TEST_DB_PATH_DELIVERY = path.resolve(
+  __dirname,
+  "../../.data/test-webhook-middleware-delivery.db"
+);
+
+describe("webhook delivery persistence", () => {
+  beforeAll(() => {
+    process.env.DATABASE_PATH = TEST_DB_PATH_DELIVERY;
+    closeDatabase();
+    const conn = getDatabase();
+    conn.exec(`
+      CREATE TABLE IF NOT EXISTS webhook_deliveries (
+        id TEXT PRIMARY KEY,
+        event_type TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        subscriber_id TEXT,
+        status TEXT NOT NULL DEFAULT 'pending'
+          CHECK(status IN ('pending','processing','success','failed','dead_letter')),
+        enqueued_at TEXT NOT NULL DEFAULT (datetime('now')),
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 5,
+        next_retry_at TEXT,
+        last_error TEXT,
+        last_attempt_at TEXT,
+        created_at TEXT NOT NULL DEFAULT (datetime('now')),
+        updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      )
+    `);
+    conn.exec(`
+      CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status_next_retry
+      ON webhook_deliveries(status, next_retry_at)
+    `);
+    conn.exec(`
+      CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created_at
+      ON webhook_deliveries(created_at)
+    `);
+  });
+
+  afterAll(() => {
+    closeDatabase();
+    try {
+      require("fs").unlinkSync(TEST_DB_PATH_DELIVERY);
+    } catch {
+      // ignore
+    }
+  });
+
+  beforeEach(() => {
+    const conn = getDatabase();
+    conn.exec("DELETE FROM webhook_deliveries");
+    WebhookQueueService.resetInstance();
+  });
+
+  it("enqueues and persists a delivery", () => {
+    const svc = WebhookQueueService.getInstance();
+    const event = svc.enqueue("invoice.paid", { invoiceId: "inv-1" });
+
+    expect(event.id).toBeDefined();
+    expect(event.status).toBe("pending");
+
+    const fromDb = getDatabase()
+      .prepare("SELECT * FROM webhook_deliveries WHERE id = ?")
+      .get(event.id) as any;
+    expect(fromDb).toBeDefined();
+    expect(fromDb.event_type).toBe("invoice.paid");
+  });
+
+  it("marks delivery as success", () => {
+    const svc = WebhookQueueService.getInstance();
+    const event = svc.enqueue("test.event", {});
+    expect(svc.markSuccess(event.id)).toBe(true);
+    const fromDb = getDatabase()
+      .prepare("SELECT status FROM webhook_deliveries WHERE id = ?")
+      .get(event.id) as any;
+    expect(fromDb.status).toBe("success");
+  });
+
+  it("marks delivery as failed with retry schedule", () => {
+    const svc = WebhookQueueService.getInstance();
+    const event = svc.enqueue("test.event", {});
+    const result = svc.markFailed(event.id);
+    expect(result).not.toBeNull();
+    expect(result!.status).toBe("failed");
+    expect(result!.nextRetryAt).not.toBeNull();
+  });
+
+  it("promotes to dead_letter after exhausting attempts", () => {
+    const svc = WebhookQueueService.getInstance();
+    const event = svc.enqueue("test.event", {});
+    for (let i = 0; i < 5; i++) {
+      svc.markFailed(event.id);
+    }
+    const info = svc.getDeliveryInfo(event.id);
+    expect(info!.status).toBe("dead_letter");
+  });
+
+  it("retrieves delivery info", () => {
+    const svc = WebhookQueueService.getInstance();
+    const event = svc.enqueueWithSubscriber("user.created", { uid: 1 }, "sub-xyz");
+    const info = svc.getDeliveryInfo(event.id);
+    expect(info).not.toBeNull();
+    expect(info!.eventType).toBe("user.created");
+    expect(info!.subscriberId).toBe("sub-xyz");
+    expect(info!.attemptCount).toBe(0);
+  });
+});

@@ -73,6 +73,7 @@ fn create_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
+        &None,
     );
     client.verify_invoice(&invoice_id);
     invoice_id
@@ -86,7 +87,13 @@ fn create_and_place_bid(
     bid_amount: i128,
     expected_return: i128,
 ) -> BytesN<32> {
-    client.place_bid(investor, invoice_id, &bid_amount, &expected_return)
+    client.place_bid(
+        investor,
+        invoice_id,
+        &bid_amount,
+        &expected_return,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    )
 }
 
 fn get_bid_count_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> u32 {
@@ -117,6 +124,160 @@ fn count_bids_by_status(env: &Env, invoice_id: &BytesN<32>, status: BidStatus) -
         }
     }
     count
+}
+
+#[test]
+fn expired_bid_not_active_during_grace() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+
+    client.set_bid_expiry_grace_seconds(&86_400u64);
+    let now = env.ledger().timestamp();
+    let invoice_id = create_invoice(
+        &env,
+        &client,
+        &admin,
+        &business,
+        50_000,
+        now + 86400 * 30,
+    );
+    let bid_id = create_and_place_bid(&env, &client, &investor, &invoice_id, 50_000, 50_500);
+
+    let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
+    bid.expiration_timestamp = now;
+    BidStorage::update_bid(&env, &bid);
+
+    env.ledger().set_timestamp(now + 10);
+
+    assert_eq!(BidStorage::get_active_bid_count(&env, &invoice_id), 0);
+    assert_eq!(BidStorage::count_active_bids_by_investor(&env, &investor), 0);
+}
+
+#[test]
+fn counters_agree() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    let now = env.ledger().timestamp();
+    let invoice_id = create_invoice(
+        &env,
+        &client,
+        &admin,
+        &business,
+        500_000,
+        now + 86400 * 30,
+    );
+
+    let live1 = create_and_place_bid(&env, &client, &investor, &invoice_id, 25_000, 25_250);
+    let live2 = create_and_place_bid(&env, &client, &investor, &invoice_id, 30_000, 30_300);
+    let live3 = create_and_place_bid(&env, &client, &investor, &invoice_id, 35_000, 35_350);
+    let stale1 = create_and_place_bid(&env, &client, &investor, &invoice_id, 40_000, 40_400);
+    let stale2 = create_and_place_bid(&env, &client, &investor, &invoice_id, 45_000, 45_450);
+    let expired_bid = create_and_place_bid(&env, &client, &investor, &invoice_id, 50_000, 50_500);
+
+    for bid_id in [live1, live2, live3, stale1, stale2] {
+        let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
+        bid.expiration_timestamp = now;
+        BidStorage::update_bid(&env, &bid);
+    }
+
+    let mut expired = BidStorage::get_bid(&env, &expired_bid).unwrap();
+    expired.expiration_timestamp = now.saturating_sub(1);
+    expired.status = BidStatus::Expired;
+    BidStorage::update_bid(&env, &expired);
+
+    env.ledger().set_timestamp(now + 10);
+
+    assert_eq!(BidStorage::get_active_bid_count(&env, &invoice_id), 3);
+    assert_eq!(BidStorage::count_active_bids_by_investor(&env, &investor), 3);
+    assert_eq!(BidStorage::count_active_placed_bids_for_investor(&env, &investor), 3);
+}
+
+#[test]
+fn expired_bids_queryable() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    let now = env.ledger().timestamp();
+    let invoice_id = create_invoice(
+        &env,
+        &client,
+        &admin,
+        &business,
+        50_000,
+        now + 86400 * 30,
+    );
+    let bid_id = create_and_place_bid(&env, &client, &investor, &invoice_id, 50_000, 50_500);
+
+    let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
+    bid.expiration_timestamp = now;
+    BidStorage::update_bid(&env, &bid);
+    env.ledger().set_timestamp(now + 1);
+
+    BidStorage::cleanup_expired_bids(&env, &invoice_id);
+
+    let expired = BidStorage::get_bids_by_status(&env, &invoice_id, BidStatus::Expired);
+    assert_eq!(expired.len(), 1);
+    assert_eq!(expired.get(0).unwrap().bid_id, bid_id);
+
+    let counts = BidStorage::count_bids_by_status(&env, &invoice_id);
+    assert_eq!(counts.3, 1);
+}
+
+#[test]
+fn invariants_accept_boundary_expiry() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    let now = env.ledger().timestamp();
+    let invoice_id = create_invoice(
+        &env,
+        &client,
+        &admin,
+        &business,
+        50_000,
+        now + 86400 * 30,
+    );
+
+    client.set_bid_expiry_grace_seconds(&86_400u64);
+    let bid_id = create_and_place_bid(&env, &client, &investor, &invoice_id, 50_000, 50_500);
+    let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
+    bid.expiration_timestamp = now;
+    BidStorage::update_bid(&env, &bid);
+    env.ledger().set_timestamp(now + 10);
+    assert!(BidStorage::assert_bid_invariants(&env, &invoice_id, env.ledger().timestamp()));
+
+    let expired_id = create_and_place_bid(&env, &client, &investor, &invoice_id, 60_000, 60_600);
+    let mut expired = BidStorage::get_bid(&env, &expired_id).unwrap();
+    expired.status = BidStatus::Expired;
+    expired.expiration_timestamp = now + 10;
+    BidStorage::update_bid(&env, &expired);
+    assert!(BidStorage::assert_bid_invariants(&env, &invoice_id, env.ledger().timestamp()));
+}
+
+#[test]
+fn invariants_reject_real_violation() {
+    let (env, client, admin) = setup();
+    let business = create_verified_business(&env, &client, &admin);
+    let investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    let now = env.ledger().timestamp();
+    let invoice_id = create_invoice(
+        &env,
+        &client,
+        &admin,
+        &business,
+        50_000,
+        now + 86400 * 30,
+    );
+    let bid_id = create_and_place_bid(&env, &client, &investor, &invoice_id, 50_000, 50_500);
+
+    let mut bid = BidStorage::get_bid(&env, &bid_id).unwrap();
+    bid.status = BidStatus::Expired;
+    bid.expiration_timestamp = now + 100;
+    BidStorage::update_bid(&env, &bid);
+
+    assert!(!BidStorage::assert_bid_invariants(&env, &invoice_id, now));
 }
 
 // -------------------------------------------------------------------------------
@@ -853,8 +1014,14 @@ fn test_exact_expiry_set_exactness() {
     let bid_e = create_and_place_bid(&env, &client, &investor, &invoice_id, 70_000, 70_700);
 
     // All 5 are Placed
-    assert_eq!(count_bids_by_status(&env, &invoice_id, BidStatus::Placed), 5);
-    assert_eq!(count_bids_by_status(&env, &invoice_id, BidStatus::Expired), 0);
+    assert_eq!(
+        count_bids_by_status(&env, &invoice_id, BidStatus::Placed),
+        5
+    );
+    assert_eq!(
+        count_bids_by_status(&env, &invoice_id, BidStatus::Expired),
+        0
+    );
 
     // 1) Advance to exactly at TTL boundary (should NOT expire any bids)
     let ttl_boundary = now + ttl_seconds;
@@ -866,11 +1033,13 @@ fn test_exact_expiry_set_exactness() {
         "No bids expire exactly at TTL boundary (strict > comparison)"
     );
     assert_eq!(
-        count_bids_by_status(&env, &invoice_id, BidStatus::Placed), 5,
+        count_bids_by_status(&env, &invoice_id, BidStatus::Placed),
+        5,
         "All 5 bids still Placed at exact TTL boundary"
     );
     assert_eq!(
-        count_bids_by_status(&env, &invoice_id, BidStatus::Expired), 0,
+        count_bids_by_status(&env, &invoice_id, BidStatus::Expired),
+        0,
         "No bids expired at exact TTL boundary"
     );
 
@@ -883,11 +1052,13 @@ fn test_exact_expiry_set_exactness() {
         "Exactly 5 bids should expire 1 second past TTL boundary"
     );
     assert_eq!(
-        count_bids_by_status(&env, &invoice_id, BidStatus::Expired), 0,
+        count_bids_by_status(&env, &invoice_id, BidStatus::Expired),
+        0,
         "Expired bids pruned from invoice index"
     );
     assert_eq!(
-        get_bid_count_for_invoice(&env, &invoice_id), 0,
+        get_bid_count_for_invoice(&env, &invoice_id),
+        0,
         "All expired bids removed from invoice index"
     );
 
@@ -928,11 +1099,13 @@ fn test_exact_expiry_mixed_active_expired() {
 
     // Check: 4 Placed (1 about to become terminal, but accept already moved it)
     assert_eq!(
-        count_bids_by_status(&env, &invoice_id, BidStatus::Placed), 3,
+        count_bids_by_status(&env, &invoice_id, BidStatus::Placed),
+        3,
         "3 Placed after acceptance"
     );
     assert_eq!(
-        count_bids_by_status(&env, &invoice_id, BidStatus::Accepted), 1,
+        count_bids_by_status(&env, &invoice_id, BidStatus::Accepted),
+        1,
         "1 Accepted after acceptance"
     );
 
@@ -969,7 +1142,8 @@ fn test_exact_expiry_mixed_active_expired() {
 
     // Invoice index contains only active + terminal (2 bids)
     assert_eq!(
-        get_bid_count_for_invoice(&env, &invoice_id), 2,
+        get_bid_count_for_invoice(&env, &invoice_id),
+        2,
         "Only active + terminal bids remain in invoice index"
     );
 }
@@ -1096,10 +1270,7 @@ fn test_investor_limit_released_after_cleanup() {
 
     // Active count should be 0
     let active_count = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
-    assert_eq!(
-        active_count, 0,
-        "Zero active bids after all expired"
-    );
+    assert_eq!(active_count, 0, "Zero active bids after all expired");
 }
 
 // -------------------------------------------------------------------------------
@@ -1162,10 +1333,7 @@ fn test_idempotent_cleanup_preserves_active_count() {
     );
 
     let active_after_3 = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
-    assert_eq!(
-        active_after_3, 1,
-        "Active count stable after third cleanup"
-    );
+    assert_eq!(active_after_3, 1, "Active count stable after third cleanup");
 
     // Verify remaining bid statuses
     assert_eq!(
@@ -1205,11 +1373,18 @@ fn test_idempotent_cleanup_all_active() {
     // Repeat cleanup many times at same timestamp
     for i in 0..5 {
         let cleaned = BidStorage::cleanup_expired_bids(&env, &invoice_id);
-        assert_eq!(cleaned, 0, "Iteration {}: cleanup idempotent with active bids", i);
+        assert_eq!(
+            cleaned, 0,
+            "Iteration {}: cleanup idempotent with active bids",
+            i
+        );
     }
 
     let active_after = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
-    assert_eq!(active_after, 2, "Active count unchanged after repeated cleanup");
+    assert_eq!(
+        active_after, 2,
+        "Active count unchanged after repeated cleanup"
+    );
 }
 
 // -------------------------------------------------------------------------------

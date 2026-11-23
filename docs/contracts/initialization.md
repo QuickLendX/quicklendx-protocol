@@ -1,5 +1,7 @@
 # QuickLendX Protocol Initialization
 
+> For upgrading an already-initialized contract — WASM redeployment, storage migration, and rollback — see [`docs/UPGRADE_PATHS.md`](../UPGRADE_PATHS.md).
+
 ## Overview
 
 The QuickLendX protocol uses a secure, one-time initialization flow that sets up all critical

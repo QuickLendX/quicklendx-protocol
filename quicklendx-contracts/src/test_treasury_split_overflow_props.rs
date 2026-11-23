@@ -90,9 +90,9 @@ proptest! {
             Ok((treasury_amount, remaining)) => {
                 // Invariant: treasury_share + remainder == platform_fee
                 prop_assert_eq!(
-                    treasury_amount + remaining, 
+                    treasury_amount + remaining,
                     platform_fee,
-                    "Sum invariant violated: {} + {} != {}", 
+                    "Sum invariant violated: {} + {} != {}",
                     treasury_amount, remaining, platform_fee
                 );
 
@@ -121,13 +121,13 @@ proptest! {
         treasury_share_bps in 2i128..=9_999, // Needs to be > 1 to multiply and overflow
     ) {
         let platform_fee = i128::MAX - high_bits;
-        
+
         let result = calculate_treasury_split_checked(platform_fee, treasury_share_bps);
-        
+
         // As long as treasury_share_bps > 1, the multiplication `(i128::MAX - high_bits) * bps`
         // will overflow an i128.
         prop_assert_eq!(result, Err(QuickLendXError::ArithmeticOverflow));
-        
+
         // Double check using checked_mul
         prop_assert!(platform_fee.checked_mul(treasury_share_bps).is_none());
     }

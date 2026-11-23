@@ -77,3 +77,4 @@ The admin role is required for the following operations:
 - `add_currency` / `remove_currency`: Manage the whitelist of allowed settlement tokens.
 - `pause` / `unpause`: Emergency control for the contract.
 - `initiate_emergency_withdraw`: Emergency recovery of stuck funds.
+- `admin_get_escrow`: Inspect escrow state by escrow ID for support and debugging.

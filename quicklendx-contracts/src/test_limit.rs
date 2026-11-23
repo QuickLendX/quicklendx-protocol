@@ -39,7 +39,7 @@ fn create_invoice(
         &String::from_str(env, "Invoice"),
         &category,
         &Vec::new(env),
-    );
+        &None);
     if verify {
         // set admin and verify
         env.mock_all_auths();
@@ -59,7 +59,7 @@ fn create_bid(
     amount: i128,
 ) -> BytesN<32> {
     env.mock_all_auths();
-    client.place_bid(investor, invoice_id, &amount, &1000i128)
+    client.place_bid(investor, invoice_id, &amount, &1000i128, &BytesN::from_array(&env, &[0u8; 32]))
 }
 
 /// Test that limit=0 returns empty results for all paginated endpoints

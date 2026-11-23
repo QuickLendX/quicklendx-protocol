@@ -1,3 +1,5 @@
+#![cfg(test)]
+
 /// Tag normalization and duplicate prevention tests - Issue #527
 ///
 /// These tests verify that:
@@ -5,7 +7,6 @@
 /// - Normalized duplicates are rejected at creation time.
 /// - `add_invoice_tag`, `remove_invoice_tag`, `invoice_has_tag`, `get_invoices_by_tag`,
 ///   and `get_invoice_count_by_tag` all operate on the normalized form.
-#![cfg(test)]
 extern crate std;
 
 use crate::errors::QuickLendXError;
@@ -38,7 +39,7 @@ fn make_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &tags,
-    )
+        &None)
 }
 
 // ----------------------------------------------------------------------------
@@ -95,7 +96,7 @@ fn test_whitespace_only_tag_rejected() {
         &String::from_str(&env, "Spaces test"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidTag);
 }
@@ -119,7 +120,7 @@ fn test_case_duplicate_tags_rejected_at_creation() {
         &String::from_str(&env, "Dup test"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidTag);
 }
@@ -143,7 +144,7 @@ fn test_whitespace_duplicate_tags_rejected_at_creation() {
         &String::from_str(&env, "Pad dup test"),
         &InvoiceCategory::Services,
         &tags,
-    );
+        &None);
     assert!(result.is_err());
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::InvalidTag);
 }
