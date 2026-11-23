@@ -7,7 +7,7 @@ use quicklendx_contracts::{
     types::{Investment, InvestmentStatus},
     QuickLendXContract, QuickLendXContractClient,
 };
-use soroban_sdk::{testutils::Address as _, Address, BytesN, Env, Vec};
+use soroban_sdk::{testutils::Address as _, Address, BytesN, Env};
 
 #[derive(Arbitrary, Debug)]
 struct Input {
@@ -48,7 +48,7 @@ fuzz_target!(|input: Input| {
                     amount: amount as i128,
                     funded_at: 0,
                     status: InvestmentStatus::Active,
-                    insurance: Vec::new(&env),
+                    insurance: soroban_sdk::Vec::new(&env),
                 };
                 // A missing/stale snapshot must be rejected cleanly without
                 // mutating payment or escrow state.
