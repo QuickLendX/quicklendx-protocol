@@ -85,6 +85,27 @@ where
     extend_persistent_ttl(env, key);
 }
 
+pub fn persistent_set<K, V>(env: &Env, key: &K, val: &V)
+where
+    K: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
+    V: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
+{
+    env.storage().persistent().set(key, val);
+    extend_persistent_ttl(env, key);
+}
+
+pub fn persistent_get<K, V>(env: &Env, key: &K) -> Option<V>
+where
+    K: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
+    V: soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val>,
+{
+    let val = env.storage().persistent().get(key);
+    if val.is_some() {
+        extend_persistent_ttl(env, key);
+    }
+    val
+}
+
 pub fn extend_instance_ttl(env: &Env) {
     env.storage()
         .instance()
@@ -336,7 +357,40 @@ impl InvoiceStorage {
 
     pub fn get_business_generation(env: &Env, business: &Address) -> u64 {
         let key = Self::business_generation_key(business);
-        env.storage().persistent().get(&key).unwrap_or(0)
+        persistent_get(env, &key).unwrap_or(0)
+        let generation = env.storage().persistent().get(&key).unwrap_or(0);
+        if env.storage().persistent().has(&key) {
+            extend_persistent_ttl(env, &key);
+        }
+        generation
+    }
+
+    fn get_business_cursor_generation(
+        env: &Env,
+        business: &Address,
+        status_filter: Option<InvoiceStatus>,
+    ) -> u64 {
+        let status_tag = match status_filter {
+            None => 0,
+            Some(InvoiceStatus::Pending) => 1,
+            Some(InvoiceStatus::Verified) => 2,
+            Some(InvoiceStatus::Funded) => 3,
+            Some(InvoiceStatus::Paid) => 4,
+            Some(InvoiceStatus::Defaulted) => 5,
+            Some(InvoiceStatus::Cancelled) => 6,
+            Some(InvoiceStatus::Refunded) => 7,
+        };
+        let mut preimage = soroban_sdk::Bytes::from_slice(env, b"business_invoice_cursor_v1");
+        preimage.append(&business.to_string().to_bytes());
+        preimage.append(&soroban_sdk::Bytes::from_array(env, &[status_tag]));
+        preimage.append(&soroban_sdk::Bytes::from_array(
+            env,
+            &Self::get_business_generation(env, business).to_be_bytes(),
+        ));
+        let digest = env.crypto().sha256(&preimage).to_array();
+        u64::from_be_bytes([
+            digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6], digest[7],
+        ])
     }
 
     pub fn bump_business_generation(env: &Env, business: &Address) {
@@ -361,7 +415,7 @@ impl InvoiceStorage {
 
     pub fn get_status_generation(env: &Env, status: InvoiceStatus) -> u64 {
         let key = Self::status_generation_key(status);
-        env.storage().persistent().get(&key).unwrap_or(0)
+        persistent_get(env, &key).unwrap_or(0)
     }
 
     pub fn bump_status_generation(env: &Env, status: InvoiceStatus) {
@@ -373,36 +427,30 @@ impl InvoiceStorage {
 
     fn raw_index_entries(env: &Env, index: &InvoiceIndex) -> Vec<BytesN<32>> {
         match index {
-            InvoiceIndex::Business(business) => env
-                .storage()
-                .persistent()
-                .get(&Indexes::invoices_by_business(business))
-                .unwrap_or(Vec::new(env)),
-            InvoiceIndex::Status(status) => env
-                .storage()
-                .persistent()
-                .get(&Indexes::invoices_by_status(*status))
-                .unwrap_or(Vec::new(env)),
-            InvoiceIndex::Customer(name) => env
-                .storage()
-                .persistent()
-                .get(&Indexes::invoices_by_customer(name))
-                .unwrap_or(Vec::new(env)),
-            InvoiceIndex::TaxId(tax_id) => env
-                .storage()
-                .persistent()
-                .get(&Indexes::invoices_by_tax_id(tax_id))
-                .unwrap_or(Vec::new(env)),
-            InvoiceIndex::Tag(tag) => env
-                .storage()
-                .persistent()
-                .get(&Indexes::invoices_by_tag(tag))
-                .unwrap_or(Vec::new(env)),
-            InvoiceIndex::Category(category) => env
-                .storage()
-                .persistent()
-                .get(&Indexes::invoices_by_category(*category))
-                .unwrap_or(Vec::new(env)),
+            InvoiceIndex::Business(business) => {
+                let key = Indexes::invoices_by_business(business);
+                persistent_get(env, &key).unwrap_or(Vec::new(env))
+            }
+            InvoiceIndex::Status(status) => {
+                let key = Indexes::invoices_by_status(*status);
+                persistent_get(env, &key).unwrap_or(Vec::new(env))
+            }
+            InvoiceIndex::Customer(name) => {
+                let key = Indexes::invoices_by_customer(name);
+                persistent_get(env, &key).unwrap_or(Vec::new(env))
+            }
+            InvoiceIndex::TaxId(tax_id) => {
+                let key = Indexes::invoices_by_tax_id(tax_id);
+                persistent_get(env, &key).unwrap_or(Vec::new(env))
+            }
+            InvoiceIndex::Tag(tag) => {
+                let key = Indexes::invoices_by_tag(tag);
+                persistent_get(env, &key).unwrap_or(Vec::new(env))
+            }
+            InvoiceIndex::Category(category) => {
+                let key = Indexes::invoices_by_category(*category);
+                persistent_get(env, &key).unwrap_or(Vec::new(env))
+            }
         }
     }
 
@@ -558,10 +606,8 @@ impl InvoiceStorage {
     }
 
     pub fn get_invoice_lock(env: &Env, invoice_id: &BytesN<32>) -> InvoiceLock {
-        env.storage()
-            .persistent()
-            .get(&DataKey::FrozenInvoice(invoice_id.clone()))
-            .unwrap_or(InvoiceLock::None)
+        let key = DataKey::FrozenInvoice(invoice_id.clone());
+        persistent_get(env, &key).unwrap_or(InvoiceLock::None)
     }
 
     pub fn is_frozen(env: &Env, invoice_id: &BytesN<32>) -> bool {
@@ -652,6 +698,79 @@ impl InvoiceStorage {
         Self::get_by_business(env, business)
     }
 
+    /// Return business invoices in descending creation-time order using an
+    /// opaque, generation-bound cursor.
+    pub fn get_business_invoices_paged(
+        env: &Env,
+        business: &Address,
+        status_filter: Option<InvoiceStatus>,
+        cursor: Option<soroban_sdk::String>,
+        limit: u32,
+    ) -> Result<crate::types::InvoicePage, crate::errors::QuickLendXError> {
+        let generation = Self::get_business_cursor_generation(env, business, status_filter);
+        let offset = match cursor {
+            Some(raw) => {
+                let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+                decoded.require_stable(generation)?;
+                decoded.offset
+            }
+            None => 0,
+        };
+
+        let mut ordered = Vec::new(env);
+        for id in Self::get_business_invoices(env, business).iter() {
+            let Some(invoice) = Self::get(env, &id) else {
+                continue;
+            };
+            if status_filter.is_some_and(|status| invoice.status != status) {
+                continue;
+            }
+
+            let mut insertion_index = ordered.len();
+            ordered.push_back(id.clone());
+            while insertion_index > 0 {
+                let previous_id = ordered.get(insertion_index - 1).unwrap();
+                let previous_created_at = Self::get(env, &previous_id)
+                    .map(|previous| previous.created_at)
+                    .unwrap_or(0);
+                if previous_created_at >= invoice.created_at {
+                    break;
+                }
+                ordered.set(insertion_index, previous_id);
+                insertion_index -= 1;
+            }
+            ordered.set(insertion_index, id);
+        }
+
+        let total_count = ordered.len();
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut items = Vec::new(env);
+        for index in start..end {
+            if let Some(id) = ordered.get(index) {
+                items.push_back(id);
+            }
+        }
+
+        let capped_limit = crate::pagination::cap_query_limit(limit);
+        let has_more = capped_limit > 0 && offset.saturating_add(capped_limit) < total_count;
+        let next_cursor = if has_more {
+            Some(crate::pagination::encode_soroban_cursor(
+                env,
+                crate::pagination::Cursor::new(start.saturating_add(capped_limit), generation),
+            ))
+        } else {
+            None
+        };
+
+        Ok(crate::types::InvoicePage {
+            items,
+            total_count,
+            has_more,
+            generation,
+            next_cursor,
+        })
+    }
+
     pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
         let mut categories = Vec::new(env);
         categories.push_back(InvoiceCategory::Goods);
@@ -692,7 +811,7 @@ impl InvoiceStorage {
     /// `None` means the invoice is uncapped (only face value / protocol limits apply).
     pub fn get_per_investor_position_cap(env: &Env, invoice_id: &BytesN<32>) -> Option<i128> {
         let key = DataKey::PerInvestorPositionCap(invoice_id.clone());
-        env.storage().persistent().get(&key)
+        persistent_get(env, &key)
     }
 
     /// Sets or clears the absolute per-investor position cap for an invoice.
@@ -719,6 +838,7 @@ impl InvoiceStorage {
             if old.status != invoice.status {
                 Self::remove_from_status_index(env, old.status, &invoice.id);
                 Self::add_to_status_index(env, invoice.status, &invoice.id);
+                Self::bump_business_generation(env, &invoice.business);
             }
             if old.metadata_customer_name != invoice.metadata_customer_name {
                 if let Some(ref name) = old.metadata_customer_name {
@@ -759,29 +879,21 @@ impl InvoiceStorage {
     }
 
     pub fn next_count(env: &Env) -> u64 {
-        let current: u64 = env
-            .storage()
-            .persistent()
-            .get(&StorageKeys::invoice_count())
-            .unwrap_or(0);
+        let key = StorageKeys::invoice_count();
+        let current: u64 = persistent_get(env, &key).unwrap_or(0);
         let next = current.saturating_add(1);
-        env.storage()
-            .persistent()
-            .set(&StorageKeys::invoice_count(), &next);
+        persistent_set(env, &key, &next);
         next
     }
 
     pub fn get_total_count(env: &Env) -> u64 {
-        env.storage()
-            .persistent()
-            .get(&StorageKeys::invoice_count())
-            .unwrap_or(0)
+        let key = StorageKeys::invoice_count();
+        persistent_get(env, &key).unwrap_or(0)
     }
 
     pub fn set_total_count(env: &Env, count: u32) {
-        env.storage()
-            .persistent()
-            .set(&StorageKeys::invoice_count(), &(count as u64));
+        let key = StorageKeys::invoice_count();
+        persistent_set(env, &key, &(count as u64));
     }
 
     pub fn delete_invoice(env: &Env, invoice_id: &BytesN<32>) {
@@ -875,65 +987,61 @@ impl InvoiceStorage {
         matches
     }
 
-fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
-    let index = InvoiceIndex::Business(business.clone());
-    let mut invoices = Self::raw_index_entries(env, &index);
+    fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
+        let index = InvoiceIndex::Business(business.clone());
+        let mut invoices = Self::raw_index_entries(env, &index);
 
-    if !invoices.contains(invoice_id) {
-        invoices.push_back(invoice_id.clone());
+        if !invoices.contains(invoice_id) {
+            invoices.push_back(invoice_id.clone());
 
-        let key = Indexes::invoices_by_business(business);
-        env.storage().persistent().set(&key, &invoices);
-        extend_persistent_ttl(env, &key);
-        Self::bump_business_generation(env, business);
+            let key = Indexes::invoices_by_business(business);
+            env.storage().persistent().set(&key, &invoices);
+            extend_persistent_ttl(env, &key);
+            Self::bump_business_generation(env, business);
+        }
     }
-}
 
-fn remove_from_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
-    let index = InvoiceIndex::Business(business.clone());
-    let mut invoices = Self::raw_index_entries(env, &index);
+    fn remove_from_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
+        let index = InvoiceIndex::Business(business.clone());
+        let mut invoices = Self::raw_index_entries(env, &index);
 
-    if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
-        invoices.remove(pos as u32);
+        if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
+            invoices.remove(pos as u32);
 
-        let key = Indexes::invoices_by_business(business);
-        env.storage().persistent().set(&key, &invoices);
-        extend_persistent_ttl(env, &key);
-        Self::bump_business_generation(env, business);
+            let key = Indexes::invoices_by_business(business);
+            env.storage().persistent().set(&key, &invoices);
+            extend_persistent_ttl(env, &key);
+            Self::bump_business_generation(env, business);
+        }
     }
-}
 
-fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-    let index = InvoiceIndex::Status(status);
-    let mut invoices = Self::raw_index_entries(env, &index);
+    fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
+        let index = InvoiceIndex::Status(status);
+        let mut invoices = Self::raw_index_entries(env, &index);
 
-    if !invoices.contains(invoice_id) {
-        invoices.push_back(invoice_id.clone());
+        if !invoices.contains(invoice_id) {
+            invoices.push_back(invoice_id.clone());
 
-        let key = Indexes::invoices_by_status(status);
-        env.storage().persistent().set(&key, &invoices);
-        extend_persistent_ttl(env, &key);
-        Self::bump_status_generation(env, status);
+            let key = Indexes::invoices_by_status(status);
+            env.storage().persistent().set(&key, &invoices);
+            extend_persistent_ttl(env, &key);
+            Self::bump_status_generation(env, status);
+        }
     }
-}
 
-fn remove_from_status_index(
-    env: &Env,
-    status: InvoiceStatus,
-    invoice_id: &BytesN<32>,
-) {
-    let index = InvoiceIndex::Status(status);
-    let mut invoices = Self::raw_index_entries(env, &index);
+    fn remove_from_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
+        let index = InvoiceIndex::Status(status);
+        let mut invoices = Self::raw_index_entries(env, &index);
 
-    if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
-        invoices.remove(pos as u32);
+        if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
+            invoices.remove(pos as u32);
 
-        let key = Indexes::invoices_by_status(status);
-        env.storage().persistent().set(&key, &invoices);
-        extend_persistent_ttl(env, &key);
-        Self::bump_status_generation(env, status);
+            let key = Indexes::invoices_by_status(status);
+            env.storage().persistent().set(&key, &invoices);
+            extend_persistent_ttl(env, &key);
+            Self::bump_status_generation(env, status);
+        }
     }
-}
 
     pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_customer(customer_name);
@@ -1154,13 +1262,13 @@ fn remove_from_status_index(
             return Ok(Vec::new(env));
         }
         let mut result = Vec::new(env);
-        let first_tag = tags.get(0).ok_or(QuickLendXError::InvalidInput)?;
+        let first_tag = tags.get(0).ok_or(QuickLendXError::InvalidTag)?;
         let first_ids = Self::get_invoices_by_tag(env, &first_tag);
 
         for id in first_ids.iter() {
             let mut all_match = true;
             for i in 1..tags.len() {
-                let tag = tags.get(i).ok_or(QuickLendXError::InvalidInput)?;
+                let tag = tags.get(i).ok_or(QuickLendXError::InvalidTag)?;
                 let tag_ids = Self::get_invoices_by_tag(env, &tag);
                 if !tag_ids.contains(&id) {
                     all_match = false;
@@ -1311,24 +1419,12 @@ impl StorageMigration {
     /// Return the migration progress cursor (next offset to process).
     /// Returns `0` when no migration is in progress or on the first page.
     pub fn get_migration_offset(env: &Env) -> u32 {
-        if !env.storage().persistent().has(&MIGRATION_OFFSET_KEY) {
-            return 0u32;
-        }
-        env.storage()
-            .persistent()
-            .get(&MIGRATION_OFFSET_KEY)
-            .unwrap_or(0u32)
+        persistent_get(env, &MIGRATION_OFFSET_KEY).unwrap_or(0u32)
     }
 
     /// Return the cumulative number of records migrated so far.
     pub fn get_migration_records_migrated(env: &Env) -> u32 {
-        if !env.storage().persistent().has(&MIGRATION_RECORDS_KEY) {
-            return 0u32;
-        }
-        env.storage()
-            .persistent()
-            .get(&MIGRATION_RECORDS_KEY)
-            .unwrap_or(0u32)
+        persistent_get(env, &MIGRATION_RECORDS_KEY).unwrap_or(0u32)
     }
 
     // ── Write operations ─────────────────────────────────────────────────
@@ -1369,10 +1465,8 @@ impl StorageMigration {
             .instance()
             .set(&MIGRATION_PENDING_VER_KEY, &schema_to);
         // Reset progress counters.
-        env.storage().persistent().set(&MIGRATION_OFFSET_KEY, &0u32);
-        env.storage()
-            .persistent()
-            .set(&MIGRATION_RECORDS_KEY, &0u32);
+        persistent_set(env, &MIGRATION_OFFSET_KEY, &0u32);
+        persistent_set(env, &MIGRATION_RECORDS_KEY, &0u32);
         crate::events::emit_migration_started(env, schema_from, schema_to, admin);
         Ok(())
     }
@@ -1383,18 +1477,10 @@ impl StorageMigration {
     /// Does NOT commit the schema version — call [`commit_migration`] when all
     /// records have been processed.
     pub fn advance_migration_page(env: &Env, new_offset: u32, records_this_page: u32) {
-        env.storage()
-            .persistent()
-            .set(&MIGRATION_OFFSET_KEY, &new_offset);
-        let prior: u32 = env
-            .storage()
-            .persistent()
-            .get(&MIGRATION_RECORDS_KEY)
-            .unwrap_or(0);
+        persistent_set(env, &MIGRATION_OFFSET_KEY, &new_offset);
+        let prior: u32 = persistent_get(env, &MIGRATION_RECORDS_KEY).unwrap_or(0);
         let total = prior.saturating_add(records_this_page);
-        env.storage()
-            .persistent()
-            .set(&MIGRATION_RECORDS_KEY, &total);
+        persistent_set(env, &MIGRATION_RECORDS_KEY, &total);
     }
 
     /// Commit the migration: bump the schema version and clear migration state.
@@ -1765,6 +1851,15 @@ pub fn remove_pending_treasury(env: &Env) {
     env.storage().instance().remove(&PENDING_TREASURY_TS_KEY);
 }
 
+/// Store a pending treasury rotation request (address + timestamp).
+///
+/// This is a low-level setter used by treasury rotation flows and by tests
+/// that need to prime the pending state before exercising `cancel_treasury_rotation`.
+pub fn set_pending_treasury(env: &Env, address: &Address, timestamp: u64) {
+    env.storage().instance().set(&PENDING_TREASURY_KEY, address);
+    env.storage().instance().set(&PENDING_TREASURY_TS_KEY, &timestamp);
+}
+
 /// Get the pending treasury address and its execution timestamp.
 /// This is used by tests and potentially by UI components to show pending changes.
 pub fn get_pending_treasury(env: &Env) -> Option<(Address, u64)> {
@@ -1772,10 +1867,7 @@ pub fn get_pending_treasury(env: &Env) -> Option<(Address, u64)> {
         return None;
     }
     let address = env.storage().instance().get(&PENDING_TREASURY_KEY)?;
-    let timestamp = env
-        .storage()
-        .instance()
-        .get(&PENDING_TREASURY_TS_KEY)?;
+    let timestamp = env.storage().instance().get(&PENDING_TREASURY_TS_KEY)?;
     Some((address, timestamp))
 }
 

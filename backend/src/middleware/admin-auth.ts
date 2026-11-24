@@ -23,6 +23,30 @@
 import { Request, Response, NextFunction } from "express";
 import { timingSafeEqual } from "crypto";
 
+const ADMIN_TOKEN_ENV_KEY = "ADMIN_API_TOKEN";
+
+export function requireAdminAuth(req: Request, res: Response, next: NextFunction): void {
+  const configuredToken = process.env[ADMIN_TOKEN_ENV_KEY];
+  if (!configuredToken) {
+    res.status(503).json({ error: { message: "Admin endpoints are disabled until ADMIN_API_TOKEN is configured", code: "ADMIN_AUTH_NOT_CONFIGURED" } });
+    return;
+  }
+  const authHeader = req.header("authorization");
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    res.status(401).json({ error: { message: "Unauthorized", code: "UNAUTHORIZED" } });
+    return;
+  }
+  if (!timingSafeStringEqual(authHeader.slice("Bearer ".length).trim(), configuredToken)) {
+    res.status(403).json({ error: { message: "Forbidden", code: "FORBIDDEN" } });
+    return;
+  }
+  next();
+}
+
+export function getAdminActor(req: Request): string {
+  return req.header("x-admin-actor") || "admin";
+}
+
 /** Header name callers must supply. */
 export const ADMIN_KEY_HEADER = "x-admin-key";
 

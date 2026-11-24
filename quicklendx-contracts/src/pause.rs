@@ -75,7 +75,7 @@ impl PauseControl {
                 if !paused { "true" } else { "false" },
             )),
             Some(String::from_str(env, if paused { "true" } else { "false" })),
-        );
+        )?;
         if paused {
             crate::events::emit_paused(env, admin);
         } else {
@@ -99,11 +99,13 @@ impl PauseControl {
     }
 
     pub fn require_not_paused(env: &Env) -> Result<(), QuickLendXError> {
+        // Report the specific quiescence state before the generic pause state.
+        // Scheduling an upgrade intentionally pauses the contract, but callers
+        // need the stable UpgradePending error to distinguish that condition.
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(env)?;
         if Self::is_paused(env) {
             return Err(QuickLendXError::ContractPaused);
         }
-        // Also block writes while an upgrade is pending (defence-in-depth).
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(env)?;
         Ok(())
     }
 

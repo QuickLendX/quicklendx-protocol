@@ -205,7 +205,7 @@ fn test_bid_index_expired_cleanup() {
 
         assert_eq!(BidStorage::get_bids_for_invoice(env, &invoice_id).len(), 1);
 
-        let cleaned = BidStorage::refresh_expired_bids(env, &invoice_id);
+        let cleaned = BidStorage::refresh_expired_bids(env, &invoice_id).expect("expired bid refresh should succeed");
         assert_eq!(cleaned, 1, "one bid should be cleaned");
 
         assert_eq!(BidStorage::get_bids_for_invoice(env, &invoice_id).len(), 0);
@@ -252,7 +252,7 @@ fn test_bid_index_cleanup_keeps_terminal_bids() {
 
         assert_eq!(BidStorage::get_bids_for_invoice(env, &invoice_id).len(), 2);
 
-        let cleaned = BidStorage::refresh_expired_bids(env, &invoice_id);
+        let cleaned = BidStorage::refresh_expired_bids(env, &invoice_id).expect("expired bid refresh should succeed");
         assert_eq!(cleaned, 1, "only the placed bid should be cleaned");
 
         let remaining = BidStorage::get_bids_for_invoice(env, &invoice_id);
