@@ -170,6 +170,8 @@ mod test_backup_safety;
 mod test_bid;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_acceptance_replay;
+#[cfg(test)]
+mod test_bid_active_counts_history;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_atomic_rollback;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -188,6 +190,8 @@ mod test_bid_capacity_stress;
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_capacity_stress;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_capacity_stress;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -231,6 +235,12 @@ mod test_bid_ranking;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking_determinism;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_match_helper;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_ranking;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_ranking_determinism;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking_tiebreaker;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_state_matrix;
@@ -246,6 +256,8 @@ mod test_bid_transition_matrix;
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_transition_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_transition_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -397,6 +409,8 @@ mod test_escrow_uniqueness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_uniqueness;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_escrow_uniqueness;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_evidence_hash_format;
@@ -428,6 +442,8 @@ mod test_fees_extended;
 mod test_freeze_appeal_channel;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_freeze_appeal_channel;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_appeal_channel;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -497,6 +513,10 @@ mod test_init;
 #[cfg(test)]
 mod test_contract_init_admin;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_incident;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_init;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -664,6 +684,16 @@ mod test_pagination_cursors;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_panic_handler;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_overflow;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_overdue_expiration;
+#[cfg(test)]
+mod test_overdue_scan_resilience;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_pagination_cursors;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_panic_handler;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
@@ -780,6 +810,8 @@ mod test_storage;
 #[allow(clippy::disallowed_macros)]
 mod test_storage_tier_migration;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_storage;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_storage;
 #[cfg(all(test, feature = "legacy-tests"))]
