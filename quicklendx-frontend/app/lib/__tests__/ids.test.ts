@@ -1,4 +1,4 @@
-import { isHexId } from "../ids";
+import { isHexId, truncateAddress } from "../ids";
 
 describe("isHexId", () => {
   it("accepts hex identifiers", () => {
@@ -23,5 +23,18 @@ describe("isHexId", () => {
   it("requires the 0x prefix", () => {
     expect(isHexId("1a")).toBe(false);
     expect(isHexId("abc123")).toBe(false);
+  });
+});
+
+describe("truncateAddress", () => {
+  it("keeps the first six and last four characters", () => {
+    expect(
+      truncateAddress("GBBXKXTNVC3QDNK7LVHRWCNVMCLK4QNKR4IQHZXR4IQHZXR4KZ")
+    ).toBe("GBBXKX…R4KZ");
+  });
+
+  it("leaves short addresses unchanged", () => {
+    expect(truncateAddress("0xabc")).toBe("0xabc");
+    expect(truncateAddress("1234567890")).toBe("1234567890");
   });
 });

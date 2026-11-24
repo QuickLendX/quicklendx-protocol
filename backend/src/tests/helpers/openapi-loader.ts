@@ -10,9 +10,389 @@
 
 import * as fs from "fs";
 import * as path from "path";
-import * as yaml from "js-yaml";
 import Ajv, { SchemaObject, ValidateFunction } from "ajv";
 import addFormats from "ajv-formats";
+
+/**
+ * Lightweight pure-TS YAML parser covering the OpenAPI 3.0 YAML subset
+ * (block/flow mappings & sequences, quoted/block scalars, comments).
+ */
+function parseYaml(source: string): unknown {
+  const lines = source.replace(/\r\n?/g, "\n").split("\n");
+
+  const stripComment = (line: string): string => {
+    let inSingle = false;
+    let inDouble = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === "'" && !inDouble) {
+        if (inSingle && line[i + 1] === "'") {
+          i++;
+          continue;
+        }
+        inSingle = !inSingle;
+      } else if (ch === '"' && !inSingle) {
+        if (inDouble && line[i - 1] === "\\") continue;
+        inDouble = !inDouble;
+      } else if (ch === "#" && !inSingle && !inDouble && (i === 0 || /\s/.test(line[i - 1]))) {
+        return line.slice(0, i);
+      }
+    }
+    return line;
+  };
+
+  const countIndent = (line: string): number => {
+    let n = 0;
+    while (n < line.length && line[n] === " ") n++;
+    return n;
+  };
+
+  const unquote = (raw: string): string => {
+    if (raw.startsWith("'") && raw.endsWith("'") && raw.length >= 2) {
+      return raw.slice(1, -1).replace(/''/g, "'");
+    }
+    if (raw.startsWith('"') && raw.endsWith('"') && raw.length >= 2) {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return raw.slice(1, -1);
+      }
+    }
+    return raw;
+  };
+
+  const parseScalar = (raw: string): unknown => {
+    const s = raw.trim();
+    if (s === "" || s === "null" || s === "~") return null;
+    if (s === "true") return true;
+    if (s === "false") return false;
+    if ((s.startsWith("'") && s.endsWith("'")) || (s.startsWith('"') && s.endsWith('"'))) {
+      return unquote(s);
+    }
+    if (/^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/.test(s)) {
+      return Number(s);
+    }
+    return s;
+  };
+
+  const parseFlow = (text: string): unknown => {
+    let pos = 0;
+    const skipWs = () => {
+      while (pos < text.length && /\s/.test(text[pos])) pos++;
+    };
+    const readQuoted = (quote: string): string => {
+      const start = pos;
+      pos++;
+      while (pos < text.length) {
+        if (quote === "'" && text[pos] === "'" && text[pos + 1] === "'") {
+          pos += 2;
+          continue;
+        }
+        if (quote === '"' && text[pos] === "\\") {
+          pos += 2;
+          continue;
+        }
+        if (text[pos] === quote) {
+          pos++;
+          return unquote(text.slice(start, pos));
+        }
+        pos++;
+      }
+      return unquote(text.slice(start));
+    };
+    const parseValue = (): unknown => {
+      skipWs();
+      if (pos >= text.length) return null;
+      const ch = text[pos];
+      if (ch === "[") {
+        pos++;
+        const arr: unknown[] = [];
+        skipWs();
+        while (pos < text.length && text[pos] !== "]") {
+          arr.push(parseValue());
+          skipWs();
+          if (text[pos] === ",") pos++;
+          skipWs();
+        }
+        if (text[pos] === "]") pos++;
+        return arr;
+      }
+      if (ch === "{") {
+        pos++;
+        const obj: Record<string, unknown> = {};
+        skipWs();
+        while (pos < text.length && text[pos] !== "}") {
+          skipWs();
+          let key: string;
+          if (text[pos] === "'" || text[pos] === '"') {
+            key = readQuoted(text[pos]);
+          } else {
+            const kStart = pos;
+            while (pos < text.length && text[pos] !== ":" && text[pos] !== "}") pos++;
+            key = text.slice(kStart, pos).trim();
+          }
+          skipWs();
+          if (text[pos] === ":") pos++;
+          skipWs();
+          obj[key] = parseValue();
+          skipWs();
+          if (text[pos] === ",") pos++;
+          skipWs();
+        }
+        if (text[pos] === "}") pos++;
+        return obj;
+      }
+      if (ch === "'" || ch === '"') {
+        return readQuoted(ch);
+      }
+      const start = pos;
+      while (pos < text.length && !/[,\]\}]/.test(text[pos])) pos++;
+      return parseScalar(text.slice(start, pos));
+    };
+    return parseValue();
+  };
+
+  // Find next non-empty, non-comment line index
+  const nextLine = (idx: number): number => {
+    while (idx < lines.length) {
+      const cleaned = stripComment(lines[idx]).trim();
+      if (cleaned.length > 0 && cleaned !== "---" && cleaned !== "...") return idx;
+      idx++;
+    }
+    return lines.length;
+  };
+
+  const splitKeyValue = (trimmed: string): { key: string; rest: string } | null => {
+    let inSingle = false;
+    let inDouble = false;
+    for (let i = 0; i < trimmed.length; i++) {
+      const ch = trimmed[i];
+      if (ch === "'" && !inDouble) {
+        if (inSingle && trimmed[i + 1] === "'") {
+          i++;
+          continue;
+        }
+        inSingle = !inSingle;
+      } else if (ch === '"' && !inSingle) {
+        if (inDouble && trimmed[i - 1] === "\\") continue;
+        inDouble = !inDouble;
+      } else if (ch === ":" && !inSingle && !inDouble) {
+        const next = trimmed[i + 1];
+        if (next === undefined || next === " " || next === "\t") {
+          return {
+            key: unquote(trimmed.slice(0, i).trim()),
+            rest: trimmed.slice(i + 1).trim(),
+          };
+        }
+      }
+    }
+    return null;
+  };
+
+  const isFlowComplete = (buf: string): boolean => {
+    let depth = 0;
+    let inSingle = false;
+    let inDouble = false;
+    for (let i = 0; i < buf.length; i++) {
+      const ch = buf[i];
+      if (ch === "'" && !inDouble) {
+        if (inSingle && buf[i + 1] === "'") {
+          i++;
+          continue;
+        }
+        inSingle = !inSingle;
+      } else if (ch === '"' && !inSingle) {
+        if (inDouble && buf[i - 1] === "\\") continue;
+        inDouble = !inDouble;
+      } else if (!inSingle && !inDouble) {
+        if (ch === "[" || ch === "{") depth++;
+        else if (ch === "]" || ch === "}") depth--;
+      }
+    }
+    return depth <= 0;
+  };
+
+  const readFlowBlock = (initial: string, idx: number): { value: unknown; nextIdx: number } => {
+    let buf = initial;
+    let cur = idx;
+    while (!isFlowComplete(buf) && cur < lines.length) {
+      buf += " " + stripComment(lines[cur]).trim();
+      cur++;
+    }
+    return { value: parseFlow(buf), nextIdx: cur };
+  };
+
+  const readBlockScalar = (indicator: string, parentIndent: number, idx: number): { value: string; nextIdx: number } => {
+    const folded = indicator.startsWith(">");
+    const chomp = indicator.endsWith("-") ? "strip" : indicator.endsWith("+") ? "keep" : "clip";
+    const rawLines: string[] = [];
+    let blockIndent: number | null = null;
+    let cur = idx;
+
+    while (cur < lines.length) {
+      const line = lines[cur];
+      if (line.trim() === "") {
+        rawLines.push("");
+        cur++;
+        continue;
+      }
+      const indent = countIndent(line);
+      if (blockIndent === null) {
+        if (indent <= parentIndent) break;
+        blockIndent = indent;
+      } else if (indent < blockIndent) {
+        break;
+      }
+      rawLines.push(line.slice(blockIndent));
+      cur++;
+    }
+
+    while (rawLines.length > 0 && rawLines[rawLines.length - 1] === "" && chomp !== "keep") {
+      rawLines.pop();
+    }
+
+    let text: string;
+    if (folded) {
+      const parts: string[] = [];
+      for (let i = 0; i < rawLines.length; i++) {
+        const l = rawLines[i];
+        if (l === "") {
+          parts.push("\n");
+        } else if (parts.length > 0 && parts[parts.length - 1] !== "\n") {
+          parts.push(" " + l);
+        } else {
+          parts.push(l);
+        }
+      }
+      text = parts.join("");
+    } else {
+      text = rawLines.join("\n");
+    }
+
+    if (chomp === "clip" && rawLines.length > 0) text += "\n";
+    return { value: text, nextIdx: cur };
+  };
+
+  const parseValueExpr = (
+    expr: string,
+    parentIndent: number,
+    nextRowIdx: number,
+  ): { value: unknown; nextIdx: number } => {
+    if (expr === "|" || expr === "|-" || expr === "|+" || expr === ">" || expr === ">-" || expr === ">+") {
+      return readBlockScalar(expr, parentIndent, nextRowIdx);
+    }
+    if (expr.startsWith("[") || expr.startsWith("{")) {
+      return readFlowBlock(expr, nextRowIdx);
+    }
+    if (expr !== "") {
+      return { value: parseScalar(expr), nextIdx: nextRowIdx };
+    }
+    const ni = nextLine(nextRowIdx);
+    if (ni < lines.length) {
+      const childIndent = countIndent(lines[ni]);
+      const childTrimmed = stripComment(lines[ni]).trim();
+      if (childIndent > parentIndent || (childIndent === parentIndent && (childTrimmed === "-" || childTrimmed.startsWith("- ")))) {
+        return parseNode(ni, childIndent);
+      }
+    }
+    return { value: null, nextIdx: nextRowIdx };
+  };
+
+  const parseNode = (startIdx: number, minIndent: number): { value: unknown; nextIdx: number } => {
+    const idx = nextLine(startIdx);
+    if (idx >= lines.length) return { value: null, nextIdx: idx };
+    const line = stripComment(lines[idx]);
+    const indent = countIndent(line);
+    const trimmed = line.trim();
+
+    if (trimmed.startsWith("[") || trimmed.startsWith("{")) {
+      return readFlowBlock(trimmed, idx + 1);
+    }
+
+    if (trimmed === "-" || trimmed.startsWith("- ")) {
+      const arr: unknown[] = [];
+      let cur = idx;
+      while (cur < lines.length) {
+        cur = nextLine(cur);
+        if (cur >= lines.length) break;
+        const l = stripComment(lines[cur]);
+        const ind = countIndent(l);
+        const tr = l.trim();
+        if (ind < indent || (ind === indent && tr !== "-" && !tr.startsWith("- "))) break;
+        if (ind > indent) break;
+
+        const afterDash = tr.slice(1).trim();
+        if (afterDash === "") {
+          const ni = nextLine(cur + 1);
+          if (ni < lines.length && countIndent(lines[ni]) > ind) {
+            const child = parseNode(ni, countIndent(lines[ni]));
+            arr.push(child.value);
+            cur = child.nextIdx;
+          } else {
+            arr.push(null);
+            cur++;
+          }
+          continue;
+        }
+        const kv = splitKeyValue(afterDash);
+        if (kv) {
+          const itemObj: Record<string, unknown> = {};
+          const itemIndent = ind + 2;
+          const firstVal = parseValueExpr(kv.rest, ind, cur + 1);
+          itemObj[kv.key] = firstVal.value;
+          cur = firstVal.nextIdx;
+
+          // Read remaining properties belonging to this sequence item object
+          while (cur < lines.length) {
+            const ni = nextLine(cur);
+            if (ni >= lines.length) {
+              cur = ni;
+              break;
+            }
+            const nl = stripComment(lines[ni]);
+            const nind = countIndent(nl);
+            const ntr = nl.trim();
+            if (nind < itemIndent || (nind === ind && (ntr === "-" || ntr.startsWith("- ")))) break;
+            const nkv = splitKeyValue(ntr);
+            if (!nkv) break;
+            const val = parseValueExpr(nkv.rest, nind, ni + 1);
+            itemObj[nkv.key] = val.value;
+            cur = val.nextIdx;
+          }
+          arr.push(itemObj);
+        } else {
+          const parsed = parseValueExpr(afterDash, ind, cur + 1);
+          arr.push(parsed.value);
+          cur = parsed.nextIdx;
+        }
+      }
+      return { value: arr, nextIdx: cur };
+    }
+
+    const obj: Record<string, unknown> = {};
+    let cur = idx;
+    while (cur < lines.length) {
+      cur = nextLine(cur);
+      if (cur >= lines.length) break;
+      const l = stripComment(lines[cur]);
+      const ind = countIndent(l);
+      if (ind < minIndent) break;
+      const tr = l.trim();
+      if (tr === "-" || tr.startsWith("- ")) break;
+      const kv = splitKeyValue(tr);
+      if (!kv) {
+        cur++;
+        continue;
+      }
+      const val = parseValueExpr(kv.rest, ind, cur + 1);
+      obj[kv.key] = val.value;
+      cur = val.nextIdx;
+    }
+    return { value: obj, nextIdx: cur };
+  };
+
+  return parseNode(0, 0).value;
+}
 
 // ---------------------------------------------------------------------------
 // Types
@@ -94,6 +474,8 @@ export function getAjv(): Ajv {
     useDefaults: false,
   });
   addFormats(_ajv);
+  _ajv.addFormat("stellar-address", /^G[A-Z2-7]{55}$/);
+  _ajv.addFormat("hex", /^0x[a-fA-F0-9]+$/);
   return _ajv;
 }
 
@@ -107,7 +489,7 @@ export function loadOpenApiDoc(openapiPath?: string): OpenApiDoc {
     openapiPath ??
     path.resolve(__dirname, "..", "..", "..", "openapi.yaml");
   const raw = fs.readFileSync(filePath, "utf8");
-  return yaml.load(raw) as OpenApiDoc;
+  return parseYaml(raw) as OpenApiDoc;
 }
 
 // ---------------------------------------------------------------------------
@@ -359,7 +741,7 @@ export function extractConformanceCases(openapiPath?: string): ConformanceCase[]
           // placeholders.  We look for a named path param in the spec that has
           // an example value; if not found we fall back to the example body
           // itself (works for single-resource responses).
-          const pathParams = buildPathParams(pathTemplate, pathItem, exampleBody);
+          const pathParams = buildPathParams(pathTemplate, pathItem, operation as unknown as Record<string, unknown>, exampleBody);
           const interpolated = interpolatePath(pathTemplate, pathParams);
           const url = `${BASE_PREFIX}${interpolated}`;
 
@@ -379,6 +761,98 @@ export function extractConformanceCases(openapiPath?: string): ConformanceCase[]
   return cases;
 }
 
+export interface DocumentedOperation {
+  method: string;
+  pathTemplate: string;
+  fullPath: string;
+  operationId?: string;
+  requiresAuth: boolean;
+  documentedStatuses: number[];
+  requestBodyExamples: Array<{ name: string; value: unknown }>;
+}
+
+/**
+ * Extracts every documented path × method operation from openapi.yaml
+ * (even when no response example is declared).
+ */
+export function extractDocumentedOperations(openapiPath?: string): DocumentedOperation[] {
+  const doc = loadOpenApiDoc(openapiPath);
+  const HTTP_METHODS = new Set(["get", "post", "put", "patch", "delete", "head", "options"]);
+  const ops: DocumentedOperation[] = [];
+
+  for (const [pathTemplate, pathItem] of Object.entries(doc.paths)) {
+    for (const [rawMethod, operation] of Object.entries(pathItem)) {
+      if (!HTTP_METHODS.has(rawMethod.toLowerCase())) continue;
+      const op = operation as OperationObject & {
+        operationId?: string;
+        security?: Array<Record<string, unknown>>;
+        requestBody?: { content?: Record<string, MediaTypeObject> };
+      };
+      const documentedStatuses = Object.keys(op.responses ?? {})
+        .map((s) => parseInt(s, 10))
+        .filter((n) => !isNaN(n));
+      const requiresAuth =
+        Array.isArray(op.security) &&
+        op.security.some((entry) => Object.keys(entry).length > 0);
+      const jsonReq = op.requestBody?.content?.["application/json"];
+      const requestBodyExamples = jsonReq
+        ? extractExamples(jsonReq).map((e) => ({ name: e.label, value: e.value }))
+        : [];
+
+      ops.push({
+        method: rawMethod.toUpperCase(),
+        pathTemplate,
+        fullPath: `${BASE_PREFIX}${pathTemplate}`,
+        operationId: op.operationId,
+        requiresAuth,
+        documentedStatuses,
+        requestBodyExamples,
+      });
+    }
+  }
+
+  return ops;
+}
+
+/**
+ * Validates a live Express response body against an AJV validator, validating
+ * `statusInjector`'s additive `_system` block when the schema itself doesn't
+ * list `_system` in its strict properties.
+ */
+export function validateLiveResponseBody(
+  validate: ValidateFunction,
+  body: unknown
+): { valid: boolean; errors: ValidateFunction["errors"] } {
+  if (validate(body)) {
+    return { valid: true, errors: null };
+  }
+
+  if (
+    body !== null &&
+    typeof body === "object" &&
+    !Array.isArray(body) &&
+    "_system" in body
+  ) {
+    const sys = (body as Record<string, unknown>)._system as Record<string, unknown> | null;
+    const validSystemShape =
+      sys !== null &&
+      typeof sys === "object" &&
+      typeof sys.status === "string" &&
+      typeof sys.degraded === "boolean" &&
+      typeof sys.lag === "number" &&
+      typeof sys.level === "string";
+
+    if (validSystemShape) {
+      const { _system: _ignored, ...withoutSystem } = body as Record<string, unknown>;
+      if (validate(withoutSystem)) {
+        return { valid: true, errors: null };
+      }
+    }
+  }
+
+  return { valid: false, errors: validate.errors };
+}
+
 // ---------------------------------------------------------------------------
 // Private helpers
 // ---------------------------------------------------------------------------
@@ -396,6 +870,7 @@ export function extractConformanceCases(openapiPath?: string): ConformanceCase[]
 function buildPathParams(
   pathTemplate: string,
   pathItem: Record<string, unknown>,
+  operation: Record<string, unknown>,
   exampleBody: unknown
 ): PathParam[] {
   // Collect all {name} placeholders
@@ -407,7 +882,12 @@ function buildPathParams(
   // declares path parameters on the operation).
   const pathLevelParams =
     (pathItem["parameters"] as Array<{ name: string; in: string; example?: unknown }> | undefined) ?? [];
-  const paramDefs: Array<{ name: string; in: string; example?: unknown }> = pathLevelParams;
+  const opLevelParams =
+    (operation["parameters"] as Array<{ name: string; in: string; example?: unknown }> | undefined) ?? [];
+  const paramDefs: Array<{ name: string; in: string; example?: unknown }> = [
+    ...opLevelParams,
+    ...pathLevelParams,
+  ];
 
   return placeholders.map((name) => {
     const def = paramDefs.find((p) => p.in === "path" && p.name === name);
