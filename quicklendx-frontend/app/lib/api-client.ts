@@ -344,7 +344,10 @@ class ApiClient {
   }
 
   private generateRequestId(): string {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    if (
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+    ) {
       return `req_${crypto.randomUUID()}`;
     }
     return `req_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;

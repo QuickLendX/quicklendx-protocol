@@ -592,7 +592,8 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
   const progressPct = state.phase === "holding" ? state.progressPct : 0;
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const noAnim = reducedMotion || (typeof window !== "undefined" && window.innerWidth < 375);
+  const noAnim =
+    reducedMotion || (typeof window !== "undefined" && window.innerWidth < 375);
 
   const panelAnimClass = noAnim
     ? ""
