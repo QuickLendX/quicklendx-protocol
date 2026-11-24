@@ -37,3 +37,31 @@ pub fn measure<F: FnOnce()>(env: &Env, _label: &str, f: F) -> BudgetDelta {
 pub fn instructions_used(env: &Env) -> u64 {
     env.cost_estimate().resources().instructions as u64
 }
+
+/// Nested re-export so both `bench::*` and `bench::bench::*` import paths resolve.
+pub mod bench {
+    pub use super::{instructions_used, measure, BudgetDelta};
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{QuickLendXContract, QuickLendXContractClient};
+
+    #[test]
+    fn measure_returns_nonzero_instructions_for_noop_contract_call() {
+        let env = Env::default();
+        let contract_id = env.register(QuickLendXContract, ());
+        let client = QuickLendXContractClient::new(&env, &contract_id);
+
+        let delta = measure(&env, "get_version", || {
+            let _ = client.get_version();
+        });
+
+        assert!(
+            delta.instructions > 0,
+            "expected nonzero instructions for contract call, got {}",
+            delta.instructions
+        );
+    }
+}

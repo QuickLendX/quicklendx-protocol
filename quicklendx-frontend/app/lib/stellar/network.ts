@@ -97,6 +97,8 @@ export function getNetworkConfig(): NetworkConfig {
       warnUnrecognised(raw);
     }
   }
+  const raw = process.env.NEXT_PUBLIC_NETWORK ?? "testnet";
+  const network: StellarNetwork = raw === "public" ? "public" : "testnet";
 
   return {
     network,

@@ -4,7 +4,7 @@ import {
   apiKeyAuth,
   AuthenticatedRequest,
   resetApiKeys,
-} from "./apiKeyAuth";
+} from "./api-key-auth";
 
 describe("apiKeyAuth reset boundary", () => {
   const originalKeys = process.env.ADMIN_API_KEYS;

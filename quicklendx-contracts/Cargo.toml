@@ -89,9 +89,7 @@ required-features = ["legacy-tests"]
 [[test]]
 name = "test_admin_lookalike"
 path = "tests/test_admin_lookalike.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "test_treasury_rotation"
 path = "tests/test_treasury_rotation.rs"
-required-features = ["legacy-tests"]
