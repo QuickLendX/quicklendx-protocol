@@ -253,6 +253,7 @@ export async function request(
 import type { CreateBidPayload } from "../../invest/_lib/place-bid";
 import { apiClient } from "../api-client";
 import { SystemError } from "../errors";
+import { env } from "../env";
 
 const FreshnessSchema = z.object({
   lastIndexedLedger: z.number().int(),
@@ -400,6 +401,7 @@ export const CreateBidResponseSchema = z.object({
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+const API_BASE_URL = env.NEXT_PUBLIC_API_URL;
 
 function addQueryParams(
   url: string,

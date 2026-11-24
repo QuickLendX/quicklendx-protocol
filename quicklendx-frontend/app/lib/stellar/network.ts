@@ -29,6 +29,8 @@
  *   const { network, passphrase } = getNetworkConfig();
  */
 
+import { env } from "../env";
+
 export type StellarNetwork = "testnet" | "public";
 
 export interface NetworkConfig {
@@ -99,6 +101,7 @@ export function getNetworkConfig(): NetworkConfig {
   }
   const raw = process.env.NEXT_PUBLIC_NETWORK ?? "testnet";
   const network: StellarNetwork = raw === "public" ? "public" : "testnet";
+  const network: StellarNetwork = env.NEXT_PUBLIC_NETWORK;
 
   return {
     network,
