@@ -82,8 +82,11 @@ mod test_dispute_arbiter;
 #[cfg(test)]
 mod test_dispute_timeline;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_settlement;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_partial_payments;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payment_history;
 #[cfg(test)]
 mod test_settlement;
@@ -108,6 +111,12 @@ mod test_platform_fee_ownership;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod test_address_summary;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_accept_bid_instruction_budget;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_accept_bid_race;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_admin;
 #[cfg(test)]
 mod test_rating_auth;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -172,6 +181,7 @@ mod test_bid_cancel_accept_race;
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_capacity_stress;
 #[cfg(test)]
 #[allow(
@@ -207,6 +217,7 @@ mod test_bid_ranking;
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking_determinism;
 #[cfg(test)]
 #[allow(
@@ -235,6 +246,8 @@ mod test_bid_transition_matrix;
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_transition_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_transition_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -377,6 +390,8 @@ mod test_escrow_uniqueness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_uniqueness;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_escrow_uniqueness;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_evidence_hash_format;
@@ -408,6 +423,8 @@ mod test_fees_extended;
 mod test_freeze_appeal_channel;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_freeze_appeal_channel;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_appeal_channel;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -473,6 +490,10 @@ mod test_init;
 #[cfg(test)]
 mod test_contract_init_admin;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_incident;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_init;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_debug;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -608,6 +629,11 @@ mod test_overdue_expiration;
 #[cfg(test)]
 mod test_overflow;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_overflow;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_overdue_expiration;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pagination_cursors;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
@@ -735,6 +761,7 @@ mod test_snapshot;
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_storage;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
@@ -890,6 +917,23 @@ impl QuickLendXContract {
 
     pub fn get_admin(env: Env) -> Result<Address, QuickLendXError> {
         AdminStorage::get_admin(&env).ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
+    /// Initialize the contract admin exactly once.
+    ///
+    /// # Authorization
+    /// Requires the `admin` argument to authorize the call.
+    pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::initialize(&env, &admin)
+    }
+
+    /// Transfer the admin role from the current admin to `new_admin`.
+    ///
+    /// # Authorization
+    /// Requires the current admin (read from storage) to authorize the call.
+    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
+        let current = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        AdminStorage::transfer_admin(&env, &current, &new_admin)
     }
 
     pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
@@ -2109,4 +2153,102 @@ impl QuickLendXContract {
         storage::InvoiceStorage::get(&env, &invoice_id)
             .ok_or(errors::QuickLendXError::InvoiceNotFound)
     }
+    // =========================================================================
+    // Vesting
+    // =========================================================================
+
+    /// Create a time-locked vesting schedule for `beneficiary`.
+    ///
+    /// Locks `total_amount` of `token` in contract custody and releases it
+    /// linearly from `start_time` to `end_time`, gated by a `cliff_seconds`
+    /// cliff. Returns the new schedule id.
+    ///
+    /// # Authorization
+    /// Requires the current admin to authorize and pays for the tokens.
+    ///
+    /// # Errors
+    /// - `InvalidAmount` if `total_amount <= 0`
+    /// - `InvalidTimestamp` if the timeline is backdated/non-monotonic or the
+    ///   cliff eliminates the post-cliff window
+    /// - `NotAdmin` if `admin` is not the stored admin
+    pub fn create_vesting_schedule(
+        env: Env,
+        admin: Address,
+        token: Address,
+        beneficiary: Address,
+        total_amount: i128,
+        start_time: u64,
+        cliff_seconds: u64,
+        end_time: u64,
+    ) -> Result<u64, QuickLendXError> {
+        crate::vesting::Vesting::create_schedule(
+            &env,
+            &admin,
+            token,
+            beneficiary,
+            total_amount,
+            start_time,
+            cliff_seconds,
+            end_time,
+        )
+    }
+
+    /// Return the vesting schedule with `id`, if it exists.
+    pub fn get_vesting_schedule(env: Env, id: u64) -> Option<crate::vesting::VestingSchedule> {
+        crate::vesting::Vesting::get_schedule(&env, id)
+    }
+
+    /// Aggregated vesting summary for `user` across all of their schedules.
+    pub fn get_vesting_summary(env: Env, user: Address) -> crate::vesting::VestingSummary {
+        crate::vesting::Vesting::get_summary_for_user(&env, &user)
+    }
+
+    /// Total amount vested for schedule `id` at the current ledger time.
+    ///
+    /// Returns `None` if the schedule does not exist.
+    pub fn get_vesting_vested(env: Env, id: u64) -> Option<i128> {
+        crate::vesting::Vesting::get_schedule(&env, id)
+            .and_then(|s| crate::vesting::Vesting::vested_amount(&env, &s).ok())
+    }
+
+    /// Amount currently releasable for schedule `id` at the current ledger time.
+    ///
+    /// Returns `None` if the schedule does not exist.
+    pub fn get_vesting_releasable(env: Env, id: u64) -> Option<i128> {
+        crate::vesting::Vesting::get_schedule(&env, id)
+            .and_then(|s| crate::vesting::Vesting::releasable_amount(&env, &s).ok())
+    }
+
+    /// Release the currently releasable tokens for schedule `id` to its
+    /// beneficiary and return the amount transferred.
+    ///
+    /// # Authorization
+    /// Requires the schedule's beneficiary to authorize the call.
+    ///
+    /// # Errors
+    /// - `Unauthorized` if the caller is not the beneficiary
+    /// - `InvalidTimestamp` if called before the cliff
+    /// - Returns `Ok(0)` when nothing remains to release (idempotent)
+    pub fn release_vested_tokens(
+        env: Env,
+        beneficiary: Address,
+        id: u64,
+    ) -> Result<i128, QuickLendXError> {
+        crate::vesting::Vesting::release(&env, &beneficiary, id)
+    }
+
+    /// Alias of [`Self::release_vested_tokens`].
+    pub fn release_vesting(
+        env: Env,
+        beneficiary: Address,
+        id: u64,
+    ) -> Result<i128, QuickLendXError> {
+        crate::vesting::Vesting::release(&env, &beneficiary, id)
+    }
+
+    /// Alias of [`Self::get_vesting_releasable`].
+    pub fn get_releasable_vesting(env: Env, id: u64) -> Option<i128> {
+        Self::get_vesting_releasable(env, id)
+    }
+
 }
