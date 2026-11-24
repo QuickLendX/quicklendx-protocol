@@ -405,13 +405,17 @@ pub struct InsuranceCoverage {
     pub active: bool,
 }
 
-/// Platform fee configuration
+/// Platform fee settings and the metadata for their most recent update.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct PlatformFeeConfig {
+    /// Platform fee rate in basis points (10,000 basis points equal 100%).
     pub fee_bps: u32,
+    /// Recipient of collected platform fees, or `None` until a treasury is configured.
     pub treasury_address: Option<Address>,
+    /// Ledger timestamp when this configuration was last updated.
     pub updated_at: u64,
+    /// Address that authorized the most recent configuration update.
     pub updated_by: Address,
 }
 
