@@ -311,7 +311,7 @@ fn test_cancel_without_pending_fails() {
 }
 
 #[test]
-fn test_non_admin_cannot_cancel() {
+fn test_non_admin_cannot_cancel_with_spoofed_auth() {
     let env = Env::default();
     let (client, admin, _) = setup(&env);
     let token = Address::generate(&env);
@@ -1290,4 +1290,3 @@ fn test_initiate_expires_before_queue_fails() {
     let contract_err = err.expect("expected contract error");
     assert_eq!(contract_err, crate::errors::QuickLendXError::InvalidTimestamp);
 }
-

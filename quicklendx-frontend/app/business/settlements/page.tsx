@@ -158,7 +158,7 @@ function SettlementsContent() {
 
   if (wallet.state !== "connected" || !wallet.address) {
     return (
-      <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
         <Link
           href="/business"
           className="mb-8 w-fit text-sm font-medium text-blue-800 underline underline-offset-2 focus:outline-none focus:ring-2 focus:ring-blue-600"
@@ -176,12 +176,12 @@ function SettlementsContent() {
             <WalletConnectControl />
           </div>
         </section>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="mx-auto min-h-screen max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
+    <div className="mx-auto min-h-screen max-w-7xl space-y-6 px-4 py-8 sm:px-6 lg:px-8">
       <header className="space-y-2">
         <Link
           href="/business"
@@ -278,7 +278,7 @@ function SettlementsContent() {
           )}
         </>
       )}
-    </main>
+    </div>
   );
 }
 
@@ -286,9 +286,9 @@ export default function SettlementsPage() {
   return (
     <Suspense
       fallback={
-        <main className="mx-auto max-w-7xl px-4 py-8" aria-busy="true">
+        <div className="mx-auto max-w-7xl px-4 py-8" aria-busy="true">
           Loading settlement receipts…
-        </main>
+        </div>
       }
     >
       <SettlementsContent />

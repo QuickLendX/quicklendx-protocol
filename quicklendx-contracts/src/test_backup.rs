@@ -19,7 +19,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    let _ = client.try_initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
+    let _ = client.try_initialize_protocol_limits(&admin);
     (env, client, admin)
 }
 
@@ -85,6 +85,7 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
             resolved_by: Address::generate(env),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: soroban_sdk::Vec::new(env),
         },
         total_paid: 0,
         payment_history: soroban_sdk::Vec::new(env),
@@ -564,7 +565,7 @@ fn restore_preserves_all_statuses() {
     // Delete or modify invoices
     env.as_contract(&client.address, || {
         use crate::storage::InvoiceStorage;
-        InvoiceStorage::clear_all(&env);
+        InvoiceStorage::clear_all(&env).unwrap();
     });
 
     // Restore
@@ -628,7 +629,7 @@ fn invoice_count_consistent_after_restore() {
     // Clear and restore
     env.as_contract(&client.address, || {
         use crate::storage::InvoiceStorage;
-        InvoiceStorage::clear_all(&env);
+        InvoiceStorage::clear_all(&env).unwrap();
     });
 
     let restored_count = client.restore_backup(&admin, &backup_id);

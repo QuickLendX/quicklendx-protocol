@@ -1,13 +1,17 @@
 # cargo-mutants config for protocol-critical arithmetic and settlement code.
 # See docs/mutation-testing.md for survivor triage and local commands.
 examine_globs = [
-  "src/profits.rs",
-  "src/fees.rs",
-  "src/settlement.rs",
-  "src/escrow.rs",
+  "quicklendx-contracts/src/profits.rs",
+  "quicklendx-contracts/src/fees.rs",
+  "quicklendx-contracts/src/settlement.rs",
+  "quicklendx-contracts/src/escrow.rs",
 ]
 
-# Keep CI runtimes bounded while the job is advisory. Developers can override
-# this with command-line flags for deeper local analysis.
+# Only the library test suite is relevant to the contract modules under test.
+additional_cargo_test_args = ["--lib"]
+
+# Contract macros generate specifications that are not useful mutation targets.
+exclude_re = ["__spec"]
+
 timeout_multiplier = 2.0
 minimum_test_timeout = 60

@@ -196,31 +196,29 @@ export function decryptSensitiveDataAny(ciphertext: string): string {
     if (!encryptionConfig) {
       throw new Error("Encryption not initialized");
     }
-    // Use any available key to try decrypting v1 (backward compatible)
-    // First try active key, then try others
-    let key: Buffer | null = null;
-    try {
-      key = keyRing.getKey(encryptionConfig.activeKeyId);
-    } catch {
-      for (const k in encryptionConfig.keys) {
-        try {
-          key = keyRing.getKey(k);
-          break;
-        } catch {}
-      }
-    }
-    if (!key) throw new Error("No key available to decrypt v1 format");
 
     const iv = Buffer.from(ciphertext.substring(0, IV_BYTES * 2), "hex");
     const authTag = Buffer.from(ciphertext.substring(IV_BYTES * 2, IV_BYTES * 2 + TAG_BYTES * 2), "hex");
     const encrypted = ciphertext.substring(IV_BYTES * 2 + TAG_BYTES * 2);
 
-    const decipher = crypto.createDecipheriv(ALGO, key, iv);
-    decipher.setAuthTag(authTag);
-
-    let decrypted = decipher.update(encrypted, "hex", "utf8");
-    decrypted += decipher.final("utf8");
-    return decrypted;
+    // V1 ciphertext does not embed a key id. Try each configured key until
+    // GCM authentication succeeds, preserving records across key rotation.
+    let lastError: unknown;
+    for (const keyId of Object.keys(encryptionConfig.keys)) {
+      try {
+        const key = keyRing.getKey(keyId);
+        const decipher = crypto.createDecipheriv(ALGO, key, iv);
+        decipher.setAuthTag(authTag);
+        let decrypted = decipher.update(encrypted, "hex", "utf8");
+        decrypted += decipher.final("utf8");
+        return decrypted;
+      } catch (err) {
+        lastError = err;
+      }
+    }
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("No key available to decrypt v1 format");
   }
 }
 

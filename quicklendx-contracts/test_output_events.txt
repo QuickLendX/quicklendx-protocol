@@ -1,5 +1,0 @@
-error: unexpected argument 'type' found
-
-Usage: cargo.exe test [OPTIONS] [TESTNAME] [-- [ARGS]...]
-
-For more information, try '--help'.

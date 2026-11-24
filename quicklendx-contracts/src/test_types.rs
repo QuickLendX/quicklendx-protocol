@@ -40,6 +40,7 @@ fn make_dispute(env: &Env) -> Dispute {
         resolved_by: Address::generate(env),
         resolved_at: 0,
         resolution_outcome: DisputeResolution::None,
+        votes: Vec::new(env),
     }
 }
 
@@ -720,6 +721,7 @@ fn test_dispute_unresolved_state() {
         resolved_by: Address::generate(&env),
         resolved_at: 0,
         resolution_outcome: DisputeResolution::None,
+        votes: Vec::new(&env),
     };
     assert_eq!(d.resolved_at, 0);
     assert_eq!(d.resolution, String::from_str(&env, ""));
@@ -737,6 +739,8 @@ fn test_dispute_resolved_state() {
         resolution: String::from_str(&env, "Payment transferred"),
         resolved_by: resolver.clone(),
         resolved_at: 1_100_000,
+        resolution_outcome: DisputeResolution::None,
+        votes: Vec::new(&env),
     };
     assert_eq!(d.resolved_by, resolver);
     assert!(d.resolved_at > 0);

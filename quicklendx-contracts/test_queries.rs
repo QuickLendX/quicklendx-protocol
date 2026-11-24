@@ -1,3 +1,4 @@
+#![allow(clippy::disallowed_macros)]
 use soroban_sdk::{Address, String, Vec, vec, BytesN, Env};
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
 use quicklendx_contracts::invoice::{InvoiceCategory, InvoiceStatus};

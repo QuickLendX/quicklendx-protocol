@@ -13,12 +13,7 @@
  * https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/
  */
 
-import React, {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-} from "react";
+import React, { useCallback, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
 
 // ---------------------------------------------------------------------------
@@ -62,8 +57,15 @@ const FOCUSABLE_SELECTORS = [
 ].join(", ");
 
 function getFocusableElements(container: HTMLElement): HTMLElement[] {
+  return Array.from(
+    container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS)
+  ).filter((el) => !el.closest("[inert]") && el.offsetParent !== null);
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS)).filter(
-    (el) => !el.closest("[inert]") && el.offsetParent !== null
+    (el) => {
+      if (el.closest("[inert]") || el.hidden) return false;
+      const style = window.getComputedStyle(el);
+      return style.display !== "none" && style.visibility !== "hidden";
+    }
   );
 }
 
@@ -108,7 +110,9 @@ export const Dialog: React.FC<DialogProps> = ({
   // This prevents background content from being tabbable or read by AT.
   useEffect(() => {
     if (!isOpen) return;
-    const portal = panelRef.current?.closest("[data-dialog-portal]") as HTMLElement | null;
+    const portal = panelRef.current?.closest(
+      "[data-dialog-portal]"
+    ) as HTMLElement | null;
     if (!portal) return;
     const parent = portal.parentElement;
     if (!parent) return;
@@ -120,11 +124,25 @@ export const Dialog: React.FC<DialogProps> = ({
     return () => siblings.forEach((el) => el.removeAttribute("inert"));
   }, [isOpen]);
 
+  // Lock body scroll while open; restore the previous value on every close path.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
   // Stable close handler that always reads current onClose / triggerRef
   const onCloseRef = useRef(onClose);
   const triggerRefRef = useRef(triggerRef);
-  useEffect(() => { onCloseRef.current = onClose; }, [onClose]);
-  useEffect(() => { triggerRefRef.current = triggerRef; }, [triggerRef]);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+  useEffect(() => {
+    triggerRefRef.current = triggerRef;
+  }, [triggerRef]);
 
   const handleClose = useCallback(() => {
     onCloseRef.current();
@@ -199,7 +217,12 @@ export const Dialog: React.FC<DialogProps> = ({
         className={`fixed z-50 focus:outline-none ${panelClassName}`}
       >
         {typeof children === "function"
-          ? (children as (args: { labelId: string; handleClose: () => void }) => React.ReactNode)({ labelId: resolvedLabelId, handleClose })
+          ? (
+              children as (args: {
+                labelId: string;
+                handleClose: () => void;
+              }) => React.ReactNode
+            )({ labelId: resolvedLabelId, handleClose })
           : children}
       </div>
     </div>,

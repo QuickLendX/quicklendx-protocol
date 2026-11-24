@@ -9,7 +9,7 @@ import Link from "next/link";
  */
 export default function NotFound() {
   return (
-    <main className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-12">
       <div className="max-w-md w-full bg-white border border-[#E2E8F0] rounded-lg shadow-[0_1px_3px_rgba(0,0,0,0.1)] p-8 text-center">
         <div className="mb-4 flex justify-center text-[#94A3B8]">
           <svg
@@ -49,6 +49,6 @@ export default function NotFound() {
           </Link>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

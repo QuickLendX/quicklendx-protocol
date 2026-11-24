@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { webhookDeliveryRepo } from "./webhookDeliveryRepo";
-import type { WebhookDelivery } from "./webhookDeliveryRepo";
+import type { WebhookDelivery, WebhookDeadLetter } from "./webhookDeliveryRepo";
 
 const MAX_CAPACITY = 5000;
 
@@ -74,49 +74,40 @@ class WebhookQueueService {
   }
 
   enqueue(type: string, payload?: unknown): WebhookEvent {
-    try {
-      return this.db.transaction(() => {
-        // Check current size of pending/processing elements
-        const rowCount = this.db
-          .prepare("SELECT COUNT(*) as count FROM webhook_queue WHERE status IN ('pending', 'processing')")
-          .get().count;
-
-        if (rowCount >= MAX_CAPACITY) {
-          const err = new Error("Webhook queue capacity exceeded");
-          (err as any).statusCode = 503;
-          throw err;
-        }
-
-        const id = ulid();
-        const enqueuedAt = new Date().toISOString();
-        const event: WebhookEvent = {
-          id,
-          type,
-          payload,
-          enqueuedAt,
-          status: "pending",
-        };
-
-        this.db
-          .prepare(`
-            INSERT INTO webhook_queue (id, type, payload, status, enqueued_at)
-            VALUES (?, ?, ?, ?, ?)
-          `)
-          .run(id, type, JSON.stringify(payload ?? null), "pending", enqueuedAt);
-
-        return event;
-      })();
-    } catch (err) {
-      if ((err as any)?.statusCode === 503) {
-        // The transaction above rolls back on overflow, which would also roll
-        // back an in-transaction counter update. Persist the overflow metric
-        // outside the failed transaction so it is never lost.
-        this.db
-          .prepare("UPDATE queue_metadata SET value = value + 1 WHERE key = 'overflow_count'")
-          .run();
-      }
+    const stats = webhookDeliveryRepo.getStats();
+    if (stats.pending + stats.processing >= MAX_CAPACITY) {
+      webhookDeliveryRepo.incrementOverflow();
+      const err = new Error("Webhook queue capacity exceeded");
+      (err as any).statusCode = 503;
       throw err;
     }
+
+    const delivery = webhookDeliveryRepo.create({
+      eventType: type,
+      payload,
+    });
+    return deliveryToEvent(delivery);
+  }
+
+  enqueueWithSubscriber(
+    type: string,
+    payload: unknown,
+    subscriberId: string
+  ): WebhookEvent {
+    const stats = webhookDeliveryRepo.getStats();
+    if (stats.pending + stats.processing >= MAX_CAPACITY) {
+      webhookDeliveryRepo.incrementOverflow();
+      const err = new Error("Webhook queue capacity exceeded");
+      (err as any).statusCode = 503;
+      throw err;
+    }
+
+    const delivery = webhookDeliveryRepo.create({
+      eventType: type,
+      payload,
+      subscriberId,
+    });
+    return deliveryToEvent(delivery);
   }
 
   markSuccess(id: string): boolean {
@@ -161,6 +152,18 @@ class WebhookQueueService {
     return webhookDeliveryRepo.getDeadLetters();
   }
 
+  listDeadLetterRecords(params?: { limit?: number; offset?: number }) {
+    return webhookDeliveryRepo.listDeadLetters(params);
+  }
+
+  getDeadLetterById(id: string): WebhookDeadLetter | null {
+    return webhookDeliveryRepo.getDeadLetterById(id);
+  }
+
+  replayDeadLetter(id: string) {
+    return webhookDeliveryRepo.replayDeadLetter(id);
+  }
+
   retryDeadLetter(id: string): boolean {
     return webhookDeliveryRepo.retryDeadLetter(id);
   }
@@ -193,4 +196,4 @@ class WebhookQueueService {
 }
 
 export const webhookQueueService = WebhookQueueService.getInstance();
-export { WebhookQueueService };
+export { WebhookQueueService, type WebhookDeadLetter };
