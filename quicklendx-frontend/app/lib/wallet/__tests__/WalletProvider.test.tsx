@@ -20,8 +20,8 @@
 import React from "react";
 import { render, screen, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { WalletProvider, useWallet } from "../../WalletProvider";
-import { WalletAdapter, WalletAdapterError } from "../../types";
+import { WalletProvider, useWallet } from "../WalletProvider";
+import { WalletAdapter, WalletAdapterError } from "../types";
 
 // ---------------------------------------------------------------------------
 // Test constants
@@ -36,8 +36,9 @@ const FAKE_ADDRESS = "GBSXVDGXRV7CATNUUYCQPVMKQRFHG5HF4JNW77HJKNJKIQLG7C5K";
 // ---------------------------------------------------------------------------
 
 function makeFakeAdapter(overrides?: Partial<WalletAdapter>): WalletAdapter {
-  const watchCbs: Set<(evt: { address: string; networkPassphrase: string }) => void> =
-    new Set();
+  const watchCbs: Set<
+    (evt: { address: string; networkPassphrase: string }) => void
+  > = new Set();
   const unwatch = jest.fn(() => {
     watchCbs.clear();
   });
@@ -65,7 +66,11 @@ function makeFakeAdapter(overrides?: Partial<WalletAdapter>): WalletAdapter {
 // Helper: tiny component that exposes wallet state to the test
 // ---------------------------------------------------------------------------
 
-function WalletConsumer({ onRender }: { onRender?: (ctx: ReturnType<typeof useWallet>) => void }) {
+function WalletConsumer({
+  onRender,
+}: {
+  onRender?: (ctx: ReturnType<typeof useWallet>) => void;
+}) {
   const ctx = useWallet();
   onRender?.(ctx);
   return (
@@ -106,9 +111,11 @@ describe("WalletProvider — Freighter not installed", () => {
   it('shows "not_installed" error when isInstalled returns false', async () => {
     const adapter = makeFakeAdapter({
       isInstalled: jest.fn().mockResolvedValue(false),
-      connect: jest.fn().mockRejectedValue(
-        new WalletAdapterError("not_installed", "Freighter is not installed.")
-      ),
+      connect: jest
+        .fn()
+        .mockRejectedValue(
+          new WalletAdapterError("not_installed", "Freighter is not installed.")
+        ),
     });
     renderWithProvider(adapter);
 
@@ -128,9 +135,11 @@ describe("WalletProvider — Freighter not installed", () => {
 describe("WalletProvider — user rejects", () => {
   it('sets error "rejected" when user declines', async () => {
     const adapter = makeFakeAdapter({
-      connect: jest.fn().mockRejectedValue(
-        new WalletAdapterError("rejected", "User declined access")
-      ),
+      connect: jest
+        .fn()
+        .mockRejectedValue(
+          new WalletAdapterError("rejected", "User declined access")
+        ),
     });
     renderWithProvider(adapter);
 
@@ -236,14 +245,18 @@ describe("WalletProvider — connect timeout (fake timers)", () => {
 
     // Start connecting (don't await — it will never resolve)
     const connectBtn = screen.getByRole("button", { name: "connect" });
-    act(() => { connectBtn.click(); });
+    act(() => {
+      connectBtn.click();
+    });
 
     await waitFor(() =>
       expect(screen.getByTestId("state").textContent).toBe("CONNECTING")
     );
 
     // Advance past the 60 second timeout
-    await act(async () => { jest.advanceTimersByTime(60_001); });
+    await act(async () => {
+      jest.advanceTimersByTime(60_001);
+    });
 
     await waitFor(() => {
       expect(screen.getByTestId("state").textContent).toBe("ERROR");
@@ -271,7 +284,10 @@ describe("WalletProvider — watch events", () => {
     const newAddress = "GCXYZ" + "A".repeat(51);
 
     await act(async () => {
-      adapter._emit({ address: newAddress, networkPassphrase: TESTNET_PASSPHRASE });
+      adapter._emit({
+        address: newAddress,
+        networkPassphrase: TESTNET_PASSPHRASE,
+      });
     });
 
     await waitFor(() =>
@@ -294,7 +310,10 @@ describe("WalletProvider — watch events", () => {
 
     // User switches network in Freighter → watch fires with correct passphrase
     await act(async () => {
-      adapter._emit({ address: FAKE_ADDRESS, networkPassphrase: TESTNET_PASSPHRASE });
+      adapter._emit({
+        address: FAKE_ADDRESS,
+        networkPassphrase: TESTNET_PASSPHRASE,
+      });
     });
 
     await waitFor(() =>
@@ -335,7 +354,9 @@ describe("WalletProvider — silent restore", () => {
     renderWithProvider(adapter);
 
     // Wait a tick for effects to settle
-    await act(async () => { await new Promise((r) => setTimeout(r, 50)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 50));
+    });
 
     expect(adapter.restore).not.toHaveBeenCalled();
     expect(screen.getByTestId("state").textContent).toBe("NOT_CONNECTED");
@@ -381,7 +402,9 @@ describe("createFreighterAdapter — error mapping", () => {
   it('maps "User declined access" to WalletErrorCode "rejected"', async () => {
     jest.mock("@stellar/freighter-api", () => ({
       isConnected: jest.fn().mockResolvedValue({ isConnected: true }),
-      requestAccess: jest.fn().mockResolvedValue({ error: "User declined access" }),
+      requestAccess: jest
+        .fn()
+        .mockResolvedValue({ error: "User declined access" }),
       getAddress: jest.fn(),
       isAllowed: jest.fn(),
       getNetworkDetails: jest.fn(),
@@ -390,13 +413,13 @@ describe("createFreighterAdapter — error mapping", () => {
     }));
 
     // Verify adapter maps errors via WalletAdapterError
-    const { WalletAdapterError: WAE } = await import("../../types");
+    const { WalletAdapterError: WAE } = await import("../types");
     const err = new WAE("rejected", "User declined access");
     expect(err.code).toBe("rejected");
   });
 
   it('maps isConnected:{isConnected:false} to WalletErrorCode "not_installed"', async () => {
-    const { WalletAdapterError: WAE } = await import("../../types");
+    const { WalletAdapterError: WAE } = await import("../types");
     const err = new WAE("not_installed", "Freighter is not installed.");
     expect(err.code).toBe("not_installed");
   });

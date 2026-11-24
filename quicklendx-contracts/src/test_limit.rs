@@ -20,6 +20,28 @@ fn setup() -> (Env, QuickLendXContractClient<'static>) {
     (env, client)
 }
 
+fn get_business_page(
+    env: &Env,
+    client: &QuickLendXContractClient,
+    business: &Address,
+    status: Option<InvoiceStatus>,
+    offset: u32,
+    limit: u32,
+) -> crate::types::InvoicePage {
+    let generation = client
+        .get_business_invoices_paged(business, &status, &None::<String>, &0)
+        .generation;
+    let cursor = if offset == 0 {
+        None
+    } else {
+        Some(crate::pagination::encode_soroban_cursor(
+            env,
+            crate::pagination::Cursor::new(offset, generation),
+        ))
+    };
+    client.get_business_invoices_paged(business, &status, &cursor, &limit)
+}
+
 // Helper: create and optionally verify an invoice
 fn create_invoice(
     env: &Env,
@@ -39,7 +61,8 @@ fn create_invoice(
         &String::from_str(env, "Invoice"),
         &category,
         &Vec::new(env),
-        &None);
+        &None,
+    );
     if verify {
         // set admin and verify
         env.mock_all_auths();
@@ -59,7 +82,13 @@ fn create_bid(
     amount: i128,
 ) -> BytesN<32> {
     env.mock_all_auths();
-    client.place_bid(investor, invoice_id, &amount, &1000i128, &BytesN::from_array(&env, &[0u8; 32]))
+    client.place_bid(
+        investor,
+        invoice_id,
+        &amount,
+        &1000i128,
+        &BytesN::from_array(&env, &[0u8; 32]),
+    )
 }
 
 /// Test that limit=0 returns empty results for all paginated endpoints
@@ -84,10 +113,9 @@ fn test_limit_zero_returns_empty_all_endpoints() {
     );
 
     // Test all paginated endpoints with limit=0
-    let business_invoices =
-        client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &0u32, &0u32);
+    let business_invoices = get_business_page(&env, &client, &business, None, 0, 0);
     assert_eq!(
-        business_invoices.len(),
+        business_invoices.items.len(),
         0,
         "Business invoices with limit=0 should return empty"
     );
@@ -108,11 +136,11 @@ fn test_limit_zero_returns_empty_all_endpoints() {
     let investor_investments = client.get_investor_investments_paged(
         &investor,
         &Option::<InvestmentStatus>::None,
-        &0u32,
+        &None::<String>,
         &0u32,
     );
     assert_eq!(
-        investor_investments.len(),
+        investor_investments.items.len(),
         0,
         "Investor investments with limit=0 should return empty"
     );
@@ -133,7 +161,7 @@ fn test_limit_zero_returns_empty_all_endpoints() {
         "Investor bids with limit=0 should return empty"
     );
 
-    let currencies = client.get_whitelisted_currencies_paged(&0u32, &0u32);
+    let currencies = client.get_whitelisted_currency_offset(&0u32, &0u32);
     assert_eq!(
         currencies.len(),
         0,
@@ -164,14 +192,11 @@ fn test_limit_exceeds_max_query_limit_is_capped() {
     }
 
     // Test business invoices with limit > MAX_QUERY_LIMIT
-    let business_invoices = client.get_business_invoices_paged(
-        &business,
-        &Option::<InvoiceStatus>::None,
-        &0u32,
-        &500u32, // Much larger than MAX_QUERY_LIMIT
+    let business_invoices = get_business_page(
+        &env, &client, &business, None, 0, 500, // Much larger than MAX_QUERY_LIMIT
     );
     assert_eq!(
-        business_invoices.len(),
+        business_invoices.items.len(),
         crate::MAX_QUERY_LIMIT,
         "Business invoices should be capped at MAX_QUERY_LIMIT"
     );
@@ -214,14 +239,12 @@ fn test_large_offset_returns_empty() {
     }
 
     // Test offset beyond available items
-    let business_invoices = client.get_business_invoices_paged(
-        &business,
-        &Option::<InvoiceStatus>::None,
-        &100u32, // Offset much larger than available items
-        &10u32,
+    let business_invoices = get_business_page(
+        &env, &client, &business, None, 100, // Offset much larger than available items
+        10,
     );
     assert_eq!(
-        business_invoices.len(),
+        business_invoices.items.len(),
         0,
         "Large offset should return empty results"
     );
@@ -264,14 +287,9 @@ fn test_overflow_protection() {
 
     // Test with offset that could cause overflow
     let large_offset = u32::MAX - 50;
-    let business_invoices = client.get_business_invoices_paged(
-        &business,
-        &Option::<InvoiceStatus>::None,
-        &large_offset,
-        &100u32,
-    );
+    let business_invoices = get_business_page(&env, &client, &business, None, large_offset, 100);
     assert_eq!(
-        business_invoices.len(),
+        business_invoices.items.len(),
         0,
         "Overflow protection should return empty results"
     );
@@ -345,7 +363,7 @@ fn test_currency_pagination_enforces_max_query_limit() {
     let _ = client.set_currencies(&admin, &currencies);
 
     // Test with large limit
-    let paged_currencies = client.get_whitelisted_currencies_paged(&0u32, &500u32);
+    let paged_currencies = client.get_whitelisted_currency_offset(&0u32, &500u32);
     assert_eq!(
         paged_currencies.len(),
         crate::MAX_QUERY_LIMIT,
@@ -379,11 +397,11 @@ fn test_pagination_consistency() {
     let page1 = client.get_business_invoices_paged(
         &business,
         &Option::<InvoiceStatus>::None,
-        &0u32,
+        &None::<String>,
         &crate::MAX_QUERY_LIMIT,
     );
     assert_eq!(
-        page1.len(),
+        page1.items.len(),
         crate::MAX_QUERY_LIMIT,
         "First page should be full"
     );
@@ -392,11 +410,11 @@ fn test_pagination_consistency() {
     let page2 = client.get_business_invoices_paged(
         &business,
         &Option::<InvoiceStatus>::None,
-        &crate::MAX_QUERY_LIMIT,
+        &page1.next_cursor,
         &crate::MAX_QUERY_LIMIT,
     );
     assert_eq!(
-        page2.len(),
+        page2.items.len(),
         crate::MAX_QUERY_LIMIT,
         "Second page should be full"
     );
@@ -405,19 +423,23 @@ fn test_pagination_consistency() {
     let page3 = client.get_business_invoices_paged(
         &business,
         &Option::<InvoiceStatus>::None,
-        &(2 * crate::MAX_QUERY_LIMIT),
+        &page2.next_cursor,
         &crate::MAX_QUERY_LIMIT,
     );
-    assert_eq!(page3.len(), 50, "Third page should have remaining items");
+    assert_eq!(
+        page3.items.len(),
+        50,
+        "Third page should have remaining items"
+    );
 
     // Verify no overlap between pages
-    for item1 in page1.iter() {
-        assert!(!page2.contains(&item1), "Pages should not overlap");
-        assert!(!page3.contains(&item1), "Pages should not overlap");
+    for item1 in page1.items.iter() {
+        assert!(!page2.items.contains(&item1), "Pages should not overlap");
+        assert!(!page3.items.contains(&item1), "Pages should not overlap");
     }
 
-    for item2 in page2.iter() {
-        assert!(!page3.contains(&item2), "Pages should not overlap");
+    for item2 in page2.items.iter() {
+        assert!(!page3.items.contains(&item2), "Pages should not overlap");
     }
 }
 
@@ -444,27 +466,24 @@ fn test_exactly_max_query_limit_items() {
     }
 
     // Request all items
-    let all_invoices = client.get_business_invoices_paged(
-        &business,
-        &Option::<InvoiceStatus>::None,
-        &0u32,
-        &crate::MAX_QUERY_LIMIT,
-    );
+    let all_invoices = get_business_page(&env, &client, &business, None, 0, crate::MAX_QUERY_LIMIT);
     assert_eq!(
-        all_invoices.len(),
+        all_invoices.items.len(),
         crate::MAX_QUERY_LIMIT,
         "Should return exactly MAX_QUERY_LIMIT items"
     );
 
     // Request with larger limit
-    let capped_invoices = client.get_business_invoices_paged(
+    let capped_invoices = get_business_page(
+        &env,
+        &client,
         &business,
-        &Option::<InvoiceStatus>::None,
-        &0u32,
-        &(crate::MAX_QUERY_LIMIT * 2),
+        None,
+        0,
+        crate::MAX_QUERY_LIMIT * 2,
     );
     assert_eq!(
-        capped_invoices.len(),
+        capped_invoices.items.len(),
         crate::MAX_QUERY_LIMIT,
         "Should still return exactly MAX_QUERY_LIMIT items"
     );
@@ -478,28 +497,18 @@ fn test_extreme_offset_validation() {
     let business = Address::generate(&env);
 
     // Test with u32::MAX offset
-    let result = client.get_business_invoices_paged(
-        &business,
-        &Option::<InvoiceStatus>::None,
-        &u32::MAX,
-        &10u32,
-    );
+    let result = get_business_page(&env, &client, &business, None, u32::MAX, 10);
     assert_eq!(
-        result.len(),
+        result.items.len(),
         0,
         "u32::MAX offset should return empty results"
     );
 
     // Test with offset that would overflow when added to MAX_QUERY_LIMIT
     let dangerous_offset = u32::MAX - 50;
-    let result2 = client.get_business_invoices_paged(
-        &business,
-        &Option::<InvoiceStatus>::None,
-        &dangerous_offset,
-        &100u32,
-    );
+    let result2 = get_business_page(&env, &client, &business, None, dangerous_offset, 100);
     assert_eq!(
-        result2.len(),
+        result2.items.len(),
         0,
         "Dangerous offset should return empty results"
     );

@@ -25,7 +25,7 @@ use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_investment_withdrawn, emit_invoice_funded};
 use crate::payments::{
-    create_escrow, create_escrow_record_only, refund_escrow, EscrowStatus, EscrowStorage,
+    create_escrow, create_escrow_record_only, EscrowStatus, EscrowStorage,
 };
 use crate::storage::{BidStorage, InvestmentStorage, InvoiceStorage};
 use crate::types::{BidStatus, Investment, InvestmentStatus, InvoiceStatus};
@@ -61,9 +61,8 @@ const BID_ACCEPTANCE_RECORD_KEY: Symbol = symbol_short!("bid_acc");
 
 /// Look up a durable bid-acceptance record by request key.
 fn get_bid_acceptance_record(env: &Env, request_key: &BytesN<32>) -> Option<BidAcceptanceRecord> {
-    env.storage()
-        .persistent()
-        .get(&(BID_ACCEPTANCE_RECORD_KEY, request_key.clone()))
+    let key = (BID_ACCEPTANCE_RECORD_KEY, request_key.clone());
+    crate::storage::persistent_get(env, &key)
 }
 
 /// Persist a durable bid-acceptance record and extend its TTL so it does not
@@ -94,7 +93,7 @@ pub(crate) fn load_accept_bid_context(
     invoice_id: &BytesN<32>,
     bid_id: &BytesN<32>,
 ) -> Result<AcceptBidContext, QuickLendXError> {
-    BidStorage::cleanup_expired_bids(env, invoice_id);
+    BidStorage::cleanup_expired_bids(env, invoice_id)?;
 
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -374,8 +373,17 @@ fn update_states_after_funding(
         bid.bid_amount,
         bid.bid_id.clone(),
     );
+    )?;
+    emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
+    crate::audit::log_invoice_funded(
+        env,
+        invoice_id.clone(),
+        bid.investor.clone(),
+        bid.bid_amount,
+        bid.bid_id.clone(),
+    )?;
     emit_invoice_funded(env, invoice_id, &bid.investor, escrow_amount);
-    crate::audit::log_invoice_funded(env, invoice_id.clone(), bid.investor.clone(), escrow_amount);
+    crate::audit::log_invoice_funded(env, invoice_id.clone(), bid.investor.clone(), escrow_amount)?;
 
     // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
     // after escrow funding and state transitions complete successfully.
@@ -392,7 +400,7 @@ fn update_states_after_funding(
 /// # Correctness
 /// - Refunds the net `escrow.amount` and any withheld origination fee.
 /// - Sends funds to the stored `escrow.investor`, never to a caller-controlled recipient.
-/// - Uses `payments::refund_escrow` which rejects any escrow not in `Held` status,
+/// - Uses `payments::refund_escrow_internal` which rejects any escrow not in `Held` status,
 ///   making repeated refund attempts fail and preventing double refunds.
 ///
 /// # Errors
@@ -424,15 +432,11 @@ pub fn refund_escrow_funds(
         return Err(QuickLendXError::InvalidStatus);
     }
 
-    // 4. Retrieve Escrow
-    let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
-        .ok_or(QuickLendXError::StorageKeyNotFound)?;
+    // 4. Transfer funds and update escrow state
+    // This internal call handles the token transfer and escrow status update.
+    crate::payments::refund_escrow_internal(env, invoice_id)?;
 
-    // 5. Transfer funds and update escrow state
-    // This calls payments::refund_escrow which handles the token transfer and status update
-    refund_escrow(env, invoice_id, caller)?;
-
-    // 6. Update internal states
+    // 5. Update internal states
 
     // Update Invoice status to Refunded
     let previous_status = invoice.status;
@@ -445,7 +449,7 @@ pub fn refund_escrow_funds(
 
     // Update Bid status to Cancelled (find the accepted bid first)
     // In our protocol, a Funded invoice has exactly one Accepted bid
-    let bids = BidStorage::get_bid_records_for_invoice(env, invoice_id);
+    let bids = BidStorage::get_bid_records_for_invoice(env, invoice_id)?;
     for mut bid in bids.iter() {
         if bid.status == BidStatus::Accepted {
             bid.status = BidStatus::Cancelled;
@@ -491,7 +495,7 @@ pub fn refund_escrow_funds(
 ///
 /// # Security
 /// - Authorization: `investor.require_auth()` ensures only the investor can withdraw
-/// - Escrow guard: `payments::refund_escrow` rejects any escrow not in `Held` status,
+/// - Escrow guard: `payments::refund_escrow_internal` rejects any escrow not in `Held` status,
 ///   preventing double-withdrawal even if `withdraw_investment` is called again
 /// - Transition guard: `InvestmentStorage::update_investment` calls `validate_transition`,
 ///   rejecting any attempt to withdraw from a terminal state
@@ -541,7 +545,7 @@ pub fn withdraw_investment(
     }
 
     // 5. Refund escrowed funds to the investor (token transfer + escrow status → Refunded)
-    refund_escrow(env, invoice_id, investor)?;
+    crate::payments::refund_escrow_internal(env, invoice_id)?;
 
     // 6. Restore invoice to Verified state and clear funded fields
     let previous_status = invoice.status;
@@ -556,6 +560,8 @@ pub fn withdraw_investment(
     InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Verified, invoice_id);
 
     // 7. Cancel the accepted bid
+    let bids = BidStorage::get_bid_records_for_invoice(env, invoice_id)?;
+    // 6. Cancel the accepted bid
     let bids = BidStorage::get_bid_records_for_invoice(env, invoice_id);
     for mut bid in bids.iter() {
         if bid.status == BidStatus::Accepted {

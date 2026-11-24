@@ -1437,3 +1437,81 @@ fn test_large_amount_vesting_arithmetic_does_not_overflow() {
     let vested_end = client.get_vesting_vested(&id).unwrap();
     assert_eq!(vested_end, total);
 }
+
+// ============================================================================
+// OUTSTANDING VESTING RESERVE
+// Custodied vesting tokens must be tracked so treasury solvency checks never
+// treat them as withdrawable surplus.
+// ============================================================================
+
+/// The outstanding-vesting reserve must equal the full custodied amount right
+/// after creation (so the withdrawable treasury surplus is zero), drop by
+/// exactly the released amount on each claim, and return to zero once every
+/// token has been released.
+#[test]
+fn test_outstanding_vesting_reduces_withdrawable_treasury_balance() {
+    let (env, client, admin, beneficiary, token_id, token_client) = setup();
+
+    let total = 1000i128;
+    let start = 1000u64;
+    let end = start + 2000; // 3000
+    let cliff_seconds = 500u64; // cliff at 1500
+
+    let id = client.create_vesting_schedule(
+        &admin,
+        &token_id,
+        &beneficiary,
+        &total,
+        &start,
+        &cliff_seconds,
+        &end,
+    );
+
+    let contract_id = client.address.clone();
+
+    // All tokens were moved into contract custody on creation.
+    assert_eq!(token_client.balance(&contract_id), total);
+
+    // The whole balance is owed to the beneficiary, so no surplus is withdrawable.
+    let outstanding = env.as_contract(&contract_id, || {
+        crate::vesting::VestingStorage::get_outstanding_vesting(&env, &token_id)
+    });
+    assert_eq!(
+        outstanding, total,
+        "full amount must be reserved while nothing has vested"
+    );
+    assert_eq!(
+        token_client.balance(&contract_id) - outstanding,
+        0,
+        "no withdrawable surplus while the entire balance is reserved"
+    );
+
+    // Midpoint (after cliff): release the vested half.
+    env.ledger().set_timestamp(start + 1000); // 2000
+    let released = client.release_vested_tokens(&beneficiary, &id);
+    assert_eq!(released, total / 2, "half the tokens vest at the midpoint");
+
+    // Reserve drops by exactly the released amount.
+    let outstanding_mid = env.as_contract(&contract_id, || {
+        crate::vesting::VestingStorage::get_outstanding_vesting(&env, &token_id)
+    });
+    assert_eq!(
+        outstanding_mid,
+        total - released,
+        "reserve must drop by exactly the released amount"
+    );
+
+    // Fully release at end_time; the reserve must be fully drained.
+    env.ledger().set_timestamp(end);
+    let final_release = client.release_vested_tokens(&beneficiary, &id);
+    assert_eq!(final_release, total - released);
+
+    let outstanding_end = env.as_contract(&contract_id, || {
+        crate::vesting::VestingStorage::get_outstanding_vesting(&env, &token_id)
+    });
+    assert_eq!(
+        outstanding_end, 0,
+        "reserve must return to zero after full release"
+    );
+    assert_eq!(token_client.balance(&beneficiary), total);
+}
