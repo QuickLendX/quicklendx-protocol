@@ -274,3 +274,17 @@ fn contract_entrypoint_blocks_kyc_writes_while_upgrade_is_pending() {
     );
     assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::UpgradePending);
 }
+
+
+#[test]
+fn contract_entrypoint_blocks_invoice_state_changes_while_upgrade_is_pending() {
+    let (env, admin, wasm_hash) = setup_test();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+    client.set_admin(&admin);
+
+    client.schedule_upgrade(&admin, &wasm_hash);
+    let invoice_id = BytesN::from_array(&env, &[7u8; 32]);
+    let result = client.try_verify_invoice(&invoice_id);
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::UpgradePending);
+}
