@@ -2,6 +2,8 @@ import { Router, Request, Response } from 'express';
 import { notificationService } from '../../services/notificationService';
 import { UserNotificationPreferences, NotificationType } from '../../types/contract';
 import { requireUserAuth, getUser } from '../../middleware/userAuth';
+import { createParamsValidationMiddleware } from '../../middleware/validation';
+import { userIdParamSchema } from '../../validators/shared';
 import {
   verifyUnsubscribeToken,
   maskEmail,
@@ -9,6 +11,7 @@ import {
 import { z } from 'zod';
 
 const router = Router();
+const validateUserIdParam = createParamsValidationMiddleware(userIdParamSchema);
 
 /**
  * Seam for resolving principal. Defaults to reading authenticated user from request.
@@ -34,38 +37,46 @@ const updatePreferencesSchema = z.object({
 });
 
 // Get user notification preferences
-router.get('/preferences/:userId', requireUserAuth, async (req: Request, res: Response) => {
+router.get('/preferences/:userId', validateUserIdParam, requireUserAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.params.userId as string;
     const principal = resolvePrincipal(req);
 
     // Ownership check: must equal authenticated principal
     if (!principal || principal !== userId) {
-      return res.status(403).json({ error: 'FORBIDDEN' });
+      return res.status(403).json({
+        error: { message: 'Forbidden', code: 'FORBIDDEN' },
+      });
     }
 
     const preferences = await notificationService.getUserPreferencesPublic(userId);
     if (!preferences) {
-      return res.status(404).json({ error: 'User preferences not found' });
+      return res.status(404).json({
+        error: { message: 'User preferences not found', code: 'NOT_FOUND' },
+      });
     }
 
     // Owner gets full email address
     res.json(preferences);
   } catch (error) {
     console.error('Error fetching preferences:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({
+      error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+    });
   }
 });
 
 // Update user notification preferences
-router.put('/preferences/:userId', requireUserAuth, async (req: Request, res: Response) => {
+router.put('/preferences/:userId', validateUserIdParam, requireUserAuth, async (req: Request, res: Response) => {
   try {
     const userId = req.params.userId as string;
     const principal = resolvePrincipal(req);
 
     // Ownership check: must equal authenticated principal
     if (!principal || principal !== userId) {
-      return res.status(403).json({ error: 'FORBIDDEN' });
+      return res.status(403).json({
+        error: { message: 'Forbidden', code: 'FORBIDDEN' },
+      });
     }
 
     const updates = updatePreferencesSchema.parse(req.body);
@@ -86,11 +97,15 @@ router.put('/preferences/:userId', requireUserAuth, async (req: Request, res: Re
     res.json({ success: true });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: 'Invalid request data', details: error.issues });
+      return res.status(400).json({
+        error: { message: 'Invalid request data', code: 'INVALID_PARAM', details: error.issues },
+      });
     }
 
     console.error('Error updating preferences:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({
+      error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+    });
   }
 });
 
@@ -101,33 +116,41 @@ const verifyEmailHandler = async (req: Request, res: Response) => {
     const token = (req.body?.token || req.query?.token) as string;
 
     if (!token) {
-      return res.status(403).json({ error: 'INVALID_TOKEN' });
+      return res.status(403).json({
+        error: { message: 'Invalid or missing verification token', code: 'INVALID_TOKEN' },
+      });
     }
 
     const result = notificationService.verifyAndActivateEmail(userId, token);
     if (!result.success) {
-      return res.status(result.status).json({ error: result.error });
+      return res.status(result.status).json({
+        error: { message: result.error || 'Verification failed', code: result.error || 'INVALID_TOKEN' },
+      });
     }
 
     res.status(200).json({ success: true, message: 'Email address verified successfully' });
   } catch (error) {
     console.error('Error verifying email:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({
+      error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+    });
   }
 };
 
-router.post('/preferences/:userId/email/verify', verifyEmailHandler);
-router.post('/preferences/:userId/verify', verifyEmailHandler);
+router.post('/preferences/:userId/email/verify', validateUserIdParam, verifyEmailHandler);
+router.post('/preferences/:userId/verify', validateUserIdParam, verifyEmailHandler);
 
 // Unsubscribe from all emails (for email links)
-router.post('/unsubscribe/:userId', async (req: Request, res: Response) => {
+router.post('/unsubscribe/:userId', validateUserIdParam, async (req: Request, res: Response) => {
   try {
     const userId = req.params.userId as string;
     const token = (req.query.token || req.body?.token) as string;
 
     // Unguessable signed HMAC token verification
     if (!token || !verifyUnsubscribeToken(userId, token)) {
-      return res.status(403).json({ error: 'INVALID_UNSUBSCRIBE_TOKEN' });
+      return res.status(403).json({
+        error: { message: 'Invalid or missing unsubscribe token', code: 'INVALID_UNSUBSCRIBE_TOKEN' },
+      });
     }
 
     notificationService.updateUserPreferences(userId, {
@@ -141,7 +164,9 @@ router.post('/unsubscribe/:userId', async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error('Error unsubscribing:', error);
-    res.status(500).json({ error: 'Internal server error' });
+    res.status(500).json({
+      error: { message: 'Internal server error', code: 'INTERNAL_ERROR' },
+    });
   }
 });
 

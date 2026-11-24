@@ -250,7 +250,7 @@ impl InvestmentQueries {
     /// concurrent-insert case, which is both the case this issue's required
     /// test list names explicitly and the one that changes the *size* of
     /// the underlying collection callers are paging over. See
-    /// `ISSUE_2456_IMPLEMENTATION.md` for the full design note, including
+    /// `docs/archive/ISSUE_2456_IMPLEMENTATION.md` for the full design note, including
     /// this as a documented, in-scope limitation rather than an oversight.
     ///
     /// ## Compatibility

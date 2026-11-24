@@ -1,13 +1,8 @@
+import type { Page } from "./schemas";
 import { z } from "zod";
 import { Page } from "./schemas";
 
-export type Page<T> = {
-  data: T[];
-  nextCursor: string | null;
-  hasMore: boolean;
-  freshness?: any;
-  system?: any;
-};
+export type { Page };
 
 /**
  * Async generator that iterates over pages returned by a paginated endpoint.
