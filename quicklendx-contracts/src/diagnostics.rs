@@ -110,6 +110,10 @@ macro_rules! qlx_log {
 ///
 /// # Panics
 /// Panics with a descriptive message if `StorageManager::is_view_only(env)` returns true.
+#[allow(
+    clippy::disallowed_macros,
+    reason = "This exported assertion preserves its panic-on-violation API; returning a typed error requires changing its callers."
+)]
 #[macro_export]
 macro_rules! assert_view_only {
     ($env:expr) => {
