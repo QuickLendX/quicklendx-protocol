@@ -84,7 +84,6 @@ required-features = ["legacy-tests"]
 [[test]]
 name = "profit_fee_golden"
 path = "tests/profit_fee_golden.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "test_admin_lookalike"
