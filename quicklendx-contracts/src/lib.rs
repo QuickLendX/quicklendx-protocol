@@ -81,6 +81,8 @@ mod test_partial_payments;
 #[cfg(test)]
 mod test_payment_history;
 #[cfg(test)]
+mod test_payment_token_policy;
+#[cfg(test)]
 mod test_dispute;
 #[cfg(test)]
 mod test_dispute_timeline;
