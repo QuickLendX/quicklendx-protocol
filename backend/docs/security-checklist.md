@@ -107,7 +107,7 @@ integrations are added.
 | # | Control | Status | File | Notes |
 |---|---------|--------|------|-------|
 | 4.1 | Global rate limit applied to all routes | ✅ | `src/middleware/rate-limit.ts` | 100 req / 60 s per IP in production; 1 000 in test |
-| 4.2 | Rate limiter keyed on real client IP (trust proxy enabled) | ✅ | `src/app.ts` | `app.set("trust proxy", true)`; falls back to `"unknown"` when IP is absent |
+| 4.2 | Rate limiter keyed on real client IP (trust proxy enabled) | ✅ | `src/app.ts` | `app.set("trust proxy", config.TRUST_PROXY)` (default `"loopback"`); falls back to `"unknown"` when IP is absent |
 | 4.3 | 429 response includes structured error body | ✅ | `src/middleware/rate-limit.ts` | `{ error: { message, code: "RATE_LIMIT_EXCEEDED" } }` |
 | 4.4 | Stricter rate limit on admin / write endpoints | ❌ | — | Add a separate `RateLimiterMemory` instance (e.g. 10 req / 60 s) mounted before admin routes |
 | 4.5 | Rate-limit state persisted across restarts (Redis) for multi-instance deployments | ❌ | — | Replace `RateLimiterMemory` with `RateLimiterRedis` before horizontal scaling |

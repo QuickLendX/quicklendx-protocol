@@ -1,5 +1,6 @@
 #![cfg(feature = "legacy-tests")]
 
+#![allow(clippy::disallowed_macros)]
 use quicklendx_contracts::{
     analytics::TimePeriod,
     audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter},
@@ -585,7 +586,7 @@ fn test_invoice_gas() {
         harness,
         "get_business_invoices_paged",
         "default",
-        client.try_get_business_invoices_paged(&harness.business, &None, &0, &10)
+        client.try_get_business_invoices_paged(&harness.business, &None, &None::<String>, &10)
     );
     bench_scenario!(
         harness,

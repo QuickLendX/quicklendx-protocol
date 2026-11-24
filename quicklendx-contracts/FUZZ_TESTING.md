@@ -182,3 +182,58 @@ If a proptest test fails:
 - [Proptest Documentation](https://docs.rs/proptest/)
 - [Soroban Testing Guide](https://soroban.stellar.org/docs/how-to-guides/testing)
 - [Rust Fuzz Book](https://rust-fuzz.github.io/book/)
+
+
+---
+
+## libFuzzer targets (Issue #3051)
+
+The standalone libFuzzer harnesses exercise the public bid-acceptance wrapper,
+settlement query/attempt paths, and the shared overflow-safe pagination
+primitives with bounded structured inputs. The contract-facing targets start
+from an empty test environment, so missing-state rejections are expected; the
+pagination target directly checks bounds, caps, and slice consistency. They
+complement the deterministic and proptest coverage above.
+
+### Build and run
+
+Install the nightly toolchain and cargo-fuzz once:
+
+```bash
+rustup toolchain install nightly
+cargo install cargo-fuzz
+cd quicklendx-contracts/fuzz
+cargo +nightly fuzz build
+cargo +nightly fuzz run accept_bid_and_fund
+cargo +nightly fuzz run settlement
+cargo +nightly fuzz run paged_queries
+```
+
+Run a short smoke pass from `quicklendx-contracts` (30 seconds per target
+by default; pass another positive integer to change the duration):
+
+```bash
+./scripts/fuzz-smoke.sh
+./scripts/fuzz-smoke.sh 30
+./scripts/fuzz-smoke.sh --help
+```
+
+Each target caps the number of operations per input to keep individual
+executions bounded. Contract-level rejections for missing or invalid state are
+expected; an unexpected host panic or violated pagination assertion is a
+fuzzer finding.
+
+### Corpus and crash handling
+
+Cargo-fuzz stores target corpora and crash artifacts under
+`fuzz/corpus/<target>` and `fuzz/artifacts/<target>`. These are local
+development artifacts: do not commit generated corpora, crash dumps, or
+minimized inputs unless a small regression fixture is intentionally added to
+the test suite. Keep any committed corpus below 1 MB. Reproduce a crash with:
+
+```bash
+cargo +nightly fuzz run <target> fuzz/artifacts/<target>/<crash-file>
+```
+
+After fixing a finding, add a deterministic regression test, rerun the relevant
+unit tests, rebuild all fuzz targets, and repeat the smoke run.

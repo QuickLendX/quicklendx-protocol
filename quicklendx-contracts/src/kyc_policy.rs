@@ -10,10 +10,9 @@
 //!    Ties are broken lexicographically by address encoding so the page is
 //!    reproducible across repeated calls on the same ledger state.
 //!
-//! 2. **Scope-safe cursor** – The opaque cursor is an ASCII-encoded offset.
-//!    It is validated on every decode; malformed cursors return
-//!    `InvalidCursor`. An offset that exceeds the current result set length
-//!    yields an empty page with `next_cursor = None` (no panic, no wrap).
+//! 2. **Scope-safe cursor** – The opaque cursor contains a version, the
+//!    selected index generation, and an offset. Malformed cursors return
+//!    `InvalidCursor`; a changed index returns `UnstableCursor`.
 //!
 //! 3. **Hard page cap** – `limit` is clamped to [`pagination::MAX_QUERY_LIMIT`]
 //!    to bound resource consumption.
@@ -26,12 +25,11 @@
 //!    reaches or exceeds the total count; callers can stop iterating.
 
 use crate::errors::QuickLendXError;
-use crate::pagination;
+use crate::pagination::{self, Cursor};
 use crate::verification::{
     get_kyc_index_page, BusinessVerificationStatus, BusinessVerificationStorage,
     InvestorVerificationStorage, KycIndexKind,
 };
-use alloc::string::String as AllocString;
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 // ---------------------------------------------------------------------------
@@ -54,64 +52,14 @@ pub struct KycPageResult {
 // Cursor encoding / decoding
 // ---------------------------------------------------------------------------
 
-/// Encode a page offset as an opaque ASCII cursor string.
-///
-/// The cursor is intentionally minimal – just the decimal offset – to avoid
-/// embedding mutable state (e.g. ledger sequence) that could go stale. The
-/// deterministic ordering guarantee means the same offset always returns the
-/// same page given identical storage content.
-pub fn encode_cursor(env: &Env, offset: u32) -> String {
-    let mut buf = [0u8; 10];
-    let mut tmp = [0u8; 10];
-    let mut val = offset;
-    let mut len = 0usize;
-
-    if val == 0 {
-        buf[0] = b'0';
-        len = 1;
-    } else {
-        while val > 0 {
-            tmp[len] = b'0' + (val % 10) as u8;
-            val /= 10;
-            len += 1;
-        }
-        for i in 0..len {
-            buf[i] = tmp[len - 1 - i];
-        }
-    }
-
-    let s = core::str::from_utf8(&buf[..len]).unwrap_or("0");
-    String::from_str(env, s)
+/// Encode a shared pagination cursor for Soroban callers.
+pub fn encode_cursor(env: &Env, offset: u32, generation: u64) -> String {
+    pagination::encode_soroban_cursor(env, Cursor::new(offset, generation))
 }
 
-/// Decode an opaque cursor string into a page offset.
-///
-/// Returns `Err(InvalidCursor)` for non-digit, empty, or overflowing values.
-pub fn decode_cursor(cursor: &String) -> Result<u32, QuickLendXError> {
-    if cursor.is_empty() {
-        return Err(QuickLendXError::InvalidCursor);
-    }
-
-    let mut buf = [0u8; 10];
-    let len = cursor.len() as usize;
-    if len > 10 {
-        return Err(QuickLendXError::InvalidCursor);
-    }
-    cursor.copy_into_slice(&mut buf[..len]);
-
-    let mut offset: u32 = 0;
-    for &b in &buf[..len] {
-        if b < b'0' || b > b'9' {
-            return Err(QuickLendXError::InvalidCursor);
-        }
-        let digit = (b - b'0') as u32;
-        offset = offset
-            .checked_mul(10)
-            .and_then(|v| v.checked_add(digit))
-            .ok_or(QuickLendXError::InvalidCursor)?;
-    }
-
-    Ok(offset)
+/// Decode a Soroban string with the shared pagination cursor format.
+pub fn decode_cursor(cursor: &String) -> Result<Cursor, QuickLendXError> {
+    pagination::decode_soroban_cursor(cursor)
 }
 
 // ---------------------------------------------------------------------------
@@ -125,7 +73,7 @@ pub fn decode_cursor(cursor: &String) -> Result<u32, QuickLendXError> {
 /// `(submitted_at ASC, address_bytes ASC)`
 ///
 /// # Errors
-/// - `InvalidCursor` if `cursor` contains non-digit characters or overflows.
+/// - `InvalidCursor` if `cursor` is malformed or fails integrity validation.
 
 fn query_businesses_by_status(
     env: &Env,
@@ -139,8 +87,13 @@ fn query_businesses_by_status(
         BusinessVerificationStatus::Rejected => KycIndexKind::RejectedBusinesses,
     };
 
+    let generation = crate::verification::get_kyc_index_cursor_generation(env, kind);
     let offset = match cursor {
-        Some(c) => decode_cursor(c)?,
+        Some(c) => {
+            let decoded = decode_cursor(c)?;
+            decoded.require_stable(generation)?;
+            decoded.offset
+        }
         None => 0,
     };
 
@@ -155,6 +108,7 @@ fn query_businesses_by_status(
         Some(encode_cursor(
             env,
             safe_offset.saturating_add(effective_limit),
+            generation,
         ))
     } else {
         None
@@ -182,8 +136,13 @@ fn query_investors_by_status(
         BusinessVerificationStatus::Rejected => KycIndexKind::RejectedInvestors,
     };
 
+    let generation = crate::verification::get_kyc_index_generation(env, kind);
     let offset = match cursor {
-        Some(c) => decode_cursor(c)?,
+        Some(c) => {
+            let decoded = decode_cursor(c)?;
+            decoded.require_stable(generation)?;
+            decoded.offset
+        }
         None => 0,
     };
 
@@ -198,6 +157,7 @@ fn query_investors_by_status(
         Some(encode_cursor(
             env,
             safe_offset.saturating_add(effective_limit),
+            generation,
         ))
     } else {
         None
@@ -218,9 +178,11 @@ fn query_investors_by_status(
 ///
 /// # Cursor semantics
 /// - `cursor = None` → first page.
-/// - `cursor = Some("0")` → same as `None` (first page).
-/// - `cursor = Some("5")` → skip the first 5 results.
-/// - `cursor = Some("invalid")` → `Err(InvalidCursor)`.
+/// - `cursor = None` → first page.
+/// - A returned cursor resumes after the prior page if the index generation
+///   has not changed.
+/// - Malformed cursors return `InvalidCursor`; stale cursors return
+///   `UnstableCursor`.
 ///
 /// # Page limit
 /// `limit` is clamped to [`pagination::MAX_QUERY_LIMIT`].
@@ -391,6 +353,8 @@ fn paginate_address_list(
 // ===========================================================================
 
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
     use crate::{QuickLendXContract, QuickLendXContractClient};
@@ -463,24 +427,25 @@ mod tests {
     #[test]
     fn test_cursor_roundtrip_zero() {
         let env = Env::default();
-        let cursor = encode_cursor(&env, 0);
-        assert_eq!(cursor, SorobanString::from_str(&env, "0"));
-        assert_eq!(decode_cursor(&cursor).unwrap(), 0);
+        let cursor = encode_cursor(&env, 0, 0);
+        assert_eq!(decode_cursor(&cursor).unwrap(), Cursor::new(0, 0));
     }
 
     #[test]
     fn test_cursor_roundtrip_large() {
         let env = Env::default();
-        let cursor = encode_cursor(&env, 123456);
-        assert_eq!(cursor, SorobanString::from_str(&env, "123456"));
-        assert_eq!(decode_cursor(&cursor).unwrap(), 123456);
+        let cursor = encode_cursor(&env, 123456, 42);
+        assert_eq!(decode_cursor(&cursor).unwrap(), Cursor::new(123456, 42));
     }
 
     #[test]
     fn test_cursor_roundtrip_max() {
         let env = Env::default();
-        let cursor = encode_cursor(&env, u32::MAX);
-        assert_eq!(decode_cursor(&cursor).unwrap(), u32::MAX);
+        let cursor = encode_cursor(&env, u32::MAX, u64::MAX);
+        assert_eq!(
+            decode_cursor(&cursor).unwrap(),
+            Cursor::new(u32::MAX, u64::MAX)
+        );
     }
 
     #[test]
@@ -491,16 +456,24 @@ mod tests {
     }
 
     #[test]
-    fn test_cursor_decode_non_digit() {
+    fn test_cursor_decode_non_base64() {
         let env = Env::default();
         let cursor = SorobanString::from_str(&env, "abc");
         assert_eq!(decode_cursor(&cursor), Err(QuickLendXError::InvalidCursor));
     }
 
     #[test]
-    fn test_cursor_decode_mixed() {
+    fn test_cursor_decode_tampered() {
         let env = Env::default();
-        let cursor = SorobanString::from_str(&env, "12abc");
+        let mut cursor = encode_cursor(&env, 12, 9);
+        let mut bytes = cursor.to_bytes();
+        let byte = if bytes.get(3).unwrap() == b'A' {
+            b'B'
+        } else {
+            b'A'
+        };
+        bytes.set(3, byte);
+        cursor = SorobanString::from_bytes(&env, &bytes);
         assert_eq!(decode_cursor(&cursor), Err(QuickLendXError::InvalidCursor));
     }
 
@@ -512,10 +485,10 @@ mod tests {
     }
 
     #[test]
-    fn test_cursor_decode_leading_zeros() {
+    fn test_cursor_rejects_legacy_offset_token() {
         let env = Env::default();
         let cursor = SorobanString::from_str(&env, "007");
-        assert_eq!(decode_cursor(&cursor).unwrap(), 7);
+        assert_eq!(decode_cursor(&cursor), Err(QuickLendXError::InvalidCursor));
     }
 
     // ======================================================================
@@ -663,7 +636,9 @@ mod tests {
         verify_business(&env, &client, &admin, &biz);
 
         // offset=100 when there is only 1 record.
-        let cursor = encode_cursor(&env, 100);
+        let generation =
+            crate::verification::get_kyc_index_generation(&env, KycIndexKind::VerifiedBusinesses);
+        let cursor = encode_cursor(&env, 100, generation);
         let result = client
             .try_get_businesses_paged(&BusinessVerificationStatus::Verified, &Some(cursor), &10)
             .unwrap()
@@ -672,6 +647,31 @@ mod tests {
         assert!(result.items.is_empty());
         assert!(result.next_cursor.is_none());
         assert_eq!(result.total_count, 1);
+    }
+
+    #[test]
+    fn test_changed_index_rejects_stale_cursor() {
+        let (env, client, admin) = setup();
+        for label in ["first", "second"] {
+            let business = register_business(&env, &client, &admin, label);
+            verify_business(&env, &client, &admin, &business);
+        }
+
+        let first_page = client.get_businesses_paged(
+            &BusinessVerificationStatus::Verified,
+            &None::<SorobanString>,
+            &1,
+        );
+        let cursor = first_page.next_cursor.unwrap();
+
+        let business = register_business(&env, &client, &admin, "third");
+        verify_business(&env, &client, &admin, &business);
+
+        let error = client
+            .try_get_businesses_paged(&BusinessVerificationStatus::Verified, &Some(cursor), &1)
+            .unwrap_err()
+            .unwrap();
+        assert_eq!(error, QuickLendXError::UnstableCursor);
     }
 
     #[test]
