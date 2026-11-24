@@ -19,7 +19,7 @@ fn setup() -> (Env, QuickLendXContractClient<'static>, Address) {
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    let _ = client.try_initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
+    let _ = client.try_initialize_protocol_limits(&admin);
     (env, client, admin)
 }
 

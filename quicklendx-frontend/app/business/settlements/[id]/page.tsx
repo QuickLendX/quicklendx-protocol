@@ -3,48 +3,15 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
 import { useParams, notFound } from "next/navigation";
-import { isHexId } from "../../../lib/ids";
-
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
-
-interface FeeLineItem {
-  label: string;
-  amount: number;
-}
-
-interface SettlementReceipt {
-  id: string;
-  settlementDate: string;
-  status: "SETTLED" | "PENDING" | "DELAYED";
-  invoice: {
-    id: string;
-    debtor: string;
-    debtorVerified: boolean;
-    amount: number;
-    issueDate: string;
-    dueDate: string;
-    description: string;
-  };
-  funding: {
-    fundedDate: string;
-    fullFundingAt: string;
-    investorCount: number;
-    escrowRelease: string;
-    paymentReceived: boolean;
-  };
-  calculation: {
-    grossAmount: number;
-    fees: FeeLineItem[];
-    netPayout: number;
-  };
-  transfer: {
-    accountLast4: string;
-    transferredAt: string;
-    stellarTxHash: string;
-  };
-}
+import { isHexId, truncateAddress } from "../../../lib/ids";
+import { useWallet } from "../../../lib/useWallet";
+import { getSettlement, getInvoice, SettlementStatus } from "./_lib/data";
+import {
+  ReceiptViewModel,
+  toReceiptViewModel,
+  toJsonExport,
+} from "./_lib/view-model";
+import { ReceiptSkeleton } from "./ReceiptSkeleton";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -66,44 +33,26 @@ function formatDisplayDate(iso: string): string {
   }
 }
 
-function truncateMiddle(str: string, prefixLen = 6, suffixLen = 4): string {
-  if (str.length <= prefixLen + suffixLen + 2) return str;
-  return `${str.slice(0, prefixLen)}…${str.slice(-suffixLen)}`;
-}
-
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
 
-const StatusBadge: React.FC<{ status: SettlementStatus }> = ({ status }) => {
-  const map: Record<SettlementStatus, { label: string; cls: string }> = {
-    Paid: {
-      label: "✓ Settled",
-      cls: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    },
-    Pending: {
-      label: "⏳ Pending",
-      cls: "bg-amber-50 text-amber-700 border-amber-200",
-    },
-    Defaulted: {
-      label: "⚠ Defaulted",
-      cls: "bg-red-50 text-red-700 border-red-200",
-    },
-  };
-
-  const { label, cls } = map[status] || {
-    label: status,
-    cls: "bg-gray-50 text-gray-700 border-gray-200",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${cls}`}
-    >
-      {label}
-    </span>
-  );
+const STATUS_CLASSES: Record<SettlementStatus, string> = {
+  Paid: "bg-emerald-50 text-emerald-700 border-emerald-200",
+  Pending: "bg-amber-50 text-amber-700 border-amber-200",
+  Defaulted: "bg-red-50 text-red-700 border-red-200",
 };
+
+const StatusBadge: React.FC<{
+  status: SettlementStatus;
+  label: string;
+}> = ({ status, label }) => (
+  <span
+    className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${STATUS_CLASSES[status]}`}
+  >
+    {label}
+  </span>
+);
 
 /** Copy button with live text feedback */
 const CopyButton: React.FC<{ value: string; label?: string }> = ({
@@ -320,23 +269,12 @@ const ExportButton: React.FC<{
 
 export default function SettlementReceiptPage() {
   const params = useParams();
-  const requestedId =
-    typeof params?.id === "string" ? (params.id as string) : undefined;
-
-  // Reject malformed identifiers before any API call is made: settlement ids
-  // are on-chain hex strings (`0x` + hex digits, see
-  // `backend/src/validators/shared.ts` `hexStringSchema`).
-  if (requestedId !== undefined && !isHexId(requestedId)) {
-    notFound();
-  }
-
-  const receiptId = requestedId ?? PLACEHOLDER.id;
-
+  const settlementId = isHexId(params?.id) ? params.id : null;
   const { address, connect } = useWallet();
 
   const [viewModel, setViewModel] = useState<ReceiptViewModel | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [notFound, setNotFound] = useState<boolean>(false);
+  const [receiptNotFound, setReceiptNotFound] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   // aria-live region for export feedback
@@ -354,7 +292,7 @@ export default function SettlementReceiptPage() {
     abortControllerRef.current = controller;
 
     setLoading(true);
-    setNotFound(false);
+    setReceiptNotFound(false);
     setError(null);
 
     try {
@@ -385,7 +323,7 @@ export default function SettlementReceiptPage() {
         errObj?.message?.toLowerCase().includes("not found");
 
       if (is404) {
-        setNotFound(true);
+        setReceiptNotFound(true);
       } else {
         setError(errObj?.message || "Failed to load settlement receipt");
       }
@@ -402,7 +340,7 @@ export default function SettlementReceiptPage() {
     } else {
       setViewModel(null);
       setLoading(false);
-      setNotFound(false);
+      setReceiptNotFound(false);
       setError(null);
     }
 
@@ -412,6 +350,10 @@ export default function SettlementReceiptPage() {
       }
     };
   }, [address, settlementId, fetchData]);
+
+  if (!settlementId) {
+    notFound();
+  }
 
   const handleDownloadJSON = async () => {
     if (!viewModel) return;
@@ -526,7 +468,7 @@ export default function SettlementReceiptPage() {
   }
 
   // 3. 404 state: Receipt not found
-  if (notFound) {
+  if (receiptNotFound) {
     return (
       <div className="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8 print:bg-white print:py-4">
         <div className="max-w-3xl mx-auto space-y-6">
@@ -706,7 +648,7 @@ export default function SettlementReceiptPage() {
               Settlement Receipt
             </h1>
             <div className="mt-1 flex items-center gap-1.5 font-mono text-sm text-[#64748B]">
-              <span>#{truncateMiddle(viewModel.id)}</span>
+              <span>#{truncateAddress(viewModel.id)}</span>
               <CopyButton
                 value={viewModel.id}
                 label="Copy full receipt ID to clipboard"
@@ -716,7 +658,10 @@ export default function SettlementReceiptPage() {
               {formatDisplayDate(viewModel.settlementDate)}
             </p>
           </div>
-          <StatusBadge status={viewModel.status} />
+          <StatusBadge
+            status={viewModel.status}
+            label={viewModel.statusLabel}
+          />
         </div>
 
         {/* Block 1: Invoice Details */}
