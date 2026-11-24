@@ -5,7 +5,7 @@ import {
   resetApiKeys,
   getKeyMapSize,
   AuthenticatedRequest,
-} from "../middleware/apiKeyAuth";
+} from "../middleware/api-key-auth";
 
 describe("apiKeyAuth middleware & resetApiKeys failure boundaries", () => {
   const next = jest.fn();
