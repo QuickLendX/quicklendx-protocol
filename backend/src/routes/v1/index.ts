@@ -36,7 +36,11 @@ router.use("/settlements", settlementRoutes);
 // FIX: portfolioRoutes was imported but never mounted – /portfolio always returned 404.
 // This was a drift between openapi.yaml (which documents /portfolio) and the live routes.
 router.use("/portfolio", portfolioRoutes);
-router.use("/test-errors", testErrorRoutes);
+// Gate test-error routes to non-production only to prevent detail leakage and
+// to eliminate the process.env.NODE_ENV mutation race condition (issue #3216).
+if (process.env.NODE_ENV !== "production") {
+  router.use("/test-errors", testErrorRoutes);
+}
 router.use("/webhooks", webhookRoutes);
 router.use("/notifications", notificationRoutes);
 router.use("/exports", exportRoutes);

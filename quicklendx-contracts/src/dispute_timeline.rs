@@ -111,16 +111,14 @@ fn dispute_review_at_key(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
 
 /// Persist the exact ledger timestamp when a dispute entered `UnderReview`.
 pub(crate) fn set_under_review_timestamp(env: &Env, invoice_id: &BytesN<32>, timestamp: u64) {
-    env.storage()
-        .persistent()
-        .set(&dispute_review_at_key(invoice_id), &timestamp);
+    let key = dispute_review_at_key(invoice_id);
+    crate::storage::persistent_set(env, &key, &timestamp);
 }
 
 /// Read the persisted `UnderReview` timestamp, if the dispute reached review.
 pub(crate) fn get_under_review_timestamp(env: &Env, invoice_id: &BytesN<32>) -> Option<u64> {
-    env.storage()
-        .persistent()
-        .get(&dispute_review_at_key(invoice_id))
+    let key = dispute_review_at_key(invoice_id);
+    crate::storage::persistent_get(env, &key)
 }
 
 /// Remove any stale persisted `UnderReview` timestamp for a dispute.

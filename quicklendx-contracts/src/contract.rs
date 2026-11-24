@@ -241,7 +241,7 @@ impl QuickLendXContract {
         // 7. Event, audit trail, notification (a notification failure must
         //    not undo the invoice).
         crate::events::emit_invoice_uploaded(&env, &invoice);
-        crate::audit::log_invoice_created(&env, &invoice);
+        crate::audit::log_invoice_created(&env, &invoice)?;
         let _ = crate::notifications::NotificationSystem::notify_invoice_created(&env, &invoice);
 
         // 8. Remember the result for this (business, nonce).
@@ -419,11 +419,11 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> u32 {
+    pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> Result<u32, QuickLendXError> {
         BidStorage::cleanup_expired_bids(&env, &invoice_id)
     }
 
-    pub fn get_ranked_bids(env: Env, invoice_id: BytesN<32>) -> Vec<Bid> {
+    pub fn get_ranked_bids(env: Env, invoice_id: BytesN<32>) -> Result<Vec<Bid>, QuickLendXError> {
         BidStorage::rank_bids(&env, &invoice_id)
     }
 
@@ -432,25 +432,33 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         offset: u32,
         limit: u32,
-    ) -> crate::types::PaginatedBids {
+    ) -> Result<crate::types::PaginatedBids, QuickLendXError> {
         let (items, total_count, has_more) =
-            BidStorage::rank_bids_paged(&env, &invoice_id, offset, limit);
-        crate::types::PaginatedBids {
+            BidStorage::rank_bids_paged(&env, &invoice_id, offset, limit)?;
+        Ok(crate::types::PaginatedBids {
             items,
             total_count,
             has_more,
-        }
+        })
     }
 
-    pub fn get_best_bid(env: Env, invoice_id: BytesN<32>) -> Option<Bid> {
+    pub fn get_best_bid(env: Env, invoice_id: BytesN<32>) -> Result<Option<Bid>, QuickLendXError> {
         BidStorage::get_best_bid(&env, &invoice_id)
     }
 
-    pub fn get_bids_by_status(env: Env, invoice_id: BytesN<32>, status: BidStatus) -> Vec<Bid> {
+    pub fn get_bids_by_status(
+        env: Env,
+        invoice_id: BytesN<32>,
+        status: BidStatus,
+    ) -> Result<Vec<Bid>, QuickLendXError> {
         BidStorage::get_bids_by_status(&env, &invoice_id, status)
     }
 
-    pub fn get_bids_by_investor(env: Env, invoice_id: BytesN<32>, investor: Address) -> Vec<Bid> {
+    pub fn get_bids_by_investor(
+        env: Env,
+        invoice_id: BytesN<32>,
+        investor: Address,
+    ) -> Result<Vec<Bid>, QuickLendXError> {
         BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
     }
 
@@ -666,8 +674,8 @@ impl QuickLendXContract {
             return Ok(());
         }
         // #2439 – rate-limit on the invoice owner
-        let invoice =
-            InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        let invoice = InvoiceStorage::get(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
         check_and_record_mutation(&env, &invoice.business)?;
         // Bidding is only permitted while the invoice is open for funding.
         // Pending (unverified) and any terminal/Funded state must reject new bids.
@@ -805,8 +813,8 @@ impl QuickLendXContract {
 
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
-        let invoice = InvoiceStorage::get(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        let invoice =
+            InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         // Only a Funded invoice may have its escrow released. This also covers
         // the "no escrow exists" case (Verified/Pending/Refunded invoices).
         if invoice.status != InvoiceStatus::Funded {

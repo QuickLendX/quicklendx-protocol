@@ -1774,6 +1774,219 @@ fn test_invoice_settled_includes_amount_and_ledger() {
     assert_eq!(p.ledger, expected_ledger, "ledger sequence mismatch");
 }
 
+// ============================================================================
+// 26. Module-split topic parity snapshot
+// ============================================================================
+
+/// Records the emitted first-topic `Symbol` for emitters across every domain
+/// submodule (`invoice`, `bid`, `escrow`, `kyc`, `fees`, `dispute`, `backup`,
+/// `migration`, `admin`) invoked via the top-level `crate::events::*`
+/// re-exports, and asserts exact 1-to-1 parity against the pre-split topic
+/// snapshot.
+#[test]
+fn test_events_module_split_topic_parity_snapshot() {
+    use crate::events::{
+        emit_admin_initialized, emit_admin_set, emit_audit_validation, emit_backup_archived,
+        emit_backup_created, emit_bid_expiry_grace_updated, emit_bid_ttl_updated,
+        emit_dispute_created, emit_dispute_rejected, emit_dispute_resolved,
+        emit_dispute_under_review, emit_escrow_refunded, emit_escrow_released,
+        emit_incident_mode_entered, emit_incident_mode_exited, emit_insurance_claimed,
+        emit_investment_withdrawn, emit_investor_unfrozen, emit_invoice_funded,
+        emit_invoice_status_updated, emit_kyc_rejected, emit_kyc_revoked, emit_kyc_submitted,
+        emit_kyc_verified, emit_migration_completed, emit_migration_failed,
+        emit_migration_rolled_back, emit_migration_started, emit_paused, emit_platform_fee_routed,
+        emit_scan_item_failed, emit_schema_version_set, emit_treasury_configured,
+        emit_treasury_rotation_confirmed, emit_treasury_rotation_initiated, emit_ttl_extended,
+        emit_unpaused, emit_upgrade_cancelled, emit_upgrade_executed, emit_upgrade_scheduled,
+        TOPIC_MIGRATION_COMPLETED, TOPIC_MIGRATION_FAILED, TOPIC_MIGRATION_ROLLED_BACK,
+        TOPIC_MIGRATION_STARTED, TOPIC_SCHEMA_VERSION_SET, TOPIC_TREASURY_ROTATION_CANCELLED,
+        TOPIC_TREASURY_ROTATION_CONFIRMED, TOPIC_TREASURY_ROTATION_INITIATED,
+        TOPIC_UPGRADE_CANCELLED, TOPIC_UPGRADE_EXECUTED, TOPIC_UPGRADE_SCHEDULED,
+    };
+
+    // 1. Verify topic constant snapshot stability
+    assert_eq!(TOPIC_INVOICE_UPLOADED, "invoice_uploaded");
+    assert_eq!(TOPIC_INVOICE_VERIFIED, "invoice_verified");
+    assert_eq!(TOPIC_INVOICE_CANCELLED, "invoice_cancelled");
+    assert_eq!(TOPIC_INVOICE_SETTLED, "invoice_settled");
+    assert_eq!(TOPIC_INVOICE_DEFAULTED, "invoice_defaulted");
+    assert_eq!(TOPIC_INVOICE_EXPIRED, "invoice_expired");
+    assert_eq!(TOPIC_PARTIAL_PAYMENT, "partial_payment");
+    assert_eq!(TOPIC_PAYMENT_RECORDED, "payment_recorded");
+    assert_eq!(TOPIC_INVOICE_SETTLED_FINAL, "invoice_settled_final");
+    assert_eq!(TOPIC_INVOICE_FUNDED, "invoice_funded");
+    assert_eq!(TOPIC_BID_PLACED, "bid_placed");
+    assert_eq!(TOPIC_BID_ACCEPTED, "bid_accepted");
+    assert_eq!(TOPIC_BID_WITHDRAWN, "bid_withdrawn");
+    assert_eq!(TOPIC_BID_EXPIRED, "bid_expired");
+    assert_eq!(TOPIC_ESCROW_CREATED, "escrow_created");
+    assert_eq!(TOPIC_ESCROW_RELEASED, "escrow_released");
+    assert_eq!(TOPIC_ESCROW_REFUNDED, "escrow_refunded");
+    assert_eq!(TOPIC_DISPUTE_CREATED, "dispute_created");
+    assert_eq!(TOPIC_DISPUTE_UNDER_REVIEW, "dispute_under_review");
+    assert_eq!(TOPIC_DISPUTE_RESOLVED, "dispute_resolved");
+    assert_eq!(TOPIC_DISPUTE_REJECTED, "dispute_rejected");
+    assert_eq!(
+        TOPIC_TREASURY_ROTATION_INITIATED,
+        "treasury_rotation_initiated"
+    );
+    assert_eq!(
+        TOPIC_TREASURY_ROTATION_CONFIRMED,
+        "treasury_rotation_confirmed"
+    );
+    assert_eq!(
+        TOPIC_TREASURY_ROTATION_CANCELLED,
+        "treasury_rotation_cancelled"
+    );
+    assert_eq!(TOPIC_MIGRATION_STARTED, "migration_started");
+    assert_eq!(TOPIC_MIGRATION_COMPLETED, "migration_completed");
+    assert_eq!(TOPIC_MIGRATION_ROLLED_BACK, "migration_rolled_back");
+    assert_eq!(TOPIC_MIGRATION_FAILED, "migration_failed");
+    assert_eq!(TOPIC_SCHEMA_VERSION_SET, "schema_version_set");
+    assert_eq!(TOPIC_UPGRADE_SCHEDULED, "upg_sch");
+    assert_eq!(TOPIC_UPGRADE_CANCELLED, "upg_can");
+    assert_eq!(TOPIC_UPGRADE_EXECUTED, "upg_exe");
+
+    // 2. Emit events across every domain via crate::events::* and snapshot-compare topics
+    let env = Env::default();
+    let contract_id = env.register(QuickLendXContract, ());
+    let admin = Address::generate(&env);
+    let actor = Address::generate(&env);
+    let business = Address::generate(&env);
+    let investor = Address::generate(&env);
+    let currency = Address::generate(&env);
+    let id = BytesN::from_array(&env, &[7u8; 32]);
+    let reason = String::from_str(&env, "parity-check");
+    let kind = String::from_str(&env, "invoice");
+    let status = String::from_str(&env, "Verified");
+
+    env.as_contract(&contract_id, || {
+        // invoice
+        emit_invoice_funded(&env, &id, &investor, 1_000);
+        emit_invoice_status_updated(&env, &id, &status);
+        // bid
+        emit_bid_ttl_updated(&env, 7, 14, &admin);
+        emit_bid_expiry_grace_updated(&env, 3600, 7200, &admin);
+        // escrow
+        emit_escrow_released(&env, &id, &id, &business, 1_000);
+        emit_escrow_refunded(&env, &id, &id, &investor, 1_000);
+        emit_investment_withdrawn(&env, &id, &id, &investor, 1_000);
+        // kyc
+        emit_kyc_submitted(&env, &actor, false);
+        emit_kyc_verified(&env, &actor, &admin);
+        emit_kyc_rejected(&env, &actor, &admin, &reason);
+        emit_kyc_revoked(&env, &investor, &admin, &reason);
+        emit_investor_unfrozen(&env, &investor, &admin);
+        // fees & treasury
+        emit_insurance_claimed(&env, &id, &investor, 500);
+        emit_platform_fee_routed(&env, &id, &actor, 50, &currency);
+        emit_treasury_configured(&env, &actor, &admin);
+        emit_treasury_rotation_initiated(&env, &admin, &actor, 100);
+        emit_treasury_rotation_confirmed(&env, &admin, &actor);
+        // dispute
+        emit_dispute_created(&env, &id, &actor, &reason);
+        emit_dispute_under_review(&env, &id, &admin);
+        emit_dispute_resolved(&env, &id, &admin, &reason);
+        emit_dispute_rejected(&env, &id, &admin, &reason);
+        // backup
+        emit_backup_created(&env, &id, 10);
+        emit_backup_archived(&env, &id);
+        // migration
+        emit_schema_version_set(&env, 2, &admin);
+        emit_migration_started(&env, 1, 2, &admin);
+        emit_migration_completed(&env, 1, 2, 42, &admin);
+        emit_migration_rolled_back(&env, 1, 2, &reason, &admin);
+        emit_migration_failed(&env, 1, 2, 10, &reason, &admin);
+        // admin
+        emit_admin_set(&env, &admin);
+        emit_admin_initialized(&env, &admin);
+        emit_paused(&env, &admin);
+        emit_unpaused(&env, &admin);
+        emit_ttl_extended(&env, &kind, 5);
+        emit_scan_item_failed(&env, &id, 1);
+        emit_audit_validation(&env, &id, true);
+        emit_incident_mode_entered(&env, &admin, &reason);
+        emit_incident_mode_exited(&env, &admin);
+        emit_upgrade_scheduled(&env, &admin, &id, 999);
+        emit_upgrade_cancelled(&env, &admin, &id);
+        emit_upgrade_executed(&env, &admin, &id);
+    });
+
+    let expected_topics: [&str; 40] = [
+        // invoice
+        TOPIC_INVOICE_FUNDED,
+        "invoice_status_updated",
+        // bid
+        "bid_ttl_updated",
+        "bid_expiry_grace_updated",
+        // escrow
+        TOPIC_ESCROW_RELEASED,
+        TOPIC_ESCROW_REFUNDED,
+        "investment_withdrawn",
+        // kyc
+        "kyc_submitted",
+        "kyc_verified",
+        "kyc_rejected",
+        "kyc_revoked",
+        "investor_unfrozen",
+        // fees & treasury
+        "insurance_claimed",
+        "platform_fee_routed",
+        "treasury_configured",
+        TOPIC_TREASURY_ROTATION_INITIATED,
+        TOPIC_TREASURY_ROTATION_CONFIRMED,
+        // dispute
+        TOPIC_DISPUTE_CREATED,
+        TOPIC_DISPUTE_UNDER_REVIEW,
+        TOPIC_DISPUTE_RESOLVED,
+        TOPIC_DISPUTE_REJECTED,
+        // backup
+        "backup_created",
+        "backup_archived",
+        // migration
+        TOPIC_SCHEMA_VERSION_SET,
+        TOPIC_MIGRATION_STARTED,
+        TOPIC_MIGRATION_COMPLETED,
+        TOPIC_MIGRATION_ROLLED_BACK,
+        TOPIC_MIGRATION_FAILED,
+        // admin
+        "admin_set",
+        "admin_initialized",
+        "paused",
+        "unpaused",
+        "ttl_extended",
+        "scan_item_failed",
+        "audit_validation",
+        "incident_mode_entered",
+        "incident_mode_exited",
+        TOPIC_UPGRADE_SCHEDULED,
+        TOPIC_UPGRADE_CANCELLED,
+        TOPIC_UPGRADE_EXECUTED,
+    ];
+
+    use soroban_sdk::xdr;
+    let all_events = env.events().all();
+    let events = all_events.events();
+    assert_eq!(
+        events.len(),
+        expected_topics.len(),
+        "emitted event count must match snapshot"
+    );
+
+    for (idx, (event, expected)) in events.iter().zip(expected_topics.iter()).enumerate() {
+        let xdr::ContractEventBody::V0(body) = &event.body;
+        let expected_sym = Symbol::new(&env, expected);
+        let expected_xdr = xdr::ScVal::try_from_val(&env, &expected_sym).expect("topic to ScVal");
+        assert_eq!(
+            body.topics.first(),
+            Some(&expected_xdr),
+            "topic mismatch at index {}: expected '{}'",
+            idx,
+            expected
+        );
+    }
+}
+
 // Helper used only in this test module - suppress unused warning
 #[allow(dead_code)]
 fn _use_count_events(env: &Env) {

@@ -49,8 +49,8 @@ mod test_bid_ranking {
     }
 
     fn assert_best_matches_first_ranked(env: &Env, invoice: &BytesN<32>) {
-        let ranked = BidStorage::rank_bids(env, invoice);
-        let best = BidStorage::get_best_bid(env, invoice);
+        let ranked = BidStorage::rank_bids(env, invoice).expect("bid ranking should succeed");
+        let best = BidStorage::get_best_bid(env, invoice).expect("best bid query should succeed");
 
         if ranked.len() == 0 {
             assert!(best.is_none());
@@ -108,7 +108,7 @@ mod test_bid_ranking {
         persist_bid(&env, &bid_mid);
         persist_bid(&env, &bid_low);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 3);
         assert_eq!(ranked.get(0).unwrap().bid_id, bid_top.bid_id);
         assert_eq!(ranked.get(1).unwrap().bid_id, bid_mid.bid_id);
@@ -148,7 +148,7 @@ mod test_bid_ranking {
         persist_bid(&env, &older);
         persist_bid(&env, &newer);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 2);
         assert_eq!(ranked.get(0).unwrap().timestamp, 20);
         assert_eq!(ranked.get(1).unwrap().timestamp, 10);
@@ -185,7 +185,7 @@ mod test_bid_ranking {
         persist_bid(&env, &lower_id);
         persist_bid(&env, &higher_id);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 2);
         assert_eq!(ranked.get(0).unwrap().bid_id, higher_id.bid_id);
         assert_eq!(ranked.get(1).unwrap().bid_id, lower_id.bid_id);
@@ -223,11 +223,11 @@ mod test_bid_ranking {
         persist_bid(&env, &placed);
         persist_bid(&env, &cancelled);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 1);
         assert_eq!(ranked.get(0).unwrap().bid_id, placed.bid_id);
 
-        let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
+        let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").unwrap();
         assert_eq!(best.bid_id, placed.bid_id);
     }
 
@@ -265,7 +265,7 @@ mod test_bid_ranking {
         persist_bid(&env, &lower_expected);
         persist_bid(&env, &higher_expected);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, higher_expected.bid_id);
         assert_best_matches_first_ranked(&env, &invoice);
     }
@@ -304,7 +304,7 @@ mod test_bid_ranking {
         persist_bid(&env, &lower_amount);
         persist_bid(&env, &higher_amount);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, higher_amount.bid_id);
         assert_best_matches_first_ranked(&env, &invoice);
     }
@@ -343,7 +343,7 @@ mod test_bid_ranking {
         persist_bid(&env, &older);
         persist_bid(&env, &newer);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, newer.bid_id);
         assert_best_matches_first_ranked(&env, &invoice);
     }
@@ -381,7 +381,7 @@ mod test_bid_ranking {
         persist_bid(&env, &lower_id);
         persist_bid(&env, &higher_id);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, higher_id.bid_id);
         assert_best_matches_first_ranked(&env, &invoice);
     }
@@ -439,7 +439,7 @@ mod test_bid_ranking {
                 persist_bid(&env, &bid_a);
             }
 
-            let ranked = BidStorage::rank_bids(&env, &invoice);
+            let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
             assert_eq!(ranked.get(0).unwrap().bid_id, bid_c.bid_id);
             assert_best_matches_first_ranked(&env, &invoice);
         }
@@ -496,7 +496,7 @@ mod test_bid_ranking {
         persist_bid(&env, &bid_low);
 
         // Verify initial ordering: high > mid > low
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 3);
         assert_eq!(ranked.get(0).unwrap().bid_id, bid_high.bid_id);
 
@@ -506,11 +506,11 @@ mod test_bid_ranking {
         env.ledger().with_mut(|li| li.timestamp = expired_timestamp);
 
         // Run cleanup to expire the high bid
-        BidStorage::refresh_expired_bids(&env, &invoice);
+        BidStorage::refresh_expired_bids(&env, &invoice).expect("expired bid refresh should succeed");
 
         // Verify: high is now expired, get_best_bid should return mid
-        let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").unwrap();
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
 
         assert_eq!(ranked.len(), 2, "expired bid should be excluded");
         assert_eq!(
@@ -560,8 +560,8 @@ mod test_bid_ranking {
         persist_bid(&env, &bid_expired);
 
         // Run cleanup
-        let cleaned = BidStorage::cleanup_expired_bids(&env, &invoice);
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let cleaned = BidStorage::cleanup_expired_bids(&env, &invoice).expect("expired bid cleanup should succeed");
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
 
         // bid_soon should still be placed, bid_expired should be excluded
         assert_eq!(
@@ -641,8 +641,8 @@ mod test_bid_ranking {
         persist_bid(&env, &bid_cancelled);
         persist_bid(&env, &bid_expired);
 
-        let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").unwrap();
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
 
         // Only Placed bids should be in ranked
         assert_eq!(ranked.len(), 1, "only Placed bids should be ranked");
@@ -731,15 +731,15 @@ mod test_bid_ranking {
         persist_bid(&env, &bid5);
 
         // Initial state: 5 placed bids
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 5);
 
         // Advance to just after bid1 expires but before bid2
         env.ledger().with_mut(|li| li.timestamp = 20);
-        BidStorage::cleanup_expired_bids(&env, &invoice);
+        BidStorage::cleanup_expired_bids(&env, &invoice).expect("expired bid cleanup should succeed");
 
-        let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").unwrap();
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 4, "1 expired");
         assert_eq!(
             best.bid_id,
@@ -749,10 +749,10 @@ mod test_bid_ranking {
 
         // Advance to after bid2 expires
         env.ledger().with_mut(|li| li.timestamp = 30);
-        BidStorage::cleanup_expired_bids(&env, &invoice);
+        BidStorage::cleanup_expired_bids(&env, &invoice).expect("expired bid cleanup should succeed");
 
-        let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").unwrap();
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 3, "2 expired");
         assert_eq!(
             best.bid_id,
@@ -803,10 +803,10 @@ mod test_bid_ranking {
 
         // Advance past expiration
         env.ledger().with_mut(|li| li.timestamp = 600);
-        BidStorage::cleanup_expired_bids(&env, &invoice);
+        BidStorage::cleanup_expired_bids(&env, &invoice).expect("expired bid cleanup should succeed");
 
-        let best = BidStorage::get_best_bid(&env, &invoice);
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed");
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
 
         assert!(
             best.is_none(),
@@ -872,16 +872,16 @@ mod test_bid_ranking {
         // Advance and run cleanup multiple times
         env.ledger().with_mut(|li| li.timestamp = 200);
 
-        let cleaned1 = BidStorage::cleanup_expired_bids(&env, &invoice);
-        let cleaned2 = BidStorage::cleanup_expired_bids(&env, &invoice);
-        let cleaned3 = BidStorage::cleanup_expired_bids(&env, &invoice);
+        let cleaned1 = BidStorage::cleanup_expired_bids(&env, &invoice).expect("expired bid cleanup should succeed");
+        let cleaned2 = BidStorage::cleanup_expired_bids(&env, &invoice).expect("expired bid cleanup should succeed");
+        let cleaned3 = BidStorage::cleanup_expired_bids(&env, &invoice).expect("expired bid cleanup should succeed");
 
         assert_eq!(cleaned1, 1, "first cleanup should expire 1 bid");
         assert_eq!(cleaned2, 0, "second cleanup should be idempotent");
         assert_eq!(cleaned3, 0, "third cleanup should be idempotent");
 
-        let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").unwrap();
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
 
         assert_eq!(ranked.len(), 2);
         assert_eq!(
@@ -970,7 +970,7 @@ mod test_bid_ranking {
             persist_bid(&env, bid);
         }
 
-        let ranked = BidStorage::rank_bids(&env, &invoice_id);
+        let ranked = BidStorage::rank_bids(&env, &invoice_id).expect("bid ranking should succeed");
 
         assert_eq!(ranked.len(), 4);
         // Tier 1 (profit): high_profit (2_000) beats every other bid.
@@ -986,7 +986,7 @@ mod test_bid_ranking {
         assert_eq!(ranked.get(3).unwrap().bid_id, equal_old_lower_id.bid_id);
 
         // Invariant: best_bid == rank_bids[0] when ranking is non-empty.
-        let best = BidStorage::get_best_bid(&env, &invoice_id).unwrap();
+        let best = BidStorage::get_best_bid(&env, &invoice_id).expect("best bid query should succeed").unwrap();
         assert_eq!(best.bid_id, ranked.get(0).unwrap().bid_id);
     }
 }

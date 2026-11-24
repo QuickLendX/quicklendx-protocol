@@ -213,4 +213,4 @@ The primary residual risk is admin key compromise, which should be mitigated thr
 
 - [Soroban Security Best Practices](https://soroban.stellar.org/docs/learn/security)
 - [Smart Contract Security Verification Standard](https://github.com/securing/SCSVS)
-- [QuickLendX Protocol Limits Documentation](../docs/contracts/protocol-limits.md)
+- [QuickLendX Protocol Limits Documentation](../../../docs/contracts/protocol-limits.md)
