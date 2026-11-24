@@ -64,7 +64,7 @@ export const RankedBidsResponseSchema = z.object({
 });
 
 const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
+  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
 
 export async function fetchInvoices(params?: {
   status?: string;

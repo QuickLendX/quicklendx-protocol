@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   preset: "ts-jest",
   testEnvironment: "node",
   testMatch: ["**/*.test.ts"],
@@ -61,7 +61,6 @@ module.exports = {
     "src/tests/openapi-contract.test.ts",
     "src/tests/kyc-service.kms.test.ts",
     "tests/openapi-conformance.test.ts",
-    "src/tests/kyc-service.test.ts",
     "tests/openapi-example-validation.test.ts",
     "tests/tenant-isolation.test.ts",
     "src/utils/pagination.properties.test.ts",
@@ -70,7 +69,6 @@ module.exports = {
     "src/tests/migration-integration.test.ts",
     "src/tests/streaming-exports.test.ts",
     "src/tests/load-shedding-concurrency.test.ts",
-    "src/tests/latency-tracker.test.ts",
     "src/tests/drift-severity.test.ts",
     "src/tests/cache-headers.endpoints.test.ts",
     "src/tests/request-signing.test.ts",

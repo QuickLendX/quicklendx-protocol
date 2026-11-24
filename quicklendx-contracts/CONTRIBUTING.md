@@ -101,6 +101,22 @@ cargo test --features fuzz-tests fuzz_store_invoice_valid_ranges
 
 ---
 
+### 🛠️ Makefile Targets
+
+The `Makefile` in `quicklendx-contracts` provides convenient phony targets for fast local development and CI:
+
+| Target | Command | Description |
+|---|---|---|
+| `make check` | `cargo check --lib` | Fast compilation check of the library without building WASM |
+| `make lint` | `cargo clippy --lib -- -D warnings` | Run Clippy linter with warnings treated as errors |
+| `make fmt-check` | `cargo fmt --all -- --check` | Verify formatting without modifying files |
+| `make fmt` | `cargo fmt --all` | Format all Rust source code |
+| `make test-lib` | `cargo test --lib` | Run unit tests directly without compiling WASM |
+| `make test` | `cargo test` (builds WASM first) | Full test suite execution |
+| `make size` | `./scripts/check-wasm-size.sh` | Verify WASM build size budget |
+| `make ci` | `fmt-check check lint test-lib size` | Run all standard fast CI checks |
+| `make build` | Builds WASM and bindings | Compile contract WASM and generate client bindings |
+| `make clean` | `cargo clean` and remove `bindings/` | Clean build artifacts and generated bindings |
 ### Checking Contract Features
 
 From `quicklendx-contracts/`, run:
@@ -118,13 +134,36 @@ compilation; run `cargo test` to execute tests.
 
 ### 🧹 Before Submitting
 
-Before opening a PR, ensure:
+Before opening a PR, ensure all checks pass:
 
+- **Run all CI checks:** `make ci` (runs `fmt-check`, `check`, `lint`, `test-lib`, and `size`)
+- Or run checks individually:
+  1. **Formatting:** `make fmt-check` (or `make fmt` to auto-format)
+  2. **Compilation check:** `make check`
+  3. **Lint:** `make lint`
+  4. **Tests:** `make test-lib` (or `make test` for full WASM + test suite)
+  5. **WASM size within budget:** `make size` (or `./scripts/check-wasm-size.sh`)
+  6. **Build succeeds:** `make build` compiles WASM and regenerates bindings
 1. **Build succeeds:** `make build` compiles WASM and regenerates bindings
 2. **Tests pass:** `cargo test` runs the full suite
 3. **Lint is clean:** `cargo clippy --workspace --all-targets -- -D warnings`
 4. **Format is clean:** `cargo fmt --all`
 5. **WASM size within budget:** `./scripts/check-wasm-size.sh`
+6. **Entrypoint docs match contract:** `./scripts/check-entrypoint-docs.sh` (ensures `README.md` entrypoint table matches `src/lib.rs` without compiling)
+
+### 📋 Verifying Entrypoint Documentation
+
+To check that all exported contract functions in `src/lib.rs` are documented in `README.md`:
+
+```bash
+# From quicklendx-contracts directory
+./scripts/check-entrypoint-docs.sh
+
+# View help and options
+./scripts/check-entrypoint-docs.sh --help
+```
+
+The script runs without compiling the contract and reports any missing or extra entrypoints with exit code 1.
 6. **Feature matrix compiles:** `bash scripts/check-features.sh`
 
 ---

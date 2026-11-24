@@ -73,13 +73,9 @@ pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {
-    let ttl = env.storage().persistent().get_ttl(key);
-
-    if ttl < PERSISTENT_BUMP_THRESHOLD {
-        env.storage()
-            .persistent()
-            .extend_ttl(key, PERSISTENT_BUMP_THRESHOLD, PERSISTENT_EXTEND_TO);
-    }
+    env.storage()
+        .persistent()
+        .extend_ttl(key, PERSISTENT_BUMP_THRESHOLD, PERSISTENT_EXTEND_TO);
 }
 
 pub fn bump_persistent<T>(env: &Env, key: &T)
@@ -452,7 +448,9 @@ impl InvoiceStorage {
         let mut position = start;
         let mut scanned = 0u32;
         while scanned < end.saturating_sub(start) && position < entries.len() {
-            let id = entries.get(position).unwrap();
+            let Some(id) = entries.get(position) else {
+                break;
+            };
             let valid = Self::entry_matches(env, index, &id) && !valid_seen.contains(&id);
             if valid {
                 valid_seen.push_back(id);
@@ -807,13 +805,14 @@ impl InvoiceStorage {
             .remove(&DataKey::Invoice(invoice_id.clone()));
     }
 
-    pub fn clear_all(env: &Env) {
-        crate::governance::require_no_open_governance_proposal(env).unwrap();
+    pub fn clear_all(env: &Env) -> Result<(), QuickLendXError> {
+        crate::governance::require_no_open_governance_proposal(env)?;
         let ids = Self::get_all_invoice_ids(env);
         for id in ids.iter() {
             Self::delete_invoice(env, &id);
         }
-        StorageManager::clear_all_mappings(env);
+        StorageManager::clear_all_mappings(env)?;
+        Ok(())
     }
 
     pub fn get_all_invoice_ids(env: &Env) -> Vec<BytesN<32>> {
@@ -1155,13 +1154,13 @@ fn remove_from_status_index(
             return Ok(Vec::new(env));
         }
         let mut result = Vec::new(env);
-        let first_tag = tags.get(0).unwrap();
+        let first_tag = tags.get(0).ok_or(QuickLendXError::InvalidInput)?;
         let first_ids = Self::get_invoices_by_tag(env, &first_tag);
 
         for id in first_ids.iter() {
             let mut all_match = true;
             for i in 1..tags.len() {
-                let tag = tags.get(i).unwrap();
+                let tag = tags.get(i).ok_or(QuickLendXError::InvalidInput)?;
                 let tag_ids = Self::get_invoices_by_tag(env, &tag);
                 if !tag_ids.contains(&id) {
                     all_match = false;
@@ -1223,8 +1222,8 @@ pub struct StorageManager;
 const VIEW_ONLY_KEY: Symbol = symbol_short!("view_onl");
 
 impl StorageManager {
-    pub fn clear_all_mappings(env: &Env) {
-        crate::governance::require_no_open_governance_proposal(env).unwrap();
+    pub fn clear_all_mappings(env: &Env) -> Result<(), QuickLendXError> {
+        crate::governance::require_no_open_governance_proposal(env)?;
         env.storage()
             .persistent()
             .remove(&StorageKeys::invoice_count());
@@ -1232,6 +1231,7 @@ impl StorageManager {
         env.storage()
             .persistent()
             .remove(&StorageKeys::investment_count());
+        Ok(())
     }
 
     /// Return `true` if the current context is marked as view-only.
@@ -1771,13 +1771,11 @@ pub fn get_pending_treasury(env: &Env) -> Option<(Address, u64)> {
     if !has_pending_treasury(env) {
         return None;
     }
-    // We can safely unwrap here because we've already checked with `has()`.
-    let address = env.storage().instance().get(&PENDING_TREASURY_KEY).unwrap();
+    let address = env.storage().instance().get(&PENDING_TREASURY_KEY)?;
     let timestamp = env
         .storage()
         .instance()
-        .get(&PENDING_TREASURY_TS_KEY)
-        .unwrap();
+        .get(&PENDING_TREASURY_TS_KEY)?;
     Some((address, timestamp))
 }
 
@@ -1925,6 +1923,7 @@ impl InvoiceStorage {
 }
 
 #[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_storage_read_cache {
     use super::*;
     use crate::types::{
