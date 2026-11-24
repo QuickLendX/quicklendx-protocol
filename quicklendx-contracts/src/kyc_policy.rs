@@ -391,6 +391,7 @@ fn paginate_address_list(
 // ===========================================================================
 
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod tests {
     use super::*;
     use crate::{QuickLendXContract, QuickLendXContractClient};

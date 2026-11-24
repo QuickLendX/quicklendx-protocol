@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from "express";
 import { auditService } from "../services/auditService";
 import { redactSensitiveFields, AuditOperation } from "../types/audit";
-import { AuthenticatedRequest } from "./apiKeyAuth";
+import { AuthenticatedRequest } from "./api-key-auth";
 
 export interface AuditContext {
   operation: AuditOperation;

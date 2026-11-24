@@ -9,8 +9,8 @@ git checkout -b test/get-invoice-get-bid
 ```
 
 ## Test File Location
-- [src/test/test_get_invoice_bid.rs](src/test/test_get_invoice_bid.rs) - 592 lines
-- Registered in [src/test.rs](src/test.rs)
+- [src/test/test_get_invoice_bid.rs](../../src/test/test_get_invoice_bid.rs) - 592 lines
+- Registered in [src/test.rs](../../src/test.rs)
 
 ## Test Coverage Summary
 

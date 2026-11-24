@@ -14,7 +14,7 @@ proptest! {
         let invoice_id = BytesN::from_array(&env, &[1; 32]);
 
         for _ in 0..count_a {
-            log_operation(
+            assert!(log_operation(
                 &env,
                 invoice_id.clone(),
                 AuditOperation::InvoiceCreated,
@@ -23,11 +23,11 @@ proptest! {
                 None,
                 None,
                 None,
-            );
+            ).is_ok());
         }
 
         for _ in 0..count_b {
-            log_operation(
+            assert!(log_operation(
                 &env,
                 invoice_id.clone(),
                 AuditOperation::InvoiceStatusChanged,
@@ -36,7 +36,7 @@ proptest! {
                 None,
                 None,
                 None,
-            );
+            ).is_ok());
         }
 
         let stats = AuditStorage::get_audit_stats(&env);

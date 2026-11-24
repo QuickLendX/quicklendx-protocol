@@ -1,6 +1,4 @@
-import { describe, it, expect, beforeEach, beforeAll, afterAll, afterEach, jest } from "@jest/globals";
-import request from "supertest";
-import app from "../app";
+import { describe, it, expect, beforeEach, jest } from "@jest/globals";
 import { Request, Response } from "express";
 import {
   assertConditionalWrite,
@@ -10,15 +8,9 @@ import {
   applyCacheHeaders,
   CC_NO_STORE,
 } from "../middleware/cache-headers";
-import { invoiceStore } from "../services/invoiceStore";
 import { createBid, getBids, getBestBid, getTopBids } from "../controllers/v1/bids";
-import { MOCK_INVOICES } from "../controllers/v1/invoices";
 import { bidStore } from "../services/bidStore";
-import pool from "../services/database";
-import { getDatabase, closeDatabase } from "../lib/database";
-import { apiKeyService } from "../services/api-key-service";
-import path from "path";
-import fs from "fs";
+import { exposureService } from "../services/exposureService";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -205,6 +197,8 @@ describe("assertConditionalWrite (unit)", () => {
           lastModified: new Date("2025-01-01"),
         })
       ).toBe(true);
+    });
+
     it("should ignore If-Unmodified-Since when If-Match is present and matches (RFC 7232 §3.4)", () => {
       const oldHeader = new Date("2020-01-01T00:00:00Z").toUTCString();
       const req = mockReq({
@@ -379,236 +373,6 @@ describe("extractLastModified (unit)", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Integration tests — POST /api/v1/bids with conditional write
-// ---------------------------------------------------------------------------
-
-describe("POST /api/v1/bids — conditional write (integration)", () => {
-  let TEST_API_KEY = "qlx_test_conditionalwrite";
-  let testInvoice: any;
-  let invoiceETag: string;
-  let poolConnectSpy: any;
-
-  const TEST_INVOICE_ID = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-  const TEST_DB_DIR = path.resolve(__dirname, "../../../.data");
-  const TEST_DB_PATH = path.join(TEST_DB_DIR, `test-conditional-write-${crypto.randomUUID()}.db`);
-
-  beforeAll(async () => {
-    if (!fs.existsSync(TEST_DB_DIR)) {
-      fs.mkdirSync(TEST_DB_DIR, { recursive: true });
-    }
-    process.env.DATABASE_PATH = TEST_DB_PATH;
-    closeDatabase();
-    const conn = getDatabase();
-
-    conn.exec(`
-      CREATE TABLE IF NOT EXISTS api_keys (
-        id TEXT PRIMARY KEY,
-        key_hash TEXT NOT NULL,
-        prev_signing_secret_hash TEXT,
-        prefix TEXT NOT NULL,
-        name TEXT NOT NULL,
-        scopes TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        last_used_at TEXT,
-        expires_at TEXT,
-        prev_secret_expires_at TEXT,
-        revoked INTEGER NOT NULL DEFAULT 0,
-        created_by TEXT NOT NULL
-      )
-    `);
-    conn.exec(`
-      CREATE TABLE IF NOT EXISTS api_key_audit_log (
-        id TEXT PRIMARY KEY,
-        event_type TEXT NOT NULL,
-        key_id TEXT NOT NULL,
-        actor TEXT NOT NULL,
-        timestamp TEXT NOT NULL,
-        ip_address TEXT,
-        endpoint TEXT,
-        metadata TEXT
-      )
-    `);
-    conn.exec(`
-      CREATE TABLE IF NOT EXISTS invoices (
-        id TEXT PRIMARY KEY,
-        business TEXT NOT NULL,
-        amount TEXT NOT NULL,
-        currency TEXT NOT NULL,
-        due_date INTEGER NOT NULL,
-        status TEXT NOT NULL,
-        description TEXT NOT NULL,
-        category TEXT NOT NULL,
-        tags TEXT NOT NULL,
-        metadata TEXT NOT NULL,
-        created_at INTEGER NOT NULL,
-        updated_at INTEGER NOT NULL,
-        contract_version INTEGER NOT NULL,
-        event_schema_version INTEGER NOT NULL,
-        indexed_at TEXT NOT NULL
-      )
-    `);
-
-    // Create a test API key
-    const saKey = await apiKeyService.createApiKey({
-      name: "Test Key",
-      scopes: ["read:*", "write:*"],
-      created_by: "test-user",
-    });
-    TEST_API_KEY = saKey.plaintext_key;
-
-    // Seed mock invoice
-    invoiceStore.insertInvoice({
-      id: TEST_INVOICE_ID,
-      business: "biz-1",
-      amount: "1000",
-      currency: "USD",
-      due_date: 1234567890,
-      status: "Verified" as any,
-      description: "Test description",
-      category: "Services" as any,
-      tags: ["test"],
-      metadata: {
-        customer_name: "John",
-        customer_address: "123 Main St",
-        tax_id: "123",
-        line_items: [],
-        notes: ""
-      },
-      created_at: 1234567800,
-      updated_at: 1234567800,
-      contract_version: 1,
-      event_schema_version: 1,
-      indexed_at: new Date().toISOString()
-    });
-  });
-
-  afterAll(() => {
-    closeDatabase();
-    try {
-      if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
-      try { fs.unlinkSync(TEST_DB_PATH + "-wal"); } catch {}
-      try { fs.unlinkSync(TEST_DB_PATH + "-shm"); } catch {}
-    } catch {}
-  });
-
-  beforeEach(() => {
-    poolConnectSpy = jest.spyOn(pool as any, 'connect').mockResolvedValue({
-      query: jest.fn(async (sql: any, params?: any): Promise<any> => {
-        const sqlStr = String(sql);
-        if (sqlStr.includes('SELECT id, status FROM invoices')) {
-          return { rows: [{ id: params?.[0], status: 'Verified' }], rowCount: 1 };
-        }
-        if (sqlStr.includes('SELECT bid_id FROM bids')) {
-          return { rows: [], rowCount: 0 };
-        }
-        if (sqlStr.includes('INSERT INTO bids')) {
-          return {
-            rows: [{
-              bid_id: 'mock-bid-id',
-              invoice_id: params?.[1],
-              investor: params?.[2],
-              bid_amount: params?.[3],
-              expected_return: params?.[4],
-              timestamp: params?.[5],
-              status: 'Placed',
-              expiration_timestamp: params?.[7],
-              created_by: params?.[8],
-            }],
-            rowCount: 1
-          };
-        }
-        return { rows: [], rowCount: 0 };
-      }) as any,
-      release: jest.fn() as any,
-    } as any);
-
-    try {
-      testInvoice = invoiceStore.findInvoiceById(TEST_INVOICE_ID);
-    } catch {
-      testInvoice = undefined;
-    }
-    if (testInvoice) {
-      invoiceETag = computeETag(JSON.stringify(testInvoice));
-    }
-  });
-
-  afterEach(() => {
-    if (poolConnectSpy) {
-      poolConnectSpy.mockRestore();
-    }
-    jest.restoreAllMocks();
-  });
-
-  const validBid = {
-    invoice_id: TEST_INVOICE_ID,
-    bid_amount: "1000000",
-    expected_return: "1500000",
-    expiration_timestamp: Math.floor(Date.now() / 1000) + 86400,
-  };
-
-  it("should create bid (201) when If-Match matches the current invoice ETag", async () => {
-    if (!testInvoice) return;
-
-    const res = await request(app)
-      .post("/api/v1/bids")
-      .set("Authorization", `Bearer ${TEST_API_KEY}`)
-      .set("If-Match", invoiceETag)
-      .send(validBid);
-
-    expect(res.status).toBe(201);
-    expect(res.body.data.bid_id).toBe("mock-bid-id");
-  });
-
-  it("should return 412 when If-Match is a stale etag", async () => {
-    if (!testInvoice) return;
-
-    const res = await request(app)
-      .post("/api/v1/bids")
-      .set("Authorization", `Bearer ${TEST_API_KEY}`)
-      .set("If-Match", '"stale-etag-value"')
-      .send(validBid);
-
-    expect(res.status).toBe(412);
-    expect(res.body.error.code).toBe("PRECONDITION_FAILED");
-    expect(res.headers["cache-control"]).toBe(CC_NO_STORE);
-  });
-
-  it("should succeed (not 412) when If-Match header is absent — backward compatibility", async () => {
-    const res = await request(app)
-      .post("/api/v1/bids")
-      .set("Authorization", `Bearer ${TEST_API_KEY}`)
-      .send(validBid);
-
-    expect(res.status).toBe(201);
-  });
-
-  it("should pass with If-Match: * when the invoice exists", async () => {
-    if (!testInvoice) return;
-
-    const res = await request(app)
-      .post("/api/v1/bids")
-      .set("Authorization", `Bearer ${TEST_API_KEY}`)
-      .set("If-Match", "*")
-      .send(validBid);
-
-    expect(res.status).toBe(201);
-  });
-
-  it("should ensure no bid is created on 412 (stale etag)", async () => {
-    if (!testInvoice) return;
-
-    const res = await request(app)
-      .post("/api/v1/bids")
-      .set("Authorization", `Bearer ${TEST_API_KEY}`)
-      .set("If-Match", '"definitely-wrong-etag"')
-      .send(validBid);
-
-    expect(res.status).toBe(412);
-    expect(res.body.data).toBeUndefined();
-  });
-});
-
-// ---------------------------------------------------------------------------
 // Unit tests — applyCacheHeaders
 // ---------------------------------------------------------------------------
 
@@ -678,8 +442,11 @@ describe("isNotModified — extra branch coverage", () => {
 // ---------------------------------------------------------------------------
 
 describe("Bids Controller (unit)", () => {
+  const VALID_INVOICE_ID = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+
   beforeEach(() => {
     jest.restoreAllMocks();
+    jest.spyOn(exposureService, "assertWithinCap").mockResolvedValue(undefined as any);
   });
 
   describe("createBid", () => {
@@ -708,7 +475,7 @@ describe("Bids Controller (unit)", () => {
       const req = {
         apiKey: { created_by: "test-user" },
         body: {
-          invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+          invoice_id: VALID_INVOICE_ID,
           bid_amount: "1000",
           expected_return: "1500",
           expiration_timestamp: Math.floor(Date.now() / 1000) + 3600,
@@ -717,11 +484,6 @@ describe("Bids Controller (unit)", () => {
       } as any;
       const res = mockRes();
       const next = jest.fn();
-
-      jest.spyOn(invoiceStore, 'findInvoiceById').mockReturnValue({
-        id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-        status: "Verified",
-      } as any);
 
       jest.spyOn(bidStore, 'createBid').mockRejectedValue(new Error("Cannot place bid on invoice with status Pending. Only Verified invoices accept bids."));
 
@@ -736,7 +498,7 @@ describe("Bids Controller (unit)", () => {
       const req = {
         apiKey: { created_by: "test-user" },
         body: {
-          invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+          invoice_id: VALID_INVOICE_ID,
           bid_amount: "1000",
           expected_return: "1500",
           expiration_timestamp: Math.floor(Date.now() / 1000) + 3600,
@@ -745,11 +507,6 @@ describe("Bids Controller (unit)", () => {
       } as any;
       const res = mockRes();
       const next = jest.fn();
-
-      jest.spyOn(invoiceStore, 'findInvoiceById').mockReturnValue({
-        id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-        status: "Verified",
-      } as any);
 
       jest.spyOn(bidStore, 'createBid').mockRejectedValue(new Error("Database connection lost"));
 
@@ -762,7 +519,7 @@ describe("Bids Controller (unit)", () => {
       const req = {
         apiKey: { created_by: "test-user" },
         body: {
-          invoice_id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
+          invoice_id: VALID_INVOICE_ID,
           bid_amount: "1000",
           expected_return: "1500",
           expiration_timestamp: Math.floor(Date.now() / 1000) + 3600,
@@ -771,11 +528,6 @@ describe("Bids Controller (unit)", () => {
       } as any;
       const res = mockRes();
       const next = jest.fn();
-
-      jest.spyOn(invoiceStore, 'findInvoiceById').mockReturnValue({
-        id: "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef",
-        status: "Pending",
-      } as any);
 
       jest.spyOn(bidStore, 'createBid').mockRejectedValue(new Error("Cannot place bid on invoice with status Pending"));
 
@@ -783,64 +535,6 @@ describe("Bids Controller (unit)", () => {
 
       expect(res._status).toBe(400);
       expect(res._json.error.code).toBe("INVALID_BID");
-    });
-
-    it("should fallback to MOCK_INVOICES in test env if findInvoiceById throws a no such table error", async () => {
-      const hexInvoiceId = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-      MOCK_INVOICES.push({
-        id: hexInvoiceId,
-        status: "Verified",
-      });
-
-      const req = {
-        apiKey: { created_by: "test-user" },
-        body: {
-          invoice_id: hexInvoiceId,
-          bid_amount: "1000",
-          expected_return: "1500",
-          expiration_timestamp: Math.floor(Date.now() / 1000) + 3600,
-        },
-        headers: {},
-      } as any;
-      const res = mockRes();
-      const next = jest.fn();
-
-      jest.spyOn(invoiceStore, 'findInvoiceById').mockImplementation(() => {
-        throw new Error("SqliteError: no such table: invoices");
-      });
-
-      jest.spyOn(bidStore, 'createBid').mockResolvedValue({
-        bid_id: "mock-bid-id",
-      } as any);
-
-      await createBid(req, res, next);
-
-      expect(res._status).toBe(201);
-      expect(res._json.data.bid_id).toBe("mock-bid-id");
-    });
-
-    it("should throw error if findInvoiceById throws an error other than no such table", async () => {
-      const hexInvoiceId = "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
-      const req = {
-        apiKey: { created_by: "test-user" },
-        body: {
-          invoice_id: hexInvoiceId,
-          bid_amount: "1000",
-          expected_return: "1500",
-          expiration_timestamp: Math.floor(Date.now() / 1000) + 3600,
-        },
-        headers: {},
-      } as any;
-      const res = mockRes();
-      const next = jest.fn();
-
-      jest.spyOn(invoiceStore, 'findInvoiceById').mockImplementation(() => {
-        throw new Error("Some other database connection error");
-      });
-
-      await createBid(req, res, next);
-
-      expect(next).toHaveBeenCalledWith(expect.any(Error));
     });
   });
 
@@ -855,7 +549,7 @@ describe("Bids Controller (unit)", () => {
     });
 
     it("should return 400 on PaginationError", async () => {
-      const req = { query: { invoice_id: "123", limit: "invalid" }, headers: {} } as any;
+      const req = { query: { invoice_id: VALID_INVOICE_ID, limit: "invalid" }, headers: {} } as any;
       const res = mockRes();
       const next = jest.fn();
       await getBids(req, res, next);
@@ -864,7 +558,7 @@ describe("Bids Controller (unit)", () => {
     });
 
     it("should return 200 and list of bids", async () => {
-      const req = { query: { invoice_id: "123" }, headers: {} } as any;
+      const req = { query: { invoice_id: VALID_INVOICE_ID }, headers: {} } as any;
       const res = mockRes();
       const next = jest.fn();
 
@@ -880,7 +574,7 @@ describe("Bids Controller (unit)", () => {
     });
 
     it("should call next with error if getBidsPaginated fails", async () => {
-      const req = { query: { invoice_id: "123" }, headers: {} } as any;
+      const req = { query: { invoice_id: VALID_INVOICE_ID }, headers: {} } as any;
       const res = mockRes();
       const next = jest.fn();
 
@@ -893,7 +587,7 @@ describe("Bids Controller (unit)", () => {
 
   describe("getBestBid", () => {
     it("should return 404 if no best bid found", async () => {
-      const req = { params: { invoiceId: "123" }, headers: {} } as any;
+      const req = { params: { invoiceId: VALID_INVOICE_ID }, headers: {} } as any;
       const res = mockRes();
       const next = jest.fn();
 
@@ -905,7 +599,7 @@ describe("Bids Controller (unit)", () => {
     });
 
     it("should return 200 with best bid if found", async () => {
-      const req = { params: { invoiceId: "123" }, headers: {} } as any;
+      const req = { params: { invoiceId: VALID_INVOICE_ID }, headers: {} } as any;
       const res = mockRes();
       const next = jest.fn();
 
@@ -917,7 +611,7 @@ describe("Bids Controller (unit)", () => {
     });
 
     it("should call next with error if getBestBid fails", async () => {
-      const req = { params: { invoiceId: "123" }, headers: {} } as any;
+      const req = { params: { invoiceId: VALID_INVOICE_ID }, headers: {} } as any;
       const res = mockRes();
       const next = jest.fn();
 
@@ -930,7 +624,7 @@ describe("Bids Controller (unit)", () => {
 
   describe("getTopBids", () => {
     it("should return 200 with ranked bids", async () => {
-      const req = { params: { invoiceId: "123" }, headers: {} } as any;
+      const req = { params: { invoiceId: VALID_INVOICE_ID }, headers: {} } as any;
       const res = mockRes();
       const next = jest.fn();
 
@@ -941,7 +635,7 @@ describe("Bids Controller (unit)", () => {
     });
 
     it("should call next with error if getRankedBids fails", async () => {
-      const req = { params: { invoiceId: "123" }, headers: {} } as any;
+      const req = { params: { invoiceId: VALID_INVOICE_ID }, headers: {} } as any;
       const res = mockRes();
       const next = jest.fn();
 

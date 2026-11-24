@@ -476,7 +476,7 @@ fn get_best_bid_returns_highest_profit_placed_bid() {
     persist_bid(&env, &mid);
     persist_bid(&env, &high);
 
-    let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
+    let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").unwrap();
     assert_eq!(best.bid_id, high.bid_id);
 }
 
@@ -489,7 +489,7 @@ fn get_best_bid_returns_highest_profit_placed_bid() {
 fn get_best_bid_returns_none_for_empty_invoice() {
     let env = Env::default();
     let invoice = invoice_id(&env, 21);
-    let best = BidStorage::get_best_bid(&env, &invoice);
+    let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed");
     assert!(best.is_none(), "empty invoice must yield no best bid");
 }
 
@@ -547,7 +547,7 @@ fn get_best_bid_returns_none_when_only_terminal_status_bids_exist() {
     persist_bid(&env, &accepted);
     persist_bid(&env, &expired);
 
-    let best = BidStorage::get_best_bid(&env, &invoice);
+    let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed");
     assert!(
         best.is_none(),
         "no Placed bids means no best bid, regardless of terminal economics"
@@ -587,7 +587,7 @@ fn get_best_bid_prefers_placed_over_higher_economics_terminal_bid() {
     persist_bid(&env, &placed_low);
     persist_bid(&env, &cancelled_high);
 
-    let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
+    let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").unwrap();
     assert_eq!(
         best.bid_id, placed_low.bid_id,
         "status filter must exclude Cancelled regardless of economics"
@@ -617,7 +617,7 @@ fn get_best_bid_returns_single_bid_when_only_one_is_placed() {
     );
     persist_bid(&env, &only);
 
-    let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
+    let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").unwrap();
     assert_eq!(best.bid_id, only.bid_id);
 }
 
@@ -658,9 +658,9 @@ fn get_best_bid_returns_none_after_all_placed_bids_expire_and_cleanup_runs() {
 
     // Advance ledger past expiration and trigger cleanup.
     env.ledger().with_mut(|li| li.timestamp = 200);
-    BidStorage::cleanup_expired_bids(&env, &invoice);
+    BidStorage::cleanup_expired_bids(&env, &invoice).expect("expired bid cleanup should succeed");
 
-    let best = BidStorage::get_best_bid(&env, &invoice);
+    let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed");
     assert!(
         best.is_none(),
         "all bids expired and removed from index -> no best bid"
@@ -715,7 +715,7 @@ fn rank_bids_orders_by_profit_descending() {
     persist_bid(&env, &mid);
     persist_bid(&env, &high);
 
-    let ranked = BidStorage::rank_bids(&env, &invoice);
+    let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
     assert_eq!(ranked.len(), 3);
     assert_eq!(ranked.get(0).unwrap().bid_id, high.bid_id);
     assert_eq!(ranked.get(1).unwrap().bid_id, mid.bid_id);
@@ -779,9 +779,9 @@ fn rank_bids_first_index_matches_get_best_bid() {
     persist_bid(&env, &expired);
     persist_bid(&env, &placed_a);
 
-    let ranked = BidStorage::rank_bids(&env, &invoice);
+    let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
     assert_eq!(ranked.len(), 2);
-    let best = BidStorage::get_best_bid(&env, &invoice).unwrap();
+    let best = BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").unwrap();
     assert_eq!(best.bid_id, ranked.get(0).unwrap().bid_id);
 }
 
@@ -794,7 +794,7 @@ fn rank_bids_first_index_matches_get_best_bid() {
 fn rank_bids_returns_empty_for_empty_invoice() {
     let env = Env::default();
     let invoice = invoice_id(&env, 32);
-    let ranked = BidStorage::rank_bids(&env, &invoice);
+    let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
     assert!(ranked.is_empty(), "empty invoice must yield empty ranking");
 }
 
@@ -840,7 +840,7 @@ fn rank_bids_returns_empty_when_only_terminal_status_bids_exist() {
     persist_bid(&env, &withdrawn);
     persist_bid(&env, &accepted);
 
-    let ranked = BidStorage::rank_bids(&env, &invoice);
+    let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
     assert!(ranked.is_empty(), "no Placed bids means no ranked bids");
 }
 
@@ -876,7 +876,7 @@ fn rank_bids_excludes_terminal_statuses_around_placed_bids() {
     persist_bid(&env, &placed);
     persist_bid(&env, &cancelled);
 
-    let ranked = BidStorage::rank_bids(&env, &invoice);
+    let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
     assert_eq!(ranked.len(), 1);
     assert_eq!(ranked.get(0).unwrap().bid_id, placed.bid_id);
 }
@@ -904,7 +904,7 @@ fn rank_bids_handles_single_placed_bid() {
     );
     persist_bid(&env, &only);
 
-    let ranked = BidStorage::rank_bids(&env, &invoice);
+    let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
     assert_eq!(ranked.len(), 1);
     assert_eq!(ranked.get(0).unwrap().bid_id, only.bid_id);
 }
@@ -930,7 +930,7 @@ fn rank_bids_is_deterministic_across_insertion_orders() {
     persist_bid(&env_a, &a1);
     persist_bid(&env_a, &a2);
     persist_bid(&env_a, &a3);
-    let ranked_a: alloc::vec::Vec<BytesN<32>> = BidStorage::rank_bids(&env_a, &invoice_a)
+    let ranked_a: alloc::vec::Vec<BytesN<32>> = BidStorage::rank_bids(&env_a, &invoice_a).expect("bid ranking should succeed")
         .iter()
         .map(|b| b.bid_id)
         .collect();
@@ -942,7 +942,7 @@ fn rank_bids_is_deterministic_across_insertion_orders() {
     persist_bid(&env_b, &b3);
     persist_bid(&env_b, &b1);
     persist_bid(&env_b, &b2);
-    let ranked_b: alloc::vec::Vec<BytesN<32>> = BidStorage::rank_bids(&env_b, &invoice_b)
+    let ranked_b: alloc::vec::Vec<BytesN<32>> = BidStorage::rank_bids(&env_b, &invoice_b).expect("bid ranking should succeed")
         .iter()
         .map(|b| b.bid_id)
         .collect();
@@ -984,7 +984,7 @@ fn rank_bids_resolves_full_tie_via_bid_id_lexicographic() {
     persist_bid(&env, &lower_id);
     persist_bid(&env, &higher_id);
 
-    let ranked = BidStorage::rank_bids(&env, &invoice);
+    let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
     assert_eq!(ranked.get(0).unwrap().bid_id, higher_id.bid_id);
     assert_eq!(ranked.get(1).unwrap().bid_id, lower_id.bid_id);
 }
@@ -1079,7 +1079,7 @@ fn rank_bids_resolves_each_of_five_tiebreaker_tiers() {
     persist_bid(&env, &tier4_newer);
     persist_bid(&env, &tier5_higher_id);
 
-    let ranked = BidStorage::rank_bids(&env, &invoice);
+    let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
     assert_eq!(ranked.len(), 6);
     assert_eq!(
         ranked.get(0).unwrap().bid_id,
@@ -1188,7 +1188,7 @@ fn rank_bids_produces_no_adjacent_inversions() {
         persist_bid(&env, b);
     }
 
-    let ranked = BidStorage::rank_bids(&env, &invoice);
+    let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
     assert_eq!(ranked.len() as usize, bids.len());
 
     let mut i: u32 = 0;

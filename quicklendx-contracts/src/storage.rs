@@ -1155,13 +1155,13 @@ impl InvoiceStorage {
             return Ok(Vec::new(env));
         }
         let mut result = Vec::new(env);
-        let first_tag = tags.get(0).ok_or(QuickLendXError::InvalidInput)?;
+        let first_tag = tags.get(0).ok_or(QuickLendXError::InvalidTag)?;
         let first_ids = Self::get_invoices_by_tag(env, &first_tag);
 
         for id in first_ids.iter() {
             let mut all_match = true;
             for i in 1..tags.len() {
-                let tag = tags.get(i).ok_or(QuickLendXError::InvalidInput)?;
+                let tag = tags.get(i).ok_or(QuickLendXError::InvalidTag)?;
                 let tag_ids = Self::get_invoices_by_tag(env, &tag);
                 if !tag_ids.contains(&id) {
                     all_match = false;
