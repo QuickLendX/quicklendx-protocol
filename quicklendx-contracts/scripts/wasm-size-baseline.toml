@@ -32,7 +32,7 @@ recorded = "2026-07-25"
 # Must match WASM_REGRESSION_MARGIN in tests/wasm_build_size_budget.rs.
 regression_margin = 0.10
 
-# Absolute ceiling in bytes (CI gate; raised pending size reduction work).
+# Absolute ceiling in bytes (640 KiB CI gate; future target: reduce to 256 KiB).
 # Must match WASM_SIZE_BUDGET_BYTES in tests/wasm_build_size_budget.rs
 # and MAX_BYTES in scripts/check-wasm-size.sh.
 hard_budget_bytes = 655360
