@@ -73,7 +73,7 @@
    - Algorithm descriptions
    - Integration guide
 
-3. ✅ `quicklendx-contracts/EXPIRED_BID_CLEANUP_IMPLEMENTATION.md`
+3. ✅ `quicklendx-contracts/docs/archive/EXPIRED_BID_CLEANUP_IMPLEMENTATION.md`
    - Implementation summary
    - Security checklist
    - Test evidence
