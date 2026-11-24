@@ -60,6 +60,13 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
   return Array.from(
     container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS)
   ).filter((el) => !el.closest("[inert]") && el.offsetParent !== null);
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS)).filter(
+    (el) => {
+      if (el.closest("[inert]") || el.hidden) return false;
+      const style = window.getComputedStyle(el);
+      return style.display !== "none" && style.visibility !== "hidden";
+    }
+  );
 }
 
 // ---------------------------------------------------------------------------
