@@ -525,9 +525,11 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
     setTimeout(() => {
       setClosing(false);
       onClose();
+      requestAnimationFrame(() => {
+        triggerRef?.current?.focus();
+      });
     }, delay);
-    // Focus return is handled by Dialog via triggerRef
-  }, [state.phase, reducedMotion, onClose, clearHoldInterval]);
+  }, [state.phase, reducedMotion, onClose, clearHoldInterval, triggerRef]);
 
   const handleHoldStart = useCallback(() => {
     if (state.phase !== "idle") return;
