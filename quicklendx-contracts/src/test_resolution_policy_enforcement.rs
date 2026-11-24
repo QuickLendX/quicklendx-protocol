@@ -22,6 +22,7 @@
 
 #![cfg(test)]
 
+#![allow(clippy::disallowed_macros)]
 // Balance-delta reporting below uses `std::println!` (the crate is `no_std`).
 extern crate std;
 

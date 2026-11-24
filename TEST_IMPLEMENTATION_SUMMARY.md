@@ -50,7 +50,7 @@ Achieve minimum 95% test coverage for fee structure updates and validation in th
 
 1. **quicklendx-contracts/src/test_fees.rs** - Added 33 comprehensive tests
 2. **quicklendx-contracts/src/test/test_invoice.rs** - Fixed format! macro issues (3 locations)
-3. **quicklendx-contracts/FEE_TESTS_IMPLEMENTATION.md** - Detailed documentation
+3. **quicklendx-contracts/docs/archive/FEE_TESTS_IMPLEMENTATION.md** - Detailed documentation
 4. **quicklendx-contracts/run_fee_tests.sh** - Test execution script
 
 ### Test Execution

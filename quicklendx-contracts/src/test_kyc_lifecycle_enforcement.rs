@@ -44,7 +44,7 @@ mod test_kyc_lifecycle_enforcement {
         client.set_admin(&admin);
 
         // Initialize protocol limits
-        client.initialize_protocol_limits(&admin, &1_000_000i128, &365u64, &86400u64);
+        client.initialize_protocol_limits(&admin);
 
         (env, client, admin)
     }
