@@ -185,6 +185,9 @@ module function it delegates to.
 | `is_two_step_enabled()` | `AdminStorage::is_two_step_enabled` | — |
 | `get_pending_admin()` | `AdminStorage::get_pending_admin` | — |
 | `store_invoice(business, amount, currency, due_date, description, category, tags, origination_fee_bps, late_payment_penalty_bps, early_payment_discount_bps, nonce)` | `Invoice::new` + `InvoiceStorage::store_invoice` (see order of checks below) | business |
+| `upload_invoice(business, amount, currency, due_date, description, category, tags, origination_fee_bps, late_payment_penalty_bps, early_payment_discount_bps)` | Bound checks (`require_description_bound`, `require_tags_bound`) + `Invoice::new_with_fee_settings` + `InvoiceStorage::store_invoice` | business |
+| `set_invoice_lock(admin, invoice_id, lock)` | `InvoiceStorage::set_invoice_lock`; the invoice must exist | admin (`require_admin_auth`) |
+| `get_invoice_lock(invoice_id)` | `InvoiceStorage::get_invoice_lock` | — |
 | `get_invoice(invoice_id)` | `InvoiceStorage::get` | — |
 | `get_business_invoices(business)` | `InvoiceStorage::get_business_invoices` | — |
 | `get_invoices_by_status(status)` | `InvoiceStorage::get_invoices_by_status` | — |
