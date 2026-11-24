@@ -540,7 +540,7 @@ fn record_resolution_vote(
 /// # Authorization
 /// Internal — no `require_auth` here. The caller (resolution path) has
 /// already passed the admin **and** arbiter gates; the escrow refund uses
-/// [`crate::payments::refund_escrow`] for the same reason.
+/// [`crate::payments::refund_escrow_internal`] for the same reason.
 ///
 /// # Errors
 /// | Error | Condition |
@@ -565,7 +565,7 @@ pub fn apply_resolution_policy(
                 crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
             {
                 if escrow.status == crate::payments::EscrowStatus::Held {
-                    crate::payments::refund_escrow(env, invoice_id, &escrow.investor)?;
+                    crate::payments::refund_escrow_internal(env, invoice_id)?;
                 }
             }
         }
