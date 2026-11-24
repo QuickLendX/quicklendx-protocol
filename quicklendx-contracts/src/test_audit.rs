@@ -50,6 +50,39 @@ fn test_audit_records_are_versioned_and_correlated() {
 }
 
 #[test]
+fn duplicate_operation_id_is_rejected_without_mutating_audit_storage() {
+    let (env, client, _admin, actor) = setup();
+    let invoice_id = BytesN::from_array(&env, &[7u8; 32]);
+    let operation_id = BytesN::from_array(&env, &[9u8; 32]);
+
+    let (first_append, duplicate_append, total_entries) =
+        env.as_contract(&client.address, || {
+            let entry = AuditLogEntry::new_with_operation_id(
+                &env,
+                invoice_id,
+                AuditOperation::InvoiceCreated,
+                actor,
+                None,
+                None,
+                None,
+                None,
+                operation_id,
+            );
+            let first_append = AuditStorage::store_audit_entry(&env, &entry);
+            let duplicate_append = AuditStorage::store_audit_entry(&env, &entry);
+            let total_entries = AuditStorage::get_audit_stats(&env).total_entries;
+            (first_append, duplicate_append, total_entries)
+        });
+
+    assert_eq!(first_append, Ok(()));
+    assert_eq!(
+        duplicate_append,
+        Err(crate::errors::QuickLendXError::AuditIntegrityError)
+    );
+    assert_eq!(total_entries, 1);
+}
+
+#[test]
 fn test_audit_invoice_created_and_trail() {
     let (env, client, _admin, business) = setup();
     let currency = Address::generate(&env);
@@ -1726,13 +1759,13 @@ fn test_audit_hash_chain_tampered_middle_fails() {
         &None,
     );
     let _ = client.verify_invoice(&invoice_id);
-    crate::audit::log_payment_processed(
+    assert!(crate::audit::log_payment_processed(
         &env,
         invoice_id.clone(),
         business.clone(),
         25,
         String::from_str(&env, "manual test payment"),
-    );
+    ).is_ok());
 
     assert!(client.verify_audit_chain(&invoice_id));
     let trail = client.get_invoice_audit_trail(&invoice_id);

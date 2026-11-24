@@ -64,10 +64,10 @@ export const createRequestExportHandler = (
 
       // Try to acquire a concurrency slot
       if (!dependencies.tryAcquire(key)) {
-        return res.status(429).json( {
+        return res.status(429).json({
           error: {
             message: "Too many concurrent export jobs. Please try again later.",
-            code: "EXPOJT_CONCURRENCY_EXCEEDED",
+            code: "EXPORT_CONCURRENCY_EXCEEDED",
           },
         });
       }
