@@ -423,7 +423,7 @@ fn test_no_new_escrow_after_refund() {
             InvestmentStorage::update_investment(&env, &investment);
         }
 
-        for mut bid in BidStorage::get_bid_records_for_invoice(&env, &invoice_id).iter() {
+        for mut bid in BidStorage::get_bid_records_for_invoice(&env, &invoice_id).expect("invoice bids should be available").iter() {
             if bid.status == BidStatus::Accepted {
                 bid.status = BidStatus::Cancelled;
                 BidStorage::update_bid(&env, &bid);
@@ -907,7 +907,7 @@ fn seed_post_withdrawal(
         investment.status = InvestmentStatus::Withdrawn;
         InvestmentStorage::update_investment(env, &investment);
 
-        for mut bid in BidStorage::get_bid_records_for_invoice(env, invoice_id).iter() {
+        for mut bid in BidStorage::get_bid_records_for_invoice(env, invoice_id).expect("invoice bids should be available").iter() {
             if bid.status == BidStatus::Accepted {
                 bid.status = BidStatus::Cancelled;
                 BidStorage::update_bid(env, &bid);
