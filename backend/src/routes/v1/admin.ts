@@ -1,6 +1,6 @@
 import { Router, Request, Response } from "express";
 import { auditService } from "../../services/auditService";
-import { apiKeyAuth, AuthenticatedRequest } from "../../middleware/apiKeyAuth";
+import { apiKeyAuth, AuthenticatedRequest } from "../../middleware/api-key-auth";
 import { auditMiddleware } from "../../middleware/auditMiddleware";
 import {
   AuditOperationSchema,

@@ -96,7 +96,9 @@ use crate::types::InvestmentStatus;
 use crate::types::{
     DisputeResolution, DisputeStatus, Invoice, InvoiceStatus, PaymentRecord as InvoicePaymentRecord,
 };
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Vec};
+use soroban_sdk::{
+    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
+};
 
 const MAX_INLINE_PAYMENT_HISTORY: u32 = 32;
 
@@ -140,6 +142,16 @@ pub struct SettlementPaymentRecord {
     pub amount: i128,
     pub timestamp: u64,
     pub nonce: String,
+}
+
+#[contracttype]
+#[derive(Clone, Eq, PartialEq)]
+#[cfg_attr(test, derive(Debug))]
+pub struct CursorPaymentRecordsPage {
+    pub items: Vec<SettlementPaymentRecord>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
 }
 
 /// Settlement progress for an invoice.
@@ -695,7 +707,7 @@ pub fn record_payment(
             applied_late_penalty,
         ),
         operation_id.clone(),
-    );
+    )?;
 
     let progress = get_invoice_progress(env, invoice_id)?;
     Ok(RecordedPayment {
@@ -885,6 +897,61 @@ pub fn get_payment_records(
     }
 
     Ok(records)
+}
+
+/// Returns a generation-bound opaque-cursor page of payment records.
+pub fn get_payment_records_paged(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    cursor: Option<String>,
+    limit: u32,
+) -> Result<CursorPaymentRecordsPage, QuickLendXError> {
+    ensure_invoice_exists(env, invoice_id)?;
+    let total_count = get_payment_count_internal(env, invoice_id);
+    let mut snapshot = Bytes::from_slice(env, b"payment_records_cursor_v1");
+    snapshot.append(&invoice_id.clone().into());
+    snapshot.append(&Bytes::from_array(env, &total_count.to_be_bytes()));
+    let digest = env.crypto().sha256(&snapshot).to_array();
+    let generation = u64::from_be_bytes([
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6],
+        digest[7],
+    ]);
+    let offset = match cursor {
+        Some(raw) => {
+            let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+            decoded.require_stable(generation)?;
+            decoded.offset
+        }
+        None => 0,
+    };
+    let (start, end) =
+        crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+    let mut items = Vec::new(env);
+    for index in start..end {
+        if let Some(record) = env
+            .storage()
+            .persistent()
+            .get(&SettlementDataKey::Payment(invoice_id.clone(), index))
+        {
+            items.push_back(record);
+        }
+    }
+    let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+    let capped_limit = crate::pagination::cap_query_limit(limit);
+    let next_cursor = if has_more {
+        Some(crate::pagination::encode_soroban_cursor(
+            env,
+            crate::pagination::Cursor::new(start.saturating_add(capped_limit), generation),
+        ))
+    } else {
+        None
+    };
+    Ok(CursorPaymentRecordsPage {
+        items,
+        total_count,
+        has_more,
+        next_cursor,
+    })
 }
 
 /// Returns whether an invoice has been finalized (settlement completed).

@@ -13,7 +13,10 @@
 extern crate std;
 
 use super::*;
-use crate::profits::{calculate_treasury_split, validate_calculation_inputs, PlatformFee};
+use crate::profits::{
+    calculate_treasury_split, calculate_treasury_split_checked, compute_yield_u32,
+    validate_calculation_inputs, verify_no_dust, PlatformFee,
+};
 use soroban_sdk::{testutils::Address as _, Address, Env, String};
 use std::vec;
 
@@ -550,6 +553,47 @@ fn test_validate_inputs_negative_investment() {
 #[test]
 fn test_validate_inputs_negative_payment() {
     assert!(validate_calculation_inputs(1000, -1).is_err());
+}
+
+#[test]
+fn test_profit_fee_clamps_negative_amounts_and_fee_bps() {
+    assert_eq!(PlatformFee::calculate_with_fee_bps(-100, 200, -1), (200, 0));
+    assert_eq!(
+        PlatformFee::calculate_with_fee_bps(100, 200, 10_000),
+        (100, 100)
+    );
+    assert_eq!(
+        PlatformFee::calculate_with_fee_bps(100, 200, 10_001),
+        (100, 100)
+    );
+    assert_eq!(PlatformFee::calculate_with_fee_bps(100, -1, 200), (0, 0));
+}
+
+#[test]
+fn test_checked_profit_fee_rejects_multiplication_overflow() {
+    assert_eq!(
+        PlatformFee::calculate_with_fee_bps_checked(0, i128::MAX, 10_000),
+        Err(crate::errors::QuickLendXError::ArithmeticOverflow)
+    );
+}
+
+#[test]
+fn test_treasury_split_clamps_negative_inputs_and_caps_share() {
+    assert_eq!(calculate_treasury_split_checked(-1, 5_000), Ok((0, 0)));
+    assert_eq!(calculate_treasury_split_checked(100, -1), Ok((0, 100)));
+    assert_eq!(calculate_treasury_split_checked(100, 10_001), Ok((100, 0)));
+}
+
+#[test]
+fn test_verify_no_dust_rejects_overflowing_sum() {
+    assert!(!verify_no_dust(i128::MAX, 1, i128::MAX));
+}
+
+#[test]
+fn test_yield_uses_simple_interest_and_clamps_negative_amount() {
+    assert_eq!(compute_yield_u32(100_000, 1_000, 365), 10_000);
+    assert_eq!(compute_yield_u32(-100_000, 1_000, 365), 0);
+    assert_eq!(compute_yield_u32(100_000, 1_000, 0), 0);
 }
 
 // ============================================================================

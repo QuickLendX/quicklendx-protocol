@@ -18,7 +18,7 @@ function fixtureRows(count: number): Settlement[] {
 
 async function useWallet(page: import("@playwright/test").Page) {
   await page.addInitScript((address) => {
-    window.__QLX_TEST_WALLET__ = address;
+    window.__TEST_WALLET_ADDRESS__ = address;
   }, connectedAddress);
 }
 
