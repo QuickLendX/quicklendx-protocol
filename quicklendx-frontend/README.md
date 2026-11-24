@@ -116,6 +116,7 @@ The `next.config.ts` file contains Next.js configuration. Key settings:
 | --- | --- | --- |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api/v1` | Base URL for the API. Include the `/api/v1` prefix. |
 | `NEXT_PUBLIC_NETWORK` | `testnet` | Stellar network: `testnet`, `public`, or `mainnet` (alias of `public`). Case-insensitive. An unrecognised value falls back to `testnet` and logs a one-time console warning. |
+| `NEXT_PUBLIC_NETWORK` | `testnet` | Stellar network (`testnet` or `public`). |
 | `NEXT_PUBLIC_E2E` | `0` | Test-only wallet injection is enabled with `1` by the E2E build. |
 | `NEXT_PUBLIC_ENABLE_NEW_INVOICE_ROUTE` | `false` | Enables the new business invoice route when set to `true`. |
 | `NEXT_PUBLIC_ANALYTICS_ENABLED` | `false` | Telemetry is opt-in; set to `true` to enable it. |
