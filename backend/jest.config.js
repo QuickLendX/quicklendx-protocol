@@ -62,7 +62,6 @@ export default {
     "src/tests/kyc-service.kms.test.ts",
     "tests/openapi-conformance.test.ts",
     "tests/openapi-example-validation.test.ts",
-    "tests/tenant-isolation.test.ts",
     "src/utils/pagination.properties.test.ts",
     "src/tests/conditional-write.test.ts",
     "src/tests/bids.test.ts",
