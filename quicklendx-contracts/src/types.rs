@@ -243,6 +243,9 @@ pub struct Dispute {
     pub resolved_at: u64,
     /// Structured outcome of the resolution.
     pub resolution_outcome: DisputeResolution,
+    /// Arbiter votes for the dispute. Empty for disputes created before quorum
+    /// storage was enabled and for the default quorum-1 lifecycle.
+    pub votes: Vec<DisputeVote>,
 }
 
 /// A single star-rating entry for an invoice.

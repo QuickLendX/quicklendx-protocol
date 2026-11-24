@@ -1637,6 +1637,20 @@ impl QuickLendXContract {
         ArbiterStorage::is_arbiter(&env, &addr)
     }
 
+    /// Configure the distinct-arbiter quorum for structured dispute resolutions.
+    pub fn set_dispute_quorum(
+        env: Env,
+        admin: Address,
+        quorum: u32,
+    ) -> Result<(), QuickLendXError> {
+        ArbiterStorage::set_dispute_quorum(&env, &admin, quorum)
+    }
+
+    /// Return the configured dispute-resolution quorum (default: 1).
+    pub fn get_dispute_quorum(env: Env) -> u32 {
+        ArbiterStorage::get_dispute_quorum(&env)
+    }
+
     // ── Backup Management ────────────────────────────────────────────────────
 
     /// Create a backup of all invoices across all statuses.

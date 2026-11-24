@@ -137,6 +137,7 @@ fn restore_from_backup_clears_pending_flag_after_success() {
             resolved_by: Address::generate(&env),
             resolved_at: 0,
             resolution_outcome: crate::types::DisputeResolution::None,
+            votes: Vec::new(&env),
         },
         total_paid: 0,
         payment_history: Vec::new(&env),

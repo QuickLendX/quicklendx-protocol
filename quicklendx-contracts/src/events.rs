@@ -2096,6 +2096,32 @@ pub fn arbiter_revoked(env: &Env, admin: &Address, arbiter: &Address) {
     );
 }
 
+/// Emitted once for every accepted distinct arbiter vote.
+pub fn dispute_arbiter_voted(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    arbiter: &Address,
+    outcome: crate::types::DisputeResolution,
+) {
+    env.events().publish(
+        (symbol_short!("dsp_vote"),),
+        (
+            invoice_id.clone(),
+            arbiter.clone(),
+            outcome.code(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emitted when the configured dispute quorum changes.
+pub fn dispute_quorum_updated(env: &Env, admin: &Address, quorum: u32) {
+    env.events().publish(
+        (symbol_short!("dsp_qrm"),),
+        (admin.clone(), quorum, env.ledger().timestamp()),
+    );
+}
+
 // ── Backfill lifecycle events ────────────────────────────────────────────────
 
 /// Emitted when a destructive backfill (e.g. `restore_from_backup`) begins.

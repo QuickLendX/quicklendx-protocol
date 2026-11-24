@@ -85,6 +85,7 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
             resolved_by: Address::generate(env),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: soroban_sdk::Vec::new(env),
         },
         total_paid: 0,
         payment_history: soroban_sdk::Vec::new(env),
