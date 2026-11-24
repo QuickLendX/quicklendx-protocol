@@ -39,12 +39,11 @@ legacy-tests = []
 diagnostics = []
 testutils = ["soroban-sdk/testutils"]
 
-# Integration tests written against the full contract API; the crate root is
-# currently a stub, so they only build with the `legacy-tests` feature.
+# Integration tests written against the full contract API. Targets that still
+# require the `legacy-tests` feature are gated individually below.
 [[test]]
 name = "auth_verification_test"
 path = "tests/auth_verification_test.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "bid_acceptance_replay"
@@ -53,12 +52,10 @@ path = "tests/bid_acceptance_replay.rs"
 [[test]]
 name = "investor_kyc_tier"
 path = "tests/investor_kyc_tier.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "invoice_lifecycle_e2e"
 path = "tests/invoice_lifecycle_e2e.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "issue_2954_bid_expiry_active_counts"

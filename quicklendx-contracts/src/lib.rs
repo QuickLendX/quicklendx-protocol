@@ -696,6 +696,18 @@ impl QuickLendXContract {
         crate::protocol_limits::ProtocolLimitsContract::initialize(env, admin)
     }
 
+    /// Admin-only: add a token address to the currency whitelist.
+    ///
+    /// An empty whitelist accepts every currency; once a currency is added the
+    /// list becomes restrictive. See [`crate::currency::CurrencyWhitelist`].
+    pub fn add_currency(
+        env: Env,
+        admin: Address,
+        currency: Address,
+    ) -> Result<(), QuickLendXError> {
+        crate::currency::CurrencyWhitelist::add_currency(&env, &admin, &currency)
+    }
+
     pub fn pause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
         PauseControl::set_paused(&env, &admin, true)
     }
@@ -822,12 +834,47 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    /// Emit the `InvoiceExpired` event for an invoice past its due date.
+    ///
+    /// Requires `current_timestamp > invoice.due_date`. This entrypoint only
+    /// emits the event; it does not change the invoice status. Status
+    /// transitions are performed by `mark_invoice_defaulted` (→ `Defaulted`)
+    /// or `refund_escrow` (→ `Refunded`).
+    pub fn expire_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if env.ledger().timestamp() <= invoice.due_date {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+        crate::events::emit_invoice_expired(&env, &invoice);
+        Ok(())
+    }
+
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified)
     }
 
+    /// Return all invoice IDs currently in `status`.
+    pub fn get_invoices_by_status(env: Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_invoices_by_status(&env, status)
+    }
+
     pub fn get_business_invoices(env: Env, business: Address) -> Vec<BytesN<32>> {
         InvoiceStorage::get_business_invoices(&env, &business)
+    }
+
+    // =========================================================================
+    // Analytics
+    // =========================================================================
+
+    /// Platform analytics derived live from on-chain state.
+    ///
+    /// Totals and rates are computed from the invoice status indexes, so the
+    /// values always reflect the current ledger state. Read-only; no auth.
+    pub fn get_platform_metrics(
+        env: Env,
+    ) -> Result<crate::analytics::PlatformMetrics, QuickLendXError> {
+        crate::analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
     }
 
     // =========================================================================
@@ -863,6 +910,7 @@ impl QuickLendXContract {
             expiration_timestamp: env.ledger().timestamp() + 86_400,
         };
         crate::bid::BidStorage::store_bid(&env, &bid);
+        crate::bid::BidStorage::add_bid_to_invoice(&env, &bid.invoice_id, &bid.bid_id);
         Ok(bid_id)
     }
 
@@ -913,6 +961,18 @@ impl QuickLendXContract {
         PauseControl::require_not_paused(&env)?;
         with_payment_guard(&env, || {
             crate::payments::release_escrow(&env, &invoice_id, &business)
+        })
+    }
+
+    /// Admin-only: refund a funded invoice's escrow back to the investor.
+    ///
+    /// Convenience wrapper around [`crate::escrow::refund_escrow_funds`] that
+    /// reads the admin from storage. Transitions the invoice to `Refunded`.
+    pub fn refund_escrow(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        with_payment_guard(&env, || {
+            crate::escrow::refund_escrow_funds(&env, &invoice_id, &admin)
         })
     }
 
