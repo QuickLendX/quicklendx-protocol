@@ -7,6 +7,7 @@ import { errorHandler } from "./middleware/error-handler";
 import { statusInjector } from "./middleware/status-injector";
 import { csrfMiddleware } from "./middleware/csrf";
 import { corsOptionsDelegate, webhookCorsOptions } from "./config/cors";
+import { optionalApiKeyAuth } from "./middleware/api-key-auth";
 import v1Routes from "./routes/v1";
 import webhookRoutes from "./routes/webhooks";
 import healthRoutes from "./routes/health";
@@ -86,6 +87,10 @@ app.use(statusInjector);
 
 // Structured request/response logging with automatic field-level redaction
 app.use(requestLogger);
+
+// Optional API key auth (populates req.apiKey if valid Bearer token present)
+// Must run before CSRF so CSRF can check for validated API key
+app.use(optionalApiKeyAuth);
 
 // Routes
 app.use("/api/webhooks", cors(webhookCorsOptions), webhookRoutes);
