@@ -22,6 +22,7 @@
 
 #![cfg(test)]
 
+#![allow(clippy::disallowed_macros)]
 // Balance-delta reporting below uses `std::println!` (the crate is `no_std`).
 extern crate std;
 
@@ -192,6 +193,7 @@ fn setup_under_review_dispute() -> Fixture {
                 resolved_by: business.clone(),
                 resolved_at: 0,
                 resolution_outcome: DisputeResolution::None,
+                votes: Vec::new(env),
             },
             total_paid: 0,
             payment_history: Vec::new(&env),

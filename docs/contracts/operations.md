@@ -191,4 +191,4 @@ Clears both pause and maintenance. Idempotent when already in normal operation.
 
 ### Runbook
 
-See [`reliability.md`](../../reliability.md#on-chain-incident-mode-protocol-runbook) for the operator checklist.
+See [`reliability.md`](../archive/reliability.md#on-chain-incident-mode-protocol-runbook) for the operator checklist.

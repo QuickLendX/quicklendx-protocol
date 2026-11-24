@@ -154,7 +154,7 @@ cargo test test_max_invoices --lib -- --nocapture
 ## Documentation
 
 Created comprehensive documentation:
-- **File**: `quicklendx-contracts/MAX_INVOICES_PER_BUSINESS_TESTS.md`
+- **File**: `quicklendx-contracts/docs/archive/MAX_INVOICES_PER_BUSINESS_TESTS.md`
 - **Contents**:
   - Feature description
   - Implementation details
@@ -254,7 +254,7 @@ match client.upload_invoice(...) {
 3. `quicklendx-contracts/src/invoice.rs` - Added counting helper function
 4. `quicklendx-contracts/src/lib.rs` - Added enforcement and admin function
 5. `quicklendx-contracts/src/test_max_invoices_per_business.rs` - New test file
-6. `quicklendx-contracts/MAX_INVOICES_PER_BUSINESS_TESTS.md` - New documentation
+6. `quicklendx-contracts/docs/archive/MAX_INVOICES_PER_BUSINESS_TESTS.md` - New documentation
 
 ## Statistics
 

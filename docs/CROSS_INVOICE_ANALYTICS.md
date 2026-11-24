@@ -17,7 +17,7 @@ These entrypoints are read-only and do not mutate contract state.
 
 | Entrypoint | What it returns | Bounds / behavior |
 |---|---|---|
-| `get_business_invoices_paged(env, business, status_filter, offset, limit)` | Invoice IDs for one business | `limit` is clamped to `MAX_QUERY_LIMIT` (50). `offset` is validated before paging; if it is beyond the available data, the result is empty. Results are sorted newest-first by `created_at`. |
+| `get_business_invoices_paged(env, business, status_filter, cursor, limit)` | Invoice IDs for one business | `limit` is clamped to `MAX_QUERY_LIMIT` (50). Results are sorted newest-first by `created_at`; a cursor is rejected with `UnstableCursor` if the business invoice generation changes. |
 | `get_available_invoices_paged(env, min_amount, max_amount, category_filter, offset, limit)` | Verified invoice IDs that match optional filters | Same paging bounds as above: `limit` is capped at 50 and `offset` beyond the available set returns an empty page. |
 | `get_invoices_by_status(env, status)` | All invoice IDs in one status bucket | No pagination. This is convenient for batch processing, but it can be large. Prefer the paged variants for UI and indexer workloads. |
 | `get_invoice_count_by_status(env, status)` and `get_total_invoice_count(env)` | Counters only | These do not return invoice IDs. They are the cheapest way to answer “how many invoices are there?” questions. |
@@ -33,16 +33,18 @@ These entrypoints are read-only and do not mutate contract state.
 ### 1. Fetch the first page of a business’s invoices
 
 ```rust
-let ids = contract.get_business_invoices_paged(
+let page = contract.get_business_invoices_paged(
     env.clone(),
     business.clone(),
     Some(InvoiceStatus::Verified),
-    0,
+    None,
     10,
 );
 ```
 
-This returns up to 10 invoice IDs for the business. If you need the next page, advance the offset to 10 and request again.
+This returns up to 10 invoice IDs for the business. Pass `page.next_cursor`
+unchanged to request the next page. If the contract returns `UnstableCursor`,
+restart from the first page.
 
 ### 2. Fetch the next page of available invoices
 

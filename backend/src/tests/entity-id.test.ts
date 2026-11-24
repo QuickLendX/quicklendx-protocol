@@ -46,6 +46,16 @@ const SQL_SETTLEMENT = encodeURIComponent(`${ENTITY_PREFIXES.SETTLEMENT}' OR '1'
 const SQL_EXPORT = encodeURIComponent(`${ENTITY_PREFIXES.EXPORT_TOKEN}' OR '1'='1`);
 const SQL_BID = encodeURIComponent(`${ENTITY_PREFIXES.BID}' OR '1'='1`);
 
+function expectTokenInvalidResponse(res: supertest.Response): void {
+  expect(res.status).toBe(400);
+  expect(res.body).toEqual({
+    error: {
+      message: expect.any(String),
+      code: "TOKEN_INVALID",
+    },
+  });
+}
+
 describe("assertInvoiceId", () => {
   describe("GET /bids/:invoiceId/best", () => {
     it("accepts a valid ULID (not 400)", async () => {
@@ -191,43 +201,37 @@ describe("assertSettlementId", () => {
 
 describe("assertExportToken", () => {
   describe("GET /exports/download/:token", () => {
-    it("accepts a valid ULID (not 400)", async () => {
+    it("accepts a well-formed token ID and returns TOKEN_INVALID when it is unknown", async () => {
       const res = await request.get(`/exports/download/${ENTITY_PREFIXES.EXPORT_TOKEN}${VALID_ULID}`);
-      expect(res.status).not.toBe(400);
+      expectTokenInvalidResponse(res);
     });
-    it("accepts lowercase (not 400)", async () => {
+    it("accepts a lowercase well-formed token ID and returns TOKEN_INVALID when it is unknown", async () => {
       const res = await request.get(`/exports/download/${ENTITY_PREFIXES.EXPORT_TOKEN}${VALID_ULID_LOWER}`);
-      expect(res.status).not.toBe(400);
+      expectTokenInvalidResponse(res);
     });
     it("rejects wrong prefix", async () => {
       const res = await request.get(`/exports/download/${ENTITY_PREFIXES.SETTLEMENT}${VALID_ULID}`);
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("INVALID_ENTITY_ID");
+      expectTokenInvalidResponse(res);
     });
     it("rejects '123'", async () => {
       const res = await request.get(`/exports/download/${ENTITY_PREFIXES.EXPORT_TOKEN}123`);
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("INVALID_ENTITY_ID");
+      expectTokenInvalidResponse(res);
     });
     it("rejects '1'", async () => {
       const res = await request.get(`/exports/download/${ENTITY_PREFIXES.EXPORT_TOKEN}1`);
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("INVALID_ENTITY_ID");
+      expectTokenInvalidResponse(res);
     });
     it("rejects invalid Crockford chars", async () => {
       const res = await request.get(`/exports/download/${ENTITY_PREFIXES.EXPORT_TOKEN}${INVALID_CROCKFORD}`);
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("INVALID_ENTITY_ID");
+      expectTokenInvalidResponse(res);
     });
     it("rejects 1000 chars", async () => {
       const res = await request.get(`/exports/download/${LONG_EXPORT}`);
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("INVALID_ENTITY_ID");
+      expectTokenInvalidResponse(res);
     });
     it("rejects SQL injection", async () => {
       const res = await request.get(`/exports/download/${SQL_EXPORT}`);
-      expect(res.status).toBe(400);
-      expect(res.body.error.code).toBe("INVALID_ENTITY_ID");
+      expectTokenInvalidResponse(res);
     });
   });
 });
