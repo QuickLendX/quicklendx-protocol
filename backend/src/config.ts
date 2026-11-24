@@ -11,7 +11,7 @@ import { z } from "zod";
 
 const isProduction = process.env.NODE_ENV === "production";
 
-const schema = z.object({
+export const configSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
   STELLAR_RPC_URL: z.url().default("https://soroban-testnet.stellar.org"),
@@ -69,17 +69,17 @@ const schema = z.object({
   ALERT_EMAIL_RECIPIENTS: z.string().optional(), // comma-separated emails
 });
 
-export type Config = z.infer<typeof schema>;
+export type Config = z.infer<typeof configSchema>;
 
 export function load(env: NodeJS.ProcessEnv = process.env): Config {
   const isProd = env.NODE_ENV === "production";
   const effectiveSchema = isProd
-    ? schema.extend({
+    ? configSchema.extend({
         NOTIFICATION_LINK_SECRET: z.string().min(32),
         ADMIN_API_KEY: z.string().min(32),
         EXPORT_SECRET: z.string().min(32),
       })
-    : schema;
+    : configSchema;
 
   const result = effectiveSchema.safeParse(env);
   if (!result.success) {

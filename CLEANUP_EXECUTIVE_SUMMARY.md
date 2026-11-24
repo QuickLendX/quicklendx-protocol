@@ -54,7 +54,7 @@ Located: `quicklendx-contracts/src/test_expired_bids_cleanup.rs`
   - Usage examples
   - Complexity analysis
 
-- **`quicklendx-contracts/EXPIRED_BID_CLEANUP_IMPLEMENTATION.md`**
+- **`quicklendx-contracts/docs/archive/EXPIRED_BID_CLEANUP_IMPLEMENTATION.md`**
   - Implementation summary
   - Security checklist
   - Test evidence
@@ -129,7 +129,7 @@ Located: `quicklendx-contracts/src/test_expired_bids_cleanup.rs`
 ### Created
 1. `quicklendx-contracts/src/test_expired_bids_cleanup.rs` (685 lines)
 2. `docs/contracts/bidding_cleanup.md` (350+ lines)
-3. `quicklendx-contracts/EXPIRED_BID_CLEANUP_IMPLEMENTATION.md`
+3. `quicklendx-contracts/docs/archive/EXPIRED_BID_CLEANUP_IMPLEMENTATION.md`
 4. `TESTING_PATTERNS_ANALYSIS.md`
 
 ### Modified
@@ -265,7 +265,7 @@ Optional:
 For more information:
 - **Architecture**: See `docs/contracts/bidding_cleanup.md`
 - **Tests**: See `quicklendx-contracts/src/test_expired_bids_cleanup.rs`
-- **Implementation**: See `quicklendx-contracts/EXPIRED_BID_CLEANUP_IMPLEMENTATION.md`
+- **Implementation**: See `quicklendx-contracts/docs/archive/EXPIRED_BID_CLEANUP_IMPLEMENTATION.md`
 - **Verification**: See `IMPLEMENTATION_VERIFICATION.md`
 
 All requirements have been met and the implementation is ready for review and merge.

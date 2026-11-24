@@ -117,6 +117,18 @@ The `Makefile` in `quicklendx-contracts` provides convenient phony targets for f
 | `make ci` | `fmt-check check lint test-lib size` | Run all standard fast CI checks |
 | `make build` | Builds WASM and bindings | Compile contract WASM and generate client bindings |
 | `make clean` | `cargo clean` and remove `bindings/` | Clean build artifacts and generated bindings |
+### Checking Contract Features
+
+From `quicklendx-contracts/`, run:
+
+```bash
+bash scripts/check-features.sh
+```
+
+The script checks the library and test targets for the default configuration,
+`testutils`, `diagnostics`, `testutils,diagnostics`, and `fuzz-tests`. It prints a
+pass/fail table and exits with a failure status if any check fails. This checks
+compilation; run `cargo test` to execute tests.
 
 ---
 
@@ -132,6 +144,27 @@ Before opening a PR, ensure all checks pass:
   4. **Tests:** `make test-lib` (or `make test` for full WASM + test suite)
   5. **WASM size within budget:** `make size` (or `./scripts/check-wasm-size.sh`)
   6. **Build succeeds:** `make build` compiles WASM and regenerates bindings
+1. **Build succeeds:** `make build` compiles WASM and regenerates bindings
+2. **Tests pass:** `cargo test` runs the full suite
+3. **Lint is clean:** `cargo clippy --workspace --all-targets -- -D warnings`
+4. **Format is clean:** `cargo fmt --all`
+5. **WASM size within budget:** `./scripts/check-wasm-size.sh`
+6. **Entrypoint docs match contract:** `./scripts/check-entrypoint-docs.sh` (ensures `README.md` entrypoint table matches `src/lib.rs` without compiling)
+
+### 📋 Verifying Entrypoint Documentation
+
+To check that all exported contract functions in `src/lib.rs` are documented in `README.md`:
+
+```bash
+# From quicklendx-contracts directory
+./scripts/check-entrypoint-docs.sh
+
+# View help and options
+./scripts/check-entrypoint-docs.sh --help
+```
+
+The script runs without compiling the contract and reports any missing or extra entrypoints with exit code 1.
+6. **Feature matrix compiles:** `bash scripts/check-features.sh`
 
 ---
 

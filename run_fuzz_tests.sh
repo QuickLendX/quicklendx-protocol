@@ -2,7 +2,62 @@
 # QuickLendX Fuzz Testing Quick Reference
 # Run this script to execute fuzz tests with various configurations
 
-set -e
+set -euo pipefail
+
+usage() {
+    echo "Usage: $0 [mode]"
+    echo ""
+    echo "Modes:"
+    echo "  quick      - Run with 50 cases per test (~30s, default)"
+    echo "  standard   - Run with 1,000 cases per test (~5min)"
+    echo "  extended   - Run with 10,000 cases per test (~30min)"
+    echo "  thorough   - Run with 100,000 cases per test (hours)"
+    echo "  invoice    - Run only invoice creation tests"
+    echo "  bid        - Run only bid placement tests"
+    echo "  settlement - Run only settlement tests"
+    echo "  payment    - Run payment capping and replay protection tests (Issue #1080)"
+    echo "  all        - Run all tests including non-fuzz"
+    echo "  help       - Show this help message"
+    echo ""
+    echo "Examples:"
+    echo "  $0              # Quick test (default)"
+    echo "  $0 standard     # Standard test"
+    echo "  $0 invoice      # Only invoice tests"
+    echo ""
+    echo "Environment Variables:"
+    echo "  PROPTEST_CASES=N    - Set number of test cases"
+    echo "  PROPTEST_SEED=N     - Reproduce specific test case"
+    echo ""
+    echo "Note: Fuzz tests require the 'fuzz-tests' feature flag"
+    echo ""
+    echo "Documentation:"
+    echo "  See FUZZ_TESTING.md for detailed guide"
+    echo "  See SECURITY_ANALYSIS.md for security details"
+}
+
+if [ "$#" -gt 1 ]; then
+    echo "❌ Too many arguments" >&2
+    echo "" >&2
+    usage >&2
+    exit 2
+fi
+
+mode="${1:-quick}"
+
+case "$mode" in
+    help|--help|-h)
+        usage
+        exit 0
+        ;;
+    quick|standard|extended|thorough|invoice|bid|settlement|payment|all)
+        ;;
+    *)
+        echo "❌ Unknown mode: $mode" >&2
+        echo "" >&2
+        usage >&2
+        exit 2
+        ;;
+esac
 
 echo "🔬 QuickLendX Fuzz Testing Suite"
 echo "================================"
@@ -14,117 +69,80 @@ cd "$(dirname "$0")/quicklendx-contracts"
 # Function to run tests with timing
 run_test() {
     local description=$1
-    local command=$2
-    
+    shift
+
     echo "📋 $description"
-    echo "   Command: $command"
+    echo "   Command: $*"
     echo ""
-    
+
+    local start_time end_time duration
     start_time=$(date +%s)
-    eval "$command"
+    "$@"
     end_time=$(date +%s)
     duration=$((end_time - start_time))
-    
+
     echo ""
     echo "   ✅ Completed in ${duration}s"
     echo ""
 }
 
-# Parse command line arguments
-case "${1:-quick}" in
+# Execute selected mode
+case "$mode" in
     quick)
         echo "Running quick fuzz tests (50 cases per test)..."
         echo ""
-        run_test "Quick Fuzz Test" "cargo test --features fuzz-tests fuzz_ --lib"
+        run_test "Quick Fuzz Test" cargo test --features fuzz-tests fuzz_ --lib
         ;;
-    
+
     standard)
         echo "Running standard fuzz tests (1,000 cases per test)..."
         echo ""
-        run_test "Standard Fuzz Test" "PROPTEST_CASES=1000 cargo test --features fuzz-tests fuzz_ --lib"
+        run_test "Standard Fuzz Test" env PROPTEST_CASES=1000 cargo test --features fuzz-tests fuzz_ --lib
         ;;
-    
+
     extended)
         echo "Running extended fuzz tests (10,000 cases per test)..."
         echo "⚠️  This may take 30+ minutes"
         echo ""
-        run_test "Extended Fuzz Test" "PROPTEST_CASES=10000 cargo test --features fuzz-tests fuzz_ --lib"
+        run_test "Extended Fuzz Test" env PROPTEST_CASES=10000 cargo test --features fuzz-tests fuzz_ --lib
         ;;
-    
+
     thorough)
         echo "Running thorough fuzz tests (100,000 cases per test)..."
         echo "⚠️  This may take several hours"
         echo ""
-        run_test "Thorough Fuzz Test" "PROPTEST_CASES=100000 cargo test --features fuzz-tests fuzz_ --lib"
+        run_test "Thorough Fuzz Test" env PROPTEST_CASES=100000 cargo test --features fuzz-tests fuzz_ --lib
         ;;
-    
+
     invoice)
         echo "Running invoice creation fuzz tests..."
         echo ""
-        run_test "Invoice Fuzz Tests" "cargo test --features fuzz-tests fuzz_store_invoice --lib"
+        run_test "Invoice Fuzz Tests" cargo test --features fuzz-tests fuzz_store_invoice --lib
         ;;
-    
+
     bid)
         echo "Running bid placement fuzz tests..."
         echo ""
-        run_test "Bid Fuzz Tests" "cargo test --features fuzz-tests fuzz_place_bid --lib"
+        run_test "Bid Fuzz Tests" cargo test --features fuzz-tests fuzz_place_bid --lib
         ;;
-    
-settlement)
+
+    settlement)
         echo "Running settlement fuzz tests..."
         echo ""
-        run_test "Settlement Fuzz Tests" "cargo test --features fuzz-tests fuzz_settlement --lib"
+        run_test "Settlement Fuzz Tests" cargo test --features fuzz-tests fuzz_settlement --lib
         ;;
 
     payment)
         echo "Running payment capping and replay protection fuzz tests (Issue #1080)..."
         echo ""
-        run_test "Payment Fuzz Tests" "cargo test --features fuzz-tests fuzz_payment --lib"
-        run_test "Partial Payment Tests" "cargo test --features fuzz-tests test_partial_payments --lib"
+        run_test "Payment Fuzz Tests" cargo test --features fuzz-tests fuzz_payment --lib
+        run_test "Partial Payment Tests" cargo test --features fuzz-tests test_partial_payments --lib
         ;;
-    
+
     all)
         echo "Running ALL tests (including non-fuzz)..."
         echo ""
-        run_test "All Tests" "cargo test --features fuzz-tests --lib"
-        ;;
-    
-    help|--help|-h)
-        echo "Usage: $0 [mode]"
-        echo ""
-echo "Modes:"
-    echo "  quick      - Run with 50 cases per test (~30s, default)"
-    echo "  standard   - Run with 1,000 cases per test (~5min)"
-    echo "  extended   - Run with 10,000 cases per test (~30min)"
-    echo "  thorough   - Run with 100,000 cases per test (hours)"
-    echo "  invoice    - Run only invoice creation tests"
-    echo "  bid        - Run only bid placement tests"
-    echo "  settlement - Run only settlement tests"
-    echo "  payment    - Run payment capping and replay protection tests (Issue #1080)"
-    echo "  all        - Run all tests including non-fuzz"
-    echo "  help       - Show this help message"
-        echo ""
-        echo "Examples:"
-        echo "  $0              # Quick test (default)"
-        echo "  $0 standard     # Standard test"
-        echo "  $0 invoice      # Only invoice tests"
-        echo ""
-        echo "Environment Variables:"
-        echo "  PROPTEST_CASES=N    - Set number of test cases"
-        echo "  PROPTEST_SEED=N     - Reproduce specific test case"
-        echo ""
-        echo "Note: Fuzz tests require the 'fuzz-tests' feature flag"
-        echo ""
-        echo "Documentation:"
-        echo "  See FUZZ_TESTING.md for detailed guide"
-        echo "  See SECURITY_ANALYSIS.md for security details"
-        exit 0
-        ;;
-    
-    *)
-        echo "❌ Unknown mode: $1"
-        echo "Run '$0 help' for usage information"
-        exit 1
+        run_test "All Tests" cargo test --features fuzz-tests --lib
         ;;
 esac
 
