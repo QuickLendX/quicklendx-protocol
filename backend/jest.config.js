@@ -58,7 +58,6 @@ export default {
     // of the current backend contract. Keep them out of the release gate
     // until they are rewritten against the merged implementation.
     "src/tests/perf/soak.test.ts",
-    "src/tests/openapi-contract.test.ts",
     "src/tests/kyc-service.kms.test.ts",
     "tests/openapi-example-validation.test.ts",
     "src/utils/pagination.properties.test.ts",
@@ -68,7 +67,6 @@ export default {
     "src/tests/load-shedding-concurrency.test.ts",
     "src/tests/drift-severity.test.ts",
     "src/tests/cache-headers.endpoints.test.ts",
-    "src/tests/request-signing.test.ts",
     "src/tests/webhook-ed25519.test.ts",
     "src/tests/api-key-rotation-integration.test.ts",
     "tests/webhook-ssrf.test.ts",
