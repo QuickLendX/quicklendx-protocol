@@ -71,6 +71,7 @@ export default {
     "src/tests/drift-severity.test.ts",
     "src/tests/cache-headers.endpoints.test.ts",
     "src/tests/webhook-ed25519.test.ts",
+    "src/tests/request-signing.test.ts",
     "src/tests/api-key-rotation-integration.test.ts",
     "src/tests/invoicesController.test.ts",
     "tests/webhook-ssrf.test.ts",
