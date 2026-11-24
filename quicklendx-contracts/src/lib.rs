@@ -629,6 +629,8 @@ mod test_self_call_rejection;
 mod test_settle_during_dispute;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
+#[cfg(all(test, feature = "fuzz-tests"))]
+mod test_settlement_conservation_props;
 #[cfg(test)]
 mod test_settlement_atomic_rollback;
 #[cfg(test)]
