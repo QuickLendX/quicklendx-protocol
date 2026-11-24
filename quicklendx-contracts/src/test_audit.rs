@@ -5,13 +5,94 @@
 
 use super::*;
 use crate::audit::{
-    AuditLogEntry, AuditOperation, AuditOperationFilter, AuditQueryFilter, AuditStorage,
+    AuditLogEntry, AuditOperation, AuditOperationFilter, AuditQueryFilter, AuditStorage, OpType,
 };
 use crate::invoice::InvoiceCategory;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Env, String, Vec,
+    symbol_short, Address, BytesN, Env, String, Vec,
 };
+
+#[test]
+fn test_every_audit_operation_maps_to_its_op_type_symbol() {
+    let operations = [
+        (AuditOperation::InvoiceCreated, symbol_short!("inv_crt")),
+        (AuditOperation::InvoiceUploaded, symbol_short!("inv_up")),
+        (AuditOperation::InvoiceVerified, symbol_short!("inv_ver")),
+        (AuditOperation::InvoiceFunded, symbol_short!("inv_fnd")),
+        (AuditOperation::InvoicePaid, symbol_short!("inv_pd")),
+        (AuditOperation::InvoiceDefaulted, symbol_short!("inv_def")),
+        (AuditOperation::InvoiceStatusChanged, symbol_short!("inv_stch")),
+        (AuditOperation::InvoiceRated, symbol_short!("inv_rt")),
+        (AuditOperation::BidPlaced, symbol_short!("bid_plc")),
+        (AuditOperation::BidAccepted, symbol_short!("bid_acc")),
+        (AuditOperation::BidCancelled, symbol_short!("bid_cnl")),
+        (AuditOperation::BidExpired, symbol_short!("bid_exp")),
+        (AuditOperation::BidWithdrawn, symbol_short!("bid_wdr")),
+        (AuditOperation::EscrowCreated, symbol_short!("esc_cr")),
+        (AuditOperation::EscrowReleased, symbol_short!("esc_rel")),
+        (AuditOperation::EscrowRefunded, symbol_short!("esc_ref")),
+        (AuditOperation::PaymentProcessed, symbol_short!("pay_prc")),
+        (AuditOperation::SettlementCompleted, symbol_short!("stl_cmp")),
+        (
+            AuditOperation::ConfigProtocolChanged,
+            symbol_short!("cfg_prt"),
+        ),
+        (AuditOperation::ConfigFeeChanged, symbol_short!("cfg_fee")),
+        (
+            AuditOperation::ConfigTreasuryChanged,
+            symbol_short!("cfg_trs"),
+        ),
+        (
+            AuditOperation::ConfigFeeStructureChanged,
+            symbol_short!("cfg_fstr"),
+        ),
+        (
+            AuditOperation::ConfigRevenueDistributionChanged,
+            symbol_short!("cfg_rev"),
+        ),
+        (AuditOperation::RatingOverridden, symbol_short!("rt_over")),
+        (AuditOperation::AdminInitialized, symbol_short!("adm_init")),
+        (AuditOperation::AdminTransferred, symbol_short!("adm_trf")),
+        (
+            AuditOperation::AdminTransferInitiated,
+            symbol_short!("adm_req"),
+        ),
+        (
+            AuditOperation::AdminTransferCancelled,
+            symbol_short!("adm_cnl"),
+        ),
+        (AuditOperation::AdminTwoStepUpdated, symbol_short!("adm_2st")),
+        (AuditOperation::ProtocolPaused, symbol_short!("paused")),
+        (AuditOperation::ProtocolUnpaused, symbol_short!("unpaused")),
+        (
+            AuditOperation::EmergencyWithdrawalInitiated,
+            symbol_short!("emg_init"),
+        ),
+        (
+            AuditOperation::EmergencyWithdrawalExecuted,
+            symbol_short!("emg_exec"),
+        ),
+        (
+            AuditOperation::EmergencyWithdrawalCancelled,
+            symbol_short!("emg_cnl"),
+        ),
+        (
+            AuditOperation::TreasuryRotationCancelled,
+            symbol_short!("tr_rot_cn"),
+        ),
+        (AuditOperation::KycSubmitted, symbol_short!("kyc_sub")),
+        (AuditOperation::KycVerified, symbol_short!("kyc_ver")),
+        (AuditOperation::KycRejected, symbol_short!("kyc_rej")),
+        (AuditOperation::KycRevoked, symbol_short!("kyc_rev")),
+        (AuditOperation::InvestorFrozen, symbol_short!("inv_frz")),
+        (AuditOperation::InvestorUnfrozen, symbol_short!("inv_unf")),
+    ];
+
+    for (operation, expected_symbol) in operations {
+        assert_eq!(OpType::from(operation).to_symbol(), expected_symbol);
+    }
+}
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let env = Env::default();
