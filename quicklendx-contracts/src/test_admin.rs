@@ -1805,11 +1805,11 @@ mod access_control_matrix {
         let client = crate::QuickLendXContractClient::new(&env, &contract_id);
 
         // Non-admin cannot initialize protocol limits
-        let result = client.try_initialize_protocol_limits(&non_admin, 1000, 365, 86400);
+        let result = client.try_initialize_protocol_limits(&non_admin);
         assert!(result.is_err());
 
         // Admin can initialize protocol limits
-        let result = client.initialize_protocol_limits(&admin, 1000, 365, 86400);
+        let result = client.try_initialize_protocol_limits(&admin);
         assert!(result.is_ok());
     }
 
@@ -2617,7 +2617,7 @@ mod access_control_matrix_extended {
 
         // Admin can set admin (transfers to new admin)
         let new_admin = Address::generate(&env);
-        let result = client.set_admin(&new_admin);
+        let result = client.try_set_admin(&new_admin);
         assert!(result.is_ok());
     }
 
@@ -2737,7 +2737,7 @@ mod access_control_matrix_extended {
                 client.try_set_backup_retention_policy(&non_admin, 5, 0, true)
             }),
             ("initialize_protocol_limits", || {
-                client.try_initialize_protocol_limits(&non_admin, 1000, 365, 86400)
+                client.try_initialize_protocol_limits(&non_admin)
             }),
             ("set_protocol_limits", || {
                 client.try_set_protocol_limits(&non_admin, 1000, 365, 86400)

@@ -1199,6 +1199,8 @@ impl QuickLendXContract {
         env: Env,
     ) -> Result<crate::analytics::PlatformMetrics, QuickLendXError> {
         crate::analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
+    pub fn get_total_invoice_count(env: Env) -> u32 {
+        InvoiceStorage::get_total_count(&env) as u32
     }
 
     // =========================================================================
