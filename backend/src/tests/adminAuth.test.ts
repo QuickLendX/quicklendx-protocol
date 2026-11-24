@@ -1,5 +1,5 @@
 import { Request, Response } from "express";
-import { getAdminActor, requireAdminAuth } from "../middleware/adminAuth";
+import { getAdminActor, requireAdminAuth } from "../middleware/admin-auth";
 
 describe("adminAuth middleware", () => {
   const next = jest.fn();

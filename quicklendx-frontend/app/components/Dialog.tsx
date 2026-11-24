@@ -120,6 +120,16 @@ export const Dialog: React.FC<DialogProps> = ({
     return () => siblings.forEach((el) => el.removeAttribute("inert"));
   }, [isOpen]);
 
+  // Lock body scroll while open; restore the previous value on every close path.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isOpen]);
+
   // Stable close handler that always reads current onClose / triggerRef
   const onCloseRef = useRef(onClose);
   const triggerRefRef = useRef(triggerRef);
