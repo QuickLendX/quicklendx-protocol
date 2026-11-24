@@ -1,3 +1,4 @@
+import type { CreateInvoiceBody } from "@/app/business/invoices/new/_lib/schema";
 import axios, {
   AxiosInstance,
   AxiosRequestConfig,
@@ -5,6 +6,7 @@ import axios, {
   AxiosError,
 } from "axios";
 import { z } from "zod";
+import { env } from "./env";
 import {
   AppError,
   NetworkError,
@@ -31,7 +33,7 @@ import {
  * NEXT_PUBLIC_API_URL, when set, must include the full prefix including /api/v1.
  */
 const API_CONFIG = {
-  baseURL: process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1",
+  baseURL: env.NEXT_PUBLIC_API_URL,
   timeout: 10000,
   retryAttempts: 3,
   retryDelay: 1000,
@@ -70,12 +72,20 @@ export function _resetCsrfToken(): void {
 // Error envelope schema (matches backend/openapi.yaml → ErrorEnvelope)
 // ---------------------------------------------------------------------------
 
+/**
+ * `.passthrough()` keeps fields the backend adds next to `message` and `code`.
+ * `POST /bids` answers 429 EXPOSURE_CAP_EXCEEDED with `currentExposureUsd`,
+ * `attemptedUsd` and `capUsd` directly on `error`; a stripping schema would drop
+ * exactly the numbers the caller needs to explain the refusal.
+ */
 const ErrorEnvelopeSchema = z.object({
-  error: z.object({
-    message: z.string(),
-    code: z.string(),
-    details: z.unknown().optional(),
-  }),
+  error: z
+    .object({
+      message: z.string(),
+      code: z.string(),
+      details: z.unknown().optional(),
+    })
+    .passthrough(),
 });
 
 type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;
@@ -85,6 +95,21 @@ type ErrorEnvelope = z.infer<typeof ErrorEnvelopeSchema>;
 // ---------------------------------------------------------------------------
 
 const CSRF_METHODS = new Set(["post", "put", "patch", "delete"]);
+
+/**
+ * Axios config plus the options this client adds.
+ *
+ * `retry` controls how many times a failed request is attempted in total:
+ * `false` sends it exactly once, a number sets the attempt count, and leaving it
+ * out keeps the default of {@link API_CONFIG.retryAttempts}. Every failure is
+ * retried by default (including 4xx and 429), which is acceptable for reads but
+ * wrong for a request that moves money: a timeout does not mean the server did
+ * not process it, and resending would place the same bid twice. Pass
+ * `retry: false` for those.
+ */
+export interface ApiRequestConfig extends AxiosRequestConfig {
+  retry?: false | number;
+}
 
 // ---------------------------------------------------------------------------
 // ApiClient
@@ -215,9 +240,15 @@ class ApiClient {
         ? parsed.data.error.message
         : undefined;
       const serverCode = parsed.success ? parsed.data.error.code : undefined;
-      const serverDetails = parsed.success
-        ? parsed.data.error.details
-        : undefined;
+      // `details` when the backend sends it, otherwise any extra fields on the
+      // envelope (see ErrorEnvelopeSchema), otherwise nothing.
+      const serverDetails = (() => {
+        if (!parsed.success) return undefined;
+        const { message: _message, code: _code, details, ...extra } =
+          parsed.data.error;
+        if (details !== undefined) return details;
+        return Object.keys(extra).length > 0 ? extra : undefined;
+      })();
 
       // Fall back to a generic status-based message when the body is not a
       // well-formed ErrorEnvelope (e.g., HTML error pages from a reverse proxy).
@@ -293,6 +324,9 @@ class ApiClient {
               additionalData: {
                 url,
                 retryAfter: response.headers["retry-after"],
+                ...(serverDetails !== undefined
+                  ? { details: serverDetails }
+                  : {}),
               },
             },
             0, // Don't retry rate limit errors
@@ -354,14 +388,33 @@ class ApiClient {
   }
 
   private getRequestKey(config: AxiosRequestConfig): string {
-    return `${config.method?.toUpperCase()}_${config.url}_${JSON.stringify(config.params || {})}`;
+    // The body is part of the identity of a write: two POSTs to the same URL with
+    // different bodies are different requests, and must not be collapsed into one
+    // (the second caller would silently get the first caller's result).
+    let body = "";
+    if (config.data !== undefined) {
+      try {
+        body = JSON.stringify(config.data);
+      } catch {
+        // Not serialisable: give it a key no other request can share.
+        body = `unique_${this.generateRequestId()}`;
+      }
+    }
+    return `${config.method?.toUpperCase()}_${config.url}_${JSON.stringify(config.params || {})}_${body}`;
   }
 
   // -------------------------------------------------------------------------
   // Main request method with retry logic
   // -------------------------------------------------------------------------
-  async request<T = any>(config: AxiosRequestConfig): Promise<T> {
-    const requestKey = this.getRequestKey(config);
+  async request<T = any>(config: ApiRequestConfig): Promise<T> {
+    const { retry, ...axiosConfig } = config;
+    const attempts =
+      retry === false
+        ? 1
+        : typeof retry === "number" && retry >= 1
+          ? Math.floor(retry)
+          : API_CONFIG.retryAttempts;
+    const requestKey = this.getRequestKey(axiosConfig);
 
     // Check if there's already a pending request with the same key
     if (this.requestQueue.has(requestKey)) {
@@ -370,10 +423,10 @@ class ApiClient {
 
     const requestPromise = ErrorRecovery.retryOperation(
       async () => {
-        const response = await this.client.request(config);
+        const response = await this.client.request(axiosConfig);
         return response.data;
       },
-      API_CONFIG.retryAttempts,
+      attempts,
       API_CONFIG.retryDelay
     );
 
@@ -391,22 +444,36 @@ class ApiClient {
   // Convenience methods
   // -------------------------------------------------------------------------
 
-  async get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async get<T = any>(url: string, config?: ApiRequestConfig): Promise<T> {
     return this.request<T>({ ...config, method: "GET", url });
   }
 
   async post<T = any>(
     url: string,
     data?: any,
-    config?: AxiosRequestConfig
+    config?: ApiRequestConfig
   ): Promise<T> {
     return this.request<T>({ ...config, method: "POST", url, data });
+  }
+
+  async postOnce<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<T> {
+    const response = await this.client.request({
+      ...config,
+      method: "POST",
+      url,
+      data,
+    });
+    return response.data;
   }
 
   async put<T = any>(
     url: string,
     data?: any,
-    config?: AxiosRequestConfig
+    config?: ApiRequestConfig
   ): Promise<T> {
     return this.request<T>({ ...config, method: "PUT", url, data });
   }
@@ -414,12 +481,12 @@ class ApiClient {
   async patch<T = any>(
     url: string,
     data?: any,
-    config?: AxiosRequestConfig
+    config?: ApiRequestConfig
   ): Promise<T> {
     return this.request<T>({ ...config, method: "PATCH", url, data });
   }
 
-  async delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T> {
+  async delete<T = any>(url: string, config?: ApiRequestConfig): Promise<T> {
     return this.request<T>({ ...config, method: "DELETE", url });
   }
 
@@ -461,6 +528,9 @@ class ApiClient {
 // Singleton instance
 // ---------------------------------------------------------------------------
 export const apiClient = new ApiClient();
+export function createInvoice(body: CreateInvoiceBody) {
+  return apiClient.post("/invoices", body);
+}
 
 // ---------------------------------------------------------------------------
 // Hook for using API client with error handling

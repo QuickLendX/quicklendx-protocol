@@ -41,6 +41,8 @@ with the migration tests and the commands documented in the backend README.
   [`observability.md`](./observability.md).
 - Secret scanning and local environment guidance are described in
   [`secrets.md`](./secrets.md).
+- Cursor-based pagination parameters, ordering guarantees, and error codes are
+  described in [`pagination.md`](./pagination.md).
 
 The repository does not include the separate package's metrics service,
 hot-reload configuration loader, or contract-test harness. See the root

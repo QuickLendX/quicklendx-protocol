@@ -60,6 +60,13 @@ function getFocusableElements(container: HTMLElement): HTMLElement[] {
   return Array.from(
     container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS)
   ).filter((el) => !el.closest("[inert]") && el.offsetParent !== null);
+  return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTORS)).filter(
+    (el) => {
+      if (el.closest("[inert]") || el.hidden) return false;
+      const style = window.getComputedStyle(el);
+      return style.display !== "none" && style.visibility !== "hidden";
+    }
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -115,6 +122,16 @@ export const Dialog: React.FC<DialogProps> = ({
     ) as HTMLElement[];
     siblings.forEach((el) => el.setAttribute("inert", ""));
     return () => siblings.forEach((el) => el.removeAttribute("inert"));
+  }, [isOpen]);
+
+  // Lock body scroll while open; restore the previous value on every close path.
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
   }, [isOpen]);
 
   // Stable close handler that always reads current onClose / triggerRef
