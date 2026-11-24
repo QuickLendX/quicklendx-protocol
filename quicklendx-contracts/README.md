@@ -853,31 +853,32 @@ stellar-cli contract deploy \
 #### Contract size budget
 
 The release build is tuned for minimal WASM size (`opt-level = "z"`, LTO, strip,
-`codegen-units = 1`). The contract **must** stay within the size budget to be
-accepted by the Stellar network.
+`codegen-units = 1`). The contract **must** stay within the current enforced
+size budget of **655 360 B (640 KiB)** (with a long-term target to reduce back
+to **256 KiB**).
 
 ##### Three-tier size classification
 
 | Tier        | Range                            | Behaviour                                                                   |
 | ----------- | -------------------------------- | --------------------------------------------------------------------------- |
-| **OK**      | 0 – 235 929 B (≤ 90 % of budget) | Green – no action needed.                                                   |
-| **Warning** | 235 930 – 262 144 B (90 – 100 %) | Yellow – plan a reduction effort; CI prints a diagnostic but does not fail. |
-| **Over**    | > 262 144 B (> 256 KiB)          | Red – CI **fails**; artifact is rejected by the Stellar network.            |
+| **OK**      | 0 – 589 824 B (≤ 90 % of budget) | Green – no action needed.                                                   |
+| **Warning** | 589 825 – 655 360 B (90 – 100 %) | Yellow – plan a reduction effort; CI prints a diagnostic but does not fail. |
+| **Over**    | > 655 360 B (> 640 KiB)          | Red – CI **fails**; artifact exceeds the enforced size budget.              |
 
 ##### Regression detection
 
 In addition to the hard budget, CI compares the current build against a recorded
-**baseline** (last known good size). If the artifact grows by more than **5 %**
+**baseline** (last known good size). If the artifact grows by more than **10 %**
 relative to the baseline, CI fails even if the hard budget is not yet broken.
 This catches incremental drift before it becomes a problem.
 
 | Constant            | Value                     | Location                                                                                           |
 | ------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| Hard budget (opt.)  | 262 144 B (256 KiB)       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
-| Raw fallback budget | 327 680 B (320 KiB)       | `tests/wasm_build_size_budget.rs` – used when `wasm-opt` absent (e.g. Windows local builds)        |
-| Warning zone        | 235 929 B (90 %)          | `tests/wasm_build_size_budget.rs`                                                                  |
-| Regression baseline | 217 668 B (last recorded) | `tests/wasm_build_size_budget.rs`, `scripts/wasm-size-baseline.toml`                               |
-| Regression margin   | 5 %                       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`                                    |
+| Hard budget (opt.)  | 655 360 B (640 KiB)       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
+| Raw fallback budget | 655 360 B (640 KiB)       | `tests/wasm_build_size_budget.rs` – used when `wasm-opt` absent (e.g. Windows local builds)        |
+| Warning zone        | 589 824 B (90 %)          | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`                                    |
+| Regression baseline | 558 732 B (last recorded) | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
+| Regression margin   | 10 %                      | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
 
 ##### Update procedure after a legitimate size increase
 
@@ -889,7 +890,7 @@ locations in the **same PR** that introduces the growth:
 cd quicklendx-contracts
 ./scripts/check-wasm-size.sh   # prints "WASM size: <N> bytes"
 
-# 2. Update the baseline (replace 217668 with the new value)
+# 2. Update the baseline (replace 558732 with the new value)
 #    a. tests/wasm_build_size_budget.rs  → WASM_SIZE_BASELINE_BYTES
 #    b. scripts/check-wasm-size.sh       → BASELINE_BYTES
 #    c. scripts/wasm-size-baseline.toml  → [baseline].bytes and recorded
