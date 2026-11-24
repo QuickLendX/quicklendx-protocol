@@ -21,6 +21,7 @@ pub mod emergency;
 pub mod errors;
 pub mod escrow;
 pub mod events;
+pub mod events_schema;
 pub mod fees;
 pub mod freshness;
 pub mod governance;

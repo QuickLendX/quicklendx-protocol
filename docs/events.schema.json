@@ -1,0 +1,2107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "QuickLendX Contract Events Schema",
+  "description": "Authoritative machine-readable schema of all on-chain events emitted by quicklendx-contracts. Generated from quicklendx-contracts/src/events_schema.rs via scripts/gen-events-schema.sh.",
+  "source": "quicklendx-contracts/src/events_schema.rs",
+  "event_count": 89,
+  "events": [
+    {
+      "emitter": "emit_ttl_extended",
+      "topic": "ttl_extended",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "kind",
+          "type": "String"
+        },
+        {
+          "name": "count",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_paused",
+      "topic": "paused",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_unpaused",
+      "topic": "unpaused",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_scan_item_failed",
+      "topic": "scan_item_failed",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "error_code",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_frozen",
+      "topic": "invoice_frozen",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "frozen_by",
+          "type": "Address"
+        },
+        {
+          "name": "reason",
+          "type": "String"
+        },
+        {
+          "name": "freeze_appeal_channel",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_uploaded",
+      "topic": "invoice_uploaded",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        },
+        {
+          "name": "currency",
+          "type": "Address"
+        },
+        {
+          "name": "due_date",
+          "type": "u64"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_verified",
+      "topic": "invoice_verified",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_cancelled",
+      "topic": "invoice_cancelled",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_metadata_updated",
+      "topic": "invoice_metadata_updated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "line_item_count",
+          "type": "u32"
+        },
+        {
+          "name": "total_value",
+          "type": "i128"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_metadata_cleared",
+      "topic": "invoice_metadata_cleared",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_investor_verified",
+      "topic": "investor_verified",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "investment_limit",
+          "type": "i128"
+        },
+        {
+          "name": "verified_at",
+          "type": "u64"
+        },
+        {
+          "name": "verified_by",
+          "type": "Address"
+        },
+        {
+          "name": "tier",
+          "type": "u32"
+        },
+        {
+          "name": "risk_level",
+          "type": "u32"
+        },
+        {
+          "name": "risk_score",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_kyc_submitted",
+      "topic": "kyc_submitted",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "subject",
+          "type": "Address"
+        },
+        {
+          "name": "is_resubmit",
+          "type": "bool"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_kyc_verified",
+      "topic": "kyc_verified",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "subject",
+          "type": "Address"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_kyc_rejected",
+      "topic": "kyc_rejected",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "subject",
+          "type": "Address"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "reason",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_kyc_revoked",
+      "topic": "kyc_revoked",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "reason",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_investor_frozen",
+      "topic": "investor_frozen",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "reason",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_investor_unfrozen",
+      "topic": "investor_unfrozen",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_settled",
+      "topic": "invoice_settled",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        },
+        {
+          "name": "ledger",
+          "type": "u32"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "investor_return",
+          "type": "i128"
+        },
+        {
+          "name": "platform_fee",
+          "type": "i128"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_partial_payment",
+      "topic": "partial_payment",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "payment_amount",
+          "type": "i128"
+        },
+        {
+          "name": "total_paid",
+          "type": "i128"
+        },
+        {
+          "name": "progress",
+          "type": "u32"
+        },
+        {
+          "name": "transaction_id",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_payment_recorded",
+      "topic": "payment_recorded",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "payer",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        },
+        {
+          "name": "transaction_id",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_repayment_allocated",
+      "topic": "repayment_allocated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "schema_version",
+          "type": "u32"
+        },
+        {
+          "name": "operation_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "phase",
+          "type": "TransitionPhase"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "payer",
+          "type": "Address"
+        },
+        {
+          "name": "applied_principal",
+          "type": "i128"
+        },
+        {
+          "name": "applied_investor_profit",
+          "type": "i128"
+        },
+        {
+          "name": "applied_platform_fee",
+          "type": "i128"
+        },
+        {
+          "name": "applied_late_penalty",
+          "type": "i128"
+        },
+        {
+          "name": "cumulative_principal",
+          "type": "i128"
+        },
+        {
+          "name": "cumulative_investor_profit",
+          "type": "i128"
+        },
+        {
+          "name": "cumulative_platform_fee",
+          "type": "i128"
+        },
+        {
+          "name": "cumulative_late_penalty",
+          "type": "i128"
+        },
+        {
+          "name": "total_paid",
+          "type": "i128"
+        },
+        {
+          "name": "total_due",
+          "type": "i128"
+        },
+        {
+          "name": "fee_bps",
+          "type": "i128"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_settled_final",
+      "topic": "invoice_settled_final",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "total_paid",
+          "type": "i128"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_expired",
+      "topic": "invoice_expired",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "due_date",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_defaulted",
+      "topic": "invoice_defaulted",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_funded",
+      "topic": "invoice_funded",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_insurance_added",
+      "topic": "insurance_added",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "investment_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "provider",
+          "type": "Address"
+        },
+        {
+          "name": "coverage_percentage",
+          "type": "u32"
+        },
+        {
+          "name": "coverage_amount",
+          "type": "i128"
+        },
+        {
+          "name": "premium_amount",
+          "type": "i128"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_insurance_premium_collected",
+      "topic": "insurance_premium_collected",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "investment_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "provider",
+          "type": "Address"
+        },
+        {
+          "name": "premium_amount",
+          "type": "i128"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_insurance_claimed",
+      "topic": "insurance_claimed",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "investment_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "provider",
+          "type": "Address"
+        },
+        {
+          "name": "coverage_amount",
+          "type": "i128"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_platform_fee_updated",
+      "topic": "platform_fee_updated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "fee_bps",
+          "type": "u32"
+        },
+        {
+          "name": "updated_at",
+          "type": "u64"
+        },
+        {
+          "name": "updated_by",
+          "type": "Address"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_fee_structure_updated",
+      "topic": "fee_structure_updated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "fee_type",
+          "type": "FeeType"
+        },
+        {
+          "name": "old_fee_bps",
+          "type": "u32"
+        },
+        {
+          "name": "new_fee_bps",
+          "type": "u32"
+        },
+        {
+          "name": "updated_by",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_platform_fee_routed",
+      "topic": "platform_fee_routed",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "recipient",
+          "type": "Address"
+        },
+        {
+          "name": "fee_amount",
+          "type": "i128"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_platform_fee_config_updated",
+      "topic": "platform_fee_config_updated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "old_fee_bps",
+          "type": "u32"
+        },
+        {
+          "name": "new_fee_bps",
+          "type": "u32"
+        },
+        {
+          "name": "updated_by",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_treasury_configured",
+      "topic": "treasury_configured",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "treasury_address",
+          "type": "Address"
+        },
+        {
+          "name": "configured_by",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_escrow_created",
+      "topic": "escrow_created",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "escrow_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_escrow_released",
+      "topic": "escrow_released",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "escrow_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_escrow_refunded",
+      "topic": "escrow_refunded",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "escrow_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_investment_withdrawn",
+      "topic": "investment_withdrawn",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "investment_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_bid_placed",
+      "topic": "bid_placed",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "bid_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "bid_amount",
+          "type": "i128"
+        },
+        {
+          "name": "expected_return",
+          "type": "i128"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        },
+        {
+          "name": "expiration_timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_bid_withdrawn",
+      "topic": "bid_withdrawn",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "bid_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "bid_amount",
+          "type": "i128"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_bid_cancelled",
+      "topic": "bid_cancelled",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "bid_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "bid_amount",
+          "type": "i128"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_bid_accepted",
+      "topic": "bid_accepted",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "bid_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "bid_amount",
+          "type": "i128"
+        },
+        {
+          "name": "expected_return",
+          "type": "i128"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_bid_expired",
+      "topic": "bid_expired",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "bid_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investor",
+          "type": "Address"
+        },
+        {
+          "name": "bid_amount",
+          "type": "i128"
+        },
+        {
+          "name": "expiration_timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_backup_created",
+      "topic": "backup_created",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "backup_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_count",
+          "type": "u32"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_backup_restored",
+      "topic": "backup_restored",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "backup_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "invoice_count",
+          "type": "u32"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_backup_validated",
+      "topic": "backup_validated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "backup_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "success",
+          "type": "bool"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_backup_archived",
+      "topic": "backup_archived",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "backup_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_retention_policy_updated",
+      "topic": "retention_policy_updated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "max_backups",
+          "type": "u32"
+        },
+        {
+          "name": "max_age_seconds",
+          "type": "u64"
+        },
+        {
+          "name": "auto_cleanup_enabled",
+          "type": "bool"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_backups_cleaned",
+      "topic": "backups_cleaned",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "removed_count",
+          "type": "u32"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_audit_validation",
+      "topic": "audit_validation",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "is_valid",
+          "type": "bool"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_audit_query",
+      "topic": "audit_query",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "query_type",
+          "type": "OpType"
+        },
+        {
+          "name": "result_count",
+          "type": "u32"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_category_updated",
+      "topic": "invoice_category_updated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "old_category",
+          "type": "InvoiceCategory"
+        },
+        {
+          "name": "new_category",
+          "type": "InvoiceCategory"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_tag_added",
+      "topic": "invoice_tag_added",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "tag",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_tag_removed",
+      "topic": "invoice_tag_removed",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "business",
+          "type": "Address"
+        },
+        {
+          "name": "tag",
+          "type": "String"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_dispute_created",
+      "topic": "dispute_created",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "created_by",
+          "type": "Address"
+        },
+        {
+          "name": "reason",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_dispute_under_review",
+      "topic": "dispute_under_review",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "reviewed_by",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_dispute_resolved",
+      "topic": "dispute_resolved",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "resolved_by",
+          "type": "Address"
+        },
+        {
+          "name": "resolution",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_dispute_rejected",
+      "topic": "dispute_rejected",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "rejected_by",
+          "type": "Address"
+        },
+        {
+          "name": "reason",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_profit_fee_breakdown",
+      "topic": "profit_fee_breakdown",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "investment_amount",
+          "type": "i128"
+        },
+        {
+          "name": "payment_amount",
+          "type": "i128"
+        },
+        {
+          "name": "gross_profit",
+          "type": "i128"
+        },
+        {
+          "name": "platform_fee",
+          "type": "i128"
+        },
+        {
+          "name": "investor_return",
+          "type": "i128"
+        },
+        {
+          "name": "fee_bps_applied",
+          "type": "i128"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_bid_ttl_updated",
+      "topic": "bid_ttl_updated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "old_days",
+          "type": "u64"
+        },
+        {
+          "name": "new_days",
+          "type": "u64"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_bid_expiry_grace_updated",
+      "topic": "bid_expiry_grace_updated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "old_seconds",
+          "type": "u64"
+        },
+        {
+          "name": "new_seconds",
+          "type": "u64"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_emergency_withdrawal_initiated",
+      "topic": "emergency_withdrawal_initiated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "token",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        },
+        {
+          "name": "target",
+          "type": "Address"
+        },
+        {
+          "name": "unlock_at",
+          "type": "u64"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_emergency_withdrawal_executed",
+      "topic": "emergency_withdrawal_executed",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "token",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        },
+        {
+          "name": "target",
+          "type": "Address"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_emergency_withdrawal_cancelled",
+      "topic": "emergency_withdrawal_cancelled",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "token",
+          "type": "Address"
+        },
+        {
+          "name": "amount",
+          "type": "i128"
+        },
+        {
+          "name": "target",
+          "type": "Address"
+        },
+        {
+          "name": "admin",
+          "type": "Address"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_admin_set",
+      "topic": "admin_set",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_admin_transferred",
+      "topic": "adm_trf",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "old_admin",
+          "type": "Address"
+        },
+        {
+          "name": "new_admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_admin_transfer_initiated",
+      "topic": "adm_req",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "current_admin",
+          "type": "Address"
+        },
+        {
+          "name": "pending_admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_admin_transfer_cancelled",
+      "topic": "adm_cnl",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "current_admin",
+          "type": "Address"
+        },
+        {
+          "name": "pending_admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_admin_two_step_updated",
+      "topic": "adm_2st",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "enabled",
+          "type": "bool"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_revenue_distributed",
+      "topic": "revenue_distributed",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "period",
+          "type": "u64"
+        },
+        {
+          "name": "treasury_amount",
+          "type": "i128"
+        },
+        {
+          "name": "developer_amount",
+          "type": "i128"
+        },
+        {
+          "name": "platform_amount",
+          "type": "i128"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_invoice_status_updated",
+      "topic": "invoice_status_updated",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "status",
+          "type": "InvoiceStatus"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_protocol_initialized",
+      "topic": "protocol_initialized",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "treasury",
+          "type": "Address"
+        },
+        {
+          "name": "fee_bps",
+          "type": "u32"
+        },
+        {
+          "name": "min_invoice_amount",
+          "type": "i128"
+        },
+        {
+          "name": "max_due_date_days",
+          "type": "u64"
+        },
+        {
+          "name": "grace_period_seconds",
+          "type": "u64"
+        },
+        {
+          "name": "backfill_max_batch_size",
+          "type": "u32"
+        },
+        {
+          "name": "corridors",
+          "type": "Vec<Address>"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_admin_initialized",
+      "topic": "adm_init",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_treasury_rotation_initiated",
+      "topic": "tr_rot_i",
+      "format": "tuple",
+      "topic_fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        }
+      ],
+      "fields": [
+        {
+          "name": "new_address",
+          "type": "Address"
+        },
+        {
+          "name": "deadline",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_treasury_rotation_confirmed",
+      "topic": "tr_rot_f",
+      "format": "tuple",
+      "topic_fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        }
+      ],
+      "fields": [
+        {
+          "name": "new_address",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "treasury_rotation_cancelled",
+      "topic": "tr_rot_cn",
+      "format": "unit",
+      "topic_fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        }
+      ],
+      "fields": []
+    },
+    {
+      "emitter": "emit_upgrade_scheduled",
+      "topic": "upg_sch",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "wasm_hash",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        },
+        {
+          "name": "executable_at",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_upgrade_cancelled",
+      "topic": "upg_can",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "wasm_hash",
+          "type": "BytesN<32>"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_upgrade_executed",
+      "topic": "upg_exe",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "wasm_hash",
+          "type": "BytesN<32>"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_incident_mode_entered",
+      "topic": "incident_mode_entered",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "reason",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_incident_mode_exited",
+      "topic": "incident_mode_exited",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "arbiter_registered",
+      "topic": "arb_reg",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "arbiter",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "arbiter_revoked",
+      "topic": "arb_rvk",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "arbiter",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "backfill_started",
+      "topic": "bkf_sta",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "actor",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "backfill_finished",
+      "topic": "bkf_end",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "actor",
+          "type": "Address"
+        },
+        {
+          "name": "restored_count",
+          "type": "u32"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_schema_version_set",
+      "topic": "schema_version_set",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "schema_version",
+          "type": "u32"
+        },
+        {
+          "name": "set_by",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_migration_started",
+      "topic": "migration_started",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "schema_from",
+          "type": "u32"
+        },
+        {
+          "name": "schema_to",
+          "type": "u32"
+        },
+        {
+          "name": "initiated_by",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_migration_completed",
+      "topic": "migration_completed",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "schema_from",
+          "type": "u32"
+        },
+        {
+          "name": "schema_to",
+          "type": "u32"
+        },
+        {
+          "name": "records_migrated",
+          "type": "u32"
+        },
+        {
+          "name": "completed_by",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_migration_rolled_back",
+      "topic": "migration_rolled_back",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "schema_from",
+          "type": "u32"
+        },
+        {
+          "name": "schema_to",
+          "type": "u32"
+        },
+        {
+          "name": "rolled_back_by",
+          "type": "Address"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_migration_failed",
+      "topic": "migration_failed",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "schema_from",
+          "type": "u32"
+        },
+        {
+          "name": "schema_to",
+          "type": "u32"
+        },
+        {
+          "name": "records_migrated",
+          "type": "u32"
+        },
+        {
+          "name": "next_offset",
+          "type": "u32"
+        },
+        {
+          "name": "reason",
+          "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    }
+  ]
+}
