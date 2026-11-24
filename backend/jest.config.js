@@ -70,7 +70,6 @@ export default {
     "src/tests/streaming-exports.test.ts",
     "src/tests/load-shedding-concurrency.test.ts",
     "src/tests/latency-tracker.test.ts",
-    "src/tests/drift-severity.test.ts",
     "src/tests/cache-headers.endpoints.test.ts",
     "src/tests/request-signing.test.ts",
     "src/tests/webhook-ed25519.test.ts",
