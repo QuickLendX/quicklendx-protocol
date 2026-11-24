@@ -17,6 +17,7 @@ pub mod currency;
 pub mod defaults;
 pub mod dispute;
 pub mod dispute_timeline;
+pub mod emergency;
 pub mod errors;
 pub mod escrow;
 pub mod events;
@@ -63,9 +64,6 @@ pub mod diagnostics;
 
 pub mod address_summary;
 pub mod analytics;
-
-// scratch_events is internal
-mod scratch_events;
 
 /// Shared test utilities accessible from integration tests.
 pub mod test_utils;
@@ -461,8 +459,6 @@ mod test_pagination_cursors;
 #[cfg(test)]
 mod test_panic_handler;
 #[cfg(test)]
-mod test_partial_payments;
-#[cfg(test)]
 mod test_pause;
 #[cfg(test)]
 mod test_pause_reads_available;
@@ -770,8 +766,8 @@ impl QuickLendXContract {
         business.require_auth();
         crate::verification::require_business_not_pending(&env, &business)?;
         crate::invoice_amount::validate_invoice_amount_ceiling(amount)?;
-        crate::protocol_limits::ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
-        let invoice = crate::invoice::Invoice::new(
+        crate::protocol_limits::check_invoice_limit(&env, &business)?;
+        let invoice = crate::invoice::Invoice::new_with_fee_settings(
             &env,
             business,
             amount,
@@ -878,6 +874,7 @@ impl QuickLendXContract {
         PauseControl::require_not_paused(&env)?;
         with_payment_guard(&env, || {
             crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id)
+                .map(|_| ())
         })
     }
 

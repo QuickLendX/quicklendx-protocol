@@ -10,6 +10,7 @@ import { corsOptionsDelegate, webhookCorsOptions } from "./config/cors";
 import v1Routes from "./routes/v1";
 import webhookRoutes from "./routes/webhooks";
 import healthRoutes from "./routes/health";
+import adminRoutes from "./routes/v1/admin";
 import { requestLogger } from "./middleware/request-logger";
 import { isEventIngestRequest } from "./middleware/event-ingest-limits";
 import { lagMonitor } from "./services/lagMonitor";
@@ -90,6 +91,7 @@ app.use(requestLogger);
 app.use("/api/webhooks", cors(webhookCorsOptions), webhookRoutes);
 app.use(csrfMiddleware);
 app.use("/api/v1", v1Routes);
+app.use("/admin", adminRoutes);
 
 // Liveness (/health, /livez) and readiness (/readyz) probes.
 // Mounted at the root and left unauthenticated so orchestrators can probe them.

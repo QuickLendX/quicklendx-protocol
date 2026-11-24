@@ -61,9 +61,8 @@ fn setup_investor_for_bid_tests(
 
 /// Helper to get current protocol limits
 fn get_protocol_limits_for_test(env: &Env) -> ProtocolLimits {
-    ProtocolLimitsContract::get_protocol_limits(env),
-        min_investor_tier: crate::verification::InvestorTier::Basic,
-    }
+    ProtocolLimitsContract::get_protocol_limits(env.clone())
+}
 
 #[test]
 fn test_bid_validation_enforces_absolute_minimum() {
