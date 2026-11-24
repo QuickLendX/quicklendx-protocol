@@ -8,6 +8,7 @@ import { statusInjector } from "./middleware/status-injector";
 import { csrfMiddleware } from "./middleware/csrf";
 import { corsOptionsDelegate, webhookCorsOptions } from "./config/cors";
 import { optionalApiKeyAuth } from "./middleware/api-key-auth";
+import { config } from "./config";
 import v1Routes from "./routes/v1";
 import webhookRoutes from "./routes/webhooks";
 import healthRoutes from "./routes/health";
@@ -35,7 +36,7 @@ const unsubscribeLagAlerts = lagMonitor.onAlert((event) => {
 
 const app = express();
 
-app.set("trust proxy", true);
+app.set("trust proxy", config.TRUST_PROXY);
 // Disable Express's built-in ETag generation so our cache-headers middleware
 // has full control over which responses get ETags and which do not.
 app.set("etag", false);
@@ -67,15 +68,6 @@ app.use((req, res, next) => {
     return;
   }
   globalJsonParser(req, res, next);
-});
-app.set("trust proxy", true);
-
-// Test middleware to simulate no IP for coverage
-app.use((req, res, next) => {
-  if (req.headers["x-simulate-no-ip"]) {
-    Object.defineProperty(req, "ip", { value: undefined });
-  }
-  next();
 });
 
 // Rate Limiting (IP-based + per-API-key layered)
