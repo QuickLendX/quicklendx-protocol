@@ -9,11 +9,10 @@
 use alloc::vec::Vec;
 use core::cmp::Ordering;
 use soroban_sdk::testutils::Address as _;
-use soroban_sdk::{testutils::Ledger, Address, BytesN, Env};
+use soroban_sdk::{testutils::Ledger, Address, BytesN, Env, String};
 
 use crate::bid::{Bid, BidStatus, BidStorage};
-use crate::pagination::{cap_query_limit, PageCursor, MAX_QUERY_LIMIT};
-use crate::types::PaginatedBids;
+use crate::pagination::{cap_query_limit, Cursor, MAX_QUERY_LIMIT};
 use crate::QuickLendXContract;
 
 // ============================================================================
@@ -91,7 +90,7 @@ fn rank_bids_paged(
     contract_id: &Address,
 ) -> (soroban_sdk::Vec<Bid>, u32, bool) {
     env.as_contract(contract_id, || {
-        BidStorage::rank_bids_paged(env, invoice, offset, limit)
+        BidStorage::rank_bids_offset(env, invoice, offset, limit)
     })
 }
 
@@ -580,12 +579,12 @@ fn test_contract_get_ranked_bids_paged_integration() {
         persist(&env, &bid, &contract_id);
     }
 
-    let page1: PaginatedBids = client.get_ranked_bids_paged(&inv, &0, &4);
+    let page1 = client.get_ranked_bids_paged(&inv, &None::<String>, &4);
     assert_eq!(page1.items.len(), 4);
     assert_eq!(page1.total_count, 7);
     assert_eq!(page1.has_more, true);
 
-    let page2: PaginatedBids = client.get_ranked_bids_paged(&inv, &4, &4);
+    let page2 = client.get_ranked_bids_paged(&inv, &page1.next_cursor, &4);
     assert_eq!(page2.items.len(), 3);
     assert_eq!(page2.total_count, 7);
     assert_eq!(page2.has_more, false);
@@ -634,7 +633,7 @@ fn test_contract_get_bid_history_paged_filters_expired_on_placed() {
 #[test]
 fn test_page_cursor_generation_semantics() {
     let generation = 1725000000u64;
-    let cursor = PageCursor::new(10, generation);
+    let cursor = Cursor::new(10, generation);
 
     assert_eq!(cursor.require_stable(generation), Ok(()));
     assert_eq!(
@@ -643,9 +642,9 @@ fn test_page_cursor_generation_semantics() {
     );
 
     let encoded = cursor.encode();
-    assert_eq!(encoded, "1725000000_10");
+    assert_eq!(encoded.len(), Cursor::ENCODED_LEN);
 
-    let decoded = PageCursor::decode(&encoded).expect("valid cursor string");
+    let decoded = Cursor::decode(&encoded).expect("valid cursor string");
     assert_eq!(decoded.offset, 10);
     assert_eq!(decoded.generation, generation);
 }

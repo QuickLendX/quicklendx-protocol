@@ -403,6 +403,15 @@ pub struct AuditStats {
     pub date_range: (u64, u64),
 }
 
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CursorAuditPage {
+    pub items: Vec<AuditLogEntry>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+}
+
 impl AuditLogEntry {
     /// Domain separator for audit-chain hashes.
     ///
@@ -764,32 +773,51 @@ impl AuditStorage {
 
     /// Get audit trail for an invoice
     pub fn get_invoice_audit_trail(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
-        Self::get_invoice_audit_trail_paged(env, invoice_id, 0, u32::MAX)
+        let key = (symbol_short!("inv_aud"), invoice_id.clone());
+        if let Some(ids) = env.storage().persistent().get(&key) {
+            return ids;
+        }
+        let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
+        if let Some(ids) = legacy.clone() {
+            persist_set(env, &key, &ids);
+            return ids;
+        }
+        Vec::new(env)
     }
 
     pub fn get_invoice_audit_trail_paged(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        let mut scope = Bytes::from_slice(env, b"invoice_audit");
+        scope.append(&invoice_id.clone().into());
+        Self::page_ids_cursor(
+            env,
+            Self::get_invoice_audit_trail(env, invoice_id),
+            cursor,
+            limit,
+            &scope,
+        )
+    }
+
+    #[deprecated(note = "use get_invoice_audit_trail_paged with an opaque cursor")]
+    pub fn get_invoice_audit_trail_offset(
         env: &Env,
         invoice_id: &BytesN<32>,
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
         let key = (symbol_short!("inv_aud"), invoice_id.clone());
-        let trail: Vec<BytesN<32>> = if let Some(ids) = env.storage().persistent().get(&key) {
-            ids
-        } else {
-            let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
-            if let Some(ids) = legacy.clone() {
-                persist_set(env, &key, &ids);
-                ids
-            } else {
-                Vec::new(env)
-            }
-        };
-        let start = offset.min(trail.len() as u32);
-        let end = (start + limit.min(crate::MAX_QUERY_LIMIT)).min(trail.len() as u32);
+        let trail = Self::get_invoice_audit_trail(env, invoice_id);
+        let (start, end) =
+            crate::pagination::calculate_safe_bounds(offset, limit, trail.len());
         let mut page = Vec::new(env);
         for i in start..end {
-            page.push_back(trail.get(i as u32).unwrap());
+            if let Some(id) = trail.get(i) {
+                page.push_back(id);
+            }
         }
         page
     }
@@ -812,6 +840,24 @@ impl AuditStorage {
     }
 
     pub fn get_audit_entries_by_operation_paged(
+        env: &Env,
+        operation: &AuditOperation,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        let mut scope = Bytes::from_slice(env, b"operation_audit");
+        scope.append(&operation.to_xdr(env));
+        Self::page_ids_cursor(
+            env,
+            Self::get_audit_entries_by_operation(env, operation),
+            cursor,
+            limit,
+            &scope,
+        )
+    }
+
+    #[deprecated(note = "use get_audit_entries_by_operation_paged with an opaque cursor")]
+    pub fn get_audit_entries_by_operation_offset(
         env: &Env,
         operation: &AuditOperation,
         offset: u32,
@@ -837,6 +883,24 @@ impl AuditStorage {
     pub fn get_audit_entries_by_actor_paged(
         env: &Env,
         actor: &Address,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        let mut scope = Bytes::from_slice(env, b"actor_audit");
+        scope.append(&actor.to_xdr(env));
+        Self::page_ids_cursor(
+            env,
+            Self::get_audit_entries_by_actor(env, actor),
+            cursor,
+            limit,
+            &scope,
+        )
+    }
+
+    #[deprecated(note = "use get_audit_entries_by_actor_paged with an opaque cursor")]
+    pub fn get_audit_entries_by_actor_offset(
+        env: &Env,
+        actor: &Address,
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
@@ -850,12 +914,69 @@ impl AuditStorage {
         let ids: Vec<BytesN<32>> = env.storage().persistent().get(key).unwrap_or_else(|| Vec::new(env));
         let page_limit = limit.min(crate::MAX_QUERY_LIMIT);
         let start = offset.min(ids.len() as u32);
-        let end = (start + page_limit).min(ids.len() as u32);
+        let end = start.saturating_add(page_limit).min(ids.len());
         let mut page = Vec::new(env);
         for i in start..end {
             page.push_back(ids.get(i).unwrap());
         }
         page
+    }
+
+    fn page_ids_cursor(
+        env: &Env,
+        ids: Vec<BytesN<32>>,
+        cursor: Option<String>,
+        limit: u32,
+        scope: &Bytes,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        let generation = Self::cursor_generation(env, scope);
+        let offset = match cursor {
+            Some(raw) => {
+                let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+                decoded.require_stable(generation)?;
+                decoded.offset
+            }
+            None => 0,
+        };
+        let total_count = ids.len();
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut items = Vec::new(env);
+        for index in start..end {
+            if let Some(id) = ids.get(index) {
+                items.push_back(id);
+            }
+        }
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        let capped_limit = crate::pagination::cap_query_limit(limit);
+        let next_cursor = if has_more {
+            Some(crate::pagination::encode_soroban_cursor(
+                env,
+                crate::pagination::Cursor::new(
+                    start.saturating_add(capped_limit),
+                    generation,
+                ),
+            ))
+        } else {
+            None
+        };
+        Ok(crate::types::CursorBytes32Page {
+            items,
+            total_count,
+            has_more,
+            next_cursor,
+        })
+    }
+
+    fn cursor_generation(env: &Env, scope: &Bytes) -> u64 {
+        let generation = Self::get_all_audit_entries(env).len();
+        let mut preimage = Bytes::from_slice(env, b"audit_cursor_v1");
+        preimage.append(&Bytes::from_array(env, &generation.to_be_bytes()));
+        preimage.append(scope);
+        let digest = env.crypto().sha256(&preimage).to_array();
+        u64::from_be_bytes([
+            digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6],
+            digest[7],
+        ])
     }
 
     /// Query audit logs with filters.
@@ -864,10 +985,76 @@ impl AuditStorage {
         filter: &AuditQueryFilter,
         limit: u32,
     ) -> Vec<AuditLogEntry> {
-        Self::query_audit_logs_paged(env, filter, 0, limit)
+        Self::query_audit_logs_offset(env, filter, 0, limit)
     }
 
     pub fn query_audit_logs_paged(
+        env: &Env,
+        filter: &AuditQueryFilter,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<CursorAuditPage, QuickLendXError> {
+        let mut matched = Vec::new(env);
+        let ids = if let Some(invoice_id) = &filter.invoice_id {
+            Self::get_invoice_audit_trail(env, invoice_id)
+        } else if let AuditOperationFilter::Specific(operation) = &filter.operation {
+            Self::get_audit_entries_by_operation(env, operation)
+        } else if let Some(actor) = &filter.actor {
+            Self::get_audit_entries_by_actor(env, actor)
+        } else {
+            Self::get_all_audit_entries(env)
+        };
+        for id in ids.iter() {
+            if let Some(entry) = Self::get_audit_entry(env, &id) {
+                if Self::matches_filter(&entry, filter) {
+                    matched.push_back(entry);
+                }
+            }
+        }
+
+        let scope = filter.to_xdr(env);
+        let generation = Self::cursor_generation(env, &scope);
+        let offset = match cursor {
+            Some(raw) => {
+                let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+                decoded.require_stable(generation)?;
+                decoded.offset
+            }
+            None => 0,
+        };
+        let total_count = matched.len();
+        let (start, end) =
+            crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut items = Vec::new(env);
+        for index in start..end {
+            if let Some(entry) = matched.get(index) {
+                items.push_back(entry);
+            }
+        }
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        let capped_limit = crate::pagination::cap_query_limit(limit);
+        let next_cursor = if has_more {
+            Some(crate::pagination::encode_soroban_cursor(
+                env,
+                crate::pagination::Cursor::new(
+                    start.saturating_add(capped_limit),
+                    generation,
+                ),
+            ))
+        } else {
+            None
+        };
+        Ok(CursorAuditPage {
+            items,
+            total_count,
+            has_more,
+            next_cursor,
+        })
+    }
+
+    /// Legacy offset-based audit query.
+    #[deprecated(note = "use query_audit_logs_paged with an opaque cursor")]
+    pub fn query_audit_logs_offset(
         env: &Env,
         filter: &AuditQueryFilter,
         offset: u32,
@@ -882,13 +1069,13 @@ impl AuditStorage {
         }
 
         let audit_ids = if let Some(invoice_id) = &filter.invoice_id {
-            Self::get_invoice_audit_trail_paged(env, invoice_id, offset, capped_limit)
+            Self::get_invoice_audit_trail_offset(env, invoice_id, offset, capped_limit)
         } else if let AuditOperationFilter::Specific(operation) = &filter.operation {
-            Self::get_audit_entries_by_operation_paged(env, operation, offset, capped_limit)
+            Self::get_audit_entries_by_operation_offset(env, operation, offset, capped_limit)
         } else if let Some(actor) = &filter.actor {
-            Self::get_audit_entries_by_actor_paged(env, actor, offset, capped_limit)
+            Self::get_audit_entries_by_actor_offset(env, actor, offset, capped_limit)
         } else {
-            Self::get_all_audit_entries_paged(env, offset, capped_limit)
+            Self::page_ids(env, &symbol_short!("all_aud"), offset, capped_limit)
         };
 
         for audit_id in audit_ids.iter() {
@@ -1040,10 +1227,6 @@ impl AuditStorage {
             return ids;
         }
         Vec::new(env)
-    }
-
-    fn get_all_audit_entries_paged(env: &Env, offset: u32, limit: u32) -> Vec<BytesN<32>> {
-        Self::page_ids(env, &symbol_short!("all_aud"), offset, limit)
     }
 
     pub fn migrate_legacy_audit_storage(env: &Env) -> u32 {

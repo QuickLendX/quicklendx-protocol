@@ -481,11 +481,39 @@ pub struct PaginatedBytes32Vec {
 
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CursorBytes32Page {
+    pub items: Vec<BytesN<32>>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CursorAddressPage {
+    pub items: Vec<Address>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CursorBidsPage {
+    pub items: Vec<Bid>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoicePage {
     pub items: Vec<BytesN<32>>,
     pub total_count: u32,
     pub has_more: bool,
     pub generation: u64,
+    pub next_cursor: Option<String>,
 }
 
 #[contracttype]

@@ -1,5 +1,7 @@
 use core::cmp::Ordering;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec};
+use soroban_sdk::{
+    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, Symbol, Vec,
+};
 
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
@@ -1021,24 +1023,33 @@ impl BidStorage {
         ranked
     }
 
-    /// Return ranked placed bids for an invoice with pagination and boundary validation.
-    ///
-    /// # Returns
-    /// `(ranked_page, total_count, has_more)` where:
-    /// - `ranked_page`: Subsequence of ranked bids within `[offset, offset + limit)`
-    /// - `total_count`: Total number of active placed bids on the invoice
-    /// - `has_more`: `true` if additional ranked bids exist past the requested page
+    /// Return ranked placed bids using a cursor bound to the ranked snapshot.
     pub fn rank_bids_paged(
         env: &Env,
         invoice_id: &BytesN<32>,
-        offset: u32,
+        cursor: Option<soroban_sdk::String>,
         limit: u32,
-    ) -> (Vec<Bid>, u32, bool) {
-        if crate::pagination::validate_query_params(offset, limit).is_err() {
-            return (Vec::new(env), 0, false);
-        }
+    ) -> Result<crate::types::CursorBidsPage, QuickLendXError> {
         let ranked = Self::rank_bids(env, invoice_id);
         let total_count = ranked.len();
+        let mut snapshot = Bytes::new(env);
+        snapshot.append(&invoice_id.to_xdr(env));
+        for bid in ranked.iter() {
+            snapshot.append(&bid.to_xdr(env));
+        }
+        let digest = env.crypto().sha256(&snapshot).to_array();
+        let generation = u64::from_be_bytes([
+            digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6],
+            digest[7],
+        ]);
+        let offset = match cursor {
+            Some(raw) => {
+                let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+                decoded.require_stable(generation)?;
+                decoded.offset
+            }
+            None => 0,
+        };
         let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
         let mut result = Vec::new(env);
         let mut idx = start;
@@ -1047,6 +1058,44 @@ impl BidStorage {
                 result.push_back(bid);
             }
             idx += 1;
+        }
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        let capped_limit = crate::pagination::cap_query_limit(limit);
+        let next_cursor = if has_more {
+            Some(crate::pagination::encode_soroban_cursor(
+                env,
+                crate::pagination::Cursor::new(
+                    start.saturating_add(capped_limit),
+                    generation,
+                ),
+            ))
+        } else {
+            None
+        };
+        Ok(crate::types::CursorBidsPage {
+            items: result,
+            total_count,
+            has_more,
+            next_cursor,
+        })
+    }
+
+    /// Legacy offset-based ranked bid query.
+    #[deprecated(note = "use rank_bids_paged with an opaque cursor")]
+    pub fn rank_bids_offset(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        offset: u32,
+        limit: u32,
+    ) -> (Vec<Bid>, u32, bool) {
+        let ranked = Self::rank_bids(env, invoice_id);
+        let total_count = ranked.len();
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut result = Vec::new(env);
+        for index in start..end {
+            if let Some(bid) = ranked.get(index) {
+                result.push_back(bid);
+            }
         }
         let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
         (result, total_count, has_more)

@@ -353,7 +353,14 @@ fn test_timestamp_pagination_overflow_safe() {
     let (env, client, _admin) = setup_test();
     let business = Address::generate(&env);
 
-    let _ = client.get_business_invoices_paged(&business, &None, &(u32::MAX - 5), &10);
+    let generation = client
+        .get_business_invoices_paged(&business, &None, &None::<String>, &0)
+        .generation;
+    let cursor = crate::pagination::encode_soroban_cursor(
+        &env,
+        crate::pagination::Cursor::new(u32::MAX - 5, generation),
+    );
+    let _ = client.get_business_invoices_paged(&business, &None, &Some(cursor), &10);
 }
 
 /// get_total_invoice_count sums status counts with saturating_add; must not panic.
@@ -440,7 +447,13 @@ fn test_investor_investments_pagination_overflow_safe() {
     let (env, client, _admin) = setup_test();
     let investor = Address::generate(&env);
 
-    let _ = client.get_investor_investments_paged(&investor, &None, &(u32::MAX - 1), &10);
+    let _ = crate::investment_queries::InvestmentQueries::get_investor_investments_paginated(
+        &env,
+        &investor,
+        None,
+        u32::MAX - 1,
+        10,
+    );
 }
 
 // =============================================================================

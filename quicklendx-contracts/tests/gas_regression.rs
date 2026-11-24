@@ -585,7 +585,7 @@ fn test_invoice_gas() {
         harness,
         "get_business_invoices_paged",
         "default",
-        client.try_get_business_invoices_paged(&harness.business, &None, &0, &10)
+        client.try_get_business_invoices_paged(&harness.business, &None, &None::<String>, &10)
     );
     bench_scenario!(
         harness,
