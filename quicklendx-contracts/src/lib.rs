@@ -141,6 +141,9 @@ mod test_audit_stats_regression;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_authorization;
 #[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
+mod test_entrypoint_auth_matrix;
+#[cfg(test)]
 mod test_auto_resolution_boundary;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_backfill_guard;
