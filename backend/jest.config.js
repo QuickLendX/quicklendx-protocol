@@ -77,7 +77,6 @@ export default {
     "src/tests/api-key-store.test.ts",
     "src/tests/migration-runner.test.ts",
     "src/tests/rbac.tokens.test.ts",
-    "src/tests/ingestion-fault.test.ts",
     "src/tests/api-key-rotation.test.ts",
     "src/tests/entity-id.test.ts",
   ],
