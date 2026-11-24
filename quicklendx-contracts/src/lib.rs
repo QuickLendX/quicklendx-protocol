@@ -97,6 +97,8 @@ mod test_partial_payments;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_payment_history;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_payment_token_policy;
+#[cfg(test)]
 mod test_dispute;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline;
