@@ -49,7 +49,6 @@ fn create_verified_investor(
 fn create_invoice(
     env: &Env,
     client: &QuickLendXContractClient,
-    admin: &Address,
     business: &Address,
     amount: i128,
     due_date: u64,
@@ -58,7 +57,6 @@ fn create_invoice(
     let currency = env
         .register_stellar_asset_contract_v2(token_admin)
         .address();
-    client.add_currency(&admin, &currency);
     let result = client.try_store_invoice(
         business,
         &amount,
@@ -67,8 +65,6 @@ fn create_invoice(
         &String::from_str(env, "Test invoice"),
         &InvoiceCategory::Services,
         &Vec::new(env),
-        &None,
-        &None,
         &None,
     );
     let invoice_id = result
@@ -117,11 +113,12 @@ fn expired_bid_not_active_during_grace() {
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100_000_000);
 
-    client.set_bid_expiry_grace_seconds(&86_400u64);
+    env.as_contract(&client.address, || {
+        BidStorage::set_bid_expiry_grace_seconds(&env, &admin, 86_400u64).unwrap();
+    });
     let invoice_id = create_invoice(
         &env,
         &client,
-        &admin,
         &business,
         1_000_000,
         env.ledger().timestamp() + 86400 * 30,
@@ -150,7 +147,6 @@ fn expired_bids_queryable() {
     let invoice_id = create_invoice(
         &env,
         &client,
-        &admin,
         &business,
         1_000_000,
         env.ledger().timestamp() + 86400 * 30,
@@ -182,13 +178,14 @@ fn invariants_accept_boundary_expiry() {
     let invoice_id = create_invoice(
         &env,
         &client,
-        &admin,
         &business,
         1_000_000,
         env.ledger().timestamp() + 86400 * 30,
     );
 
-    client.set_bid_expiry_grace_seconds(&86_400u64);
+    env.as_contract(&client.address, || {
+        BidStorage::set_bid_expiry_grace_seconds(&env, &admin, 86_400u64).unwrap();
+    });
     let bid_id = create_and_place_bid(&env, &client, &investor, &invoice_id, 1_000_000, 1_010_000);
     set_bid_expiration(&env, &client.address, &bid_id, env.ledger().timestamp());
     env.ledger().set_timestamp(env.ledger().timestamp() + 10);
