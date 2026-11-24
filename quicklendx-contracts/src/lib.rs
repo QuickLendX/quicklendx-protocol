@@ -95,6 +95,8 @@ mod test_accept_bid_instruction_budget;
 mod test_accept_bid_race;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+mod test_address_summary;
+#[cfg(test)]
 mod test_admin;
 #[cfg(test)]
 mod test_admin_events_audit_parity;
