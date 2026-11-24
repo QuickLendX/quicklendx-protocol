@@ -143,6 +143,9 @@ export type WebhookDeliveryOptions = {
   ) => Promise<OnceResult>;
   /** Injected for tests when using a custom `requestImpl`. */
   createAgent?: () => SecureAgent;
+  deliveryId?: string;
+  eventType?: string;
+  subscriberId?: string;
 };
 
 function requestOnceHttps(

@@ -44,44 +44,38 @@ fn test_business_invoices_cursored_pagination() {
     let (env, client) = setup();
     let business = Address::generate(&env);
 
-    let id1 = create_invoice_at(&env, &client, &business, 1_000);
-    let id2 = create_invoice_at(&env, &client, &business, 2_000);
+    create_invoice_at(&env, &client, &business, 1_000);
+    create_invoice_at(&env, &client, &business, 2_000);
 
-    let page1 = client.get_business_invoices_cursor(
+    let page1 = client.get_business_invoices_paged(
         &business,
         &Option::<InvoiceStatus>::None,
-        &0u32,
+        &None::<String>,
         &1u32,
-        &None,
     );
 
     assert_eq!(page1.items.len(), 1);
     assert_eq!(page1.total_count, 2);
     assert!(page1.has_more);
-    let gen = page1.generation;
+    let cursor = page1.next_cursor.clone().unwrap();
 
-    // Stable cursor works
-    let page2 = client.get_business_invoices_cursor(
+    let page2 = client.get_business_invoices_paged(
         &business,
         &Option::<InvoiceStatus>::None,
+        &Some(cursor.clone()),
         &1u32,
-        &1u32,
-        &Some(gen),
     );
     assert_eq!(page2.items.len(), 1);
     assert_eq!(page2.total_count, 2);
     assert!(!page2.has_more);
 
-    // Destabilized cursor
     create_invoice_at(&env, &client, &business, 3_000);
-
     let err = client
-        .try_get_business_invoices_cursor(
+        .try_get_business_invoices_paged(
             &business,
             &Option::<InvoiceStatus>::None,
+            &Some(cursor),
             &1u32,
-            &1u32,
-            &Some(gen),
         )
         .unwrap_err()
         .unwrap();
@@ -89,37 +83,56 @@ fn test_business_invoices_cursored_pagination() {
 }
 
 #[test]
-fn test_available_invoices_cursored_pagination() {
+fn test_business_invoice_pagination_rejects_malformed_cursor() {
     let (env, client) = setup();
     let business = Address::generate(&env);
+    let error = client
+        .try_get_business_invoices_paged(
+            &business,
+            &Option::<InvoiceStatus>::None,
+            &Some(String::from_str(&env, "not-a-cursor")),
+            &1u32,
+        )
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(error, QuickLendXError::InvalidCursor);
+}
 
-    // Create an invoice and verify it so it becomes available
-    let id1 = create_invoice_at(&env, &client, &business, 1_000);
-    // Pretend admin verified it (status = Verified)
-    // Actually we can just call store_invoice with a different status or update it.
-    // For simplicity, we just assume it's added. Let's just create one.
-    // However, store_invoice sets it to Pending.
-    // We would need to verify it. We can just skip exact verification in this dummy test
-    // or test the unstable cursor logic anyway.
-    
-    // We can just call get_available_invoices_cursor
-    let page1 = client.get_available_invoices_cursor(
-        &None,
-        &None,
-        &None,
-        &0u32,
-        &1u32,
-        &None,
-    );
-    let gen = page1.generation;
+#[test]
+fn test_business_invoice_cursor_is_bound_to_business_and_filter() {
+    let (env, client) = setup();
+    let business = Address::generate(&env);
+    let other_business = Address::generate(&env);
+    create_invoice_at(&env, &client, &business, 1_000);
+    create_invoice_at(&env, &client, &business, 2_000);
 
-    let page2 = client.get_available_invoices_cursor(
-        &None,
-        &None,
-        &None,
-        &0u32,
+    let page = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &None::<String>,
         &1u32,
-        &Some(gen),
     );
-    assert_eq!(page2.generation, gen);
+    let cursor = page.next_cursor.unwrap();
+
+    let other_business_error = client
+        .try_get_business_invoices_paged(
+            &other_business,
+            &Option::<InvoiceStatus>::None,
+            &Some(cursor.clone()),
+            &1u32,
+        )
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(other_business_error, QuickLendXError::UnstableCursor);
+
+    let other_filter_error = client
+        .try_get_business_invoices_paged(
+            &business,
+            &Some(InvoiceStatus::Pending),
+            &Some(cursor),
+            &1u32,
+        )
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(other_filter_error, QuickLendXError::UnstableCursor);
 }

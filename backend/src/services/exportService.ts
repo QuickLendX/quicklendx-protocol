@@ -7,6 +7,8 @@ import crypto from "crypto";
 import fs from "fs";
 import fsp from "fs/promises";
 import path from "path";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
 
 export enum ExportFormat {
   JSON = "json",
@@ -312,31 +314,12 @@ class ExportService {
     const writeStream = fs.createWriteStream(tmpPath, { mode: 0o600 });
 
     try {
-      await new Promise<void>((resolve, reject) => {
-        if (format === ExportFormat.JSON) {
-          writeStream.write('{\n');
-          this.writeJsonSection(writeStream, data, "invoices", ["id", "amount", "currency", "status", "due_date"]);
-          writeStream.write(',\n');
-          this.writeJsonSection(writeStream, data, "bids", ["bid_id", "invoice_id", "bid_amount", "status", "timestamp"]);
-          writeStream.write(',\n');
-          this.writeJsonSection(writeStream, data, "settlements", ["id", "invoice_id", "amount", "status", "timestamp"]);
-          writeStream.write('\n}\n');
-          writeStream.end();
-        } else {
-          this.writeCsvSection(writeStream, "INVOICES", data.invoices, ["id", "amount", "currency", "status", "due_date"],
-            (r) => `${r.id},${r.amount},${r.currency},${r.status},${r.due_date ? new Date(r.due_date * 1000).toISOString() : ""}`
-          );
-          this.writeCsvSection(writeStream, "BIDS", data.bids, ["bid_id", "invoice_id", "bid_amount", "status", "timestamp"],
-            (r) => `${r.bid_id},${r.invoice_id},${r.bid_amount},${r.status},${r.timestamp ? new Date(r.timestamp * 1000).toISOString() : ""}`
-          );
-          this.writeCsvSection(writeStream, "SETTLEMENTS", data.settlements, ["id", "invoice_id", "amount", "status", "timestamp"],
-            (r) => `${r.id},${r.invoice_id},${r.amount},${r.status},${r.timestamp ? new Date(r.timestamp * 1000).toISOString() : ""}`
-          );
-          writeStream.end();
-        }
-        writeStream.on("finish", resolve);
-        writeStream.on("error", reject);
-      });
+      // pipeline propagates errors and pauses serialization when the file's
+      // writable buffer is full instead of buffering the complete export.
+      await pipeline(
+        Readable.from(this.exportChunks(data, format), { objectMode: false }),
+        writeStream,
+      );
       await fsp.rename(tmpPath, filePath);
       await fsp.chmod(filePath, 0o600);
     } catch (err) {
@@ -350,41 +333,48 @@ class ExportService {
     }
   }
 
-  private writeJsonSection(
-    stream: fs.WriteStream,
-    data: ExportData["data"],
-    key: string,
-    fields: string[],
-  ): void {
-    const items = (data as any)[key] as any[];
-    stream.write(`  "${key}": [\n`);
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i];
-      const obj = Object.fromEntries(fields.map((f) => [f, (item as any)[f] ?? null]));
-      stream.write(`    ${JSON.stringify(obj)}`);
-      if (i < items.length - 1) stream.write(",");
-      stream.write("\n");
+  private *exportChunks(data: ExportData["data"], format: ExportFormat): Generator<string> {
+    if (format === ExportFormat.JSON) {
+      yield "{\n";
+      yield* this.jsonSection(data.invoices, "invoices", ["id", "amount", "currency", "status", "due_date"]);
+      yield ",\n";
+      yield* this.jsonSection(data.bids, "bids", ["bid_id", "invoice_id", "bid_amount", "status", "timestamp"]);
+      yield ",\n";
+      yield* this.jsonSection(data.settlements, "settlements", ["id", "invoice_id", "amount", "status", "timestamp"]);
+      yield "\n}\n";
+    } else {
+      yield* this.csvSection("INVOICES", data.invoices, ["id", "amount", "currency", "status", "due_date"],
+        (r) => `${r.id},${r.amount},${r.currency},${r.status},${r.due_date ? new Date(r.due_date * 1000).toISOString() : ""}`);
+      yield* this.csvSection("BIDS", data.bids, ["bid_id", "invoice_id", "bid_amount", "status", "timestamp"],
+        (r) => `${r.bid_id},${r.invoice_id},${r.bid_amount},${r.status},${r.timestamp ? new Date(r.timestamp * 1000).toISOString() : ""}`);
+      yield* this.csvSection("SETTLEMENTS", data.settlements, ["id", "invoice_id", "amount", "status", "timestamp"],
+        (r) => `${r.id},${r.invoice_id},${r.amount},${r.status},${r.timestamp ? new Date(r.timestamp * 1000).toISOString() : ""}`);
     }
-    stream.write("  ]");
   }
 
-  private writeCsvSection(
-    stream: fs.WriteStream,
+  private *jsonSection(items: any[], key: string, fields: string[]): Generator<string> {
+    yield `  "${key}": [\n`;
+    for (let i = 0; i < items.length; i++) {
+      const obj = Object.fromEntries(fields.map((field) => [field, items[i][field] ?? null]));
+      yield `    ${JSON.stringify(obj)}${i < items.length - 1 ? "," : ""}\n`;
+    }
+    yield "  ]";
+  }
+
+  private *csvSection(
     sectionName: string,
     rows: any[],
     headers: string[],
-    formatRow: (r: any) => string,
-  ): void {
-    stream.write(`--- ${sectionName} ---\n`);
+    formatRow: (row: any) => string,
+  ): Generator<string> {
+    yield `--- ${sectionName} ---\n`;
     if (rows.length > 0) {
-      stream.write(headers.join(",") + "\n");
-      for (const row of rows) {
-        stream.write(formatRow(row) + "\n");
-      }
+      yield headers.join(",") + "\n";
+      for (const row of rows) yield formatRow(row) + "\n";
     } else {
-      stream.write(`No ${sectionName.toLowerCase()} found\n`);
+      yield `No ${sectionName.toLowerCase()} found\n`;
     }
-    stream.write("\n");
+    yield "\n";
   }
 
   public async getFilePath(token: string): Promise<string | null> {

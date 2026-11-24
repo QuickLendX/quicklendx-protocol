@@ -50,19 +50,23 @@ Additionally:
 
 ```bash
 # From the repository root
-bash scripts/reproducible-build.sh
+bash scripts/reproducible-build.sh --verify
 ```
 
 ### What the script does
 
-1. Verifies the WASM target is installed (`rustup target add wasm32-unknown-unknown`).
-2. **Cleans** all build artefacts (`cargo clean` + `rm -rf target/.../release`).
-3. Runs `cargo build --target wasm32-unknown-unknown --release --locked --no-default-features` **(Build 1)**.
-4. Records the SHA-256 of the resulting `.wasm` file.
-5. **Cleans again**.
-6. Runs the same build command **(Build 2)**.
-7. Records the SHA-256.
-8. **Asserts both hashes match**. Exits `1` if they diverge.
+1. Creates an isolated temporary directory (`mktemp -d`) with an `EXIT` trap so build artefacts are never left in the repository or committed.
+2. Exports deterministic build environment variables:
+   - `SOURCE_DATE_EPOCH=1700000000` (overridable via environment)
+   - `CARGO_INCREMENTAL=0`
+   - `RUSTC_WRAPPER=""`
+   - `TZ=UTC` and `LC_ALL=C`
+   - `RUSTFLAGS` with `--remap-path-prefix` mapping the repository root (`/workspace`), `CARGO_HOME` (`/cargo`), `RUSTUP_HOME` (`/rustup`), and each build's `CARGO_TARGET_DIR` (`/target`).
+3. Verifies the WASM target is installed (`rustup target add wasm32v1-none`).
+4. Runs `cargo build --target wasm32v1-none --release --locked --no-default-features` into `<tmp>/target-1` **(Build 1)** and records its SHA-256.
+5. Runs the exact same build command into a completely separate clean directory `<tmp>/target-2` **(Build 2)** and records its SHA-256.
+6. **Asserts both SHA-256 hashes and raw bytes match** (`cmp -s`). Exits `1` if they diverge.
+7. Optionally asserts the verified hash equals `--expected-hash <sha256>` (or `EXPECTED_WASM_SHA256`).
 
 ### Expected output (passing)
 
@@ -71,34 +75,64 @@ bash scripts/reproducible-build.sh
 ║  QuickLendX — WASM Reproducible-Build Verification          ║
 ╚══════════════════════════════════════════════════════════════╝
 
+==> Mode:              verify (dual clean build)
+==> SOURCE_DATE_EPOCH: 1700000000
+==> Temp build root:   /tmp/qlx-reproducible-build.XXXXXX
 ==> Toolchain version: stable-x86_64-unknown-linux-gnu (…)
-==> Checking WASM target… wasm32-unknown-unknown (installed)
+==> Checking WASM target…
 ==> Cargo.lock status: Cargo.lock present — using pinned dependencies.
 
 ============================================================
-  Build 1
+  Build 1 (CARGO_TARGET_DIR=/tmp/qlx-reproducible-build.XXXXXX/target-1)
 ============================================================
-  SHA-256 (build 1): 3a7f9c…
+  SHA-256 (build 1): <64-hex-sha256>
 
 ============================================================
-  Build 2
+  Build 2 (CARGO_TARGET_DIR=/tmp/qlx-reproducible-build.XXXXXX/target-2)
 ============================================================
-  SHA-256 (build 2): 3a7f9c…
+  SHA-256 (build 2): <64-hex-sha256>
 
 ============================================================
   Reproducibility verdict
 ============================================================
-  Build 1: 3a7f9c…
-  Build 2: 3a7f9c…
+  Build 1: <64-hex-sha256>
+  Build 2: <64-hex-sha256>
 
-  ✅  PASS — hashes match. WASM build is reproducible.
+  PASS — hashes match. WASM build is reproducible.
+
+  SHA-256: <64-hex-sha256>
 ```
 
 ### Verbose mode
 
 ```bash
-VERBOSE=1 bash scripts/reproducible-build.sh
+VERBOSE=1 bash scripts/reproducible-build.sh --verify
 ```
+
+---
+
+## Expected Hash and Update Procedure
+
+Record the verified release WASM SHA-256 hash here for each tagged release or audited commit:
+
+| Target | `SOURCE_DATE_EPOCH` | Expected WASM SHA-256 |
+|--------|---------------------|-----------------------|
+| `wasm32v1-none` | `1700000000` | *(run `bash scripts/reproducible-build.sh --verify` on a clean release commit to populate)* |
+
+To verify against a recorded hash:
+
+```bash
+bash scripts/reproducible-build.sh --verify --expected-hash <RECORDED_SHA256>
+```
+
+### Updating the recorded hash
+
+Whenever contract source (`quicklendx-contracts/src/`), `Cargo.lock`, `Cargo.toml`, or `rust-toolchain.toml` changes for a release:
+
+1. Ensure the working tree is clean and on the release commit.
+2. Run `bash scripts/reproducible-build.sh --verify` and confirm it prints identical Build 1 and Build 2 SHA-256 hashes and exits `0`.
+3. Update the **Expected WASM SHA-256** cell in the table above with the printed hash.
+4. Commit the updated `docs/reproducible-builds.md` alongside the release notes / tag.
 
 ---
 

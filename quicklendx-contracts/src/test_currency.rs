@@ -329,7 +329,7 @@ fn test_currency_count() {
 }
 
 #[test]
-fn test_get_whitelisted_currencies_paged() {
+fn test_get_whitelisted_currencies_offset() {
     let (env, client, admin) = setup();
     let currency_a = Address::generate(&env);
     let currency_b = Address::generate(&env);
@@ -338,15 +338,33 @@ fn test_get_whitelisted_currencies_paged() {
     client.add_currency(&admin, &currency_b);
     client.add_currency(&admin, &currency_c);
 
-    let page1 = client.get_whitelisted_currencies_paged(&0u32, &2u32);
+    let page1 = client.get_whitelisted_currency_offset(&0u32, &2u32);
     assert_eq!(page1.len(), 2);
 
-    let page2 = client.get_whitelisted_currencies_paged(&2u32, &2u32);
+    let page2 = client.get_whitelisted_currency_offset(&2u32, &2u32);
     assert_eq!(page2.len(), 1);
 
     // offset beyond length returns empty
-    let page3 = client.get_whitelisted_currencies_paged(&10u32, &2u32);
+    let page3 = client.get_whitelisted_currency_offset(&10u32, &2u32);
     assert_eq!(page3.len(), 0);
+}
+
+#[test]
+fn test_whitelisted_currency_cursor_is_invalidated_by_changes() {
+    let (env, client, admin) = setup();
+    for _ in 0..3 {
+        client.add_currency(&admin, &Address::generate(&env));
+    }
+
+    let first_page = client.get_whitelisted_currencies_paged(&None::<String>, &2u32);
+    let cursor = first_page.next_cursor.unwrap();
+    client.add_currency(&admin, &Address::generate(&env));
+
+    let result = client
+        .try_get_whitelisted_currencies_paged(&Some(cursor), &2u32)
+        .unwrap_err()
+        .unwrap();
+    assert_eq!(result, crate::errors::QuickLendXError::UnstableCursor);
 }
 
 /// Test boundary conditions for pagination with empty whitelist
@@ -355,7 +373,7 @@ fn test_pagination_empty_whitelist_boundaries() {
     let (_env, client, _admin) = setup();
 
     // Empty whitelist with zero offset/limit
-    let result = client.get_whitelisted_currencies_paged(&0u32, &0u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &0u32);
     assert_eq!(
         result.len(),
         0,
@@ -363,7 +381,7 @@ fn test_pagination_empty_whitelist_boundaries() {
     );
 
     // Empty whitelist with non-zero offset/limit
-    let result = client.get_whitelisted_currencies_paged(&0u32, &10u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &10u32);
     assert_eq!(
         result.len(),
         0,
@@ -371,7 +389,7 @@ fn test_pagination_empty_whitelist_boundaries() {
     );
 
     // Empty whitelist with large offset
-    let result = client.get_whitelisted_currencies_paged(&u32::MAX, &10u32);
+    let result = client.get_whitelisted_currencies_offset(&u32::MAX, &10u32);
     assert_eq!(
         result.len(),
         0,
@@ -379,7 +397,7 @@ fn test_pagination_empty_whitelist_boundaries() {
     );
 
     // Empty whitelist with max limit
-    let result = client.get_whitelisted_currencies_paged(&0u32, &u32::MAX);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &u32::MAX);
     assert_eq!(
         result.len(),
         0,
@@ -399,7 +417,7 @@ fn test_pagination_offset_saturation() {
     }
 
     // Test offset at exact boundary (length)
-    let result = client.get_whitelisted_currencies_paged(&5u32, &10u32);
+    let result = client.get_whitelisted_currencies_offset(&5u32, &10u32);
     assert_eq!(
         result.len(),
         0,
@@ -407,11 +425,11 @@ fn test_pagination_offset_saturation() {
     );
 
     // Test offset just beyond boundary
-    let result = client.get_whitelisted_currencies_paged(&6u32, &10u32);
+    let result = client.get_whitelisted_currencies_offset(&6u32, &10u32);
     assert_eq!(result.len(), 0, "offset beyond length should return empty");
 
     // Test offset at maximum value
-    let result = client.get_whitelisted_currencies_paged(&u32::MAX, &10u32);
+    let result = client.get_whitelisted_currencies_offset(&u32::MAX, &10u32);
     assert_eq!(
         result.len(),
         0,
@@ -419,7 +437,7 @@ fn test_pagination_offset_saturation() {
     );
 
     // Test offset near maximum with small limit
-    let result = client.get_whitelisted_currencies_paged(&(u32::MAX - 1), &1u32);
+    let result = client.get_whitelisted_currencies_offset(&(u32::MAX - 1), &1u32);
     assert_eq!(
         result.len(),
         0,
@@ -427,7 +445,7 @@ fn test_pagination_offset_saturation() {
     );
 
     // Test valid offset at boundary minus one
-    let result = client.get_whitelisted_currencies_paged(&4u32, &10u32);
+    let result = client.get_whitelisted_currencies_offset(&4u32, &10u32);
     assert_eq!(result.len(), 1, "offset at length-1 should return 1 item");
 }
 
@@ -443,11 +461,11 @@ fn test_pagination_limit_saturation() {
     }
 
     // Test zero limit
-    let result = client.get_whitelisted_currencies_paged(&0u32, &0u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &0u32);
     assert_eq!(result.len(), 0, "zero limit should return empty");
 
     // Test limit larger than available items
-    let result = client.get_whitelisted_currencies_paged(&0u32, &100u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &100u32);
     assert_eq!(
         result.len(),
         3,
@@ -455,7 +473,7 @@ fn test_pagination_limit_saturation() {
     );
 
     // Test maximum limit value
-    let result = client.get_whitelisted_currencies_paged(&0u32, &u32::MAX);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &u32::MAX);
     assert_eq!(
         result.len(),
         3,
@@ -463,7 +481,7 @@ fn test_pagination_limit_saturation() {
     );
 
     // Test limit exactly matching available items
-    let result = client.get_whitelisted_currencies_paged(&0u32, &3u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &3u32);
     assert_eq!(
         result.len(),
         3,
@@ -471,7 +489,7 @@ fn test_pagination_limit_saturation() {
     );
 
     // Test limit one less than available
-    let result = client.get_whitelisted_currencies_paged(&0u32, &2u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &2u32);
     assert_eq!(
         result.len(),
         2,
@@ -491,7 +509,7 @@ fn test_pagination_overflow_protection() {
     }
 
     // Test offset + limit overflow (should not panic)
-    let result = client.get_whitelisted_currencies_paged(&u32::MAX, &u32::MAX);
+    let result = client.get_whitelisted_currencies_offset(&u32::MAX, &u32::MAX);
     assert_eq!(
         result.len(),
         0,
@@ -499,7 +517,7 @@ fn test_pagination_overflow_protection() {
     );
 
     // Test large offset with large limit
-    let result = client.get_whitelisted_currencies_paged(&(u32::MAX - 5), &10u32);
+    let result = client.get_whitelisted_currencies_offset(&(u32::MAX - 5), &10u32);
     assert_eq!(
         result.len(),
         0,
@@ -507,7 +525,7 @@ fn test_pagination_overflow_protection() {
     );
 
     // Test normal offset with very large limit
-    let result = client.get_whitelisted_currencies_paged(&5u32, &u32::MAX);
+    let result = client.get_whitelisted_currencies_offset(&5u32, &u32::MAX);
     assert_eq!(
         result.len(),
         5,
@@ -515,7 +533,7 @@ fn test_pagination_overflow_protection() {
     );
 
     // Test edge case: offset at max-1, limit 1
-    let result = client.get_whitelisted_currencies_paged(&(u32::MAX - 1), &1u32);
+    let result = client.get_whitelisted_currencies_offset(&(u32::MAX - 1), &1u32);
     assert_eq!(
         result.len(),
         0,
@@ -525,7 +543,7 @@ fn test_pagination_overflow_protection() {
     // Test arithmetic overflow protection: offset + limit > u32::MAX
     let large_offset = u32::MAX / 2;
     let large_limit = u32::MAX / 2 + 1;
-    let result = client.get_whitelisted_currencies_paged(&large_offset, &large_limit);
+    let result = client.get_whitelisted_currencies_offset(&large_offset, &large_limit);
     assert_eq!(
         result.len(),
         0,
@@ -549,9 +567,9 @@ fn test_pagination_consistency_and_ordering() {
     assert_eq!(full_list.len(), 7, "should have 7 currencies");
 
     // Test that pagination returns items in same order as full list
-    let page1 = client.get_whitelisted_currencies_paged(&0u32, &3u32);
-    let page2 = client.get_whitelisted_currencies_paged(&3u32, &3u32);
-    let page3 = client.get_whitelisted_currencies_paged(&6u32, &3u32);
+    let page1 = client.get_whitelisted_currencies_offset(&0u32, &3u32);
+    let page2 = client.get_whitelisted_currencies_offset(&3u32, &3u32);
+    let page3 = client.get_whitelisted_currencies_offset(&6u32, &3u32);
 
     assert_eq!(page1.len(), 3, "first page should have 3 items");
     assert_eq!(page2.len(), 3, "second page should have 3 items");
@@ -581,7 +599,7 @@ fn test_pagination_consistency_and_ordering() {
     );
 
     // Test overlapping pages don't duplicate
-    let overlap_page = client.get_whitelisted_currencies_paged(&2u32, &3u32);
+    let overlap_page = client.get_whitelisted_currencies_offset(&2u32, &3u32);
     assert_eq!(
         overlap_page.len(),
         3,
@@ -604,7 +622,7 @@ fn test_pagination_single_item_edge_cases() {
     client.add_currency(&admin, &currency);
 
     // Test various pagination scenarios with single item
-    let result = client.get_whitelisted_currencies_paged(&0u32, &1u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &1u32);
     assert_eq!(result.len(), 1, "should return the single item");
     assert_eq!(
         result.get(0).unwrap(),
@@ -612,21 +630,21 @@ fn test_pagination_single_item_edge_cases() {
         "should return correct currency"
     );
 
-    let result = client.get_whitelisted_currencies_paged(&0u32, &10u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &10u32);
     assert_eq!(
         result.len(),
         1,
         "large limit should still return single item"
     );
 
-    let result = client.get_whitelisted_currencies_paged(&1u32, &1u32);
+    let result = client.get_whitelisted_currencies_offset(&1u32, &1u32);
     assert_eq!(
         result.len(),
         0,
         "offset beyond single item should return empty"
     );
 
-    let result = client.get_whitelisted_currencies_paged(&0u32, &0u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &0u32);
     assert_eq!(
         result.len(),
         0,
@@ -646,7 +664,7 @@ fn test_pagination_after_modifications() {
     }
 
     // Test pagination before modification
-    let page_before = client.get_whitelisted_currencies_paged(&0u32, &3u32);
+    let page_before = client.get_whitelisted_currencies_offset(&0u32, &3u32);
     assert_eq!(
         page_before.len(),
         3,
@@ -658,7 +676,7 @@ fn test_pagination_after_modifications() {
     client.remove_currency(&admin, &currencies[3]);
 
     // Test pagination after removal
-    let page_after = client.get_whitelisted_currencies_paged(&0u32, &3u32);
+    let page_after = client.get_whitelisted_currencies_offset(&0u32, &3u32);
     assert_eq!(page_after.len(), 3, "should have 3 items after removal");
 
     // Verify removed currencies are not in results
@@ -678,7 +696,7 @@ fn test_pagination_after_modifications() {
     );
 
     // Test pagination at new boundary
-    let boundary_page = client.get_whitelisted_currencies_paged(&3u32, &1u32);
+    let boundary_page = client.get_whitelisted_currencies_offset(&3u32, &1u32);
     assert_eq!(
         boundary_page.len(),
         0,
@@ -687,7 +705,7 @@ fn test_pagination_after_modifications() {
 
     // Clear all currencies and test
     client.clear_currencies(&admin);
-    let empty_page = client.get_whitelisted_currencies_paged(&0u32, &10u32);
+    let empty_page = client.get_whitelisted_currencies_offset(&0u32, &10u32);
     assert_eq!(
         empty_page.len(),
         0,
@@ -711,7 +729,7 @@ fn test_pagination_security_boundaries() {
     env.mock_all_auths_allowing_non_root_auth();
 
     // Non-admin should be able to read paginated results
-    let result = client.get_whitelisted_currencies_paged(&0u32, &3u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &3u32);
     assert_eq!(
         result.len(),
         3,
@@ -720,7 +738,7 @@ fn test_pagination_security_boundaries() {
 
     // Test that pagination doesn't expose more data than intended
     let full_list = client.get_whitelisted_currencies();
-    let paginated_total = client.get_whitelisted_currencies_paged(&0u32, &u32::MAX);
+    let paginated_total = client.get_whitelisted_currencies_offset(&0u32, &u32::MAX);
     assert_eq!(
         full_list.len(),
         paginated_total.len(),
@@ -766,7 +784,7 @@ fn test_pagination_large_dataset_boundaries() {
     let mut offset = 0u32;
 
     loop {
-        let page = client.get_whitelisted_currencies_paged(&offset, &page_size);
+        let page = client.get_whitelisted_currencies_offset(&offset, &page_size);
         if page.len() == 0 {
             break;
         }
@@ -785,7 +803,7 @@ fn test_pagination_large_dataset_boundaries() {
     );
 
     // Test large offset with large dataset
-    let result = client.get_whitelisted_currencies_paged(&(large_count + 10), &10u32);
+    let result = client.get_whitelisted_currencies_offset(&(large_count + 10), &10u32);
     assert_eq!(
         result.len(),
         0,
@@ -793,7 +811,7 @@ fn test_pagination_large_dataset_boundaries() {
     );
 
     // Test boundary at exact dataset size
-    let result = client.get_whitelisted_currencies_paged(&large_count, &1u32);
+    let result = client.get_whitelisted_currencies_offset(&large_count, &1u32);
     assert_eq!(
         result.len(),
         0,
@@ -813,7 +831,7 @@ fn test_pagination_concurrent_modification_boundaries() {
     }
 
     // Simulate concurrent reads during modifications
-    let initial_page = client.get_whitelisted_currencies_paged(&0u32, &5u32);
+    let initial_page = client.get_whitelisted_currencies_offset(&0u32, &5u32);
     assert_eq!(initial_page.len(), 5, "initial page should have 5 items");
 
     // Modify whitelist (remove some currencies)
@@ -821,7 +839,7 @@ fn test_pagination_concurrent_modification_boundaries() {
     client.remove_currency(&admin, &currencies[7]);
 
     // Read same page after modification
-    let modified_page = client.get_whitelisted_currencies_paged(&0u32, &5u32);
+    let modified_page = client.get_whitelisted_currencies_offset(&0u32, &5u32);
     assert_eq!(
         modified_page.len(),
         5,
@@ -834,7 +852,7 @@ fn test_pagination_concurrent_modification_boundaries() {
     let mut offset = 0u32;
 
     loop {
-        let page = client.get_whitelisted_currencies_paged(&offset, &3u32);
+        let page = client.get_whitelisted_currencies_offset(&offset, &3u32);
         if page.len() == 0 {
             break;
         }
@@ -862,7 +880,7 @@ fn test_pagination_address_handling_boundaries() {
     client.add_currency(&admin, &currency);
     client.add_currency(&admin, &currency); // Duplicate add
 
-    let result = client.get_whitelisted_currencies_paged(&0u32, &10u32);
+    let result = client.get_whitelisted_currencies_offset(&0u32, &10u32);
     assert_eq!(
         result.len(),
         1,
@@ -884,7 +902,7 @@ fn test_pagination_address_handling_boundaries() {
     ); // 1 from duplicate test + 15 new
 
     // Test pagination retrieves all unique addresses
-    let all_paginated = client.get_whitelisted_currencies_paged(&0u32, &20u32);
+    let all_paginated = client.get_whitelisted_currencies_offset(&0u32, &20u32);
     assert_eq!(
         all_paginated.len(),
         16,
@@ -909,7 +927,7 @@ fn test_pagination_storage_efficiency() {
     let (env, client, admin) = setup();
 
     // Test empty storage efficiency
-    let empty_result = client.get_whitelisted_currencies_paged(&0u32, &100u32);
+    let empty_result = client.get_whitelisted_currencies_offset(&0u32, &100u32);
     assert_eq!(
         empty_result.len(),
         0,
@@ -923,7 +941,7 @@ fn test_pagination_storage_efficiency() {
 
         // Test pagination at each growth step
         let count = (i + 1) as u32;
-        let result = client.get_whitelisted_currencies_paged(&0u32, &count);
+        let result = client.get_whitelisted_currencies_offset(&0u32, &count);
         assert_eq!(
             result.len(),
             count,
@@ -932,7 +950,7 @@ fn test_pagination_storage_efficiency() {
         );
 
         // Test boundary pagination
-        let boundary_result = client.get_whitelisted_currencies_paged(&count, &1u32);
+        let boundary_result = client.get_whitelisted_currencies_offset(&count, &1u32);
         assert_eq!(
             boundary_result.len(),
             0,
@@ -943,7 +961,7 @@ fn test_pagination_storage_efficiency() {
 
     // Test bulk clear efficiency
     client.clear_currencies(&admin);
-    let cleared_result = client.get_whitelisted_currencies_paged(&0u32, &100u32);
+    let cleared_result = client.get_whitelisted_currencies_offset(&0u32, &100u32);
     assert_eq!(
         cleared_result.len(),
         0,
