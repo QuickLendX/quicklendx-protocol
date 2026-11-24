@@ -10,7 +10,7 @@
 //! ```
 #![allow(clippy::disallowed_methods)]
 #![allow(clippy::unit_arg)]
-
+#![allow(clippy::disallowed_macros)]
 use quicklendx_contracts::fees::FeeManager;
 use quicklendx_contracts::profits::{calculate_treasury_split, verify_no_dust, PlatformFee};
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};

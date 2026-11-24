@@ -151,71 +151,73 @@ See [Settlement Currencies by Invoice Type](docs/SETTLEMENT_CURRENCIES.md) for a
 
 ### Contract entrypoints (current surface)
 
-The deployed contract (`src/contract.rs`) currently exposes the protocol
-initialization and admin slice and invoice creation and lifecycle. The
-remaining modules (bids, escrow, settlement, disputes, KYC, fees, pause,
-backup) are wired in by their own issues; the functions documented under *Core Functions* below describe those
-modules and are not callable on-chain until they are wired.
+The deployed contract (defined in `src/lib.rs`) exposes the contract entrypoints across admin, fee management, KYC/verification, invoice lifecycle, bidding, escrow, investment queries, settlement, disputes, arbiter registry, and backup management.
 
-Every entrypoint is a thin wrapper; validation, auth and events live in the
-module function it delegates to.
+Every entrypoint is a thin wrapper; validation, auth and events live in the module function it delegates to.
 
 | Entrypoint | Delegates to | Auth |
 |---|---|---|
-| `initialize(params: InitializationParams)` | `ProtocolInitializer::initialize` | `params.admin` (once) |
-| `is_initialized()` | `ProtocolInitializer::is_initialized` | — |
-| `get_version()` | `ProtocolInitializer::get_version` | — |
-| `get_protocol_config()` | `ProtocolInitializer::get_protocol_config` | — |
-| `preview_protocol_config(admin, params: ProtocolConfigParams)` | `ProtocolInitializer::preview_protocol_config` | admin (read-only) |
-| `set_protocol_config(admin, min_invoice_amount, max_due_date_days, grace_period_seconds, backfill_max_batch_size)` | `ProtocolInitializer::set_protocol_config` | admin |
-| `set_fee_config(admin, fee_bps)` | `ProtocolInitializer::set_fee_config` | admin |
-| `set_treasury(admin, treasury)` | `ProtocolInitializer::set_treasury` | admin |
-| `get_fee_bps()` | `ProtocolInitializer::get_fee_bps` | — |
-| `get_treasury()` | `ProtocolInitializer::get_treasury` | — |
-| `get_min_invoice_amount()` | `ProtocolInitializer::get_min_invoice_amount` | — |
-| `get_max_due_date_days()` | `ProtocolInitializer::get_max_due_date_days` | — |
-| `get_grace_period_seconds()` | `ProtocolInitializer::get_grace_period_seconds` | — |
-| `get_corridors()` | `ProtocolInitializer::get_corridors` | — |
-| `get_current_admin()` | `AdminStorage::get_admin` | — |
-| `transfer_admin(current_admin, new_admin)` | `AdminStorage::transfer_admin` (records a pending transfer when two-step is on) | current admin |
-| `initiate_admin_transfer(current_admin, pending_admin)` | `AdminStorage::initiate_admin_transfer` | current admin |
-| `accept_admin_transfer(pending_admin)` | `AdminStorage::accept_admin_transfer` | pending admin |
-| `cancel_admin_transfer(current_admin)` | `AdminStorage::cancel_admin_transfer` | current admin |
-| `set_two_step_enabled(admin, enabled)` | `AdminStorage::set_two_step_enabled` | admin |
-| `is_two_step_enabled()` | `AdminStorage::is_two_step_enabled` | — |
-| `get_pending_admin()` | `AdminStorage::get_pending_admin` | — |
-| `store_invoice(business, amount, currency, due_date, description, category, tags, origination_fee_bps, late_payment_penalty_bps, early_payment_discount_bps, nonce)` | `Invoice::new` + `InvoiceStorage::store_invoice` (see order of checks below) | business |
-| `get_invoice(invoice_id)` | `InvoiceStorage::get` | — |
-| `get_business_invoices(business)` | `InvoiceStorage::get_business_invoices` | — |
-| `get_invoices_by_status(status)` | `InvoiceStorage::get_invoices_by_status` | — |
-| `get_total_invoice_count()` | `InvoiceStorage::get_total_count` | — |
-| `get_invoice_count_by_status(status)` | status index length | — |
-| `get_invoices_by_customer(customer_name)` | `InvoiceStorage::get_by_customer` | — |
-| `get_invoices_by_tax_id(tax_id)` | `InvoiceStorage::get_by_tax_id` | — |
-| `get_invoices_by_status_batch(invoice_ids)` | status per ID, at most `MAX_INPUT_STATUS_BATCH_SIZE` IDs | — |
-| `verify_invoice(admin, invoice_id)` | `Invoice::verify` | admin (`require_admin_auth`) |
-| `update_invoice_metadata(business, invoice_id, metadata)` | `Invoice::update_metadata` | business (inside `Invoice`) |
-| `clear_invoice_metadata(business, invoice_id)` | `Invoice::clear_metadata` | business (inside `Invoice`) |
-| `add_invoice_tag(business, invoice_id, tag)` | `Invoice::add_tag` | business (wrapper, after ownership check) |
-| `remove_invoice_tag(business, invoice_id, tag)` | `Invoice::remove_tag` | business (wrapper, after ownership check) |
-| `update_invoice_category(business, invoice_id, category)` | `Invoice::update_category` | business (wrapper, after ownership check) |
-
-`initialize` succeeds once. Repeating it with identical params returns `Ok(())`;
-any other params return `OperationNotAllowed`. There is no standalone
-`initialize_admin`: the admin is installed only by `initialize`. If a
-deployment already has an admin from an older flow, only that admin can
-complete `initialize`.
-
-`store_invoice` checks, in order: the business signature; idempotency (the key
-is `sha256("inv_create" || business || nonce)`, so a repeated
-`(business, nonce)` returns the original ID and another business reusing the
-nonce gets its own invoice); the per-address rate limit and input size bounds;
-KYC, regulatory, currency whitelist and protocol limits (minimum amount, due
-date horizon, invoices per business); `Invoice::new`; storage; the
-`invoice_uploaded` event, the audit entry and the notification; and finally
-the idempotency record. Invoice IDs come from `Invoice::new`, which mixes the
-ledger timestamp, sequence and a monotonic counter, so invoices created in the
-same ledger get distinct IDs.
+| `set_admin(admin: Address)` | `AdminStorage::set_admin_legacy` | admin |
+| `get_admin()` | `AdminStorage::get_admin` | - |
+| `initialize_fee_system(admin: Address)` | `FeeManager::initialize` | admin |
+| `update_platform_fee_bps(fee_bps: u32)` | `FeeManager::update_platform_fee` | admin |
+| `get_platform_fee_config()` | `FeeManager::get_platform_fee_config` | - |
+| `calculate_profit(investment_amount: i128, payment_amount: i128)` | `profits::calculate_profit` | - |
+| `invariant_self_check(admin: Address)` | `invariants::invariant_self_check` | admin |
+| `initialize_protocol_limits(admin: Address)` | `ProtocolLimitsContract::initialize` | admin |
+| `pause(admin: Address)` | `PauseControl::set_paused` | admin |
+| `unpause(admin: Address)` | `PauseControl::set_paused` | admin |
+| `is_paused()` | `PauseControl::is_paused` | - |
+| `submit_kyc_application(business: Address, kyc_data: String)` | `verification::submit_kyc_application` | business |
+| `verify_business(admin: Address, business: Address)` | `verification::verify_business` | admin |
+| `submit_investor_kyc(investor: Address, kyc_data: String)` | `verification::submit_investor_kyc` | investor |
+| `verify_investor(investor: Address, limit: i128)` | `verification::verify_investor` | admin |
+| `store_invoice(business: Address, amount: i128, currency: Address, due_date: u64, description: String, category: InvoiceCategory, tags: Vec<String>, origination_fee_bps: Option<u32>)` | `Invoice::new` + `InvoiceStorage::store_invoice` | business |
+| `get_invoice(invoice_id: BytesN<32>)` | `InvoiceStorage::get_invoice` | - |
+| `verify_invoice(invoice_id: BytesN<32>)` | `Invoice::verify` | admin |
+| `update_invoice_status(invoice_id: BytesN<32>, status: InvoiceStatus)` | `InvoiceStorage::update_invoice` | admin |
+| `cancel_invoice(invoice_id: BytesN<32>)` | `invoice.cancel` | business |
+| `get_available_invoices()` | `InvoiceStorage::get_invoices_by_status` | - |
+| `get_business_invoices(business: Address)` | `InvoiceStorage::get_business_invoices` | - |
+| `get_total_invoice_count()` | `InvoiceStorage::get_total_count` | - |
+| `place_bid(investor: Address, invoice_id: BytesN<32>, bid_amount: i128, expected_return: i128, salt: BytesN<32>)` | `BidStorage::store_bid` | investor |
+| `accept_bid(invoice_id: BytesN<32>, bid_id: BytesN<32>)` | `escrow::accept_bid_and_fund` | - |
+| `get_bid(bid_id: BytesN<32>)` | `BidStorage::get_bid` | - |
+| `get_bids_for_invoice(invoice_id: BytesN<32>)` | `BidStorage::get_bids_for_invoice` | - |
+| `get_escrow_details(invoice_id: BytesN<32>)` | `EscrowStorage::get_escrow_by_invoice` | - |
+| `release_escrow(invoice_id: BytesN<32>, business: Address)` | `payments::release_escrow` | business |
+| `get_investment(invoice_id: BytesN<32>)` | `InvestmentStorage::get_investment_by_invoice` | - |
+| `get_invoice_investment(invoice_id: BytesN<32>)` | `InvestmentStorage::get_investment_by_invoice` | - |
+| `process_partial_payment(invoice_id: BytesN<32>, payment_amount: i128, transaction_id: String)` | `settlement::process_partial_payment` | - |
+| `settle_invoice(invoice_id: BytesN<32>, payment_amount: i128, snap: Investment)` | `settlement::settle_invoice` | - |
+| `get_invoice_progress(invoice_id: BytesN<32>)` | `settlement::get_invoice_progress` | - |
+| `get_payment_count(invoice_id: BytesN<32>)` | `settlement::get_payment_count` | - |
+| `get_payment_records(invoice_id: BytesN<32>, from: u32, limit: u32)` | `settlement::get_payment_records` | - |
+| `is_invoice_finalized(invoice_id: BytesN<32>)` | `settlement::is_invoice_finalized` | - |
+| `get_settlement_batch_size()` | `settlement::default_settlement_batch_size_soft_cap` | - |
+| `get_settlement_batch_size_max()` | `settlement::max_settlement_batch_size_soft_cap` | - |
+| `create_dispute(invoice_id: BytesN<32>, creator: Address, reason: String, evidence: String)` | `dispute::create_dispute` | creator |
+| `put_dispute_under_review(invoice_id: BytesN<32>, admin: Address)` | `dispute::put_dispute_under_review` | admin |
+| `resolve_dispute(invoice_id: BytesN<32>, admin: Address, resolution: String)` | `dispute::resolve_dispute` | admin |
+| `resolve_dispute_structured(invoice_id: BytesN<32>, admin: Address, outcome: DisputeResolution, note: String)` | `dispute::resolve_dispute_structured` | admin |
+| `get_dispute_details(invoice_id: BytesN<32>)` | `dispute::get_dispute_details` | - |
+| `get_invoices_with_disputes()` | `dispute::get_invoices_with_disputes` | - |
+| `get_invoices_by_dispute_status(status: DisputeStatus)` | `dispute::get_invoices_by_dispute_status` | - |
+| `get_dispute_timeline(invoice_id: BytesN<32>, offset: u32, limit: u32)` | `dispute_timeline::get_dispute_timeline` | - |
+| `update_dispute_evidence(invoice_id: BytesN<32>, creator: Address, new_evidence: String)` | `verification::validate_dispute_evidence` | creator |
+| `register_arbiter(admin: Address, arbiter: Address)` | `ArbiterStorage::register_arbiter` | admin |
+| `unregister_arbiter(admin: Address, arbiter: Address)` | `ArbiterStorage::unregister_arbiter` | admin |
+| `list_arbiters()` | `ArbiterStorage::list_arbiters` | - |
+| `is_arbiter(addr: Address)` | `ArbiterStorage::is_arbiter` | - |
+| `create_backup(admin: Address, description: String)` | `BackupStorage::store_backup` | admin |
+| `restore_backup(admin: Address, backup_id: BytesN<32>)` | `BackupStorage::restore_from_backup` | admin |
+| `set_backup_retention_policy(admin: Address, max_backups: u32, max_age_seconds: u64, enabled: bool)` | `BackupStorage::set_retention_policy` | admin |
+| `archive_backup(admin: Address, backup_id: BytesN<32>)` | `BackupStorage::update_backup` | admin |
+| `cleanup_backups(admin: Address)` | `BackupStorage::cleanup_old_backups` | admin |
+| `get_backups()` | `BackupStorage::get_all_backups` | - |
+| `get_backup_details(backup_id: BytesN<32>)` | `BackupStorage::get_backup` | - |
+| `validate_backup(backup_id: BytesN<32>)` | `BackupStorage::validate_backup` | - |
+| `preview_cleanup_backups()` | `BackupStorage::preview_cleanup_old_backups` | - |
 
 ### Core Functions
 
@@ -851,31 +853,32 @@ stellar-cli contract deploy \
 #### Contract size budget
 
 The release build is tuned for minimal WASM size (`opt-level = "z"`, LTO, strip,
-`codegen-units = 1`). The contract **must** stay within the size budget to be
-accepted by the Stellar network.
+`codegen-units = 1`). The contract **must** stay within the current enforced
+size budget of **655 360 B (640 KiB)** (with a long-term target to reduce back
+to **256 KiB**).
 
 ##### Three-tier size classification
 
 | Tier        | Range                            | Behaviour                                                                   |
 | ----------- | -------------------------------- | --------------------------------------------------------------------------- |
-| **OK**      | 0 – 235 929 B (≤ 90 % of budget) | Green – no action needed.                                                   |
-| **Warning** | 235 930 – 262 144 B (90 – 100 %) | Yellow – plan a reduction effort; CI prints a diagnostic but does not fail. |
-| **Over**    | > 262 144 B (> 256 KiB)          | Red – CI **fails**; artifact is rejected by the Stellar network.            |
+| **OK**      | 0 – 589 824 B (≤ 90 % of budget) | Green – no action needed.                                                   |
+| **Warning** | 589 825 – 655 360 B (90 – 100 %) | Yellow – plan a reduction effort; CI prints a diagnostic but does not fail. |
+| **Over**    | > 655 360 B (> 640 KiB)          | Red – CI **fails**; artifact exceeds the enforced size budget.              |
 
 ##### Regression detection
 
 In addition to the hard budget, CI compares the current build against a recorded
-**baseline** (last known good size). If the artifact grows by more than **5 %**
+**baseline** (last known good size). If the artifact grows by more than **10 %**
 relative to the baseline, CI fails even if the hard budget is not yet broken.
 This catches incremental drift before it becomes a problem.
 
 | Constant            | Value                     | Location                                                                                           |
 | ------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| Hard budget (opt.)  | 262 144 B (256 KiB)       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
-| Raw fallback budget | 327 680 B (320 KiB)       | `tests/wasm_build_size_budget.rs` – used when `wasm-opt` absent (e.g. Windows local builds)        |
-| Warning zone        | 235 929 B (90 %)          | `tests/wasm_build_size_budget.rs`                                                                  |
-| Regression baseline | 217 668 B (last recorded) | `tests/wasm_build_size_budget.rs`, `scripts/wasm-size-baseline.toml`                               |
-| Regression margin   | 5 %                       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`                                    |
+| Hard budget (opt.)  | 655 360 B (640 KiB)       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
+| Raw fallback budget | 655 360 B (640 KiB)       | `tests/wasm_build_size_budget.rs` – used when `wasm-opt` absent (e.g. Windows local builds)        |
+| Warning zone        | 589 824 B (90 %)          | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`                                    |
+| Regression baseline | 558 732 B (last recorded) | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
+| Regression margin   | 10 %                      | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
 
 ##### Update procedure after a legitimate size increase
 
@@ -887,7 +890,7 @@ locations in the **same PR** that introduces the growth:
 cd quicklendx-contracts
 ./scripts/check-wasm-size.sh   # prints "WASM size: <N> bytes"
 
-# 2. Update the baseline (replace 217668 with the new value)
+# 2. Update the baseline (replace 558732 with the new value)
 #    a. tests/wasm_build_size_budget.rs  → WASM_SIZE_BASELINE_BYTES
 #    b. scripts/check-wasm-size.sh       → BASELINE_BYTES
 #    c. scripts/wasm-size-baseline.toml  → [baseline].bytes and recorded

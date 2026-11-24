@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # WASM build and size budget regression checks for QuickLendX contracts.
 #
-# Builds the contract for Soroban (wasm32v1-native)
+# Builds the contract for Soroban (wasm32v1-none)
 # and applies a three-tier size classification:
 #
 #   OK      : size <= WARN_BYTES (90 % of hard limit)     – healthy
@@ -97,14 +97,14 @@ echo "  WASM path       : $WASM_PATH"
 echo "  Size            : ${SIZE} B  (~$(( SIZE / 1024 )) KiB)"
 echo "  Baseline        : ${BASELINE_BYTES} B  (+${REGRESSION_MARGIN_PCT}% -> limit ${REGRESSION_LIMIT} B)"
 echo "  Warn zone entry : ${WARN_BYTES} B  (90% of budget)"
-echo "  Hard limit      : ${MAX_BYTES} B  (256 KiB)"
+echo "  Hard limit      : ${MAX_BYTES} B  (640 KiB)"
 echo ""
 
 FAIL=false
 
 # ── Tier 1: hard budget ────────────────────────────────────────────────────────
 if [[ "$SIZE" -gt "$MAX_BYTES" ]]; then
-  echo "::error::WASM size ${SIZE} B exceeds hard budget ${MAX_BYTES} B (256 KiB)"
+  echo "::error::WASM size ${SIZE} B exceeds hard budget ${MAX_BYTES} B (640 KiB)"
   echo ""
   echo "  Remediation:"
   echo "    1. Install wasm-opt and re-run:      brew install binaryen"
@@ -113,7 +113,7 @@ if [[ "$SIZE" -gt "$MAX_BYTES" ]]; then
   FAIL=true
 elif [[ "$SIZE" -gt "$WARN_BYTES" ]]; then
   echo "::warning::WASM size ${SIZE} B is in the WARNING zone (>${WARN_BYTES} B)."
-  echo "  Plan size-reduction work before reaching the 256 KiB hard limit."
+  echo "  Plan size-reduction work before reaching the 640 KiB hard limit."
 else
   echo "==> Hard budget check passed (${SIZE} / ${MAX_BYTES} B)."
 fi
