@@ -19,8 +19,9 @@ app.use(express.json());
 app.use('/api/v1/notifications', notificationRoutes);
 
 describe('Notifications Security & IDOR Protections (Issue #2907)', () => {
-  const GA = 'GA1111111111111111111111111111111111111111111111111111111111';
-  const GB = 'GB2222222222222222222222222222222222222222222222222222222222';
+  const GA = 'G' + 'A'.repeat(55);
+  const GB = 'G' + 'B'.repeat(55);
+  const GC = 'G' + 'C'.repeat(55);
 
   beforeEach(() => {
     resetTokenCache();
@@ -58,12 +59,31 @@ describe('Notifications Security & IDOR Protections (Issue #2907)', () => {
       expect(res.status).toBe(401);
     });
 
+    it('returns 400 with standard error envelope when :userId is not a valid Stellar public key', async () => {
+      const res = await request(app)
+        .get('/api/v1/notifications/preferences/not-a-stellar-key')
+        .set('Authorization', `Bearer ${GA}`);
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatchObject({
+        code: expect.any(String),
+        message: expect.any(String),
+      });
+    });
+
     it('returns 403 when authenticated as a different principal (GB accessing GA)', async () => {
       const res = await request(app)
         .get(`/api/v1/notifications/preferences/${GA}`)
         .set('Authorization', `Bearer ${GB}`);
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe('FORBIDDEN');
+      expect(res.body.error).toMatchObject({ code: 'FORBIDDEN', message: expect.any(String) });
+    });
+
+    it('returns 404 with standard error envelope when preferences do not exist', async () => {
+      const res = await request(app)
+        .get(`/api/v1/notifications/preferences/${GC}`)
+        .set('Authorization', `Bearer ${GC}`);
+      expect(res.status).toBe(404);
+      expect(res.body.error).toMatchObject({ code: 'NOT_FOUND', message: expect.any(String) });
     });
 
     it('returns 200 with the full email address when authenticated as the owner (GA)', async () => {
@@ -150,7 +170,7 @@ describe('Notifications Security & IDOR Protections (Issue #2907)', () => {
     it('returns 403 when no token is provided', async () => {
       const res = await request(app).post(`/api/v1/notifications/unsubscribe/${GA}`);
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe('INVALID_UNSUBSCRIBE_TOKEN');
+      expect(res.body.error).toMatchObject({ code: 'INVALID_UNSUBSCRIBE_TOKEN', message: expect.any(String) });
     });
 
     it('returns 403 with a token computed for a different user (GB)', async () => {
@@ -159,7 +179,7 @@ describe('Notifications Security & IDOR Protections (Issue #2907)', () => {
         .post(`/api/v1/notifications/unsubscribe/${GA}`)
         .query({ token: tokenGB });
       expect(res.status).toBe(403);
-      expect(res.body.error).toBe('INVALID_UNSUBSCRIBE_TOKEN');
+      expect(res.body.error).toMatchObject({ code: 'INVALID_UNSUBSCRIBE_TOKEN', message: expect.any(String) });
     });
 
     it('returns 200 and disables email when correct token is provided, and remains idempotent on repeated calls', async () => {
