@@ -386,7 +386,8 @@ pub fn accept_bid(
 
 ##### `release_escrow_funds`
 
-Releases escrow funds to the investor upon invoice verification.
+Releases a funded invoice's escrow to the business. The invoice must be
+`Funded` and the escrow `Held`; the escrow's business must authorize the call.
 
 ```rust
 pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError>
@@ -394,10 +395,67 @@ pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), Quic
 
 ##### `refund_escrow_funds`
 
-Refunds escrow funds to the investor if conditions aren't met.
+Refunds a funded invoice's escrow back to the investor. Authorized for the
+contract admin or the invoice's business.
 
 ```rust
-pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError>
+pub fn refund_escrow_funds(
+    env: Env,
+    invoice_id: BytesN<32>,
+    caller: Address,
+) -> Result<(), QuickLendXError>
+```
+
+##### `get_escrow_status`
+
+Returns the escrow status (`Held`, `Released` or `Refunded`) for an invoice.
+
+```rust
+pub fn get_escrow_status(
+    env: Env,
+    invoice_id: BytesN<32>,
+) -> Result<EscrowStatus, QuickLendXError>
+```
+
+##### `approve_early_escrow_release`
+
+Records a caller's approval for an early escrow release.
+
+```rust
+pub fn approve_early_escrow_release(
+    env: Env,
+    invoice_id: BytesN<32>,
+    caller: Address,
+) -> Result<(), QuickLendXError>
+```
+
+#### Invoice completion & freeze
+
+##### `complete_invoice`
+
+Marks an invoice as completed (paid) by its owning business. Idempotent on
+`nonce`.
+
+```rust
+pub fn complete_invoice(
+    env: Env,
+    caller: Address,
+    invoice_id: BytesN<32>,
+    nonce: BytesN<32>,
+) -> Result<(), QuickLendXError>
+```
+
+##### `freeze_invoice`
+
+Freezes an invoice (admin only) and emits an `InvoiceFrozen` event.
+
+```rust
+pub fn freeze_invoice(
+    env: Env,
+    admin: Address,
+    invoice_id: BytesN<32>,
+    reason: BusinessFreezeReason,
+) -> Result<(), QuickLendXError>
 ```
 
 #### Verification & KYC

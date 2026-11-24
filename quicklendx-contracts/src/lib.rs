@@ -251,6 +251,8 @@ mod test_bid_transition_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_transition_matrix;
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_transition_matrix;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_validation;
@@ -359,6 +361,7 @@ mod test_escrow_consistency;
 mod test_escrow_early_release;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+mod test_escrow_entrypoints;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_event_completeness;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -387,6 +390,8 @@ mod test_escrow_time_limit;
 mod test_escrow_uniqueness;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_escrow_uniqueness;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_uniqueness;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -423,6 +428,8 @@ mod test_fees_extended;
 mod test_freeze_appeal_channel;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_freeze_appeal_channel;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_appeal_channel;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -490,6 +497,10 @@ mod test_init;
 #[cfg(test)]
 mod test_contract_init_admin;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_incident;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_init;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -629,6 +640,8 @@ mod test_overdue_expiration;
 #[cfg(test)]
 mod test_overflow;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_overflow;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_overflow;
 #[cfg(all(test, feature = "legacy-tests"))]
@@ -868,6 +881,8 @@ use crate::storage::InvoiceStorage;
 use crate::types::{
     Dispute, DisputeResolution, DisputeStatus, Investment, InvoiceCategory, InvoiceLock,
     InvoiceMetadata, InvoiceStatus,
+    BusinessFreezeReason, Dispute, DisputeResolution, DisputeStatus, Investment, InvoiceCategory,
+    InvoiceStatus,
 };
 
 /// Load an invoice for a state-changing call made by its owning business.
@@ -1564,6 +1579,117 @@ impl QuickLendXContract {
         with_payment_guard(&env, || {
             crate::escrow::refund_escrow_funds(&env, &invoice_id, &admin)
         })
+    }
+
+    /// Return the escrow status for an invoice.
+    ///
+    /// # Errors
+    /// * `QuickLendXError::StorageKeyNotFound` — no escrow record exists for
+    ///   the given invoice.
+    pub fn get_escrow_status(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<crate::payments::EscrowStatus, QuickLendXError> {
+        crate::payments::EscrowStorage::get_escrow_status(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
+    /// Release a funded invoice's escrow to the business.
+    ///
+    /// The invoice must be `Funded` and its escrow must be `Held`.
+    /// `payments::release_escrow` enforces that the escrow's business authorizes
+    /// the call, and `EscrowStatus::verify_transition` rejects any transition
+    /// other than `Held -> Released`, so a second release fails with
+    /// `InvalidStatus`.
+    pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if invoice.status != InvoiceStatus::Funded {
+            return Err(QuickLendXError::InvalidStatus);
+        }
+        let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvalidStatus)?;
+        with_payment_guard(&env, || {
+            crate::payments::release_escrow(&env, &invoice_id, &escrow.business)
+        })
+    }
+
+    /// Refund a funded invoice's escrow back to the investor.
+    ///
+    /// Authorized for the contract admin or the invoice's business. Delegates to
+    /// `escrow::refund_escrow_funds`, which enforces that authorization matrix
+    /// and the `Held -> Refunded` escrow transition.
+    pub fn refund_escrow_funds(
+        env: Env,
+        invoice_id: BytesN<32>,
+        caller: Address,
+    ) -> Result<(), QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || {
+            crate::escrow::refund_escrow_funds(&env, &invoice_id, &caller)
+        })
+    }
+
+    /// Record `caller`'s approval for an early escrow release.
+    ///
+    /// Ported from the contract reference surface as-is: the approval bookkeeping
+    /// for early release is not yet wired into `release_escrow_funds`, so this
+    /// entrypoint currently succeeds without side effects.
+    pub fn approve_early_escrow_release(
+        env: Env,
+        invoice_id: BytesN<32>,
+        caller: Address,
+    ) -> Result<(), QuickLendXError> {
+        let _ = (&env, &invoice_id, &caller);
+        Ok(())
+    }
+
+    /// Mark an invoice as completed (paid) by its owning business.
+    ///
+    /// Idempotent on `nonce`; only an invoice that is still open for funding may
+    /// be completed.
+    pub fn complete_invoice(
+        env: Env,
+        caller: Address,
+        invoice_id: BytesN<32>,
+        nonce: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        if crate::idempotency::idempotency_exists(&env, &nonce) {
+            return Ok(());
+        }
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        check_and_record_mutation(&env, &invoice.business)?;
+        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        if !invoice.is_available_for_funding() {
+            return Err(QuickLendXError::InvoiceNotAvailableForFunding);
+        }
+        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        crate::invoice::require_matching_business_invoice_ownership(&env, &caller, &invoice)?;
+        caller.require_auth();
+        invoice.mark_as_paid(&env, caller.clone(), env.ledger().timestamp());
+        InvoiceStorage::update_invoice(&env, &invoice);
+        crate::idempotency::store_idempotency(&env, &nonce);
+        Ok(())
+    }
+
+    /// Freeze an invoice (admin only).
+    ///
+    /// Emits `InvoiceFrozen` with the appeals channel so off-chain consumers can
+    /// surface the appeals path to the affected business.
+    pub fn freeze_invoice(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        reason: BusinessFreezeReason,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin(&env, &admin)?;
+        InvoiceStorage::set_frozen(&env, &invoice_id, true, Some(reason));
+        crate::events::emit_invoice_frozen(&env, &invoice_id, &admin, reason.label());
+        Ok(())
     }
 
     // =========================================================================
