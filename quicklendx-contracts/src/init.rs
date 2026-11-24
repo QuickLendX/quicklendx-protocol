@@ -673,7 +673,7 @@ impl ProtocolInitializer {
                     grace_period_seconds,
                     backfill_max_batch_size,
                 )),
-            );
+            )?;
 
             // Emit event
             emit_protocol_config_updated(
@@ -827,7 +827,7 @@ impl ProtocolInitializer {
                 "fee_bps",
                 old_str,
                 Some(fmt_fee_bps(env, fee_bps)),
-            );
+            )?;
 
             // Emit event
             emit_fee_config_updated(env, admin, fee_bps);
@@ -871,7 +871,7 @@ impl ProtocolInitializer {
                 "treasury",
                 old_str,
                 Some(address_to_audit_string(env, treasury)),
-            );
+            )?;
 
             // Emit event
             emit_treasury_updated(env, admin, treasury);

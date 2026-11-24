@@ -228,8 +228,11 @@ impl BidStorage {
         bids
     }
 
-    pub fn get_active_bid_count(env: &Env, invoice_id: &BytesN<32>) -> u32 {
-        let _ = Self::refresh_expired_bids(env, invoice_id);
+    pub fn get_active_bid_count(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Result<u32, QuickLendXError> {
+        Self::refresh_expired_bids(env, invoice_id)?;
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
         let current_timestamp = env.ledger().timestamp();
         let mut active_count = 0u32;
@@ -243,7 +246,7 @@ impl BidStorage {
             }
             idx += 1;
         }
-        active_count
+        Ok(active_count)
     }
 
     pub fn get_bid_ttl_days(env: &Env) -> u64 {
@@ -428,16 +431,19 @@ impl BidStorage {
     /// This function is **read-only** with respect to the limit policy itself.
     /// Setting or changing the limit requires admin authority and goes through
     /// [`BidStorage::set_max_active_bids_per_investor`].
-    pub fn investor_has_reached_bid_limit(env: &Env, investor: &Address) -> bool {
+    pub fn investor_has_reached_bid_limit(
+        env: &Env,
+        investor: &Address,
+    ) -> Result<bool, QuickLendXError> {
         let limit = Self::get_max_active_bids_per_investor(env);
 
         // Limit of 0 means "disabled" - never block a placement.
         if limit == INVESTOR_BID_LIMIT_DISABLED {
-            return false;
+            return Ok(false);
         }
 
-        let active = Self::count_active_placed_bids_for_investor(env, investor);
-        active >= limit
+        let active = Self::count_active_placed_bids_for_investor(env, investor)?;
+        Ok(active >= limit)
     }
 
     /// Admin-only: set max number of active (Placed) bids per investor across all invoices.
@@ -501,7 +507,7 @@ impl BidStorage {
     /// @param investor The address of the investor
     ///
     /// @return newly_expired The number of bids that transitioned from Placed to Expired in this call
-    pub fn refresh_investor_bids(env: &Env, investor: &Address) -> u32 {
+    pub fn refresh_investor_bids(env: &Env, investor: &Address) -> Result<u32, QuickLendXError> {
         let current_timestamp = env.ledger().timestamp();
         let grace_seconds = Self::get_bid_expiry_grace_seconds(env);
         let bid_ids = Self::get_bids_by_investor_all(env, investor);
@@ -524,7 +530,7 @@ impl BidStorage {
                             bid.investor.clone(),
                             bid.bid_amount,
                             bid.bid_id.clone(),
-                        );
+                        )?;
                         newly_expired = newly_expired.saturating_add(1);
                         // Do not push to active -> prunes this expired bid
                     } else {
@@ -564,7 +570,7 @@ impl BidStorage {
             bump_persistent(env, &count_key);
         }
 
-        newly_expired
+        Ok(newly_expired)
     }
 
     /// @notice Count currently active (Placed) bids for an investor across all invoices.
@@ -585,8 +591,11 @@ impl BidStorage {
     /// @param env The Soroban environment
     /// @param investor The address of the investor
     /// @return count The number of non-expired Placed bids across all invoices
-    pub fn count_active_placed_bids_for_investor(env: &Env, investor: &Address) -> u32 {
-        let _ = Self::refresh_investor_bids(env, investor);
+    pub fn count_active_placed_bids_for_investor(
+        env: &Env,
+        investor: &Address,
+    ) -> Result<u32, QuickLendXError> {
+        Self::refresh_investor_bids(env, investor)?;
         let current_timestamp = env.ledger().timestamp();
         let bid_ids = Self::get_bids_by_investor_all(env, investor);
         let mut count = 0u32;
@@ -599,7 +608,7 @@ impl BidStorage {
             }
         }
 
-        count
+        Ok(count)
     }
     pub fn add_bid_to_invoice(env: &Env, invoice_id: &BytesN<32>, bid_id: &BytesN<32>) {
         crate::assert_view_only!(env);
@@ -632,7 +641,10 @@ impl BidStorage {
     ///
     /// A `Placed` bid transitions to `Expired` only after `expiration_timestamp
     /// + bid_expiry_grace_seconds` has elapsed; see `Bid::is_cleanup_eligible`.
-    pub fn refresh_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+    pub fn refresh_expired_bids(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Result<u32, QuickLendXError> {
         let current_timestamp = env.ledger().timestamp();
         let grace_seconds = Self::get_bid_expiry_grace_seconds(env);
         let count_key = Self::invoice_bid_count_key(invoice_id);
@@ -645,11 +657,8 @@ impl BidStorage {
 
         while read_idx < old_count {
             let entry_key = Self::invoice_bid_entry_key(invoice_id, read_idx);
-            let should_keep = env
-                .storage()
-                .persistent()
-                .get::<_, BytesN<32>>(&entry_key)
-                .is_some_and(|bid_id| {
+            let should_keep =
+                if let Some(bid_id) = env.storage().persistent().get::<_, BytesN<32>>(&entry_key) {
                     bump_persistent(env, &entry_key);
                     if let Some(mut bid) = Self::get_bid(env, &bid_id) {
                         let is_terminal = bid.status == BidStatus::Accepted
@@ -670,7 +679,7 @@ impl BidStorage {
                                 bid.investor.clone(),
                                 bid.bid_amount,
                                 bid.bid_id.clone(),
-                            );
+                            )?;
                             cleaned_count = cleaned_count.saturating_add(1);
                             true
                         } else {
@@ -680,7 +689,9 @@ impl BidStorage {
                         cleaned_count = cleaned_count.saturating_add(1);
                         false
                     }
-                });
+                } else {
+                    false
+                };
 
             if !should_keep {
                 break;
@@ -688,7 +699,7 @@ impl BidStorage {
             read_idx += 1;
         }
 
-        cleaned_count
+        Ok(cleaned_count)
     }
 
     /// @notice Public interface to trigger cleanup of expired bids for a specific invoice.
@@ -725,7 +736,10 @@ impl BidStorage {
     /// // First call: returns 3 (3 expired Placed bids transitioned and removed)
     /// // Second call: returns 0 (idempotent; nothing left to clean)
     /// ```
-    pub fn cleanup_expired_bids(env: &Env, invoice_id: &BytesN<32>) -> u32 {
+    pub fn cleanup_expired_bids(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Result<u32, QuickLendXError> {
         Self::refresh_expired_bids(env, invoice_id)
     }
 
@@ -776,13 +790,13 @@ impl BidStorage {
         invoice_id: &BytesN<32>,
         offset: u32,
         limit: u32,
-    ) -> (u32, u32) {
+    ) -> Result<(u32, u32), QuickLendXError> {
         // Validate and cap pagination parameters
         let capped_limit = limit.min(MAX_BIDS_PER_INVOICE);
 
         // Prevent overflow: offset + limit must not exceed u32::MAX
         if offset > u32::MAX - capped_limit {
-            return (0, 0);
+            return Ok((0, 0));
         }
 
         let current_timestamp = env.ledger().timestamp();
@@ -796,7 +810,7 @@ impl BidStorage {
 
         // If offset is beyond the current count, return early
         if offset >= old_count {
-            return (0, old_count);
+            return Ok((0, old_count));
         }
 
         let end_idx = (offset + capped_limit).min(old_count);
@@ -807,11 +821,8 @@ impl BidStorage {
         // Process only the requested range [offset, end_idx)
         while read_idx < end_idx {
             let entry_key = Self::invoice_bid_entry_key(invoice_id, read_idx);
-            let should_keep = env
-                .storage()
-                .persistent()
-                .get::<_, BytesN<32>>(&entry_key)
-                .is_some_and(|bid_id| {
+            let should_keep =
+                if let Some(bid_id) = env.storage().persistent().get::<_, BytesN<32>>(&entry_key) {
                     bump_persistent(env, &entry_key);
                     if let Some(mut bid) = Self::get_bid(env, &bid_id) {
                         let is_terminal = bid.status == BidStatus::Accepted
@@ -832,7 +843,7 @@ impl BidStorage {
                                 bid.investor.clone(),
                                 bid.bid_amount,
                                 bid.bid_id.clone(),
-                            );
+                            )?;
                             cleaned_count = cleaned_count.saturating_add(1);
                             true
                         } else {
@@ -842,7 +853,9 @@ impl BidStorage {
                         cleaned_count = cleaned_count.saturating_add(1);
                         false
                     }
-                });
+                } else {
+                    false
+                };
 
             if !should_keep {
                 break;
@@ -853,11 +866,14 @@ impl BidStorage {
         // Expired bids remain in the invoice index for historical queries; we
         // only transition them to `Expired` in storage and return the number
         // that were newly marked expired.
-        (cleaned_count, old_count)
+        Ok((cleaned_count, old_count))
     }
 
-    pub fn get_bid_records_for_invoice(env: &Env, invoice_id: &BytesN<32>) -> Vec<Bid> {
-        let _ = Self::refresh_expired_bids(env, invoice_id);
+    pub fn get_bid_records_for_invoice(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Result<Vec<Bid>, QuickLendXError> {
+        Self::refresh_expired_bids(env, invoice_id)?;
         let mut bids = Vec::new(env);
         for bid_id in Self::get_bids_for_invoice(env, invoice_id).iter() {
             if let Some(bid) = Self::get_bid(env, &bid_id) {
@@ -866,11 +882,15 @@ impl BidStorage {
                 }
             }
         }
-        bids
+        Ok(bids)
     }
-    pub fn get_bids_by_status(env: &Env, invoice_id: &BytesN<32>, status: BidStatus) -> Vec<Bid> {
+    pub fn get_bids_by_status(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        status: BidStatus,
+    ) -> Result<Vec<Bid>, QuickLendXError> {
         let mut filtered = Vec::new(env);
-        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        let records = Self::get_bid_records_for_invoice(env, invoice_id)?;
         let mut idx: u32 = 0;
         while idx < records.len() {
             let bid = records.get(idx).unwrap();
@@ -880,15 +900,15 @@ impl BidStorage {
             }
             idx += 1;
         }
-        filtered
+        Ok(filtered)
     }
     pub fn get_bids_by_investor(
         env: &Env,
         invoice_id: &BytesN<32>,
         investor: &Address,
-    ) -> Vec<Bid> {
+    ) -> Result<Vec<Bid>, QuickLendXError> {
         let mut filtered = Vec::new(env);
-        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        let records = Self::get_bid_records_for_invoice(env, invoice_id)?;
         let mut idx: u32 = 0;
         while idx < records.len() {
             let bid = records.get(idx).unwrap();
@@ -897,7 +917,7 @@ impl BidStorage {
             }
             idx += 1;
         }
-        filtered
+        Ok(filtered)
     }
     /// @notice Deterministically compares two bids.
     /// @dev Ordering priority: (1) profit, (2) expected_return, (3) bid_amount,
@@ -986,10 +1006,13 @@ impl BidStorage {
     /// Stale bids (past their raw expiry, even while a grace window delays
     /// their `Placed -> Expired` storage transition) are excluded, matching
     /// `accept_bid` and `get_bids_by_status`.
-    pub fn get_best_bid(env: &Env, invoice_id: &BytesN<32>) -> Option<Bid> {
-        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+    pub fn get_best_bid(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Result<Option<Bid>, QuickLendXError> {
+        let records = Self::get_bid_records_for_invoice(env, invoice_id)?;
         let current_timestamp = env.ledger().timestamp();
-        Self::select_best_placed_bid(&records, current_timestamp)
+        Ok(Self::select_best_placed_bid(&records, current_timestamp))
     }
 
     /// Return all placed bids sorted from best to worst.
@@ -1001,8 +1024,8 @@ impl BidStorage {
     /// Stale bids (past their raw expiry, even while a grace window delays
     /// their `Placed -> Expired` storage transition) are excluded, matching
     /// `accept_bid` and `get_bids_by_status`.
-    pub fn rank_bids(env: &Env, invoice_id: &BytesN<32>) -> Vec<Bid> {
-        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+    pub fn rank_bids(env: &Env, invoice_id: &BytesN<32>) -> Result<Vec<Bid>, QuickLendXError> {
+        let records = Self::get_bid_records_for_invoice(env, invoice_id)?;
         let current_timestamp = env.ledger().timestamp();
         let mut remaining = Vec::new(env);
         let mut idx: u32 = 0;
@@ -1032,7 +1055,7 @@ impl BidStorage {
             remaining = new_remaining;
         }
 
-        ranked
+        Ok(ranked)
     }
 
     /// Return ranked placed bids for an invoice with pagination and boundary validation.
@@ -1047,11 +1070,11 @@ impl BidStorage {
         invoice_id: &BytesN<32>,
         offset: u32,
         limit: u32,
-    ) -> (Vec<Bid>, u32, bool) {
+    ) -> Result<(Vec<Bid>, u32, bool), QuickLendXError> {
         if crate::pagination::validate_query_params(offset, limit).is_err() {
-            return (Vec::new(env), 0, false);
+            return Ok((Vec::new(env), 0, false));
         }
-        let ranked = Self::rank_bids(env, invoice_id);
+        let ranked = Self::rank_bids(env, invoice_id)?;
         let total_count = ranked.len();
         let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
         let mut result = Vec::new(env);
@@ -1063,7 +1086,7 @@ impl BidStorage {
             idx += 1;
         }
         let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
-        (result, total_count, has_more)
+        Ok((result, total_count, has_more))
     }
 
     /// Cancel a placed bid by bid_id. Only transitions Placed -> Cancelled.
@@ -1198,8 +1221,11 @@ impl BidStorage {
 
     /// Returns bid counts by status as `(placed, accepted, withdrawn, expired, cancelled)`.
     /// Useful for assertions in tests and analytics.
-    pub fn count_bids_by_status(env: &Env, invoice_id: &BytesN<32>) -> (u32, u32, u32, u32, u32) {
-        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+    pub fn count_bids_by_status(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+    ) -> Result<(u32, u32, u32, u32, u32), QuickLendXError> {
+        let records = Self::get_bid_records_for_invoice(env, invoice_id)?;
         let (mut placed, mut accepted, mut withdrawn, mut expired, mut cancelled) =
             (0u32, 0u32, 0u32, 0u32, 0u32);
         let mut idx: u32 = 0;
@@ -1214,7 +1240,7 @@ impl BidStorage {
             }
             idx += 1;
         }
-        (placed, accepted, withdrawn, expired, cancelled)
+        Ok((placed, accepted, withdrawn, expired, cancelled))
     }
 
     // --- Aliases and compatibility methods ---

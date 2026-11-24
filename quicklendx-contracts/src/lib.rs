@@ -92,6 +92,7 @@ mod test_accept_bid_instruction_budget;
 #[cfg(test)]
 mod test_accept_bid_race;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_admin;
 #[cfg(test)]
 mod test_admin_events_audit_parity;
@@ -104,6 +105,7 @@ mod test_admin_simple;
 #[cfg(test)]
 mod test_admin_standalone;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_admin_two_step;
 #[cfg(test)]
 mod test_analytics_consistency;
@@ -140,8 +142,16 @@ mod test_bid_audit_parity;
 #[cfg(test)]
 mod test_bid_cancel_accept_race;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_bid_capacity_stress;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_bid_compare_order_props;
 #[cfg(test)]
 mod test_bid_concurrency;
@@ -152,18 +162,43 @@ mod test_bid_expiry_boundary;
 #[cfg(test)]
 mod test_bid_expiry_grace;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_bid_match_helper;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_bid_ranking;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_bid_ranking_determinism;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_bid_ranking_tiebreaker;
 #[cfg(test)]
 mod test_bid_state_matrix;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_bid_transition_matrix;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_bid_ttl;
 #[cfg(test)]
 mod test_bid_validation;
@@ -182,6 +217,10 @@ mod test_cannot_withdraw_more_than_deposited;
 #[cfg(test)]
 mod test_category_breakdown;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_cleanup_pagination;
 #[cfg(test)]
 mod test_clock_rollover;
@@ -190,10 +229,12 @@ mod test_compute_yield_props;
 #[cfg(test)]
 mod test_concurrent_default_overlap;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_config_bounds_matrix;
 #[cfg(test)]
 mod test_cross_module_consistency;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_currency;
 #[cfg(test)]
 mod test_currency_batch;
@@ -206,12 +247,14 @@ mod test_default;
 #[cfg(test)]
 mod test_default_finality;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_default_finality_matrix;
 #[cfg(test)]
 mod test_default_grace_boundary;
 #[cfg(test)]
 mod test_diagnostics;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_dispute_event_invariant;
 #[cfg(test)]
 mod test_dispute_evidence_identity;
@@ -226,6 +269,7 @@ mod test_dispute_state_matrix;
 #[cfg(test)]
 mod test_dispute_time_limit;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_dispute_timeline_props;
 #[cfg(test)]
 mod test_due_date_boundaries;
@@ -244,6 +288,7 @@ mod test_emergency_withdraw;
 #[cfg(test)]
 mod test_emergency_withdraw_props;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_error_code_stability;
 #[cfg(test)]
 mod test_errors;
@@ -254,6 +299,7 @@ mod test_escrow_consistency;
 #[cfg(test)]
 mod test_escrow_early_release;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_escrow_event_completeness;
 #[cfg(test)]
 mod test_escrow_expiry_extend;
@@ -274,16 +320,26 @@ mod test_escrow_state_machine;
 #[cfg(test)]
 mod test_escrow_time_limit;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_escrow_uniqueness;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_events;
 #[cfg(test)]
 mod test_evidence_hash_format;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_evidence_kind_guard_matrix;
 #[cfg(test)]
 mod test_evidence_size_cap;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_expired_bids_cleanup;
 #[cfg(test)]
 mod test_expired_escrow;
@@ -296,8 +352,10 @@ mod test_fees;
 #[cfg(test)]
 mod test_fees_extended;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_freeze_appeal_channel;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_freeze_event;
 #[cfg(test)]
 mod test_freeze_guard_writes;
@@ -312,6 +370,7 @@ mod test_funding_events_audit_parity;
 #[cfg(test)]
 mod test_fuzz;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_fuzz_accept_bid_and_fund;
 #[cfg(test)]
 mod test_fuzz_accounting;
@@ -332,6 +391,7 @@ mod test_fuzz_invoice_metadata;
 #[cfg(test)]
 mod test_fuzz_invoice_search;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_fuzz_partial_payment;
 #[cfg(test)]
 mod test_fuzz_settlement_currency_whitelist;
@@ -346,6 +406,7 @@ mod test_id_collision_cross_domain;
 #[cfg(test)]
 mod test_id_stability;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_incident;
 #[cfg(test)]
 mod test_init;
@@ -354,10 +415,12 @@ mod test_init_debug;
 #[cfg(test)]
 mod test_init_invariants;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_input_matrix;
 #[cfg(test)]
 mod test_insurance;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_insurance_claim_payout;
 #[cfg(test)]
 mod test_insurance_optin_lifecycle;
@@ -366,12 +429,17 @@ mod test_insurance_premium_props;
 #[cfg(test)]
 mod test_insurance_stacking;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_invariant_self_check;
 #[cfg(test)]
 mod test_invariants;
 #[cfg(test)]
 mod test_investment_active_guard;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_investment_consistency;
 #[cfg(test)]
 mod test_investment_lifecycle;
@@ -386,6 +454,10 @@ mod test_investment_transitions;
 #[cfg(test)]
 mod test_investment_withdrawal;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_investor_bid_limit;
 #[cfg(test)]
 mod test_investor_exposure_caps;
@@ -396,6 +468,7 @@ mod test_investor_kyc;
 #[cfg(test)]
 mod test_investor_rating_recompute;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_invoice;
 #[cfg(test)]
 mod test_invoice_amount_precision;
@@ -438,6 +511,7 @@ mod test_maintenance;
 #[cfg(test)]
 mod test_maintenance_write_matrix;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_max_invoice_tags_boundary;
 #[cfg(test)]
 mod test_max_invoices_per_business;
@@ -450,6 +524,7 @@ mod test_multisig;
 #[cfg(test)]
 mod test_notification_status_matrix;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_notifications;
 #[cfg(test)]
 mod test_operational_limits;
@@ -460,8 +535,12 @@ mod test_overdue_expiration;
 #[cfg(test)]
 mod test_pagination_cursors;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_panic_handler;
 #[cfg(test)]
+mod test_partial_payments;
+#[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_pause;
 #[cfg(test)]
 mod test_pause_reads_available;
@@ -506,6 +585,7 @@ mod test_ratings_snapshot;
 #[cfg(test)]
 mod test_rebuild_indexes;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_recipient_history;
 #[cfg(test)]
 mod test_reentrancy;
@@ -528,12 +608,14 @@ mod test_require_valid_business_kyc_tier;
 #[cfg(test)]
 mod test_require_valid_invoice_category;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_resource_rate_limits;
 #[cfg(test)]
 mod test_revenue_split;
 #[cfg(test)]
 mod test_risk_tier;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_seed;
 #[cfg(test)]
 mod test_self_call_rejection;
@@ -556,8 +638,13 @@ mod test_settlement_history_reconstruction;
 #[cfg(test)]
 mod test_snapshot;
 #[cfg(test)]
+#[allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
 mod test_storage;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_storage_key_layout;
 #[cfg(test)]
 mod test_storage_migration_compat;
@@ -594,6 +681,7 @@ mod test_vesting_summary;
 #[cfg(test)]
 mod test_view_only;
 #[cfg(test)]
+#[allow(clippy::disallowed_macros)]
 mod test_volume_tier_props;
 #[cfg(test)]
 mod test_withdraw_bid_matrix;
