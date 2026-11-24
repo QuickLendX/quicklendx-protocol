@@ -34,7 +34,7 @@ mod test_investor_kyc {
         let _ = client.try_initialize_admin(&admin);
 
         // Initialize protocol limits (min invoice amount, max due date days, grace period)
-        let _ = client.try_initialize_protocol_limits(&admin, &10i128, &365u64, &86400u64);
+        let _ = client.try_initialize_protocol_limits(&admin);
 
         (env, client, admin)
     }

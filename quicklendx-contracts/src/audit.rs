@@ -389,6 +389,15 @@ pub struct AuditStats {
     pub date_range: (u64, u64),
 }
 
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct CursorAuditPage {
+    pub items: Vec<AuditLogEntry>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+}
+
 impl AuditLogEntry {
     /// Domain separator for audit-chain hashes.
     ///
@@ -705,9 +714,9 @@ impl AuditStorage {
     /// This function **never overwrites** existing entries. It appends the new
     /// entry to multiple indices (by invoice, operation, actor, timestamp) to
     /// enable efficient queries without reordering.
-    pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) {
+    pub fn store_audit_entry(env: &Env, entry: &AuditLogEntry) -> Result<(), QuickLendXError> {
         if Self::get_audit_entry(env, &entry.operation_id).is_some() {
-            panic!("duplicate observability operation id");
+            return Err(QuickLendXError::AuditIntegrityError);
         }
 
         let entry_key = entry.audit_id.clone();
@@ -732,6 +741,7 @@ impl AuditStorage {
         Self::add_to_actor_index(env, &entry.actor, &entry.audit_id);
         Self::add_to_timestamp_index(env, entry.timestamp, &entry.audit_id);
         Self::add_to_all_audit_entries(env, &entry.audit_id);
+        Ok(())
     }
 
     /// Get audit entry by ID
@@ -748,32 +758,51 @@ impl AuditStorage {
 
     /// Get audit trail for an invoice
     pub fn get_invoice_audit_trail(env: &Env, invoice_id: &BytesN<32>) -> Vec<BytesN<32>> {
-        Self::get_invoice_audit_trail_paged(env, invoice_id, 0, u32::MAX)
+        let key = (symbol_short!("inv_aud"), invoice_id.clone());
+        if let Some(ids) = env.storage().persistent().get(&key) {
+            return ids;
+        }
+        let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
+        if let Some(ids) = legacy.clone() {
+            persist_set(env, &key, &ids);
+            return ids;
+        }
+        Vec::new(env)
     }
 
     pub fn get_invoice_audit_trail_paged(
+        env: &Env,
+        invoice_id: &BytesN<32>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        let mut scope = Bytes::from_slice(env, b"invoice_audit");
+        scope.append(&invoice_id.clone().into());
+        Self::page_ids_cursor(
+            env,
+            Self::get_invoice_audit_trail(env, invoice_id),
+            cursor,
+            limit,
+            &scope,
+        )
+    }
+
+    #[deprecated(note = "use get_invoice_audit_trail_paged with an opaque cursor")]
+    pub fn get_invoice_audit_trail_offset(
         env: &Env,
         invoice_id: &BytesN<32>,
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
         let key = (symbol_short!("inv_aud"), invoice_id.clone());
-        let trail: Vec<BytesN<32>> = if let Some(ids) = env.storage().persistent().get(&key) {
-            ids
-        } else {
-            let legacy: Option<Vec<BytesN<32>>> = env.storage().instance().get(&key);
-            if let Some(ids) = legacy.clone() {
-                persist_set(env, &key, &ids);
-                ids
-            } else {
-                Vec::new(env)
-            }
-        };
-        let start = offset.min(trail.len() as u32);
-        let end = (start + limit.min(crate::MAX_QUERY_LIMIT)).min(trail.len() as u32);
+        let trail = Self::get_invoice_audit_trail(env, invoice_id);
+        let (start, end) =
+            crate::pagination::calculate_safe_bounds(offset, limit, trail.len());
         let mut page = Vec::new(env);
         for i in start..end {
-            page.push_back(trail.get(i as u32).unwrap());
+            if let Some(id) = trail.get(i) {
+                page.push_back(id);
+            }
         }
         page
     }
@@ -796,6 +825,24 @@ impl AuditStorage {
     }
 
     pub fn get_audit_entries_by_operation_paged(
+        env: &Env,
+        operation: &AuditOperation,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        let mut scope = Bytes::from_slice(env, b"operation_audit");
+        scope.append(&operation.to_xdr(env));
+        Self::page_ids_cursor(
+            env,
+            Self::get_audit_entries_by_operation(env, operation),
+            cursor,
+            limit,
+            &scope,
+        )
+    }
+
+    #[deprecated(note = "use get_audit_entries_by_operation_paged with an opaque cursor")]
+    pub fn get_audit_entries_by_operation_offset(
         env: &Env,
         operation: &AuditOperation,
         offset: u32,
@@ -821,6 +868,24 @@ impl AuditStorage {
     pub fn get_audit_entries_by_actor_paged(
         env: &Env,
         actor: &Address,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        let mut scope = Bytes::from_slice(env, b"actor_audit");
+        scope.append(&actor.to_xdr(env));
+        Self::page_ids_cursor(
+            env,
+            Self::get_audit_entries_by_actor(env, actor),
+            cursor,
+            limit,
+            &scope,
+        )
+    }
+
+    #[deprecated(note = "use get_audit_entries_by_actor_paged with an opaque cursor")]
+    pub fn get_audit_entries_by_actor_offset(
+        env: &Env,
+        actor: &Address,
         offset: u32,
         limit: u32,
     ) -> Vec<BytesN<32>> {
@@ -834,12 +899,69 @@ impl AuditStorage {
         let ids: Vec<BytesN<32>> = env.storage().persistent().get(key).unwrap_or_else(|| Vec::new(env));
         let page_limit = limit.min(crate::MAX_QUERY_LIMIT);
         let start = offset.min(ids.len() as u32);
-        let end = (start + page_limit).min(ids.len() as u32);
+        let end = start.saturating_add(page_limit).min(ids.len());
         let mut page = Vec::new(env);
         for i in start..end {
             page.push_back(ids.get(i).unwrap());
         }
         page
+    }
+
+    fn page_ids_cursor(
+        env: &Env,
+        ids: Vec<BytesN<32>>,
+        cursor: Option<String>,
+        limit: u32,
+        scope: &Bytes,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        let generation = Self::cursor_generation(env, scope);
+        let offset = match cursor {
+            Some(raw) => {
+                let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+                decoded.require_stable(generation)?;
+                decoded.offset
+            }
+            None => 0,
+        };
+        let total_count = ids.len();
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut items = Vec::new(env);
+        for index in start..end {
+            if let Some(id) = ids.get(index) {
+                items.push_back(id);
+            }
+        }
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        let capped_limit = crate::pagination::cap_query_limit(limit);
+        let next_cursor = if has_more {
+            Some(crate::pagination::encode_soroban_cursor(
+                env,
+                crate::pagination::Cursor::new(
+                    start.saturating_add(capped_limit),
+                    generation,
+                ),
+            ))
+        } else {
+            None
+        };
+        Ok(crate::types::CursorBytes32Page {
+            items,
+            total_count,
+            has_more,
+            next_cursor,
+        })
+    }
+
+    fn cursor_generation(env: &Env, scope: &Bytes) -> u64 {
+        let generation = Self::get_all_audit_entries(env).len();
+        let mut preimage = Bytes::from_slice(env, b"audit_cursor_v1");
+        preimage.append(&Bytes::from_array(env, &generation.to_be_bytes()));
+        preimage.append(scope);
+        let digest = env.crypto().sha256(&preimage).to_array();
+        u64::from_be_bytes([
+            digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6],
+            digest[7],
+        ])
     }
 
     /// Query audit logs with filters.
@@ -848,10 +970,76 @@ impl AuditStorage {
         filter: &AuditQueryFilter,
         limit: u32,
     ) -> Vec<AuditLogEntry> {
-        Self::query_audit_logs_paged(env, filter, 0, limit)
+        Self::query_audit_logs_offset(env, filter, 0, limit)
     }
 
     pub fn query_audit_logs_paged(
+        env: &Env,
+        filter: &AuditQueryFilter,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<CursorAuditPage, QuickLendXError> {
+        let mut matched = Vec::new(env);
+        let ids = if let Some(invoice_id) = &filter.invoice_id {
+            Self::get_invoice_audit_trail(env, invoice_id)
+        } else if let AuditOperationFilter::Specific(operation) = &filter.operation {
+            Self::get_audit_entries_by_operation(env, operation)
+        } else if let Some(actor) = &filter.actor {
+            Self::get_audit_entries_by_actor(env, actor)
+        } else {
+            Self::get_all_audit_entries(env)
+        };
+        for id in ids.iter() {
+            if let Some(entry) = Self::get_audit_entry(env, &id) {
+                if Self::matches_filter(&entry, filter) {
+                    matched.push_back(entry);
+                }
+            }
+        }
+
+        let scope = filter.to_xdr(env);
+        let generation = Self::cursor_generation(env, &scope);
+        let offset = match cursor {
+            Some(raw) => {
+                let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+                decoded.require_stable(generation)?;
+                decoded.offset
+            }
+            None => 0,
+        };
+        let total_count = matched.len();
+        let (start, end) =
+            crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut items = Vec::new(env);
+        for index in start..end {
+            if let Some(entry) = matched.get(index) {
+                items.push_back(entry);
+            }
+        }
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        let capped_limit = crate::pagination::cap_query_limit(limit);
+        let next_cursor = if has_more {
+            Some(crate::pagination::encode_soroban_cursor(
+                env,
+                crate::pagination::Cursor::new(
+                    start.saturating_add(capped_limit),
+                    generation,
+                ),
+            ))
+        } else {
+            None
+        };
+        Ok(CursorAuditPage {
+            items,
+            total_count,
+            has_more,
+            next_cursor,
+        })
+    }
+
+    /// Legacy offset-based audit query.
+    #[deprecated(note = "use query_audit_logs_paged with an opaque cursor")]
+    pub fn query_audit_logs_offset(
         env: &Env,
         filter: &AuditQueryFilter,
         offset: u32,
@@ -866,13 +1054,13 @@ impl AuditStorage {
         }
 
         let audit_ids = if let Some(invoice_id) = &filter.invoice_id {
-            Self::get_invoice_audit_trail_paged(env, invoice_id, offset, capped_limit)
+            Self::get_invoice_audit_trail_offset(env, invoice_id, offset, capped_limit)
         } else if let AuditOperationFilter::Specific(operation) = &filter.operation {
-            Self::get_audit_entries_by_operation_paged(env, operation, offset, capped_limit)
+            Self::get_audit_entries_by_operation_offset(env, operation, offset, capped_limit)
         } else if let Some(actor) = &filter.actor {
-            Self::get_audit_entries_by_actor_paged(env, actor, offset, capped_limit)
+            Self::get_audit_entries_by_actor_offset(env, actor, offset, capped_limit)
         } else {
-            Self::get_all_audit_entries_paged(env, offset, capped_limit)
+            Self::page_ids(env, &symbol_short!("all_aud"), offset, capped_limit)
         };
 
         for audit_id in audit_ids.iter() {
@@ -1026,10 +1214,6 @@ impl AuditStorage {
         Vec::new(env)
     }
 
-    fn get_all_audit_entries_paged(env: &Env, offset: u32, limit: u32) -> Vec<BytesN<32>> {
-        Self::page_ids(env, &symbol_short!("all_aud"), offset, limit)
-    }
-
     pub fn migrate_legacy_audit_storage(env: &Env) -> u32 {
         let legacy_all: Vec<BytesN<32>> = env
             .storage()
@@ -1166,7 +1350,7 @@ pub fn log_operation(
     new_value: Option<String>,
     amount: Option<i128>,
     additional_data: Option<String>,
-) {
+) -> Result<(), QuickLendXError> {
     let entry = AuditLogEntry::new(
         env,
         invoice_id,
@@ -1177,7 +1361,7 @@ pub fn log_operation(
         amount,
         additional_data,
     );
-    AuditStorage::store_audit_entry(env, &entry);
+    AuditStorage::store_audit_entry(env, &entry)
 }
 
 /// Append an audit entry that reuses a committed event's correlation id.
@@ -1191,7 +1375,7 @@ pub fn log_operation_with_id(
     amount: Option<i128>,
     additional_data: Option<String>,
     operation_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     let entry = AuditLogEntry::new_with_operation_id(
         env,
         invoice_id,
@@ -1203,7 +1387,7 @@ pub fn log_operation_with_id(
         additional_data,
         operation_id,
     );
-    AuditStorage::store_audit_entry(env, &entry);
+    AuditStorage::store_audit_entry(env, &entry)
 }
 
 /// Convenience wrapper for log_operation (used by invoice helpers).
@@ -1216,7 +1400,7 @@ pub fn log_invoice_operation(
     new_value: Option<String>,
     amount: Option<i128>,
     additional_data: Option<String>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1226,11 +1410,11 @@ pub fn log_invoice_operation(
         new_value,
         amount,
         additional_data,
-    );
+    )
 }
 
 /// Log invoice creation
-pub fn log_invoice_created(env: &Env, invoice: &Invoice) {
+pub fn log_invoice_created(env: &Env, invoice: &Invoice) -> Result<(), QuickLendXError> {
     log_invoice_operation(
         env,
         invoice.id.clone(),
@@ -1240,7 +1424,7 @@ pub fn log_invoice_created(env: &Env, invoice: &Invoice) {
         Some(String::from_str(env, "Invoice created")),
         Some(invoice.amount),
         Some(invoice.description.clone()),
-    );
+    )
 }
 
 /// Log invoice status change
@@ -1250,7 +1434,7 @@ pub fn log_invoice_status_change(
     actor: Address,
     _old_status: InvoiceStatus,
     _new_status: InvoiceStatus,
-) {
+) -> Result<(), QuickLendXError> {
     let old_value = String::from_str(env, "Status changed");
     let new_value = String::from_str(env, "Status updated");
 
@@ -1263,11 +1447,16 @@ pub fn log_invoice_status_change(
         Some(new_value),
         None,
         None,
-    );
+    )
 }
 
 /// Log invoice funding
-pub fn log_invoice_funded(env: &Env, invoice_id: BytesN<32>, investor: Address, amount: i128) {
+pub fn log_invoice_funded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    investor: Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
     log_invoice_operation(
         env,
         invoice_id,
@@ -1277,7 +1466,7 @@ pub fn log_invoice_funded(env: &Env, invoice_id: BytesN<32>, investor: Address, 
         Some(String::from_str(env, "Funded")),
         Some(amount),
         None,
-    );
+    )
 }
 
 /// Log payment processing
@@ -1287,7 +1476,7 @@ pub fn log_payment_processed(
     actor: Address,
     amount: i128,
     payment_type: String,
-) {
+) -> Result<(), QuickLendXError> {
     log_invoice_operation(
         env,
         invoice_id,
@@ -1297,7 +1486,7 @@ pub fn log_payment_processed(
         Some(String::from_str(env, "Payment processed")),
         Some(amount),
         Some(payment_type),
-    );
+    )
 }
 
 /// Log a committed payment using the same `operation_id` as the protocol event.
@@ -1308,7 +1497,7 @@ pub fn log_payment_processed_with_id(
     amount: i128,
     additional_data: String,
     operation_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation_with_id(
         env,
         invoice_id,
@@ -1319,11 +1508,15 @@ pub fn log_payment_processed_with_id(
         Some(amount),
         Some(additional_data),
         operation_id,
-    );
+    )
 }
 
 /// Log invoice refund
-pub fn log_invoice_refunded(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+pub fn log_invoice_refunded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1333,11 +1526,16 @@ pub fn log_invoice_refunded(env: &Env, invoice_id: BytesN<32>, actor: Address) {
         Some(String::from_str(env, "Refunded")),
         None,
         None,
-    );
+    )
 }
 
 /// Log invoice uploaded (business flow).
-pub fn log_invoice_uploaded(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+pub fn log_invoice_uploaded(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1347,11 +1545,15 @@ pub fn log_invoice_uploaded(env: &Env, invoice_id: BytesN<32>, actor: Address, a
         Some(String::from_str(env, "Invoice uploaded")),
         Some(amount),
         None,
-    );
+    )
 }
 
 /// Log invoice verified (admin).
-pub fn log_invoice_verified(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+pub fn log_invoice_verified(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1361,11 +1563,15 @@ pub fn log_invoice_verified(env: &Env, invoice_id: BytesN<32>, actor: Address) {
         Some(String::from_str(env, "Invoice verified")),
         None,
         None,
-    );
+    )
 }
 
 /// Log invoice cancelled.
-pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) {
+pub fn log_invoice_cancelled(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1375,7 +1581,7 @@ pub fn log_invoice_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address) 
         Some(String::from_str(env, "Invoice cancelled")),
         None,
         None,
-    );
+    )
 }
 
 /// Human-readable correlation string that ties an audit entry to the bid that
@@ -1407,7 +1613,7 @@ pub fn log_bid_placed(
     actor: Address,
     bid_amount: i128,
     bid_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1417,7 +1623,7 @@ pub fn log_bid_placed(
         Some(String::from_str(env, "Bid placed")),
         Some(bid_amount),
         Some(bid_correlation(env, &bid_id)),
-    );
+    )
 }
 
 /// Log bid accepted.
@@ -1427,7 +1633,7 @@ pub fn log_bid_accepted(
     actor: Address,
     amount: i128,
     bid_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1437,11 +1643,16 @@ pub fn log_bid_accepted(
         Some(String::from_str(env, "Bid accepted")),
         Some(amount),
         Some(bid_correlation(env, &bid_id)),
-    );
+    )
 }
 
 /// Log bid withdrawn.
-pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
+pub fn log_bid_withdrawn(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    bid_id: BytesN<32>,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1451,11 +1662,16 @@ pub fn log_bid_withdrawn(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_
         Some(String::from_str(env, "Bid withdrawn")),
         None,
         Some(bid_correlation(env, &bid_id)),
-    );
+    )
 }
 
 /// Log bid cancelled (Placed -> Cancelled).
-pub fn log_bid_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_id: BytesN<32>) {
+pub fn log_bid_cancelled(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    bid_id: BytesN<32>,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1465,7 +1681,7 @@ pub fn log_bid_cancelled(env: &Env, invoice_id: BytesN<32>, actor: Address, bid_
         Some(String::from_str(env, "Bid cancelled")),
         None,
         Some(bid_correlation(env, &bid_id)),
-    );
+    )
 }
 
 /// Log bid expired (Placed -> Expired via TTL/grace cleanup).
@@ -1479,7 +1695,7 @@ pub fn log_bid_expired(
     actor: Address,
     amount: i128,
     bid_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1489,7 +1705,7 @@ pub fn log_bid_expired(
         Some(String::from_str(env, "Bid expired")),
         Some(amount),
         Some(bid_correlation(env, &bid_id)),
-    );
+    )
 }
 
 /// Log escrow created.
@@ -1499,7 +1715,7 @@ pub fn log_escrow_created(
     actor: Address,
     amount: i128,
     _escrow_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1509,7 +1725,7 @@ pub fn log_escrow_created(
         Some(String::from_str(env, "Escrow created")),
         Some(amount),
         None,
-    );
+    )
 }
 
 /// Log escrow released.
@@ -1519,7 +1735,7 @@ pub fn log_escrow_released(
     actor: Address,
     amount: i128,
     _escrow_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1529,7 +1745,7 @@ pub fn log_escrow_released(
         Some(String::from_str(env, "Escrow released")),
         Some(amount),
         None,
-    );
+    )
 }
 
 /// Log escrow refunded.
@@ -1539,7 +1755,7 @@ pub fn log_escrow_refunded(
     actor: Address,
     amount: i128,
     _escrow_id: BytesN<32>,
-) {
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1549,11 +1765,16 @@ pub fn log_escrow_refunded(
         Some(String::from_str(env, "Escrow refunded")),
         Some(amount),
         None,
-    );
+    )
 }
 
 /// Log settlement completed (full payment).
-pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Address, amount: i128) {
+pub fn log_settlement_completed(
+    env: &Env,
+    invoice_id: BytesN<32>,
+    actor: Address,
+    amount: i128,
+) -> Result<(), QuickLendXError> {
     log_operation(
         env,
         invoice_id,
@@ -1563,7 +1784,7 @@ pub fn log_settlement_completed(env: &Env, invoice_id: BytesN<32>, actor: Addres
         Some(String::from_str(env, "Settlement completed")),
         Some(amount),
         None,
-    );
+    )
 }
 
 // ─── Config-change audit helpers ─────────────────────────────────────────────
@@ -1650,9 +1871,9 @@ pub(crate) fn address_to_audit_string(env: &Env, addr: &Address) -> String {
 /// chained in the same tamper-evident, append-only trail keyed by
 /// `CONFIG_AUDIT_SENTINEL`.
 ///
-/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
-/// guarantee the preceding storage write and this audit append both commit or
-/// both roll back — there is no partial-success scenario.
+/// **Atomicity**: audit errors are propagated to the calling contract method.
+/// Soroban transaction semantics guarantee the preceding storage write and
+/// this audit append both commit or both roll back.
 pub(crate) fn log_config_change(
     env: &Env,
     operation: AuditOperation,
@@ -1660,7 +1881,7 @@ pub(crate) fn log_config_change(
     param: &str,
     old_value: Option<String>,
     new_value: Option<String>,
-) {
+) -> Result<(), QuickLendXError> {
     let sentinel = BytesN::from_array(env, &CONFIG_AUDIT_SENTINEL);
     log_operation(
         env,
@@ -1671,7 +1892,7 @@ pub(crate) fn log_config_change(
         new_value,
         None,
         Some(String::from_str(env, param)),
-    );
+    )
 }
 
 /// Append a KYC-related audit entry to the shared `KYC_AUDIT_SENTINEL` trail.
@@ -1681,9 +1902,9 @@ pub(crate) fn log_config_change(
 /// participant-identity lifecycle on the same hash-chain infrastructure used
 /// for invoice and config trails.
 ///
-/// **Atomicity**: `log_operation` is infallible. Soroban transaction semantics
-/// guarantee the preceding storage write and this audit append both commit or
-/// both roll back — there is no partial-success scenario.
+/// **Atomicity**: audit errors are propagated to the calling contract method.
+/// Soroban transaction semantics guarantee the preceding storage write and
+/// this audit append both commit or both roll back.
 pub(crate) fn log_kyc_operation(
     env: &Env,
     operation: AuditOperation,
@@ -1691,7 +1912,7 @@ pub(crate) fn log_kyc_operation(
     old_value: Option<String>,
     new_value: Option<String>,
     additional_data: Option<String>,
-) {
+) -> Result<(), QuickLendXError> {
     let sentinel = BytesN::from_array(env, &KYC_AUDIT_SENTINEL);
     log_operation(
         env,
@@ -1702,5 +1923,5 @@ pub(crate) fn log_kyc_operation(
         new_value,
         None,
         additional_data,
-    );
+    )
 }

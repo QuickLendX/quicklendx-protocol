@@ -12,6 +12,18 @@ path = "tests/wasm_build_size_budget.rs"
 name = "test_fees_boundary"
 path = "tests/test_fees_boundary.rs"
 
+[[test]]
+name = "analytics_accuracy"
+path = "tests/analytics_accuracy.rs"
+
+[[test]]
+name = "backup_retention_validation"
+path = "tests/backup_retention_validation.rs"
+
+[[test]]
+name = "invoice_id_collision_regression"
+path = "tests/invoice_id_collision_regression.rs"
+
 [lib]
 # rlib for tests/integration; cdylib for WASM contract builds.
 crate-type = ["rlib", "cdylib"]
@@ -39,12 +51,12 @@ legacy-tests = []
 diagnostics = []
 testutils = ["soroban-sdk/testutils"]
 
-# Integration tests written against the full contract API; the crate root is
-# currently a stub, so they only build with the `legacy-tests` feature.
+# Integration tests written against legacy contract APIs.
+# Integration tests written against the full contract API. Targets that still
+# require the `legacy-tests` feature are gated individually below.
 [[test]]
 name = "auth_verification_test"
 path = "tests/auth_verification_test.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "bid_acceptance_replay"
@@ -53,34 +65,27 @@ path = "tests/bid_acceptance_replay.rs"
 [[test]]
 name = "investor_kyc_tier"
 path = "tests/investor_kyc_tier.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "invoice_lifecycle_e2e"
 path = "tests/invoice_lifecycle_e2e.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "issue_2954_bid_expiry_active_counts"
 path = "tests/issue_2954_bid_expiry_active_counts.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "pagination_match_over_under"
 path = "tests/pagination_match_over_under.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "profit_fee_golden"
 path = "tests/profit_fee_golden.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "test_admin_lookalike"
 path = "tests/test_admin_lookalike.rs"
-required-features = ["legacy-tests"]
 
 [[test]]
 name = "test_treasury_rotation"
 path = "tests/test_treasury_rotation.rs"
-required-features = ["legacy-tests"]

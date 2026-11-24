@@ -28,7 +28,7 @@ This implementation adds comprehensive protocol limits functionality to the Quic
 
 ### Documentation
 - **docs/contracts/protocol-limits.md**: Complete API reference with examples
-- **PROTOCOL_LIMITS_SECURITY.md**: Security analysis and threat model
+- **docs/archive/PROTOCOL_LIMITS_SECURITY.md**: Security analysis and threat model
 - **PROTOCOL_LIMITS_README.md**: Implementation summary (this file)
 - Inline rustdoc comments on all public functions
 
@@ -108,7 +108,7 @@ cargo test test_protocol_limits --manifest-path quicklendx-contracts/Cargo.toml
 - `src/protocol_limits.rs` - Core implementation (enhanced)
 - `src/test_protocol_limits.rs` - Test suite
 - `docs/contracts/protocol-limits.md` - API documentation (enhanced)
-- `PROTOCOL_LIMITS_SECURITY.md` - Security analysis
+- `docs/archive/PROTOCOL_LIMITS_SECURITY.md` - Security analysis
 - `PROTOCOL_LIMITS_README.md` - This file
 - `test_protocol_limits_output.txt` - Test results
 
@@ -181,7 +181,7 @@ Protocol limits provide:
 
 For questions or issues:
 1. Review `docs/contracts/protocol-limits.md` for API reference
-2. Check `PROTOCOL_LIMITS_SECURITY.md` for security considerations
+2. Check `docs/archive/PROTOCOL_LIMITS_SECURITY.md` for security considerations
 3. Run tests to verify functionality
 4. Review test cases for usage examples
 

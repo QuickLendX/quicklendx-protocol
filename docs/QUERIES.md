@@ -106,10 +106,15 @@ pub fn is_allowed_currency(env: Env, currency: Address) -> bool
 ### `get_whitelisted_currencies_paged`
 
 ```rust
-pub fn get_whitelisted_currencies_paged(env: Env, offset: u32, limit: u32) -> Vec<Address>
+pub fn get_whitelisted_currencies_paged(
+    env: Env,
+    cursor: Option<String>,
+    limit: u32,
+) -> Result<CursorAddressPage, QuickLendXError>
 ```
 
-Returns a page of whitelisted token addresses. For empty lists or out-of-range offsets, returns an empty vector.
+Returns whitelist addresses in insertion order. Pass the previous response's
+`next_cursor` to continue; whitelist changes invalidate the cursor.
 
 ### Pause / Maintenance
 
@@ -148,14 +153,19 @@ pub fn get_settlement_batch_cap(env: Env) -> u32
 let batch_size = contract.get_settlement_batch_cap(env.clone());
 
 // Paginate payment records using the hint
-let mut offset = 0u32;
+let mut cursor = None;
 loop {
-    let page = contract.get_payment_records(env.clone(), invoice_id, offset, batch_size)?;
-    if page.is_empty() {
+    let page = contract.get_payment_records_paged(
+        env.clone(),
+        invoice_id,
+        cursor,
+        batch_size,
+    )?;
+    process(page.items);
+    cursor = page.next_cursor;
+    if cursor.is_none() {
         break;
     }
-    // process page...
-    offset = offset.saturating_add(batch_size);
 }
 ```
 
@@ -245,29 +255,39 @@ pub fn get_business_invoices_paged(
     env: Env,
     business: Address,
     status_filter: Option<InvoiceStatus>,
-    offset: u32,
+    cursor: Option<String>,
     limit: u32,
-) -> Vec<BytesN<32>>
+) -> Result<InvoicePage, QuickLendXError>
 ```
 
-Lists invoice IDs for a given business, optionally filtered by status, with cursor-based pagination.
+Lists invoice IDs for a given business, optionally filtered by status, with
+opaque cursor pagination. Results are ordered newest-first by `created_at`.
 
 **Example — first 10 active invoices:**
 
 ```rust
-let ids = contract.get_business_invoices_paged(
+let first_page = contract.get_business_invoices_paged(
     env.clone(),
     business_addr,
     Some(InvoiceStatus::Verified),  // filter
-    0,                              // offset
+    None,                           // first page
     10,                             // limit
+);
+
+let next_page = contract.get_business_invoices_paged(
+    env.clone(),
+    business_addr,
+    Some(InvoiceStatus::Verified),
+    first_page.next_cursor,
+    10,
 );
 ```
 
 **Edge cases:**
-- `offset >= total_count` → empty `Vec`
-- `limit == 0` → empty `Vec`
-- `limit > MAX_QUERY_LIMIT (100)` → capped to `MAX_QUERY_LIMIT`
+- malformed or modified cursor → `InvalidCursor`
+- cursor from an earlier business-index generation → `UnstableCursor`
+- `limit == 0` → empty `items`
+- `limit > MAX_QUERY_LIMIT (50)` → capped to `MAX_QUERY_LIMIT`
 
 ### `get_available_invoices_paged`
 
@@ -414,12 +434,14 @@ pub fn get_investor_investments_paged(
     env: Env,
     investor: Address,
     status_filter: Option<InvestmentStatus>,
-    offset: u32,
+    cursor: Option<String>,
     limit: u32,
-) -> Vec<BytesN<32>>
+) -> Result<CursorBytes32Page, QuickLendXError>
 ```
 
-Paginated list of investment IDs for a given investor. See [Pagination Conventions](#pagination-conventions) for boundary behaviour.
+Returns investment IDs in index order. The cursor is bound to the investor,
+status filter, and current matching result set; restart if it returns
+`UnstableCursor`.
 
 ### `get_active_investment_ids`
 
@@ -866,35 +888,38 @@ Aggregate across all schedules for a user: total vested, total released, total r
 
 ## Pagination Conventions
 
-All paginated endpoints (`*_paged`) follow the same conventions. For a detailed specification of ordering guarantees, snapshot consistency, cursor stability, and multi-page concurrency behavior, see [Query Semantics & Paged Read Guarantees](QUERY_SEMANTICS.md).
+Cursor-enabled list endpoints use opaque, versioned cursors. Pass each
+`next_cursor` back unchanged; do not construct offsets or parse cursor values.
+Malformed or modified values return `InvalidCursor`, while a mutation to the
+queried collection returns `UnstableCursor`. See [Cursor Guarantees](CURSOR_GUARANTEES.md).
 
 | Rule | Behaviour |
 |---|---|
-| Max page size | `MAX_QUERY_LIMIT = 100` — larger values are silently capped |
-| Zero limit | Returns empty `Vec` |
-| Offset at or past end | Returns empty `Vec` |
-| Offset == 0 | First page |
+| Max page size | `MAX_QUERY_LIMIT = 50` — larger values are capped |
+| Zero limit | Returns empty `items` |
+| First page | Pass `None` for `cursor` |
+| End of results | `next_cursor` is `None` and `has_more` is false |
 | Overflow safety | All internal arithmetic uses saturating operations |
 | Filtering order | Status filters are applied before pagination slicing |
 
 Example — safe iteration over all invoices for a business:
 
 ```rust
-let mut offset = 0u32;
 let limit = 100u32;
+let mut cursor = None;
 loop {
     let page = contract.get_business_invoices_paged(
         env.clone(),
         business_addr,
         None,
-        offset,
+        cursor,
         limit,
     );
-    if page.is_empty() {
+    // process page
+    cursor = page.next_cursor;
+    if cursor.is_none() {
         break;
     }
-    // process page
-    offset = offset.saturating_add(limit);
 }
 ```
 
