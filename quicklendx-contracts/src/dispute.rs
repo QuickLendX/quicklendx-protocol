@@ -3,9 +3,9 @@ use crate::arbiter::ArbiterStorage;
 use crate::dispute_timeline::{clear_under_review_timestamp, set_under_review_timestamp};
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
-use crate::resolution_policy::{EscrowEffect, InvoiceEffect, InvestmentEffect, ResolutionPolicy};
+use crate::resolution_policy::{EscrowEffect, InvestmentEffect, InvoiceEffect, ResolutionPolicy};
 use crate::storage::{DataKey, InvoiceStorage};
-use crate::types::{Dispute, DisputeResolution, DisputeStatus, InvoiceStatus, InvestmentStatus};
+use crate::types::{Dispute, DisputeResolution, DisputeStatus, InvestmentStatus, InvoiceStatus};
 use crate::verification::{
     validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
     validate_dispute_resolution,
@@ -70,6 +70,26 @@ fn dispute_index_key() -> soroban_sdk::Symbol {
     symbol_short!("dispute")
 }
 
+fn dispute_generation_key() -> soroban_sdk::Symbol {
+    symbol_short!("dis_gen")
+}
+
+fn get_dispute_generation(env: &Env) -> u64 {
+    let key = dispute_generation_key();
+    let generation = env.storage().persistent().get(&key).unwrap_or(0);
+    if env.storage().persistent().has(&key) {
+        crate::storage::extend_persistent_ttl(env, &key);
+    }
+    generation
+}
+
+fn bump_dispute_generation(env: &Env) {
+    let key = dispute_generation_key();
+    let generation = get_dispute_generation(env).saturating_add(1);
+    env.storage().persistent().set(&key, &generation);
+    crate::storage::extend_persistent_ttl(env, &key);
+}
+
 pub fn get_dispute_index(env: &Env) -> Vec<BytesN<32>> {
     let key = dispute_index_key();
     let res = env.storage().persistent().get(&key);
@@ -86,6 +106,7 @@ pub fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
         let key = dispute_index_key();
         env.storage().persistent().set(&key, &ids);
         crate::storage::extend_persistent_ttl(env, &key);
+        bump_dispute_generation(env);
     }
 }
 
@@ -248,6 +269,7 @@ pub fn create_dispute(
         resolved_by: creator.clone(), // Placeholder — overwritten on resolution
         resolved_at: 0,
         resolution_outcome: DisputeResolution::None,
+        votes: Vec::new(env),
     };
 
     InvoiceStorage::update_invoice(env, &invoice);
@@ -312,6 +334,7 @@ pub fn put_dispute_under_review(
 
     invoice.dispute_status = DisputeStatus::UnderReview;
     InvoiceStorage::update_invoice(env, &invoice);
+    bump_dispute_generation(env);
     set_under_review_timestamp(env, invoice_id, env.ledger().timestamp());
     Ok(())
 }
@@ -363,13 +386,6 @@ pub fn resolve_dispute(
     invoice_id: &BytesN<32>,
     resolution: &String,
 ) -> Result<(), QuickLendXError> {
-    AdminStorage::require_admin(env, admin)?;
-    // Arbiter gate: even an admin cannot resolve a dispute unless they have
-    // been explicitly registered as an arbiter. Splits dispute-adjudication
-    // authority from protocol-configuration authority so that a single
-    // compromised admin key cannot silently drain disputed escrow.
-    ArbiterStorage::require_dispute_arbiter(env, admin)?;
-
     validate_dispute_resolution(resolution)?;
 
     let mut invoice =
@@ -390,6 +406,7 @@ pub fn resolve_dispute(
     invoice.dispute.resolved_at = env.ledger().timestamp();
     invoice.dispute.resolution_outcome = DisputeResolution::Split;
     InvoiceStorage::update_invoice(env, &invoice);
+    bump_dispute_generation(env);
 
     // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
     let _ = crate::notifications::NotificationSystem::notify_dispute_resolved(env, &invoice);
@@ -441,37 +458,59 @@ pub fn resolve_dispute_structured(
     outcome: DisputeResolution,
     note: &String,
 ) -> Result<(), QuickLendXError> {
-    AdminStorage::require_admin(env, admin)?;
-    // See `resolve_dispute` — the structured variant shares the same arbiter
-    // gate so both resolution paths are defended equally.
-    ArbiterStorage::require_dispute_arbiter(env, admin)?;
-
     validate_dispute_resolution(note)?;
+    record_resolution_vote(env, admin, invoice_id, outcome, note)
+}
+
+fn record_resolution_vote(
+    env: &Env,
+    arbiter: &Address,
+    invoice_id: &BytesN<32>,
+    outcome: DisputeResolution,
+    note: &String,
+) -> Result<(), QuickLendXError> {
+    ArbiterStorage::require_dispute_arbiter(env, arbiter)?;
 
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-
-    // Guard: only UnderReview disputes may be resolved.
     if invoice.dispute_status != DisputeStatus::UnderReview {
         return Err(QuickLendXError::DisputeNotUnderReview);
+    }
+
+    if invoice.dispute.votes.iter().any(|vote| vote.arbiter == *arbiter) {
+        return Err(QuickLendXError::DuplicateArbiterVote);
+    }
+
+    invoice.dispute.votes.push_back(DisputeVote {
+        arbiter: arbiter.clone(),
+        outcome,
+        timestamp: env.ledger().timestamp(),
+    });
+    crate::events::dispute_arbiter_voted(env, invoice_id, arbiter, outcome);
+
+    let quorum = ArbiterStorage::get_dispute_quorum(env);
+    let mut outcome_votes = 0u32;
+    for vote in invoice.dispute.votes.iter() {
+        if vote.outcome == outcome {
+            outcome_votes += 1;
+        }
+    }
+
+    if outcome_votes < quorum {
+        InvoiceStorage::update_invoice(env, &invoice);
+        return Ok(());
     }
 
     invoice.dispute_status = DisputeStatus::Resolved;
     invoice.dispute.resolution = note.clone();
     invoice.dispute.resolution_outcome = outcome;
-    invoice.dispute.resolved_by = admin.clone();
+    invoice.dispute.resolved_by = arbiter.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
     InvoiceStorage::update_invoice(env, &invoice);
+    bump_dispute_generation(env);
 
-    // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
     let _ = crate::notifications::NotificationSystem::notify_dispute_resolved(env, &invoice);
-
-    // Enact the recorded outcome atomically: escrow, invoice and
-    // investment transitions follow `ResolutionPolicy::for_outcome`
-    // (issue #2963). Any error below aborts the whole invocation, so the
-    // outcome can never be stored without its consequences applied.
     apply_resolution_policy(env, invoice_id, outcome)?;
-
     Ok(())
 }
 
@@ -583,40 +622,100 @@ pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
     get_dispute_index(env)
 }
 
-/// Return a paginated slice of dispute-indexed invoice IDs.
+fn page_dispute_ids(
+    env: &Env,
+    ids: Vec<BytesN<32>>,
+    cursor: Option<String>,
+    limit: u32,
+    scope_tag: u64,
+) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+    let mut generation_preimage = soroban_sdk::Bytes::from_slice(env, b"dispute_cursor_scope_v1");
+    generation_preimage.append(&soroban_sdk::Bytes::from_array(
+        env,
+        &get_dispute_generation(env).to_be_bytes(),
+    ));
+    generation_preimage.append(&soroban_sdk::Bytes::from_array(
+        env,
+        &scope_tag.to_be_bytes(),
+    ));
+    let digest = env.crypto().sha256(&generation_preimage).to_array();
+    let generation = u64::from_be_bytes([
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6],
+        digest[7],
+    ]);
+    let offset = match cursor {
+        Some(raw) => {
+            let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+            decoded.require_stable(generation)?;
+            decoded.offset
+        }
+        None => 0,
+    };
+    let total_count = ids.len();
+    let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+    let mut items = Vec::new(env);
+    let mut index = start;
+    while index < end {
+        if let Some(id) = ids.get(index) {
+            items.push_back(id);
+        }
+        index = index.saturating_add(1);
+    }
+
+    let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+    let next_cursor = if has_more {
+        Some(crate::pagination::encode_soroban_cursor(
+            env,
+            crate::pagination::Cursor::new(
+                start.saturating_add(crate::pagination::cap_query_limit(limit)),
+                generation,
+            ),
+        ))
+    } else {
+        None
+    };
+
+    Ok(crate::types::CursorBytes32Page {
+        items,
+        total_count,
+        has_more,
+        next_cursor,
+    })
+}
+
+/// Return an opaque-cursor page of dispute-indexed invoice IDs.
 pub fn get_invoices_with_disputes_paged(
     env: &Env,
-    offset: u32,
+    cursor: Option<String>,
     limit: u32,
-) -> Vec<BytesN<32>> {
+) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+    page_dispute_ids(env, get_dispute_index(env), cursor, limit, 0)
+}
+
+/// Legacy offset-based dispute query. Prefer [`get_invoices_with_disputes_paged`].
+#[deprecated(note = "use get_invoices_with_disputes_paged with an opaque cursor")]
+pub fn get_invoices_with_disputes_offset(env: &Env, offset: u32, limit: u32) -> Vec<BytesN<32>> {
     let list = get_dispute_index(env);
-    let total_count = list.len();
-    let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+    let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, list.len());
     let mut page = Vec::new(env);
-    let mut idx = start;
-    while idx < end {
-        if let Some(id) = list.get(idx) {
+    let mut index = start;
+    while index < end {
+        if let Some(id) = list.get(index) {
             page.push_back(id);
         }
-        idx = idx.saturating_add(1);
+        index = index.saturating_add(1);
     }
     page
 }
 
-/// Return a paginated response with metadata for dispute-indexed invoices.
+/// Deprecated spelling retained as an opaque-cursor alias.
+#[deprecated(note = "use get_invoices_with_disputes_paged")]
 pub fn get_invoices_with_disputes_paginated(
     env: &Env,
-    offset: u32,
+    cursor: Option<String>,
     limit: u32,
-) -> crate::types::PaginatedBytes32Vec {
-    let items = get_invoices_with_disputes_paged(env, offset, limit);
-    let total_count = get_dispute_index(env).len();
-    let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
-    crate::types::PaginatedBytes32Vec {
-        items,
-        total_count,
-        has_more,
-    }
+) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+    get_invoices_with_disputes_paged(env, cursor, limit)
 }
 
 /// @notice Read the dispute index for query endpoints.
@@ -639,23 +738,44 @@ pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<
     result
 }
 
-/// Return a paginated slice of invoices matching a specific dispute status.
+/// Return an opaque-cursor page of invoices matching a dispute status.
 pub fn get_invoices_by_dispute_status_paged(
+    env: &Env,
+    status: &DisputeStatus,
+    cursor: Option<String>,
+    limit: u32,
+) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+    page_dispute_ids(
+        env,
+        get_invoices_by_dispute_status(env, status),
+        cursor,
+        limit,
+        match status {
+            DisputeStatus::None => 1,
+            DisputeStatus::Disputed => 2,
+            DisputeStatus::UnderReview => 3,
+            DisputeStatus::Resolved => 4,
+        },
+    )
+}
+
+/// Legacy offset-based status query.
+#[deprecated(note = "use get_invoices_by_dispute_status_paged with an opaque cursor")]
+pub fn get_invoices_by_dispute_status_offset(
     env: &Env,
     status: &DisputeStatus,
     offset: u32,
     limit: u32,
 ) -> Vec<BytesN<32>> {
     let list = get_invoices_by_dispute_status(env, status);
-    let total_count = list.len();
-    let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+    let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, list.len());
     let mut page = Vec::new(env);
-    let mut idx = start;
-    while idx < end {
-        if let Some(id) = list.get(idx) {
+    let mut index = start;
+    while index < end {
+        if let Some(id) = list.get(index) {
             page.push_back(id);
         }
-        idx = idx.saturating_add(1);
+        index = index.saturating_add(1);
     }
     page
 }

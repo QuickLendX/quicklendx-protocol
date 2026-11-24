@@ -176,13 +176,13 @@ fn test_full_capacity_accepts_50_rejects_51st() {
         env.as_contract(&client.address, || BidStorage::get_active_bid_count(
             &env,
             &invoice_id
-        )),
+        ).expect("active bid count should be available")),
         MAX_BIDS_PER_INVOICE,
         "active bid count must equal MAX_BIDS_PER_INVOICE at the ceiling"
     );
 
     let records = env.as_contract(&client.address, || {
-        BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
+        BidStorage::get_bid_records_for_invoice(&env, &invoice_id).expect("invoice bids should be available")
     });
     assert_eq!(
         records.len(),
@@ -212,7 +212,7 @@ fn test_full_capacity_accepts_50_rejects_51st() {
         env.as_contract(&client.address, || BidStorage::get_active_bid_count(
             &env,
             &invoice_id
-        )),
+        ).expect("active bid count should be available")),
         MAX_BIDS_PER_INVOICE,
         "active bid count must remain at MAX_BIDS_PER_INVOICE after rejection"
     );
@@ -373,7 +373,7 @@ fn test_full_capacity_pure_bid_id_tiebreaker() {
     // other two fields (bid_amount, expected_return) are pinned by
     // the loop body so they cannot drift.
     let records = env.as_contract(&client.address, || {
-        BidStorage::get_bid_records_for_invoice(&env, &invoice_id)
+        BidStorage::get_bid_records_for_invoice(&env, &invoice_id).expect("invoice bids should be available")
     });
     assert_eq!(records.len() as u32, MAX_BIDS_PER_INVOICE);
     let now = env.ledger().timestamp();
@@ -479,7 +479,7 @@ fn test_full_coverage_cleanup_drains_all_expired_at_full_capacity() {
     // and `count_bids_by_status` both see 0 entries.
     let (placed_count, accepted, withdrawn, expired, cancelled) = env
         .as_contract(&client.address, || {
-            BidStorage::count_bids_by_status(&env, &invoice_id)
+            BidStorage::count_bids_by_status(&env, &invoice_id).expect("bid status counts should be available")
         });
     assert_eq!(placed_count, 0, "no Placed bids in index");
     assert_eq!(accepted, 0, "no Accepted bids in index");
@@ -645,7 +645,7 @@ fn test_paged_cleanup_mixed_expired_and_active_full_capacity() {
     // overwritten/compacted out of the index.
     let (placed_in_index, accepted, withdrawn, expired_in_index, cancelled) = env
         .as_contract(&client.address, || {
-            BidStorage::count_bids_by_status(&env, &invoice_id)
+            BidStorage::count_bids_by_status(&env, &invoice_id).expect("bid status counts should be available")
         });
     assert_eq!(
         placed_in_index, 30,

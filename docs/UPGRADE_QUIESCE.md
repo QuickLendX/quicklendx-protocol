@@ -242,3 +242,7 @@ A: Maintenance mode stays on. Investigate, then either retry `upgrade_contract_w
 | Version | Date | Author | Change |
 |---------|------|--------|--------|
 | 1.0 | 2026-07-24 | QuickLendX team | Initial quiescence policy |
+
+## Contract-level upgrade entrypoints and write quiescence
+
+The contract exposes the scheduled-upgrade lifecycle as public Soroban entrypoints: `schedule_upgrade`, `get_pending_upgrade`, `cancel_upgrade`, and `execute_upgrade`. Scheduling enters the existing `PendingUpgrade` pause state. Mutating entrypoints must check `UpgradeControl::require_no_pending_upgrade` (directly or through `PauseControl::require_not_paused`) before writing state. Read-only queries remain available. Only the current admin can schedule, cancel, or execute; execution remains blocked until the 48-hour delay has elapsed. Cancellation restores any pre-existing manual or incident pause rather than blindly unpausing the contract.

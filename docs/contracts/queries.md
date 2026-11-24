@@ -73,14 +73,16 @@ fn validate_query_params(offset: u32, limit: u32) -> Result<(), QuickLendXError>
 
 ### Business Invoice Query Ordering
 
-`get_business_invoices_paged` applies status filtering first, then deterministically orders
-results by `(created_at ASC, invoice_id ASC)` before pagination.
+`get_business_invoices_paged` uses an opaque generation-bound cursor. It applies
+status filtering first, then preserves newest-first `created_at` order before
+pagination. A mutation to the business invoice index rejects continuation with
+`UnstableCursor`; malformed cursors return `InvalidCursor`.
 
 Security and consistency implications:
 
 - Repeated calls with identical contract state return identical page boundaries.
 - Status-filtered pagination remains deterministic and does not leak cross-status entries.
-- Tie-breaking by `invoice_id` avoids validator-dependent ordering when timestamps match.
+- Cursors must be passed through unchanged; clients must not parse or construct offsets.
 
 ---
 

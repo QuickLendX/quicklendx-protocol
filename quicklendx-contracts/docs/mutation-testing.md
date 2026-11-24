@@ -1,52 +1,54 @@
-# Mutation testing for protocol arithmetic
+# Mutation testing
 
-This repository includes a non-blocking `cargo-mutants` pipeline focused on the
-modules most likely to hide high-impact arithmetic or settlement mistakes:
+Mutation testing measures whether tests detect small behavioral changes. The
+checked-in `.cargo/mutants.toml` scopes analysis to `profits.rs`, `fees.rs`,
+`settlement.rs`, and `escrow.rs`, runs only `cargo test --lib`, and excludes
+generated `__spec` items. Mutation testing is opt-in and is not part of default
+CI.
 
-- `src/profits.rs`
-- `src/fees.rs`
-- `src/settlement.rs`
-- `src/escrow.rs`
+## Run locally
 
-The checked-in configuration lives at `.cargo/mutants.toml` and scopes the
-mutation run to those files by using `examine_globs`.
-
-## Local commands
+Install the tool once:
 
 ```bash
-cd quicklendx-contracts
-cargo install cargo-mutants
-cargo mutants --file src/profits.rs --no-shuffle
-cargo mutants --in-place=false --json > mutants.json
+cargo install --locked cargo-mutants
 ```
 
-`--in-place=false` runs against a copied build tree, so committed source files are
-not altered by the harness. Before committing, always run `git status --short` to
-confirm no source mutation leaked into the working tree.
+From `quicklendx-contracts`, list the selected mutations:
 
-## CI artifact
+```bash
+bash scripts/mutation-test.sh --list
+```
 
-The CI job writes `quicklendx-contracts/mutants.json` and uploads it as the
-`cargo-mutants-survivors` artifact. The job is advisory (`continue-on-error`) so
-that the first rollout surfaces survivor data without blocking unrelated PRs.
+Run the mutation suite:
 
-## Survivor triage workflow
+```bash
+bash scripts/mutation-test.sh
+```
 
-1. Open `mutants.json` and identify every surviving mutant in profits, fees,
-   settlement, or escrow logic.
-2. Classify the survivor:
-   - **P1 correctness gap**: profit math, fee math, settlement identity, escrow
-     terminality, or principal movement changed but tests still passed.
-   - **Equivalent mutant**: the change is observably identical for all valid
-     inputs. Document why before accepting it.
-   - **Harness gap**: the changed behavior is meaningful but the generated test
-     did not exercise the path.
-3. Add targeted assertions or property tests for every P1 correctness gap.
-4. Re-run `cargo mutants --file <module> --no-shuffle` and attach the updated
-   report to the follow-up PR.
+By default, each mutant test is limited to 300 seconds, each build to 900
+seconds, and two mutants run concurrently. Override these limits with
+`MUTANTS_TIMEOUT`, `MUTANTS_BUILD_TIMEOUT`, and `MUTANTS_JOBS`. Results are
+written under `target/mutants.out`, which is ignored by Git. The script uses
+cargo-mutants' copied-tree mode so mutations do not edit the working tree.
 
-## Security note
+## Baseline
 
-Any surviving mutant in profit, fee, settlement, or escrow arithmetic is treated
-as a P1 follow-up because these modules determine principal conservation,
-platform revenue, investor return, and double-spend resistance.
+`bash scripts/mutation-test.sh --list` selects 654 mutants across the four
+configured modules and excludes all generated `__spec` items.
+
+The initial `cargo test --lib` attempt did not compile: the crate currently
+reports 89 errors, including duplicate audit variants and contract definitions
+and unresolved APIs in existing source files. Consequently, no mutants have
+been executed and there is not yet a measured kill/survivor count. Rerun the
+script after the library test suite compiles.
+
+## Triage
+
+Review surviving mutants by behavior, not just count:
+
+- Add a focused example or property assertion when a meaningful behavior
+  change survives.
+- Mark equivalent mutants only when their equivalence is justified.
+- Treat survivors affecting fee arithmetic, repayment allocation, or escrow
+  terminality as correctness gaps until disproven.
