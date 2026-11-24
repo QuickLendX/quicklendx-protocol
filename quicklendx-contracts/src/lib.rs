@@ -1065,7 +1065,9 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         check_and_record_mutation(&env, &admin)?;
-        crate::dispute::resolve_dispute(&env, &admin, &invoice_id, &resolution)
+        with_payment_guard(&env, || {
+            crate::dispute::resolve_dispute(&env, &admin, &invoice_id, &resolution)
+        })
     }
 
     /// Resolve a dispute with a structured outcome (admin + registered arbiter).
@@ -1078,7 +1080,9 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         check_and_record_mutation(&env, &admin)?;
-        crate::dispute::resolve_dispute_structured(&env, &admin, &invoice_id, outcome, &note)
+        with_payment_guard(&env, || {
+            crate::dispute::resolve_dispute_structured(&env, &admin, &invoice_id, outcome, &note)
+        })
     }
 
     /// Return the dispute details for an invoice, or `None` if no dispute exists.
@@ -1189,7 +1193,7 @@ impl QuickLendXContract {
 
         let all_invoices = backup::BackupStorage::get_all_invoices(&env);
         let backup_id = backup::BackupStorage::generate_backup_id(&env);
-        
+
         let backup = backup::Backup {
             backup_id: backup_id.clone(),
             timestamp: env.ledger().timestamp(),
