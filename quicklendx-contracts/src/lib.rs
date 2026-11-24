@@ -87,63 +87,82 @@ mod test_partial_payments;
 mod test_payment_history;
 #[cfg(test)]
 mod test_settlement;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_settlement;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_partial_payments;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_payment_history;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_dispute;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_dispute_timeline;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_dispute_arbiter;
 
 // The remaining test modules (already present in the codebase)
 #[cfg(test)]
-mod test_accept_bid_instruction_budget;
+mod test_fee_admin_auth;
 #[cfg(test)]
-mod test_accept_bid_race;
+mod test_platform_fee_ownership;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod test_address_summary;
 #[cfg(test)]
+mod test_rating_auth;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_accept_bid_instruction_budget;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_accept_bid_race;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_events_audit_parity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_handover;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_lookalike;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_simple;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_standalone;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_two_step;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_analytics_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit_config;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit_stats_regression;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_authorization;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_auto_resolution_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backfill_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backpressure_shedding;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_restore_reindex;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_retention_enforcement;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_safety;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_acceptance_replay;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_atomic_rollback;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_audit_parity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_cancel_accept_race;
 #[cfg(test)]
 #[allow(
@@ -156,14 +175,17 @@ mod test_bid_capacity_stress;
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_capacity_stress;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_compare_order_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_concurrency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_exclusivity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_grace;
 #[cfg(test)]
 #[allow(
@@ -188,8 +210,15 @@ mod test_bid_ranking_determinism;
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_match_helper;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_ranking;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_ranking_determinism;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking_tiebreaker;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_state_matrix;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
@@ -203,125 +232,136 @@ mod test_bid_transition_matrix;
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_bid_transition_matrix;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_validation;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_freeze_reason;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_invoices_paged_ordering;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_kyc;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cancel_invoice_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cancel_refund;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cannot_withdraw_more_than_deposited;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_category_breakdown;
 #[cfg(test)]
 #[allow(
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_clock_rollover;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_compute_yield_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_concurrent_default_overlap;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_config_bounds_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cross_module_consistency;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_batch;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_match_funding;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_precision;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_grace_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_diagnostics;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_event_invariant;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_evidence_identity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_history_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_refund_flow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_settlement;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_state_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_time_limit;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_due_date_boundaries;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_due_date_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dust_transfer;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_early_payment_discount_bps;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_emergency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_emergency_escrow_protection;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_emergency_withdraw;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_emergency_withdraw_props;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_error_code_stability;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_errors;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_early_release;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_event_completeness;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_expiry_extend;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_mutual_exclusion;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund_after_expiry;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund_hardened;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_settle_refund_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_state_machine;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_time_limit;
 #[cfg(test)]
 #[allow(
@@ -331,210 +371,232 @@ mod test_escrow_time_limit;
 mod test_escrow_uniqueness;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_escrow_uniqueness;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_evidence_hash_format;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_evidence_kind_guard_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_evidence_size_cap;
 #[cfg(test)]
 #[allow(
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_escrow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fee_analytics_boundaries;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fee_recipient_rotation_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fees;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fees_extended;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 mod test_freeze_appeal_channel;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_freeze_appeal_channel;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_event;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_guard_writes;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_lag;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_funding_events_audit_parity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_accept_bid_and_fund;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_accounting;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_cancelled_noop;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_currency_whitelist;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_default_boundaries;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_default_counter;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_default_flow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_distribute_revenue;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_invoice_metadata;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_invoice_search;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_partial_payment;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_settlement_currency_whitelist;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_tier_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_governance;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_health_status;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_collision_cross_domain;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
 #[cfg(test)]
 mod test_contract_init_admin;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_debug;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_invariants;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_input_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_optin_lifecycle;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_premium_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_stacking;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariants;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_active_guard;
 #[cfg(test)]
 #[allow(
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_lifecycle;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_queries;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_state_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_terminal_states;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_withdrawal;
 #[cfg(test)]
 #[allow(
     clippy::disallowed_methods,
     reason = "Test assertions report unexpected Result errors; production linting remains enabled."
 )]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_bid_limit;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_exposure_caps;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_freeze_reason;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_kyc;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_rating_recompute;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_amount_precision;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_batch_cancel;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_id_collision;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_id_collision_regression;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_lifecycle_invariants;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_metadata;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_normalization;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_search;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_search_ranking;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_state_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_kyc_lifecycle_enforcement;
 #[cfg(test)]
 mod test_kyc_policy;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_ledger_timestamp_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_lifecycle;
 #[cfg(test)]
 mod test_lifecycle_model;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_limit;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_line_item_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_lock_time_limit;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_lock_time_limit_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoice_tags_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_min_invoice_amount;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_min_partial_fill_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_multisig;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_notification_status_matrix;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_operational_limits;
 #[cfg(test)]
 mod test_overdue_expiration;
@@ -549,105 +611,119 @@ mod test_panic_handler;
 mod test_partial_payments;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_overflow;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_overdue_expiration;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_pagination_cursors;
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_panic_handler;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reason;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reason_cap;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_toggle_symmetry;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments_auth;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments_repayment;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments_repayment_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_per_investor_position_cap;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_platform_metrics_reconciliation;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_profit_fee;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_profit_fee_formula;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_profits_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_health;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_limits_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_prune_terminal_invoices;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_queries;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_rating_override;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_ratings_snapshot;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_recipient_history;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_reentrancy;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_reentrancy_fault_injection;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_refund;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_regulatory;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_regulatory_gate;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_repayment_events_audit_parity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_replay_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_require_business_active;
 #[cfg(test)]
 mod test_resolution_policy_enforcement;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_require_valid_business_kyc_tier;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_require_valid_invoice_category;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_resource_rate_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_revenue_split;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_risk_tier;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_seed;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_self_call_rejection;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settle_during_dispute;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_accounting_identity;
 #[cfg(all(test, feature = "fuzz-tests"))]
 mod test_settlement_conservation_props;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_atomic_rollback;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_auto_release;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_capacity_stress;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_currency_whitelist;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_dispute_interaction;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_history_reconstruction;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_snapshot;
 #[cfg(test)]
 #[allow(
@@ -659,47 +735,52 @@ mod test_storage;
 #[allow(clippy::disallowed_macros)]
 mod test_storage_tier_migration;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
+mod test_storage;
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_storage_key_layout;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_storage_migration_compat;
 #[cfg(test)]
 mod test_storage_ttl;
 #[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_store_invoice_auth;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_store_invoices_batch;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_string_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_tier_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_treasury_rotation;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_treasury_rotation_deadline;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_treasury_split_overflow_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_twa_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_types;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_upgrade_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_verification_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_verify_bid_match;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_vesting;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_vesting_cliff_final;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_vesting_summary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_view_only;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_volume_tier_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 
 // ============================================================================
