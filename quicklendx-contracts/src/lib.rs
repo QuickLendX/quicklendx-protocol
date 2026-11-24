@@ -91,6 +91,8 @@ mod test_accept_bid_instruction_budget;
 #[cfg(test)]
 mod test_accept_bid_race;
 #[cfg(test)]
+mod test_address_summary;
+#[cfg(test)]
 mod test_admin;
 #[cfg(test)]
 mod test_admin_events_audit_parity;
