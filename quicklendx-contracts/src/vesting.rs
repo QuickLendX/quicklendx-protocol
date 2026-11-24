@@ -75,19 +75,18 @@ impl VestingStorage {
     }
 
     pub fn store(env: &Env, schedule: &VestingSchedule) {
-        env.storage()
-            .persistent()
-            .set(&Self::key(schedule.id), schedule);
+        let key = Self::key(schedule.id);
+        crate::storage::persistent_set(env, &key, schedule);
     }
 
     pub fn get(env: &Env, id: u64) -> Option<VestingSchedule> {
-        env.storage().persistent().get(&Self::key(id))
+        let key = Self::key(id);
+        crate::storage::persistent_get(env, &key)
     }
 
     pub fn update(env: &Env, schedule: &VestingSchedule) {
-        env.storage()
-            .persistent()
-            .set(&Self::key(schedule.id), schedule);
+        let key = Self::key(schedule.id);
+        crate::storage::persistent_set(env, &key, schedule);
     }
 
     // -----------------------------------------------------------------------
@@ -122,12 +121,7 @@ impl VestingStorage {
             return Err(QuickLendXError::InvalidAmount);
         }
         let key = Self::reserve_key(token);
-        let current: i128 = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0i128)
-            .max(0);
+        let current: i128 = env.storage().persistent().get(&key).unwrap_or(0i128).max(0);
         let new_value = current
             .checked_add(amount)
             .ok_or(QuickLendXError::ArithmeticOverflow)?;
@@ -149,12 +143,7 @@ impl VestingStorage {
             return Err(QuickLendXError::InvalidAmount);
         }
         let key = Self::reserve_key(token);
-        let current: i128 = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0i128)
-            .max(0);
+        let current: i128 = env.storage().persistent().get(&key).unwrap_or(0i128).max(0);
         // If the counter would go below zero, clamp to zero (defensive guard).
         let new_value = current.saturating_sub(amount).max(0);
         env.storage().persistent().set(&key, &new_value);

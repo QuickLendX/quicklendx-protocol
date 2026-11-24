@@ -76,11 +76,11 @@ fn ids(bids: &soroban_sdk::Vec<Bid>) -> Vec<[u8; 32]> {
 }
 
 fn rank_bids(env: &Env, invoice: &BytesN<32>, contract_id: &Address) -> soroban_sdk::Vec<Bid> {
-    env.as_contract(contract_id, || BidStorage::rank_bids(env, invoice))
+    env.as_contract(contract_id, || BidStorage::rank_bids(env, invoice).expect("bid ranking should succeed"))
 }
 
 fn get_best_bid(env: &Env, invoice: &BytesN<32>, contract_id: &Address) -> Option<Bid> {
-    env.as_contract(contract_id, || BidStorage::get_best_bid(env, invoice))
+    env.as_contract(contract_id, || BidStorage::get_best_bid(env, invoice).expect("best bid query should succeed"))
 }
 
 fn rank_bids_paged(
@@ -91,7 +91,7 @@ fn rank_bids_paged(
     contract_id: &Address,
 ) -> (soroban_sdk::Vec<Bid>, u32, bool) {
     env.as_contract(contract_id, || {
-        BidStorage::rank_bids_paged(env, invoice, offset, limit)
+        BidStorage::rank_bids_paged(env, invoice, offset, limit).expect("paged bid ranking should succeed")
     })
 }
 

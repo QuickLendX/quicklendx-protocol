@@ -179,6 +179,8 @@ pub trait Governable {
         };
 
         env.storage().instance().set(&key, &proposal);
+        // Keep the global guard in sync with newly opened proposals.
+        increment_active_proposals(env);
         // Initialise empty voter set
         let empty: Vec<Address> = Vec::new(env);
         env.storage()
@@ -308,6 +310,36 @@ pub trait Governable {
         proposal.status = ProposalStatus::Executed;
         env.storage().instance().set(&key, &proposal);
 
+        Ok(())
+    }
+
+    /// Cancel a proposal before it has been executed.
+    ///
+    /// Only the proposer may cancel an Active or Passed proposal. Active
+    /// proposals are removed from the open-proposal count; terminal proposals
+    /// cannot be cancelled a second time.
+    fn cancel_proposal(
+        env: &Env,
+        proposer: &Address,
+        proposal_id: &BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        proposer.require_auth();
+        let key = proposal_key(proposal_id);
+        let mut proposal: Proposal = env
+            .storage()
+            .instance()
+            .get(&key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        if proposal.proposer != *proposer {
+            return Err(QuickLendXError::Unauthorized);
+        }
+        match proposal.status {
+            ProposalStatus::Active => decrement_active_proposals(env),
+            ProposalStatus::Passed => {}
+            _ => return Err(QuickLendXError::InvalidStatus),
+        }
+        proposal.status = ProposalStatus::Cancelled;
+        env.storage().instance().set(&key, &proposal);
         Ok(())
     }
 

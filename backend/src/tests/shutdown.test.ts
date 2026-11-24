@@ -51,7 +51,11 @@ jest.mock('../lib/database', () => {
     getDatabase: jest.fn(() => {
       if (!dbInstance) {
         const Database = require('better-sqlite3');
-        dbInstance = new Database(process.env.DATABASE_PATH || '.data/test-shutdown.db');
+        const osMod = require('os');
+        const pathMod = require('path');
+        dbInstance = new Database(
+          process.env.DATABASE_PATH || pathMod.join(osMod.tmpdir(), 'test-shutdown.db'),
+        );
         dbInstance.pragma('journal_mode = WAL');
         dbInstance.pragma('synchronous = NORMAL');
         dbInstance.pragma('foreign_keys = ON');
@@ -71,6 +75,7 @@ jest.mock('../services/statusService', () => ({
 // Imports — after mocks
 // ---------------------------------------------------------------------------
 import http from 'http';
+import os from 'os';
 import Database from 'better-sqlite3';
 import {
   createShutdownHandler,
@@ -582,7 +587,7 @@ describe('shutdown constants', () => {
 // WebhookQueueService.flush — tested against the REAL implementation
 // ---------------------------------------------------------------------------
 describe('WebhookQueueService.flush (real implementation)', () => {
-  const FLUSH_TEST_DB_DIR = path.resolve(__dirname, "../../.data");
+  const FLUSH_TEST_DB_DIR = os.tmpdir();
   const FLUSH_TEST_DB_PATH = path.join(FLUSH_TEST_DB_DIR, `test-shutdown-flush-${crypto.randomUUID()}.db`);
 
   beforeAll(() => {
