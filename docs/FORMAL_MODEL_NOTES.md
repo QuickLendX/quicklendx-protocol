@@ -179,3 +179,45 @@ pub fn verify_settlement_identity_lemma(
 | **Settlement Accounting** | K-Framework / Certora | Value Conservation ($\sum \Delta = 0$) | `fees.rs`, `profits.rs` |
 | **Escrow Uniqueness** | Rust Proptest / Kani | Invariant Invariance | `escrow.rs`, `payments.rs` |
 | **Emergency Timelocks** | Temporal Logic Assertions | Bounded Timelock ($\le T$) | `emergency.rs`, `pause.rs` |
+
+---
+
+## 6. Executable Lifecycle Model (`quicklendx-contracts/src/test_lifecycle_model.rs`)
+
+Section 3 describes the cross-machine transitions informally. `test_lifecycle_model.rs`
+turns them into a **stateful property test**: a proptest strategy generates bounded
+sequences of lifecycle operations (`upload`, `verify`, `bid`, `accept`, `settle`,
+`cancel`, `default`) and a small reference `Model` predicts the expected outcome of
+each one.
+
+After every operation the suite asserts that:
+
+1. the contract accepted or rejected the operation exactly as the model predicted
+   (deliberately rejected operations included), and
+2. the observable invoice status, bid status, escrow status and investment status
+   all match the model, with `invoice.funded_amount == escrow.amount ==
+   investment.amount` while a position is live, and
+3. `invariants::run_invariant_checks` reports `all_passed`.
+
+### Running it
+
+Default runs use **256 cases**:
+
+```bash
+cd quicklendx-contracts
+cargo test --lib test_lifecycle_model
+```
+
+Longer runs are driven by the standard proptest environment variable, no rebuild
+of the test is required:
+
+```bash
+# 1 000 cases with the fuzz-tests feature enabled
+PROPTEST_CASES=1000 cargo test --features fuzz-tests --lib test_lifecycle_model
+
+# A specific seed, for reproducing a failure
+PROPTEST_CASES=1000 PROPTEST_SEED=<seed> cargo test --lib test_lifecycle_model
+```
+
+Failing cases are written to `proptest-regressions/test_lifecycle_model.txt` and
+replayed automatically on subsequent runs.

@@ -423,6 +423,8 @@ mod test_ledger_timestamp_consistency;
 #[cfg(test)]
 mod test_lifecycle;
 #[cfg(test)]
+mod test_lifecycle_model;
+#[cfg(test)]
 mod test_limit;
 #[cfg(test)]
 mod test_line_item_consistency;
