@@ -36,18 +36,36 @@ cargo install --locked stellar-cli@23.0.0
 
 ### 🧪 Running Project
 
-- From the root of the project, run the following command:
+From the `quicklendx-contracts/` directory, use the `Makefile` targets (or their underlying commands):
+
+- Fast library compilation check (without building WASM):
 
 ```bash
-cargo build
+make check        # cargo check --lib
 ```
 
-This compiles the contract using the top-level workspace configuration.
-
-- To run contract tests, use the following command:
+- Build the Soroban WASM contract (and regenerate TypeScript bindings):
 
 ```bash
-cargo test
+make build        # stellar contract build + TypeScript bindings
+```
+
+- Run the library unit test suite (fast, without compiling WASM):
+
+```bash
+make test-lib     # cargo test --lib
+```
+
+- Run the full test suite (builds WASM first, then runs `cargo test`):
+
+```bash
+make test
+```
+
+- Run all standard Soroban CI checks (`fmt-check`, `check`, `lint`, `test-lib`, and `size`):
+
+```bash
+make ci
 ```
 
 ### 🔗 Auto-generated TypeScript Bindings
@@ -185,16 +203,16 @@ git checkout -b feature/your-feature-name
 
 3. Make your changes in the appropriate contract directory under you are assigned to.
 
-4. Build the contract:
+4. Build and check the contract:
 
 ```bash
-cargo build
+make build
 ```
 
-5. Run the contract tests:
+5. Run the Soroban CI checks (formatting, clippy, library tests, and WASM size check):
 
 ```bash
-cargo test
+make ci
 ```
 
 6. Commit your changes and push to your fork:

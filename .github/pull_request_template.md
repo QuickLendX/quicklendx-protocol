@@ -37,12 +37,16 @@
 <!-- Describe what was tested and how -->
 
 ## 📋 Contract-Specific Checks
-- [ ] Soroban contract builds successfully
-- [ ] WASM compilation works
+- [ ] Soroban contract builds successfully (`make build` / `make wasm`)
+- [ ] Formatting passes (`cargo fmt --all -- --check` / `make fmt-check`)
+- [ ] Clippy linter passes with no warnings (`cargo clippy --lib -- -D warnings` / `make lint`)
+- [ ] Library tests pass (`cargo test --lib` / `make test-lib`)
+- [ ] WASM size check passes (`./scripts/check-wasm-size.sh` / `make size`)
+- [ ] No existing error codes reordered or changed (error-code stability preserved)
+- [ ] Contract documentation updated (README, `CONTRIBUTING.md`, or inline docs as applicable)
 - [ ] Gas usage optimized
 - [ ] Security considerations reviewed
 - [ ] Events properly emitted
-- [ ] Contract functions tested
 - [ ] Error handling implemented
 - [ ] Access control verified
 
