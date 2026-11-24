@@ -667,10 +667,12 @@ impl QuickLendXContract {
     }
 
     pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         crate::fees::FeeManager::initialize(&env, &admin)
     }
 
     pub fn update_platform_fee_bps(env: Env, fee_bps: u32) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         crate::fees::FeeManager::update_platform_fee(&env, &admin, fee_bps)
     }
@@ -693,14 +695,17 @@ impl QuickLendXContract {
     }
 
     pub fn initialize_protocol_limits(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         crate::protocol_limits::ProtocolLimitsContract::initialize(env, admin)
     }
 
     pub fn pause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         PauseControl::set_paused(&env, &admin, true)
     }
 
     pub fn unpause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         PauseControl::set_paused(&env, &admin, false)
     }
 
@@ -818,6 +823,7 @@ impl QuickLendXContract {
     }
 
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         AdminStorage::require_admin(&env, &admin)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
@@ -832,6 +838,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         AdminStorage::require_admin(&env, &admin)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
@@ -842,6 +849,7 @@ impl QuickLendXContract {
     }
 
     pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         let caller = invoice.business.clone();
@@ -1180,6 +1188,7 @@ impl QuickLendXContract {
         admin: Address,
         arbiter: Address,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         ArbiterStorage::register_arbiter(&env, &admin, &arbiter)
     }
 
@@ -1189,6 +1198,7 @@ impl QuickLendXContract {
         admin: Address,
         arbiter: Address,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         ArbiterStorage::unregister_arbiter(&env, &admin, &arbiter)
     }
 
@@ -1208,6 +1218,7 @@ impl QuickLendXContract {
     ///
     /// Returns the backup ID.
     pub fn create_backup(env: Env, admin: Address, description: String) -> Result<BytesN<32>, errors::QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
 
@@ -1241,6 +1252,7 @@ impl QuickLendXContract {
     /// Clears all existing invoices and restores from the backup snapshot.
     /// Returns the number of invoices restored.
     pub fn restore_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<u32, errors::QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         backup::BackupStorage::restore_from_backup(&env, &backup_id)
@@ -1254,6 +1266,7 @@ impl QuickLendXContract {
         max_age_seconds: u64,
         enabled: bool,
     ) -> Result<(), errors::QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
 
@@ -1268,6 +1281,7 @@ impl QuickLendXContract {
 
     /// Archive a backup (mark it as no longer active).
     pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), errors::QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         governance::require_no_open_governance_proposal(&env)?;
@@ -1284,6 +1298,7 @@ impl QuickLendXContract {
     ///
     /// Returns the number of backups removed.
     pub fn cleanup_backups(env: Env, admin: Address) -> Result<u32, errors::QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         backup::BackupStorage::cleanup_old_backups(&env)
