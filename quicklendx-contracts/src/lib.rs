@@ -115,6 +115,8 @@ mod test_audit_stats_regression;
 #[cfg(test)]
 mod test_authorization;
 #[cfg(test)]
+mod test_entrypoint_auth_matrix;
+#[cfg(test)]
 mod test_auto_resolution_boundary;
 #[cfg(test)]
 mod test_backfill_guard;
