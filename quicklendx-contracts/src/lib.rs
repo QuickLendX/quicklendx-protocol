@@ -295,6 +295,8 @@ mod test_fees;
 #[cfg(test)]
 mod test_fees_extended;
 #[cfg(test)]
+mod test_footprint_limits;
+#[cfg(test)]
 mod test_freeze_appeal_channel;
 #[cfg(test)]
 mod test_freeze_event;
