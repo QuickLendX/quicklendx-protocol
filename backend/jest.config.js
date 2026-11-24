@@ -60,7 +60,6 @@ export default {
     "src/tests/perf/soak.test.ts",
     "src/tests/openapi-contract.test.ts",
     "src/tests/kyc-service.kms.test.ts",
-    "tests/openapi-conformance.test.ts",
     "tests/openapi-example-validation.test.ts",
     "src/utils/pagination.properties.test.ts",
     "src/tests/conditional-write.test.ts",
