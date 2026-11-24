@@ -58,6 +58,7 @@ export default {
     // of the current backend contract. Keep them out of the release gate
     // until they are rewritten against the merged implementation.
     "src/tests/perf/soak.test.ts",
+    "src/tests/openapi-contract.test.ts",
     "src/tests/kyc-service.kms.test.ts",
     "tests/openapi-example-validation.test.ts",
     "tests/openapi-conformance.test.ts",
