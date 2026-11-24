@@ -1229,7 +1229,7 @@ pub fn validate_bid(
     validate_investor_investment(env, investor, bid_amount)?;
 
     // 6. Existing Bid Protection
-    BidStorage::cleanup_expired_bids(env, &invoice.id);
+    BidStorage::cleanup_expired_bids(env, &invoice.id)?;
     let existing_bids = BidStorage::get_bids_for_invoice(env, &invoice.id);
     for bid_id in existing_bids.iter() {
         if let Some(existing_bid) = BidStorage::get_bid(env, &bid_id) {
@@ -1297,7 +1297,7 @@ pub fn submit_kyc_application(
                 "new_submission"
             },
         )),
-    );
+    )?;
 
     Ok(())
 }
@@ -1337,7 +1337,7 @@ pub fn verify_business(
         Some(String::from_str(env, "Pending")),
         Some(String::from_str(env, "Verified")),
         Some(String::from_str(env, "business")),
-    );
+    )?;
     Ok(())
 }
 
@@ -1382,7 +1382,7 @@ pub fn reject_business(
         Some(String::from_str(env, "Pending")),
         Some(String::from_str(env, "Rejected")),
         Some(reason),
-    );
+    )?;
     Ok(())
 }
 
@@ -1657,7 +1657,7 @@ pub fn submit_investor_kyc(
                 "new_submission"
             },
         )),
-    );
+    )?;
     Ok(())
 }
 
@@ -1708,7 +1708,7 @@ pub fn verify_investor(
                 Some(String::from_str(env, "Pending")),
                 Some(String::from_str(env, "Verified")),
                 Some(String::from_str(env, "investor")),
-            );
+            )?;
             Ok(verification)
         }
     }
@@ -1753,7 +1753,7 @@ pub fn reject_investor(
         Some(String::from_str(env, "Pending")),
         Some(String::from_str(env, "Rejected")),
         Some(reason),
-    );
+    )?;
     Ok(())
 }
 
@@ -1814,7 +1814,7 @@ pub fn revoke_investor_kyc(
         Some(String::from_str(env, "Verified")),
         Some(String::from_str(env, "Rejected")),
         Some(reason),
-    );
+    )?;
     Ok(())
 }
 

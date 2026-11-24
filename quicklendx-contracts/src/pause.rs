@@ -75,7 +75,7 @@ impl PauseControl {
                 if !paused { "true" } else { "false" },
             )),
             Some(String::from_str(env, if paused { "true" } else { "false" })),
-        );
+        )?;
         if paused {
             crate::events::emit_paused(env, admin);
         } else {

@@ -707,7 +707,7 @@ pub fn record_payment(
             applied_late_penalty,
         ),
         operation_id.clone(),
-    );
+    )?;
 
     let progress = get_invoice_progress(env, invoice_id)?;
     Ok(RecordedPayment {

@@ -920,7 +920,7 @@ pub fn create_escrow_record_only(
         investor.clone(),
         amount,
         escrow_id.clone(),
-    );
+    )?;
     Ok(escrow_id)
 }
 
@@ -990,7 +990,7 @@ pub(crate) fn release_escrow_internal(
         escrow.business.clone(),
         escrow.amount,
         escrow.escrow_id.clone(),
-    );
+    )?;
     crate::qlx_log!(
         env,
         "payment",
@@ -1123,7 +1123,7 @@ pub(crate) fn refund_escrow(
         escrow.investor.clone(),
         refund_amount,
         escrow.escrow_id.clone(),
-    );
+    )?;
     crate::qlx_log!(
         env,
         "payment",

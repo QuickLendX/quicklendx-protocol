@@ -96,12 +96,39 @@ An event is dead-lettered when:
 - A permanent 4xx response is received
 - A non-retryable error occurs
 
-DLQ entries are persisted in the `webhook_deliveries` table with
-`status = 'dead_letter'`. They can be:
+Exhausted deliveries are persisted to the `webhook_dead_letters` table (as well as tracked in `webhook_deliveries` with `status = 'dead_letter'`).
 
-- **Listed** via `getDeadLetters()` or queried directly.
-- **Retried** via `retryDeadLetter(id)`, which resets status to `pending` and
-  clears the retry schedule so the next poll picks it up immediately.
+### `webhook_dead_letters` Schema
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `id` | `TEXT PK` | ULID, unique dead-letter identifier |
+| `delivery_id` | `TEXT` | Associated delivery identifier, if applicable |
+| `event_type` | `TEXT NOT NULL` | Event name (e.g. `invoice.paid`) |
+| `payload` | `TEXT NOT NULL` | JSON-serialised event payload |
+| `target_url` | `TEXT` | Destination webhook URL |
+| `subscriber_id` | `TEXT` | Target subscriber, if known |
+| `attempt_count` | `INTEGER` | Number of delivery attempts before DLQ promotion |
+| `max_attempts` | `INTEGER` | Configured attempt budget (default 5) |
+| `last_error` | `TEXT` | Final error message or HTTP status failure |
+| `status` | `TEXT` | `dead_letter` or `replayed` |
+| `replayed_at` | `TEXT` | ISO-8601 timestamp of replay |
+| `created_at` | `TEXT` | ISO-8601 timestamp of DLQ entry creation |
+| `updated_at` | `TEXT` | ISO-8601 timestamp of last update |
+
+### Admin DLQ Management & Replay Endpoints
+
+Operators can inspect and re-drive failed deliveries via administrative endpoints:
+
+- **`GET /admin/webhooks/dead-letters`** (paginated):
+  Lists dead letters. Requires `support`, `operations_admin`, or `super_admin` role (`read:*` scope).
+  Query parameters: `limit` (default 20, max 100), `offset` (default 0).
+
+- **`POST /admin/webhooks/dead-letters/:id/replay`**:
+  Re-enqueues the delivery with a fresh attempt count (`attempt_count = 0`, status `pending`).
+  Requires `operations_admin` or `super_admin` role (`write:*` scope).
+  Replay is guarded so each dead letter can be re-enqueued only once; subsequent attempts return HTTP `409 Conflict`.
+  Every replay action is recorded with actor metadata in the audit log.
 
 ## Retention & Cleanup
 

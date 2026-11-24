@@ -487,4 +487,3 @@ fn test_analytics_distributed_pct_overflow() {
     assert!(result.is_err());
     assert_eq!(result.unwrap_err(), QuickLendXError::ArithmeticOverflow);
 }
-}

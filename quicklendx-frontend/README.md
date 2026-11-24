@@ -42,28 +42,7 @@ yarn install
 
 3. **Set up environment variables**
 
-Create a `.env.local` file in the `quicklendx-frontend` directory:
-
-```bash
-# Contract Configuration
-NEXT_PUBLIC_CONTRACT_ID=your_contract_id_here
-NEXT_PUBLIC_NETWORK=testnet
-
-# RPC Configuration
-NEXT_PUBLIC_RPC_URL=https://soroban-testnet.stellar.org:443
-
-# Optional: Analytics & Telemetry (Opt-in only)
-NEXT_PUBLIC_ANALYTICS_ENABLED=true
-NEXT_PUBLIC_ANALYTICS_PROVIDER=mixpanel # mixpanel | ga | self-hosted | noop
-NEXT_PUBLIC_MIXPANEL_TOKEN=your_mixpanel_project_token # required for mixpanel
-# NEXT_PUBLIC_GA_MEASUREMENT_ID=G-XXXXXXXXXX # required for ga (format: G-XXXXXXXX)
-# NEXT_PUBLIC_ANALYTICS_ENDPOINT=https://your-domain.com/api/analytics/events # required for self-hosted (HTTPS in production)
-
-# API base URL (must include the full path prefix, e.g. /api/v1).
-# Defaults to http://localhost:3001/api/v1 when unset.
-# The backend mounts all v1 routes at /api/v1 (backend/src/app.ts).
-NEXT_PUBLIC_API_URL=http://localhost:3001/api/v1
-```
+Copy `.env.example` to `.env.local` in the `quicklendx-frontend` directory, then adjust the values for your environment. `.env.local` is ignored by Git.
 
 4. **Run development server**
 
@@ -133,23 +112,18 @@ The `next.config.ts` file contains Next.js configuration. Key settings:
 
 ### Environment Variables
 
-Required environment variables:
-
-- `NEXT_PUBLIC_CONTRACT_ID`: Deployed contract ID
-- `NEXT_PUBLIC_NETWORK`: Network (testnet/mainnet)
-- `NEXT_PUBLIC_RPC_URL`: Soroban RPC endpoint
-
-Optional Analytics & Telemetry:
-
-- `NEXT_PUBLIC_ANALYTICS_ENABLED`: Set to `"true"` to enable telemetry (opt-in only, disabled by default).
-- `NEXT_PUBLIC_ANALYTICS_PROVIDER`: Analytics provider (`"noop"`, `"mixpanel"`, `"ga"` / `"google-analytics"`, or `"self-hosted"`).
-- `NEXT_PUBLIC_MIXPANEL_TOKEN`: Project token for Mixpanel (required when provider is `"mixpanel"`).
-- `NEXT_PUBLIC_GA_MEASUREMENT_ID`: Google Analytics GA4 measurement ID matching `/^G-[A-Z0-9]{4,}$/` (required when provider is `"ga"`).
-- `NEXT_PUBLIC_ANALYTICS_ENDPOINT`: HTTP endpoint for self-hosted analytics (required when provider is `"self-hosted"`, must use HTTPS in production).
-- `NEXT_PUBLIC_API_URL`: Backend API base URL **including the `/api/v1` prefix**
-  (e.g. `http://localhost:3001/api/v1`). Defaults to `http://localhost:3001/api/v1` when
-  unset. Matches the v1 router mount in `backend/src/app.ts` and the server entry in
-  `backend/openapi.yaml`.
+| Variable | Default | Description |
+| --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api/v1` | Base URL for the API. Include the `/api/v1` prefix. |
+| `NEXT_PUBLIC_NETWORK` | `testnet` | Stellar network: `testnet`, `public`, or `mainnet` (alias of `public`). Case-insensitive. An unrecognised value falls back to `testnet` and logs a one-time console warning. |
+| `NEXT_PUBLIC_NETWORK` | `testnet` | Stellar network (`testnet` or `public`). |
+| `NEXT_PUBLIC_E2E` | `0` | Test-only wallet injection is enabled with `1` by the E2E build. |
+| `NEXT_PUBLIC_ENABLE_NEW_INVOICE_ROUTE` | `false` | Enables the new business invoice route when set to `true`. |
+| `NEXT_PUBLIC_ANALYTICS_ENABLED` | `false` | Telemetry is opt-in; set to `true` to enable it. |
+| `NEXT_PUBLIC_ANALYTICS_PROVIDER` | `noop` | Provider: `noop`, `mixpanel`, `ga`/`google-analytics`, or `self-hosted`. |
+| `NEXT_PUBLIC_MIXPANEL_TOKEN` | Unset | Required when the provider is `mixpanel`. |
+| `NEXT_PUBLIC_GA_MEASUREMENT_ID` | Unset | Required for `ga`; must match `G-` followed by at least four uppercase letters or digits. |
+| `NEXT_PUBLIC_ANALYTICS_ENDPOINT` | Unset | Required for `self-hosted`; use HTTPS in production. |
 
 ## 🧪 Testing
 

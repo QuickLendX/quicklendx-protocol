@@ -1,5 +1,6 @@
 #![cfg(feature = "legacy-tests")]
 
+#![allow(clippy::disallowed_macros)]
 use quicklendx_contracts::{
     analytics::TimePeriod,
     audit::{AuditOperation, AuditOperationFilter, AuditQueryFilter},

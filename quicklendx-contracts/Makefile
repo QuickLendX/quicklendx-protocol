@@ -1,4 +1,8 @@
-# ── Targets ───────────────────────────────────────────────────────────────────
+.PHONY: default all test build wasm bindings fmt clean check lint fmt-check test-lib size ci
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Targets
+# ─────────────────────────────────────────────────────────────────────────────
 default: build
 
 # Full pipeline: build WASM + regenerate TypeScript client bindings + run tests.
@@ -9,7 +13,7 @@ test: wasm
 	cargo test
 
 # Build the contract WASM and auto-generate TypeScript client bindings.
-# The bindings step is idempotent — safe to rerun without side effects.
+# The bindings step is idempotent – safe to rerun without side effects.
 build: bindings
 
 # Compile the WASM artifact without regenerating bindings.
@@ -42,8 +46,32 @@ bindings:
 		echo "==> No WASM artifact found; skipping bindings generation."; \
 	fi
 
+# Check compilation of library without building WASM.
+check:
+	cargo check --lib
+
+# Run clippy linter on library with warnings as errors.
+lint:
+	cargo clippy --lib -- -D warnings
+
+# Format all code.
 fmt:
 	cargo fmt --all
+
+# Check formatting without modifying files.
+fmt-check:
+	cargo fmt --all -- --check
+
+# Run library tests without building WASM.
+test-lib:
+	cargo test --lib
+
+# Verify WASM build size budget.
+size:
+	./scripts/check-wasm-size.sh
+
+# Aggregate target for CI checks.
+ci: fmt-check check lint test-lib size
 
 clean:
 	rm -rf bindings
