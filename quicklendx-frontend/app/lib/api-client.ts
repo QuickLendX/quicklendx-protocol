@@ -401,6 +401,20 @@ class ApiClient {
     return this.request<T>({ ...config, method: "POST", url, data });
   }
 
+  async postOnce<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<T> {
+    const response = await this.client.request({
+      ...config,
+      method: "POST",
+      url,
+      data,
+    });
+    return response.data;
+  }
+
   async put<T = any>(
     url: string,
     data?: any,
