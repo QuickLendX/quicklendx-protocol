@@ -18,6 +18,7 @@
 //! * **Before fix** (vulnerability = "allow" or missing): test FAILS.
 //! * **After fix** (vulnerability = "deny"):              test PASSES.
 
+#![allow(clippy::disallowed_macros)]
 use std::fs;
 use std::path::Path;
 

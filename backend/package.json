@@ -11,6 +11,7 @@
     "test:coverage": "jest --coverage --forceExit",
     "dev": "ts-node-dev src/index.ts",
     "start": "ts-node src/index.ts",
+    "db:backup": "ts-node scripts/backup-db.ts",
     "security:scan": "node scripts/dependency-scan.js audit-report.json high && node scripts/secret-scan.js",
     "sbom:generate": "node scripts/generate-sbom.js sbom/backend-sbom.cdx.json",
     "sbom:check": "node scripts/validate-sbom.js sbom/backend-sbom.cdx.json",
@@ -43,10 +44,14 @@
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.19.0",
     "@types/supertest": "^7.2.1",
     "@vitest/coverage-v8": "^2.1.9",
+    "jest": "^30.0.0",
+    "js-yaml": "^4.1.0",
     "supertest": "^7.3.1",
+    "ts-jest": "^29.4.15",
     "typescript": "^5.6.0",
     "vitest": "^2.1.0"
   }
