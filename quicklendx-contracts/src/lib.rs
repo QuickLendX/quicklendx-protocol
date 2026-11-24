@@ -908,6 +908,22 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
+    /// Admin-only lookup of an escrow by its direct `escrow_id`.
+    ///
+    /// Unlike `get_escrow_details` (which looks up by invoice), this returns
+    /// the escrow record keyed by `escrow_id`. Requires the caller to be the
+    /// current admin.
+    pub fn admin_get_escrow(
+        env: Env,
+        admin: Address,
+        escrow_id: BytesN<32>,
+    ) -> Result<crate::payments::Escrow, QuickLendXError> {
+        admin.require_auth();
+        crate::admin::AdminStorage::require_admin(&env, &admin)?;
+        crate::payments::EscrowStorage::get_escrow(&env, &escrow_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
     pub fn release_escrow(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1286,13 +1302,6 @@ impl QuickLendXContract {
     /// Preview which backups would be cleaned up by the retention policy.
     pub fn preview_cleanup_backups(env: Env) -> backup::BackupCleanupDryRunReport {
         backup::BackupStorage::preview_cleanup_old_backups(&env)
-    }
-
-    // ── Admin Management ─────────────────────────────────────────────────────
-
-    /// Set the contract admin (for testing - would normally require auth).
-    pub fn set_admin(env: Env, admin: Address) {
-        admin::AdminStorage::set_admin(&env, &admin);
     }
 
     // ── Stub Methods for Test Compatibility ─────────────────────────────────

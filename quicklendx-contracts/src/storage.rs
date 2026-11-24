@@ -1765,6 +1765,15 @@ pub fn remove_pending_treasury(env: &Env) {
     env.storage().instance().remove(&PENDING_TREASURY_TS_KEY);
 }
 
+/// Store a pending treasury rotation request (address + timestamp).
+///
+/// This is a low-level setter used by treasury rotation flows and by tests
+/// that need to prime the pending state before exercising `cancel_treasury_rotation`.
+pub fn set_pending_treasury(env: &Env, address: &Address, timestamp: u64) {
+    env.storage().instance().set(&PENDING_TREASURY_KEY, address);
+    env.storage().instance().set(&PENDING_TREASURY_TS_KEY, &timestamp);
+}
+
 /// Get the pending treasury address and its execution timestamp.
 /// This is used by tests and potentially by UI components to show pending changes.
 pub fn get_pending_treasury(env: &Env) -> Option<(Address, u64)> {
