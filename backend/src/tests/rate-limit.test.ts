@@ -175,3 +175,41 @@ describe("rateLimitMiddleware integration", () => {
     expect(res2.status).toBe(200);
   });
 });
+
+describe("app trust proxy and x-simulate-no-ip hardening", () => {
+  it("configures trust proxy to loopback by default and ignores spoofed X-Forwarded-For hops", async () => {
+    const { default: mainApp } = await import("../app");
+    expect(mainApp.get("trust proxy")).toBe("loopback");
+
+    const consumeSpy = jest.spyOn(rateLimiter, "consume");
+    try {
+      await supertest(mainApp)
+        .get("/health")
+        .set("X-Forwarded-For", "198.51.100.1, 203.0.113.5");
+
+      expect(consumeSpy).toHaveBeenCalledWith("203.0.113.5");
+      expect(consumeSpy).not.toHaveBeenCalledWith("198.51.100.1");
+    } finally {
+      consumeSpy.mockRestore();
+      rateLimiter.delete("203.0.113.5");
+    }
+  });
+
+  it("does not treat x-simulate-no-ip header as special", async () => {
+    const { default: mainApp } = await import("../app");
+
+    const consumeSpy = jest.spyOn(rateLimiter, "consume");
+    try {
+      await supertest(mainApp)
+        .get("/health")
+        .set("x-simulate-no-ip", "1");
+
+      expect(consumeSpy).toHaveBeenCalled();
+      const keyUsed = consumeSpy.mock.calls[0][0];
+      expect(keyUsed).not.toBe("unknown");
+      expect(keyUsed).toBeDefined();
+    } finally {
+      consumeSpy.mockRestore();
+    }
+  });
+});

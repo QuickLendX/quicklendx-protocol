@@ -13,11 +13,13 @@ Soroban requires state rent to be maintained for stored data. If an entry's TTL 
 
 ## TTL Parameters & Constants
 
-All persistent storage keys in QuickLendX are extended using a protocol-wide threshold and bump target defined in [`storage.rs`](../quicklendx-contracts/src/storage.rs):
+All persistent storage keys in QuickLendX are extended using a protocol-wide threshold and bump target defined in [`storage.rs`](../quicklendx-contracts/src/storage.rs) (assuming 5 seconds per ledger):
 
-*   **`PERSISTENT_TTL_THRESHOLD`**: `34,732,800` (representing ~402 days in seconds, or `6,946,560` ledgers assuming 5 seconds per ledger).
-*   **Threshold (`threshold`)**: If the remaining TTL of a persistent key is less than `PERSISTENT_TTL_THRESHOLD`, it is bumped.
-*   **Extend Target (`extend_to`)**: The key's TTL is bumped to `PERSISTENT_TTL_THRESHOLD`.
+*   **`PERSISTENT_BUMP_THRESHOLD`**: `120,960` ledgers (~7 days).
+*   **`PERSISTENT_EXTEND_TO`**: `518,400` ledgers (~30 days).
+*   **`INSTANCE_BUMP_THRESHOLD`**: `120,960` ledgers (~7 days).
+*   **`INSTANCE_EXTEND_TO`**: `518,400` ledgers (~30 days).
+*   **Helpers**: `persistent_set`, `persistent_get`, `extend_persistent_ttl`, and `bump_persistent` in `src/storage.rs` automatically extend any persistent entry whose remaining TTL falls below `PERSISTENT_BUMP_THRESHOLD` up to `PERSISTENT_EXTEND_TO`.
 
 ---
 
@@ -48,7 +50,19 @@ All persistent storage keys in QuickLendX are extended using a protocol-wide thr
 | **Persistent** | `held_reserve_key` | `(Symbol("esc_res"), Address)` | `PERSISTENT_TTL_THRESHOLD` | On held reserve get/set |
 | **Persistent** | `reserve_marker_key` | `(Symbol("esc_acc"), BytesN<32>)` | `PERSISTENT_TTL_THRESHOLD` | On reserve marker set/get |
 | **Persistent** | `held_reserve_repair_ids_key`| `(Symbol("esc_rids"), Address)`| `PERSISTENT_TTL_THRESHOLD` | On repair snapshot get/set |
-| **Persistent** | `all_bids_key` | `Symbol("all_bids")` | `PERSISTENT_TTL_THRESHOLD` | On global bids index add/read |
+| **Persistent** | `all_bids_key` | `Symbol("all_bids")` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On global bids index add/read |
+| **Persistent** | `DataKey::FrozenInvoice(invoice_id)` | `DataKey::FrozenInvoice(BytesN<32>)` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `set_frozen`, `set_invoice_lock`, `get_invoice_lock`, `is_frozen` |
+| **Persistent** | `DataKey::FreezeInfo(invoice_id)` | `DataKey::FreezeInfo(BytesN<32>)` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `set_freeze_info`, `get_freeze_info` |
+| **Persistent** | `DataKey::InvestorFreezeInfo(investor)` | `DataKey::InvestorFreezeInfo(Address)` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `set_investor_freeze_info`, `get_investor_freeze_info` |
+| **Persistent** | `DataKey::PerInvestorPositionCap(invoice_id)` | `DataKey::PerInvestorPositionCap(BytesN<32>)` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `set_per_investor_position_cap`, `get_per_investor_position_cap` |
+| **Persistent** | `DataKey::DisputeEvidence(digest)` | `DataKey::DisputeEvidence(BytesN<32>)` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `reserve_evidence` |
+| **Persistent** | `dispute_index_key` | `Symbol("dispute")` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `add_to_dispute_index`, `get_dispute_index` |
+| **Persistent** | `dispute_review_at_key` | `(Symbol("dsp_rev"), BytesN<32>)` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `set_under_review_timestamp`, `get_under_review_timestamp` |
+| **Persistent** | `VestingSchedule` | `(Symbol("vesting"), u64)` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `VestingStorage::store`, `get`, `update` |
+| **Persistent** | `vesting_reserved_key` | `(Symbol("vest_res"), Address)` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `get_reserved_balance`, `add_reserved_balance`, `sub_reserved_balance` |
+| **Persistent** | `bid_acceptance_record` | `(Symbol("bid_acc"), BytesN<32>)` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `store_bid_acceptance_record`, `get_bid_acceptance_record` |
+| **Persistent** | `repayment_record` | `(Symbol("rep_rec"), BytesN<32>)` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `store_repayment_record`, `get_repayment_record` |
+| **Persistent** | `migration_progress` | `Symbol("mig_off")`, `Symbol("mig_rec")` | `PERSISTENT_BUMP_THRESHOLD` / `PERSISTENT_EXTEND_TO` | On `begin_migration`, `advance_migration_page`, `get_migration_*` |
 | **Instance** | `ADMIN_KEY` | `Symbol("admin")` | Extended with Instance | Updated on admin transfer |
 | **Instance** | `ADMIN_INITIALIZED_KEY` | `Symbol("adm_init")` | Extended with Instance | Updated on initialization |
 | **Instance** | `ADMIN_TRANSFER_LOCK_KEY` | `Symbol("adm_lock")` | Extended with Instance | Used during admin transfers |
