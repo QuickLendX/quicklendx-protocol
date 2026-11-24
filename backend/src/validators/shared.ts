@@ -77,6 +77,10 @@ export const invoiceRouteIdParamForDisputesSchema = z.object({
   id: z.union([hexStringSchema, z.string().min(1)]),
 });
 
+export const userIdParamSchema = z.object({
+  userId: stellarAddressSchema,
+});
+
 export type HexString = z.infer<typeof hexStringSchema>;
 export type StellarAddress = z.infer<typeof stellarAddressSchema>;
 export type PositiveAmount = z.infer<typeof positiveAmountSchema>;
@@ -86,3 +90,4 @@ export type InvoiceIdParam = z.infer<typeof invoiceIdParamSchema>;
 export type GetBidsQuery = z.infer<typeof getBidsQuerySchema>;
 export type GetSettlementsQuery = z.infer<typeof getSettlementsQuerySchema>;
 export type SettlementIdParam = z.infer<typeof settlementIdParamSchema>;
+export type UserIdParam = z.infer<typeof userIdParamSchema>;

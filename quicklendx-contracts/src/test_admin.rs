@@ -599,6 +599,144 @@ mod test_admin {
 
         assert_eq!(result, Err(QuickLendXError::StorageKeyNotFound));
     }
+
+    // ========================================================================
+    // require_not_self / require_not_reserved / cancel_treasury_rotation
+    // ========================================================================
+
+    #[test]
+    fn require_not_self_rejects_contract_address() {
+        let (env, contract_id) = setup();
+        let contract_addr = env.current_contract_address();
+
+        assert_eq!(
+            crate::admin::require_not_self(&env, &contract_addr),
+            Err(QuickLendXError::SelfCallNotAllowed)
+        );
+    }
+
+    #[test]
+    fn require_not_self_accepts_external_address() {
+        let (env, _contract_id) = setup();
+        let external = Address::generate(&env);
+
+        assert_eq!(crate::admin::require_not_self(&env, &external), Ok(()));
+    }
+
+    #[test]
+    fn require_not_reserved_rejects_zero_burn_address() {
+        let (env, _contract_id) = setup();
+        let zero = Address::from_string(&String::from_str(
+            &env,
+            "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+        ));
+
+        assert_eq!(
+            crate::admin::require_not_reserved(&env, &zero, None, None, None),
+            Err(QuickLendXError::InvalidCurrency)
+        );
+    }
+
+    #[test]
+    fn require_not_reserved_rejects_contract_address() {
+        let (env, _contract_id) = setup();
+        let contract_addr = env.current_contract_address();
+
+        assert_eq!(
+            crate::admin::require_not_reserved(&env, &contract_addr, None, None, None),
+            Err(QuickLendXError::InvalidCurrency)
+        );
+    }
+
+    #[test]
+    fn require_not_reserved_rejects_current_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+
+        assert_eq!(
+            crate::admin::require_not_reserved(&env, &admin, None, None, None),
+            Err(QuickLendXError::InvalidCurrency)
+        );
+    }
+
+    #[test]
+    fn require_not_reserved_accepts_admin_when_explicit_admin_is_other() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let other = Address::generate(&env);
+
+        assert_eq!(
+            crate::admin::require_not_reserved(&env, &other, Some(admin), None, None),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn require_not_reserved_rejects_current_treasury() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let treasury = Address::generate(&env);
+
+        env.as_contract(&contract_id, || {
+            crate::fees::FeeManager::set_treasury(&env, &admin, &treasury).unwrap();
+        });
+
+        assert_eq!(
+            crate::admin::require_not_reserved(&env, &treasury, None, None, None),
+            Err(QuickLendXError::InvalidCurrency)
+        );
+    }
+
+    #[test]
+    fn require_not_reserved_accepts_plain_external_address() {
+        let (env, _contract_id) = setup();
+        let plain = Address::generate(&env);
+
+        assert_eq!(
+            crate::admin::require_not_reserved(&env, &plain, None, None, None),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn cancel_treasury_rotation_requires_admin() {
+        let (env, contract_id, admin) = setup_with_admin();
+        let outsider = Address::generate(&env);
+
+        assert_eq!(
+            crate::admin::cancel_treasury_rotation(&env, &outsider),
+            Err(QuickLendXError::NotAdmin)
+        );
+    }
+
+    #[test]
+    fn cancel_treasury_rotation_rejects_when_no_rotation_pending() {
+        let (env, contract_id, admin) = setup_with_admin();
+
+        assert_eq!(
+            crate::admin::cancel_treasury_rotation(&env, &admin),
+            Err(QuickLendXError::NoPendingTreasuryRotation)
+        );
+    }
+
+    #[test]
+    fn cancel_treasury_rotation_clears_pending_state() {
+        use crate::storage;
+
+        let (env, contract_id, admin) = setup_with_admin();
+        let new_treasury = Address::generate(&env);
+
+        env.as_contract(&contract_id, || {
+            storage::set_pending_treasury(&env, &new_treasury, 1000);
+            assert!(storage::has_pending_treasury(&env));
+        });
+
+        assert_eq!(
+            crate::admin::cancel_treasury_rotation(&env, &admin),
+            Ok(())
+        );
+
+        env.as_contract(&contract_id, || {
+            assert!(!storage::has_pending_treasury(&env));
+        });
+    }
 }
 
 // ============================================================================

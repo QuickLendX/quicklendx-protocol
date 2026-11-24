@@ -562,7 +562,7 @@ impl InvestmentStorage {
     /// get_investor_investments_paginated_cursored` (#2456).
     pub fn get_investor_generation(env: &Env, investor: &Address) -> u64 {
         let key = Self::investor_generation_key(investor);
-        env.storage().persistent().get(&key).unwrap_or(0)
+        crate::storage::persistent_get(env, &key).unwrap_or(0)
     }
 
     fn bump_investor_generation(env: &Env, investor: &Address) {

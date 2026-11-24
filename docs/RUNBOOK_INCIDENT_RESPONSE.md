@@ -155,7 +155,7 @@ Use read-only checks first.
 | --- | --- | --- |
 | Pause or maintenance gate | `is_paused`, `is_maintenance_mode`, `get_maintenance_reason`, failed write error code | [`contracts/operations.md`](contracts/operations.md), [`contracts/emergency.md`](contracts/emergency.md) |
 | Settlement or escrow | invoice state, escrow details, payment records, events, held reserve status | [`contracts/escrow.md`](contracts/escrow.md), [`contracts/settlement.md`](contracts/settlement.md) |
-| Freshness or indexer lag | `get_health_status`, backend health endpoint, indexer lag and queue depth | [`../reliability.md`](../reliability.md) |
+| Freshness or indexer lag | `get_health_status`, backend health endpoint, indexer lag and queue depth | [`archive/reliability.md`](archive/reliability.md) |
 | Diagnostics or local reproduction | `qlx_log!` domains, targeted test logs, CLI verbose output | [`diagnostics.md`](diagnostics.md) |
 
 Do not run emergency withdrawal, admin rotation, migration, or reserve repair

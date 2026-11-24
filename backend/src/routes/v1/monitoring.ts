@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { Router, Request, Response } from "express";
-import { apiKeyAuth, AuthenticatedRequest } from "../../middleware/apiKeyAuth";
+import { apiKeyAuth, AuthenticatedRequest } from "../../middleware/api-key-auth";
 import { reconciliationRateLimitMiddleware } from "../../middleware/rate-limit";
 import { statusService } from "../../services/statusService";
 import {
