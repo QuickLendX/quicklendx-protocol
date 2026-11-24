@@ -490,7 +490,7 @@ pub fn calculate_treasury_split_checked(
 /// total_paid` identity that function's own `checked_add`-based check
 /// already asserts, through an independently-implemented path.
 pub fn verify_no_dust(investor_return: i128, platform_fee: i128, payment_amount: i128) -> bool {
-    investor_return.saturating_add(platform_fee) == payment_amount
+    investor_return.checked_add(platform_fee) == Some(payment_amount)
 }
 
 /// Validate calculation inputs

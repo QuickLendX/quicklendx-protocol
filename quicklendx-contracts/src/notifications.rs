@@ -71,6 +71,7 @@ pub enum DataKey {
     IdempotencyKey(BytesN<32>),
     IdempotencyKeySet,
     NotificationCounter,
+    UserNotificationsGeneration(Address),
 }
 
 /// Notification statistics
@@ -544,15 +545,28 @@ impl NotificationSystem {
         result.unwrap_or_else(|| Vec::new(env))
     }
 
-    /// Return a paginated slice of user notification IDs.
+    /// Return an opaque-cursor page of user notification IDs.
     pub fn get_user_notifications_paged(
         env: &Env,
         user: &Address,
-        offset: u32,
+        cursor: Option<String>,
         limit: u32,
-    ) -> Vec<BytesN<32>> {
+    ) -> Result<crate::types::CursorBytes32Page, crate::errors::QuickLendXError> {
         let list = Self::get_user_notifications(env, user);
         let total_count = list.len();
+        let generation_key = DataKey::UserNotificationsGeneration(user.clone());
+        let generation: u64 = env.storage().persistent().get(&generation_key).unwrap_or(0);
+        if env.storage().persistent().has(&generation_key) {
+            crate::storage::extend_persistent_ttl(env, &generation_key);
+        }
+        let offset = match cursor {
+            Some(raw) => {
+                let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+                decoded.require_stable(generation)?;
+                decoded.offset
+            }
+            None => 0,
+        };
         let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
         let mut page = Vec::new(env);
         let mut idx = start;
@@ -562,18 +576,44 @@ impl NotificationSystem {
             }
             idx = idx.saturating_add(1);
         }
-        page
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        let capped_limit = crate::pagination::cap_query_limit(limit);
+        let next_cursor = if has_more {
+            Some(crate::pagination::encode_soroban_cursor(
+                env,
+                crate::pagination::Cursor::new(
+                    start.saturating_add(capped_limit),
+                    generation,
+                ),
+            ))
+        } else {
+            None
+        };
+        Ok(crate::types::CursorBytes32Page {
+            items: page,
+            total_count,
+            has_more,
+            next_cursor,
+        })
     }
 
-    /// Return a paginated response with metadata for user notifications.
-    pub fn get_user_notifications_paginated(
+    /// Legacy offset-based notification query.
+    #[deprecated(note = "use get_user_notifications_paged with an opaque cursor")]
+    pub fn get_user_notifications_offset(
         env: &Env,
         user: &Address,
         offset: u32,
         limit: u32,
     ) -> crate::types::PaginatedBytes32Vec {
-        let items = Self::get_user_notifications_paged(env, user, offset, limit);
-        let total_count = Self::get_user_notifications(env, user).len();
+        let list = Self::get_user_notifications(env, user);
+        let total_count = list.len();
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut items = Vec::new(env);
+        for idx in start..end {
+            if let Some(id) = list.get(idx) {
+                items.push_back(id);
+            }
+        }
         let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
         crate::types::PaginatedBytes32Vec {
             items,
@@ -672,6 +712,12 @@ impl NotificationSystem {
         notifications.push_back(notification_id.clone());
         env.storage().persistent().set(&key, &notifications);
         crate::storage::extend_persistent_ttl(env, &key);
+        let generation_key = DataKey::UserNotificationsGeneration(user.clone());
+        let generation: u64 = env.storage().persistent().get(&generation_key).unwrap_or(0);
+        env.storage()
+            .persistent()
+            .set(&generation_key, &generation.saturating_add(1));
+        crate::storage::extend_persistent_ttl(env, &generation_key);
     }
 
     /// Retrieve and increment the instance-level monotonic notification counter.

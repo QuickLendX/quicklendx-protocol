@@ -152,7 +152,7 @@ fn test_cap_blocks_next_bid() {
     }
 
     assert_eq!(
-        BidStorage::count_active_placed_bids_for_investor(&env, &investor),
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available"),
         3,
         "active count must equal cap"
     );
@@ -217,7 +217,7 @@ fn test_expiry_frees_slot() {
         "bid0 must be Expired after TTL elapses"
     );
     assert_eq!(
-        BidStorage::count_active_placed_bids_for_investor(&env, &investor),
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available"),
         1,
         "count must drop to 1 after expiry"
     );
@@ -265,7 +265,7 @@ fn test_cancellation_frees_slot() {
     assert_eq!(client.get_bid(&bid0).unwrap().status, BidStatus::Cancelled);
 
     assert_eq!(
-        BidStorage::count_active_placed_bids_for_investor(&env, &investor),
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available"),
         1,
         "count must drop to 1 after cancellation"
     );
@@ -319,7 +319,7 @@ fn test_acceptance_frees_slot() {
     );
 
     assert_eq!(
-        BidStorage::count_active_placed_bids_for_investor(&env, &investor),
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available"),
         1,
         "count must drop to 1 after acceptance"
     );
@@ -363,7 +363,7 @@ fn test_count_excludes_non_placed_statuses() {
     let bid_accept   = client.place_bid(&investor, &inv_accepted, &5_000i128, &5_500i128, &BytesN::from_array(&env, &[0u8; 32]));
 
     assert_eq!(
-        BidStorage::count_active_placed_bids_for_investor(&env, &investor),
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available"),
         5,
         "all 5 bids must be active initially"
     );
@@ -383,7 +383,7 @@ fn test_count_excludes_non_placed_statuses() {
     client.accept_bid(&inv_accepted, &bid_accept).unwrap();
 
     // Only bid_stay should remain in the active count.
-    let count = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    let count = BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available");
     assert_eq!(count, 1, "only the untouched Placed bid must be counted; got {}", count);
 
     // Double-check each status for clarity.
@@ -435,7 +435,7 @@ fn test_disabled_limit_allows_placement_beyond_previous_cap() {
     }
 
     assert_eq!(
-        BidStorage::count_active_placed_bids_for_investor(&env, &investor),
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available"),
         5
     );
 }

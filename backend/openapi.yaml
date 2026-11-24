@@ -855,6 +855,7 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^G[A-Z2-7]{55}$'
           description: User identifier (Stellar address)
       responses:
         '200':
@@ -863,6 +864,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserNotificationPreferences'
+        '400':
+          description: Invalid userId parameter
         '401':
           description: Unauthorized
         '403':
@@ -882,6 +885,7 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^G[A-Z2-7]{55}$'
           description: User identifier (Stellar address)
       requestBody:
         required: true
@@ -931,6 +935,7 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^G[A-Z2-7]{55}$'
           description: User identifier (Stellar address)
       requestBody:
         required: true
@@ -962,6 +967,7 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^G[A-Z2-7]{55}$'
           description: User identifier (Stellar address)
         - name: token
           in: query
@@ -972,6 +978,8 @@ paths:
       responses:
         '200':
           description: Successfully unsubscribed
+        '400':
+          description: Invalid userId parameter
         '403':
           description: Invalid or missing unsubscribe token
 

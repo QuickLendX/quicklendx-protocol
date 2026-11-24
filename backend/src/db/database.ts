@@ -314,7 +314,7 @@ class Database {
     if (!existing) return false;
 
     return this._transaction(() => {
-      getPreparedStatement('DELETE FROM api_key_audit_log WHERK key_id = ?').run(id);
+      getPreparedStatement('DELETE FROM api_key_audit_log WHERE key_id = ?').run(id);
       getPreparedStatement('DELETE FROM api_keys WHERE id = ?').run(id);
       return true;
     });

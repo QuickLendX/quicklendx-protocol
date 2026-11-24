@@ -2,44 +2,60 @@
 
 extern crate std;
 
+use quicklendx_contracts::admin::AdminStorage;
 use quicklendx_contracts::errors::QuickLendXError;
 use quicklendx_contracts::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{testutils::Address as _, Address, Env};
 
-fn setup_with_admin() -> (Env, QuickLendXContractClient<'static>, Address) {
+fn setup_with_admin() -> (Env, Address, QuickLendXContractClient<'static>, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(&env, &contract_id);
     let admin = Address::generate(&env);
-    client.initialize_admin(&admin);
-    (env, client, admin)
+    client.set_admin(&admin);
+    (env, contract_id, client, admin)
 }
 
-/// Attempting a two-step admin transfer to an address that has never been used
-/// (no on-ledger entry) must fail.
+/// Unique to integration tests: `AdminStorage::require_existing_transfer_destination`
+/// is active under `#[cfg(not(test))]`, so direct transfers to a non-existent
+/// lookalike address are rejected with `InvalidAddress`.
 #[test]
-#[ignore = "requires mock auth that supports non-existent addresses (pre-existing)"]
 fn test_direct_admin_transfer_to_lookalike_is_rejected() {
-    let (_env, client, _admin) = setup_with_admin();
-    let lookalike_admin = Address::generate(&_env);
-    client.transfer_admin(&lookalike_admin);
+    let (env, contract_id, _client, admin) = setup_with_admin();
+    let lookalike_admin = Address::generate(&env);
+
+    env.as_contract(&contract_id, || {
+        let res = AdminStorage::transfer_admin(&env, &admin, &lookalike_admin);
+        assert_eq!(res, Err(QuickLendXError::InvalidAddress));
+    });
 }
 
+/// Unique to integration tests: initiating a two-step admin transfer to a
+/// non-existent lookalike address is rejected with `InvalidAddress`.
 #[test]
-#[ignore = "requires mock auth that supports non-existent addresses (pre-existing)"]
 fn test_two_step_admin_transfer_to_lookalike_is_rejected() {
-    let (_env, client, admin) = setup_with_admin();
-    let lookalike_admin = Address::generate(&_env);
-    client.set_two_step_enabled(&admin, &true);
-    client.initiate_admin_transfer(&admin, &lookalike_admin);
+    let (env, contract_id, _client, admin) = setup_with_admin();
+    let lookalike_admin = Address::generate(&env);
+
+    env.as_contract(&contract_id, || {
+        AdminStorage::set_two_step_enabled(&env, &admin, true).unwrap();
+    });
+    env.as_contract(&contract_id, || {
+        let res = AdminStorage::initiate_admin_transfer(&env, &admin, &lookalike_admin);
+        assert_eq!(res, Err(QuickLendXError::InvalidAddress));
+    });
 }
 
-/// Transferring admin to an address that already exists must succeed.
+/// Unique to integration tests: transferring admin to an address that exists
+/// on-ledger (e.g., a deployed contract address) succeeds under `#[cfg(not(test))]`.
 #[test]
-#[ignore = "requires mock auth that supports non-existent addresses (pre-existing)"]
 fn test_transfer_to_existing_address_succeeds() {
-    let (_env, client, _admin) = setup_with_admin();
-    let new_admin = Address::generate(&_env);
-    client.transfer_admin(&new_admin);
+    let (env, contract_id, client, admin) = setup_with_admin();
+    let new_admin = env.register(QuickLendXContract, ());
+
+    env.as_contract(&contract_id, || {
+        AdminStorage::transfer_admin(&env, &admin, &new_admin).unwrap();
+    });
+    assert_eq!(client.get_admin(), new_admin);
 }

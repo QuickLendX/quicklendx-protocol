@@ -574,7 +574,7 @@ fn test_count_active_bids_respects_ttl_config() {
     );
 
     // Count should be 1 before expiry
-    let active_before = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    let active_before = BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available");
     assert_eq!(active_before, 1, "One active bid before expiry");
 
     // Advance past 2-day TTL
@@ -584,7 +584,7 @@ fn test_count_active_bids_respects_ttl_config() {
     assert_eq!(cleaned, 1, "One bid cleaned after TTL expiry");
 
     // Count should now be 0
-    let active_after = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    let active_after = BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available");
     assert_eq!(
         active_after, 0,
         "Zero active bids after TTL expiry with 2-day TTL config"
@@ -642,7 +642,7 @@ fn test_count_active_bids_multi_invoice_after_ttl_expiry() {
     );
 
     assert_eq!(
-        BidStorage::count_active_placed_bids_for_investor(&env, &investor),
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available"),
         3,
         "3 active bids across 2 invoices"
     );
@@ -657,7 +657,7 @@ fn test_count_active_bids_multi_invoice_after_ttl_expiry() {
     // Count should now be 2 (the two on invoice2 still in index before we clean it)
     // Note: count_active_placed_bids_for_investor calls refresh_investor_bids internally,
     // which iterates the investor's bid list and checks each bid against is_expired.
-    let count_after_inv1 = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    let count_after_inv1 = BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available");
     assert_eq!(
         count_after_inv1, 2,
         "2 active bids remain after invoice1 cleanup (invoice2 not yet cleaned)"
@@ -668,6 +668,6 @@ fn test_count_active_bids_multi_invoice_after_ttl_expiry() {
     assert_eq!(cleaned2, 2, "2 bids expired on invoice2");
 
     // All bids expired
-    let count_final = BidStorage::count_active_placed_bids_for_investor(&env, &investor);
+    let count_final = BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available");
     assert_eq!(count_final, 0, "0 active bids after all invoices cleaned");
 }
