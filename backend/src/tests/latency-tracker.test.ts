@@ -193,7 +193,12 @@ describe("LatencyTracker — window rotation", () => {
   let tracker: LatencyTracker;
 
   beforeEach(() => {
+    jest.useFakeTimers({ now: 1_700_000_000_000 });
     tracker = new LatencyTracker(WINDOW);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it("includes samples within the window", () => {
@@ -529,6 +534,7 @@ describe("request-logger middleware — latency tracker integration", () => {
   let nextFn: jest.Mock;
 
   beforeEach(() => {
+    jest.useFakeTimers({ now: 1_700_000_000_000 });
     latencyTracker.reset();
 
     mockRequest = {
@@ -557,6 +563,10 @@ describe("request-logger middleware — latency tracker integration", () => {
     };
 
     nextFn = jest.fn();
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it("records a latency sample after res.finish fires", async () => {

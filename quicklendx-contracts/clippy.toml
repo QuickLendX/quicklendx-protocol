@@ -6,3 +6,9 @@ disallowed-methods = [
     { path = "core::result::Result::unwrap", reason = "Use ? or map_err(QuickLendXError) instead" },
     { path = "core::result::Result::expect", reason = "Use ? or map_err(QuickLendXError) instead" },
 ]
+
+disallowed-macros = [
+    { path = "core::panic", reason = "Use Result and QuickLendXError in production code" },
+    { path = "core::todo", reason = "Incomplete code must not ship" },
+    { path = "core::unimplemented", reason = "Incomplete code must not ship" },
+]

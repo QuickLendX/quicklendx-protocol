@@ -525,9 +525,11 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
     setTimeout(() => {
       setClosing(false);
       onClose();
+      requestAnimationFrame(() => {
+        triggerRef?.current?.focus();
+      });
     }, delay);
-    // Focus return is handled by Dialog via triggerRef
-  }, [state.phase, reducedMotion, onClose, clearHoldInterval]);
+  }, [state.phase, reducedMotion, onClose, clearHoldInterval, triggerRef]);
 
   const handleHoldStart = useCallback(() => {
     if (state.phase !== "idle") return;
@@ -592,7 +594,8 @@ export const ConfirmAction: React.FC<ConfirmActionProps> = ({
   const progressPct = state.phase === "holding" ? state.progressPct : 0;
 
   const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
-  const noAnim = reducedMotion || (typeof window !== "undefined" && window.innerWidth < 375);
+  const noAnim =
+    reducedMotion || (typeof window !== "undefined" && window.innerWidth < 375);
 
   const panelAnimClass = noAnim
     ? ""
