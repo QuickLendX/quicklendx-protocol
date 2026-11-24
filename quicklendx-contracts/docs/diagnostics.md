@@ -4,7 +4,7 @@ This document describes the structured diagnostics framework used in the QuickLe
 
 ## Feature Gate & Compilation Behavior
 
-Diagnostic logs in QuickLendX are managed by the `qlx_log!` macro (defined in [diagnostics.rs](file:///Users/backenddevopsdeveloper/Downloads/DRIPS/geni3-quicklendx-protocol/quicklendx-contracts/src/diagnostics.rs)). This macro is feature-gated using Cargo features:
+Diagnostic logs in QuickLendX are managed by the `qlx_log!` macro (defined in [diagnostics.rs](../src/diagnostics.rs)). This macro is feature-gated using Cargo features:
 
 1. **Enabled Configurations**:
    - In unit/integration tests (i.e. under `#[cfg(test)]` context like running `cargo test`).
@@ -17,7 +17,7 @@ Diagnostic logs in QuickLendX are managed by the `qlx_log!` macro (defined in [d
 
 ### Profiling with Logs
 
-To build or test the contract in a release-like environment but with diagnostics/debug logs enabled, you can use the custom `release-with-logs` profile configured in the [Cargo.toml](file:///Users/backenddevopsdeveloper/Downloads/DRIPS/geni3-quicklendx-protocol/quicklendx-contracts/Cargo.toml):
+To build or test the contract in a release-like environment but with diagnostics/debug logs enabled, you can use the custom `release-with-logs` profile configured in the [Cargo.toml](../Cargo.toml):
 
 ```toml
 [profile.release-with-logs]

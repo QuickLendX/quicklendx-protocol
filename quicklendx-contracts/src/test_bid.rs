@@ -44,7 +44,7 @@ use soroban_sdk::{
 // ---------------------------------------------------------------------------
 
 /// Minimal environment with mock_all_auths for setup convenience.
-fn setup() -> (Env, QuickLendXContractClient<'static\>, Address, Address) {
+fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let env = Env::default();
     env.mock_all_auths();
     let id = env.register(QuickLendXContract, ());
@@ -670,7 +670,8 @@ fn test_all_business_freeze_reason_variants() {
             &soroban_sdk::String::from_str(&env, reason.label()),
             &crate::invoice::InvoiceCategory::Services,
             &soroban_sdk::Vec::new(&env),
-        &None);
+            &None,
+        );
 
         client.freeze_invoice(&admin, &invoice_id, reason);
 
@@ -684,5 +685,4 @@ fn test_all_business_freeze_reason_variants() {
 
         assert!(crate::storage::InvoiceStorage::is_frozen(&env, &invoice_id));
     }
-}
 }

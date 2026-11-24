@@ -526,7 +526,7 @@ fn stale_bid_not_selected_during_grace_window() {
     assert_eq!(best.bid_id, bid_fresh, "stale bid must never win");
 
     // rank_bids must also exclude the stale bid.
-    let ranked = BidStorage::rank_bids(&env, &invoice_id);
+    let ranked = BidStorage::rank_bids(&env, &invoice_id).expect("bid ranking should succeed");
     assert_eq!(ranked.len(), 1);
     assert_eq!(ranked.get(0).unwrap().bid_id, bid_fresh);
 
@@ -559,7 +559,7 @@ fn selection_is_deterministic_best_equals_first_ranked() {
     // Highest profit is the high bid.
     assert_eq!(best.bid_id, bid_high);
 
-    let ranked = BidStorage::rank_bids(&env, &invoice_id);
+    let ranked = BidStorage::rank_bids(&env, &invoice_id).expect("bid ranking should succeed");
     assert!(!ranked.is_empty());
     assert_eq!(
         ranked.get(0).unwrap().bid_id,
@@ -588,7 +588,7 @@ fn terminal_bids_excluded_from_selection() {
     let best = client.get_best_bid(&invoice_id).expect("live bid wins");
     assert_eq!(best.bid_id, bid_live);
 
-    let ranked = BidStorage::rank_bids(&env, &invoice_id);
+    let ranked = BidStorage::rank_bids(&env, &invoice_id).expect("bid ranking should succeed");
     assert_eq!(ranked.len(), 1);
     assert_eq!(ranked.get(0).unwrap().bid_id, bid_live);
 }
@@ -608,7 +608,7 @@ fn ranking_deterministic_across_placement_order() {
     let best = client.get_best_bid(&invoice_id).expect("a winner");
     assert_eq!(best.bid_id, bid_second_strong);
 
-    let ranked = BidStorage::rank_bids(&env, &invoice_id);
+    let ranked = BidStorage::rank_bids(&env, &invoice_id).expect("bid ranking should succeed");
     assert_eq!(ranked.len(), 2);
     assert_eq!(ranked.get(0).unwrap().bid_id, bid_second_strong);
     assert_eq!(ranked.get(1).unwrap().bid_id, bid_first_weak);

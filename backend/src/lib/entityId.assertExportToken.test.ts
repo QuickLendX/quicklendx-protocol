@@ -56,7 +56,7 @@ function expectRejected(value: unknown): void {
       });
       // Must not expose internals: the message must not contain the raw value
       // when the value is a (potentially adversarial) string.
-      if (typeof value === "string") {
+      if (typeof value === "string" && value.length > 0) {
         expect((err as Error).message).not.toContain(value.slice(0, 50));
       }
     }

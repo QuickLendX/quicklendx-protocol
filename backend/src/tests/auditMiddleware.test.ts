@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, jest } from "@jest/globals
 import { Request, Response, NextFunction } from "express";
 import { auditMiddleware, registerAuditRoute } from "../middleware/auditMiddleware";
 import { auditService } from "../services/auditService";
-import { AuthenticatedRequest } from "../middleware/apiKeyAuth";
+import { AuthenticatedRequest } from "../middleware/api-key-auth";
 import EventEmitter from "events";
 
 function createMockReq(overrides: Partial<AuthenticatedRequest> = {}): AuthenticatedRequest {

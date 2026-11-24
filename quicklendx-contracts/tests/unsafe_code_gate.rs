@@ -36,6 +36,7 @@
 //! introduced an `unsafe` block into first-party code or removed the `exit 1`
 //! from the enforcement script.
 
+#![allow(clippy::disallowed_macros)]
 use std::fs;
 use std::path::{Path, PathBuf};
 

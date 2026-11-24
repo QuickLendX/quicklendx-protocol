@@ -38,7 +38,7 @@ fn setup_funded_invoice_for_dispute() -> FundedDisputeFixture {
     let investor = Address::generate(&env);
 
     client.set_admin(&admin);
-    let _ = client.try_initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
+    let _ = client.try_initialize_protocol_limits(&admin);
 
     let token_admin = Address::generate(&env);
     let currency = env
