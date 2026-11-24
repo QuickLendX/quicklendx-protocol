@@ -17,6 +17,7 @@ use crate::errors::QuickLendXError;
 use soroban_sdk::{symbol_short, Address, Env, String, Vec};
 
 const WHITELIST_KEY: soroban_sdk::Symbol = symbol_short!("curr_wl");
+const GENERATION_KEY: soroban_sdk::Symbol = symbol_short!("cur_gen");
 
 /// Currency whitelist storage and operations.
 pub struct CurrencyWhitelist;
@@ -56,6 +57,7 @@ impl CurrencyWhitelist {
         }
         list.push_back(currency.clone());
         env.storage().instance().set(&WHITELIST_KEY, &list);
+        Self::bump_generation(env);
         Ok(())
     }
 
@@ -114,6 +116,7 @@ impl CurrencyWhitelist {
 
         if any_added {
             env.storage().instance().set(&WHITELIST_KEY, &list);
+            Self::bump_generation(env);
         }
 
         Ok(results)
@@ -145,6 +148,7 @@ impl CurrencyWhitelist {
         admin.require_auth();
 
         let list = Self::get_whitelisted_currencies(env);
+        let old_len = list.len();
         let mut new_list = Vec::new(env);
         for a in list.iter() {
             if a != *currency {
@@ -152,6 +156,9 @@ impl CurrencyWhitelist {
             }
         }
         env.storage().instance().set(&WHITELIST_KEY, &new_list);
+        if new_list.len() != old_len {
+            Self::bump_generation(env);
+        }
         Ok(())
     }
 
@@ -208,6 +215,7 @@ impl CurrencyWhitelist {
                 }
             }
             env.storage().instance().set(&WHITELIST_KEY, &new_list);
+            Self::bump_generation(env);
         }
 
         Ok(results)
@@ -298,7 +306,10 @@ impl CurrencyWhitelist {
                 deduped.push_back(currency);
             }
         }
-        env.storage().instance().set(&WHITELIST_KEY, &deduped);
+        if deduped != Self::get_whitelisted_currencies(env) {
+            env.storage().instance().set(&WHITELIST_KEY, &deduped);
+            Self::bump_generation(env);
+        }
         Ok(())
     }
 
@@ -321,9 +332,12 @@ impl CurrencyWhitelist {
         }
         admin.require_auth();
 
-        env.storage()
-            .instance()
-            .set(&WHITELIST_KEY, &Vec::<Address>::new(env));
+        if !Self::get_whitelisted_currencies(env).is_empty() {
+            env.storage()
+                .instance()
+                .set(&WHITELIST_KEY, &Vec::<Address>::new(env));
+            Self::bump_generation(env);
+        }
         Ok(())
     }
 
@@ -332,19 +346,37 @@ impl CurrencyWhitelist {
         Self::get_whitelisted_currencies(env).len()
     }
 
-    /// @notice Return a paginated slice of the whitelist with metadata.
+    fn generation(env: &Env) -> u64 {
+        env.storage().instance().get(&GENERATION_KEY).unwrap_or(0)
+    }
+
+    fn bump_generation(env: &Env) {
+        let next = Self::generation(env).saturating_add(1);
+        env.storage().instance().set(&GENERATION_KEY, &next);
+    }
+
+    /// Return an opaque-cursor page of the whitelist.
     /// @param env The contract environment
-    /// @param offset Starting index for pagination (0-based)
+    /// @param cursor Opaque cursor from the previous page, if any
     /// @param limit Maximum number of results to return (capped at MAX_QUERY_LIMIT)
-    /// @return [`PaginatedCurrencies`] with items, total_count, and has_more
+    /// @return [`CursorAddressPage`] with items, total_count, has_more, and next_cursor
     /// @dev Enforces MAX_QUERY_LIMIT hard cap for security and performance
     pub fn get_whitelisted_currencies_paged(
         env: &Env,
-        offset: u32,
+        cursor: Option<String>,
         limit: u32,
-    ) -> crate::types::PaginatedCurrencies {
+    ) -> Result<crate::types::CursorAddressPage, crate::errors::QuickLendXError> {
         let list = Self::get_whitelisted_currencies(env);
         let total_count = list.len();
+        let generation = Self::generation(env);
+        let offset = match cursor {
+            Some(raw) => {
+                let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+                decoded.require_stable(generation)?;
+                decoded.offset
+            }
+            None => 0,
+        };
 
         let mut page: Vec<Address> = Vec::new(env);
         let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
@@ -356,6 +388,43 @@ impl CurrencyWhitelist {
             idx = idx.saturating_add(1);
         }
 
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        let capped_limit = crate::pagination::cap_query_limit(limit);
+        let next_cursor = if has_more {
+            Some(crate::pagination::encode_soroban_cursor(
+                env,
+                crate::pagination::Cursor::new(
+                    start.saturating_add(capped_limit),
+                    generation,
+                ),
+            ))
+        } else {
+            None
+        };
+        Ok(crate::types::CursorAddressPage {
+            items: page,
+            total_count,
+            has_more,
+            next_cursor,
+        })
+    }
+
+    /// Offset compatibility alias. Prefer `get_whitelisted_currencies_paged`.
+    #[deprecated(note = "use get_whitelisted_currencies_paged with an opaque cursor")]
+    pub fn get_whitelisted_currency_offset(
+        env: &Env,
+        offset: u32,
+        limit: u32,
+    ) -> crate::types::PaginatedCurrencies {
+        let list = Self::get_whitelisted_currencies(env);
+        let total_count = list.len();
+        let mut page = Vec::new(env);
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        for idx in start..end {
+            if let Some(address) = list.get(idx) {
+                page.push_back(address);
+            }
+        }
         let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
         crate::types::PaginatedCurrencies {
             items: page,

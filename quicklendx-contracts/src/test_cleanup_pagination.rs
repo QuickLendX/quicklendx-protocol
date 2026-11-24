@@ -145,17 +145,17 @@ fn test_cleanup_pagination_two_equal_chunks() {
     env.ledger().set_timestamp(2000);
 
     // Process first 5 bids
-    let (cleaned1, remaining1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5);
+    let (cleaned1, remaining1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned1, 5, "First chunk should clean 5 bids");
     assert_eq!(remaining1, 5, "5 bids should remain after first chunk");
 
     // Process remaining 5 bids
-    let (cleaned2, remaining2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 5, 5);
+    let (cleaned2, remaining2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 5, 5).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned2, 5, "Second chunk should clean 5 bids");
     assert_eq!(remaining2, 0, "No bids should remain after second chunk");
 
     // Verify idempotency: calling again returns 0
-    let (cleaned3, remaining3) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5);
+    let (cleaned3, remaining3) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned3, 0, "Third call should clean 0 bids (idempotent)");
     assert_eq!(remaining3, 0, "No bids should remain");
 }
@@ -177,17 +177,17 @@ fn test_cleanup_pagination_unequal_chunks() {
     env.ledger().set_timestamp(2000);
 
     // Process first 3 bids
-    let (cleaned1, remaining1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 3);
+    let (cleaned1, remaining1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 3).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned1, 3);
     assert_eq!(remaining1, 7);
 
     // Process next 4 bids
-    let (cleaned2, remaining2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 3, 4);
+    let (cleaned2, remaining2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 3, 4).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned2, 4);
     assert_eq!(remaining2, 3);
 
     // Process remaining 3 bids
-    let (cleaned3, remaining3) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 7, 3);
+    let (cleaned3, remaining3) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 7, 3).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned3, 3);
     assert_eq!(remaining3, 0);
 }
@@ -230,7 +230,7 @@ fn test_cleanup_pagination_worst_case_single_call() {
 
     // Process all 50 bids in single call
     let (cleaned, remaining) =
-        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, MAX_BIDS_PER_INVOICE);
+        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, MAX_BIDS_PER_INVOICE).expect("paged expired bid cleanup should succeed");
     assert_eq!(
         cleaned, MAX_BIDS_PER_INVOICE,
         "Should clean all MAX_BIDS_PER_INVOICE bids"
@@ -269,7 +269,7 @@ fn test_cleanup_pagination_worst_case_multiple_calls() {
 
     for _ in 0..5 {
         let (cleaned, remaining) =
-            BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, offset, chunk_size);
+            BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, offset, chunk_size).expect("paged expired bid cleanup should succeed");
         total_cleaned += cleaned;
         offset += chunk_size;
 
@@ -308,7 +308,7 @@ fn test_cleanup_pagination_zero_limit() {
     env.ledger().set_timestamp(2000);
 
     // Call with zero limit
-    let (cleaned, remaining) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 0);
+    let (cleaned, remaining) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 0).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned, 0, "Zero limit should clean 0 bids");
     assert_eq!(remaining, 5, "Should return current bid count");
 }
@@ -330,7 +330,7 @@ fn test_cleanup_pagination_offset_beyond_list() {
     env.ledger().set_timestamp(2000);
 
     // Call with offset beyond list
-    let (cleaned, remaining) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 100, 10);
+    let (cleaned, remaining) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 100, 10).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned, 0, "Offset beyond list should clean 0 bids");
     assert_eq!(remaining, 5, "Should return current bid count");
 }
@@ -353,7 +353,7 @@ fn test_cleanup_pagination_offset_limit_overflow() {
 
     // Call with offset + limit that would overflow u32
     let (cleaned, remaining) =
-        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, u32::MAX - 5, 10);
+        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, u32::MAX - 5, 10).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned, 0, "Overflow should clean 0 bids");
     assert_eq!(remaining, 0, "Overflow should return 0 remaining");
 }
@@ -367,7 +367,7 @@ fn test_cleanup_pagination_empty_invoice() {
     let invoice_id = create_invoice(&env, &client, &admin, &business, 100_000, 1000);
 
     // Call cleanup on empty invoice
-    let (cleaned, remaining) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 10);
+    let (cleaned, remaining) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 10).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned, 0, "Empty invoice should clean 0 bids");
     assert_eq!(remaining, 0, "Empty invoice should have 0 remaining");
 }
@@ -393,17 +393,17 @@ fn test_cleanup_pagination_idempotency_across_boundaries() {
     env.ledger().set_timestamp(2000);
 
     // First pass: clean all bids
-    let (cleaned1, remaining1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 10);
+    let (cleaned1, remaining1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 10).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned1, 10);
     assert_eq!(remaining1, 0);
 
     // Second pass: should return 0 (idempotent)
-    let (cleaned2, remaining2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 10);
+    let (cleaned2, remaining2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 10).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned2, 0, "Second pass should be idempotent");
     assert_eq!(remaining2, 0);
 
     // Third pass with different offset: should still return 0
-    let (cleaned3, remaining3) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 5, 5);
+    let (cleaned3, remaining3) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 5, 5).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned3, 0, "Different offset should still be idempotent");
     assert_eq!(remaining3, 0);
 }
@@ -430,7 +430,7 @@ fn test_cleanup_pagination_mixed_active_and_expired() {
     env.ledger().set_timestamp(1_005);
 
     // Process first 5 bids (should clean 5)
-    let (cleaned1, remaining1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5);
+    let (cleaned1, remaining1) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned1, 5, "Should clean first 5 expired bids");
     assert_eq!(remaining1, 5, "5 active bids should remain");
 
@@ -438,7 +438,7 @@ fn test_cleanup_pagination_mixed_active_and_expired() {
     env.ledger().set_timestamp(2000);
 
     // Process remaining 5 bids (should clean 5)
-    let (cleaned2, remaining2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 5, 5);
+    let (cleaned2, remaining2) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 5, 5).expect("paged expired bid cleanup should succeed");
     assert_eq!(cleaned2, 5, "Should clean remaining 5 expired bids");
     assert_eq!(remaining2, 0, "No bids should remain");
 }
@@ -472,7 +472,7 @@ fn test_cleanup_pagination_limit_capped() {
 
     // Call with limit > MAX_BIDS_PER_INVOICE (should be capped)
     let (cleaned, remaining) =
-        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, u32::MAX);
+        BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, u32::MAX).expect("paged expired bid cleanup should succeed");
     assert_eq!(
         cleaned, MAX_BIDS_PER_INVOICE,
         "Limit should be capped at MAX_BIDS_PER_INVOICE"
@@ -505,7 +505,7 @@ fn test_cleanup_pagination_preserves_terminal_bids() {
     env.ledger().set_timestamp(2000);
 
     // Cleanup should not remove accepted bid
-    let (cleaned, remaining) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5);
+    let (cleaned, remaining) = BidStorage::cleanup_expired_bids_paged(&env, &invoice_id, 0, 5).expect("paged expired bid cleanup should succeed");
     assert_eq!(
         cleaned, 4,
         "Should clean 4 expired bids, not the accepted one"

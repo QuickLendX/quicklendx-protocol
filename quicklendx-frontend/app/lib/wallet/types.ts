@@ -7,10 +7,10 @@
  */
 
 export type WalletErrorCode =
-  | "not_installed"   // wallet extension is not present
-  | "rejected"        // user declined the connection prompt
-  | "timeout"         // connect() took longer than CONNECT_TIMEOUT_MS
-  | "unknown";        // any other error
+  | "not_installed" // wallet extension is not present
+  | "rejected" // user declined the connection prompt
+  | "timeout" // connect() took longer than CONNECT_TIMEOUT_MS
+  | "unknown"; // any other error
 
 /** Wallet connection states surfaced through useWallet(). */
 export type WalletConnectionState =

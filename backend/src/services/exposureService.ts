@@ -371,8 +371,8 @@ export class ExposureService {
   private async _sumBids(investor: string): Promise<bigint> {
     let total = 0n;
 
-    // Legacy in-memory mock
-    for (const bid of this._deps.mockBids) {
+    // Legacy in-memory mock (guard against circular-init undefined at startup)
+    for (const bid of this._deps.mockBids ?? MOCK_BIDS ?? []) {
       if (!bid || bid.investor !== investor) continue;
       if (bid.status !== BidStatus.Placed) continue;
       try {
@@ -429,8 +429,8 @@ export class ExposureService {
       SettlementStatus.Processing,
     ]);
 
-    // Legacy mock
-    for (const s of this._deps.mockSettlements) {
+    // Legacy mock (guard against circular-init undefined at startup)
+    for (const s of this._deps.mockSettlements ?? MOCK_SETTLEMENTS ?? []) {
       if (!s) continue;
       if (s.recipient !== investor) continue;
       if (!unsettledStatuses.has(s.status)) continue;

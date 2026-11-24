@@ -1,7 +1,15 @@
 import { z } from "zod";
-import { getBidsQuerySchema } from "./shared";
+import { getBidsQuerySchema, hexStringSchema } from "./shared";
 
 export { getBidsQuerySchema };
+
+/**
+ * Schema for validating :invoiceId route parameter.
+ * Accepts either a hex string (0x...) or a plain string (for mocks/tests).
+ */
+export const invoiceIdParamSchema = z.object({
+  invoiceId: z.union([hexStringSchema, z.string().min(1)]),
+});
 
 /**
  * Schema for the POST /api/v1/bids body.

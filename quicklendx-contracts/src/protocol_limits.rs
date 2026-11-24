@@ -36,6 +36,8 @@ pub const MAX_INPUT_BATCH_SIZE: u32 = 25;
 pub const MAX_INPUT_STATUS_BATCH_SIZE: u32 = 100;
 /// Hard ceiling on the number of line items in a single metadata update.
 pub const MAX_INPUT_LINE_ITEMS: u32 = 50;
+/// Hard ceiling on the number of records processed in a single storage migration step.
+pub const MAX_MIGRATION_STEP_LIMIT: u32 = 50;
 
 // ─── Per-address mutation rate limiter (#2439) ──────────────────────────────
 // A simple sliding-window counter keyed on (address, ledger_sequence).

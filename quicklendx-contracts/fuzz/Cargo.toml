@@ -4,21 +4,31 @@ version = "0.0.0"
 edition = "2021"
 publish = false
 
+[package.metadata]
+cargo-fuzz = true
+
 [[bin]]
-name = "contracttype_roundtrip"
-path = "fuzz_targets/contracttype_roundtrip.rs"
+name = "accept_bid_and_fund"
+path = "fuzz_targets/accept_bid_and_fund.rs"
 test = false
 doc = false
 
 [[bin]]
-name = "validate_fuzzer"
-path = "validate_fuzzer.rs"
+name = "settlement"
+path = "fuzz_targets/settlement.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "paged_queries"
+path = "fuzz_targets/paged_queries.rs"
 test = false
 doc = false
 
 [dependencies]
+arbitrary = { version = "1.3.2", features = ["derive"] }
 libfuzzer-sys = "0.4"
-soroban-sdk = { version = "25.1.1", features = ["alloc"] }
+soroban-sdk = { version = "25.1.1", features = ["alloc", "testutils"] }
 
 [dependencies.quicklendx-contracts]
 path = ".."
