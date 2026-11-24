@@ -465,6 +465,8 @@ mod test_id_stability;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
 #[cfg(all(test, feature = "legacy-tests"))]
+mod test_idempotency;
+#[cfg(test)]
 mod test_incident;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
