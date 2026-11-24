@@ -291,6 +291,10 @@ pub enum QuickLendXError {
     /// The upgrade can only be executed after scheduled_at + UPGRADE_DELAY_SECS.
     /// BREAKING: Do not renumber this variant. public ABI consumption.
     UpgradeTimelockNotElapsed = 2222,
+    /// The arbiter quorum must be at least one.
+    InvalidDisputeQuorum = 2223,
+    /// The same arbiter cannot vote twice on a dispute.
+    DuplicateArbiterVote = 2224,
 }
 
 impl From<QuickLendXError> for Symbol {
@@ -415,6 +419,8 @@ impl From<QuickLendXError> for Symbol {
             QuickLendXError::MutationLimitExceeded => symbol_short!("MUT_LIM"),
             QuickLendXError::InputTooLarge => symbol_short!("IN_TOO_L"),
             QuickLendXError::UpgradeTimelockNotElapsed => symbol_short!("UPG_TLK"),
+            QuickLendXError::InvalidDisputeQuorum => symbol_short!("DSP_QRM"),
+            QuickLendXError::DuplicateArbiterVote => symbol_short!("DSP_VOTE"),
         }
     }
 }

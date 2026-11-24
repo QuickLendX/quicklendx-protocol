@@ -143,6 +143,15 @@ pub struct PaymentRecord {
     pub transaction_id: String,
 }
 
+/// One registered arbiter's vote on a dispute resolution.
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DisputeVote {
+    pub arbiter: Address,
+    pub outcome: DisputeResolution,
+    pub timestamp: u64,
+}
+
 /// Dispute data structure
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -155,6 +164,9 @@ pub struct Dispute {
     pub resolved_by: Address,
     pub resolved_at: u64,
     pub resolution_outcome: DisputeResolution,
+    /// Arbiter votes for the dispute. Empty for disputes created before quorum
+    /// storage was enabled and for the default quorum-1 lifecycle.
+    pub votes: Vec<DisputeVote>,
 }
 
 /// Invoice rating structure

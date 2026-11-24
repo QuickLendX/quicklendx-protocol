@@ -275,6 +275,7 @@ fn test_legacy_data_survives_migration() {
             resolved_by: Address::generate(&env),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(env),
         },
         total_paid: 0,
         payment_history: Vec::new(&env),

@@ -5,7 +5,9 @@ use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
 use crate::resolution_policy::{EscrowEffect, InvoiceEffect, InvestmentEffect, ResolutionPolicy};
 use crate::storage::{DataKey, InvoiceStorage};
-use crate::types::{Dispute, DisputeResolution, DisputeStatus, InvoiceStatus, InvestmentStatus};
+use crate::types::{
+    Dispute, DisputeResolution, DisputeStatus, DisputeVote, InvoiceStatus, InvestmentStatus,
+};
 use crate::verification::{
     validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
     validate_dispute_resolution,
@@ -248,6 +250,7 @@ pub fn create_dispute(
         resolved_by: creator.clone(), // Placeholder — overwritten on resolution
         resolved_at: 0,
         resolution_outcome: DisputeResolution::None,
+        votes: Vec::new(env),
     };
 
     InvoiceStorage::update_invoice(env, &invoice);
@@ -363,46 +366,14 @@ pub fn resolve_dispute(
     invoice_id: &BytesN<32>,
     resolution: &String,
 ) -> Result<(), QuickLendXError> {
-    AdminStorage::require_admin(env, admin)?;
-    // Arbiter gate: even an admin cannot resolve a dispute unless they have
-    // been explicitly registered as an arbiter. Splits dispute-adjudication
-    // authority from protocol-configuration authority so that a single
-    // compromised admin key cannot silently drain disputed escrow.
-    ArbiterStorage::require_dispute_arbiter(env, admin)?;
-
     validate_dispute_resolution(resolution)?;
-
-    let mut invoice =
-        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-
-    // Guard: only UnderReview disputes may be resolved.
-    // This single check simultaneously prevents:
-    //   • resolving a Disputed invoice (review step not taken)
-    //   • double-resolving a Resolved invoice (terminal state guard)
-    //   • resolving a None invoice (no dispute exists)
-    if invoice.dispute_status != DisputeStatus::UnderReview {
-        return Err(QuickLendXError::DisputeNotUnderReview);
-    }
-
-    invoice.dispute_status = DisputeStatus::Resolved;
-    invoice.dispute.resolution = resolution.clone();
-    invoice.dispute.resolved_by = admin.clone();
-    invoice.dispute.resolved_at = env.ledger().timestamp();
-    invoice.dispute.resolution_outcome = DisputeResolution::Split;
-    InvoiceStorage::update_invoice(env, &invoice);
-
-    // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
-    let _ = crate::notifications::NotificationSystem::notify_dispute_resolved(env, &invoice);
-
-    // Enact the outcome. A free-text ruling is deliberately mapped to
-    // `Split` (funds held, settlement/default blocked pending admin
-    // follow-up) instead of a release: the platform must never infer
-    // "release to business" from unstructured text — an arbiter who wants
-    // a release must call `resolve_dispute_structured` with an explicit
-    // outcome (issue #2963).
-    apply_resolution_policy(env, invoice_id, DisputeResolution::Split)?;
-
-    Ok(())
+    record_resolution_vote(
+        env,
+        admin,
+        invoice_id,
+        DisputeResolution::Split,
+        resolution,
+    )
 }
 
 /// Finalize a dispute with a structured resolution outcome.
@@ -441,37 +412,58 @@ pub fn resolve_dispute_structured(
     outcome: DisputeResolution,
     note: &String,
 ) -> Result<(), QuickLendXError> {
-    AdminStorage::require_admin(env, admin)?;
-    // See `resolve_dispute` — the structured variant shares the same arbiter
-    // gate so both resolution paths are defended equally.
-    ArbiterStorage::require_dispute_arbiter(env, admin)?;
-
     validate_dispute_resolution(note)?;
+    record_resolution_vote(env, admin, invoice_id, outcome, note)
+}
+
+fn record_resolution_vote(
+    env: &Env,
+    arbiter: &Address,
+    invoice_id: &BytesN<32>,
+    outcome: DisputeResolution,
+    note: &String,
+) -> Result<(), QuickLendXError> {
+    ArbiterStorage::require_dispute_arbiter(env, arbiter)?;
 
     let mut invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-
-    // Guard: only UnderReview disputes may be resolved.
     if invoice.dispute_status != DisputeStatus::UnderReview {
         return Err(QuickLendXError::DisputeNotUnderReview);
+    }
+
+    if invoice.dispute.votes.iter().any(|vote| vote.arbiter == *arbiter) {
+        return Err(QuickLendXError::DuplicateArbiterVote);
+    }
+
+    invoice.dispute.votes.push_back(DisputeVote {
+        arbiter: arbiter.clone(),
+        outcome,
+        timestamp: env.ledger().timestamp(),
+    });
+    crate::events::dispute_arbiter_voted(env, invoice_id, arbiter, outcome);
+
+    let quorum = ArbiterStorage::get_dispute_quorum(env);
+    let mut outcome_votes = 0u32;
+    for vote in invoice.dispute.votes.iter() {
+        if vote.outcome == outcome {
+            outcome_votes += 1;
+        }
+    }
+
+    if outcome_votes < quorum {
+        InvoiceStorage::update_invoice(env, &invoice);
+        return Ok(());
     }
 
     invoice.dispute_status = DisputeStatus::Resolved;
     invoice.dispute.resolution = note.clone();
     invoice.dispute.resolution_outcome = outcome;
-    invoice.dispute.resolved_by = admin.clone();
+    invoice.dispute.resolved_by = arbiter.clone();
     invoice.dispute.resolved_at = env.ledger().timestamp();
     InvoiceStorage::update_invoice(env, &invoice);
 
-    // Lifecycle trigger: emits dispute-resolved notifications to business and investor.
     let _ = crate::notifications::NotificationSystem::notify_dispute_resolved(env, &invoice);
-
-    // Enact the recorded outcome atomically: escrow, invoice and
-    // investment transitions follow `ResolutionPolicy::for_outcome`
-    // (issue #2963). Any error below aborts the whole invocation, so the
-    // outcome can never be stored without its consequences applied.
     apply_resolution_policy(env, invoice_id, outcome)?;
-
     Ok(())
 }
 

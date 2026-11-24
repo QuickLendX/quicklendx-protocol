@@ -66,6 +66,7 @@ fn make_invoice(env: &Env, idx: u32) -> Invoice {
             resolved_by: Address::generate(env),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(env),
         },
         total_paid: 0,
         payment_history: soroban_sdk::Vec::new(env),
@@ -250,6 +251,7 @@ fn test_invoice_storage() {
             resolved_by: Address::generate(&env),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(&env),
         };
 
         let invoice = Invoice {
@@ -582,6 +584,7 @@ fn create_test_invoice(env: &Env, id: BytesN<32>, business: Address) -> Invoice 
         resolved_by: Address::generate(env),
         resolved_at: 0,
         resolution_outcome: DisputeResolution::None,
+        votes: Vec::new(env),
     };
 
     Invoice {
@@ -861,6 +864,8 @@ fn create_complex_invoice(env: &Env) -> Invoice {
         resolution: String::from_str(env, "Resolved amicably"),
         resolved_by: Address::generate(env),
         resolved_at: 1234567950,
+        resolution_outcome: DisputeResolution::None,
+        votes: Vec::new(env),
     };
 
     Invoice {
@@ -982,6 +987,7 @@ fn test_maximum_values(env: &Env) {
             resolved_by: Address::generate(env),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(env),
         },
         total_paid: 0,
         payment_history: Vec::new(env),
