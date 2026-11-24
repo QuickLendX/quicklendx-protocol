@@ -219,3 +219,8 @@ Any renaming of these strings requires an explicit migration — see `src/storag
 - Source: `src/init.rs` (`PROTOCOL_VERSION`, `get_version`, `initialize`)
 - Source: `src/backup.rs` (`get_backup`, `Backup::from_v1`, `verify_backup_version`)
 - Source: `src/analytics.rs` (`ANALYTICS_SCHEMA_VERSION`)
+
+
+## Contract entrypoints for scheduled upgrades
+
+The Soroban contract exposes `schedule_upgrade(admin, wasm_hash)`, `get_pending_upgrade()`, `cancel_upgrade(admin)`, and `execute_upgrade(admin)` through the `QuickLendXContract` client interface. Scheduling is restricted to the current admin and applies the existing 48-hour timelock. Execution before `scheduled_at + UPGRADE_DELAY_SECS` returns `UpgradeTimelockNotElapsed`. Cancellation and execution clear the pending-upgrade record and restore the pause state that existed before scheduling. Read the pending hash and scheduling timestamp with `get_pending_upgrade`; it returns `None` when no upgrade is pending.
