@@ -79,8 +79,6 @@ fn create_invoice(
         &InvoiceCategory::Services,
         &Vec::new(env),
         &None,
-        &None,
-        &None,
     );
     client.verify_invoice(&invoice_id);
     invoice_id
@@ -94,13 +92,29 @@ fn create_and_place_bid(
     bid_amount: i128,
     expected_return: i128,
 ) -> BytesN<32> {
-    client.place_bid(
+    let bid_id = client.place_bid(
         investor,
         invoice_id,
         &bid_amount,
         &expected_return,
         &BytesN::from_array(env, &[0u8; 32]),
-    )
+    );
+    // `place_bid` stores the bid and maintains the investor/global indexes but
+    // does not add it to the per-invoice index. The counters and cleanup
+    // helpers under test read that index, so populate it the same way the
+    // production acceptance path does. See the PR description for the
+    // corresponding production-code finding.
+    env.as_contract(&client.address, || {
+        BidStorage::add_bid_to_invoice(env, invoice_id, &bid_id);
+    });
+    bid_id
+}
+
+/// Configure the bid expiry grace window inside the contract storage context.
+fn set_bid_expiry_grace(env: &Env, contract_id: &Address, admin: &Address, seconds: u64) {
+    env.as_contract(contract_id, || {
+        BidStorage::set_bid_expiry_grace_seconds(env, admin, seconds).unwrap();
+    });
 }
 
 /// Overwrite a bid's expiration timestamp inside the contract storage context.
@@ -133,7 +147,7 @@ fn expired_bid_not_active_during_grace() {
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100_000_000);
 
-    client.set_bid_expiry_grace_seconds(&86_400u64);
+    set_bid_expiry_grace(&env, &client.address, &admin, 86_400);
     let invoice_id = create_invoice(
         &env,
         &client,
@@ -163,7 +177,14 @@ fn expired_bid_not_active_during_grace() {
 fn counters_agree() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
-    let investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    // The contract rejects multiple live bids from the same investor on one
+    // invoice, so use one investor per bid while keeping a single invoice.
+    let live1_investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    let live2_investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    let live3_investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    let stale1_investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    let stale2_investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    let expired_investor = create_verified_investor(&env, &client, &admin, 100_000_000);
     let invoice_id = create_invoice(
         &env,
         &client,
@@ -173,12 +194,12 @@ fn counters_agree() {
         env.ledger().timestamp() + 86400 * 30,
     );
 
-    let live1 = create_and_place_bid(&env, &client, &investor, &invoice_id, 25_000, 25_250);
-    let live2 = create_and_place_bid(&env, &client, &investor, &invoice_id, 30_000, 30_300);
-    let live3 = create_and_place_bid(&env, &client, &investor, &invoice_id, 35_000, 35_350);
+    let live1 = create_and_place_bid(&env, &client, &live1_investor, &invoice_id, 25_000, 25_250);
+    let live2 = create_and_place_bid(&env, &client, &live2_investor, &invoice_id, 30_000, 30_300);
+    let live3 = create_and_place_bid(&env, &client, &live3_investor, &invoice_id, 35_000, 35_350);
 
-    let stale1 = create_and_place_bid(&env, &client, &investor, &invoice_id, 40_000, 40_400);
-    let stale2 = create_and_place_bid(&env, &client, &investor, &invoice_id, 45_000, 45_450);
+    let stale1 = create_and_place_bid(&env, &client, &stale1_investor, &invoice_id, 40_000, 40_400);
+    let stale2 = create_and_place_bid(&env, &client, &stale2_investor, &invoice_id, 45_000, 45_450);
 
     let now = env.ledger().timestamp();
     for bid_id in [live1.clone(), live2.clone(), live3.clone()] {
@@ -188,7 +209,14 @@ fn counters_agree() {
         set_bid_expiration(&env, &client.address, &bid_id, now);
     }
 
-    let expired_bid = create_and_place_bid(&env, &client, &investor, &invoice_id, 50_000, 50_500);
+    let expired_bid = create_and_place_bid(
+        &env,
+        &client,
+        &expired_investor,
+        &invoice_id,
+        50_000,
+        50_500,
+    );
     set_bid_expiration(
         &env,
         &client.address,
@@ -199,18 +227,37 @@ fn counters_agree() {
 
     env.ledger().set_timestamp(now + 10);
 
-    let by_investor = env.as_contract(&client.address, || {
-        BidStorage::count_active_bids_by_investor(&env, &investor)
-    });
-    let placed_by_investor = env.as_contract(&client.address, || {
-        BidStorage::count_active_placed_bids_for_investor(&env, &investor)
-    });
+    // Each investor has exactly one live bid; the stale and expired bids belong
+    // to other investors and must not appear in their active counts.
+    for investor in [
+        &live1_investor,
+        &live2_investor,
+        &live3_investor,
+        &stale1_investor,
+        &stale2_investor,
+        &expired_investor,
+    ] {
+        let by_investor = env.as_contract(&client.address, || {
+            BidStorage::count_active_bids_by_investor(&env, investor)
+        });
+        let placed_by_investor = env.as_contract(&client.address, || {
+            BidStorage::count_active_placed_bids_for_investor(&env, investor)
+        });
+        let expected = if *investor == live1_investor
+            || *investor == live2_investor
+            || *investor == live3_investor
+        {
+            1
+        } else {
+            0
+        };
+        assert_eq!(by_investor, expected);
+        assert_eq!(placed_by_investor, expected);
+    }
     let active = env.as_contract(&client.address, || {
         BidStorage::get_active_bid_count(&env, &invoice_id)
     });
 
-    assert_eq!(by_investor, 3);
-    assert_eq!(placed_by_investor, 3);
     assert_eq!(active, 3);
 }
 
@@ -256,16 +303,17 @@ fn invariants_accept_boundary_expiry() {
     let (env, client, admin) = setup();
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100_000_000);
+    let expired_investor = create_verified_investor(&env, &client, &admin, 100_000_000);
     let invoice_id = create_invoice(
         &env,
         &client,
         &admin,
         &business,
-        50_000,
+        100_000,
         env.ledger().timestamp() + 86400 * 30,
     );
 
-    client.set_bid_expiry_grace_seconds(&86_400u64);
+    set_bid_expiry_grace(&env, &client.address, &admin, 86_400);
     let bid_id = create_and_place_bid(&env, &client, &investor, &invoice_id, 50_000, 50_500);
     set_bid_expiration(&env, &client.address, &bid_id, env.ledger().timestamp());
     env.ledger().set_timestamp(env.ledger().timestamp() + 10);
@@ -275,7 +323,14 @@ fn invariants_accept_boundary_expiry() {
     });
     assert!(within_grace);
 
-    let expired_id = create_and_place_bid(&env, &client, &investor, &invoice_id, 60_000, 60_600);
+    let expired_id = create_and_place_bid(
+        &env,
+        &client,
+        &expired_investor,
+        &invoice_id,
+        60_000,
+        60_600,
+    );
     set_bid_status(&env, &client.address, &expired_id, BidStatus::Expired);
     set_bid_expiration(
         &env,
