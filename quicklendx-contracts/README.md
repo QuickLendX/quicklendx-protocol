@@ -98,11 +98,11 @@ cd quicklendx-protocol/quicklendx-contracts
 # Build the contracts
 cargo build
 
-# Run tests
-cargo test
+# Run unit tests
+cargo test --lib
 
 # Run with logs for debugging
-cargo test --profile release-with-logs
+cargo test --lib --profile release-with-logs
 ```
 
 ### Basic Usage Example
@@ -1210,50 +1210,36 @@ authorization check without a real signature. **This does not weaken production
 security** — `mock_all_auths()` is only available under the `testutils` feature
 flag and has no effect in deployed WASM.
 
-### Why tests were disabled
+### Running tests
 
-Several audit-trail and dispute-resolution tests were commented out with
-`// TODO: Fix authorization issues in test environment`. The root causes were:
+The test suite uses `env.mock_all_auths()` from the `soroban-sdk` `testutils`
+feature to satisfy `require_auth()` calls without real signatures.
+**This does not affect production security** — `mock_all_auths()` is compiled
+only under `#[cfg(test)]` and has no effect in deployed WASM.
 
-1. **`upload_invoice`** calls `business.require_auth()` — tests that called it
-   without `mock_all_auths()` active would panic.
-2. **`create_dispute`** calls `creator.require_auth()` — same issue.
-3. **`set_admin`** / `verify_business` / `verify_investor` all require auth —
-   calling them before `mock_all_auths()` was set up caused failures.
-4. Some tests called `mock_all_auths()` mid-test (after the first contract call),
-   which was too late.
+#### Commands
 
-### Fix applied (PR #816)
+```bash
+# Unit tests (fast, no integration harness)
+cargo test --lib
 
-Every previously-disabled test now follows this pattern:
+# A single integration test suite by name
+cargo test --test <test_name>
 
-```rust
-#[test]
-fn test_example() {
-    let env = Env::default();
-    // Place mock_all_auths() FIRST, before any contract call.
-    // This satisfies every require_auth() check for the duration of the test
-    // without changing any production authorization logic.
-    env.mock_all_auths();
+# All tests including feature-gated suites
+cargo test --features legacy-tests
 
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
+# Property / fuzz-style tests (requires proptest)
+cargo test --features fuzz-tests
 
-    // Set up admin and KYC-verify actors before calling guarded entry points.
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
+# Tests with structured diagnostic logging
+cargo test --features diagnostics
 
-    let business = Address::generate(&env);
-    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
-    client.verify_business(&admin, &business);
-
-    // Now call the auth-gated entry point normally.
-    let invoice_id = client.upload_invoice(&business, /* ... */);
-    // ...
-}
+# Verbose output (useful for debugging failures)
+RUST_LOG=debug cargo test --lib -- --nocapture
 ```
 
-### Key rules for writing auth-aware tests
+#### `mock_all_auths()` rules
 
 | Rule | Reason |
 |------|--------|
