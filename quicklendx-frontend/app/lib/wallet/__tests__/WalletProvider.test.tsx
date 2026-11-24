@@ -20,8 +20,8 @@
 import React from "react";
 import { render, screen, act, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { WalletProvider, useWallet } from "../../WalletProvider";
-import { WalletAdapter, WalletAdapterError } from "../../types";
+import { WalletProvider, useWallet } from "../WalletProvider";
+import { WalletAdapter, WalletAdapterError } from "../types";
 
 // ---------------------------------------------------------------------------
 // Test constants
@@ -390,13 +390,13 @@ describe("createFreighterAdapter — error mapping", () => {
     }));
 
     // Verify adapter maps errors via WalletAdapterError
-    const { WalletAdapterError: WAE } = await import("../../types");
+    const { WalletAdapterError: WAE } = await import("../types");
     const err = new WAE("rejected", "User declined access");
     expect(err.code).toBe("rejected");
   });
 
   it('maps isConnected:{isConnected:false} to WalletErrorCode "not_installed"', async () => {
-    const { WalletAdapterError: WAE } = await import("../../types");
+    const { WalletAdapterError: WAE } = await import("../types");
     const err = new WAE("not_installed", "Freighter is not installed.");
     expect(err.code).toBe("not_installed");
   });
