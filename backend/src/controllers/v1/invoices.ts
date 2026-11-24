@@ -14,7 +14,7 @@ import { assertInvoiceId } from "../../lib/entityId";
 
 export const MOCK_INVOICES: any[] = [
   {
-    id: "mock-invoice-1",
+    id: "inv_01ARZ3NDEKTSV4RRFFQ69G5FAV",
     business: "mock-business",
     status: "Pending",
     created_at: "2026-06-01T00:00:00Z",
@@ -36,6 +36,29 @@ export const getInvoices = async (
     }
     if (typeof status === "string") {
       filter.status = status as InvoiceStatus;
+    }
+
+    // Tenant isolation: an authenticated caller may only ever see their own
+    // invoices. Auto-scope the business filter to the key owner; an explicit
+    // filter for a different tenant yields an empty page (no existence leak).
+    // Unauthenticated (public marketplace) reads are unchanged.
+    const tenant = req.apiKey?.created_by;
+    if (tenant) {
+      if (filter.business && filter.business !== tenant) {
+        const emptyBody = {
+          data: [],
+          next_cursor: null,
+          has_more: false,
+          freshness: freshnessService.getFreshness(),
+        };
+        if (applyCacheHeaders(req, res, { cacheControl: CC_SHORT, body: emptyBody })) {
+          res.status(304).end();
+          return;
+        }
+        res.json(emptyBody);
+        return;
+      }
+      filter.business = tenant;
     }
 
     let page;
@@ -99,7 +122,10 @@ export const getInvoiceById = async (
       }
     }
 
-    if (!invoice) {
+    // Tenant isolation: a foreign invoice is indistinguishable from a missing
+    // one (404, not 403) so resource existence is never leaked. Unauthenticated
+    // public reads are unchanged.
+    if (!invoice || (req.apiKey && invoice.business !== req.apiKey.created_by)) {
       return res.status(404).json({
         error: { message: "Invoice not found", code: "INVOICE_NOT_FOUND" },
       });

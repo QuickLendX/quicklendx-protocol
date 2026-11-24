@@ -29,7 +29,7 @@ mod test_contract_init_admin {
         }
     }
 
-    fn register(env: &Env) -> QuickLendXContractClient<'static> {
+    fn register<'a>(env: &'a Env) -> QuickLendXContractClient<'a> {
         let id = env.register(QuickLendXContract, ());
         QuickLendXContractClient::new(env, &id)
     }

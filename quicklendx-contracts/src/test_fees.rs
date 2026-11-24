@@ -1086,3 +1086,81 @@ fn test_get_fee_schedule() {
     assert_eq!(schedule.get(1).unwrap().fee_type, FeeType::Processing);
     assert_eq!(schedule.get(2).unwrap().fee_type, FeeType::Verification);
 }
+
+/// Fee and revenue operations should return StorageKeyNotFound instead of panicking before initialization
+#[test]
+fn test_fee_operations_before_init_return_storage_key_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let user = Address::generate(&env);
+
+    // get_fee_structure before fee system initialization
+    let res = client.try_get_fee_structure(&FeeType::Platform);
+    assert_eq!(
+        res.err()
+            .expect("expected error")
+            .expect("expected contract error"),
+        QuickLendXError::StorageKeyNotFound
+    );
+
+    // update_fee_structure before fee system initialization
+    let res =
+        client.try_update_fee_structure(&admin, &FeeType::Platform, &200, &100, &10_000, &true);
+    assert_eq!(
+        res.err()
+            .expect("expected error")
+            .expect("expected contract error"),
+        QuickLendXError::StorageKeyNotFound
+    );
+
+    // calculate_transaction_fees before fee system initialization
+    let res = client.try_calculate_transaction_fees(&user, &10_000, &false, &false);
+    assert_eq!(
+        res.err()
+            .expect("expected error")
+            .expect("expected contract error"),
+        QuickLendXError::StorageKeyNotFound
+    );
+
+    // distribute_revenue before revenue config initialization
+    let res = client.try_distribute_revenue(&admin, &1);
+    assert_eq!(
+        res.err()
+            .expect("expected error")
+            .expect("expected contract error"),
+        QuickLendXError::StorageKeyNotFound
+    );
+
+    // get_fee_analytics for an uninitialized period
+    let res = client.try_get_fee_analytics(&1);
+    assert_eq!(
+        res.err()
+            .expect("expected error")
+            .expect("expected contract error"),
+        QuickLendXError::StorageKeyNotFound
+    );
+}
+
+/// distribute_revenue should return StorageKeyNotFound when revenue config exists but period has no data
+#[test]
+fn test_distribute_revenue_missing_period_returns_storage_key_not_found() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    let admin = setup_admin(&env, &client);
+    let treasury = Address::generate(&env);
+
+    client.configure_revenue_distribution(&admin, &treasury, &5000, &3000, &2000, &true, &100);
+
+    let res = client.try_distribute_revenue(&admin, &999);
+    assert_eq!(
+        res.err()
+            .expect("expected error")
+            .expect("expected contract error"),
+        QuickLendXError::StorageKeyNotFound
+    );
+}
