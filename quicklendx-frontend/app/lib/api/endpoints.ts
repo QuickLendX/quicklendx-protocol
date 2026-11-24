@@ -63,8 +63,12 @@ export const RankedBidsResponseSchema = z.object({
   data: z.array(BidSchema),
 });
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
+const DEFAULT_API_BASE_URL = "http://localhost:3001/api/v1";
+
+export function getApiBaseUrl(): string {
+  const raw = process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_BASE_URL;
+  return raw.replace(/\/+$/, "");
+}
 
 export async function fetchInvoices(params?: {
   status?: string;
@@ -81,7 +85,7 @@ export async function fetchInvoices(params?: {
   if (params?.cursor) query.set("cursor", params.cursor);
   if (params?.limit) query.set("limit", String(params.limit));
 
-  const url = `${API_BASE_URL}/invoices?${query.toString()}`;
+  const url = `${getApiBaseUrl()}/invoices?${query.toString()}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to fetch invoices: HTTP ${res.status}`);
@@ -100,7 +104,7 @@ export async function fetchInvoices(params?: {
 export async function fetchInvoiceById(
   id: string
 ): Promise<z.infer<typeof ApiInvoiceSchema>> {
-  const url = `${API_BASE_URL}/invoices/${encodeURIComponent(id)}`;
+  const url = `${getApiBaseUrl()}/invoices/${encodeURIComponent(id)}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new Error(`Failed to fetch invoice ${id}: HTTP ${res.status}`);
@@ -117,7 +121,7 @@ export async function fetchInvoiceById(
 export async function fetchBestBid(
   invoiceId: string
 ): Promise<z.infer<typeof BidSchema> | null> {
-  const url = `${API_BASE_URL}/bids/${encodeURIComponent(invoiceId)}/best`;
+  const url = `${getApiBaseUrl()}/bids/${encodeURIComponent(invoiceId)}/best`;
   const res = await fetch(url);
   if (res.status === 404) {
     return null;
@@ -135,7 +139,7 @@ export async function fetchBestBid(
 export async function fetchRankedBids(
   invoiceId: string
 ): Promise<z.infer<typeof BidSchema>[]> {
-  const url = `${API_BASE_URL}/bids/${encodeURIComponent(invoiceId)}/ranked`;
+  const url = `${getApiBaseUrl()}/bids/${encodeURIComponent(invoiceId)}/ranked`;
   const res = await fetch(url);
   if (res.status === 404) {
     return [];
