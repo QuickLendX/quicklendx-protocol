@@ -830,12 +830,43 @@ use crate::admin::AdminStorage;
 use crate::arbiter::ArbiterStorage;
 use crate::errors::QuickLendXError;
 use crate::pause::PauseControl;
-use crate::protocol_limits::check_and_record_mutation;
+use crate::protocol_limits::{
+    check_and_record_mutation, require_description_bound, require_line_items_bound,
+    require_status_batch_bound, require_tags_bound,
+};
 use crate::reentrancy::with_payment_guard;
 use crate::storage::InvoiceStorage;
 use crate::types::{
-    Dispute, DisputeResolution, DisputeStatus, Investment, InvoiceCategory, InvoiceStatus,
+    Dispute, DisputeResolution, DisputeStatus, Investment, InvoiceCategory, InvoiceLock,
+    InvoiceMetadata, InvoiceStatus,
 };
+
+/// Load an invoice for a state-changing call made by its owning business.
+///
+/// Existence, ownership and the owner's signature are verified first and the
+/// mutation quota is charged last, so unauthorised calls fail fast. This
+/// helper calls `require_auth` for `business`; callers must not authenticate
+/// the same address again within the same invocation (Soroban rejects a
+/// duplicate `require_auth`). Frozen invoices reject writes (with
+/// `InvoiceLockExpired` once the lock outlives the lock-time limit).
+fn load_invoice_for_owner_write(
+    env: &Env,
+    business: &Address,
+    invoice_id: &BytesN<32>,
+) -> Result<crate::types::Invoice, QuickLendXError> {
+    PauseControl::require_not_paused(env)?;
+    let invoice =
+        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    crate::invoice::require_matching_business_invoice_ownership(env, business, &invoice)?;
+    business.require_auth();
+    if InvoiceStorage::is_frozen(env, invoice_id) {
+        InvoiceStorage::require_lock_within_time_limit(env, invoice_id)?;
+        return Err(QuickLendXError::InvoiceFrozen);
+    }
+    check_and_record_mutation(env, business)?;
+    Ok(invoice)
+}
+
 
 #[contract]
 pub struct QuickLendXContract;
@@ -1201,6 +1232,169 @@ impl QuickLendXContract {
         crate::analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
     pub fn get_total_invoice_count(env: Env) -> u32 {
         InvoiceStorage::get_total_count(&env) as u32
+    }
+
+    // =========================================================================
+    // Invoice management: upload, tags, category, metadata, lock, queries
+    // =========================================================================
+
+    /// Upload an invoice with explicit fee settings.
+    ///
+    /// Equivalent to [`Self::store_invoice`] but also accepts the late-payment
+    /// penalty and early-payment discount. Oversize descriptions or tag vectors
+    /// are rejected with `InputTooLarge` before any state is touched.
+    #[allow(clippy::too_many_arguments)]
+    pub fn upload_invoice(
+        env: Env,
+        business: Address,
+        amount: i128,
+        currency: Address,
+        due_date: u64,
+        description: String,
+        category: InvoiceCategory,
+        tags: Vec<String>,
+        origination_fee_bps: Option<u32>,
+        late_payment_penalty_bps: Option<u32>,
+        early_payment_discount_bps: Option<u32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        business.require_auth();
+        require_description_bound(&description)?;
+        require_tags_bound(&tags)?;
+        check_and_record_mutation(&env, &business)?;
+        crate::verification::require_business_not_pending(&env, &business)?;
+        crate::invoice_amount::validate_invoice_amount_ceiling(amount)?;
+        crate::protocol_limits::check_invoice_limit(&env, &business)?;
+        let invoice = crate::invoice::Invoice::new_with_fee_settings(
+            &env,
+            business,
+            amount,
+            currency,
+            due_date,
+            description,
+            category,
+            tags,
+            origination_fee_bps,
+            late_payment_penalty_bps,
+            early_payment_discount_bps,
+        )?;
+        let id = invoice.id.clone();
+        InvoiceStorage::store_invoice(&env, &invoice);
+        Ok(id)
+    }
+
+    /// Add a (normalised) tag to an invoice owned by `business`.
+    pub fn add_invoice_tag(
+        env: Env,
+        business: Address,
+        invoice_id: BytesN<32>,
+        tag: String,
+    ) -> Result<(), QuickLendXError> {
+        let mut invoice = load_invoice_for_owner_write(&env, &business, &invoice_id)?;
+        invoice.add_tag(&env, tag)?;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// Remove a tag from an invoice owned by `business`.
+    pub fn remove_invoice_tag(
+        env: Env,
+        business: Address,
+        invoice_id: BytesN<32>,
+        tag: String,
+    ) -> Result<(), QuickLendXError> {
+        let mut invoice = load_invoice_for_owner_write(&env, &business, &invoice_id)?;
+        invoice.remove_tag(tag)?;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// Change the category of an invoice owned by `business`.
+    pub fn update_invoice_category(
+        env: Env,
+        business: Address,
+        invoice_id: BytesN<32>,
+        category: InvoiceCategory,
+    ) -> Result<(), QuickLendXError> {
+        let mut invoice = load_invoice_for_owner_write(&env, &business, &invoice_id)?;
+        invoice.update_category(category);
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// Replace the metadata of an invoice owned by `caller`.
+    pub fn update_invoice_metadata(
+        env: Env,
+        caller: Address,
+        invoice_id: BytesN<32>,
+        metadata: InvoiceMetadata,
+    ) -> Result<(), QuickLendXError> {
+        require_line_items_bound(&metadata.line_items)?;
+        require_description_bound(&metadata.notes)?;
+        let mut invoice = load_invoice_for_owner_write(&env, &caller, &invoice_id)?;
+        // Ownership and auth were already enforced by the helper above.
+        invoice.set_metadata(&env, Some(metadata))?;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// Remove all metadata from an invoice owned by `caller`.
+    pub fn clear_invoice_metadata(
+        env: Env,
+        caller: Address,
+        invoice_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        let mut invoice = load_invoice_for_owner_write(&env, &caller, &invoice_id)?;
+        // Ownership and auth were already enforced by the helper above.
+        invoice.set_metadata(&env, None)?;
+        InvoiceStorage::update_invoice(&env, &invoice);
+        Ok(())
+    }
+
+    /// Admin-only: set or clear the hold on an invoice.
+    pub fn set_invoice_lock(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+        lock: InvoiceLock,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin_auth(&env, &admin)?;
+        InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        InvoiceStorage::set_invoice_lock(&env, &invoice_id, lock);
+        Ok(())
+    }
+
+    pub fn get_invoice_lock(env: Env, invoice_id: BytesN<32>) -> InvoiceLock {
+        InvoiceStorage::get_invoice_lock(&env, &invoice_id)
+    }
+
+    /// Invoices whose metadata customer name equals `customer_name`.
+    pub fn get_invoices_by_customer(env: Env, customer_name: String) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_by_customer(&env, &customer_name)
+    }
+
+    /// Invoices whose metadata tax id equals `tax_id`.
+    pub fn get_invoices_by_tax_id(env: Env, tax_id: String) -> Vec<BytesN<32>> {
+        InvoiceStorage::get_by_tax_id(&env, &tax_id)
+    }
+
+    /// Status of each requested invoice, in request order (`None` if unknown).
+    /// Requests larger than the status-batch bound fail with `InputTooLarge`.
+    pub fn get_invoices_by_status_batch(
+        env: Env,
+        ids: Vec<BytesN<32>>,
+    ) -> Result<Vec<Option<InvoiceStatus>>, QuickLendXError> {
+        require_status_batch_bound(&ids)?;
+        let mut statuses = Vec::new(&env);
+        for id in ids.iter() {
+            statuses.push_back(InvoiceStorage::get_invoice(&env, &id).map(|i| i.status));
+        }
+        Ok(statuses)
+    }
+
+    /// Number of invoices currently indexed under `status`.
+    pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
+        InvoiceStorage::get_invoices_by_status(&env, status).len()
     }
 
     // =========================================================================

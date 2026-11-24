@@ -219,6 +219,63 @@ Every entrypoint is a thin wrapper; validation, auth and events live in the modu
 | `get_backup_details(backup_id: BytesN<32>)` | `BackupStorage::get_backup` | - |
 | `validate_backup(backup_id: BytesN<32>)` | `BackupStorage::validate_backup` | - |
 | `preview_cleanup_backups()` | `BackupStorage::preview_cleanup_old_backups` | - |
+| `initialize(params: InitializationParams)` | `ProtocolInitializer::initialize` | `params.admin` (once) |
+| `is_initialized()` | `ProtocolInitializer::is_initialized` | — |
+| `get_version()` | `ProtocolInitializer::get_version` | — |
+| `get_protocol_config()` | `ProtocolInitializer::get_protocol_config` | — |
+| `preview_protocol_config(admin, params: ProtocolConfigParams)` | `ProtocolInitializer::preview_protocol_config` | admin (read-only) |
+| `set_protocol_config(admin, min_invoice_amount, max_due_date_days, grace_period_seconds, backfill_max_batch_size)` | `ProtocolInitializer::set_protocol_config` | admin |
+| `set_fee_config(admin, fee_bps)` | `ProtocolInitializer::set_fee_config` | admin |
+| `set_treasury(admin, treasury)` | `ProtocolInitializer::set_treasury` | admin |
+| `get_fee_bps()` | `ProtocolInitializer::get_fee_bps` | — |
+| `get_treasury()` | `ProtocolInitializer::get_treasury` | — |
+| `get_min_invoice_amount()` | `ProtocolInitializer::get_min_invoice_amount` | — |
+| `get_max_due_date_days()` | `ProtocolInitializer::get_max_due_date_days` | — |
+| `get_grace_period_seconds()` | `ProtocolInitializer::get_grace_period_seconds` | — |
+| `get_corridors()` | `ProtocolInitializer::get_corridors` | — |
+| `get_current_admin()` | `AdminStorage::get_admin` | — |
+| `transfer_admin(current_admin, new_admin)` | `AdminStorage::transfer_admin` (records a pending transfer when two-step is on) | current admin |
+| `initiate_admin_transfer(current_admin, pending_admin)` | `AdminStorage::initiate_admin_transfer` | current admin |
+| `accept_admin_transfer(pending_admin)` | `AdminStorage::accept_admin_transfer` | pending admin |
+| `cancel_admin_transfer(current_admin)` | `AdminStorage::cancel_admin_transfer` | current admin |
+| `set_two_step_enabled(admin, enabled)` | `AdminStorage::set_two_step_enabled` | admin |
+| `is_two_step_enabled()` | `AdminStorage::is_two_step_enabled` | — |
+| `get_pending_admin()` | `AdminStorage::get_pending_admin` | — |
+| `store_invoice(business, amount, currency, due_date, description, category, tags, origination_fee_bps, late_payment_penalty_bps, early_payment_discount_bps, nonce)` | `Invoice::new` + `InvoiceStorage::store_invoice` (see order of checks below) | business |
+| `upload_invoice(business, amount, currency, due_date, description, category, tags, origination_fee_bps, late_payment_penalty_bps, early_payment_discount_bps)` | Bound checks (`require_description_bound`, `require_tags_bound`) + `Invoice::new_with_fee_settings` + `InvoiceStorage::store_invoice` | business |
+| `set_invoice_lock(admin, invoice_id, lock)` | `InvoiceStorage::set_invoice_lock`; the invoice must exist | admin (`require_admin_auth`) |
+| `get_invoice_lock(invoice_id)` | `InvoiceStorage::get_invoice_lock` | — |
+| `get_invoice(invoice_id)` | `InvoiceStorage::get` | — |
+| `get_business_invoices(business)` | `InvoiceStorage::get_business_invoices` | — |
+| `get_invoices_by_status(status)` | `InvoiceStorage::get_invoices_by_status` | — |
+| `get_total_invoice_count()` | `InvoiceStorage::get_total_count` | — |
+| `get_invoice_count_by_status(status)` | status index length | — |
+| `get_invoices_by_customer(customer_name)` | `InvoiceStorage::get_by_customer` | — |
+| `get_invoices_by_tax_id(tax_id)` | `InvoiceStorage::get_by_tax_id` | — |
+| `get_invoices_by_status_batch(invoice_ids)` | status per ID, at most `MAX_INPUT_STATUS_BATCH_SIZE` IDs | — |
+| `verify_invoice(admin, invoice_id)` | `Invoice::verify` | admin (`require_admin_auth`) |
+| `update_invoice_metadata(business, invoice_id, metadata)` | `Invoice::update_metadata` | business (inside `Invoice`) |
+| `clear_invoice_metadata(business, invoice_id)` | `Invoice::clear_metadata` | business (inside `Invoice`) |
+| `add_invoice_tag(business, invoice_id, tag)` | `Invoice::add_tag` | business (wrapper, after ownership check) |
+| `remove_invoice_tag(business, invoice_id, tag)` | `Invoice::remove_tag` | business (wrapper, after ownership check) |
+| `update_invoice_category(business, invoice_id, category)` | `Invoice::update_category` | business (wrapper, after ownership check) |
+
+`initialize` succeeds once. Repeating it with identical params returns `Ok(())`;
+any other params return `OperationNotAllowed`. There is no standalone
+`initialize_admin`: the admin is installed only by `initialize`. If a
+deployment already has an admin from an older flow, only that admin can
+complete `initialize`.
+
+`store_invoice` checks, in order: the business signature; idempotency (the key
+is `sha256("inv_create" || business || nonce)`, so a repeated
+`(business, nonce)` returns the original ID and another business reusing the
+nonce gets its own invoice); the per-address rate limit and input size bounds;
+KYC, regulatory, currency whitelist and protocol limits (minimum amount, due
+date horizon, invoices per business); `Invoice::new`; storage; the
+`invoice_uploaded` event, the audit entry and the notification; and finally
+the idempotency record. Invoice IDs come from `Invoice::new`, which mixes the
+ledger timestamp, sequence and a monotonic counter, so invoices created in the
+same ledger get distinct IDs.
 
 ### Core Functions
 
