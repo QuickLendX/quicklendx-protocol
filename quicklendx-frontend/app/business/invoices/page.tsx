@@ -138,7 +138,7 @@ const BusinessInvoicesView: React.FC = () => {
   };
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-5xl mx-auto space-y-6">
         {/* Header */}
         <header className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
@@ -267,7 +267,7 @@ const BusinessInvoicesView: React.FC = () => {
           </>
         )}
       </div>
-    </main>
+    </div>
   );
 };
 
@@ -275,11 +275,11 @@ export default function BusinessInvoicesPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8">
+        <div className="min-h-screen bg-[#F8FAFC] py-12 px-4 sm:px-6 lg:px-8">
           <div className="max-w-5xl mx-auto">
             <p className="text-sm text-[#64748B]">Loading invoices…</p>
           </div>
-        </main>
+        </div>
       }
     >
       <BusinessInvoicesView />

@@ -116,7 +116,7 @@ export default function BusinessInvoiceDetailPage() {
 
   if (invoiceNotFound) {
     return (
-      <main className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto space-y-6">
           <Link
             href="/business/invoices"
@@ -136,13 +136,13 @@ export default function BusinessInvoiceDetailPage() {
             </p>
           </section>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (loading) {
     return (
-      <main className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
         <div
           role="status"
           aria-busy="true"
@@ -160,13 +160,13 @@ export default function BusinessInvoiceDetailPage() {
           />
           <span className="sr-only">Loading invoice details…</span>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (error || !invoice) {
     return (
-      <main className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-4xl mx-auto space-y-6">
           <Link
             href="/business/invoices"
@@ -184,7 +184,7 @@ export default function BusinessInvoiceDetailPage() {
             <p className="mt-1">{error || "Unknown error occurred."}</p>
           </div>
         </div>
-      </main>
+      </div>
     );
   }
 
@@ -196,7 +196,7 @@ export default function BusinessInvoiceDetailPage() {
   const primarySettlement = settlements[0];
 
   return (
-    <main className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-[#F8FAFC] py-8 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto space-y-6">
         <Link
           href="/business/invoices"
@@ -410,6 +410,6 @@ export default function BusinessInvoiceDetailPage() {
           </>
         )}
       </div>
-    </main>
+    </div>
   );
 }

@@ -238,7 +238,8 @@ mod test_fuzz_currency_whitelist {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Property: deterministic replay under churn
+    // Property: deterministic replay under churn of add/remove/set/clear.
+    // After every action, live contract state must match model replay.
     // ─────────────────────────────────────────────────────────────────────────
 
     proptest! {
@@ -248,10 +249,7 @@ mod test_fuzz_currency_whitelist {
                 config.rng_algorithm = proptest::test_runner::RngAlgorithm::ChaCha;
             }
             config
-        })] of add/remove/set/clear, the live
-        /// contract state equals the deterministic replay of the same actions,
-        /// and `is_allowed_currency`/`currency_count` answer correctly after
-        /// every single step.
+        })]
         #[test]
         fn fuzz_whitelist_churn_matches_model(actions in sequence_strategy()) {
             let (env, client, admin, pool) = setup();
