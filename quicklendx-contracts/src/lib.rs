@@ -708,6 +708,30 @@ impl QuickLendXContract {
         PauseControl::is_paused(&env)
     }
 
+    /// Schedule a WASM upgrade. Only the current admin may schedule it.
+    pub fn schedule_upgrade(
+        env: Env,
+        admin: Address,
+        wasm_hash: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::schedule_upgrade(&env, &admin, &wasm_hash)
+    }
+
+    /// Cancel a scheduled WASM upgrade and restore the previous pause state.
+    pub fn cancel_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::cancel_upgrade(&env, &admin)
+    }
+
+    /// Execute a scheduled WASM upgrade after its timelock has elapsed.
+    pub fn execute_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::execute_upgrade(&env, &admin)
+    }
+
+    /// Read the pending upgrade hash and its scheduling timestamp.
+    pub fn get_pending_upgrade(env: Env) -> Option<(BytesN<32>, u64)> {
+        crate::upgrade::UpgradeControl::get_pending_upgrade(&env)
+    }
+
     // =========================================================================
     // KYC / Verification
     // =========================================================================
@@ -717,6 +741,7 @@ impl QuickLendXContract {
         business: Address,
         kyc_data: String,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         check_and_record_mutation(&env, &business)?;
         crate::verification::submit_kyc_application(&env, &business, kyc_data)
     }
@@ -726,6 +751,7 @@ impl QuickLendXContract {
         admin: Address,
         business: Address,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         crate::verification::verify_business(&env, &admin, &business)
     }
 
@@ -734,6 +760,7 @@ impl QuickLendXContract {
         investor: Address,
         kyc_data: String,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         check_and_record_mutation(&env, &investor)?;
         crate::verification::submit_investor_kyc(&env, &investor, kyc_data)
     }
@@ -741,6 +768,7 @@ impl QuickLendXContract {
     /// Verify investor with investment limit. Admin is read from storage
     /// (matches test usage: `client.verify_investor(investor, limit)`).
     pub fn verify_investor(env: Env, investor: Address, limit: i128) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         crate::verification::verify_investor(&env, &admin, &investor, limit)?;
         Ok(())
