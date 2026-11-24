@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { buildCspHeader } from "./app/lib/security/csp";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -31,6 +32,7 @@ const nextConfig: NextConfig = {
             key: "Referrer-Policy",
             value: "strict-origin-when-cross-origin",
           },
+          buildCspHeader(process.env),
         ],
       },
     ];

@@ -113,6 +113,13 @@ Status indexes are updated via explicit `remove_from_status_invoices` and `add_t
 - Every indexed invoice exists in primary storage
 - Every invoice's stored status matches its index membership
 
+### Held-Reserve vs. Escrow-Sum Reconciliation (`held_reserve_matches_escrows`)
+
+Included in `run_invariant_checks` / `invariant_self_check`, this read-only check reconciles `EscrowStorage::get_held_reserve(env, &currency)` against the sum of all `EscrowStatus::Held` escrows for each whitelisted currency:
+- Scans whitelisted currencies and invoices in bounded pages (up to 100 currencies and 1,000 invoices) to stay within Soroban execution limits, failing closed if bounds are exceeded.
+- Checks `EscrowStorage::is_held_reserve_complete(env, &currency)` and includes completeness context in the `InvariantCheck.evidence` string.
+- Fails immediately if any whitelisted currency's stored reserve disagrees with the summed `Held` escrows, signaling operators to run `repair_held_reserve_page`.
+
 ## Data Provider Interface
 
 The suite decouples data access from check logic via `InvariantDataProvider`:
