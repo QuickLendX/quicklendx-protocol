@@ -774,10 +774,12 @@ impl QuickLendXContract {
     }
 
     pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         crate::fees::FeeManager::initialize(&env, &admin)
     }
 
     pub fn update_platform_fee_bps(env: Env, fee_bps: u32) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         crate::fees::FeeManager::update_platform_fee(&env, &admin, fee_bps)
     }
@@ -804,19 +806,46 @@ impl QuickLendXContract {
     }
 
     pub fn initialize_protocol_limits(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         crate::protocol_limits::ProtocolLimitsContract::initialize(env, admin)
     }
 
     pub fn pause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         PauseControl::set_paused(&env, &admin, true)
     }
 
     pub fn unpause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         PauseControl::set_paused(&env, &admin, false)
     }
 
     pub fn is_paused(env: Env) -> bool {
         PauseControl::is_paused(&env)
+    }
+
+    /// Schedule a WASM upgrade. Only the current admin may schedule it.
+    pub fn schedule_upgrade(
+        env: Env,
+        admin: Address,
+        wasm_hash: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::schedule_upgrade(&env, &admin, &wasm_hash)
+    }
+
+    /// Cancel a scheduled WASM upgrade and restore the previous pause state.
+    pub fn cancel_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::cancel_upgrade(&env, &admin)
+    }
+
+    /// Execute a scheduled WASM upgrade after its timelock has elapsed.
+    pub fn execute_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::execute_upgrade(&env, &admin)
+    }
+
+    /// Read the pending upgrade hash and its scheduling timestamp.
+    pub fn get_pending_upgrade(env: Env) -> Option<(BytesN<32>, u64)> {
+        crate::upgrade::UpgradeControl::get_pending_upgrade(&env)
     }
 
     // =========================================================================
@@ -828,6 +857,7 @@ impl QuickLendXContract {
         business: Address,
         kyc_data: String,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         check_and_record_mutation(&env, &business)?;
         crate::verification::submit_kyc_application(&env, &business, kyc_data)
     }
@@ -837,6 +867,7 @@ impl QuickLendXContract {
         admin: Address,
         business: Address,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         crate::verification::verify_business(&env, &admin, &business)
     }
 
@@ -845,6 +876,7 @@ impl QuickLendXContract {
         investor: Address,
         kyc_data: String,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         check_and_record_mutation(&env, &investor)?;
         crate::verification::submit_investor_kyc(&env, &investor, kyc_data)
     }
@@ -856,6 +888,8 @@ impl QuickLendXContract {
         investor: Address,
         limit: i128,
     ) -> Result<(), QuickLendXError> {
+    pub fn verify_investor(env: Env, investor: Address, limit: i128) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         crate::verification::verify_investor(&env, &admin, &investor, limit)?;
         Ok(())
@@ -926,6 +960,7 @@ impl QuickLendXContract {
     }
 
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         AdminStorage::require_admin(&env, &admin)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
@@ -940,6 +975,7 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         AdminStorage::require_admin(&env, &admin)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
@@ -950,6 +986,7 @@ impl QuickLendXContract {
     }
 
     pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         let caller = invoice.business.clone();
@@ -1412,6 +1449,7 @@ impl QuickLendXContract {
         admin: Address,
         arbiter: Address,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         ArbiterStorage::register_arbiter(&env, &admin, &arbiter)
     }
 
@@ -1421,6 +1459,7 @@ impl QuickLendXContract {
         admin: Address,
         arbiter: Address,
     ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         ArbiterStorage::unregister_arbiter(&env, &admin, &arbiter)
     }
 
@@ -1444,6 +1483,8 @@ impl QuickLendXContract {
         admin: Address,
         description: String,
     ) -> Result<BytesN<32>, errors::QuickLendXError> {
+    pub fn create_backup(env: Env, admin: Address, description: String) -> Result<BytesN<32>, errors::QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
 
@@ -1481,6 +1522,8 @@ impl QuickLendXContract {
         admin: Address,
         backup_id: BytesN<32>,
     ) -> Result<u32, errors::QuickLendXError> {
+    pub fn restore_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<u32, errors::QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         backup::BackupStorage::restore_from_backup(&env, &backup_id)
@@ -1494,6 +1537,7 @@ impl QuickLendXContract {
         max_age_seconds: u64,
         enabled: bool,
     ) -> Result<(), errors::QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
 
@@ -1512,6 +1556,8 @@ impl QuickLendXContract {
         admin: Address,
         backup_id: BytesN<32>,
     ) -> Result<(), errors::QuickLendXError> {
+    pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), errors::QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         governance::require_no_open_governance_proposal(&env)?;
@@ -1528,6 +1574,7 @@ impl QuickLendXContract {
     ///
     /// Returns the number of backups removed.
     pub fn cleanup_backups(env: Env, admin: Address) -> Result<u32, errors::QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         backup::BackupStorage::cleanup_old_backups(&env)
