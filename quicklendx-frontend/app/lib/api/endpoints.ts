@@ -250,6 +250,9 @@ export async function request(
     }
   }
 }
+import type { CreateBidPayload } from "../../invest/_lib/place-bid";
+import { apiClient } from "../api-client";
+import { SystemError } from "../errors";
 
 const FreshnessSchema = z.object({
   lastIndexedLedger: z.number().int(),
@@ -376,6 +379,10 @@ export type Settlement = z.infer<typeof SettlementSchema>;
 export type SettlementsListResponse = z.infer<
   typeof SettlementsListResponseSchema
 >;
+
+export const CreateBidResponseSchema = z.object({
+  data: BidSchema,
+});
 
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
@@ -543,4 +550,34 @@ export async function listSettlements(params?: {
     throw new Error(`Failed to fetch settlements: HTTP ${res.status}`);
   }
   return SettlementsListResponseSchema.parse(await res.json());
+}
+
+/**
+ * Place a bid: `POST /bids`, sent through the shared {@link apiClient} so it gets
+ * the CSRF header, request ID, auth token and error mapping every other write
+ * gets.
+ *
+ * It is sent exactly once (`retry: false`). The client retries every failure by
+ * default, which is fine for reads, but a bid is a write: a timeout does not tell
+ * you the server did not process it, and a blind resend is a second bid. The
+ * caller sees the first failure and decides.
+ *
+ * The body is `payload` untouched, so what the form validated is what is sent.
+ */
+export async function placeBid(
+  payload: CreateBidPayload
+): Promise<z.infer<typeof BidSchema>> {
+  const json = await apiClient.post("/bids", payload, { retry: false });
+
+  const parsed = CreateBidResponseSchema.safeParse(json);
+  if (!parsed.success) {
+    // The server answered 2xx, so the bid exists. Reporting this as an ordinary
+    // failure would invite the investor to place it again.
+    throw new SystemError(
+      "The bid may have been placed, but the server's reply was not understood.",
+      { action: "POST" },
+      "BID_RESPONSE_INVALID"
+    );
+  }
+  return parsed.data.data;
 }
