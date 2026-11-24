@@ -1,4 +1,4 @@
-use quicklendx_contracts::is_investor_kyc_tier_sufficient;
+use quicklendx_contracts::verification::is_investor_kyc_tier_sufficient;
 
 #[test]
 fn returns_false_when_investor_tier_is_below_required_tier() {

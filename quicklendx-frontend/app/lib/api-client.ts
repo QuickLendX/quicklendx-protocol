@@ -1,3 +1,4 @@
+import type { CreateInvoiceBody } from "@/app/business/invoices/new/_lib/schema";
 import axios, {
   AxiosInstance,
   AxiosRequestConfig,
@@ -344,7 +345,10 @@ class ApiClient {
   }
 
   private generateRequestId(): string {
-    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    if (
+      typeof crypto !== "undefined" &&
+      typeof crypto.randomUUID === "function"
+    ) {
       return `req_${crypto.randomUUID()}`;
     }
     return `req_${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
@@ -398,6 +402,20 @@ class ApiClient {
     config?: AxiosRequestConfig
   ): Promise<T> {
     return this.request<T>({ ...config, method: "POST", url, data });
+  }
+
+  async postOnce<T = any>(
+    url: string,
+    data?: any,
+    config?: AxiosRequestConfig
+  ): Promise<T> {
+    const response = await this.client.request({
+      ...config,
+      method: "POST",
+      url,
+      data,
+    });
+    return response.data;
   }
 
   async put<T = any>(
@@ -458,6 +476,9 @@ class ApiClient {
 // Singleton instance
 // ---------------------------------------------------------------------------
 export const apiClient = new ApiClient();
+export function createInvoice(body: CreateInvoiceBody) {
+  return apiClient.post("/invoices", body);
+}
 
 // ---------------------------------------------------------------------------
 // Hook for using API client with error handling

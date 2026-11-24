@@ -448,3 +448,7 @@ declare global {
     gtag?: (...args: any[]) => void;
   }
 }
+
+// Note: Table-driven tests for backend error code classification live in
+// app/lib/__tests__/errors.test.ts. Backend codes are cross-checked against
+// docs/ERROR_CODES.md and backend/src/middleware/error-handler.ts.

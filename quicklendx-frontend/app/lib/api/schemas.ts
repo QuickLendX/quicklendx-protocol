@@ -1,43 +1,31 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 // ---------- Enums (must match backend/openapi.yaml) ----------
 export const InvoiceStatus = z.enum([
-  'Pending',
-  'Verified',
-  'Funded',
-  'Paid',
-  'Defaulted',
-  'Cancelled',
+  "Pending",
+  "Verified",
+  "Funded",
+  "Paid",
+  "Defaulted",
+  "Cancelled",
 ]);
 export type InvoiceStatus = z.infer<typeof InvoiceStatus>;
 
 export const BidStatus = z.enum([
-  'Placed',
-  'Accepted',
-  'Rejected',
-  'Withdrawn',
+  "Placed",
+  "Accepted",
+  "Rejected",
+  "Withdrawn",
 ]);
 export type BidStatus = z.infer<typeof BidStatus>;
 
-export const SettlementStatus = z.enum([
-  'Pending',
-  'Completed',
-  'Failed',
-]);
+export const SettlementStatus = z.enum(["Pending", "Completed", "Failed"]);
 export type SettlementStatus = z.infer<typeof SettlementStatus>;
 
-export const InvestmentStatus = z.enum([
-  'Pending',
-  'Active',
-  'Closed',
-]);
+export const InvestmentStatus = z.enum(["Pending", "Active", "Closed"]);
 export type InvestmentStatus = z.infer<typeof InvestmentStatus>;
 
-export const DisputeStatus = z.enum([
-  'Open',
-  'Resolved',
-  'Cancelled',
-]);
+export const DisputeStatus = z.enum(["Open", "Resolved", "Cancelled"]);
 export type DisputeStatus = z.infer<typeof DisputeStatus>;
 
 // ---------- Primitive validators ----------
