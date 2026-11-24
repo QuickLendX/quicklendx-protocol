@@ -13,7 +13,7 @@ Soroban requires state rent to be maintained for stored data. If an entry's TTL 
 
 ## TTL Parameters & Constants
 
-All persistent storage keys in QuickLendX are extended using a protocol-wide threshold and bump target defined in [`storage.rs`](file:///c:/Users/hp/quicklendx-protocol/quicklendx-contracts/src/storage.rs):
+All persistent storage keys in QuickLendX are extended using a protocol-wide threshold and bump target defined in [`storage.rs`](../quicklendx-contracts/src/storage.rs):
 
 *   **`PERSISTENT_TTL_THRESHOLD`**: `34,732,800` (representing ~402 days in seconds, or `6,946,560` ledgers assuming 5 seconds per ledger).
 *   **Threshold (`threshold`)**: If the remaining TTL of a persistent key is less than `PERSISTENT_TTL_THRESHOLD`, it is bumped.

@@ -63,7 +63,7 @@ describe("KYC Service", () => {
       
       expect(encrypted).not.toBe(plaintext);
       expect(encrypted.length).toBeGreaterThan(plaintext.length);
-      expect(encrypted).toStartWith("v2:");
+      expect(encrypted).toMatch(/^v2:/);
       
       const decrypted = decryptSensitiveDataAny(encrypted);
       expect(decrypted).toBe(plaintext);
@@ -319,7 +319,7 @@ describe("KYC Service", () => {
       expect(record.status).toBe("submitted");
       expect(record.encryptedData).not.toBe(JSON.stringify(kycData));
       expect(record.submittedAt).toBeDefined();
-      expect(record.metadata.version).toBe("1.0");
+      expect(record.metadata.version).toBe("2.0");
     });
 
     it("should decrypt KYC record data", () => {
@@ -340,7 +340,7 @@ describe("KYC Service", () => {
       const record = createKycRecord("kyc_001", "user_001", kycData);
       
       expect(record.metadata.lastUpdated).toBeDefined();
-      expect(record.metadata.version).toBe("1.0");
+      expect(record.metadata.version).toBe("2.0");
     });
   });
 

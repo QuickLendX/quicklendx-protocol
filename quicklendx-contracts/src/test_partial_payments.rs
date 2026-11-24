@@ -380,6 +380,10 @@ mod tests {
         assert_eq!(invoice.total_paid, invoice.amount);
         assert_eq!(invoice.status, InvoiceStatus::Paid);
     }
+
+    /// Durable payment records must sum to the invoice's recorded total.
+    #[test]
+    fn test_durable_payment_records_sum_to_invoice_total() {
         let env = Env::default();
         env.mock_all_auths();
         let contract_id = env.register(QuickLendXContract, ());

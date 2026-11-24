@@ -373,6 +373,7 @@ fn update_states_after_funding(
         bid.investor.clone(),
         bid.bid_amount,
         bid.bid_id.clone(),
+    );
     )?;
     emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
     crate::audit::log_invoice_funded(
