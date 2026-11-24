@@ -36,6 +36,7 @@ pub mod invoice_amount;
 pub mod invoice_search;
 pub mod kyc_policy;
 pub mod maintenance;
+pub mod migration;
 pub mod monitor;
 pub mod multisig;
 pub mod notifications;
@@ -1287,4 +1288,51 @@ impl QuickLendXContract {
         backup::BackupStorage::preview_cleanup_old_backups(&env)
     }
 
+    // ── Storage Migration Runner ─────────────────────────────────────────────
+
+    /// Plan and initiate a resumable storage migration from `from` to `to` (admin only).
+    pub fn migration_plan(
+        env: Env,
+        admin: Address,
+        from: u32,
+        to: u32,
+    ) -> Result<migration::MigrationPlan, errors::QuickLendXError> {
+        migration::MigrationRunner::plan(&env, &admin, from, to)
+    }
+
+    /// Execute one bounded step of the active storage migration (admin only).
+    pub fn migration_run_step(
+        env: Env,
+        admin: Address,
+        limit: u32,
+    ) -> Result<migration::MigrationStepResult, errors::QuickLendXError> {
+        migration::MigrationRunner::run_step(&env, &admin, limit)
+    }
+
+    /// Preview the next storage migration step without mutating state (admin only).
+    pub fn migration_dry_run(
+        env: Env,
+        admin: Address,
+        limit: u32,
+    ) -> Result<migration::MigrationDryRunReport, errors::QuickLendXError> {
+        migration::MigrationRunner::dry_run(&env, &admin, limit)
+    }
+
+    /// Return the current storage migration status.
+    pub fn migration_status(env: Env) -> migration::MigrationStatus {
+        migration::MigrationRunner::status(&env)
+    }
+
+    /// Roll back an in-progress storage migration (admin only).
+    pub fn migration_rollback(env: Env, admin: Address) -> Result<(), errors::QuickLendXError> {
+        migration::MigrationRunner::rollback(&env, &admin)
+    }
+
+    /// Return the persisted completion record for a migrated schema version.
+    pub fn get_migration_record(
+        env: Env,
+        version: u32,
+    ) -> Option<migration::MigrationVersionRecord> {
+        migration::MigrationRunner::get_version_record(&env, version)
+    }
 }
