@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useWallet } from "@/app/lib/wallet/WalletProvider";
 import { createInvoice } from "@/app/lib/api-client";
+import { AppError, ErrorCategory } from "@/app/lib/errors";
 import {
   createInvoiceBodySchema,
   INVOICE_CATEGORIES,
@@ -15,6 +16,23 @@ type Errors = Record<string, string>;
 
 const inputCls =
   "w-full rounded-md border border-[#E2E8F0] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2563EB]";
+
+function mapServerDetails(details: unknown): Errors {
+  const out: Errors = {};
+  if (!Array.isArray(details)) return out;
+  for (const d of details) {
+    const issue = d as { path?: unknown; message?: unknown };
+    if (typeof issue?.message !== "string") continue;
+    const segs = Array.isArray(issue.path)
+      ? issue.path.map(String)
+      : typeof issue.path === "string"
+        ? issue.path.split(".")
+        : [];
+    const key = segs[0] === "metadata" ? segs[1] : segs[0];
+    if (key) out[key] ??= issue.message;
+  }
+  return out;
+}
 
 function Field(props: {
   id: string;
@@ -107,11 +125,19 @@ export default function NewInvoiceForm() {
       await createInvoice(parsed.data!);
       router.push("/business/invoices");
     } catch (err: unknown) {
-      const code = (err as { code?: string })?.code;
-      if (code === "KYC_NOT_VERIFIED") {
+      if (err instanceof AppError && err.code === "KYC_NOT_VERIFIED") {
         setFormError(
           "KYC verification is required before you can submit invoices."
         );
+      } else if (
+        err instanceof AppError &&
+        err.category === ErrorCategory.VALIDATION
+      ) {
+        const serverErrors = mapServerDetails(
+          err.context.additionalData?.details
+        );
+        if (Object.keys(serverErrors).length > 0) setErrors(serverErrors);
+        setFormError(err.message);
       } else {
         setFormError(
           err instanceof Error ? err.message : "Failed to create invoice."
