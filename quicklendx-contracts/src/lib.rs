@@ -12,6 +12,8 @@ pub mod audit;
 pub mod backpressure;
 pub mod backup;
 pub mod backup_v1;
+#[cfg(any(test, feature = "testutils"))]
+pub mod bench;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
