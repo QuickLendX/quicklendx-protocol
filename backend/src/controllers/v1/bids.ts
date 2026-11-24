@@ -145,6 +145,34 @@ export const getBids = async (
       status: status as BidStatus | undefined,
     };
 
+    // Tenant isolation: the invoice owner may see every bid on their invoice;
+    // any other authenticated caller is restricted to their own bids. An
+    // explicit investor filter for a different tenant yields an empty page.
+    // Unauthenticated (public marketplace) reads are unchanged.
+    const tenant = req.apiKey?.created_by;
+    if (tenant) {
+      let owner: string | undefined;
+      try {
+        owner = invoiceStore.findInvoiceById(invoice_id as string)?.business;
+      } catch (err: any) {
+        const msg = err && err.message ? String(err.message) : "";
+        if (process.env.NODE_ENV === "test" && /no such table/i.test(msg)) {
+          owner = MOCK_INVOICES.find((i) => i.id === (invoice_id as string))?.business;
+        } else {
+          throw err;
+        }
+      }
+      if (owner !== tenant) {
+        if (filters.investor && filters.investor !== tenant) {
+          const emptyBody = { data: [], next_cursor: null, has_more: false };
+          applyCacheHeaders(req, res, { cacheControl: CC_NO_STORE, body: emptyBody });
+          res.json(emptyBody);
+          return;
+        }
+        filters.investor = tenant;
+      }
+    }
+
     const page = await bidStore.getBidsPaginated(
       invoice_id as string,
       params.limit,

@@ -1,83 +1,112 @@
 /**
  * Multi-tenant test fixtures for tenant isolation testing.
- * 
+ *
  * Defines distinct tenant groups (businesses and investors) with isolated
- * mock records for invoices, bids, and exports. Used to verify that cross-tenant
+ * records for invoices, bids, and exports. Used to verify that cross-tenant
  * access requests fail safely without leaking resource existence.
+ *
+ * Updated against the current backend contract:
+ *  - Tenant identifiers are valid Stellar public keys (G + 55 base32 chars) so
+ *    they pass the shared `stellarAddressSchema` query validators.
+ *  - API keys match the current `ApiKey` domain model (src/models/api-key.ts).
+ *  - Invoice / bid IDs are valid hex strings so they pass `hexStringSchema`.
+ *  - Seed helpers create the SQLite schema and populate the invoice store.
+ *
+ * NOTE: this module intentionally does NOT import the bid/invoice controllers
+ * or bidStore. It is required from inside the jest.mock factory for bidStore,
+ * and importing those modules here would create a circular require.
  */
 
 import { Invoice, InvoiceStatus, InvoiceCategory } from "../../src/types/contract";
 import { Bid, BidStatus } from "../../src/types/contract";
 import { ApiKey } from "../../src/models/api-key";
+import { invoiceStore } from "../../src/services/invoiceStore";
+import { getDatabase } from "../../src/lib/database";
 import crypto from "crypto";
 
-// ─── Tenant Identifiers ──────────────────────────────────────────────────────
+// ─── Tenant Identifiers (valid Stellar public keys) ─────────────────────────
 
-export const TENANT_BUSINESS_A = "GBUSINESS_A_STELLAR_ADDRESS_AAAAAAAAAAAAAAAAAAA";
-export const TENANT_BUSINESS_B = "GBUSINESS_B_STELLAR_ADDRESS_BBBBBBBBBBBBBBBBBBB";
-export const TENANT_INVESTOR_A = "GINVESTOR_A_STELLAR_ADDRESS_AAAAAAAAAAAAAAAAAAA";
-export const TENANT_INVESTOR_B = "GINVESTOR_B_STELLAR_ADDRESS_BBBBBBBBBBBBBBBBBBB";
+export const TENANT_BUSINESS_A = `G${"A".repeat(55)}`;
+export const TENANT_BUSINESS_B = `G${"B".repeat(55)}`;
+export const TENANT_INVESTOR_A = `G${"C".repeat(55)}`;
+export const TENANT_INVESTOR_B = `G${"D".repeat(55)}`;
 
-// ─── API Keys for Each Tenant ────────────────────────────────────────────────
+// ─── Bearer tokens for each tenant ──────────────────────────────────────────
+// Tokens use the `qlx_` prefix so API-key-authenticated writes are exempt from
+// the browser CSRF check (src/middleware/csrf.ts). The test harness injects a
+// custom verifier that maps these tokens to the fixture keys below.
 
-export const API_KEY_BUSINESS_A: ApiKey = {
-  id: crypto.randomUUID(),
-  key_hash: crypto.createHash("sha256").update("business_a_key").digest("hex"),
-  prev_signing_secret_hash: null,
-  prefix: "qlx_test_busA",
-  name: "Business A API Key",
-  scopes: ["read:invoices", "write:invoices", "read:bids"],
-  created_at: new Date().toISOString(),
-  last_used_at: null,
-  expires_at: null,
-  prev_secret_expires_at: null,
-  revoked: false,
-  created_by: TENANT_BUSINESS_A,
-};
+export const TOKEN_BUSINESS_A = `qlx_tenant_business_a_${"0".repeat(20)}`;
+export const TOKEN_BUSINESS_B = `qlx_tenant_business_b_${"0".repeat(20)}`;
+export const TOKEN_INVESTOR_A = `qlx_tenant_investor_a_${"0".repeat(20)}`;
+export const TOKEN_INVESTOR_B = `qlx_tenant_investor_b_${"0".repeat(20)}`;
 
-export const API_KEY_BUSINESS_B: ApiKey = {
-  id: crypto.randomUUID(),
-  key_hash: crypto.createHash("sha256").update("business_b_key").digest("hex"),
-  prev_signing_secret_hash: null,
-  prefix: "qlx_test_busB",
-  name: "Business B API Key",
-  scopes: ["read:invoices", "write:invoices", "read:bids"],
-  created_at: new Date().toISOString(),
-  last_used_at: null,
-  expires_at: null,
-  prev_secret_expires_at: null,
-  revoked: false,
-  created_by: TENANT_BUSINESS_B,
-};
+// ─── API Keys for Each Tenant (current ApiKey model) ────────────────────────
 
-export const API_KEY_INVESTOR_A: ApiKey = {
-  id: crypto.randomUUID(),
-  key_hash: crypto.createHash("sha256").update("investor_a_key").digest("hex"),
-  prev_signing_secret_hash: null,
-  prefix: "qlx_test_invA",
-  name: "Investor A API Key",
-  scopes: ["read:invoices", "write:bids", "read:bids"],
-  created_at: new Date().toISOString(),
-  last_used_at: null,
-  expires_at: null,
-  prev_secret_expires_at: null,
-  revoked: false,
-  created_by: TENANT_INVESTOR_A,
-};
+function makeApiKey(
+  token: string,
+  tenant: string,
+  name: string,
+  scopes: string[]
+): ApiKey {
+  const now = Date.now();
+  return {
+    id: crypto.randomUUID(),
+    name,
+    prefix: token.slice(0, 15),
+    scopes,
+    created_by: tenant,
+    created_at: new Date(now).toISOString(),
+    last_used_at: null,
+    expires_at: null,
+    revoked: false,
+    signing_secret_hash: null,
+    prev_signing_secret_hash: null,
+    prev_secret_expires_at: null,
+    ownerId: tenant,
+    permissions: [...scopes],
+    status: "active",
+    version: 1,
+    createdAt: now,
+    revokedAt: null,
+    revokedBy: null,
+  };
+}
 
-export const API_KEY_INVESTOR_B: ApiKey = {
-  id: crypto.randomUUID(),
-  key_hash: crypto.createHash("sha256").update("investor_b_key").digest("hex"),
-  prev_signing_secret_hash: null,
-  prefix: "qlx_test_invB",
-  name: "Investor B API Key",
-  scopes: ["read:invoices", "write:bids", "read:bids"],
-  created_at: new Date().toISOString(),
-  last_used_at: null,
-  expires_at: null,
-  prev_secret_expires_at: null,
-  revoked: false,
-  created_by: TENANT_INVESTOR_B,
+export const API_KEY_BUSINESS_A: ApiKey = makeApiKey(
+  TOKEN_BUSINESS_A,
+  TENANT_BUSINESS_A,
+  "Business A API Key",
+  ["read:invoices", "write:invoices", "read:bids"]
+);
+
+export const API_KEY_BUSINESS_B: ApiKey = makeApiKey(
+  TOKEN_BUSINESS_B,
+  TENANT_BUSINESS_B,
+  "Business B API Key",
+  ["read:invoices", "write:invoices", "read:bids"]
+);
+
+export const API_KEY_INVESTOR_A: ApiKey = makeApiKey(
+  TOKEN_INVESTOR_A,
+  TENANT_INVESTOR_A,
+  "Investor A API Key",
+  ["read:invoices", "write:bids", "read:bids"]
+);
+
+export const API_KEY_INVESTOR_B: ApiKey = makeApiKey(
+  TOKEN_INVESTOR_B,
+  TENANT_INVESTOR_B,
+  "Investor B API Key",
+  ["read:invoices", "write:bids", "read:bids"]
+);
+
+/** Token → fixture key map used by the injected API-key verifier. */
+export const API_KEY_BY_TOKEN: Record<string, ApiKey> = {
+  [TOKEN_BUSINESS_A]: API_KEY_BUSINESS_A,
+  [TOKEN_BUSINESS_B]: API_KEY_BUSINESS_B,
+  [TOKEN_INVESTOR_A]: API_KEY_INVESTOR_A,
+  [TOKEN_INVESTOR_B]: API_KEY_INVESTOR_B,
 };
 
 // ─── Invoice Fixtures ────────────────────────────────────────────────────────
@@ -178,10 +207,10 @@ export const INVOICE_BUSINESS_B_2: Invoice = {
   indexed_at: new Date().toISOString(),
 };
 
-// ─── Bid Fixtures ────────────────────────────────────────────────────────────
+// ─── Bid Fixtures (valid hex bid_id) ─────────────────────────────────────────
 
 export const BID_INVESTOR_A_ON_BUSINESS_A: Bid = {
-  bid_id: "0xbida1" + crypto.randomBytes(29).toString("hex"),
+  bid_id: "0x" + "a1".repeat(32),
   invoice_id: INVOICE_BUSINESS_A_1.id,
   investor: TENANT_INVESTOR_A,
   bid_amount: "95000",
@@ -195,7 +224,7 @@ export const BID_INVESTOR_A_ON_BUSINESS_A: Bid = {
 };
 
 export const BID_INVESTOR_B_ON_BUSINESS_B: Bid = {
-  bid_id: "0xbidb1" + crypto.randomBytes(29).toString("hex"),
+  bid_id: "0x" + "b1".repeat(32),
   invoice_id: INVOICE_BUSINESS_B_1.id,
   investor: TENANT_INVESTOR_B,
   bid_amount: "190000",
@@ -210,7 +239,7 @@ export const BID_INVESTOR_B_ON_BUSINESS_B: Bid = {
 
 // Cross-tenant bid: Investor A bids on Business B's invoice
 export const BID_INVESTOR_A_ON_BUSINESS_B: Bid = {
-  bid_id: "0xbidab" + crypto.randomBytes(29).toString("hex"),
+  bid_id: "0x" + "ab".repeat(32),
   invoice_id: INVOICE_BUSINESS_B_1.id,
   investor: TENANT_INVESTOR_A,
   bid_amount: "185000",
@@ -243,3 +272,60 @@ export const TENANT_B_INVOICES = [INVOICE_BUSINESS_B_1, INVOICE_BUSINESS_B_2];
 
 export const TENANT_A_BIDS = [BID_INVESTOR_A_ON_BUSINESS_A, BID_INVESTOR_A_ON_BUSINESS_B];
 export const TENANT_B_BIDS = [BID_INVESTOR_B_ON_BUSINESS_B];
+
+// ─── Seed Helpers ────────────────────────────────────────────────────────────
+
+/**
+ * Create the SQLite tables the tenant-isolation suite touches. The api_keys and
+ * api_key_audit_log tables are required because the auth middleware records key
+ * usage (updateLastUsed) on every authenticated request; without them that
+ * fire-and-forget write would reject with "no such table".
+ */
+export function createTenantSchema(): void {
+  const db = getDatabase();
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id TEXT PRIMARY KEY, business TEXT NOT NULL, amount TEXT NOT NULL,
+      currency TEXT NOT NULL, due_date INTEGER NOT NULL, status TEXT NOT NULL,
+      description TEXT NOT NULL, category TEXT NOT NULL, tags TEXT NOT NULL,
+      metadata TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+      contract_version INTEGER NOT NULL, event_schema_version INTEGER NOT NULL,
+      indexed_at TEXT
+    );
+    CREATE TABLE IF NOT EXISTS api_keys (
+      id TEXT PRIMARY KEY,
+      key_hash TEXT NOT NULL,
+      signing_secret_hash TEXT,
+      prev_signing_secret_hash TEXT,
+      prefix TEXT NOT NULL,
+      name TEXT NOT NULL,
+      scopes TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      last_used_at TEXT,
+      expires_at TEXT,
+      prev_secret_expires_at TEXT,
+      revoked INTEGER NOT NULL DEFAULT 0,
+      created_by TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      revoked_at INTEGER,
+      revoked_by TEXT
+    );
+    CREATE TABLE IF NOT EXISTS api_key_audit_log (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      key_id TEXT NOT NULL,
+      actor TEXT NOT NULL,
+      timestamp TEXT NOT NULL,
+      ip_address TEXT,
+      endpoint TEXT,
+      metadata TEXT
+    );
+  `);
+}
+
+/** Insert all tenant invoices into the (isolated) SQLite invoice store. */
+export function seedTenantInvoices(): void {
+  for (const invoice of ALL_TENANT_INVOICES) {
+    invoiceStore.insertInvoice(invoice);
+  }
+}

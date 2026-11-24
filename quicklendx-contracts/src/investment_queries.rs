@@ -1,7 +1,9 @@
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
 use crate::types::InvestmentStatus;
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Vec};
+use soroban_sdk::{
+    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Vec,
+};
 
 /// Aggregate portfolio snapshot for a single investor, computed in one bounded
 /// pass over `InvestmentStorage::get_investments_by_investor`.
@@ -166,6 +168,7 @@ impl InvestmentQueries {
     /// - Validates all bounds before array access
     /// - Caps limit to prevent DoS attacks
     /// - Handles empty collections gracefully
+    #[deprecated(note = "use get_investor_investments_paged with an opaque cursor")]
     pub fn get_investor_investments_paginated(
         env: &Env,
         investor: &Address,
@@ -213,6 +216,80 @@ impl InvestmentQueries {
         }
     }
 
+    /// Return an opaque-cursor page of an investor's investments.
+    ///
+    /// The cursor is bound to the investor, status filter, and exact ordered
+    /// result IDs. Status transitions that change filter membership therefore
+    /// invalidate continuation cursors as well as newly added investments.
+    pub fn get_investor_investments_paged(
+        env: &Env,
+        investor: &Address,
+        status_filter: Option<InvestmentStatus>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        let all_ids = InvestmentStorage::get_investments_by_investor(env, investor);
+        let mut filtered = Vec::new(env);
+        for id in all_ids.iter() {
+            if let Some(investment) = InvestmentStorage::get_investment(env, &id) {
+                if status_filter
+                    .as_ref()
+                    .map(|status| investment.status == *status)
+                    .unwrap_or(true)
+                {
+                    filtered.push_back(id);
+                }
+            }
+        }
+
+        let mut snapshot = Bytes::new(env);
+        snapshot.append(&investor.to_xdr(env));
+        if let Some(status) = status_filter {
+            snapshot.append(&status.to_xdr(env));
+        }
+        for id in filtered.iter() {
+            snapshot.append(&id.clone().into());
+        }
+        let digest = env.crypto().sha256(&snapshot).to_array();
+        let generation = u64::from_be_bytes([
+            digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6],
+            digest[7],
+        ]);
+        let offset = match cursor {
+            Some(raw) => {
+                let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+                decoded.require_stable(generation)?;
+                decoded.offset
+            }
+            None => 0,
+        };
+        let total_count = filtered.len();
+        let (start, end) =
+            crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut items = Vec::new(env);
+        for idx in start..end {
+            if let Some(id) = filtered.get(idx) {
+                items.push_back(id);
+            }
+        }
+        let (_, has_more) = crate::pagination::pagination_metadata(offset, limit, total_count);
+        let capped_limit = crate::pagination::cap_query_limit(limit);
+        let next_cursor = if has_more {
+            Some(crate::pagination::encode_soroban_cursor(
+                env,
+                crate::pagination::Cursor::new(start.saturating_add(capped_limit), generation),
+            ))
+        } else {
+            None
+        };
+        Ok(crate::types::CursorBytes32Page {
+            items,
+            total_count,
+            has_more,
+            next_cursor,
+        })
+    }
+
     /// Cursor-stable variant of [`Self::get_investor_investments_paginated`]
     /// (#2456).
     ///
@@ -250,7 +327,7 @@ impl InvestmentQueries {
     /// concurrent-insert case, which is both the case this issue's required
     /// test list names explicitly and the one that changes the *size* of
     /// the underlying collection callers are paging over. See
-    /// `ISSUE_2456_IMPLEMENTATION.md` for the full design note, including
+    /// `docs/archive/ISSUE_2456_IMPLEMENTATION.md` for the full design note, including
     /// this as a documented, in-scope limitation rather than an oversight.
     ///
     /// ## Compatibility
@@ -265,6 +342,7 @@ impl InvestmentQueries {
     /// * [`QuickLendXError::UnstableCursor`] — `cursor_generation` was
     ///   `Some(g)` and `g` no longer matches `investor`'s current
     ///   generation.
+    #[deprecated(note = "use get_investor_investments_paged with an opaque cursor")]
     pub fn get_investor_investments_paginated_cursored(
         env: &Env,
         investor: &Address,
