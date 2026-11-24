@@ -4,7 +4,6 @@ import { auditLogService } from "../../services/auditLogService";
 import { config } from "../../config";
 import { getUser } from "../../middleware/userAuth";
 import * as fs from "fs";
-import { assertExportToken } from "../../lib/entityId";
 import { exportConcurrencyService } from "../../services/exportConcurrency";
 
 /**
@@ -196,18 +195,8 @@ export const createDownloadExportHandler = (
     try {
       const token = req.params.token as string;
 
-      // Deterministic boundary: assert token format early with a stable code.
-      // This catches malformed tokens before any I/O or concurrency slot.
-      try {
-        assertExportToken(token);
-      } catch {
-        return res.status(400).json({
-          error: {
-            message: "Export token is malformed",
-            code: ExportErrorCode.TOKEN_INVALID,
-          },
-        });
-      }
+      // Downloads use signed tokens from generateExportFile, not exp_ entity
+      // IDs. validateTokenStrict below verifies their signature and expiry.
 
       // Determine the key for concurrency limiting: use API key ID if available, otherwise user ID from token
       // We need to decode the token first to get the userId for the concurrency key
