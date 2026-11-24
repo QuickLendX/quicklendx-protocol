@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { InvoiceStatus } from "@/app/components/invoice-status";
+import { env } from "@/app/lib/env";
 
 // ---------------------------------------------------------------------------
 // Zod Schemas (matching backend/openapi.yaml)
@@ -218,8 +219,7 @@ export function isNotFoundError(err: unknown): boolean {
 // ---------------------------------------------------------------------------
 
 function getBaseUrl(): string {
-  const raw = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api/v1";
-  return raw.replace(/\/+$/, "");
+  return env.NEXT_PUBLIC_API_URL;
 }
 
 async function fetchJson(

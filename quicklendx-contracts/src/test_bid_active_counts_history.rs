@@ -12,6 +12,11 @@
 //!    cleanup-eligible, and treats an `Expired` bid as valid while its deadline
 //!    is not in the future.
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
+
 use super::*;
 use crate::bid::{BidStatus, BidStorage};
 use crate::invoice::InvoiceCategory;
@@ -163,7 +168,7 @@ fn expired_bid_not_active_during_grace() {
     env.ledger().set_timestamp(env.ledger().timestamp() + 10);
 
     let active = env.as_contract(&client.address, || {
-        BidStorage::get_active_bid_count(&env, &invoice_id)
+        BidStorage::get_active_bid_count(&env, &invoice_id).expect("active bid count should be available")
     });
     let by_investor = env.as_contract(&client.address, || {
         BidStorage::count_active_bids_by_investor(&env, &investor)
@@ -227,6 +232,12 @@ fn counters_agree() {
 
     env.ledger().set_timestamp(now + 10);
 
+    let by_investor = env.as_contract(&client.address, || {
+        BidStorage::count_active_bids_by_investor(&env, &investor)
+    });
+    let placed_by_investor = env.as_contract(&client.address, || {
+        BidStorage::count_active_placed_bids_for_investor(&env, &investor).expect("active investor bid count should be available")
+    });
     // Each investor has exactly one live bid; the stale and expired bids belong
     // to other investors and must not appear in their active counts.
     for investor in [
@@ -255,7 +266,7 @@ fn counters_agree() {
         assert_eq!(placed_by_investor, expected);
     }
     let active = env.as_contract(&client.address, || {
-        BidStorage::get_active_bid_count(&env, &invoice_id)
+        BidStorage::get_active_bid_count(&env, &invoice_id).expect("active bid count should be available")
     });
 
     assert_eq!(active, 3);
@@ -281,17 +292,17 @@ fn expired_bids_queryable() {
     env.ledger().set_timestamp(env.ledger().timestamp() + 1);
 
     env.as_contract(&client.address, || {
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
+        BidStorage::cleanup_expired_bids(&env, &invoice_id).expect("expired bid cleanup should succeed");
     });
 
     let expired = env.as_contract(&client.address, || {
-        BidStorage::get_bids_by_status(&env, &invoice_id, BidStatus::Expired)
+        BidStorage::get_bids_by_status(&env, &invoice_id, BidStatus::Expired).expect("status-filtered bids should be available")
     });
     assert_eq!(expired.len(), 1);
     assert_eq!(expired.get(0).unwrap().bid_id, bid_id);
 
     let expired_count = env.as_contract(&client.address, || {
-        BidStorage::count_bids_by_status(&env, &invoice_id).3
+        BidStorage::count_bids_by_status(&env, &invoice_id).expect("bid status counts should be available").3
     });
     assert_eq!(expired_count, 1);
 }

@@ -75,6 +75,7 @@ fn create_test_invoice(
             resolved_by: Address::generate(env),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(env),
         },
         total_paid: 0,
         payment_history: Vec::new(env),
@@ -1471,5 +1472,51 @@ fn invariant_count_equals_index_length_all_statuses() {
     verify_count_eq_index(&client, InvoiceStatus::Defaulted);
     verify_count_eq_index(&client, InvoiceStatus::Cancelled);
     verify_count_eq_index(&client, InvoiceStatus::Refunded);
+}
+
+/// Verify that `run_invariant_checks` reconciles `EscrowStorage::get_held_reserve`
+/// against the sum of `Held` escrows for whitelisted currencies, passing when
+/// consistent and failing when the stored reserve is corrupted.
+#[test]
+fn invariant_held_reserve_matches_escrows_detects_corruption() {
+    let env = Env::default();
+    env.mock_all_auths();
+    let admin = Address::generate(&env);
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+    client.initialize_admin(&admin);
+
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+
+    let target = String::from_str(&env, "held_reserve_matches_escrows");
+    let check_passed = |report: &crate::invariants::InvariantReport| -> bool {
+        report
+            .checks
+            .iter()
+            .find(|c| c.check_name == target)
+            .expect("held_reserve_matches_escrows row must be present")
+            .passed
+    };
+
+    env.as_contract(&contract_id, || {
+        // Fresh whitelisted currency with zero Held escrows and zero reserve passes.
+        let initial = crate::invariants::run_invariant_checks(&env);
+        assert!(check_passed(&initial));
+
+        // Corrupt the reserve to a non-zero value with no Held escrows.
+        let reserve_key = (soroban_sdk::symbol_short!("esc_res"), currency.clone());
+        env.storage().persistent().set(&reserve_key, &1_234i128);
+
+        let corrupted = crate::invariants::run_invariant_checks(&env);
+        assert!(!check_passed(&corrupted));
+        assert!(!corrupted.all_passed);
+
+        // Repairing the reserve restores agreement.
+        crate::payments::EscrowStorage::repair_held_reserve_page(&env, &currency, 0, 100)
+            .expect("repair should succeed");
+        let repaired = crate::invariants::run_invariant_checks(&env);
+        assert!(check_passed(&repaired));
+    });
 }
 

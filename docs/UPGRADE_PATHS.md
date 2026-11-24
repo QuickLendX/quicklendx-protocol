@@ -209,6 +209,44 @@ Any renaming of these strings requires an explicit migration — see `src/storag
 
 ---
 
+## Resumable storage migration runner
+
+The contract exposes an admin-gated, offset-based migration runner (`src/migration.rs`) for executing storage schema migrations in bounded batches capped by `protocol_limits::MAX_MIGRATION_STEP_LIMIT` (50 records per step).
+
+### Operator steps
+
+1. **Check current status** (read-only):
+   ```bash
+   soroban contract invoke --id $CONTRACT_ID ... -- migration_status
+   ```
+2. **Plan and initiate the migration** (admin only, rejects concurrent runs, idempotent if already completed for `to`):
+   ```bash
+   soroban contract invoke --id $CONTRACT_ID ... -- migration_plan \
+     --admin $ADMIN_ADDRESS --from 0 --to 1
+   ```
+3. **Preview the next step with a dry-run** (admin only, writes nothing and emits no events):
+   ```bash
+   soroban contract invoke --id $CONTRACT_ID ... -- migration_dry_run \
+     --admin $ADMIN_ADDRESS --limit 25
+   ```
+4. **Execute bounded steps until `completed: true`** (admin only, resumable after interruption from the persisted offset cursor):
+   ```bash
+   soroban contract invoke --id $CONTRACT_ID ... -- migration_run_step \
+     --admin $ADMIN_ADDRESS --limit 25
+   ```
+   When the final batch finishes, the runner automatically commits the new schema version, clears transient progress keys, emits `MigrationCompleted`, and persists a per-version `MigrationVersionRecord`.
+5. **Inspect the per-version completion record** (read-only):
+   ```bash
+   soroban contract invoke --id $CONTRACT_ID ... -- get_migration_record --version 1
+   ```
+6. **Rollback if needed before completion** (admin only):
+   ```bash
+   soroban contract invoke --id $CONTRACT_ID ... -- migration_rollback \
+     --admin $ADMIN_ADDRESS
+   ```
+
+---
+
 ## Related documents
 
 - [`docs/contracts/initialization.md`](contracts/initialization.md) — one-time setup and parameter validation
@@ -219,3 +257,8 @@ Any renaming of these strings requires an explicit migration — see `src/storag
 - Source: `src/init.rs` (`PROTOCOL_VERSION`, `get_version`, `initialize`)
 - Source: `src/backup.rs` (`get_backup`, `Backup::from_v1`, `verify_backup_version`)
 - Source: `src/analytics.rs` (`ANALYTICS_SCHEMA_VERSION`)
+
+
+## Contract entrypoints for scheduled upgrades
+
+The Soroban contract exposes `schedule_upgrade(admin, wasm_hash)`, `get_pending_upgrade()`, `cancel_upgrade(admin)`, and `execute_upgrade(admin)` through the `QuickLendXContract` client interface. Scheduling is restricted to the current admin and applies the existing 48-hour timelock. Execution before `scheduled_at + UPGRADE_DELAY_SECS` returns `UpgradeTimelockNotElapsed`. Cancellation and execution clear the pending-upgrade record and restore the pause state that existed before scheduling. Read the pending hash and scheduling timestamp with `get_pending_upgrade`; it returns `None` when no upgrade is pending.
