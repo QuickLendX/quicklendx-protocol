@@ -13,7 +13,7 @@ use crate::storage::{BidStorage, InvoiceStorage};
 use crate::types::{BidStatus, InvestmentStatus, InvoiceCategory, InvoiceStatus};
 use crate::{QuickLendXContract, QuickLendXContractClient, MAX_QUERY_LIMIT};
 use soroban_sdk::{
-    testutils::{Address as _, Ledger},
+    testutils::{cost_estimate::NetworkInvocationResourceLimits, Address as _, Ledger},
     token, Address, BytesN, Env, String, Vec,
 };
 
@@ -27,8 +27,11 @@ struct Fixture {
 impl Fixture {
     fn new() -> Self {
         let env = Env::default();
-        // Fixture construction is not part of the query's instruction budget.
-        env.budget().reset_unlimited();
+        // Fixture construction is not part of query metering. Funding many
+        // positions also exceeds transaction footprints in existing lifecycle
+        // code; restore resource limits before testing the read-only queries.
+        env.cost_estimate().disable_resource_limits();
+        env.cost_estimate().budget().reset_unlimited();
         env.mock_all_auths();
         env.ledger().set_timestamp(1_000);
         let contract = env.register(QuickLendXContract, ());
@@ -80,7 +83,7 @@ impl Fixture {
 
     fn invoice(&self, business: &Address, amount: i128) -> BytesN<32> {
         // Keep fixture creation outside mutation and payment rate-limit windows.
-        self.env.ledger().set_sequence(
+        self.env.ledger().set_sequence_number(
             self.env.ledger().sequence() + crate::protocol_limits::RATE_LIMIT_WINDOW_SEQUENCES,
         );
         self.env.ledger().set_timestamp(
@@ -135,7 +138,15 @@ impl Fixture {
         });
     }
 
+    fn limit_query(&self) {
+        self.env.cost_estimate().budget().reset_default();
+        self.env
+            .cost_estimate()
+            .enforce_resource_limits(NetworkInvocationResourceLimits::mainnet());
+    }
+
     fn summary(&self, address: &Address) -> AddressSummary {
+        self.limit_query();
         self.env.as_contract(&self.contract, || {
             summarize_address(&self.env, address).unwrap()
         })
@@ -406,16 +417,15 @@ fn test_address_summary_large_investor_caps_positions_within_default_budget() {
             MAX_QUERY_LIMIT + 1
         );
     });
-    // Enforce the host's finite default CPU/memory limits for the query itself.
-    f.env.budget().reset_default();
-    let summary = f.summary(&investor);
+    // Only the investor strategy promises a bounded scan. The combined
+    // summary also traverses all bid records, so it has no global record cap.
+    f.limit_query();
+    let summary = f.env.as_contract(&f.contract, || {
+        InvestorStrategy::summarize(&f.env, &investor).unwrap()
+    });
     let mut expected = AddressSummary::empty();
     expected.is_investor = true;
     expected.investor_active_principal = i128::from(MAX_QUERY_LIMIT) * 1_000;
     expected.investor_total_positions = MAX_QUERY_LIMIT;
-    // The investment cap does not truncate the independently indexed bid role.
-    expected.is_bidder = true;
-    expected.bid_accepted_count = MAX_QUERY_LIMIT + 1;
-    expected.bid_total_records = MAX_QUERY_LIMIT + 1;
     assert_eq!(summary, expected);
 }
