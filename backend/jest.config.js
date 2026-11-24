@@ -74,7 +74,6 @@ export default {
     "src/tests/request-signing.test.ts",
     "src/tests/webhook-ed25519.test.ts",
     "src/tests/api-key-rotation-integration.test.ts",
-    "src/tests/invoicesController.test.ts",
     "tests/webhook-ssrf.test.ts",
     "src/tests/api-key-store.test.ts",
     "src/tests/migration-runner.test.ts",
