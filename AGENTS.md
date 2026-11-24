@@ -14,7 +14,7 @@ Run commands from the relevant package directory unless noted.
   - `cargo build` (or `make build`): build Rust contract.
   - `cargo test`: run unit/integration tests.
   - `cargo test --features fuzz-tests fuzz_`: run proptest fuzz tests.
-  - `./scripts/check-wasm-size.sh`: enforce WASM size budget (256 KB).
+  - `./scripts/check-wasm-size.sh`: enforce WASM size budget (640 KiB / 655,360 B; future reduction target: 256 KiB).
 - Frontend:
   - `npm ci`: install exact dependencies.
   - `npm run dev`: start local dev server.
