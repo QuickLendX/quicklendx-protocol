@@ -599,6 +599,7 @@ mod test_withdraw_bid_matrix;
 // Contract-level macros (re-exported from diagnostics)
 // ============================================================================
 
+#[cfg(not(feature = "diagnostics"))]
 #[macro_export]
 macro_rules! qlx_log {
     ($env:expr, $module:expr, $fmt:expr $(, $arg:expr)*) => {{
@@ -613,6 +614,7 @@ macro_rules! qlx_log {
     }};
 }
 
+#[cfg(not(feature = "diagnostics"))]
 #[macro_export]
 macro_rules! assert_view_only {
     ($env:expr) => {{

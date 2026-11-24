@@ -117,6 +117,18 @@ The `Makefile` in `quicklendx-contracts` provides convenient phony targets for f
 | `make ci` | `fmt-check check lint test-lib size` | Run all standard fast CI checks |
 | `make build` | Builds WASM and bindings | Compile contract WASM and generate client bindings |
 | `make clean` | `cargo clean` and remove `bindings/` | Clean build artifacts and generated bindings |
+### Checking Contract Features
+
+From `quicklendx-contracts/`, run:
+
+```bash
+bash scripts/check-features.sh
+```
+
+The script checks the library and test targets for the default configuration,
+`testutils`, `diagnostics`, `testutils,diagnostics`, and `fuzz-tests`. It prints a
+pass/fail table and exits with a failure status if any check fails. This checks
+compilation; run `cargo test` to execute tests.
 
 ---
 
@@ -152,6 +164,7 @@ To check that all exported contract functions in `src/lib.rs` are documented in 
 ```
 
 The script runs without compiling the contract and reports any missing or extra entrypoints with exit code 1.
+6. **Feature matrix compiles:** `bash scripts/check-features.sh`
 
 ---
 
