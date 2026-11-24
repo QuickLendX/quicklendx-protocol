@@ -21,7 +21,10 @@ If this exact equality does not hold, the settlement transaction will unconditio
 Because the platform fee and investor return are calculated as proportions of the \	otal_paid\ amount, division is required.
 
 1. **Flooring**: Division operations in the fee engine floor the result (truncating any fractional remainder).
-2. **Remainder Allocation**: Any fractional remainder lost during the calculation of the \platform_fee\ is implicitly kept in the \investor_return\. The investor return is generally calculated as \	otal_paid - platform_fee\ to ensure the invariant is met perfectly.
+2. **Remainder Allocation**: Settlement calculates the platform fee by flooring its basis-point share. The investor return receives the remainder, so `investor_return + platform_fee == total_paid` exactly. No stroops are discarded.
+3. **Revenue Distribution**: Treasury and developer shares are floored independently. The platform receives `pending_distribution - treasury_amount - developer_amount`, preserving the full collected amount even when either share has a fractional stroop.
+
+Partial repayments allocate cumulative totals rather than rounding each payment independently. The settlement ledger's principal, investor profit, platform fee, and any assessed late penalty must sum to cumulative `total_paid` after every payment; when a split requires rounding, the remainder stays with the investor (or platform for revenue distribution) as described above.
 
 ## Currency-Specific Handling
 

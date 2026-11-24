@@ -50,6 +50,7 @@ pub(crate) enum KycIndexKind {
 enum KycIndexKey {
     Count(KycIndexKind),
     Entry(KycIndexKind, u32),
+    Generation(KycIndexKind),
     Sorted(KycIndexKind),
 }
 
@@ -236,6 +237,44 @@ pub(crate) fn get_kyc_index_page(
     (page, count)
 }
 
+pub(crate) fn get_kyc_index_generation(env: &Env, kind: KycIndexKind) -> u64 {
+    let key = KycIndexKey::Generation(kind);
+    let generation = env.storage().persistent().get(&key).unwrap_or(0u64);
+    if env.storage().persistent().has(&key) {
+        crate::storage::extend_persistent_ttl(env, &key);
+    }
+    generation
+}
+
+pub(crate) fn get_kyc_index_cursor_generation(env: &Env, kind: KycIndexKind) -> u64 {
+    let tag = match kind {
+        KycIndexKind::VerifiedBusinesses => 0,
+        KycIndexKind::PendingBusinesses => 1,
+        KycIndexKind::RejectedBusinesses => 2,
+        KycIndexKind::VerifiedInvestors => 3,
+        KycIndexKind::PendingInvestors => 4,
+        KycIndexKind::RejectedInvestors => 5,
+    };
+    let mut preimage = Bytes::from_slice(env, b"kyc_cursor_scope_v1");
+    preimage.append(&Bytes::from_array(
+        env,
+        &get_kyc_index_generation(env, kind).to_be_bytes(),
+    ));
+    preimage.append(&Bytes::from_array(env, &[tag]));
+    let digest = env.crypto().sha256(&preimage).to_array();
+    u64::from_be_bytes([
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6],
+        digest[7],
+    ])
+}
+
+fn bump_kyc_index_generation(env: &Env, kind: KycIndexKind) {
+    let key = KycIndexKey::Generation(kind);
+    let generation = get_kyc_index_generation(env, kind).saturating_add(1);
+    env.storage().persistent().set(&key, &generation);
+    crate::storage::extend_persistent_ttl(env, &key);
+}
+
 fn add_to_kyc_index(env: &Env, kind: KycIndexKind, address: &Address) {
     ensure_kyc_index_sorted(env, kind);
 
@@ -298,6 +337,7 @@ fn add_to_kyc_index(env: &Env, kind: KycIndexKind, address: &Address) {
     count += 1;
     env.storage().persistent().set(&count_key, &count);
     crate::storage::extend_persistent_ttl(env, &count_key);
+    bump_kyc_index_generation(env, kind);
 }
 
 fn remove_from_kyc_index(env: &Env, kind: KycIndexKind, address: &Address) {
@@ -311,12 +351,15 @@ fn remove_from_kyc_index(env: &Env, kind: KycIndexKind, address: &Address) {
         .unwrap_or(0);
 
     let mut write_index = 0u32;
+    let mut removed = false;
 
     for read_index in 0..count {
         let read_key = KycIndexKey::Entry(kind, read_index);
 
         if let Some(existing) = env.storage().persistent().get::<_, Address>(&read_key) {
-            if existing != *address {
+            if existing == *address {
+                removed = true;
+            } else {
                 if write_index != read_index {
                     let write_key = KycIndexKey::Entry(kind, write_index);
                     env.storage().persistent().set(&write_key, &existing);
@@ -335,6 +378,9 @@ fn remove_from_kyc_index(env: &Env, kind: KycIndexKind, address: &Address) {
 
     env.storage().persistent().set(&count_key, &write_index);
     crate::storage::extend_persistent_ttl(env, &count_key);
+    if removed {
+        bump_kyc_index_generation(env, kind);
+    }
 }
 
 #[contracttype]
@@ -610,15 +656,14 @@ impl BusinessVerificationStorage {
         }
     }
 
-
-pub fn get_verification(env: &Env, business: &Address) -> Option<BusinessVerification> {
-    let key = KycStorageKey::BusinessRecord(business.clone());
-    let value = env.storage().persistent().get(&key);
-    if value.is_some() {
-        crate::storage::extend_persistent_ttl(env, &key);
+    pub fn get_verification(env: &Env, business: &Address) -> Option<BusinessVerification> {
+        let key = KycStorageKey::BusinessRecord(business.clone());
+        let value = env.storage().persistent().get(&key);
+        if value.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        value
     }
-    value
-}
 
     pub fn update_verification(
         env: &Env,
@@ -932,16 +977,14 @@ impl InvestorVerificationStorage {
         crate::storage::extend_persistent_ttl(env, &key);
     }
 
-
-pub fn get(env: &Env, investor: &Address) -> Option<InvestorVerification> {
-    let key = KycStorageKey::InvestorRecord(investor.clone());
-    let value = env.storage().persistent().get(&key);
-    if value.is_some() {
-        crate::storage::extend_persistent_ttl(env, &key);
+    pub fn get(env: &Env, investor: &Address) -> Option<InvestorVerification> {
+        let key = KycStorageKey::InvestorRecord(investor.clone());
+        let value = env.storage().persistent().get(&key);
+        if value.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        value
     }
-    value
-}
-
 
     pub fn update(env: &Env, verification: &InvestorVerification) {
         let old_verification = Self::get(env, &verification.investor);
@@ -1186,7 +1229,7 @@ pub fn validate_bid(
     validate_investor_investment(env, investor, bid_amount)?;
 
     // 6. Existing Bid Protection
-    BidStorage::cleanup_expired_bids(env, &invoice.id);
+    BidStorage::cleanup_expired_bids(env, &invoice.id)?;
     let existing_bids = BidStorage::get_bids_for_invoice(env, &invoice.id);
     for bid_id in existing_bids.iter() {
         if let Some(existing_bid) = BidStorage::get_bid(env, &bid_id) {
@@ -1254,7 +1297,7 @@ pub fn submit_kyc_application(
                 "new_submission"
             },
         )),
-    );
+    )?;
 
     Ok(())
 }
@@ -1294,7 +1337,7 @@ pub fn verify_business(
         Some(String::from_str(env, "Pending")),
         Some(String::from_str(env, "Verified")),
         Some(String::from_str(env, "business")),
-    );
+    )?;
     Ok(())
 }
 
@@ -1339,7 +1382,7 @@ pub fn reject_business(
         Some(String::from_str(env, "Pending")),
         Some(String::from_str(env, "Rejected")),
         Some(reason),
-    );
+    )?;
     Ok(())
 }
 
@@ -1614,7 +1657,7 @@ pub fn submit_investor_kyc(
                 "new_submission"
             },
         )),
-    );
+    )?;
     Ok(())
 }
 
@@ -1665,7 +1708,7 @@ pub fn verify_investor(
                 Some(String::from_str(env, "Pending")),
                 Some(String::from_str(env, "Verified")),
                 Some(String::from_str(env, "investor")),
-            );
+            )?;
             Ok(verification)
         }
     }
@@ -1710,7 +1753,7 @@ pub fn reject_investor(
         Some(String::from_str(env, "Pending")),
         Some(String::from_str(env, "Rejected")),
         Some(reason),
-    );
+    )?;
     Ok(())
 }
 
@@ -1771,7 +1814,7 @@ pub fn revoke_investor_kyc(
         Some(String::from_str(env, "Verified")),
         Some(String::from_str(env, "Rejected")),
         Some(reason),
-    );
+    )?;
     Ok(())
 }
 

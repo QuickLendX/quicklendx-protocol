@@ -152,6 +152,36 @@ When you bump the contract WASM:
 - [ ] After upgrading, confirm `get_version` reports the expected value and that
       existing backups still pass `validate_backup`.
 
+## Frozen Storage Layout Fixtures & Refresh Policy
+
+Storage backward-compatibility promises are enforced in CI by frozen Soroban XDR
+fixtures stored at [`quicklendx-contracts/tests/fixtures/storage_v1_layout.json`](../quicklendx-contracts/tests/fixtures/storage_v1_layout.json)
+and verified by [`quicklendx-contracts/src/test_storage_migration_compat.rs`](../quicklendx-contracts/src/test_storage_migration_compat.rs).
+
+The fixture freezes raw base64-encoded `ScVal` storage keys and values for the v1
+released layout of `Invoice`, `Bid`, `Investment`, and `BackupV1`. Tests inject
+the raw XDR directly into contract storage and assert that current storage
+readers decode them identically (and that `BackupV1` auto-upgrades to `Backup`
+v2).
+
+### Refresh policy
+
+- **Never** regenerate `storage_v1_layout.json` to silence a failing test caused
+  by an accidental struct field addition, removal, rename, or storage-key change.
+- Refresh the fixture **only** as part of an intentional breaking storage-schema
+  change that also:
+  1. Bumps `STORAGE_SCHEMA_VERSION` / `PROTOCOL_VERSION` per the
+     [upgrade policy](#upgrade-policy).
+  2. Provides a migration path (or versioned adapter) for existing on-chain
+     records.
+  3. Explicitly calls out the fixture refresh in the PR description.
+- To regenerate the fixture on an intentional breaking change, run:
+
+```bash
+cd quicklendx-contracts
+cargo test --lib generate_v1_storage_fixture -- --ignored
+```
+
 ## Related documentation
 
 - [backup-format.md](backup-format.md) — backup `format_version` matrix and the v1→v2 upgrade path.

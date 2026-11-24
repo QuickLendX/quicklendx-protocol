@@ -76,8 +76,8 @@ fn store(env: &Env, bid: &Bid) {
 
 /// Assert `get_best_bid` == `rank_bids[0]` (the core invariant).
 fn assert_best_eq_first(env: &Env, invoice: &BytesN<32>) {
-    let ranked = BidStorage::rank_bids(env, invoice);
-    let best = BidStorage::get_best_bid(env, invoice);
+    let ranked = BidStorage::rank_bids(env, invoice).expect("bid ranking should succeed");
+    let best = BidStorage::get_best_bid(env, invoice).expect("best bid query should succeed");
     if ranked.len() == 0 {
         assert!(best.is_none(), "best must be None when ranking is empty");
         return;
@@ -109,7 +109,7 @@ fn tiebreak_profit_higher_wins() {
         store(&env, &high);
         store(&env, &low);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 2);
         assert_eq!(ranked.get(0).unwrap().bid_id, high.bid_id, "higher profit must rank first");
         assert_best_eq_first(&env, &invoice);
@@ -143,7 +143,7 @@ fn tiebreak_profit_three_bids_descending() {
         store(&env, &b1);
         store(&env, &b2);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, b1.bid_id);
         assert_eq!(ranked.get(1).unwrap().bid_id, b2.bid_id);
         assert_eq!(ranked.get(2).unwrap().bid_id, b3.bid_id);
@@ -170,7 +170,7 @@ fn tiebreak_expected_return_higher_wins() {
         store(&env, &low);
         store(&env, &high);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, high.bid_id);
         assert_best_eq_first(&env, &invoice);
     });
@@ -202,7 +202,7 @@ fn tiebreak_expected_return_insertion_order_independent() {
             if order == 0 { store(&env, &high); store(&env, &low); }
             else          { store(&env, &low);  store(&env, &high); }
 
-            let ranked = BidStorage::rank_bids(&env, &invoice);
+            let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
             assert_eq!(ranked.get(0).unwrap().bid_id, high.bid_id,
                 "order={order}: higher expected_return must always rank first");
             assert_best_eq_first(&env, &invoice);
@@ -231,7 +231,7 @@ fn tiebreak_bid_amount_higher_wins() {
         store(&env, &low);
         store(&env, &high);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, high.bid_id,
             "higher bid_amount must win when profit and expected_return are equal");
         assert_best_eq_first(&env, &invoice);
@@ -265,7 +265,7 @@ fn tiebreak_bid_amount_insertion_order_independent() {
             if order == 0 { store(&env, &high); store(&env, &low); }
             else          { store(&env, &low);  store(&env, &high); }
 
-            let ranked = BidStorage::rank_bids(&env, &invoice);
+            let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
             assert_eq!(ranked.get(0).unwrap().bid_id, high.bid_id,
                 "order={order}: higher bid_amount must always rank first");
             assert_best_eq_first(&env, &invoice);
@@ -291,7 +291,7 @@ fn tiebreak_timestamp_newer_wins() {
         store(&env, &older);
         store(&env, &newer);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, newer.bid_id,
             "newer timestamp must rank first");
         assert_eq!(ranked.get(1).unwrap().bid_id, older.bid_id);
@@ -325,7 +325,7 @@ fn tiebreak_timestamp_insertion_order_independent() {
             if order == 0 { store(&env, &newer); store(&env, &older); }
             else          { store(&env, &older); store(&env, &newer); }
 
-            let ranked = BidStorage::rank_bids(&env, &invoice);
+            let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
             assert_eq!(ranked.get(0).unwrap().bid_id, newer.bid_id,
                 "order={order}: newer timestamp must always rank first");
             assert_best_eq_first(&env, &invoice);
@@ -350,7 +350,7 @@ fn tiebreak_timestamp_three_bids_newest_first() {
         store(&env, &t2);
         store(&env, &t1);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, t1.bid_id);
         assert_eq!(ranked.get(1).unwrap().bid_id, t2.bid_id);
         assert_eq!(ranked.get(2).unwrap().bid_id, t3.bid_id);
@@ -376,7 +376,7 @@ fn tiebreak_bid_id_higher_wins() {
         store(&env, &low_id);
         store(&env, &high_id);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, high_id.bid_id,
             "higher bid_id must rank first on full tie");
         assert_eq!(ranked.get(1).unwrap().bid_id, low_id.bid_id);
@@ -410,7 +410,7 @@ fn tiebreak_bid_id_insertion_order_independent() {
             if order == 0 { store(&env, &high_id); store(&env, &low_id); }
             else          { store(&env, &low_id);  store(&env, &high_id); }
 
-            let ranked = BidStorage::rank_bids(&env, &invoice);
+            let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
             assert_eq!(ranked.get(0).unwrap().bid_id, high_id.bid_id,
                 "order={order}: higher bid_id must always rank first");
             assert_best_eq_first(&env, &invoice);
@@ -435,7 +435,7 @@ fn tiebreak_bid_id_three_bids_descending() {
         store(&env, &b_low);
         store(&env, &b_high);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.get(0).unwrap().bid_id, b_high.bid_id);
         assert_eq!(ranked.get(1).unwrap().bid_id, b_mid.bid_id);
         assert_eq!(ranked.get(2).unwrap().bid_id, b_low.bid_id);
@@ -498,7 +498,7 @@ fn non_placed_withdrawn_excluded() {
         store(&env, &placed);
         store(&env, &withdrawn);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 1, "only Placed bids appear in ranking");
         assert_eq!(ranked.get(0).unwrap().bid_id, placed.bid_id);
         assert_best_eq_first(&env, &invoice);
@@ -519,7 +519,7 @@ fn non_placed_accepted_excluded() {
         store(&env, &placed);
         store(&env, &accepted);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 1);
         assert_eq!(ranked.get(0).unwrap().bid_id, placed.bid_id);
         assert_best_eq_first(&env, &invoice);
@@ -540,7 +540,7 @@ fn non_placed_expired_excluded() {
         store(&env, &placed);
         store(&env, &expired);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 1);
         assert_eq!(ranked.get(0).unwrap().bid_id, placed.bid_id);
         assert_best_eq_first(&env, &invoice);
@@ -561,7 +561,7 @@ fn non_placed_cancelled_excluded() {
         store(&env, &placed);
         store(&env, &cancelled);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 1);
         assert_eq!(ranked.get(0).unwrap().bid_id, placed.bid_id);
         assert_best_eq_first(&env, &invoice);
@@ -582,9 +582,9 @@ fn all_non_placed_gives_empty_ranking() {
         store(&env, &b1);
         store(&env, &b2);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 0, "no Placed bids -> empty ranking");
-        assert!(BidStorage::get_best_bid(&env, &invoice).is_none());
+        assert!(BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").is_none());
     });
 }
 
@@ -597,9 +597,9 @@ fn no_bids_gives_empty_ranking() {
     let invoice = inv(&env, 0x65);
 
     env.as_contract(&contract, || {
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 0);
-        assert!(BidStorage::get_best_bid(&env, &invoice).is_none());
+        assert!(BidStorage::get_best_bid(&env, &invoice).expect("best bid query should succeed").is_none());
     });
 }
 
@@ -720,7 +720,7 @@ fn rank_bids_ten_bids_distinct_profits() {
             bids.push_back(b);
         }
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 10);
 
         // Verify strictly descending profit
@@ -751,7 +751,7 @@ fn rank_bids_five_full_ties_rank_by_bid_id() {
             store(&env, &b);
         }
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 5);
 
         // Verify strictly descending bid_id (last byte)
@@ -791,8 +791,8 @@ fn ranking_is_isolated_per_invoice() {
         store(&env, &b1);
         store(&env, &b2);
 
-        let ranked_a = BidStorage::rank_bids(&env, &inv_a);
-        let ranked_b = BidStorage::rank_bids(&env, &inv_b);
+        let ranked_a = BidStorage::rank_bids(&env, &inv_a).expect("bid ranking should succeed");
+        let ranked_b = BidStorage::rank_bids(&env, &inv_b).expect("bid ranking should succeed");
 
         assert_eq!(ranked_a.len(), 2);
         assert_eq!(ranked_b.len(), 2);
@@ -820,7 +820,7 @@ fn single_bid_is_best_and_only_ranked() {
         let b = make_bid(&env, &invoice, 5_000, 6_000, 100, BidStatus::Placed, 0x42);
         store(&env, &b);
 
-        let ranked = BidStorage::rank_bids(&env, &invoice);
+        let ranked = BidStorage::rank_bids(&env, &invoice).expect("bid ranking should succeed");
         assert_eq!(ranked.len(), 1);
         assert_eq!(ranked.get(0).unwrap().bid_id, b.bid_id);
         assert_best_eq_first(&env, &invoice);
