@@ -1,8 +1,8 @@
-# QuickLendX Protocol - Smart Contracts
+﻿# QuickLendX Protocol - Smart Contracts
 
 [![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Soroban](https://img.shields.io/badge/Soroban-000000?style=for-the-badge&logo=stellar&logoColor=white)](https://soroban.stellar.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 **Production-ready** smart contracts for QuickLendX, a decentralized invoice financing protocol built on Stellar's Soroban platform. These contracts enable businesses to access working capital by selling their invoices to investors through a secure, transparent, and efficient blockchain-based marketplace.
 
@@ -13,12 +13,11 @@
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
-- [API Documentation](#api-documentation)
-- [Deterministic Ledger Time](#deterministic-ledger-time)
-- [Code Examples](#code-examples)
-- [Deployment Guide](#deployment-guide)
+- [API Reference](../docs/contracts/api-reference.md)
+- [Deployment](#deployment)
+- [WASM Size Budget](../docs/contracts/wasm-size.md)
 - [Troubleshooting](#troubleshooting)
-- [Best Practices](#best-practices)
+- [Security](#security)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 
@@ -135,21 +134,23 @@ let bid_id = contract.place_bid(
 )?;
 ```
 
-## 📖 API Documentation
+## API Reference
 
-### Deterministic Ledger Time
+The full entrypoint inventory, function details, data structures, and usage examples are in the [Contracts API Reference](../docs/contracts/api-reference.md).
 
-See [Deterministic Ledger Time](docs/contracts/deterministic-time.md) for guidelines on using `env.ledger().timestamp()` instead of off-chain wall-clock time in contract logic.
+## Deployment
 
-### Settlement formula and update timing
+Build and validate the contracts from `quicklendx-contracts/` with `cargo build` and `cargo test`. For an optimized production artifact, use `stellar contract build` and follow the current Stellar CLI deployment workflow.
 
-See [Settlement formula, inputs, and update timing](../docs/contracts/settlement-formula.md) for the contributor-facing explanation of the settlement formula and when fee updates apply.
+Before deployment, verify the contract configuration and admin setup using the [admin operations guide](../docs/contracts/admin.md). The [WASM size budget](../docs/contracts/wasm-size.md) documents size thresholds and CI enforcement.
 
-### Settlement Currencies
+## Troubleshooting
 
-See [Settlement Currencies by Invoice Type](docs/SETTLEMENT_CURRENCIES.md) for a downstream integrator guide on which tokens are accepted for each invoice category.
+- Build failures: install the Rust and Stellar CLI toolchains listed under [Quick Start](#quick-start), then run `cargo build`.
+- Contract errors: consult the [error reference](../docs/contracts/errors.md) and [diagnostics guide](docs/diagnostics.md).
+- For more detail, run `cargo test -- --nocapture` and review the failing test output.
 
-### Contract entrypoints (current surface)
+## Security
 
 The deployed contract (defined in `src/lib.rs`) exposes the contract entrypoints across admin, fee management, KYC/verification, invoice lifecycle, bidding, escrow, investment queries, settlement, disputes, arbiter registry, and backup management.
 
@@ -1184,12 +1185,15 @@ The protocol includes comprehensive fuzz testing for critical operations:
 - **Arithmetic Safety**: Tests for overflow/underflow in calculations
 
 See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) for detailed security analysis.
+Review the [contract security guide](../docs/contracts/security.md), [access-control reference](../docs/contracts/access-control.md), and repository [security analysis](SECURITY_ANALYSIS.md) before changing privileged or value-moving flows.
+
+Tests for auth-gated calls should enable `env.mock_all_auths()` before the first contract interaction. This test-only helper does not bypass business-logic checks or change production authorization.
 
 ## 📚 Documentation
 
 Additional documentation is available in the `docs/` directory:
 
-- **[Regulatory Compliance Hook](docs/contracts/regulatory.md)**: Reserved compliance seam — how `require_regulatory_ok` is wired into invoice and bid flows.
+- **[Regulatory Compliance Hook](../docs/contracts/regulatory.md)**: Reserved compliance seam — how `require_regulatory_ok` is wired into invoice and bid flows.
 - **[Decimal Handling](docs/decimal-handling.md)**: How the contract handles different token decimal places (USDC, DAI, XLM, etc.) and how integrators should convert amounts
 - **[Protocol Limits](PROTOCOL_LIMITS_README.md)**: Protocol-wide limits and configuration
 - **[Admin Operations](docs/admin-dry-run.md)**: Admin function dry-run previews
@@ -1197,7 +1201,7 @@ Additional documentation is available in the `docs/` directory:
 - **[Bid Ranking](../docs/BID_RANKING.md)**: Deterministic ordering function — tier-by-tier tie-breaker logic, invariants, and contributor workflow.
 - **[Escrow Invariants](docs/escrow-invariants.md)**: Escrow state guarantees and safety properties
 - **[Investment Lifecycle](docs/investment-lifecycle.md)**: Investment states and transitions
-- **[Settlement & Fund Distribution](docs/SETTLEMENT.md)**: How invoice settlement splits funds across investors, treasury, and the platform.
+- **[Settlement & Fund Distribution](../docs/SETTLEMENT.md)**: How invoice settlement splits funds across investors, treasury, and the platform.
 - **[Settlement & Dispute Interaction](docs/settlement-dispute-interaction.md)**: How settlements interact with disputes
 - **[Invoice Search](docs/invoice-search-ranking.md)**: Invoice search and ranking algorithms
 - **[Insurance Stacking](docs/insurance-stacking.md)**: Multiple insurance providers per investment
@@ -1317,19 +1321,13 @@ Default constants (defined in `src/protocol_limits.rs`):
 | `DEFAULT_MIN_BID_AMOUNT` | `10` |
 | `DEFAULT_MIN_BID_BPS` | `100` (1 %) |
 | `DEFAULT_MAX_INVOICES_PER_BUSINESS` | `100` |
+## Test Harness Authorization
 
-### Bid TTL and per-investor bid cap
+For test setup patterns and shared helpers, see the [contracts contributor guide](../docs/contracts/contributor-guide.md).
 
-| Entrypoint | Description |
-|-----------|-------------|
-| `get_bid_ttl_config()` | Full TTL snapshot (`current_days`, `min_days`, `max_days`, `is_custom`) |
-| `set_bid_ttl_days(days)` | Set bid TTL 1–30 days (admin only) |
-| `reset_bid_ttl_to_default()` | Restore default 7-day TTL |
-| `get_bid_limit_config()` | Full per-investor cap snapshot (`limit`, `is_disabled`, `is_custom`) |
-| `set_max_active_bids_per_investor(limit)` | Set cap; `0` = unlimited |
-| `reset_bid_limit()` | Restore default 20-bid cap |
+## Protocol Limits
 
-Full documentation: [`docs/contracts/limits.md`](../docs/contracts/limits.md).
+See the [protocol limits reference](docs/contracts/limits.md) for configurable limits, defaults, and admin entrypoints.
 
 ## 🤝 Contributing
 
@@ -1353,7 +1351,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ## 🆘 Support
 
