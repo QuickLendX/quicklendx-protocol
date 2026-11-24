@@ -1,6 +1,7 @@
 //! Integration tests and proptest for fee boundaries, surcharge bounds,
 //! whole-transaction bounds, and cross-fee validator consistency (Issue #2968).
 
+#![allow(clippy::disallowed_macros)]
 use proptest::prelude::*;
 use soroban_sdk::{contract, contractimpl, testutils::Address as _, Address, Env};
 

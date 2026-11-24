@@ -102,8 +102,8 @@ fn test_fresh_contract_all_pass() {
 
     let report = client.invariant_self_check(&admin);
 
-    // Nine composed checks, all green on an empty protocol.
-    assert_eq!(report.checks.len(), 9);
+    // Ten composed checks, all green on an empty protocol.
+    assert_eq!(report.checks.len(), 10);
     assert!(report.all_passed);
 }
 
@@ -144,6 +144,7 @@ fn test_populated_healthy_state_passes() {
         &report,
         "bid_withdrawal_refund_accounting"
     ));
+    assert!(passed_for(&env, &report, "held_reserve_matches_escrows"));
 }
 
 #[test]
@@ -315,4 +316,63 @@ fn test_settlement_total_invariant_violation() {
 
     assert!(!passed_for(&env, &report, "settlement_total_invariant"));
     assert!(!report.all_passed);
+}
+
+#[test]
+fn test_held_reserve_matches_escrows_pass_and_corrupted_fail() {
+    let (env, client, contract_id, admin) = setup();
+    let currency = Address::generate(&env);
+    client.add_currency(&admin, &currency);
+
+    env.as_contract(&contract_id, || {
+        let invoice_id = BytesN::from_array(&env, &[11u8; 32]);
+        let mut invoice = make_invoice(&env, &invoice_id);
+        invoice.currency = currency.clone();
+        invoice.status = InvoiceStatus::Funded;
+        invoice.funded_amount = 2_500;
+        InvoiceStorage::store_invoice(&env, &invoice);
+
+        let escrow_id = BytesN::from_array(&env, &[12u8; 32]);
+        let escrow = crate::payments::Escrow {
+            escrow_id: escrow_id.clone(),
+            invoice_id: invoice_id.clone(),
+            investor: Address::generate(&env),
+            business: invoice.business.clone(),
+            amount: 2_500,
+            currency: currency.clone(),
+            created_at: 0,
+            status: crate::payments::EscrowStatus::Held,
+        };
+        env.storage().persistent().set(&escrow_id, &escrow);
+        let invoice_key = (soroban_sdk::symbol_short!("escrow"), &invoice_id);
+        env.storage().persistent().set(&invoice_key, &escrow_id);
+
+        // Repair reserve so it matches Held escrow sum and is marked complete.
+        crate::payments::EscrowStorage::repair_held_reserve_page(&env, &currency, 0, 100)
+            .expect("repair should succeed");
+        assert!(crate::payments::EscrowStorage::is_held_reserve_complete(
+            &env, &currency
+        ));
+
+        let healthy = run_invariant_checks(&env);
+        assert!(passed_for(&env, &healthy, "held_reserve_matches_escrows"));
+
+        // Corrupt held reserve directly in persistent storage.
+        let reserve_key = (soroban_sdk::symbol_short!("esc_res"), currency.clone());
+        env.storage().persistent().set(&reserve_key, &9_999i128);
+
+        let corrupted = run_invariant_checks(&env);
+        assert!(!passed_for(
+            &env,
+            &corrupted,
+            "held_reserve_matches_escrows"
+        ));
+        assert!(!corrupted.all_passed);
+
+        // Repairing again restores the invariant.
+        crate::payments::EscrowStorage::repair_held_reserve_page(&env, &currency, 0, 100)
+            .expect("second repair should succeed");
+        let repaired = run_invariant_checks(&env);
+        assert!(passed_for(&env, &repaired, "held_reserve_matches_escrows"));
+    });
 }
