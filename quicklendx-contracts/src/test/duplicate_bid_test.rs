@@ -1,32 +1,70 @@
 // src/test/duplicate_bid_test.rs
-//! Test that submitting the same bid with identical (invoice_id, investor, salt) fails with `DuplicateBid`.
+//! Test that submitting the same bid with identical `(invoice_id, investor, salt)` fails with
+//! `QuickLendXError::DuplicateBid`.
 
-use super::*; // bring the test utilities into scope
+#![cfg(test)]
+
+use crate::errors::QuickLendXError;
+use crate::invoice::InvoiceCategory;
+use crate::{QuickLendXContract, QuickLendXContractClient};
+use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, Vec};
 
 #[test]
 fn test_duplicate_bid_idempotency() {
-    // Setup environment
     let env = Env::default();
-    let contract = QuickLendXContractClient::new(&env, &env.register_contract(None, QuickLendXContract {}));
+    env.mock_all_auths();
 
-    // Create a mock investor and invoice
-    let investor = env.accounts().generate();
-    let issuer = env.accounts().generate();
-    let invoice_id = BytesN::from_array(&env, &[0u8; 32]);
+    let contract_id = env.register(QuickLendXContract, ());
+    let client = QuickLendXContractClient::new(&env, &contract_id);
+
+    let admin = Address::generate(&env);
+    client.initialize_admin(&admin);
+
+    let business = Address::generate(&env);
+    client.submit_kyc_application(&business, &Bytes::from_slice(&env, b"business-kyc"));
+    client.verify_business(&admin, &business);
+
+    let investor = Address::generate(&env);
+    client.submit_investor_kyc(&investor, &Bytes::from_slice(&env, b"investor-kyc"));
+    client.verify_investor(&investor, &10_000i128);
+
+    let currency = Address::generate(&env);
     let amount: i128 = 1_000;
-    let expected_return: i128 = 1_100;
+    let due_date = env.ledger().timestamp() + 86_400;
+    let nonce = BytesN::from_array(&env, &[9u8; 32]);
 
-    // Assume invoice creation helper exists
-    contract.create_invoice(&issuer, &invoice_id, &amount, &expected_return);
+    let invoice_id = client.store_invoice(
+        &business,
+        &amount,
+        &currency,
+        &due_date,
+        &Bytes::from_slice(&env, b"Duplicate bid invoice"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &nonce,
+    );
+    client.verify_invoice(&admin, &invoice_id);
 
     // Prepare a deterministic salt
     let salt = BytesN::from_array(&env, &[1u8; 32]);
 
     // First bid should succeed
-    let first_bid = contract.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &salt);
-    assert_eq!(first_bid, Ok(()));
+    let first_bid = client.try_place_bid(&investor, &invoice_id, &amount, &(amount + 100), &salt);
+    assert!(first_bid.is_ok());
 
-    // Second bid with same parameters should return DuplicateBid error
-    let duplicate_bid = contract.place_bid(&investor, &invoice_id, &amount, &(amount + 100), &salt);
-    assert_eq!(duplicate_bid, Err(ContractError::DuplicateBid));
+    // Second bid with identical (invoice_id, investor, salt) must fail with DuplicateBid
+    let duplicate_bid =
+        client.try_place_bid(&investor, &invoice_id, &amount, &(amount + 100), &salt);
+    assert_eq!(duplicate_bid, Err(Ok(QuickLendXError::DuplicateBid)));
+
+    // A different salt from the same investor on the same invoice should succeed
+    let other_salt = BytesN::from_array(&env, &[2u8; 32]);
+    let second_bid = client.try_place_bid(
+        &investor,
+        &invoice_id,
+        &amount,
+        &(amount + 100),
+        &other_salt,
+    );
+    assert!(second_bid.is_ok());
 }

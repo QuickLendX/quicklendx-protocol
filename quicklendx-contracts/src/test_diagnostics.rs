@@ -29,7 +29,7 @@ fn full_setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let (env, client) = setup();
     let admin = Address::generate(&env);
     client.set_admin(&admin);
-    let _ = client.try_initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
+    let _ = client.try_initialize_protocol_limits(&admin);
     let contract_addr = client.address.clone();
     (env, client, admin, contract_addr)
 }

@@ -41,11 +41,32 @@ export function redactSensitiveFields(obj: unknown): unknown {
   return result;
 }
 
+export interface ErrorHandlerOptions {
+  /**
+   * When true, `err.details` is included in the response body.
+   * Defaults to `process.env.NODE_ENV === "development"` so callers
+   * never need to mutate `process.env` to control this behaviour.
+   */
+  exposeDetails?: boolean;
+}
+
+/**
+ * Express error-handling middleware.
+ *
+ * @param options.exposeDetails - Override whether details are exposed.
+ *   Inject `true` only in non-production environments; never read or
+ *   mutate `process.env.NODE_ENV` from request handlers.
+/**
+ * Error handler middleware.
+ * Logs sanitized error details and returns a JSON error response.
+ * Only development mode exposes `details` to the client.
+ */
 export const errorHandler = (
   err: AppError,
   req: Request,
   res: Response,
-  next: NextFunction
+  next: NextFunction,
+  options: ErrorHandlerOptions = {}
 ) => {
   if (res.headersSent) {
     next(err);
@@ -60,11 +81,29 @@ export const errorHandler = (
   const safeDetails = redactSensitiveFields(err.details);
   console.error(`[Error] ${code}: ${message}`, safeDetails ?? "");
 
+  const exposeDetails =
+    options.exposeDetails !== undefined
+      ? options.exposeDetails
+      : process.env.NODE_ENV === "development";
+
   res.status(status).json({
     error: {
       message,
       code,
-      details: process.env.NODE_ENV === "development" ? err.details : undefined,
+      details: exposeDetails ? err.details : undefined,
     },
   });
 };
+
+/**
+ * Returns an Express error-handler bound to the given options.
+ * Use this to wire the middleware into an Express app without
+ * mutating process.env.
+ *
+ * Example (non-production only):
+ *   app.use(createErrorHandler({ exposeDetails: true }));
+ */
+export function createErrorHandler(options: ErrorHandlerOptions = {}) {
+  return (err: AppError, req: Request, res: Response, next: NextFunction) =>
+    errorHandler(err, req, res, next, options);
+}

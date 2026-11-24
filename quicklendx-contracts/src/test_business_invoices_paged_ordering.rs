@@ -59,14 +59,26 @@ fn returns_invoices_sorted_by_created_at_descending() {
     let page = client.get_business_invoices_paged(
         &business,
         &Option::<InvoiceStatus>::None,
-        &0u32,
+        &None::<String>,
         &10u32,
     );
 
-    assert_eq!(page.len(), 3);
-    assert_eq!(page.get(0).unwrap(), id_newest, "index 0 must be newest");
-    assert_eq!(page.get(1).unwrap(), id_middle, "index 1 must be middle");
-    assert_eq!(page.get(2).unwrap(), id_oldest, "index 2 must be oldest");
+    assert_eq!(page.items.len(), 3);
+    assert_eq!(
+        page.items.get(0).unwrap(),
+        id_newest,
+        "index 0 must be newest"
+    );
+    assert_eq!(
+        page.items.get(1).unwrap(),
+        id_middle,
+        "index 1 must be middle"
+    );
+    assert_eq!(
+        page.items.get(2).unwrap(),
+        id_oldest,
+        "index 2 must be oldest"
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -84,12 +96,12 @@ fn single_invoice_returned_in_correct_position() {
     let page = client.get_business_invoices_paged(
         &business,
         &Option::<InvoiceStatus>::None,
-        &0u32,
+        &None::<String>,
         &10u32,
     );
 
-    assert_eq!(page.len(), 1);
-    assert_eq!(page.get(0).unwrap(), id);
+    assert_eq!(page.items.len(), 1);
+    assert_eq!(page.items.get(0).unwrap(), id);
 }
 
 // ---------------------------------------------------------------------------
@@ -105,17 +117,21 @@ fn returns_status_filtered_invoices_sorted_by_created_at_descending() {
     let id_early = create_invoice_at(&env, &client, &business, 1_000);
     let id_late = create_invoice_at(&env, &client, &business, 9_000);
 
-    let page =
-        client.get_business_invoices_paged(&business, &Some(InvoiceStatus::Pending), &0u32, &10u32);
+    let page = client.get_business_invoices_paged(
+        &business,
+        &Some(InvoiceStatus::Pending),
+        &None::<String>,
+        &10u32,
+    );
 
-    assert_eq!(page.len(), 2);
+    assert_eq!(page.items.len(), 2);
     assert_eq!(
-        page.get(0).unwrap(),
+        page.items.get(0).unwrap(),
         id_late,
         "newer Pending invoice must be first"
     );
     assert_eq!(
-        page.get(1).unwrap(),
+        page.items.get(1).unwrap(),
         id_early,
         "older Pending invoice must be second"
     );
@@ -139,24 +155,40 @@ fn ordering_preserved_across_page_boundaries() {
     let id_t3 = create_invoice_at(&env, &client, &business, 3_000);
     let id_t4 = create_invoice_at(&env, &client, &business, 4_000);
 
-    let page1 =
-        client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &0u32, &2u32);
-    let page2 =
-        client.get_business_invoices_paged(&business, &Option::<InvoiceStatus>::None, &2u32, &2u32);
+    let page1 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &None::<String>,
+        &2u32,
+    );
+    let page2 = client.get_business_invoices_paged(
+        &business,
+        &Option::<InvoiceStatus>::None,
+        &page1.next_cursor,
+        &2u32,
+    );
 
-    assert_eq!(page1.len(), 2);
-    assert_eq!(page1.get(0).unwrap(), id_t4, "page1[0] must be newest");
+    assert_eq!(page1.items.len(), 2);
     assert_eq!(
-        page1.get(1).unwrap(),
+        page1.items.get(0).unwrap(),
+        id_t4,
+        "page1[0] must be newest"
+    );
+    assert_eq!(
+        page1.items.get(1).unwrap(),
         id_t3,
         "page1[1] must be second-newest"
     );
 
-    assert_eq!(page2.len(), 2);
+    assert_eq!(page2.items.len(), 2);
     assert_eq!(
-        page2.get(0).unwrap(),
+        page2.items.get(0).unwrap(),
         id_t2,
         "page2[0] must be third-newest"
     );
-    assert_eq!(page2.get(1).unwrap(), id_t1, "page2[1] must be oldest");
+    assert_eq!(
+        page2.items.get(1).unwrap(),
+        id_t1,
+        "page2[1] must be oldest"
+    );
 }

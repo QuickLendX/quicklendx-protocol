@@ -288,6 +288,8 @@ describe("BusinessInvoiceDetailPage (detail view)", () => {
           status: "Paid",
         },
       ],
+      next_cursor: null,
+      has_more: false,
     });
 
     render(

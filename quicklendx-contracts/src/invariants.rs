@@ -24,6 +24,7 @@ use soroban_sdk::{contracttype, Address, BytesN, Env, String, Vec};
 
 use crate::admin::AdminStorage;
 use crate::audit::AuditStorage;
+use crate::currency::CurrencyWhitelist;
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
 use crate::payments::{EscrowStatus, EscrowStorage};
@@ -539,6 +540,131 @@ fn check_bid_withdrawal_refund_accounting(env: &Env) -> InvariantCheck {
     row(env, "bid_withdrawal_refund_accounting", passed, evidence)
 }
 
+/// Held-reserve reconciliation: for every whitelisted currency (scanned in
+/// bounded pages), sum all `EscrowStatus::Held` escrows and verify the total
+/// matches `EscrowStorage::get_held_reserve`, reporting whether any reserve is
+/// still incomplete (`!EscrowStorage::is_held_reserve_complete`).
+///
+/// **Cost:** Bounded by `MAX_CURRENCIES_CHECKED` currencies and
+/// `MAX_INVOICES_CHECKED` invoices (scanned in pages of 100).
+fn check_held_reserve_matches_escrows(env: &Env) -> InvariantCheck {
+    const CURRENCY_PAGE_SIZE: u32 = 50;
+    const MAX_CURRENCIES_CHECKED: u32 = 100;
+    const INVOICE_PAGE_SIZE: u32 = 100;
+    const MAX_INVOICES_CHECKED: u32 = 1_000;
+
+    let currency_count = CurrencyWhitelist::get_whitelisted_currencies_count(env);
+    if currency_count > MAX_CURRENCIES_CHECKED {
+        return row(
+            env,
+            "held_reserve_matches_escrows",
+            false,
+            "Held-reserve check exceeded bounded whitelisted-currency scan limit.",
+        );
+    }
+
+    if currency_count == 0 {
+        return row(
+            env,
+            "held_reserve_matches_escrows",
+            true,
+            "No whitelisted currencies configured; held-reserve reconciliation trivially holds.",
+        );
+    }
+
+    let invoice_ids = InvoiceStorage::get_all_invoice_ids(env);
+    let total_invoices = invoice_ids.len();
+    if total_invoices > MAX_INVOICES_CHECKED {
+        return row(
+            env,
+            "held_reserve_matches_escrows",
+            false,
+            "Held-reserve check exceeded bounded invoice scan limit.",
+        );
+    }
+
+    let mut any_incomplete_with_held = false;
+    let mut currency_offset: u32 = 0;
+
+    while currency_offset < currency_count {
+        let currencies = CurrencyWhitelist::get_whitelisted_currencies_paged(
+            env,
+            currency_offset,
+            CURRENCY_PAGE_SIZE,
+        );
+        if currencies.is_empty() {
+            break;
+        }
+
+        for currency in currencies.iter() {
+            let mut held_sum: i128 = 0;
+            let mut inv_offset: u32 = 0;
+
+            while inv_offset < total_invoices {
+                let page_end = inv_offset
+                    .saturating_add(INVOICE_PAGE_SIZE)
+                    .min(total_invoices);
+                let mut i = inv_offset;
+                while i < page_end {
+                    if let Some(invoice_id) = invoice_ids.get(i) {
+                        if let Some(escrow) = EscrowStorage::get_escrow_by_invoice(env, &invoice_id)
+                        {
+                            if escrow.currency == currency && escrow.status == EscrowStatus::Held {
+                                if escrow.amount <= 0 {
+                                    return row(
+                                        env,
+                                        "held_reserve_matches_escrows",
+                                        false,
+                                        "Held-reserve check detected a non-positive Held escrow amount.",
+                                    );
+                                }
+                                held_sum = match held_sum.checked_add(escrow.amount) {
+                                    Some(val) => val,
+                                    None => {
+                                        return row(
+                                            env,
+                                            "held_reserve_matches_escrows",
+                                            false,
+                                            "Held-reserve check overflowed while summing Held escrows.",
+                                        );
+                                    }
+                                };
+                            }
+                        }
+                    }
+                    i = i.saturating_add(1);
+                }
+                inv_offset = page_end;
+            }
+
+            let reserve = EscrowStorage::get_held_reserve(env, &currency);
+            let complete = EscrowStorage::is_held_reserve_complete(env, &currency);
+
+            if reserve != held_sum {
+                let evidence = if complete {
+                    "Held-reserve mismatch: complete reserve disagrees with sum of Held escrows for a whitelisted currency."
+                } else {
+                    "Held-reserve mismatch: incomplete reserve disagrees with sum of Held escrows; run repair_held_reserve_page."
+                };
+                return row(env, "held_reserve_matches_escrows", false, evidence);
+            }
+
+            if !complete && held_sum > 0 {
+                any_incomplete_with_held = true;
+            }
+        }
+
+        currency_offset = currency_offset.saturating_add(currencies.len());
+    }
+
+    let evidence = if any_incomplete_with_held {
+        "Held reserves match Held escrow sums for all whitelisted currencies (some reserves not yet marked complete via repair_held_reserve_page)."
+    } else {
+        "Held reserves match Held escrow sums across all whitelisted currencies."
+    };
+    row(env, "held_reserve_matches_escrows", true, evidence)
+}
+
 /// Run every composed invariant check and assemble the report.
 ///
 /// Read-only and independent of admin gating, so tests can exercise it directly
@@ -555,6 +681,7 @@ pub fn run_invariant_checks(env: &Env) -> InvariantReport {
     checks.push_back(check_settlement_accounting_identity(env));
     checks.push_back(check_settlement_total_invariant(env));
     checks.push_back(check_bid_withdrawal_refund_accounting(env));
+    checks.push_back(check_held_reserve_matches_escrows(env));
 
     let mut all_passed = true;
     for c in checks.iter() {

@@ -29,7 +29,7 @@ In Soroban, events are published with a vector of topics and a single data value
 
 ### Pinned Event Topics List
 
-The following event topics are pinned as compile-time string constants in [src/events.rs](file:///c:/Users/hp/Desktop/quicklendx-protocol/quicklendx-contracts/src/events.rs). **Do not rename or change these topics without a major version upgrade.**
+The following event topics are pinned as compile-time string constants in [src/events.rs](../quicklendx-contracts/src/events.rs). **Do not rename or change these topics without a major version upgrade.**
 
 | Event Name | `topic_0` String | Description | Emitter |
 |---|---|---|---|
