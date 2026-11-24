@@ -35,7 +35,9 @@
 use crate::errors::QuickLendXError;
 use crate::storage::InvoiceStorage;
 use crate::types::{Dispute, DisputeResolution, DisputeStatus};
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contracttype, symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, String, Symbol, Vec,
+};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -97,6 +99,16 @@ pub struct DisputeTimeline {
     pub current_status: DisputeStatus,
 }
 
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CursorDisputeTimeline {
+    pub entries: Vec<DisputeTimelineEntry>,
+    pub total: u32,
+    pub has_more: bool,
+    pub current_status: DisputeStatus,
+    pub next_cursor: Option<String>,
+}
+
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -111,16 +123,14 @@ fn dispute_review_at_key(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
 
 /// Persist the exact ledger timestamp when a dispute entered `UnderReview`.
 pub(crate) fn set_under_review_timestamp(env: &Env, invoice_id: &BytesN<32>, timestamp: u64) {
-    env.storage()
-        .persistent()
-        .set(&dispute_review_at_key(invoice_id), &timestamp);
+    let key = dispute_review_at_key(invoice_id);
+    crate::storage::persistent_set(env, &key, &timestamp);
 }
 
 /// Read the persisted `UnderReview` timestamp, if the dispute reached review.
 pub(crate) fn get_under_review_timestamp(env: &Env, invoice_id: &BytesN<32>) -> Option<u64> {
-    env.storage()
-        .persistent()
-        .get(&dispute_review_at_key(invoice_id))
+    let key = dispute_review_at_key(invoice_id);
+    crate::storage::persistent_get(env, &key)
 }
 
 /// Remove any stale persisted `UnderReview` timestamp for a dispute.
@@ -206,7 +216,7 @@ fn paginate(
     let capped_limit = limit.min(TIMELINE_MAX_PAGE_SIZE);
     let start = offset.min(total);
     let end = start.saturating_add(capped_limit).min(total);
-    let has_more = end < total;
+    let has_more = capped_limit > 0 && end < total;
 
     let mut page: Vec<DisputeTimelineEntry> = Vec::new(env);
     let mut i = start;
@@ -271,5 +281,54 @@ pub fn get_dispute_timeline(
         total,
         has_more,
         current_status: invoice.dispute_status,
+    })
+}
+
+/// Returns a generation-bound opaque-cursor page of the redacted timeline.
+pub fn get_dispute_timeline_paged(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    cursor: Option<String>,
+    limit: u32,
+) -> Result<CursorDisputeTimeline, QuickLendXError> {
+    let invoice = InvoiceStorage::get(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+    if invoice.dispute_status == DisputeStatus::None {
+        return Err(QuickLendXError::DisputeNotFound);
+    }
+
+    let all_entries = build_all_entries(env, invoice_id, &invoice.dispute, &invoice.dispute_status);
+    let mut snapshot = Bytes::new(env);
+    snapshot.append(&invoice_id.clone().into());
+    snapshot.append(&all_entries.to_xdr(env));
+    let digest = env.crypto().sha256(&snapshot).to_array();
+    let generation = u64::from_be_bytes([
+        digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6],
+        digest[7],
+    ]);
+    let offset = match cursor {
+        Some(raw) => {
+            let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+            decoded.require_stable(generation)?;
+            decoded.offset
+        }
+        None => 0,
+    };
+    let total = all_entries.len();
+    let (entries, has_more) = paginate(env, &all_entries, offset, limit);
+    let capped_limit = crate::pagination::cap_query_limit(limit);
+    let next_cursor = if has_more {
+        Some(crate::pagination::encode_soroban_cursor(
+            env,
+            crate::pagination::Cursor::new(offset.saturating_add(capped_limit), generation),
+        ))
+    } else {
+        None
+    };
+    Ok(CursorDisputeTimeline {
+        entries,
+        total,
+        has_more,
+        current_status: invoice.dispute_status,
+        next_cursor,
     })
 }

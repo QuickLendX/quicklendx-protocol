@@ -22,3 +22,14 @@ const HEX_ID_PATTERN = /^0x[a-fA-F0-9]+$/;
 export function isHexId(value: unknown): value is string {
   return typeof value === "string" && HEX_ID_PATTERN.test(value);
 }
+
+export function truncateAddress(address: string): string {
+  const prefixLength = 6;
+  const suffixLength = 4;
+
+  if (address.length <= prefixLength + suffixLength + 2) {
+    return address;
+  }
+
+  return `${address.slice(0, prefixLength)}…${address.slice(-suffixLength)}`;
+}

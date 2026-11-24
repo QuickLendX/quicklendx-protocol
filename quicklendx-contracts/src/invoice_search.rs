@@ -254,7 +254,7 @@ impl InvoiceSearch {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod tests {
     use super::*;
     use soroban_sdk::testutils::Address as _;

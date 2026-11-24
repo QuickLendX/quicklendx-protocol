@@ -95,6 +95,7 @@ fn setup_escrow(env: &Env) -> (Address, Address, Address, BytesN<32>, Address, Q
             resolved_by: Address::generate(env),
             resolved_at: 0,
             resolution_outcome: crate::types::DisputeResolution::None,
+            votes: Vec::new(env),
         },
         total_paid: 0,
         payment_history: Vec::new(env),

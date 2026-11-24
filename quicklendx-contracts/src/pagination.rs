@@ -1,9 +1,7 @@
-//! Pure-Rust pagination utilities for QuickLendX query endpoints.
+//! Pagination utilities for QuickLendX query endpoints.
 //!
-//! This module provides overflow-safe helpers used by every paginated query in
-//! the contract. It is intentionally decoupled from Soroban-specific types so
-//! that pagination semantics can be unit-tested without touching storage or
-//! any contract state.
+//! This module provides overflow-safe helpers and the shared opaque cursor
+//! representation used by paged contract queries.
 //!
 //! # Invariants
 //!
@@ -19,7 +17,7 @@
 //!    goes through pre-computed safe bounds.
 
 use crate::errors::QuickLendXError;
-use alloc::{format, string::String, vec::Vec};
+use alloc::{string::String, vec::Vec};
 
 /// Maximum number of records returned by paginated query endpoints.
 pub const MAX_QUERY_LIMIT: u32 = 50;
@@ -41,54 +39,149 @@ pub const fn cap_query_limit(limit: u32) -> u32 {
     }
 }
 
-/// Cursor with snapshot generation metadata for paged reads.
+/// Versioned opaque cursor for paged reads.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub struct PageCursor {
+pub struct Cursor {
     /// 0-based offset or record index.
     pub offset: u32,
-    /// Snapshot generation timestamp/sequence tag for consistency validation.
+    /// Collection generation used to reject stale pages.
     pub generation: u64,
 }
 
-impl PageCursor {
+impl Cursor {
+    const VERSION: u8 = 1;
+    const PAYLOAD_LEN: usize = 13;
+    pub const ENCODED_LEN: usize = 24;
+    const BASE64: &'static [u8; 64] =
+        b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+
     /// Construct a new pagination cursor with the given offset and snapshot generation.
     #[inline]
     pub const fn new(offset: u32, generation: u64) -> Self {
         Self { offset, generation }
     }
 
-    /// Encode a cursor into a deterministic, reviewable string form.
-    ///
-    /// The encoding is intentionally simple and unambiguous:
-    /// `generation_offset`, where both components are base-10 digits.
-    /// This preserves ordering and makes invalid values easy to reject without
-    /// any lossy transformation or off-by-one interpretation.
-    #[inline]
+    /// Encode the version, generation, offset, and checksum as URL-safe base64.
     pub fn encode(&self) -> String {
-        format!("{}_{}", self.generation, self.offset)
-    }
+        let mut payload = [0u8; 17];
+        payload[0] = Self::VERSION;
+        payload[1..9].copy_from_slice(&self.generation.to_be_bytes());
+        payload[9..13].copy_from_slice(&self.offset.to_be_bytes());
+        let checksum = Self::cursor_checksum(&payload[..Self::PAYLOAD_LEN]);
+        payload[13..17].copy_from_slice(&checksum.to_be_bytes());
 
-    /// Decode a cursor produced by [`PageCursor::encode`].
-    ///
-    /// Rejects malformed or ambiguous payloads rather than silently accepting
-    /// non-numeric data or multiple separators.
-    #[inline]
-    pub fn decode(raw: &str) -> Result<Self, QuickLendXError> {
-        let mut parts = raw.split('_');
-        let generation_str = parts.next().ok_or(QuickLendXError::InvalidAmount)?;
-        let offset_str = parts.next().ok_or(QuickLendXError::InvalidAmount)?;
-        if parts.next().is_some() || generation_str.is_empty() || offset_str.is_empty() {
-            return Err(QuickLendXError::InvalidAmount);
+        let mut encoded = String::new();
+        let mut index = 0;
+        while index + 3 <= payload.len() {
+            let a = payload[index] as usize;
+            let b = payload[index + 1] as usize;
+            let c = payload[index + 2] as usize;
+            encoded.push(Self::BASE64[a >> 2] as char);
+            encoded.push(Self::BASE64[((a & 0x03) << 4) | (b >> 4)] as char);
+            encoded.push(Self::BASE64[((b & 0x0f) << 2) | (c >> 6)] as char);
+            encoded.push(Self::BASE64[c & 0x3f] as char);
+            index += 3;
         }
 
-        let generation = generation_str
-            .parse::<u64>()
-            .map_err(|_| QuickLendXError::InvalidAmount)?;
-        let offset = offset_str
-            .parse::<u32>()
-            .map_err(|_| QuickLendXError::InvalidAmount)?;
+        let a = payload[index] as usize;
+        let b = payload[index + 1] as usize;
+        encoded.push(Self::BASE64[a >> 2] as char);
+        encoded.push(Self::BASE64[((a & 0x03) << 4) | (b >> 4)] as char);
+        encoded.push(Self::BASE64[(b & 0x0f) << 2] as char);
+        encoded.push('=');
+        encoded
+    }
 
+    /// Decode a cursor produced by [`Cursor::encode`].
+    #[inline]
+    pub fn decode(raw: &str) -> Result<Self, QuickLendXError> {
+        let encoded = raw.as_bytes();
+        if encoded.len() != Self::ENCODED_LEN || encoded[Self::ENCODED_LEN - 1] != b'=' {
+            return Err(QuickLendXError::InvalidCursor);
+        }
+
+        let mut payload = [0u8; 17];
+        let mut input_index = 0;
+        let mut output_index = 0;
+        while input_index + 4 < encoded.len() {
+            let a = Self::base64_value(encoded[input_index])? as u32;
+            let b = Self::base64_value(encoded[input_index + 1])? as u32;
+            let c = Self::base64_value(encoded[input_index + 2])? as u32;
+            let d = Self::base64_value(encoded[input_index + 3])? as u32;
+            payload[output_index] = ((a << 2) | (b >> 4)) as u8;
+            payload[output_index + 1] = ((b << 4) | (c >> 2)) as u8;
+            payload[output_index + 2] = ((c << 6) | d) as u8;
+            input_index += 4;
+            output_index += 3;
+        }
+
+        let a = Self::base64_value(encoded[input_index])? as u32;
+        let b = Self::base64_value(encoded[input_index + 1])? as u32;
+        let c = Self::base64_value(encoded[input_index + 2])? as u32;
+        if c & 0x03 != 0 {
+            return Err(QuickLendXError::InvalidCursor);
+        }
+        payload[output_index] = ((a << 2) | (b >> 4)) as u8;
+        payload[output_index + 1] = ((b << 4) | (c >> 2)) as u8;
+
+        if payload[0] != Self::VERSION {
+            return Err(QuickLendXError::InvalidCursor);
+        }
+        let expected_checksum =
+            u32::from_be_bytes([payload[13], payload[14], payload[15], payload[16]]);
+        if Self::cursor_checksum(&payload[..Self::PAYLOAD_LEN]) != expected_checksum {
+            return Err(QuickLendXError::InvalidCursor);
+        }
+
+        let generation = u64::from_be_bytes(
+            payload[1..9]
+                .try_into()
+                .map_err(|_| QuickLendXError::InvalidCursor)?,
+        );
+        let offset = u32::from_be_bytes(
+            payload[9..13]
+                .try_into()
+                .map_err(|_| QuickLendXError::InvalidCursor)?,
+        );
         Ok(Self::new(offset, generation))
+    }
+
+    fn decode_soroban(raw: &soroban_sdk::String) -> Result<Cursor, QuickLendXError> {
+        if raw.len() != Cursor::ENCODED_LEN as u32 {
+            return Err(QuickLendXError::InvalidCursor);
+        }
+        let bytes = raw.to_bytes();
+        let mut encoded = [0u8; Cursor::ENCODED_LEN];
+        bytes.copy_into_slice(&mut encoded);
+        let encoded = core::str::from_utf8(&encoded).map_err(|_| QuickLendXError::InvalidCursor)?;
+        Cursor::decode(encoded)
+    }
+
+    fn encode_soroban(env: &soroban_sdk::Env, cursor: Cursor) -> soroban_sdk::String {
+        soroban_sdk::String::from_str(env, &cursor.encode())
+    }
+
+    fn base64_value(byte: u8) -> Result<u8, QuickLendXError> {
+        Cursor::BASE64
+            .iter()
+            .position(|candidate| *candidate == byte)
+            .and_then(|value| u8::try_from(value).ok())
+            .ok_or(QuickLendXError::InvalidCursor)
+    }
+
+    fn cursor_checksum(bytes: &[u8]) -> u32 {
+        let mut checksum = u32::MAX;
+        for byte in bytes {
+            checksum ^= *byte as u32;
+            for _ in 0..8 {
+                checksum = if checksum & 1 == 1 {
+                    (checksum >> 1) ^ 0xedb88320
+                } else {
+                    checksum >> 1
+                };
+            }
+        }
+        !checksum
     }
 
     /// Calculate the next page cursor given limit and total record count.
@@ -96,7 +189,7 @@ impl PageCursor {
     pub fn next_cursor(&self, limit: u32, total_count: u32) -> Option<Self> {
         let capped = cap_query_limit(limit);
         let next_offset = self.offset.saturating_add(capped);
-        if next_offset < total_count {
+        if capped > 0 && next_offset < total_count {
             Some(Self::new(next_offset, self.generation))
         } else {
             None
@@ -255,7 +348,7 @@ pub fn paginate_slice<T: Clone>(items: &[T], offset: u32, limit: u32) -> Vec<T> 
 #[inline]
 pub fn pagination_metadata(offset: u32, limit: u32, total_count: u32) -> (u32, bool) {
     let capped_limit = cap_query_limit(limit);
-    let has_more = offset.saturating_add(capped_limit) < total_count;
+    let has_more = capped_limit > 0 && offset.saturating_add(capped_limit) < total_count;
     (total_count, has_more)
 }
 
@@ -266,7 +359,7 @@ mod tests {
     #[test]
     fn test_require_stable_cursor_matching_generation() {
         assert_eq!(require_stable_cursor(100, 100), Ok(()));
-        let cursor = PageCursor::new(10, 100);
+        let cursor = Cursor::new(10, 100);
         assert_eq!(cursor.require_stable(100), Ok(()));
     }
 
@@ -276,7 +369,7 @@ mod tests {
             require_stable_cursor(99, 100),
             Err(QuickLendXError::UnstableCursor)
         );
-        let cursor = PageCursor::new(10, 99);
+        let cursor = Cursor::new(10, 99);
         assert_eq!(
             cursor.require_stable(100),
             Err(QuickLendXError::UnstableCursor)
@@ -285,39 +378,89 @@ mod tests {
 
     #[test]
     fn test_page_cursor_round_trip_and_invalid_input() {
-        let original = PageCursor::new(7, 42);
+        let original = Cursor::new(7, 42);
         let encoded = original.encode();
-        assert_eq!(encoded, "42_7");
-        assert_eq!(PageCursor::decode(&encoded), Ok(original));
+        assert_eq!(encoded.len(), Cursor::ENCODED_LEN);
+        assert_eq!(Cursor::decode(&encoded), Ok(original));
 
+        assert_eq!(Cursor::decode("42"), Err(QuickLendXError::InvalidCursor));
+        assert_eq!(Cursor::decode("abc_7"), Err(QuickLendXError::InvalidCursor));
         assert_eq!(
-            PageCursor::decode("42"),
-            Err(QuickLendXError::InvalidAmount)
+            Cursor::decode("42_abc"),
+            Err(QuickLendXError::InvalidCursor)
         );
         assert_eq!(
-            PageCursor::decode("abc_7"),
-            Err(QuickLendXError::InvalidAmount)
-        );
-        assert_eq!(
-            PageCursor::decode("42_abc"),
-            Err(QuickLendXError::InvalidAmount)
-        );
-        assert_eq!(
-            PageCursor::decode("42_7_9"),
-            Err(QuickLendXError::InvalidAmount)
+            Cursor::decode("42_7_9"),
+            Err(QuickLendXError::InvalidCursor)
         );
     }
 
     #[test]
+    fn test_cursor_rejects_tampering_and_unknown_versions() {
+        let encoded = Cursor::new(7, 42).encode();
+        let mut bytes = encoded.into_bytes();
+        bytes[2] = if bytes[2] == b'A' { b'B' } else { b'A' };
+        let tampered = core::str::from_utf8(&bytes).unwrap();
+        assert_eq!(
+            Cursor::decode(tampered),
+            Err(QuickLendXError::InvalidCursor)
+        );
+
+        let mut payload = [0u8; 17];
+        payload[0] = 2;
+        payload[1..9].copy_from_slice(&42u64.to_be_bytes());
+        payload[9..13].copy_from_slice(&7u32.to_be_bytes());
+        let checksum = Cursor::cursor_checksum(&payload[..Cursor::PAYLOAD_LEN]);
+        payload[13..17].copy_from_slice(&checksum.to_be_bytes());
+        let unknown_version = encode_test_payload(&payload);
+        assert_eq!(
+            Cursor::decode(&unknown_version),
+            Err(QuickLendXError::InvalidCursor)
+        );
+    }
+
+    fn encode_test_payload(payload: &[u8; 17]) -> String {
+        let mut encoded = String::new();
+        for chunk in payload.chunks_exact(3) {
+            let a = chunk[0] as usize;
+            let b = chunk[1] as usize;
+            let c = chunk[2] as usize;
+            encoded.push(Cursor::BASE64[a >> 2] as char);
+            encoded.push(Cursor::BASE64[((a & 3) << 4) | (b >> 4)] as char);
+            encoded.push(Cursor::BASE64[((b & 15) << 2) | (c >> 6)] as char);
+            encoded.push(Cursor::BASE64[c & 63] as char);
+        }
+        let a = payload[15] as usize;
+        let b = payload[16] as usize;
+        encoded.push(Cursor::BASE64[a >> 2] as char);
+        encoded.push(Cursor::BASE64[((a & 3) << 4) | (b >> 4)] as char);
+        encoded.push(Cursor::BASE64[(b & 15) << 2] as char);
+        encoded.push('=');
+        encoded
+    }
+
+    #[test]
     fn test_page_cursor_next_cursor() {
-        let cursor = PageCursor::new(0, 100);
+        let cursor = Cursor::new(0, 100);
         let next = cursor.next_cursor(10, 25);
-        assert_eq!(next, Some(PageCursor::new(10, 100)));
+        assert_eq!(next, Some(Cursor::new(10, 100)));
 
         let next2 = next.unwrap().next_cursor(10, 25);
-        assert_eq!(next2, Some(PageCursor::new(20, 100)));
+        assert_eq!(next2, Some(Cursor::new(20, 100)));
 
         let next3 = next2.unwrap().next_cursor(10, 25);
         assert_eq!(next3, None); // 20 + 10 = 30 >= 25 -> end of stream
+        assert_eq!(cursor.next_cursor(0, 25), None);
+        assert_eq!(pagination_metadata(0, 0, 25), (25, false));
     }
+}
+
+/// Convert an opaque Soroban string to the shared cursor representation.
+pub fn decode_soroban_cursor(raw: &soroban_sdk::String) -> Result<Cursor, QuickLendXError> {
+    Cursor::decode_soroban(raw)
+}
+
+/// Convert the shared cursor representation to an opaque Soroban string.
+pub fn encode_soroban_cursor(env: &soroban_sdk::Env, cursor: Cursor) -> soroban_sdk::String {
+    Cursor::encode_soroban(env, cursor)
 }
