@@ -158,3 +158,8 @@ When you bump the contract WASM:
 - [analytics-snapshot.md](../quicklendx-contracts/docs/analytics-snapshot.md) — `schema_version` contract for off-chain indexers.
 - [RUNBOOK_INCIDENT_RESPONSE.md](RUNBOOK_INCIDENT_RESPONSE.md) — operator recovery procedures.
 - [`quicklendx-contracts/README.md`](../quicklendx-contracts/README.md) — full contract API and deployment guide.
+
+
+## Scheduled upgrade interface
+
+The public contract interface exposes `schedule_upgrade(admin, wasm_hash)`, `get_pending_upgrade()`, `cancel_upgrade(admin)`, and `execute_upgrade(admin)`. The pending-upgrade getter returns the WASM hash and scheduling timestamp without changing storage. The lifecycle retains the 48-hour timelock and restores the pre-scheduling pause state after cancellation or execution. Integrators should treat the pending-upgrade query as optional and must not assume that a scheduled upgrade can be executed immediately.
