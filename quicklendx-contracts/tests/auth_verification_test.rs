@@ -9,7 +9,9 @@ use soroban_sdk::{
     Address, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
 
-use quicklendx_contracts::{InvoiceCategory, QuickLendXContract, QuickLendXContractClient};
+use quicklendx_contracts::{
+    types::InvoiceCategory, QuickLendXContract, QuickLendXContractClient,
+};
 
 proptest! {
     #[test]
@@ -32,7 +34,7 @@ proptest! {
         let admin = Address::generate(&env);
         client.set_admin(&admin);
 
-        client.initialize_protocol_limits(&admin, &10, &30, &86400);
+        client.initialize_protocol_limits(&admin);
 
         client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
         client.verify_business(&admin, &business);
@@ -44,7 +46,7 @@ proptest! {
         client.submit_kyc_application(&business, &String::from_str(&env, "KYC"));
         client.verify_business(&admin, &business);
 
-        let invoice_id = client.upload_invoice(
+        let invoice_id = client.store_invoice(
             &business,
             &invoice_amount,
             &currency,
@@ -52,8 +54,6 @@ proptest! {
             &String::from_str(&env, "Test Invoice"),
             &InvoiceCategory::Services,
             &Vec::new(&env),
-            &None,
-            &None,
             &None,
         );
 
