@@ -2,7 +2,7 @@
 
 > [!IMPORTANT]
 > **Target Audience:** Downstream Integrators, Indexer Service Developers, and Client API Engineers.
-> This document specifies the exact read guarantees, ordering rules, snapshot consistency, cursor stability, and concurrency semantics for all paginated query entrypoints on the QuickLendX Soroban smart contracts.
+> This document describes the shared cursor format and guarantees for cursor-enabled list queries.
 
 ---
 
@@ -10,7 +10,7 @@
 
 Read-only entrypoints on QuickLendX smart contracts allow off-chain clients, indexers, and frontends to inspect protocol state without submitting mutating transactions.
 
-Every paginated query endpoint follows strict runtime invariants to guarantee deterministic execution, zero panic risk, and resource-bounded execution on the Soroban host.
+Cursor-enabled queries use one versioned opaque cursor type, enforce the common page-size cap, and preserve each query's result ordering.
 
 ---
 
@@ -19,41 +19,36 @@ Every paginated query endpoint follows strict runtime invariants to guarantee de
 | Semantic Dimension | Guarantee Provided | Behavior & Enforcement |
 | :--- | :--- | :--- |
 | **Snapshot Consistency** | **Single-Ledger Atomic** | Within a single RPC query invocation, all state storage accesses are executed against a frozen, consistent snapshot of the ledger at sequence $L$. |
-| **Cross-Request Isolation** | **Stateless Read Independent** | Each subsequent paged query (e.g., fetching Page 2 after Page 1) is an independent RPC call evaluated at the current ledger sequence $L'$ (where $L' \ge L$). |
-| **Ordering Determinism** | **Stable Index Order** | Results are returned in deterministic index order (insertion sequence or explicit rank score). Page slicing never reorders or skips items within a single page slice. |
+| **Cross-Request Validation** | **Generation Bound** | The cursor carries the queried collection's generation. Mutations invalidate continuation and return `UnstableCursor`; historical ledger state is not served. |
+| **Ordering Determinism** | **Query-Specific Stable Order** | Results preserve their query's deterministic order, including newest-first `created_at` order for business invoices. |
 | **Query Hard Cap** | **Clamped to 50 Items** | No endpoint returns more than `MAX_QUERY_LIMIT = 50` items. Requests specifying `limit > 50` are automatically clamped to 50. |
-| **Overflow Protection** | **Empty Slice (No Panic)** | If `offset >= total_count` or if `offset` approaches `u32::MAX`, endpoints return an empty list (`Vec::new()`) and `has_more = false`. |
+| **Cursor Validation** | **Typed Rejection** | Malformed, unsupported-version, or modified cursors return `InvalidCursor`; stale generations return `UnstableCursor`. |
 
 ---
 
 ## 3. Snapshot Consistency vs. Multi-Page Concurrency Drift
 
 ### Single-Page Snapshot Guarantee
-When calling a paged endpoint such as `get_business_invoices_paged(business, offset = 0, limit = 20)`:
+When calling a paged endpoint such as `get_business_invoices_paged(business, cursor = None, limit = 20)`:
 - The entire evaluation occurs within ledger sequence $L$.
 - The set of invoices returned, their statuses, and `has_more` represent a point-in-time atomic state.
 
-### Multi-Page Concurrency Drift & Cursor Anomalies
-Because Soroban contract reads are **stateless across RPC requests**, state mutations can occur on-chain between fetching Page 1 at ledger $L_1$ and Page 2 at ledger $L_2$:
-
-1. **Insertion Shift**:
-   - If a new invoice is created by the business at $L_{1.5}$, item positions shift right.
-   - *Result*: Fetching Page 2 with `offset = 20` at $L_2$ might re-read the last element of Page 1.
-2. **Deletion / Status Transition Shift**:
-   - If an invoice transitions status or is pruned between requests, item positions shift left.
-   - *Result*: Fetching Page 2 might skip an item that shifted from index 20 to index 19.
+### Generation Changes Between Pages
+Soroban reads are stateless across RPC requests. If a mutation changes a
+cursor-enabled query's collection between pages, the next request returns
+`UnstableCursor` rather than attempting to continue at a shifted offset.
+Discard the partial result and restart without a cursor.
 
 ### Recommended Integrator Mitigations
-Downstream indexers and API clients **MUST** handle potential multi-page drift:
-- **Client-Side Deduplication**: Key processed entities by unique ID (`invoice_id: BytesN<32>` or `bid_id: BytesN<32>`).
-- **State Verification**: Re-verify record status or version if operating across multi-block indexing jobs.
-- **Index-Based Ingestion**: For full historical replication, stream contract events (`emit_invoice_created`, `emit_bid_placed`) rather than polling paginated queries.
+For full historical replication, index contract events rather than relying on
+pagination across changing generations.
 
 ---
 
 ## 4. Resource Bounding & Safe Slice Math
 
-All contract query handlers utilize the internal `quicklendx_contracts::pagination` module:
+Cursor-enabled query handlers decode the opaque cursor into an offset and then
+use the internal `quicklendx_contracts::pagination` bounds helpers:
 
 ```
 Requested: (offset, limit)
@@ -86,20 +81,27 @@ Retrieves all invoices created by a specific business address, sorted by creatio
 pub fn get_business_invoices_paged(
     env: Env,
     business: Address,
-    offset: u32,
+    status_filter: Option<InvoiceStatus>,
+    cursor: Option<String>,
     limit: u32,
-) -> Result<(Vec<Invoice>, bool), QuickLendXError>
+) -> Result<InvoicePage, QuickLendXError>
 ```
 
 **Invocation Parameters**:
 - `business`: `G...` (Stellar Address)
-- `offset`: `0` (First page)
+- `cursor`: `None` for the first page; otherwise pass through the prior
+  response's exact `next_cursor`
 - `limit`: `10`
+
+The response carries `items`, `total_count`, `has_more`, `generation`, and an
+optional `next_cursor`. Results preserve newest-first `created_at` order. A
+mutation to the business invoice index invalidates the cursor with
+`UnstableCursor`; restart from the first page.
 
 **Response Output Structure**:
 ```json
-[
-  [
+{
+  "items": [
     {
       "id": "0x1a2b3c...",
       "owner": "G...BUSINESS",
@@ -108,13 +110,16 @@ pub fn get_business_invoices_paged(
       "created_at": 1740000000
     }
   ],
-  true  // has_more flag indicating page 2 is available
-]
+  "total_count": 101,
+  "has_more": true,
+  "generation": 8,
+  "next_cursor": "<opaque token>"
+}
 ```
 
 ---
 
-### 2. `get_bids_for_invoice_paged`
+### 2. `get_ranked_bids_paged`
 
 Retrieves all bids placed on a specific invoice, ordered deterministically by bid ranking (highest yield rate & tier first).
 
@@ -122,12 +127,15 @@ Retrieves all bids placed on a specific invoice, ordered deterministically by bi
 pub fn get_bids_for_invoice_paged(
     env: Env,
     invoice_id: BytesN<32>,
-    offset: u32,
+    cursor: Option<String>,
     limit: u32,
-) -> Result<(Vec<Bid>, bool), QuickLendXError>
+) -> Result<CursorBidsPage, QuickLendXError>
 ```
 
 **Ordering Semantic**: Bids are ordered by deterministic ranking rules (`bid_ranking.rs`). Pagination preserves this exact ranking order across pages.
+
+The cursor is bound to the invoice and the current ordered ranking snapshot.
+Changes that affect active bids invalidate it with `UnstableCursor`.
 
 ---
 

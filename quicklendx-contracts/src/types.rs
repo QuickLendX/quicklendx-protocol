@@ -668,6 +668,33 @@ pub struct PaginatedBytes32Vec {
 /// allowing clients to detect and discard stale cached pages.
 #[contracttype]
 #[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CursorBytes32Page {
+    pub items: Vec<BytesN<32>>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CursorAddressPage {
+    pub items: Vec<Address>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct CursorBidsPage {
+    pub items: Vec<Bid>,
+    pub total_count: u32,
+    pub has_more: bool,
+    pub next_cursor: Option<String>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct InvoicePage {
     /// Page of invoice IDs.
     pub items: Vec<BytesN<32>>,
@@ -677,6 +704,7 @@ pub struct InvoicePage {
     pub has_more: bool,
     /// Monotonically increasing index generation counter; increments on rebuild.
     pub generation: u64,
+    pub next_cursor: Option<String>,
 }
 
 /// A paginated page of [`Bid`] records.

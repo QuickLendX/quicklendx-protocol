@@ -299,9 +299,14 @@ impl QuickLendXContract {
         Ok(())
     }
 
-     pub fn verify_invoice(env: Env, admin: Address, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+    pub fn verify_invoice(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
-        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        let mut invoice =
+            InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
         // Issue #300: re-verifying an already-funded invoice triggers the
         // pending escrow release instead of downgrading the invoice status.
@@ -430,6 +435,16 @@ impl QuickLendXContract {
     pub fn get_ranked_bids_paged(
         env: Env,
         invoice_id: BytesN<32>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBidsPage, QuickLendXError> {
+        BidStorage::rank_bids_paged(&env, &invoice_id, cursor, limit)
+    }
+
+    #[deprecated(note = "use get_ranked_bids_paged with an opaque cursor")]
+    pub fn get_ranked_bids_offset(
+        env: Env,
+        invoice_id: BytesN<32>,
         offset: u32,
         limit: u32,
     ) -> Result<crate::types::PaginatedBids, QuickLendXError> {
@@ -440,6 +455,8 @@ impl QuickLendXContract {
             total_count,
             has_more,
         })
+            BidStorage::rank_bids_offset(&env, &invoice_id, offset, limit);
+        crate::types::PaginatedBids { items, total_count, has_more }
     }
 
     pub fn get_best_bid(env: Env, invoice_id: BytesN<32>) -> Result<Option<Bid>, QuickLendXError> {
@@ -595,12 +612,38 @@ impl QuickLendXContract {
         crate::kyc_policy::get_investors_paged(&env, status, cursor, limit)
     }
 
+    pub fn get_investor_investments_paged(
+        env: Env,
+        investor: Address,
+        status_filter: Option<crate::types::InvestmentStatus>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        crate::investment_queries::InvestmentQueries::get_investor_investments_paged(
+            &env,
+            &investor,
+            status_filter,
+            cursor,
+            limit,
+        )
+    }
+
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified)
     }
 
     pub fn get_business_invoices(env: Env, business: Address) -> Vec<BytesN<32>> {
         InvoiceStorage::get_business_invoices(&env, &business)
+    }
+
+    pub fn get_business_invoices_paged(
+        env: Env,
+        business: Address,
+        status_filter: Option<InvoiceStatus>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::InvoicePage, QuickLendXError> {
+        InvoiceStorage::get_business_invoices_paged(&env, &business, status_filter, cursor, limit)
     }
 
     pub fn get_total_invoice_count(env: Env) -> u32 {
@@ -630,7 +673,7 @@ impl QuickLendXContract {
             InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.update_metadata(&env, &caller, metadata)?;
         InvoiceStorage::update_invoice(&env, &invoice);
-        
+
         crate::idempotency::store_idempotency(&env, &nonce);
         Ok(())
     }

@@ -857,6 +857,24 @@ impl QuickLendXContract {
         Ok(())
     }
 
+    pub fn get_businesses_paged(
+        env: Env,
+        status: crate::verification::BusinessVerificationStatus,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::kyc_policy::KycPageResult, QuickLendXError> {
+        crate::kyc_policy::get_businesses_paged(&env, status, cursor, limit)
+    }
+
+    pub fn get_investors_paged(
+        env: Env,
+        status: crate::verification::BusinessVerificationStatus,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::kyc_policy::KycPageResult, QuickLendXError> {
+        crate::kyc_policy::get_investors_paged(&env, status, cursor, limit)
+    }
+
     // =========================================================================
     // Invoice lifecycle
     // =========================================================================
@@ -944,6 +962,71 @@ impl QuickLendXContract {
         InvoiceStorage::get_business_invoices(&env, &business)
     }
 
+    pub fn get_business_invoices_paged(
+        env: Env,
+        business: Address,
+        status_filter: Option<InvoiceStatus>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::InvoicePage, QuickLendXError> {
+        InvoiceStorage::get_business_invoices_paged(
+            &env,
+            &business,
+            status_filter,
+            cursor,
+            limit,
+        )
+    }
+
+    pub fn get_whitelisted_currencies_paged(
+        env: Env,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorAddressPage, QuickLendXError> {
+        crate::currency::CurrencyWhitelist::get_whitelisted_currencies_paged(
+            &env, cursor, limit,
+        )
+    }
+
+    #[deprecated(note = "use get_whitelisted_currencies_paged with an opaque cursor")]
+    pub fn get_whitelisted_currency_offset(
+        env: Env,
+        offset: u32,
+        limit: u32,
+    ) -> crate::types::PaginatedCurrencies {
+        crate::currency::CurrencyWhitelist::get_whitelisted_currency_offset(
+            &env, offset, limit,
+        )
+    }
+
+    pub fn get_whitelisted_currencies(env: Env) -> Vec<Address> {
+        crate::currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
+    }
+
+    pub fn get_user_notifications(env: Env, user: Address) -> Vec<BytesN<32>> {
+        crate::notifications::NotificationSystem::get_user_notifications(&env, &user)
+    }
+
+    pub fn get_user_notifications_paged(
+        env: Env,
+        user: Address,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        crate::notifications::NotificationSystem::get_user_notifications_paged(
+            &env, &user, cursor, limit,
+        )
+    }
+
+    pub fn query_audit_logs_paged(
+        env: Env,
+        filter: crate::audit::AuditQueryFilter,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::audit::CursorAuditPage, QuickLendXError> {
+        crate::audit::AuditStorage::query_audit_logs_paged(&env, &filter, cursor, limit)
+    }
+
     // =========================================================================
     // Bidding
     // =========================================================================
@@ -1006,6 +1089,15 @@ impl QuickLendXContract {
         bids
     }
 
+    pub fn get_ranked_bids_paged(
+        env: Env,
+        invoice_id: BytesN<32>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBidsPage, QuickLendXError> {
+        crate::bid::BidStorage::rank_bids_paged(&env, &invoice_id, cursor, limit)
+    }
+
     // =========================================================================
     // Escrow
     // =========================================================================
@@ -1042,6 +1134,22 @@ impl QuickLendXContract {
     pub fn get_invoice_investment(env: Env, invoice_id: BytesN<32>) -> Investment {
         crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
             .expect("invoice has no investment")
+    }
+
+    pub fn get_investor_investments_paged(
+        env: Env,
+        investor: Address,
+        status_filter: Option<crate::types::InvestmentStatus>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        crate::investment_queries::InvestmentQueries::get_investor_investments_paged(
+            &env,
+            &investor,
+            status_filter,
+            cursor,
+            limit,
+        )
     }
 
     // =========================================================================
@@ -1120,6 +1228,15 @@ impl QuickLendXContract {
     ) -> Result<Vec<crate::settlement::SettlementPaymentRecord>, QuickLendXError> {
         let capped = limit.min(crate::settlement::MAX_SETTLEMENT_BATCH_SIZE_SOFT_CAP);
         crate::settlement::get_payment_records(&env, &invoice_id, from, capped)
+    }
+
+    pub fn get_payment_records_paged(
+        env: Env,
+        invoice_id: BytesN<32>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::settlement::CursorPaymentRecordsPage, QuickLendXError> {
+        crate::settlement::get_payment_records_paged(&env, &invoice_id, cursor, limit)
     }
 
     /// Returns `true` if the invoice has been fully settled.
@@ -1205,9 +1322,28 @@ impl QuickLendXContract {
         crate::dispute::get_invoices_with_disputes(&env)
     }
 
+    pub fn get_invoices_with_disputes_paged(
+        env: Env,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        crate::dispute::get_invoices_with_disputes_paged(&env, cursor, limit)
+    }
+
     /// Filter dispute-indexed invoices by their current dispute status.
     pub fn get_invoices_by_dispute_status(env: Env, status: DisputeStatus) -> Vec<BytesN<32>> {
         crate::dispute::get_invoices_by_dispute_status(&env, &status)
+    }
+
+    pub fn get_disputes_by_status_paged(
+        env: Env,
+        status: DisputeStatus,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        crate::dispute::get_invoices_by_dispute_status_paged(
+            &env, &status, cursor, limit,
+        )
     }
 
     /// Return a paginated dispute timeline for an invoice.
@@ -1218,6 +1354,15 @@ impl QuickLendXContract {
         limit: u32,
     ) -> Result<crate::dispute_timeline::DisputeTimeline, QuickLendXError> {
         crate::dispute_timeline::get_dispute_timeline(&env, &invoice_id, offset, limit)
+    }
+
+    pub fn get_dispute_timeline_paged(
+        env: Env,
+        invoice_id: BytesN<32>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::dispute_timeline::CursorDisputeTimeline, QuickLendXError> {
+        crate::dispute_timeline::get_dispute_timeline_paged(&env, &invoice_id, cursor, limit)
     }
 
     /// Update the evidence on an open (Disputed) dispute. Creator-only, immutable once UnderReview.

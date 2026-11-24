@@ -358,6 +358,39 @@ impl InvoiceStorage {
     pub fn get_business_generation(env: &Env, business: &Address) -> u64 {
         let key = Self::business_generation_key(business);
         persistent_get(env, &key).unwrap_or(0)
+        let generation = env.storage().persistent().get(&key).unwrap_or(0);
+        if env.storage().persistent().has(&key) {
+            extend_persistent_ttl(env, &key);
+        }
+        generation
+    }
+
+    fn get_business_cursor_generation(
+        env: &Env,
+        business: &Address,
+        status_filter: Option<InvoiceStatus>,
+    ) -> u64 {
+        let status_tag = match status_filter {
+            None => 0,
+            Some(InvoiceStatus::Pending) => 1,
+            Some(InvoiceStatus::Verified) => 2,
+            Some(InvoiceStatus::Funded) => 3,
+            Some(InvoiceStatus::Paid) => 4,
+            Some(InvoiceStatus::Defaulted) => 5,
+            Some(InvoiceStatus::Cancelled) => 6,
+            Some(InvoiceStatus::Refunded) => 7,
+        };
+        let mut preimage = soroban_sdk::Bytes::from_slice(env, b"business_invoice_cursor_v1");
+        preimage.append(&business.to_string().to_bytes());
+        preimage.append(&soroban_sdk::Bytes::from_array(env, &[status_tag]));
+        preimage.append(&soroban_sdk::Bytes::from_array(
+            env,
+            &Self::get_business_generation(env, business).to_be_bytes(),
+        ));
+        let digest = env.crypto().sha256(&preimage).to_array();
+        u64::from_be_bytes([
+            digest[0], digest[1], digest[2], digest[3], digest[4], digest[5], digest[6], digest[7],
+        ])
     }
 
     pub fn bump_business_generation(env: &Env, business: &Address) {
@@ -665,6 +698,79 @@ impl InvoiceStorage {
         Self::get_by_business(env, business)
     }
 
+    /// Return business invoices in descending creation-time order using an
+    /// opaque, generation-bound cursor.
+    pub fn get_business_invoices_paged(
+        env: &Env,
+        business: &Address,
+        status_filter: Option<InvoiceStatus>,
+        cursor: Option<soroban_sdk::String>,
+        limit: u32,
+    ) -> Result<crate::types::InvoicePage, crate::errors::QuickLendXError> {
+        let generation = Self::get_business_cursor_generation(env, business, status_filter);
+        let offset = match cursor {
+            Some(raw) => {
+                let decoded = crate::pagination::decode_soroban_cursor(&raw)?;
+                decoded.require_stable(generation)?;
+                decoded.offset
+            }
+            None => 0,
+        };
+
+        let mut ordered = Vec::new(env);
+        for id in Self::get_business_invoices(env, business).iter() {
+            let Some(invoice) = Self::get(env, &id) else {
+                continue;
+            };
+            if status_filter.is_some_and(|status| invoice.status != status) {
+                continue;
+            }
+
+            let mut insertion_index = ordered.len();
+            ordered.push_back(id.clone());
+            while insertion_index > 0 {
+                let previous_id = ordered.get(insertion_index - 1).unwrap();
+                let previous_created_at = Self::get(env, &previous_id)
+                    .map(|previous| previous.created_at)
+                    .unwrap_or(0);
+                if previous_created_at >= invoice.created_at {
+                    break;
+                }
+                ordered.set(insertion_index, previous_id);
+                insertion_index -= 1;
+            }
+            ordered.set(insertion_index, id);
+        }
+
+        let total_count = ordered.len();
+        let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
+        let mut items = Vec::new(env);
+        for index in start..end {
+            if let Some(id) = ordered.get(index) {
+                items.push_back(id);
+            }
+        }
+
+        let capped_limit = crate::pagination::cap_query_limit(limit);
+        let has_more = capped_limit > 0 && offset.saturating_add(capped_limit) < total_count;
+        let next_cursor = if has_more {
+            Some(crate::pagination::encode_soroban_cursor(
+                env,
+                crate::pagination::Cursor::new(start.saturating_add(capped_limit), generation),
+            ))
+        } else {
+            None
+        };
+
+        Ok(crate::types::InvoicePage {
+            items,
+            total_count,
+            has_more,
+            generation,
+            next_cursor,
+        })
+    }
+
     pub fn get_all_categories(env: &Env) -> Vec<InvoiceCategory> {
         let mut categories = Vec::new(env);
         categories.push_back(InvoiceCategory::Goods);
@@ -732,6 +838,7 @@ impl InvoiceStorage {
             if old.status != invoice.status {
                 Self::remove_from_status_index(env, old.status, &invoice.id);
                 Self::add_to_status_index(env, invoice.status, &invoice.id);
+                Self::bump_business_generation(env, &invoice.business);
             }
             if old.metadata_customer_name != invoice.metadata_customer_name {
                 if let Some(ref name) = old.metadata_customer_name {

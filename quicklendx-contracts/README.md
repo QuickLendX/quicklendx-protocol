@@ -379,38 +379,42 @@ pub fn get_business_invoices_paged(
     env: Env,
     business: Address,
     status_filter: Option<InvoiceStatus>,
-    offset: u32,
+    cursor: Option<String>,
     limit: u32,
-) -> Vec<BytesN<32>>
+) -> Result<InvoicePage, QuickLendXError>
 ```
 
 **Parameters:**
 
 - `business`: Address of the business
 - `status_filter`: Optional status filter (None returns all statuses)
-- `offset`: Starting index for pagination (0-based)
+- `cursor`: `None` for the first page, otherwise the exact `next_cursor` from
+  the preceding response
 - `limit`: Maximum number of results to return
 
-**Returns:** Vector of invoice IDs
+**Returns:** `InvoicePage` containing invoice IDs, total count, generation,
+`has_more`, and an optional opaque `next_cursor`. Results are sorted newest
+first by `created_at`. Cursors are rejected with `UnstableCursor` if the
+business invoice index changes.
 
 **Example:**
 
 ```rust
 // Get first 10 verified invoices for a business
-let invoices = contract.get_business_invoices_paged(
+let first_page = contract.get_business_invoices_paged(
     &env,
     business_addr,
     Some(InvoiceStatus::Verified),
-    0,  // offset
+    None,  // cursor
     10  // limit
 );
 
 // Get next 10 invoices
-let more_invoices = contract.get_business_invoices_paged(
+let second_page = contract.get_business_invoices_paged(
     &env,
     business_addr,
     Some(InvoiceStatus::Verified),
-    10, // offset
+    first_page.next_cursor,
     10  // limit
 );
 ```
@@ -424,29 +428,31 @@ pub fn get_investor_investments_paged(
     env: Env,
     investor: Address,
     status_filter: Option<InvestmentStatus>,
-    offset: u32,
+    cursor: Option<String>,
     limit: u32,
-) -> Vec<BytesN<32>>
+) -> Result<CursorBytes32Page, QuickLendXError>
 ```
 
 **Parameters:**
 
 - `investor`: Address of the investor
 - `status_filter`: Optional investment status filter
-- `offset`: Starting index for pagination
+- `cursor`: `None` for the first page; otherwise pass the previous `next_cursor`
 - `limit`: Maximum number of results to return
 
-**Returns:** Vector of investment IDs
+**Returns:** `CursorBytes32Page` containing ordered investment IDs, count,
+`has_more`, and an optional `next_cursor`. The cursor is bound to the investor,
+filter, and current matching result set.
 
 **Example:**
 
 ```rust
-// Get all active investments for an investor
+// Get the first page of active investments for an investor
 let active_investments = contract.get_investor_investments_paged(
     &env,
     investor_addr,
     Some(InvestmentStatus::Active),
-    0,
+    None,
     50
 );
 ```
@@ -699,7 +705,7 @@ let page1 = contract.get_business_invoices_paged(
     &env,
     business_addr,
     None, // all statuses
-    0,    // offset
+    None, // first page
     10    // limit
 );
 
@@ -708,7 +714,7 @@ let page2 = contract.get_business_invoices_paged(
     &env,
     business_addr,
     None,
-    10,   // offset
+    page1.next_cursor,
     10    // limit
 );
 
@@ -743,8 +749,8 @@ let bids = contract.get_bid_history_paged(
 
 Query limit safety:
 
-- Public query endpoints with pagination/limits enforce `MAX_QUERY_LIMIT = 100`.
-- Effective limit is always `min(limit, 100)` for `query_audit_logs`, `query_analytics_data`,
+- Public query endpoints with pagination/limits enforce `MAX_QUERY_LIMIT = 50`.
+- Effective limit is always `min(limit, 50)` for `query_audit_logs`, `query_analytics_data`,
   `get_business_invoices_paged`, `get_investor_investments_paged`,
   `get_available_invoices_paged`, `get_bid_history_paged`, and `get_investor_bids_paged`.
 

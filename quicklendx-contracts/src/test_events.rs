@@ -1031,7 +1031,7 @@ fn test_no_events_emitted_for_reads() {
 
     // Read-only calls - must not add events
     client.get_invoice(&id);
-    client.get_business_invoices_paged(&biz, &None, &0u32, &10u32);
+    client.get_business_invoices_paged(&biz, &None, &None::<String>, &10u32);
     client.get_platform_fee();
 
     assert_eq!(
