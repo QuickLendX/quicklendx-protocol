@@ -434,7 +434,7 @@ export async function fetchInvoices(params?: {
   if (params?.cursor) query.set("cursor", params.cursor);
   if (params?.limit) query.set("limit", String(params.limit));
 
-  const url = `${API_BASE_URL}/invoices?${query.toString()}`;
+  const url = `${getApiBaseUrl()}/invoices?${query.toString()}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new ApiHttpError(
@@ -463,7 +463,7 @@ export async function fetchInvoiceById(
   id: string,
   options?: { signal?: AbortSignal; timeoutMs?: number }
 ): Promise<z.infer<typeof ApiInvoiceSchema>> {
-  const url = `${API_BASE_URL}/invoices/${encodeURIComponent(id)}`;
+  const url = `${getApiBaseUrl()}/invoices/${encodeURIComponent(id)}`;
   const res = await fetch(url);
   if (!res.ok) {
     throw new ApiHttpError(
