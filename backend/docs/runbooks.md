@@ -38,3 +38,25 @@ The first poll establishes a schedule baseline unless it occurs exactly on a
 matching cron minute. Later executions happen only after a scheduled fire time
 newer than the stored run time. A completed or failed job records its run time
 and releases its lease; a crashed worker's lease expires after its duration.
+
+## SQLite backup and restore
+
+Create a consistent online backup of the configured SQLite database and verify
+it with `PRAGMA integrity_check` and row counts from key tables:
+
+```sh
+cd backend
+npm run db:backup
+```
+
+Backups are written to `backups/` next to `DATABASE_PATH`. The newest seven
+verified backups are retained by default. Set `BACKUP_RETENTION` to a positive
+integer to change that limit. The command exits nonzero if backup creation,
+integrity checking, or row-count verification fails. Backup files contain
+service state and must be protected like the database itself.
+
+To restore, first stop every process using the database. Preserve the existing
+database files (including any `-wal` and `-shm` files), then copy the chosen
+verified backup to the path configured by `DATABASE_PATH`. Do not replace a
+live database or restore only the main file while SQLite is running. Start the
+service and verify its health before removing the preserved files.

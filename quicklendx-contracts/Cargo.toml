@@ -12,6 +12,18 @@ path = "tests/wasm_build_size_budget.rs"
 name = "test_fees_boundary"
 path = "tests/test_fees_boundary.rs"
 
+[[test]]
+name = "analytics_accuracy"
+path = "tests/analytics_accuracy.rs"
+
+[[test]]
+name = "backup_retention_validation"
+path = "tests/backup_retention_validation.rs"
+
+[[test]]
+name = "invoice_id_collision_regression"
+path = "tests/invoice_id_collision_regression.rs"
+
 [lib]
 # rlib for tests/integration; cdylib for WASM contract builds.
 crate-type = ["rlib", "cdylib"]
@@ -39,8 +51,7 @@ legacy-tests = []
 diagnostics = []
 testutils = ["soroban-sdk/testutils"]
 
-# Integration tests written against the full contract API; the crate root is
-# currently a stub, so they only build with the `legacy-tests` feature.
+# Integration tests written against legacy contract APIs.
 [[test]]
 name = "auth_verification_test"
 path = "tests/auth_verification_test.rs"
