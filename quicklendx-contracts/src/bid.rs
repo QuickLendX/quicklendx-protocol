@@ -974,10 +974,24 @@ impl BidStorage {
         best
     }
 
-    /// Return the index of the best bid inside `records` using `compare_bids`.
-    fn select_best_index(records: &Vec<Bid>) -> Option<u32> {
-        if records.is_empty() {
-            return None;
+    /// Stable, descending sort of bids using `compare_bids`.
+    ///
+    /// # Complexity
+    /// Bottom-up merge sort: `O(n log n)` comparisons and `O(n)` extra memory
+    /// per pass. This replaces the previous "scan for the maximum, then rebuild
+    /// the remaining vector" loop, which was `O(n^2)` in both comparisons and
+    /// vector writes.
+    ///
+    /// # Stability
+    /// When two bids compare `Equal`, the one that appeared first in storage
+    /// stays first in the ranking. The old selector only replaced the current
+    /// best on `Ordering::Greater`, so it preserved insertion order for ties;
+    /// the merge below keeps the left (earlier) run on equality to produce the
+    /// exact same ordering.
+    fn sort_bids_desc(env: &Env, bids: Vec<Bid>) -> Vec<Bid> {
+        let len = bids.len();
+        if len < 2 {
+            return bids;
         }
 
         let mut best_idx: u32 = 0;
@@ -989,10 +1003,44 @@ impl BidStorage {
                     best_idx = idx;
                     best_bid = candidate;
                 }
+        let mut src = bids;
+        let mut width: u32 = 1;
+        while width < len {
+            let mut merged = Vec::new(env);
+            let mut left: u32 = 0;
+            while left < len {
+                let mid = left.saturating_add(width).min(len);
+                let right = left.saturating_add(width.saturating_mul(2)).min(len);
+                let mut a = left;
+                let mut b = mid;
+                let mut emitted: u32 = 0;
+                let run_len = right - left;
+                while emitted < run_len {
+                    let take_left = if a >= mid {
+                        false
+                    } else if b >= right {
+                        true
+                    } else {
+                        // Only a strictly better right-hand bid may jump ahead of
+                        // an equal left-hand bid, preserving tie stability.
+                        Self::compare_bids(&src.get(b).unwrap(), &src.get(a).unwrap())
+                            != Ordering::Greater
+                    };
+                    if take_left {
+                        merged.push_back(src.get(a).unwrap());
+                        a += 1;
+                    } else {
+                        merged.push_back(src.get(b).unwrap());
+                        b += 1;
+                    }
+                    emitted += 1;
+                }
+                left = right;
             }
-            idx += 1;
+            src = merged;
+            width = width.saturating_mul(2);
         }
-        Some(best_idx)
+        src
     }
 
     /// Return the highest-ranked placed bid for an invoice.
@@ -1027,8 +1075,15 @@ impl BidStorage {
         let current_timestamp = env.ledger().timestamp();
         let mut remaining = Vec::new(env);
         for bid in records.iter() {
+
+        // One filtering pass, then one sort: the ranking is computed once
+        // instead of re-scanning and rebuilding the candidate list per rank.
+        let mut placed = Vec::new(env);
+        let mut idx: u32 = 0;
+        while idx < records.len() {
+            let bid = records.get(idx).unwrap();
             if bid.status == BidStatus::Placed && !bid.is_expired(current_timestamp) {
-                remaining.push_back(bid);
+                placed.push_back(bid);
             }
         }
 
@@ -1057,6 +1112,7 @@ impl BidStorage {
         }
 
         Ok(ranked)
+        Self::sort_bids_desc(env, placed)
     }
 
     /// Return ranked placed bids using a cursor bound to the ranked snapshot.
