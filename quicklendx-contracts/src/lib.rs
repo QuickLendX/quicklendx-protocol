@@ -830,6 +830,10 @@ impl QuickLendXContract {
         InvoiceStorage::get_business_invoices(&env, &business)
     }
 
+    pub fn get_total_invoice_count(env: Env) -> u32 {
+        InvoiceStorage::get_total_count(&env) as u32
+    }
+
     // =========================================================================
     // Bidding
     // =========================================================================
