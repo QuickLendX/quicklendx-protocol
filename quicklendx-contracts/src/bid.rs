@@ -236,15 +236,12 @@ impl BidStorage {
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
         let current_timestamp = env.ledger().timestamp();
         let mut active_count = 0u32;
-        let mut idx: u32 = 0;
-        while idx < bid_ids.len() {
-            let bid_id = bid_ids.get(idx).unwrap();
+        for bid_id in bid_ids.iter() {
             if let Some(bid) = Self::get_bid(env, &bid_id) {
                 if bid.is_active(current_timestamp) {
-                    active_count += 1;
+                    active_count = active_count.saturating_add(1);
                 }
             }
-            idx += 1;
         }
         Ok(active_count)
     }
@@ -894,11 +891,12 @@ impl BidStorage {
         let mut idx: u32 = 0;
         while idx < records.len() {
             let bid = records.get(idx).unwrap();
+        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        for bid in records.iter() {
             let eligible = status != BidStatus::Placed || !bid.is_expired(env.ledger().timestamp());
             if bid.status == status && eligible {
                 filtered.push_back(bid);
             }
-            idx += 1;
         }
         Ok(filtered)
     }
@@ -912,10 +910,11 @@ impl BidStorage {
         let mut idx: u32 = 0;
         while idx < records.len() {
             let bid = records.get(idx).unwrap();
+        let records = Self::get_bid_records_for_invoice(env, invoice_id);
+        for bid in records.iter() {
             if &bid.investor == investor {
                 filtered.push_back(bid);
             }
-            idx += 1;
         }
         Ok(filtered)
     }
@@ -955,11 +954,8 @@ impl BidStorage {
     /// Expired bids are excluded from selection.
     fn select_best_placed_bid(records: &Vec<Bid>, current_timestamp: u64) -> Option<Bid> {
         let mut best: Option<Bid> = None;
-        let mut idx: u32 = 0;
-        while idx < records.len() {
-            let candidate = records.get(idx).unwrap();
+        for candidate in records.iter() {
             if candidate.status != BidStatus::Placed || candidate.is_expired(current_timestamp) {
-                idx += 1;
                 continue;
             }
             best = match best {
@@ -972,7 +968,6 @@ impl BidStorage {
                     }
                 }
             };
-            idx += 1;
         }
         best
     }
@@ -984,13 +979,14 @@ impl BidStorage {
         }
 
         let mut best_idx: u32 = 0;
-        let mut best_bid = records.get(0).unwrap();
+        let mut best_bid = records.get(0)?;
         let mut idx: u32 = 1;
         while idx < records.len() {
-            let candidate = records.get(idx).unwrap();
-            if Self::compare_bids(&candidate, &best_bid) == Ordering::Greater {
-                best_idx = idx;
-                best_bid = candidate;
+            if let Some(candidate) = records.get(idx) {
+                if Self::compare_bids(&candidate, &best_bid) == Ordering::Greater {
+                    best_idx = idx;
+                    best_bid = candidate;
+                }
             }
             idx += 1;
         }
@@ -1028,27 +1024,30 @@ impl BidStorage {
         let records = Self::get_bid_records_for_invoice(env, invoice_id)?;
         let current_timestamp = env.ledger().timestamp();
         let mut remaining = Vec::new(env);
-        let mut idx: u32 = 0;
-        while idx < records.len() {
-            let bid = records.get(idx).unwrap();
+        for bid in records.iter() {
             if bid.status == BidStatus::Placed && !bid.is_expired(current_timestamp) {
                 remaining.push_back(bid);
             }
-            idx += 1;
         }
 
         let mut ranked = Vec::new(env);
 
         while !remaining.is_empty() {
-            let best_idx = Self::select_best_index(&remaining).unwrap();
-            let best_bid = remaining.get(best_idx).unwrap();
-            ranked.push_back(best_bid);
+            let best_idx = match Self::select_best_index(&remaining) {
+                Some(idx) => idx,
+                None => break,
+            };
+            if let Some(best_bid) = remaining.get(best_idx) {
+                ranked.push_back(best_bid);
+            }
 
             let mut new_remaining = Vec::new(env);
             let mut copy_idx: u32 = 0;
             while copy_idx < remaining.len() {
                 if copy_idx != best_idx {
-                    new_remaining.push_back(remaining.get(copy_idx).unwrap());
+                    if let Some(bid) = remaining.get(copy_idx) {
+                        new_remaining.push_back(bid);
+                    }
                 }
                 copy_idx += 1;
             }
@@ -1131,13 +1130,10 @@ impl BidStorage {
         let all_bids = Self::get_all_bids_by_investor(env, investor);
         let current_timestamp = env.ledger().timestamp();
         let mut count: u32 = 0;
-        let mut idx: u32 = 0;
-        while idx < all_bids.len() {
-            let bid = all_bids.get(idx).unwrap();
+        for bid in all_bids.iter() {
             if bid.is_active(current_timestamp) {
                 count = count.saturating_add(1);
             }
-            idx = idx.saturating_add(1);
         }
         count
     }
@@ -1148,13 +1144,10 @@ impl BidStorage {
         let all_bids = Self::get_all_bids_by_investor(env, investor);
         let current_timestamp = env.ledger().timestamp();
         let mut total_amount: i128 = 0;
-        let mut idx: u32 = 0;
-        while idx < all_bids.len() {
-            let bid = all_bids.get(idx).unwrap();
+        for bid in all_bids.iter() {
             if bid.status == BidStatus::Placed && !bid.is_expired(current_timestamp) {
                 total_amount = total_amount.saturating_add(bid.bid_amount);
             }
-            idx = idx.saturating_add(1);
         }
         total_amount
     }
@@ -1202,19 +1195,18 @@ impl BidStorage {
     ) -> bool {
         let grace_seconds = Self::get_bid_expiry_grace_seconds(env);
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
-        let mut idx: u32 = 0;
-        while idx < bid_ids.len() {
-            let bid_id = bid_ids.get(idx).unwrap();
+        for bid_id in bid_ids.iter() {
             if let Some(bid) = Self::get_bid(env, &bid_id) {
-                if bid.status == BidStatus::Expired && bid.expiration_timestamp > current_timestamp {
+                if bid.status == BidStatus::Expired && bid.expiration_timestamp > current_timestamp
+                {
                     return false;
                 }
-                if bid.status == BidStatus::Placed && bid.is_cleanup_eligible(current_timestamp, grace_seconds)
+                if bid.status == BidStatus::Placed
+                    && bid.is_cleanup_eligible(current_timestamp, grace_seconds)
                 {
                     return false;
                 }
             }
-            idx += 1;
         }
         true
     }
@@ -1228,9 +1220,7 @@ impl BidStorage {
         let records = Self::get_bid_records_for_invoice(env, invoice_id)?;
         let (mut placed, mut accepted, mut withdrawn, mut expired, mut cancelled) =
             (0u32, 0u32, 0u32, 0u32, 0u32);
-        let mut idx: u32 = 0;
-        while idx < records.len() {
-            let bid = records.get(idx).unwrap();
+        for bid in records.iter() {
             match bid.status {
                 BidStatus::Placed => placed += 1,
                 BidStatus::Accepted => accepted += 1,
@@ -1238,7 +1228,6 @@ impl BidStorage {
                 BidStatus::Expired => expired += 1,
                 BidStatus::Cancelled => cancelled += 1,
             }
-            idx += 1;
         }
         Ok((placed, accepted, withdrawn, expired, cancelled))
     }
