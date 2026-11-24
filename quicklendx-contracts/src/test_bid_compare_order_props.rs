@@ -315,7 +315,7 @@ proptest! {
         }
 
         // Rank the bids
-        let ranked = BidStorage::rank_bids(&env, &invoice_id);
+        let ranked = BidStorage::rank_bids(&env, &invoice_id).expect("bid ranking should succeed");
 
         // Verify no adjacent inversions
         for i in 0..(ranked.len() - 1) {

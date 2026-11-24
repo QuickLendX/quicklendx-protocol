@@ -2,7 +2,7 @@ import { Router } from "express";
 import * as bidController from "../../controllers/v1/bids";
 import { createQueryValidationMiddleware, createBodyValidationMiddleware } from "../../middleware/validation";
 import { getBidsQuerySchema, createBidBodySchema } from "../../validators/bids";
-import { apiKeyAuthMiddleware } from "../../middleware/api-key-auth";
+import { apiKeyAuthMiddleware, optionalApiKeyAuth } from "../../middleware/api-key-auth";
 import { requireSignature } from "../../middleware/request-signing";
 
 const router = Router();
@@ -11,7 +11,7 @@ const router = Router();
  * GET /api/v1/bids - Get ranked bids for an invoice
  * Query params: invoice_id (required), investor (optional), status (optional), limit, cursor
  */
-router.get("/", createQueryValidationMiddleware(getBidsQuerySchema), bidController.getBids);
+router.get("/", createQueryValidationMiddleware(getBidsQuerySchema), optionalApiKeyAuth, bidController.getBids);
 
 /**
  * POST /api/v1/bids - Place a new bid

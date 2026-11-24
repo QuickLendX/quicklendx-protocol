@@ -57,31 +57,6 @@ servers:
     description: Local development server
 
 paths:
-  /fees:
-    get:
-      x-rate-limit:
-        policies: [global, perKey]
-      summary: Get the current fee schedule
-      description: Returns the platform's current fee schedule configurations.
-      operationId: getFeeSchedule
-      responses:
-        "200":
-          description: List of current fee structures
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/FeeStructure'
-              example:
-                - fee_type: "Platform"
-                  base_fee_bps: 200
-                  min_fee: "100"
-                  max_fee: "1000000"
-                  is_active: true
-                  updated_at: 1745599232
-                  updated_by: "GBSXVD727UNXJZ7ZM4VCXBTK3UMPXR7O6LLXS7XVOECGDYH3XFNV7C5K"
-
   /health:
     get:
       x-rate-limit:
@@ -144,133 +119,6 @@ paths:
                   degraded: false
                   lag: 0
                   level: none
-
-  /admin/status:
-    get:
-      x-rate-limit:
-        policies: [global, perKey]
-      summary: Read internal admin status
-      description: Returns troubleshooting details for authenticated admin roles.
-      security:
-        - BearerAuth: []
-      responses:
-        "200":
-          description: Internal admin status
-        "401":
-          description: Missing bearer token
-        "403":
-          description: Invalid token or insufficient role
-
-  /admin/audit-logs:
-    get:
-      x-rate-limit:
-        policies: [global, perKey]
-      summary: Read admin audit logs
-      description: Returns recent authorization and admin action audit entries.
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: limit
-          in: query
-          schema:
-            type: integer
-            minimum: 1
-            maximum: 100
-      responses:
-        "200":
-          description: Audit log entries
-
-  /admin/maintenance:
-    post:
-      x-rate-limit:
-        policies: [global, perKey]
-      operationId: toggleMaintenanceMode
-      summary: Toggle maintenance mode
-      description: Restricted to operations admin and super-admin.
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ enabled ]
-              properties:
-                enabled:
-                  type: boolean
-            examples:
-              enable:
-                description: Enable maintenance mode
-                value:
-                  enabled: true
-              disable:
-                description: Disable maintenance mode
-                value:
-                  enabled: false
-      responses:
-        "200":
-          description: Maintenance mode updated
-
-  /admin/backfill:
-    post:
-      x-rate-limit:
-        policies: [global, perKey]
-      operationId: queueBackfillJob
-      summary: Queue a backfill job
-      description: Restricted to operations admin and super-admin.
-      security:
-        - BearerAuth: []
-      requestBody:
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                scope:
-                  type: string
-                  example: ledger:100000-100500
-            examples:
-              basic:
-                description: Queue backfill for a ledger range
-                value:
-                  scope: "ledger:100000-100500"
-      responses:
-        "202":
-          description: Backfill job queued
-
-  /admin/config/dangerous:
-    post:
-      x-rate-limit:
-        policies: [global, perKey]
-      operationId: updateDangerousAdminConfig
-      summary: Update dangerous admin configuration
-      description: Restricted to super-admin only.
-      security:
-        - BearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [ allowEmergencyConfigChanges, maintenanceWindowMinutes ]
-              properties:
-                allowEmergencyConfigChanges:
-                  type: boolean
-                maintenanceWindowMinutes:
-                  type: integer
-                  minimum: 1
-                  maximum: 1440
-            examples:
-              enable:
-                description: Enable emergency config changes with 60 minute window
-                value:
-                  allowEmergencyConfigChanges: true
-                  maintenanceWindowMinutes: 60
-      responses:
-        "200":
-          description: Dangerous config updated
 
   /invoices:
     get:
@@ -352,6 +200,12 @@ paths:
                 data: []
                 next_cursor: null
                 has_more: false
+    post:
+      summary: Create an invoice
+      operationId: createInvoice
+      responses:
+        "201":
+          description: Invoice created
 
   /invoices/{id}:
     parameters:
@@ -855,6 +709,7 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^G[A-Z2-7]{55}$'
           description: User identifier (Stellar address)
       responses:
         '200':
@@ -863,6 +718,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/UserNotificationPreferences'
+        '400':
+          description: Invalid userId parameter
         '401':
           description: Unauthorized
         '403':
@@ -882,6 +739,7 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^G[A-Z2-7]{55}$'
           description: User identifier (Stellar address)
       requestBody:
         required: true
@@ -931,6 +789,7 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^G[A-Z2-7]{55}$'
           description: User identifier (Stellar address)
       requestBody:
         required: true
@@ -962,6 +821,7 @@ paths:
           required: true
           schema:
             type: string
+            pattern: '^G[A-Z2-7]{55}$'
           description: User identifier (Stellar address)
         - name: token
           in: query
@@ -972,6 +832,8 @@ paths:
       responses:
         '200':
           description: Successfully unsubscribed
+        '400':
+          description: Invalid userId parameter
         '403':
           description: Invalid or missing unsubscribe token
 
@@ -1109,72 +971,6 @@ paths:
         '500':
           description: Internal server error
 
-  /keys/{id}/rotate-signing-secret:
-    post:
-      x-rate-limit:
-        policies: [global, perKey]
-      summary: Rotate an API key's signing secret
-      description: |
-        Generates a new signing secret for the specified API key ID, retaining the old secret for a configurable grace window (default 24h). Requires admin RBAC privileges.
-      security:
-        - BearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
-          description: The ID of the API key to rotate
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - actor
-              properties:
-                actor:
-                  type: string
-                  description: Identifier of the admin performing the rotation
-                grace_window_hours:
-                  type: integer
-                  default: 24
-                  description: Hours to retain the old secret
-      responses:
-        "200":
-          description: Successfully rotated the signing secret
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: object
-                    properties:
-                      id:
-                        type: string
-                      key:
-                        type: string
-                        description: The new plaintext key. Only returned once.
-                      prefix:
-                        type: string
-                      scopes:
-                        type: array
-                        items:
-                          type: string
-                      created_at:
-                        type: string
-                        format: date-time
-                      prev_secret_expires_at:
-                        type: string
-                        format: date-time
-                      warning:
-                        type: string
-        "400":
-          description: Validation error or failure to rotate
-        "401":
-          $ref: '#/components/responses/Unauthorized'
         "403":
           description: Insufficient admin role permissions
 
@@ -1319,6 +1115,160 @@ paths:
         "409":
           description: No rotation in progress
 
+  /admin/audit:
+    get:
+      operationId: getAuditEntries
+      responses: { "200": { description: Audit entries } }
+  /admin/audit/operations:
+    get:
+      operationId: listAuditOperations
+      responses: { "200": { description: Audit operations } }
+  /admin/audit/export:
+    get:
+      operationId: exportAuditEntries
+      responses: { "200": { description: NDJSON audit export } }
+  /admin/feature-flags:
+    get:
+      operationId: listFeatureFlags
+      responses: { "200": { description: Feature flags } }
+  /admin/feature-flags/{apiKeyId}:
+    get:
+      operationId: listFeatureFlagsForApiKey
+      parameters:
+        - { name: apiKeyId, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: Feature flags } }
+  /admin/feature-flags/{apiKeyId}/{flag}:
+    put:
+      operationId: toggleFeatureFlag
+      parameters:
+        - { name: apiKeyId, in: path, required: true, schema: { type: string } }
+        - { name: flag, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: Feature flag updated } }
+    delete:
+      operationId: deleteFeatureFlag
+      parameters:
+        - { name: apiKeyId, in: path, required: true, schema: { type: string } }
+        - { name: flag, in: path, required: true, schema: { type: string } }
+      responses: { "204": { description: Feature flag deleted } }
+  /admin/webhooks/dead-letters:
+    get:
+      operationId: listWebhookDeadLetters
+      responses: { "200": { description: Dead-letter deliveries } }
+  /admin/webhooks/dead-letters/{id}/replay:
+    post:
+      operationId: replayWebhookDeadLetter
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: Dead letter re-enqueued } }
+  /admin/monitoring/health:
+    get:
+      operationId: getMonitoringHealth
+      responses: { "200": { description: Monitoring health } }
+  /admin/monitoring/cursor:
+    get:
+      operationId: getMonitoringCursor
+      responses: { "200": { description: Indexing cursor } }
+  /admin/monitoring/invariants:
+    get:
+      operationId: getMonitoringInvariants
+      responses: { "200": { description: Invariant status } }
+  /admin/monitoring/invariants/metrics:
+    get:
+      operationId: getMonitoringInvariantMetrics
+      responses: { "200": { description: Invariant metrics } }
+  /admin/monitoring/webhook:
+    get:
+      operationId: getMonitoringWebhook
+      responses: { "200": { description: Webhook queue status } }
+    post:
+      operationId: enqueueMonitoringWebhook
+      responses: { "201": { description: Webhook event enqueued } }
+  /admin/monitoring/webhook/{id}/success:
+    post:
+      operationId: markMonitoringWebhookSuccess
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: Outcome recorded } }
+  /admin/monitoring/webhook/{id}/fail:
+    post:
+      operationId: markMonitoringWebhookFailed
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: Outcome recorded } }
+  /admin/monitoring/reconciliation:
+    get:
+      operationId: getMonitoringReconciliation
+      responses: { "200": { description: Latest reconciliation report } }
+  /admin/monitoring/latency:
+    get:
+      operationId: getMonitoringLatency
+      responses: { "200": { description: Latency metrics } }
+  /api-keys:
+    get:
+      operationId: listApiKeys
+      responses: { "200": { description: API keys } }
+    post:
+      operationId: createApiKey
+      responses: { "201": { description: API key created } }
+  /api-keys/scopes:
+    get:
+      operationId: listApiKeyScopes
+      responses: { "200": { description: Available scopes } }
+  /api-keys/{id}:
+    get:
+      operationId: getApiKey
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: API key } }
+  /api-keys/{id}/rotate:
+    post:
+      operationId: rotateApiKey
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: API key rotated } }
+  /api-keys/{id}/rotate-signing-secret:
+    post:
+      operationId: rotateApiKeySigningSecret
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: Signing secret rotated } }
+  /api-keys/{id}/revoke:
+    post:
+      operationId: revokeApiKey
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: API key revoked } }
+  /api-keys/{id}/audit-logs:
+    get:
+      operationId: getApiKeyAuditLogs
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: API key audit logs } }
+  /reconciliation/reports:
+    get:
+      operationId: listReconciliationReports
+      responses: { "200": { description: Reconciliation reports } }
+  /reconciliation/run:
+    post:
+      operationId: runReconciliation
+      responses: { "202": { description: Reconciliation started } }
+  /reconciliation/backfill:
+    post:
+      operationId: backfillReconciliation
+      responses: { "202": { description: Reconciliation backfill started } }
+  /notifications/preferences/{userId}/verify:
+    post:
+      operationId: verifyNotificationPreferences
+      parameters:
+        - { name: userId, in: path, required: true, schema: { type: string } }
+      responses: { "200": { description: Preferences verified } }
+  /webhooks/ingest/{subscriberId}:
+    post:
+      operationId: ingestWebhookEvent
+      parameters:
+        - { name: subscriberId, in: path, required: true, schema: { type: string } }
+      responses: { "202": { description: Webhook accepted } }
+
 components:
   securitySchemes:
     BearerAuth:
@@ -1349,6 +1299,28 @@ components:
           type: string
           format: date-time
           description: RFC 3339 timestamp of the health probe.
+
+    StatusResponse:
+      type: object
+      required:
+        - lag
+        - warnThreshold
+        - criticalThreshold
+        - rateLimits
+      properties:
+        lag:
+          type: integer
+        warnThreshold:
+          type: integer
+        criticalThreshold:
+          type: integer
+        isDegraded:
+          type: boolean
+        isCritical:
+          type: boolean
+        rateLimits:
+          type: object
+          additionalProperties: true
 
     FreshnessMetadata:
       type: object
