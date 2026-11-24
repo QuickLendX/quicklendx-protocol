@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { AppHeader } from "@/app/components/AppHeader";
+import { WalletProvider } from "@/app/lib/wallet/WalletProvider";
 import { Providers } from "./providers";
 import "./globals.css";
 
@@ -42,7 +44,12 @@ export default function RootLayout({
           Skip to main content
         </a>
         <main id="main-content" tabIndex={-1}>
-          <Providers>{children}</Providers>
+          <Providers>
+            <WalletProvider>
+              <AppHeader />
+              {children}
+            </WalletProvider>
+          </Providers>
         </main>
       </body>
     </html>
