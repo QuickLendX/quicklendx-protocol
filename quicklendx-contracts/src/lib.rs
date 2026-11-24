@@ -439,6 +439,8 @@ mod test_fees;
 mod test_fees_extended;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
+mod test_footprint_limits;
+#[cfg(test)]
 mod test_freeze_appeal_channel;
 #[cfg(test)]
 #[allow(clippy::disallowed_macros)]
