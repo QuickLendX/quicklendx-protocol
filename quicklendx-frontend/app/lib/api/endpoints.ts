@@ -1,5 +1,24 @@
 import { z } from "zod";
 import { FreshnessMetadata } from "../../invest/_lib/view-model";
+import { ApiHttpError } from "../../business/invoices/_lib/data";
+
+export {
+  ApiHttpError,
+  isNotFoundError,
+  listInvoices,
+  getInvoice,
+  getRankedBids,
+  listInvoiceDisputes,
+  listSettlements,
+} from "../../business/invoices/_lib/data";
+export type {
+  Invoice,
+  Bid,
+  Dispute,
+  Settlement,
+  ListInvoicesParams,
+  ListSettlementsParams,
+} from "../../business/invoices/_lib/data";
 
 export {
   ApiHttpError,
@@ -174,7 +193,10 @@ export async function fetchInvoices(params?: {
   const url = `${API_BASE_URL}/invoices?${query.toString()}`;
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`Failed to fetch invoices: HTTP ${res.status}`);
+    throw new ApiHttpError(
+      `Failed to fetch invoices: HTTP ${res.status}`,
+      res.status
+    );
   }
   const json = await res.json();
   const parsed = InvoicesResponseSchema.parse(json);
@@ -193,7 +215,10 @@ export async function fetchInvoiceById(
   const url = `${API_BASE_URL}/invoices/${encodeURIComponent(id)}`;
   const res = await fetch(url);
   if (!res.ok) {
-    throw new Error(`Failed to fetch invoice ${id}: HTTP ${res.status}`);
+    throw new ApiHttpError(
+      `Failed to fetch invoice ${id}: HTTP ${res.status}`,
+      res.status
+    );
   }
   const json = await res.json();
   // Handle direct object or { data: ... }
