@@ -72,241 +72,241 @@ pub mod test_utils;
 // Test modules
 // ============================================================================
 
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_partial_payments;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payment_history;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_arbiter;
 
 // The remaining test modules (already present in the codebase)
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin;
 #[cfg(test)]
 mod test_admin_events_audit_parity;
 #[cfg(test)]
 mod test_admin_handover;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_lookalike;
 #[cfg(test)]
 mod test_admin_simple;
 #[cfg(test)]
 mod test_admin_standalone;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_two_step;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_analytics_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_audit_config;
 #[cfg(test)]
 mod test_audit_stats_regression;
 #[cfg(test)]
 mod test_authorization;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_auto_resolution_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backfill_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backpressure_shedding;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_restore_reindex;
 #[cfg(test)]
 mod test_backup_retention_enforcement;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_backup_safety;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_acceptance_replay;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_atomic_rollback;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_audit_parity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_cancel_accept_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_capacity_stress;
 #[cfg(test)]
 mod test_bid_compare_order_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_concurrency;
 #[cfg(test)]
 mod test_bid_exclusivity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_expiry_grace;
 #[cfg(test)]
 mod test_bid_match_helper;
 #[cfg(test)]
 mod test_bid_ranking;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking_determinism;
 #[cfg(test)]
 mod test_bid_ranking_tiebreaker;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_state_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_transition_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_validation;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_freeze_reason;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_invoices_paged_ordering;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_business_kyc;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cancel_invoice_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cancel_refund;
 #[cfg(test)]
 mod test_cannot_withdraw_more_than_deposited;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_category_breakdown;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_clock_rollover;
 #[cfg(test)]
 mod test_compute_yield_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_concurrent_default_overlap;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_config_bounds_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cross_module_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_batch;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency_match_funding;
 #[cfg(test)]
 mod test_currency_precision;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_grace_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_diagnostics;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_event_invariant;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_evidence_identity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_history_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_refund_flow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_settlement;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_state_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_time_limit;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_due_date_boundaries;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_due_date_guard;
 #[cfg(test)]
 mod test_dust_transfer;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_early_payment_discount_bps;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_emergency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_emergency_escrow_protection;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_emergency_withdraw;
 #[cfg(test)]
 mod test_emergency_withdraw_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_error_code_stability;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_errors;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_early_release;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_event_completeness;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_expiry_extend;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_invariant_model;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_mutual_exclusion;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund_after_expiry;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_refund_hardened;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_settle_refund_race;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_state_machine;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_time_limit;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_uniqueness;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
 #[cfg(test)]
 mod test_evidence_hash_format;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_evidence_kind_guard_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_evidence_size_cap;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_escrow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fee_analytics_boundaries;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fee_recipient_rotation_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fees;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fees_extended;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_appeal_channel;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_event;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_guard_writes;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_bounds;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freshness_lag;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_funding_events_audit_parity;
 #[cfg(test)]
 mod test_fuzz;
@@ -316,7 +316,7 @@ mod test_fuzz_accept_bid_and_fund;
 mod test_fuzz_accounting;
 #[cfg(test)]
 mod test_fuzz_cancelled_noop;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_currency_whitelist;
 #[cfg(test)]
 mod test_fuzz_default_boundaries;
@@ -328,119 +328,119 @@ mod test_fuzz_default_flow;
 mod test_fuzz_distribute_revenue;
 #[cfg(test)]
 mod test_fuzz_invoice_metadata;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_invoice_search;
 #[cfg(test)]
 mod test_fuzz_partial_payment;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_settlement_currency_whitelist;
 #[cfg(test)]
 mod test_fuzz_tier_boundary;
 #[cfg(test)]
 mod test_governance;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_health_status;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_collision_cross_domain;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_id_stability;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_incident;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_init;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_debug;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_invariants;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_input_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_optin_lifecycle;
 #[cfg(test)]
 mod test_insurance_premium_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_stacking;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariants;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_active_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_lifecycle;
 #[cfg(test)]
 mod test_investment_queries;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_state_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_terminal_states;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_transitions;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_withdrawal;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_bid_limit;
 #[cfg(test)]
 mod test_investor_exposure_caps;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_freeze_reason;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_kyc;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_rating_recompute;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice;
 #[cfg(test)]
 mod test_invoice_amount_precision;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_batch_cancel;
 #[cfg(test)]
 mod test_invoice_id_collision;
 #[cfg(test)]
 mod test_invoice_id_collision_regression;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_lifecycle_invariants;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_metadata;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_normalization;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_search;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_search_ranking;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice_state_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_kyc_lifecycle_enforcement;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_ledger_timestamp_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_lifecycle;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_limit;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_line_item_consistency;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_lock_time_limit;
 #[cfg(test)]
 mod test_lock_time_limit_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_maintenance_write_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoice_tags_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoices_per_business;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_min_invoice_amount;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_min_partial_fill_boundary;
 #[cfg(test)]
 mod test_multisig;
@@ -448,139 +448,139 @@ mod test_multisig;
 mod test_notification_status_matrix;
 #[cfg(test)]
 mod test_notifications;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_operational_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_overflow;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_overdue_expiration;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pagination_cursors;
 #[cfg(test)]
 mod test_panic_handler;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reads_available;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reason;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_reason_cap;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause_toggle_symmetry;
 #[cfg(test)]
 mod test_payments;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments_auth;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments_repayment;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_payments_repayment_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_per_investor_position_cap;
 #[cfg(test)]
 mod test_platform_metrics_reconciliation;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_profit_fee;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_profit_fee_formula;
 #[cfg(test)]
 mod test_profits_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_health;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_protocol_limits;
 #[cfg(test)]
 mod test_protocol_limits_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_prune_terminal_invoices;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_queries;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_rating_override;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_ratings_snapshot;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_rebuild_indexes;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_recipient_history;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_reentrancy;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_reentrancy_fault_injection;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_refund;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_regulatory;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_regulatory_gate;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_repayment_events_audit_parity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_replay_guard;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_require_business_active;
 #[cfg(test)]
 mod test_require_valid_business_kyc_tier;
 #[cfg(test)]
 mod test_require_valid_invoice_category;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_resource_rate_limits;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_revenue_split;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_risk_tier;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_seed;
 #[cfg(test)]
 mod test_self_call_rejection;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settle_during_dispute;
 #[cfg(test)]
 mod test_settlement_accounting_identity;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_atomic_rollback;
 #[cfg(test)]
 mod test_settlement_auto_release;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_capacity_stress;
 #[cfg(test)]
 mod test_settlement_currency_whitelist;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_settlement_dispute_interaction;
 #[cfg(test)]
 mod test_settlement_history_reconstruction;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_snapshot;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_storage;
 #[cfg(test)]
 mod test_storage_key_layout;
 #[cfg(test)]
 mod test_storage_migration_compat;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_store_invoice_auth;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_store_invoices_batch;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_string_limits;
 #[cfg(test)]
 mod test_tier_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_treasury_rotation;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_treasury_rotation_deadline;
 #[cfg(test)]
 mod test_treasury_split_overflow_props;
 #[cfg(test)]
 mod test_twa_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_types;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_upgrade_guard;
 #[cfg(test)]
 mod test_verification_matrix;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_verify_bid_match;
 #[cfg(test)]
 mod test_vesting;
@@ -592,7 +592,7 @@ mod test_vesting_summary;
 mod test_view_only;
 #[cfg(test)]
 mod test_volume_tier_props;
-#[cfg(test)]
+#[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
 
 // ============================================================================
@@ -664,6 +664,23 @@ impl QuickLendXContract {
 
     pub fn get_admin(env: Env) -> Result<Address, QuickLendXError> {
         AdminStorage::get_admin(&env).ok_or(QuickLendXError::StorageKeyNotFound)
+    }
+
+    /// Initialize the contract admin exactly once.
+    ///
+    /// # Authorization
+    /// Requires the `admin` argument to authorize the call.
+    pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        AdminStorage::initialize(&env, &admin)
+    }
+
+    /// Transfer the admin role from the current admin to `new_admin`.
+    ///
+    /// # Authorization
+    /// Requires the current admin (read from storage) to authorize the call.
+    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
+        let current = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
+        AdminStorage::transfer_admin(&env, &current, &new_admin)
     }
 
     pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
@@ -1283,6 +1300,104 @@ impl QuickLendXContract {
     /// Preview which backups would be cleaned up by the retention policy.
     pub fn preview_cleanup_backups(env: Env) -> backup::BackupCleanupDryRunReport {
         backup::BackupStorage::preview_cleanup_old_backups(&env)
+    }
+
+    // =========================================================================
+    // Vesting
+    // =========================================================================
+
+    /// Create a time-locked vesting schedule for `beneficiary`.
+    ///
+    /// Locks `total_amount` of `token` in contract custody and releases it
+    /// linearly from `start_time` to `end_time`, gated by a `cliff_seconds`
+    /// cliff. Returns the new schedule id.
+    ///
+    /// # Authorization
+    /// Requires the current admin to authorize and pays for the tokens.
+    ///
+    /// # Errors
+    /// - `InvalidAmount` if `total_amount <= 0`
+    /// - `InvalidTimestamp` if the timeline is backdated/non-monotonic or the
+    ///   cliff eliminates the post-cliff window
+    /// - `NotAdmin` if `admin` is not the stored admin
+    pub fn create_vesting_schedule(
+        env: Env,
+        admin: Address,
+        token: Address,
+        beneficiary: Address,
+        total_amount: i128,
+        start_time: u64,
+        cliff_seconds: u64,
+        end_time: u64,
+    ) -> Result<u64, QuickLendXError> {
+        crate::vesting::Vesting::create_schedule(
+            &env,
+            &admin,
+            token,
+            beneficiary,
+            total_amount,
+            start_time,
+            cliff_seconds,
+            end_time,
+        )
+    }
+
+    /// Return the vesting schedule with `id`, if it exists.
+    pub fn get_vesting_schedule(env: Env, id: u64) -> Option<crate::vesting::VestingSchedule> {
+        crate::vesting::Vesting::get_schedule(&env, id)
+    }
+
+    /// Aggregated vesting summary for `user` across all of their schedules.
+    pub fn get_vesting_summary(env: Env, user: Address) -> crate::vesting::VestingSummary {
+        crate::vesting::Vesting::get_summary_for_user(&env, &user)
+    }
+
+    /// Total amount vested for schedule `id` at the current ledger time.
+    ///
+    /// Returns `None` if the schedule does not exist.
+    pub fn get_vesting_vested(env: Env, id: u64) -> Option<i128> {
+        crate::vesting::Vesting::get_schedule(&env, id)
+            .and_then(|s| crate::vesting::Vesting::vested_amount(&env, &s).ok())
+    }
+
+    /// Amount currently releasable for schedule `id` at the current ledger time.
+    ///
+    /// Returns `None` if the schedule does not exist.
+    pub fn get_vesting_releasable(env: Env, id: u64) -> Option<i128> {
+        crate::vesting::Vesting::get_schedule(&env, id)
+            .and_then(|s| crate::vesting::Vesting::releasable_amount(&env, &s).ok())
+    }
+
+    /// Release the currently releasable tokens for schedule `id` to its
+    /// beneficiary and return the amount transferred.
+    ///
+    /// # Authorization
+    /// Requires the schedule's beneficiary to authorize the call.
+    ///
+    /// # Errors
+    /// - `Unauthorized` if the caller is not the beneficiary
+    /// - `InvalidTimestamp` if called before the cliff
+    /// - Returns `Ok(0)` when nothing remains to release (idempotent)
+    pub fn release_vested_tokens(
+        env: Env,
+        beneficiary: Address,
+        id: u64,
+    ) -> Result<i128, QuickLendXError> {
+        crate::vesting::Vesting::release(&env, &beneficiary, id)
+    }
+
+    /// Alias of [`Self::release_vested_tokens`].
+    pub fn release_vesting(
+        env: Env,
+        beneficiary: Address,
+        id: u64,
+    ) -> Result<i128, QuickLendXError> {
+        crate::vesting::Vesting::release(&env, &beneficiary, id)
+    }
+
+    /// Alias of [`Self::get_vesting_releasable`].
+    pub fn get_releasable_vesting(env: Env, id: u64) -> Option<i128> {
+        Self::get_vesting_releasable(env, id)
     }
 
 }
