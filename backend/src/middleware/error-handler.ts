@@ -56,6 +56,10 @@ export interface ErrorHandlerOptions {
  * @param options.exposeDetails - Override whether details are exposed.
  *   Inject `true` only in non-production environments; never read or
  *   mutate `process.env.NODE_ENV` from request handlers.
+/**
+ * Error handler middleware.
+ * Logs sanitized error details and returns a JSON error response.
+ * Only development mode exposes `details` to the client.
  */
 export const errorHandler = (
   err: AppError,
