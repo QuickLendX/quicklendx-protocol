@@ -347,6 +347,8 @@ mod test_id_collision_cross_domain;
 #[cfg(test)]
 mod test_id_stability;
 #[cfg(test)]
+mod test_idempotency;
+#[cfg(test)]
 mod test_incident;
 #[cfg(test)]
 mod test_init;
