@@ -59,7 +59,7 @@ impl AdminStorage {
             "admin_init",
             None,
             Some(address_to_audit_string(env, admin)),
-        );
+        )?;
 
         crate::events::emit_admin_initialized(env, admin);
         Ok(())
@@ -108,7 +108,7 @@ impl AdminStorage {
             "admin_transfer",
             Some(address_to_audit_string(env, current_admin)),
             Some(address_to_audit_string(env, new_admin)),
-        );
+        )?;
 
         crate::events::emit_admin_transferred(env, current_admin, new_admin);
         Ok(())
@@ -157,7 +157,7 @@ impl AdminStorage {
             "admin_pending",
             None,
             Some(address_to_audit_string(env, pending_admin)),
-        );
+        )?;
 
         crate::events::emit_admin_transfer_initiated(env, current_admin, pending_admin);
         Ok(())
@@ -193,7 +193,7 @@ impl AdminStorage {
             "admin_accept",
             Some(address_to_audit_string(env, &current_admin)),
             Some(address_to_audit_string(env, pending_admin)),
-        );
+        )?;
 
         crate::events::emit_admin_transferred(env, &current_admin, pending_admin);
         Ok(())
@@ -219,7 +219,7 @@ impl AdminStorage {
             "admin_cancel",
             Some(address_to_audit_string(env, &pending_admin)),
             None,
-        );
+        )?;
 
         crate::events::emit_admin_transfer_cancelled(env, current_admin, &pending_admin);
         Ok(())
@@ -255,7 +255,7 @@ impl AdminStorage {
                 env,
                 if enabled { "true" } else { "false" },
             )),
-        );
+        )?;
 
         crate::events::emit_admin_two_step_updated(env, admin, enabled);
         Ok(())
@@ -528,7 +528,7 @@ pub fn cancel_treasury_rotation(env: &Env, admin: &Address) -> Result<(), QuickL
         "cancel_treasury_rotation",
         None,
         None,
-    );
+    )?;
     crate::events::treasury_rotation_cancelled(env, admin);
     Ok(())
 }

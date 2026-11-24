@@ -61,9 +61,8 @@ const BID_ACCEPTANCE_RECORD_KEY: Symbol = symbol_short!("bid_acc");
 
 /// Look up a durable bid-acceptance record by request key.
 fn get_bid_acceptance_record(env: &Env, request_key: &BytesN<32>) -> Option<BidAcceptanceRecord> {
-    env.storage()
-        .persistent()
-        .get(&(BID_ACCEPTANCE_RECORD_KEY, request_key.clone()))
+    let key = (BID_ACCEPTANCE_RECORD_KEY, request_key.clone());
+    crate::storage::persistent_get(env, &key)
 }
 
 /// Persist a durable bid-acceptance record and extend its TTL so it does not
@@ -94,7 +93,7 @@ pub(crate) fn load_accept_bid_context(
     invoice_id: &BytesN<32>,
     bid_id: &BytesN<32>,
 ) -> Result<AcceptBidContext, QuickLendXError> {
-    BidStorage::cleanup_expired_bids(env, invoice_id);
+    BidStorage::cleanup_expired_bids(env, invoice_id)?;
 
     let invoice =
         InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
@@ -374,8 +373,17 @@ fn update_states_after_funding(
         bid.bid_amount,
         bid.bid_id.clone(),
     );
+    )?;
+    emit_invoice_funded(env, invoice_id, &bid.investor, bid.bid_amount);
+    crate::audit::log_invoice_funded(
+        env,
+        invoice_id.clone(),
+        bid.investor.clone(),
+        bid.bid_amount,
+        bid.bid_id.clone(),
+    )?;
     emit_invoice_funded(env, invoice_id, &bid.investor, escrow_amount);
-    crate::audit::log_invoice_funded(env, invoice_id.clone(), bid.investor.clone(), escrow_amount);
+    crate::audit::log_invoice_funded(env, invoice_id.clone(), bid.investor.clone(), escrow_amount)?;
 
     // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
     // after escrow funding and state transitions complete successfully.
@@ -445,7 +453,7 @@ pub fn refund_escrow_funds(
 
     // Update Bid status to Cancelled (find the accepted bid first)
     // In our protocol, a Funded invoice has exactly one Accepted bid
-    let bids = BidStorage::get_bid_records_for_invoice(env, invoice_id);
+    let bids = BidStorage::get_bid_records_for_invoice(env, invoice_id)?;
     for mut bid in bids.iter() {
         if bid.status == BidStatus::Accepted {
             bid.status = BidStatus::Cancelled;
@@ -556,7 +564,7 @@ pub fn withdraw_investment(
     InvoiceStorage::add_to_status_invoices(env, InvoiceStatus::Verified, invoice_id);
 
     // 7. Cancel the accepted bid
-    let bids = BidStorage::get_bid_records_for_invoice(env, invoice_id);
+    let bids = BidStorage::get_bid_records_for_invoice(env, invoice_id)?;
     for mut bid in bids.iter() {
         if bid.status == BidStatus::Accepted {
             bid.status = BidStatus::Cancelled;

@@ -4,10 +4,68 @@ import { ApiKey } from '../models/api-key';
 
 export type ApiKeyVerifier = (key: string) => Promise<ApiKey | null>;
 
+/** Request context shared by authenticated API-key routes. */
+export interface AuthenticatedRequest extends Request {
+  actor?: string;
+}
+
 let customVerifier: ApiKeyVerifier | null = null;
 export function setApiKeyVerifier(verifier: ApiKeyVerifier | null): void {
   customVerifier = verifier;
 }
+
+// Compatibility for the environment-configured API keys used by admin and
+// monitoring routes. Kept here so all API-key authentication has one owner.
+type KeyMap = Record<string, string>;
+let keyMap: KeyMap = {};
+let isLoaded = false;
+
+export function loadApiKeys(): void {
+  try {
+    keyMap = {};
+    for (const entry of (process.env.ADMIN_API_KEYS || '').split(',')) {
+      const trimmed = entry.trim();
+      const colonIdx = trimmed.indexOf(':');
+      if (colonIdx > 0) {
+        const key = trimmed.slice(0, colonIdx).trim();
+        const actor = trimmed.slice(colonIdx + 1).trim();
+        if (key && actor) keyMap[key] = actor;
+      }
+    }
+    isLoaded = true;
+  } catch {
+    keyMap = {};
+    isLoaded = true;
+  }
+}
+
+export function apiKeyAuth(req: AuthenticatedRequest, res: Response, next: NextFunction): void {
+  try {
+    if (process.env.SKIP_API_KEY_AUTH === 'true') {
+      req.actor = process.env.TEST_ACTOR || 'test-actor';
+      next();
+      return;
+    }
+    if (!isLoaded) loadApiKeys();
+    const rawKey = req.header('X-API-Key');
+    if (!rawKey) {
+      res.status(401).json({ error: { message: 'Missing X-API-Key header', code: 'UNAUTHORIZED' } });
+      return;
+    }
+    const actor = keyMap[rawKey];
+    if (!actor) {
+      res.status(401).json({ error: { message: 'Invalid API key', code: 'UNAUTHORIZED' } });
+      return;
+    }
+    req.actor = actor;
+    next();
+  } catch {
+    res.status(500).json({ error: { message: 'Internal authentication error', code: 'INTERNAL_ERROR' } });
+  }
+}
+
+export function resetApiKeys(): void { keyMap = {}; isLoaded = false; }
+export function getKeyMapSize(): number { return Object.keys(keyMap).length; }
 
 async function verifyKey(plaintextKey: string): Promise<ApiKey | null> {
   if (customVerifier) {
