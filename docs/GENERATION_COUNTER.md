@@ -2,6 +2,12 @@
 
 What the generation counter is, who consumes it, and how to read it on-chain.
 
+> **Pagination note:** the protocol-version counter described below is not the
+> collection generation embedded in pagination cursors. Collection generations
+> are maintained separately and advance when the corresponding indexed query
+> result changes. A stale page cursor is rejected with `UnstableCursor`; it
+> does not request historical ledger state.
+
 ---
 
 ## What it is

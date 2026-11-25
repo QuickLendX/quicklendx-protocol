@@ -43,12 +43,9 @@ export const csrfMiddleware = (
     return;
   }
 
-  // Exempt API-key authenticated requests (admin/keys or general api-keys)
-  const authHeader = req.headers["authorization"];
-  const hasApiKeyHeader = req.headers["x-api-key"] !== undefined;
-  const hasBearerApiKey = typeof authHeader === "string" && authHeader.startsWith("Bearer qlx_");
-
-  if (hasApiKeyHeader || hasBearerApiKey) {
+  // Exempt API-key authenticated requests (only after key is validated)
+  // req.apiKey is populated by optionalApiKeyAuth middleware if Bearer token is valid
+  if (req.apiKey) {
     next();
     return;
   }

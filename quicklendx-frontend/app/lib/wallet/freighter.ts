@@ -63,8 +63,14 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
       ms
     );
     promise.then(
-      (v) => { clearTimeout(timer); resolve(v); },
-      (e) => { clearTimeout(timer); reject(e); }
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
     );
   });
 }
@@ -118,10 +124,7 @@ export function createFreighterAdapter(): WalletAdapter {
         const accessResult = await freighter.requestAccess();
         if (accessResult?.error) {
           const code = mapError(accessResult.error);
-          throw new WalletAdapterError(
-            code,
-            accessResult.error
-          );
+          throw new WalletAdapterError(code, accessResult.error);
         }
 
         // Get the address
@@ -158,7 +161,10 @@ export function createFreighterAdapter(): WalletAdapter {
         if (!isAllowed) return null;
 
         const addrResult = await freighter.getAddress();
-        if (addrResult?.error || !(addrResult as { address?: string }).address) {
+        if (
+          addrResult?.error ||
+          !(addrResult as { address?: string }).address
+        ) {
           return null;
         }
 
@@ -188,19 +194,29 @@ export function createFreighterAdapter(): WalletAdapter {
       let stopFn: (() => void) | null = null;
       let cancelled = false;
 
-      getFreighter().then((freighter) => {
-        if (cancelled) return;
-        if (typeof freighter.WatchWalletChanges !== "function") return;
+      getFreighter()
+        .then((freighter) => {
+          if (cancelled) return;
+          if (typeof freighter.WatchWalletChanges !== "function") return;
 
-        const watcher = new freighter.WatchWalletChanges(3_000);
-        watcher.watch((evt: { address: string; networkPassphrase: string }) => {
-          cb(evt);
+          const watcher = new freighter.WatchWalletChanges(3_000);
+          watcher.watch(
+            (evt: { address: string; networkPassphrase: string }) => {
+              cb(evt);
+            }
+          );
+
+          stopFn = () => {
+            try {
+              watcher.stop();
+            } catch {
+              /* ignore */
+            }
+          };
+        })
+        .catch(() => {
+          /* module load failure is silent */
         });
-
-        stopFn = () => {
-          try { watcher.stop(); } catch { /* ignore */ }
-        };
-      }).catch(() => { /* module load failure is silent */ });
 
       return () => {
         cancelled = true;
@@ -223,7 +239,10 @@ export function createFreighterAdapter(): WalletAdapter {
         throw new WalletAdapterError(code, (result as { error: string }).error);
       }
 
-      return (result as { signedTxXdr: string }).signedTxXdr ?? (result as unknown as string);
+      return (
+        (result as { signedTxXdr: string }).signedTxXdr ??
+        (result as unknown as string)
+      );
     },
   };
 }
