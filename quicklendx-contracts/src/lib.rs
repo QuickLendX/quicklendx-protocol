@@ -1376,7 +1376,7 @@ impl QuickLendXContract {
         cursor: Option<String>,
         limit: u32,
     ) -> Result<crate::audit::CursorAuditPage, QuickLendXError> {
-        crate::audit::AuditStorage::query_audit_logs_paged(&env, &filter, cursor, limit)
+        crate::audit::AuditStorage::query_audit_logs_paged(&env, &filter, cursor, crate::pagination::cap_query_limit(limit))
     }
 
     // =========================================================================
@@ -1447,18 +1447,6 @@ impl QuickLendXContract {
     ) -> Vec<crate::audit::AuditLogEntry> {
         crate::audit::AuditStorage::query_audit_logs(
             &env, &filter, crate::pagination::cap_query_limit(limit),
-        )
-    }
-
-    /// Return a cursor-paginated audit query result.
-    pub fn query_audit_logs_paged(
-        env: Env,
-        filter: crate::audit::AuditQueryFilter,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::audit::CursorAuditPage, QuickLendXError> {
-        crate::audit::AuditStorage::query_audit_logs_paged(
-            &env, &filter, cursor, crate::pagination::cap_query_limit(limit),
         )
     }
 
