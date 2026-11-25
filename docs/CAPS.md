@@ -24,8 +24,9 @@ intent. Operators who need the knobs-and-levers view should also read
 6. [String / Metadata Field Lengths](#6-string--metadata-field-lengths)
 7. [Fee Limits](#7-fee-limits)
 8. [Pagination / Query Limits](#8-pagination--query-limits)
-9. [Reading Limits On-Chain](#9-reading-limits-on-chain)
-10. [Related Documents](#10-related-documents)
+9. [Soroban Transaction Footprint Limits](#9-soroban-transaction-footprint-limits)
+10. [Reading Limits On-Chain](#10-reading-limits-on-chain)
+11. [Related Documents](#11-related-documents)
 
 ---
 
@@ -447,7 +448,56 @@ Source: [`src/pagination.rs`](../quicklendx-contracts/src/pagination.rs) L25
 
 ---
 
-## 9. Reading Limits On-Chain
+## 9. Soroban Transaction Footprint Limits
+
+Soroban caps the number of ledger entries read/written, bytes read/written, CPU
+instructions, and memory per transaction. Heavy entrypoints are tested at their
+maximum configured protocol bounds in
+[`src/test_footprint_limits.rs`](../quicklendx-contracts/src/test_footprint_limits.rs)
+and asserted against the single-source table `FOOTPRINT_LIMITS` in
+[`src/operational_limits.rs`](../quicklendx-contracts/src/operational_limits.rs).
+
+### 9.1 Soroban network transaction ceilings
+
+| Resource | Constant | Ceiling |
+|---|---|---|
+| Ledger read entries | `SOROBAN_MAX_READ_ENTRIES` | 100 |
+| Ledger write entries | `SOROBAN_MAX_WRITE_ENTRIES` | 50 |
+| Ledger read bytes | `SOROBAN_MAX_READ_BYTES` | 200 000 B |
+| Ledger write bytes | `SOROBAN_MAX_WRITE_BYTES` | 66 560 B (65 KiB) |
+| CPU instructions | `SOROBAN_MAX_INSTRUCTIONS` | 100 000 000 |
+| Memory bytes | `SOROBAN_MAX_MEM_BYTES` | 41 943 040 B (40 MiB) |
+
+### 9.2 Per-entrypoint footprint table (`FOOTPRINT_LIMITS`)
+
+| Constant | Entrypoint / Fixture | Max Read Entries | Max Write Entries | Max Read Bytes | Max Write Bytes | Max Instructions | Max Mem Bytes |
+|---|---|---|---|---|---|---|---|
+| `FOOTPRINT_ACCEPT_BID_AND_FUND` | `accept_bid_and_fund` (50 bids) | 100 | 50 | 200 000 | 66 560 | 100 000 000 | 41 943 040 |
+| `FOOTPRINT_SETTLE_INVOICE` | `settle_invoice` | 100 | 50 | 200 000 | 66 560 | 100 000 000 | 41 943 040 |
+| `FOOTPRINT_CLEANUP_EXPIRED_BIDS` | `cleanup_expired_bids` (50 expired bids) | 100 | 50 | 200 000 | 66 560 | 100 000 000 | 41 943 040 |
+| `FOOTPRINT_PROCESS_PARTIAL_PAYMENT` | `process_partial_payment` (after 50 payments) | 100 | 50 | 200 000 | 66 560 | 100 000 000 | 41 943 040 |
+| `FOOTPRINT_PAGED_QUERIES` | `get_payment_records`, `get_bids_for_invoice`, `get_dispute_timeline` (limit 50) | 100 | 50 | 200 000 | 66 560 | 100 000 000 | 41 943 040 |
+
+### 9.3 Running and updating footprint assertions
+
+Run the footprint regression suite with:
+
+```bash
+cd quicklendx-contracts && cargo test --lib test_footprint_limits
+```
+
+To update a limit after a justified contract change:
+
+1. Update the corresponding `FOOTPRINT_*` constant in
+   [`src/operational_limits.rs`](../quicklendx-contracts/src/operational_limits.rs)
+   (every entry must remain `<=` the `SOROBAN_MAX_*` network ceilings, which is
+   verified by `operational_limits::tests::test_footprint_limits_within_soroban_network_caps`).
+2. Re-run `cargo test --lib test_footprint_limits` and `cargo test --lib operational_limits`.
+3. Update the table above and [`docs/gas-baselines.md`](gas-baselines.md) in the same PR.
+
+---
+
+## 10. Reading Limits On-Chain
 
 These query entrypoints expose the currently active limits in a single
 round-trip so off-chain clients never have to hard-code constants.
@@ -494,7 +544,7 @@ Source: [`src/bid.rs`](../quicklendx-contracts/src/bid.rs)
 
 ---
 
-## 10. Related Documents
+## 11. Related Documents
 
 | Document | What it covers |
 |---|---|

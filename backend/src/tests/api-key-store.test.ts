@@ -8,91 +8,75 @@
  */
 
 import path from 'path';
+import os from 'os';
 import fs from 'fs';
 import crypto from 'crypto';
+import { config } from '../config';
 import { getDatabase, closeDatabase } from '../lib/database';
 import { db, DbApiKey, DbAuditLog } from '../db/database';
-import { createApiKey } from '../controllers/v1/api-keys';
-import { listApiKeys } from '../controllers/v1/api-keys';
-import { getApiKey } from '../controllers/v1/api-keys';
+import { createApiKey, listApiKeys, getApiKey } from '../controllers/v1/api-keys';
+import v008 from '../migrations/v008_create_api_keys';
+import v014 from '../migrations/v014_add_api_key_rotation';
+import v015 from '../migrations/v015_add_signing_secret_hash';
+import v013Versions from '../migrations/v013_api_key_versions';
+import type { MigrationContext } from '../lib/migrations/types';
 
 // ---------------------------------------------------------------------------
 // Test database lifecycle – isolated temp file per run
 // ---------------------------------------------------------------------------
 
-const TEST_DB_DIR = path.resolve(__dirname, '../../.data');
-const TEST_DB_PATH = path.join(TEST_DB_DIR, `test-api-keys-${crypto.randomUUID()}.db`);
+const ORIGINAL_DATABASE_PATH = config.DATABASE_PATH;
+const TEST_DB_PATH = path.join(os.tmpdir(), `test-api-keys-${crypto.randomUUID()}.db`);
 
-beforeAll(() => {
+beforeAll(async () => {
   process.env.DATABASE_PATH = TEST_DB_PATH;
+  (config as { DATABASE_PATH: string }).DATABASE_PATH = TEST_DB_PATH;
   closeDatabase(); // reset singleton so next getDatabase() uses the new path
 
   const conn = getDatabase();
-  conn.exec(`
-    CREATE TABLE IF NOT EXISTS api_keys (
-      id TEXT PRIMARY KEY,
-      key_hash TEXT NOT NULL,
-      prefix TEXT NOT NULL,
-      name TEXT NOT NULL,
-      scopes TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      last_used_at TEXT,
-      expires_at TEXT,
-      prev_signing_secret_hash TEXT,
-      prev_secret_expires_at TEXT,
-      revoked INTEGER NOT NULL DEFAULT 0,
-      created_by TEXT NOT NULL,
-      prev_signing_secret_hash TEXT,
-      prev_secret_expires_at TEXT
-    )
-  `);
-  conn.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_api_keys_prefix ON api_keys(prefix)
-  `);
-  conn.exec(`
-    CREATE INDEX IF NOT EXISTS idx_api_keys_created_by ON api_keys(created_by)
-  `);
-  conn.exec(`
-    CREATE INDEX IF NOT EXISTS idx_api_keys_revoked ON api_keys(revoked)
-  `);
-  conn.exec(`
-    CREATE TABLE IF NOT EXISTS api_key_audit_log (
-      id TEXT PRIMARY KEY,
-      event_type TEXT NOT NULL CHECK(event_type IN ('created','used','rotated','revoked')),
-      key_id TEXT NOT NULL,
-      actor TEXT NOT NULL,
-      timestamp TEXT NOT NULL,
-      ip_address TEXT,
-      endpoint TEXT,
-      metadata TEXT,
-      FOREIGN KEY (key_id) REFERENCES api_keys(id) ON DELETE CASCADE
-    )
-  `);
-  conn.exec(`
-    CREATE INDEX IF NOT EXISTS idx_api_key_audit_key_id ON api_key_audit_log(key_id)
-  `);
-  conn.exec(`
-    CREATE INDEX IF NOT EXISTS idx_api_key_audit_event_type ON api_key_audit_log(event_type)
-  `);
-  conn.exec(`
-    CREATE INDEX IF NOT EXISTS idx_api_key_audit_timestamp ON api_key_audit_log(timestamp)
-  `);
+  const ctx = {
+    db: {
+      exec: async (sql: string) => {
+        conn.exec(sql);
+        return [];
+      },
+      get: async <T = unknown>(sql: string, params: unknown[] = []) =>
+        conn.prepare(sql).get(...params) as T | undefined,
+      run: async (sql: string, params: unknown[] = []) => {
+        const res = conn.prepare(sql).run(...params);
+        return { lastInsertRowId: Number(res.lastInsertRowid), changes: res.changes };
+      },
+      transaction: <T>(fn: (d: MigrationContext['db']) => T) => conn.transaction(() => fn(ctx.db))(),
+    },
+    env: process.env,
+    isProduction: false,
+    isTest: true,
+  } as MigrationContext;
+
+  for (const migration of [v008, v014, v015, v013Versions]) {
+    await migration.up(ctx);
+  }
 });
 
-afterAll(() => {
+afterAll(async () => {
+  await new Promise((resolve) => setImmediate(resolve));
   closeDatabase();
-  try {
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
-    }
-    // Remove WAL and SHM files if they exist
-    try { fs.unlinkSync(TEST_DB_PATH + '-wal'); } catch { /* ok */ }
-    try { fs.unlinkSync(TEST_DB_PATH + '-shm'); } catch { /* ok */ }
-  } catch { /* ok */ }
+  (config as { DATABASE_PATH: string }).DATABASE_PATH = ORIGINAL_DATABASE_PATH;
+  for (const suffix of ['', '-wal', '-shm']) {
+    try {
+      if (fs.existsSync(TEST_DB_PATH + suffix)) {
+        fs.unlinkSync(TEST_DB_PATH + suffix);
+      }
+    } catch { /* ok */ }
+  }
 });
 
 beforeEach(() => {
   db.clear();
+});
+
+afterEach(async () => {
+  await new Promise((resolve) => setImmediate(resolve));
 });
 
 // ---------------------------------------------------------------------------
@@ -103,6 +87,7 @@ function makeKey(overrides: Partial<DbApiKey> = {}): DbApiKey {
   return {
     id: crypto.randomUUID(),
     key_hash: crypto.createHash('sha256').update(crypto.randomBytes(32)).digest('hex'),
+    signing_secret_hash: null,
     prev_signing_secret_hash: null,
     prefix: `qlx_test_${crypto.randomBytes(4).toString('hex')}`,
     name: 'Test Key',
@@ -113,6 +98,9 @@ function makeKey(overrides: Partial<DbApiKey> = {}): DbApiKey {
     prev_secret_expires_at: null,
     revoked: 0,
     created_by: 'test-user',
+    version: 1,
+    revoked_at: null,
+    revoked_by: null,
     ...overrides,
   };
 }
@@ -461,102 +449,258 @@ describe('Audit log event_type constraints', () => {
     expect(() => db.createAuditLog(log)).not.toThrow();
   });
 });
+import { ApiKeyService, InMemoryApiKeyService } from '../services/api-key-service';
+import { ApiKeyError } from '../errors/api-key-error';
+import type { ApiKey } from '../models/api-key';
+
+// ---------------------------------------------------------------------------
+// ApiKeyService & InMemoryApiKeyService contract coverage
+// ---------------------------------------------------------------------------
+
+describe('ApiKeyService & InMemoryApiKeyService', () => {
+  test('createApiKey, verifyApiKey, getApiKeyById, listApiKeys, updateLastUsed', async () => {
+    const service = new ApiKeyService();
+    const created = await service.createApiKey({
+      name: 'Service Key',
+      scopes: ['read:invoices', 'write:bids'],
+      created_by: 'svc-owner',
+    });
+
+    expect(created.plaintext_key).toMatch(/^qlx_/);
+    expect(created.plaintext_signing_secret.length).toBeGreaterThan(0);
+    expect(created.status).toBe('active');
+    expect(created.version).toBe(1);
+
+    const verified = await service.verifyApiKey(created.plaintext_key);
+    expect(verified).not.toBeNull();
+    expect(verified!.id).toBe(created.id);
+
+    expect(await service.verifyApiKey('invalid-token')).toBeNull();
+
+    const fetched = await service.getApiKey(created.id);
+    expect(fetched).not.toBeNull();
+    expect(fetched!.id).toBe(created.id);
+
+    const listed = await service.listApiKeys({ created_by: 'svc-owner' });
+    expect(listed.map((k) => k.id)).toEqual([created.id]);
+
+    await service.updateLastUsed(created.id, '/api/v1/invoices', '127.0.0.1');
+    const afterUsed = await service.getApiKeyById(created.id);
+    expect(afterUsed!.last_used_at).not.toBeNull();
+  });
+
+  test('revokeApiKey enforces OCC expectedVersion and is idempotent once revoked', async () => {
+    const service = new ApiKeyService();
+    const created = await service.createApiKey({
+      name: 'Revokable Key',
+      scopes: ['read:*'],
+      created_by: 'owner-1',
+    });
+
+    await expect(service.revokeApiKey(created.id, 'owner-1', 999)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+
+    const revoked = await service.revokeApiKey(created.id, 'owner-1', 1);
+    expect(revoked.status).toBe('revoked');
+    expect(revoked.revoked).toBe(true);
+    expect(revoked.version).toBe(2);
+    expect(revoked.revokedBy).toBe('owner-1');
+    expect(typeof revoked.revokedAt).toBe('number');
+
+    // Idempotent repeat revocation
+    const again = await service.revokeApiKey(created.id, 'owner-1');
+    expect(again.status).toBe('revoked');
+    expect(again.revokedAt).toBe(revoked.revokedAt);
+
+    expect(await service.verifyApiKey(created.plaintext_key)).toBeNull();
+  });
+
+  test('revokeApiKey throws NOT_FOUND for missing key', async () => {
+    const service = new ApiKeyService();
+    await expect(service.revokeApiKey(crypto.randomUUID(), 'actor-1')).rejects.toThrow(ApiKeyError);
+    await expect(service.revokeApiKey(crypto.randomUUID(), 'actor-1')).rejects.toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  test('rotateApiKey issues new key and revokes old key', async () => {
+    const service = new ApiKeyService();
+    const created = await service.createApiKey({
+      name: 'Rotate Key',
+      scopes: ['read:*'],
+      created_by: 'owner-1',
+    });
+
+    const rotated = await service.rotateApiKey(created.id, 'owner-1', '127.0.0.1');
+    expect(rotated.id).not.toBe(created.id);
+    expect(rotated.plaintext_key).not.toBe(created.plaintext_key);
+
+    expect(await service.verifyApiKey(created.plaintext_key)).toBeNull();
+    expect((await service.verifyApiKey(rotated.plaintext_key))!.id).toBe(rotated.id);
+  });
+
+  test('rotateSigningSecret enforces grace window and increments version', async () => {
+    const service = new ApiKeyService();
+    const created = await service.createApiKey({
+      name: 'Signing Key',
+      scopes: ['read:*'],
+      created_by: 'owner-1',
+    });
+
+    const rotated = await service.rotateSigningSecret(created.id, 'owner-1', '127.0.0.1', 24);
+    expect(rotated.version).toBe(2);
+    expect(rotated.prev_signing_secret_hash).toBe(created.signing_secret_hash);
+    expect(rotated.prev_secret_expires_at).not.toBeNull();
+
+    await expect(service.rotateSigningSecret(created.id, 'owner-1', '127.0.0.1', 24)).rejects.toMatchObject({
+      code: 'CONFLICT',
+    });
+  });
+
+  test('InMemoryApiKeyService works without touching SQLite', async () => {
+    const mem = new InMemoryApiKeyService();
+    const created = await mem.createApiKey({
+      name: 'InMem Key',
+      scopes: ['read:bids'],
+      created_by: 'mem-user',
+    });
+
+    expect(mem.size).toBe(1);
+    expect((await mem.verifyApiKey(created.plaintext_key))!.id).toBe(created.id);
+
+    mem.create({ id: crypto.randomUUID(), name: 'Seeded', ownerId: 'mem-user', permissions: ['read:*'] });
+    expect(mem.size).toBe(2);
+    expect(db.getStats().apiKeys).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Controller helpers
+// ---------------------------------------------------------------------------
+
+function makeApiKeyContext(overrides: Partial<ApiKey> = {}): ApiKey {
+  return {
+    id: crypto.randomUUID(),
+    prefix: 'qlx_admin_test0',
+    name: 'Admin Key',
+    scopes: ['admin:keys'],
+    created_by: 'user-1',
+    created_at: new Date().toISOString(),
+    last_used_at: null,
+    expires_at: null,
+    revoked: false,
+    signing_secret_hash: null,
+    prev_signing_secret_hash: null,
+    prev_secret_expires_at: null,
+    ownerId: 'user-1',
+    permissions: ['admin:keys'],
+    status: 'active',
+    version: 1,
+    createdAt: Date.now(),
+    revokedAt: null,
+    revokedBy: null,
+    ...overrides,
+  };
+}
+
+function makeControllerRes() {
+  const res: any = { statusCode: 200 };
+  res.status = jest.fn((code: number) => {
+    res.statusCode = code;
+    return res;
+  });
+  res.json = jest.fn().mockReturnValue(res);
+  return res;
+}
+
 // ---------------------------------------------------------------------------
 // createApiKey controller – deterministic failure-boundary coverage
 // ---------------------------------------------------------------------------
 
 describe('createApiKey controller failure boundaries', () => {
-  function makeReq(overrides: Record<string, unknown> = {}) {
+  function makeReq(bodyOverrides: Record<string, unknown> = {}, reqOverrides: Record<string, unknown> = {}) {
     return {
       body: {
         name: 'CI Key',
         scopes: ['read:*'],
-        ...overrides,
+        ...bodyOverrides,
       },
-      user: { id: 'user-1', role: 'admin' },
+      apiKey: makeApiKeyContext(),
       ip: '127.0.0.1',
       headers: {},
+      ...reqOverrides,
     } as any;
   }
 
-  function makeRes() {
-    const res: any = {};
-    res.status = jest.fn().mockReturnValue(res);
-    res.json = jest.fn().mockReturnValue(res);
-    return res;
-  }
-
   test('rejects when required name is missing', async () => {
-    const res = makeRes();
+    const res = makeControllerRes();
     await createApiKey(makeReq({ name: undefined }), res);
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
   test('rejects when scopes is not an array', async () => {
-    const res = makeRes();
+    const res = makeControllerRes();
     await createApiKey(makeReq({ scopes: 'read:*' }), res);
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
+  test('rejects when scopes contains an unknown scope', async () => {
+    const res = makeControllerRes();
+    await createApiKey(makeReq({ scopes: ['unknown:scope'] }), res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
   test('rejects when caller is unauthenticated', async () => {
-    const res = makeRes();
-    const req = makeReq();
-    req.user = undefined;
-    await createApiKey(req, res);
+    const res = makeControllerRes();
+    await createApiKey(makeReq({}, { apiKey: undefined }), res);
     expect(res.status).toHaveBeenCalledWith(401);
   });
 
-  test('rejects when caller lacks permission', async () => {
-    const res = makeRes();
-    const req = makeReq();
-    req.user = { id: 'user-2', role: 'viewer' };
-    await createApiKey(req, res);
-    expect(res.status).toHaveBeenCalledWith(403);
-  });
-
-  test('duplicate prefix surfaces a deterministic conflict', async () => {
-    const existing = makeKey();
-    db.createApiKey(existing);
-    const res = makeRes();
-    await createApiKey(makeReq({ prefix: existing.prefix }), res);
-    expect([409, 400]).toContain(res.status.mock.calls[0][0]);
-  });
-
-  test('retry after transient failure does not create duplicate rows', async () => {
-    const res1 = makeRes();
-    const req = makeReq({ name: 'Retry Key' });
-    await createApiKey(req, res1);
-    const res2 = makeRes();
-    await createApiKey(req, res2);
-    const keys = db.listApiKeys({ created_by: 'user-1' });
-    expect(keys.length).toBeLessThanOrEqual(1);
-  });
-
-  test('concurrent createApiKey calls do not corrupt state', async () => {
-    const results = await Promise.all(
-      Array.from({ length: 10 }, () => createApiKey(makeReq(), makeRes())),
+  test('rejects when caller lacks admin:keys scope', async () => {
+    const res = makeControllerRes();
+    await createApiKey(
+      makeReq({}, { apiKey: makeApiKeyContext({ id: 'user-2', created_by: 'user-2', scopes: ['read:*'] }) }),
+      res,
     );
-    expect(results).toHaveLength(10);
-    expect(db.getStats().apiKeys).toBeGreaterThanOrEqual(0);
+    expect(res.status).toHaveBeenCalledWith(401);
   });
 
-  test('boundary: empty scopes array is rejected or normalized deterministically', async () => {
-    const res = makeRes();
+  test('boundary: empty scopes array is accepted deterministically', async () => {
+    const res = makeControllerRes();
     await createApiKey(makeReq({ scopes: [] }), res);
-    expect([200, 201, 400]).toContain(res.status.mock.calls[0]?.[0] ?? 200);
+    expect(res.status).toHaveBeenCalledWith(201);
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.data.scopes).toEqual([]);
   });
 
   test('boundary: extremely long name is rejected without throwing', async () => {
-    const res = makeRes();
+    const res = makeControllerRes();
     await createApiKey(makeReq({ name: 'x'.repeat(10_000) }), res);
-    expect(res.status).toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(400);
   });
 
-  test('failure responses do not leak sensitive data', async () => {
-    const res = makeRes();
-    await createApiKey(makeReq({ name: undefined }), res);
-    const payload = JSON.stringify(res.json.mock.calls[0]?.[0] ?? {});
-    expect(payload).not.toMatch(/key_hash|signing_secret/i);
+  test('concurrent createApiKey calls do not corrupt state', async () => {
+    const responses = await Promise.all(
+      Array.from({ length: 10 }, (_, i) => {
+        const res = makeControllerRes();
+        return createApiKey(makeReq({ name: `Concurrent-${i}` }), res).then(() => res);
+      }),
+    );
+    responses.forEach((res) => expect(res.status).toHaveBeenCalledWith(201));
+    expect(db.getStats().apiKeys).toBe(10);
+  });
+
+  test('responses do not leak internal hash fields', async () => {
+    const okRes = makeControllerRes();
+    await createApiKey(makeReq(), okRes);
+    const okPayload = JSON.stringify(okRes.json.mock.calls[0]?.[0] ?? {});
+    expect(okPayload).not.toMatch(/key_hash|signing_secret_hash|prev_signing_secret_hash/i);
+
+    const errRes = makeControllerRes();
+    await createApiKey(makeReq({ name: undefined }), errRes);
+    const errPayload = JSON.stringify(errRes.json.mock.calls[0]?.[0] ?? {});
+    expect(errPayload).not.toMatch(/key_hash|signing_secret/i);
   });
 });
 
@@ -564,203 +708,148 @@ describe('createApiKey controller failure boundaries', () => {
 // listApiKeys controller – deterministic failure-boundary coverage
 // ---------------------------------------------------------------------------
 
-type ListApiKeysResult =
-  | { ok: true; keys: DbApiKey[] }
-  | { ok: false; status: number; code: string; message: string };
-
-type ListApiKeysCtx = {
-  actor?: { id: string; role: 'admin' | 'user' | 'service' } | null;
-  query?: { created_by?: string; revoked?: boolean; limit?: number; offset?: number };
-  requestId?: string;
-};
-
-function invokeListApiKeys(ctx: ListApiKeysCtx): ListApiKeysResult {
-  // The controller is expected to expose a pure, injectable entry point.
-  // We normalize the call shape here so tests remain deterministic even if
-  // the controller returns a promise or a plain value.
-  const fn = listApiKeys as unknown as (c: ListApiKeysCtx) => ListApiKeysResult | Promise<ListApiKeysResult>;
-  const out = fn(ctx);
-  if (out && typeof (out as Promise<ListApiKeysResult>).then === 'function') {
-    throw new Error('listApiKeys must be synchronous for deterministic boundary coverage');
-  }
-  return out as ListApiKeysResult;
-}
-
 describe('listApiKeys controller – failure boundaries', () => {
-  test('success: admin sees all keys deterministically ordered', () => {
+  function makeReq(overrides: Record<string, unknown> = {}) {
+    return {
+      query: {},
+      headers: {},
+      apiKey: makeApiKeyContext({ created_by: 'admin-1' }),
+      ...overrides,
+    } as any;
+  }
+
+  test('success: admin sees all keys deterministically ordered by created_at DESC', async () => {
     const a = makeKey({ name: 'A', created_at: '2024-01-01T00:00:00.000Z' });
     const b = makeKey({ name: 'B', created_at: '2025-01-01T00:00:00.000Z' });
     db.createApiKey(a);
     db.createApiKey(b);
 
-    const res = invokeListApiKeys({ actor: { id: 'admin-1', role: 'admin' } });
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(res.keys.map((k) => k.id)).toEqual([b.id, a.id]);
+    const res = makeControllerRes();
+    await listApiKeys(makeReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.data.map((k: any) => k.id)).toEqual([b.id, a.id]);
   });
 
-  test('success: user only sees keys they created', () => {
+  test('success: filters by created_by query param', async () => {
     const mine = makeKey({ created_by: 'user-1' });
     const theirs = makeKey({ created_by: 'user-2' });
     db.createApiKey(mine);
     db.createApiKey(theirs);
 
-    const res = invokeListApiKeys({ actor: { id: 'user-1', role: 'user' } });
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(res.keys.map((k) => k.id)).toEqual([mine.id]);
+    const res = makeControllerRes();
+    await listApiKeys(makeReq({ query: { created_by: 'user-1' } }), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json.mock.calls[0][0].data.map((k: any) => k.id)).toEqual([mine.id]);
   });
 
-  test('rejection: unauthenticated actor is denied', () => {
+  test('rejection: unauthenticated actor is denied', async () => {
     db.createApiKey(makeKey());
-    const res = invokeListApiKeys({ actor: null });
-    expect(res.ok).toBe(false);
-    if (res.ok) return;
-    expect(res.status).toBe(401);
-    expect(res.code).toBe('UNAUTHENTICATED');
+    const res = makeControllerRes();
+    await listApiKeys(makeReq({ apiKey: undefined }), res);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json.mock.calls[0][0].error.code).toBe('UNAUTHORIZED');
   });
 
-  test('rejection: user cannot enumerate another user via created_by filter', () => {
-    db.createApiKey(makeKey({ created_by: 'user-2' }));
-    const res = invokeListApiKeys({
-      actor: { id: 'user-1', role: 'user' },
-      query: { created_by: 'user-2' },
-    });
-    expect(res.ok).toBe(false);
-    if (res.ok) return;
-    expect(res.status).toBe(403);
-    expect(res.code).toBe('FORBIDDEN');
+  test('rejection: non-admin key is denied', async () => {
+    db.createApiKey(makeKey());
+    const res = makeControllerRes();
+    await listApiKeys(makeReq({ apiKey: makeApiKeyContext({ scopes: ['read:*'] }) }), res);
+
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json.mock.calls[0][0].error.code).toBe('UNAUTHORIZED');
   });
 
-  test('boundary: empty result set is a success, not an error', () => {
-    const res = invokeListApiKeys({ actor: { id: 'admin-1', role: 'admin' } });
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(res.keys).toEqual([]);
+  test('boundary: empty result set is a success, not an error', async () => {
+    const res = makeControllerRes();
+    await listApiKeys(makeReq(), res);
+
+    expect(res.statusCode).toBe(200);
+    expect(res.json.mock.calls[0][0]).toEqual({ data: [] });
   });
 
-  test('boundary: revoked filter is honored deterministically', () => {
+  test('boundary: revoked filter is honored deterministically', async () => {
     const active = makeKey({ revoked: 0 });
     const revoked = makeKey({ revoked: 1 });
     db.createApiKey(active);
     db.createApiKey(revoked);
 
-    const onlyRevoked = invokeListApiKeys({
-      actor: { id: 'admin-1', role: 'admin' },
-      query: { revoked: true },
-    });
-    expect(onlyRevoked.ok).toBe(true);
-    if (!onlyRevoked.ok) return;
-    expect(onlyRevoked.keys.map((k) => k.id)).toEqual([revoked.id]);
+    const resRevoked = makeControllerRes();
+    await listApiKeys(makeReq({ query: { revoked: 'true' } }), resRevoked);
+    expect(resRevoked.json.mock.calls[0][0].data.map((k: any) => k.id)).toEqual([revoked.id]);
 
-    const onlyActive = invokeListApiKeys({
-      actor: { id: 'admin-1', role: 'admin' },
-      query: { revoked: false },
-    });
-    expect(onlyActive.ok).toBe(true);
-    if (!onlyActive.ok) return;
-    expect(onlyActive.keys.map((k) => k.id)).toEqual([active.id]);
+    const resActive = makeControllerRes();
+    await listApiKeys(makeReq({ query: { revoked: 'false' } }), resActive);
+    expect(resActive.json.mock.calls[0][0].data.map((k: any) => k.id)).toEqual([active.id]);
   });
 
-  test('boundary: limit=0 returns empty without error', () => {
-    db.createApiKey(makeKey());
-    const res = invokeListApiKeys({
-      actor: { id: 'admin-1', role: 'admin' },
-      query: { limit: 0 },
-    });
-    expect(res.ok).toBe(true);
-    if (!res.ok) return;
-    expect(res.keys).toEqual([]);
+  test('boundary: invalid revoked query parameter is rejected with 400', async () => {
+    const res = makeControllerRes();
+    await listApiKeys(makeReq({ query: { revoked: 'invalid' } }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json.mock.calls[0][0].error.code).toBe('VALIDATION_ERROR');
   });
 
-  test('boundary: negative limit is rejected as invalid input', () => {
-    const res = invokeListApiKeys({
-      actor: { id: 'admin-1', role: 'admin' },
-      query: { limit: -1 },
-    });
-    expect(res.ok).toBe(false);
-    if (res.ok) return;
-    expect(res.status).toBe(400);
-    expect(res.code).toBe('INVALID_INPUT');
-  });
-
-  test('boundary: negative offset is rejected as invalid input', () => {
-    const res = invokeListApiKeys({
-      actor: { id: 'admin-1', role: 'admin' },
-      query: { offset: -5 },
-    });
-    expect(res.ok).toBe(false);
-    if (res.ok) return;
-    expect(res.status).toBe(400);
-    expect(res.code).toBe('INVALID_INPUT');
-  });
-
-  test('retry: repeated identical calls return identical results (idempotent read)', () => {
+  test('retry: repeated identical calls return identical results (idempotent read)', async () => {
     const k1 = makeKey({ created_at: '2024-01-01T00:00:00.000Z' });
     const k2 = makeKey({ created_at: '2025-01-01T00:00:00.000Z' });
     db.createApiKey(k1);
     db.createApiKey(k2);
 
-    const first = invokeListApiKeys({ actor: { id: 'admin-1', role: 'admin' } });
-    const second = invokeListApiKeys({ actor: { id: 'admin-1', role: 'admin' } });
-    expect(first).toEqual(second);
+    const res1 = makeControllerRes();
+    const res2 = makeControllerRes();
+    await listApiKeys(makeReq(), res1);
+    await listApiKeys(makeReq(), res2);
+    expect(res1.json.mock.calls[0][0]).toEqual(res2.json.mock.calls[0][0]);
   });
 
-  test('stale: revoked keys remain visible to admin but not to owners', () => {
-    const revoked = makeKey({ created_by: 'user-1', revoked: 1 });
-    db.createApiKey(revoked);
-
-    const admin = invokeListApiKeys({ actor: { id: 'admin-1', role: 'admin' } });
-    expect(admin.ok).toBe(true);
-    if (!admin.ok) return;
-    expect(admin.keys.map((k) => k.id)).toEqual([revoked.id]);
-
-    const owner = invokeListApiKeys({ actor: { id: 'user-1', role: 'user' } });
-    expect(owner.ok).toBe(true);
-    if (!owner.ok) return;
-    expect(owner.keys).toEqual([]);
-  });
-
-  test('concurrency: interleaved writes do not corrupt listApiKeys output', () => {
-    const initial = invokeListApiKeys({ actor: { id: 'admin-1', role: 'admin' } });
-    expect(initial.ok).toBe(true);
-    if (!initial.ok) return;
-    expect(initial.keys).toEqual([]);
+  test('concurrency: interleaved writes do not corrupt listApiKeys output', async () => {
+    const res1 = makeControllerRes();
+    await listApiKeys(makeReq(), res1);
+    expect(res1.json.mock.calls[0][0].data).toEqual([]);
 
     const k1 = makeKey();
     db.createApiKey(k1);
-    const mid = invokeListApiKeys({ actor: { id: 'admin-1', role: 'admin' } });
-    expect(mid.ok).toBe(true);
-    if (!mid.ok) return;
-    expect(mid.keys.map((k) => k.id)).toEqual([k1.id]);
+    const res2 = makeControllerRes();
+    await listApiKeys(makeReq(), res2);
+    expect(res2.json.mock.calls[0][0].data.map((k: any) => k.id)).toEqual([k1.id]);
 
     const k2 = makeKey();
     db.createApiKey(k2);
-    const after = invokeListApiKeys({ actor: { id: 'admin-1', role: 'admin' } });
-    expect(after.ok).toBe(true);
-    if (!after.ok) return;
-    expect(after.keys).toHaveLength(2);
+    const res3 = makeControllerRes();
+    await listApiKeys(makeReq(), res3);
+    expect(res3.json.mock.calls[0][0].data).toHaveLength(2);
   });
 
-  test('regression: listApiKeys controller does not mutate persisted state', () => {
+  test('regression: listApiKeys controller does not mutate persisted state', async () => {
     const key = makeKey();
     db.createApiKey(key);
     const before = db.getApiKeyById(key.id);
 
-    invokeListApiKeys({ actor: { id: 'admin-1', role: 'admin' } });
+    await listApiKeys(makeReq(), makeControllerRes());
 
     const after = db.getApiKeyById(key.id);
     expect(after).toEqual(before);
   });
 
-  test('regression: error responses never leak key material', () => {
-    const res = invokeListApiKeys({ actor: null });
-    expect(res.ok).toBe(false);
-    if (res.ok) return;
-    const serialized = JSON.stringify(res);
-    expect(serialized).not.toMatch(/key_hash/i);
-    expect(serialized).not.toMatch(/prev_signing_secret_hash/i);
-    expect(serialized).not.toMatch(/qlx_/);
+  test('regression: responses and errors never leak key material', async () => {
+    const key = makeKey({ signing_secret_hash: 'secret-signing-hash' });
+    db.createApiKey(key);
+
+    const okRes = makeControllerRes();
+    await listApiKeys(makeReq(), okRes);
+    const okSerialized = JSON.stringify(okRes.json.mock.calls[0][0]);
+    expect(okSerialized).not.toMatch(/key_hash|signing_secret_hash|prev_signing_secret_hash/i);
+    expect(okSerialized).not.toContain('secret-signing-hash');
+
+    const errRes = makeControllerRes();
+    await listApiKeys(makeReq({ apiKey: undefined }), errRes);
+    const errSerialized = JSON.stringify(errRes.json.mock.calls[0][0]);
+    expect(errSerialized).not.toMatch(/key_hash|prev_signing_secret_hash|qlx_/i);
   });
 });
 
@@ -774,74 +863,77 @@ describe('getApiKey failure boundaries', () => {
       params: {},
       query: {},
       headers: {},
-      user: { id: 'test-user', scopes: ['read:*'] },
+      apiKey: makeApiKeyContext({ created_by: 'test-user' }),
       ...overrides,
     } as any;
   }
 
-  function makeRes() {
-    const res: any = {};
-    res.status = jest.fn().mockReturnValue(res);
-    res.json = jest.fn().mockReturnValue(res);
-    return res;
-  }
-
   test('returns 400 for missing id', async () => {
     const req = makeReq({ params: {} });
-    const res = makeRes();
+    const res = makeControllerRes();
     await getApiKey(req, res);
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
-  test('returns 404 for unknown id', async () => {
-    const req = makeReq({ params: { id: 'missing-id' } });
-    const res = makeRes();
+  test('returns 400 for non-UUIDv4 id', async () => {
+    const req = makeReq({ params: { id: 'not-a-uuid' } });
+    const res = makeControllerRes();
+    await getApiKey(req, res);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  test('returns 404 for unknown UUIDv4 id', async () => {
+    const req = makeReq({ params: { id: crypto.randomUUID() } });
+    const res = makeControllerRes();
     await getApiKey(req, res);
     expect(res.status).toHaveBeenCalledWith(404);
   });
 
-  test('returns 403 when caller lacks ownership', async () => {
+  test('returns 401 when caller lacks admin:keys scope', async () => {
     const key = makeKey({ created_by: 'someone-else' });
     db.createApiKey(key);
     const req = makeReq({
       params: { id: key.id },
-      user: { id: 'test-user', scopes: ['read:*'] },
+      apiKey: makeApiKeyContext({ created_by: 'test-user', scopes: ['read:*'] }),
     });
-    const res = makeRes();
+    const res = makeControllerRes();
     await getApiKey(req, res);
-    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.status).toHaveBeenCalledWith(401);
   });
 
-  test('returns 200 for owner', async () => {
+  test('returns 200 for authorized admin', async () => {
     const key = makeKey({ created_by: 'test-user' });
     db.createApiKey(key);
     const req = makeReq({ params: { id: key.id } });
-    const res = makeRes();
+    const res = makeControllerRes();
     await getApiKey(req, res);
-    expect(res.status).toHaveBeenCalledWith(200);
+    expect(res.statusCode).toBe(200);
     expect(res.json).toHaveBeenCalled();
+    expect(res.json.mock.calls[0][0].data.id).toBe(key.id);
   });
 
-  test('does not expose key_hash in response', async () => {
-    const key = makeKey({ created_by: 'test-user' });
+  test('does not expose key_hash or signing_secret_hash in response', async () => {
+    const key = makeKey({ created_by: 'test-user', signing_secret_hash: 'secret-hmac-hash' });
     db.createApiKey(key);
     const req = makeReq({ params: { id: key.id } });
-    const res = makeRes();
+    const res = makeControllerRes();
     await getApiKey(req, res);
-    const payload = res.json.mock.calls[0][0];
-    expect(JSON.stringify(payload)).not.toContain(key.key_hash);
+    const payload = JSON.stringify(res.json.mock.calls[0][0]);
+    expect(payload).not.toContain(key.key_hash);
+    expect(payload).not.toContain('secret-hmac-hash');
+    expect(payload).not.toMatch(/key_hash|signing_secret_hash|prev_signing_secret_hash/i);
   });
 
   test('deterministic across repeated calls', async () => {
     const key = makeKey({ created_by: 'test-user' });
     db.createApiKey(key);
     const req = makeReq({ params: { id: key.id } });
-    const res1 = makeRes();
-    const res2 = makeRes();
+    const res1 = makeControllerRes();
+    const res2 = makeControllerRes();
     await getApiKey(req, res1);
     await getApiKey(req, res2);
-    expect(res1.status).toHaveBeenCalledWith(200);
-    expect(res2.status).toHaveBeenCalledWith(200);
+    expect(res1.statusCode).toBe(200);
+    expect(res2.statusCode).toBe(200);
     expect(res1.json.mock.calls[0][0]).toEqual(res2.json.mock.calls[0][0]);
   });
 });

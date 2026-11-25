@@ -20,9 +20,6 @@ fn make_funded_invoice(
             String::from_str(env, "Rated invoice"),
             InvoiceCategory::Services,
             soroban_sdk::Vec::new(env),
-            None,
-            None,
-            None,
         )
         .unwrap();
         let invoice_id = invoice.id.clone();
@@ -95,7 +92,6 @@ fn test_business_cannot_rate_own_invoice() {
 fn test_rating_requires_signature() {
     let env = Env::default();
     let contract_id = env.register(crate::QuickLendXContract, ());
-    let client = crate::QuickLendXContractClient::new(&env, &contract_id);
 
     let business = Address::generate(&env);
     let investor = Address::generate(&env);
@@ -109,9 +105,6 @@ fn test_rating_requires_signature() {
             String::from_str(&env, "Signed rating"),
             InvoiceCategory::Services,
             soroban_sdk::Vec::new(&env),
-            None,
-            None,
-            None,
         )
         .unwrap();
         invoice.status = InvoiceStatus::Funded;
@@ -120,12 +113,17 @@ fn test_rating_requires_signature() {
         invoice.id.clone()
     });
 
-    let result = client.try_add_invoice_rating(
-        &invoice_id,
-        &5u32,
-        &String::from_str(&env, "signed"),
-        &investor,
-    );
+    // No mock auth is configured: `rate_invoice` must reject the unsigned
+    // investor even though the caller supplies the investor's address.
+    let result = env.try_as_contract::<_, soroban_sdk::Error>(&contract_id, || {
+        crate::invoice::Invoice::rate_invoice(
+            &env,
+            &invoice_id,
+            investor.clone(),
+            5,
+            String::from_str(&env, "signed"),
+        )
+    });
     assert!(result.is_err(), "missing signer auth must fail");
 }
 
@@ -145,9 +143,6 @@ fn test_unfunded_invoice_cannot_be_rated() {
             String::from_str(&env, "Pending invoice"),
             InvoiceCategory::Services,
             soroban_sdk::Vec::new(&env),
-            None,
-            None,
-            None,
         )
         .unwrap()
     });

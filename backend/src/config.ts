@@ -20,9 +20,19 @@ export const envBoolean = z
   .enum(["true", "false", "1", "0"])
   .transform((value) => value === "true" || value === "1");
 
-const schema = z.object({
+export const configSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
+  TRUST_PROXY: z
+    .string()
+    .default("loopback")
+    .transform((val): boolean | number | string => {
+      const trimmed = val.trim();
+      if (trimmed === "true") return true;
+      if (trimmed === "false") return false;
+      if (/^\d+$/.test(trimmed)) return Number(trimmed);
+      return trimmed;
+    }),
   STELLAR_RPC_URL: z.url().default("https://soroban-testnet.stellar.org"),
   RATE_LIMIT_POINTS: z.coerce.number().int().min(1).default(100),
   RATE_LIMIT_PER_KEY_POINTS: z.coerce.number().int().min(1).default(60),
@@ -78,17 +88,17 @@ const schema = z.object({
   ALERT_EMAIL_RECIPIENTS: z.string().optional(), // comma-separated emails
 });
 
-export type Config = z.infer<typeof schema>;
+export type Config = z.infer<typeof configSchema>;
 
 export function load(env: NodeJS.ProcessEnv = process.env): Config {
   const isProd = env.NODE_ENV === "production";
   const effectiveSchema = isProd
-    ? schema.extend({
+    ? configSchema.extend({
         NOTIFICATION_LINK_SECRET: z.string().min(32),
         ADMIN_API_KEY: z.string().min(32),
         EXPORT_SECRET: z.string().min(32),
       })
-    : schema;
+    : configSchema;
 
   const result = effectiveSchema.safeParse(env);
   if (!result.success) {

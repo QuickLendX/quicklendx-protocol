@@ -187,6 +187,7 @@ impl Invoice {
             resolved_by: zero_address(env),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(env),
         }
     }
 

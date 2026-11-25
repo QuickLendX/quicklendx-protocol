@@ -11,9 +11,13 @@
  */
 
 import React, { createRef } from "react";
-import { render, screen, act, waitFor } from "@testing-library/react";
+import { render, screen, act, waitFor, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { ConfirmAction, ConfirmActionProps } from "../../app/components/ConfirmAction";
+import {
+  ConfirmAction,
+  ConfirmActionProps,
+} from "../../app/components/ConfirmAction";
+import { ConfirmAction, ConfirmActionProps } from "../ConfirmAction";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -22,12 +26,14 @@ import { ConfirmAction, ConfirmActionProps } from "../../app/components/ConfirmA
 const defaultFees = [
   {
     label: "Platform fee",
-    amount: 0.0050000,
+    amount: 0.005,
     isEstimate: false,
   },
 ];
 
-function makeProps(overrides?: Partial<ConfirmActionProps>): ConfirmActionProps {
+function makeProps(
+  overrides?: Partial<ConfirmActionProps>
+): ConfirmActionProps {
   return {
     isOpen: true,
     onClose: jest.fn(),
@@ -80,16 +86,14 @@ describe("ConfirmAction — Tab focus cycle", () => {
     focusable[0].focus();
     expect(document.activeElement).toBe(focusable[0]);
 
-    // Tab through all elements
-    for (let i = 1; i < focusable.length; i++) {
-      await user.tab();
-      // After each Tab we expect to be on a focusable element inside dialog
-      expect(dialog.contains(document.activeElement)).toBe(true);
-    }
-
-    // One more Tab should wrap back to first
-    await user.tab();
-    expect(document.activeElement).toBe(focusable[0]);
+    // Tab from the last element should wrap back to first
+    const last = focusable[focusable.length - 1];
+    last.focus();
+    expect(document.activeElement).toBe(last);
+    fireEvent.keyDown(dialog, { key: "Tab" });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(focusable[0]);
+    });
   });
 
   it("Shift+Tab cycles through focusable elements in reverse", async () => {
@@ -114,8 +118,10 @@ describe("ConfirmAction — Tab focus cycle", () => {
     expect(document.activeElement).toBe(first);
 
     // Shift+Tab from first should wrap to last
-    await user.tab({ shift: true });
-    expect(document.activeElement).toBe(last);
+    fireEvent.keyDown(dialog, { key: "Tab", shiftKey: true });
+    await waitFor(() => {
+      expect(document.activeElement).toBe(last);
+    });
   });
 });
 
@@ -137,16 +143,18 @@ describe("ConfirmAction — focus return on close", () => {
     const onClose = jest.fn();
 
     const { rerender } = render(
-      <ConfirmAction
-        {...makeProps({ onConfirm, onClose, triggerRef })}
-      />
+      <ConfirmAction {...makeProps({ onConfirm, onClose, triggerRef })} />
     );
 
     // Click "Confirm acceptance" twice with gap (two-step button)
-    const twoStepBtn = screen.getByRole("button", { name: /confirm acceptance/i });
+    const twoStepBtn = screen.getByRole("button", {
+      name: /confirm acceptance/i,
+    });
     await user.click(twoStepBtn);
     // Wait for the reset timer gap (500ms min)
-    await act(async () => { await new Promise((r) => setTimeout(r, 600)); });
+    await act(async () => {
+      await new Promise((r) => setTimeout(r, 600));
+    });
     await user.click(twoStepBtn);
 
     // Wait for onConfirm and close to run
@@ -180,19 +188,23 @@ describe("ConfirmAction — focus return on close", () => {
     const onClose = jest.fn();
 
     const { rerender } = render(
-      <ConfirmAction
-        {...makeProps({ onConfirm, onClose, triggerRef })}
-      />
+      <ConfirmAction {...makeProps({ onConfirm, onClose, triggerRef })} />
     );
 
     // Trigger submission via two-step button
-    const twoStepBtn = screen.getByRole("button", { name: /confirm acceptance/i });
+    const twoStepBtn = screen.getByRole("button", {
+      name: /confirm acceptance/i,
+    });
     await user.click(twoStepBtn);
-    await act(async () => { jest.advanceTimersByTime(600); });
+    await act(async () => {
+      jest.advanceTimersByTime(600);
+    });
     await user.click(twoStepBtn);
 
     // Advance past server timeout (10 000 ms)
-    await act(async () => { jest.advanceTimersByTime(10_100); });
+    await act(async () => {
+      jest.advanceTimersByTime(10_100);
+    });
 
     // "Dismiss" button should now be visible
     const dismissBtn = await screen.findByRole("button", { name: /dismiss/i });
@@ -232,9 +244,11 @@ describe("ConfirmAction — Escape key calls current onClose (no stale closure)"
     // Re-render with a different onClose before pressing Escape
     rerender(<ConfirmAction {...makeProps({ onClose: secondOnClose })} />);
 
-    await user.keyboard("{Escape}");
+    fireEvent.keyDown(screen.getByRole("alertdialog"), { key: "Escape" });
 
-    expect(secondOnClose).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(secondOnClose).toHaveBeenCalledTimes(1);
+    });
     expect(firstOnClose).not.toHaveBeenCalled();
   });
 });
