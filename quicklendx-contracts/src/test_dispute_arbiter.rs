@@ -217,12 +217,95 @@ fn resolve_dispute_succeeds_after_register_arbiter() {
     .unwrap();
 }
 
+#[test]
+fn dispute_quorum_requires_distinct_matching_arbiter_votes() {
+    let (env, admin, business, investor) = setup();
+    let invoice_id = open_dispute_under_review(&env, &admin, &business, &investor);
+
+    let first = Address::generate(&env);
+    let second = Address::generate(&env);
+    let third = Address::generate(&env);
+    let fourth = Address::generate(&env);
+    let fifth = Address::generate(&env);
+    crate::arbiter::ArbiterStorage::register_arbiter(&env, &admin, &first).unwrap();
+    crate::arbiter::ArbiterStorage::register_arbiter(&env, &admin, &second).unwrap();
+    crate::arbiter::ArbiterStorage::register_arbiter(&env, &admin, &third).unwrap();
+    crate::arbiter::ArbiterStorage::register_arbiter(&env, &admin, &fourth).unwrap();
+    crate::arbiter::ArbiterStorage::register_arbiter(&env, &admin, &fifth).unwrap();
+    crate::arbiter::ArbiterStorage::set_dispute_quorum(&env, &admin, 3).unwrap();
+
+    crate::dispute::resolve_dispute_structured(
+        &env,
+        &first,
+        &invoice_id,
+        crate::types::DisputeResolution::FavorBusiness,
+        &String::from_str(&env, RESOLUTION),
+    )
+    .unwrap();
+    let dispute = crate::invoice::Invoice::get(&env, &invoice_id).unwrap().dispute;
+    assert_eq!(dispute.votes.len(), 1);
+
+    let duplicate = crate::dispute::resolve_dispute_structured(
+        &env,
+        &first,
+        &invoice_id,
+        crate::types::DisputeResolution::FavorBusiness,
+        &String::from_str(&env, RESOLUTION),
+    );
+    assert_eq!(duplicate, Err(QuickLendXError::DuplicateArbiterVote));
+
+    crate::dispute::resolve_dispute_structured(
+        &env,
+        &second,
+        &invoice_id,
+        crate::types::DisputeResolution::FavorInvestor,
+        &String::from_str(&env, RESOLUTION),
+    )
+    .unwrap();
+    let invoice = crate::invoice::Invoice::get(&env, &invoice_id).unwrap();
+    assert_eq!(invoice.dispute_status, crate::types::DisputeStatus::UnderReview);
+    assert_eq!(invoice.dispute.votes.len(), 2);
+
+    crate::dispute::resolve_dispute_structured(
+        &env,
+        &fourth,
+        &invoice_id,
+        crate::types::DisputeResolution::FavorInvestor,
+        &String::from_str(&env, RESOLUTION),
+    )
+    .unwrap();
+    let invoice = crate::invoice::Invoice::get(&env, &invoice_id).unwrap();
+    assert_eq!(invoice.dispute_status, crate::types::DisputeStatus::UnderReview);
+
+    crate::dispute::resolve_dispute_structured(
+        &env,
+        &third,
+        &invoice_id,
+        crate::types::DisputeResolution::FavorBusiness,
+        &String::from_str(&env, RESOLUTION),
+    )
+    .unwrap();
+    let invoice = crate::invoice::Invoice::get(&env, &invoice_id).unwrap();
+    assert_eq!(invoice.dispute_status, crate::types::DisputeStatus::UnderReview);
+
+    crate::dispute::resolve_dispute_structured(
+        &env,
+        &fifth,
+        &invoice_id,
+        crate::types::DisputeResolution::FavorBusiness,
+        &String::from_str(&env, RESOLUTION),
+    )
+    .unwrap();
+    let invoice = crate::invoice::Invoice::get(&env, &invoice_id).unwrap();
+    assert_eq!(invoice.dispute_status, crate::types::DisputeStatus::Resolved);
+}
+
 // ─── Arbiter independence from admin authority ───────────────────────────────
 
-/// A non-admin, registered arbiter cannot resolve disputes because the
-/// `require_admin` guard still applies. Splits the roles cleanly.
+/// A registered arbiter may submit a resolution vote without also being the
+/// platform administrator. This enables distinct quorum members.
 #[test]
-fn non_admin_arbiter_still_blocked_by_require_admin() {
+fn non_admin_registered_arbiter_can_submit_vote() {
     let (env, admin, business, investor) = setup();
     let invoice_id = open_dispute_under_review(&env, &admin, &business, &investor);
 
@@ -233,21 +316,13 @@ fn non_admin_arbiter_still_blocked_by_require_admin() {
         &non_admin_arbiter
     ));
 
-    let err = crate::dispute::resolve_dispute(
+    crate::dispute::resolve_dispute(
         &env,
         &non_admin_arbiter,
         &invoice_id,
         &String::from_str(&env, RESOLUTION),
     )
-    .unwrap_err();
-    // Either NotAdmin from the admin gate, or NotArbiter if both happen to
-    // pass. We only assert "not OK" — the precise code is not the contract
-    // surface tested here.
-    assert!(
-        err == QuickLendXError::NotAdmin || err == QuickLendXError::NotArbiter,
-        "non-admin arbiter should be blocked, got {:?}",
-        err
-    );
+    .unwrap();
 }
 
 /// Unregistering an arbiter immediately revokes their authority — the next

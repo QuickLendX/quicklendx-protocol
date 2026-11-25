@@ -45,6 +45,22 @@ processing. This document explains:
 | `Disputed` | `put_dispute_under_review` | Platform admin | `UnderReview` |
 | `UnderReview` | `resolve_dispute` or `resolve_dispute_structured` | Platform admin | `Resolved` (terminal) |
 
+## Arbiter quorum
+
+Dispute resolution is controlled by a configurable quorum of distinct registered
+arbiters. The default quorum is `1`, which preserves the existing single-arbiter
+behavior. An admin can configure it with `set_dispute_quorum(admin, quorum)`.
+
+Each vote is recorded in `invoice.dispute.votes`. An arbiter may vote only once
+for a dispute and only while it is `UnderReview`. `N` matching votes for the
+same outcome are required before `apply_resolution_policy` is called:
+
+- quorum `1`: the first registered arbiter resolves immediately;
+- quorum `3`: three distinct arbiters must vote for the same outcome;
+- split/tied outcomes remain unresolved until one outcome reaches the quorum.
+
+Accepted votes emit `dsp_vote`; quorum configuration changes emit `dsp_qrm`.
+
 `Resolved` is strictly terminal: any further mutation is rejected.
 
 ## Timers and deadlines

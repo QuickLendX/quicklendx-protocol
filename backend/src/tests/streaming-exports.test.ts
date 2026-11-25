@@ -5,606 +5,321 @@ import fsp from "fs/promises";
 import path from "path";
 import os from "os";
 import crypto from "crypto";
+import { Readable, Writable } from "stream";
+import { finished } from "stream/promises";
+import { EventEmitter } from "events";
 
-process.env.EXPORT_DIR = path.join(os.tmpdir(), "qlx-export-test-" + Date.now());
-process.env.EXPORT_SECRET = "test-secret-thirty-two-chars-long-for-hmac";
+// Keep filesystem state and environment local to this suite. Only storage and
+// audit dependencies are mocked; serialization, signing and downloads are real.
+const exportDir = fs.mkdtempSync(path.join(os.tmpdir(), "qlx-streaming-"));
+const savedEnv = { ...process.env };
+process.env.EXPORT_DIR = exportDir;
+process.env.EXPORT_SECRET = "streaming-tests-only-signing-secret-32-chars";
 process.env.NODE_ENV = "test";
-process.env.RATE_LIMIT_EXPORT_POINTS = "1000";
+
+jest.mock("../services/invoiceStore", () => ({
+  invoiceStore: { findInvoices: jest.fn() },
+}));
+jest.mock("../controllers/v1/invoices", () => ({ MOCK_INVOICES: [] }));
+jest.mock("../controllers/v1/bids", () => ({ MOCK_BIDS: [] }));
+jest.mock("../controllers/v1/settlements", () => ({ MOCK_SETTLEMENTS: [] }));
+jest.mock("../services/auditLogService", () => ({
+  auditLogService: { recordAuthorization: jest.fn(), recordAdminAction: jest.fn() },
+}));
 
 import { exportService, ExportFormat, ExportErrorCode } from "../services/exportService";
-import { config } from "../config";
-import { requestExport, downloadExport, createDownloadExportHandler } from "../controllers/v1/exports";
+import { requestExport, downloadExport, createDownloadExportHandler, DownloadExportDependencies } from "../controllers/v1/exports";
+import { requireUserAuth, getUser } from "../middleware/userAuth";
+import { exportConcurrencyService } from "../services/exportConcurrency";
+import { invoiceStore } from "../services/invoiceStore";
+import { MOCK_BIDS } from "../controllers/v1/bids";
+import { MOCK_SETTLEMENTS } from "../controllers/v1/settlements";
 
-const exportDir = process.env.EXPORT_DIR!;
+const userId = "stream-user";
+const invoice = { id: "inv-1", business: userId, amount: "123", currency: "USD", status: "pending", due_date: 1700000000 };
 
 function buildApp() {
   const app = express();
-  app.use(express.json());
-  const { default: exportRoutes } = require("../routes/v1/exports");
-  app.use("/api/v1/exports", (req: any, _res: any, next: any) => {
-    const auth = req.headers.authorization || "";
-    req.user = { userId: auth.replace("Bearer ", "") || "user-stream-test" };
-    next();
+  app.post("/api/v1/exports/generate", requireUserAuth, requestExport);
+  app.get("/api/v1/exports/download/:token", downloadExport);
+  app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+    res.status(500).json({ error: { message: err.message } });
   });
-  app.use("/api/v1/exports", exportRoutes);
   return app;
 }
 
-function makeToken(userId: string, format: ExportFormat, expiresAt: number): string {
-  const payload = JSON.stringify({ userId, format, expiresAt });
-  const signature = crypto
-    .createHmac("sha256", config.EXPORT_SECRET)
-    .update(payload)
-    .digest("hex");
+function signedToken(expiresAt: number, secret = process.env.EXPORT_SECRET!) {
+  const payload = JSON.stringify({ userId, format: ExportFormat.JSON, expiresAt });
+  const signature = crypto.createHmac("sha256", secret).update(payload).digest("hex");
   return Buffer.from(JSON.stringify({ payload, signature })).toString("base64");
 }
 
-function makeFutureToken(userId: string, format: ExportFormat): string {
-  return makeToken(userId, format, Date.now() + 3600_000);
+async function waitForDeletion(token: string) {
+  // The controller's end listener performs asynchronous best-effort deletion.
+  for (let i = 0; i < 100; i++) {
+    if (await exportService.getFilePath(token) === null) return;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error("Export file was not deleted after stream completion");
 }
 
-function makeExpiredToken(userId: string, format: ExportFormat): string {
-  return makeToken(userId, format, Date.now() - 1000);
+function downloadDependencies(overrides: Partial<DownloadExportDependencies> = {}): DownloadExportDependencies {
+  return {
+    getUser,
+    validateTokenStrict: (token) => exportService.validateTokenStrict(token),
+    getFilePathStrict: (token) => exportService.getFilePathStrict(token),
+    deleteFile: (file) => exportService.deleteFile(file),
+    tryAcquire: jest.fn(() => true),
+    release: jest.fn(),
+    recordAudit: jest.fn(),
+    createReadStream: (file) => fs.createReadStream(file),
+    ...overrides,
+  };
 }
 
-beforeAll(async () => {
-  await fsp.mkdir(exportDir, { recursive: true, mode: 0o700 });
+function streamResponse(write: (chunk: Buffer, done: (error?: Error | null) => void) => void) {
+  const response = new Writable({ highWaterMark: 128, write(chunk, _encoding, done) { write(chunk, done); } }) as any;
+  response.headers = {};
+  response.setHeader = (name: string, value: string) => { response.headers[name] = value; };
+  response.status = jest.fn(() => response);
+  response.json = jest.fn(() => response);
+  return response;
+}
+
+beforeEach(() => {
+  exportConcurrencyService.reset();
+  exportService.__resetInFlightForTests();
+  jest.mocked(invoiceStore.findInvoices).mockImplementation(({ business } = {}) => business === userId ? [{ ...invoice }] as any : []);
+  MOCK_BIDS.splice(0, MOCK_BIDS.length, { bid_id: "bid-1", investor: userId, invoice_id: invoice.id, bid_amount: "100", status: "active", timestamp: 1700000000 } as any);
+  MOCK_SETTLEMENTS.splice(0, MOCK_SETTLEMENTS.length, { id: "stl-1", payer: userId, recipient: "other", invoice_id: invoice.id, amount: "100", status: "paid", timestamp: 1700000000 } as any);
+});
+
+afterEach(async () => {
+  jest.restoreAllMocks();
+  exportConcurrencyService.reset();
+  exportService.__resetInFlightForTests();
+  for (const file of await fsp.readdir(exportDir)) await fsp.unlink(path.join(exportDir, file));
 });
 
 afterAll(async () => {
-  await fsp.rm(exportDir, { recursive: true, force: true }).catch(() => {});
-});
-
-beforeEach(async () => {
-  const files = await fsp.readdir(exportDir).catch(() => []);
-  for (const f of files) {
-    await fsp.unlink(path.join(exportDir, f)).catch(() => {});
+  await fsp.rm(exportDir, { recursive: true, force: true });
+  for (const key of ["EXPORT_DIR", "EXPORT_SECRET", "NODE_ENV"]) {
+    if (savedEnv[key] === undefined) delete process.env[key];
+    else process.env[key] = savedEnv[key];
   }
 });
 
-// ---------------------------------------------------------------------------
-// Direct service unit tests
-// ---------------------------------------------------------------------------
-describe("ExportService - Token signing", () => {
-  it("generates and validates a token", () => {
-    const token = exportService.generateSignedToken("user-1", ExportFormat.JSON);
-    const result = exportService.validateToken(token);
-    expect(result).not.toBeNull();
-    expect(result!.userId).toBe("user-1");
-    expect(result!.format).toBe(ExportFormat.JSON);
-  });
-
-  it("rejects tampered token", () => {
-    const result = exportService.validateToken("invalid+base64!!");
-    expect(result).toBeNull();
-  });
-
-  it("rejects expired token", () => {
-    const token = makeExpiredToken("user-1", ExportFormat.JSON);
-    const result = exportService.validateToken(token);
-    expect(result).toBeNull();
-  });
-
-  it("rejects token with bad signature", () => {
-    const payload = JSON.stringify({ userId: "u1", format: "json", expiresAt: Date.now() + 3600_000 });
-    const badSig = crypto.createHmac("sha256", "wrong-secret").update(payload).digest("hex");
-    const token = Buffer.from(JSON.stringify({ payload, signature: badSig })).toString("base64");
-    const result = exportService.validateToken(token);
-    expect(result).toBeNull();
-  });
-});
-
-describe("ExportService - File generation", () => {
-  it("generates a JSON file on disk", async () => {
-    const token = await exportService.generateExportFile("user-stream-test", ExportFormat.JSON);
-    expect(token).toBeTruthy();
-    const fp = await exportService.getFilePath(token);
-    expect(fp).toBeTruthy();
-    const content = await fsp.readFile(fp!, "utf8");
-    const parsed = JSON.parse(content);
-    expect(parsed.invoices).toBeDefined();
-    expect(parsed.bids).toBeDefined();
-    expect(parsed.settlements).toBeDefined();
-  });
-
-  it("generates a CSV file on disk", async () => {
-    const token = await exportService.generateExportFile("user-stream-test", ExportFormat.CSV);
-    const fp = await exportService.getFilePath(token);
-    expect(fp).toMatch(/\.csv$/);
-    const content = await fsp.readFile(fp!, "utf8");
-    expect(content).toContain("--- INVOICES ---");
-    expect(content).toContain("--- BIDS ---");
-    expect(content).toContain("--- SETTLEMENTS ---");
-  });
-
-  it("file has restricted permissions (0o600)", async () => {
-    const token = await exportService.generateExportFile("user-stream-test", ExportFormat.JSON);
-    const fp = await exportService.getFilePath(token);
-    const stat = await fsp.stat(fp!);
-    const mode = stat.mode & 0o777;
-    expect(mode).toBe(0o600);
-  });
-
-  it("getFilePath returns null for unknown token", async () => {
-    const fp = await exportService.getFilePath("nonexistent-token");
-    expect(fp).toBeNull();
-  });
-
-  it("getFilePath returns null for expired token", async () => {
-    // Create file on disk but with expired token
-    const expiredToken = makeExpiredToken("u1", ExportFormat.JSON);
-    const safeToken = expiredToken.replace(/[/+=]/g, "_");
-    const filePath = path.join(exportDir, `${safeToken}.json`);
-    await fsp.writeFile(filePath, "{}", { mode: 0o600 });
-    const result = await exportService.getFilePath(expiredToken);
-    expect(result).toBeNull();
-  });
-
-  it("deleteFile removes the file", async () => {
-    const tmp = path.join(exportDir, "delete-test.txt");
-    await fsp.writeFile(tmp, "data");
-    await exportService.deleteFile(tmp);
-    const exists = await fsp.access(tmp).then(() => true).catch(() => false);
-    expect(exists).toBe(false);
-  });
-});
-
-describe("ExportService - Cleanup", () => {
-  it("cleanupExpiredFiles removes old files", async () => {
-    const stalePath = path.join(exportDir, "stale_test.json");
-    await fsp.writeFile(stalePath, "{}");
-    const now = Date.now();
-    await fsp.utimes(stalePath, new Date(now - 7200_000), new Date(now - 7200_000));
-    const cleaned = await exportService.cleanupExpiredFiles();
-    expect(cleaned).toBeGreaterThanOrEqual(1);
-    const exists = await fsp.access(stalePath).then(() => true).catch(() => false);
-    expect(exists).toBe(false);
-  });
-
-  it("cleanupExpiredFiles ignores non-export files", async () => {
-    const strayPath = path.join(exportDir, "readme.md");
-    await fsp.writeFile(strayPath, "hello");
-    const cleaned = await exportService.cleanupExpiredFiles();
-    expect(cleaned).toBe(0);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// HTTP integration tests
-// ---------------------------------------------------------------------------
-describe("HTTP API - /api/v1/exports/generate", () => {
-  it("returns a download URL for JSON", async () => {
+describe("signed export generation and download", () => {
+  it.each([ExportFormat.JSON, ExportFormat.CSV])("generates and downloads populated %s data with single-use cleanup", async (format) => {
     const app = buildApp();
-    const res = await request(app)
-      .post("/api/v1/exports/generate")
-      .set("Authorization", "Bearer user-stream-test")
-      .query({ format: "json" });
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.download_url).toMatch(/^\/api\/v1\/exports\/download\//);
-    expect(res.body.expires_in).toBeTruthy();
-  });
-
-  it("returns a download URL for CSV", async () => {
-    const app = buildApp();
-    const res = await request(app)
-      .post("/api/v1/exports/generate")
-      .set("Authorization", "Bearer user-stream-test")
-      .query({ format: "csv" });
-    expect(res.status).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.download_url).toMatch(/^\/api\/v1\/exports\/download\//);
-  });
-
-  it("rejects invalid format", async () => {
-    const app = buildApp();
-    const res = await request(app)
-      .post("/api/v1/exports/generate")
-      .set("Authorization", "Bearer user-stream-test")
-      .query({ format: "xml" });
-    expect(res.status).toBe(400);
-    expect(res.body.error.code).toBe("INVALID_FORMAT");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// requestExport controller - deterministic failure-boundary coverage
-// ---------------------------------------------------------------------------
-describe("requestExport controller - failure boundaries", () => {
-  function makeReq(overrides: any = {}): any {
-    return {
-      user: { userId: "user-stream-test" },
-      query: {},
-      headers: {},
-      ...overrides,
-    };
-  }
-
-  function makeRes() {
-    const res: any = {
-      statusCode: 200,
-      body: undefined,
-      status(code: number) {
-        this.statusCode = code;
-        return this;
-      },
-      json(payload: any) {
-        this.body = payload;
-        return this;
-      },
-    };
-    return res;
-  }
-
-  it("returns a download URL for a valid request", async () => {
-    const req = makeReq({ query: { format: "json" } });
-    const res = makeRes();
-    await requestExport(req, res);
-    expect(res.statusCode).toBe(200);
-    expect(res.body.success).toBe(true);
-    expect(res.body.download_url).toMatch(/^\/api\/v1\/exports\/download\//);
-  });
-
-  it("rejects an invalid format deterministically", async () => {
-    const req = makeReq({ query: { format: "xml" } });
-    const res = makeRes();
-    await requestExport(req, res);
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error.code).toBe("INVALID_FORMAT");
-  });
-
-  it("rejects a missing user (permission boundary)", async () => {
-    const req = makeReq({ user: undefined, query: { format: "json" } });
-    const res = makeRes();
-    await requestExport(req, res);
-    expect(res.statusCode).toBe(401);
-    expect(res.body.error.code).toBe("UNAUTHORIZED");
-  });
-
-  it("rejects a missing userId (permission boundary)", async () => {
-    const req = makeReq({ user: {}, query: { format: "json" } });
-    const res = makeRes();
-    await requestExport(req, res);
-    expect(res.statusCode).toBe(401);
-    expect(res.body.error.code).toBe("UNAUTHORIZED");
-  });
-
-  it("defaults to JSON when format is omitted", async () => {
-    const req = makeReq({ query: {} });
-    const res = makeRes();
-    await requestExport(req, res);
-    expect(res.statusCode).toBe(200);
-    expect(res.body.success).toBe(true);
-  });
-
-  it("is deterministic across repeated valid calls", async () => {
-    const req1 = makeReq({ query: { format: "csv" } });
-    const res1 = makeRes();
-    await requestExport(req1, res1);
-    const req2 = makeReq({ query: { format: "csv" } });
-    const res2 = makeRes();
-    await requestExport(req2, res2);
-    expect(res1.statusCode).toBe(200);
-    expect(res2.statusCode).toBe(200);
-    expect(res1.body.success).toBe(true);
-    expect(res2.body.success).toBe(true);
-  });
-
-  it("surfaces a diagnosable error on generation failure without leaking secrets", async () => {
-    const spy = jest
-      .spyOn(exportService, "generateExportFile")
-      .mockRejectedValueOnce(new Error("disk full at /secret/path"));
-    const req = makeReq({ query: { format: "json" } });
-    const res = makeRes();
-    await requestExport(req, res);
-    expect(res.statusCode).toBeGreaterThanOrEqual(500);
-    expect(res.body.success).toBe(false);
-    expect(res.body.error).toBeDefined();
-    expect(JSON.stringify(res.body)).not.toContain("/secret/path");
-    spy.mockRestore();
-  });
-
-  it("recovers after a transient failure (retry boundary)", async () => {
-    const spy = jest
-      .spyOn(exportService, "generateExportFile")
-      .mockRejectedValueOnce(new Error("transient"));
-    const failReq = makeReq({ query: { format: "json" } });
-    const failRes = makeRes();
-    await requestExport(failReq, failRes);
-    expect(failRes.body.success).toBe(false);
-    spy.mockRestore();
-
-    const okReq = makeReq({ query: { format: "json" } });
-    const okRes = makeRes();
-    await requestExport(okReq, okRes);
-    expect(okRes.statusCode).toBe(200);
-    expect(okRes.body.success).toBe(true);
-  });
-});
-
-describe("HTTP API - /api/v1/exports/download/:token", () => {
-  it("streams a file and deletes after download", async () => {
-    // Pre-create a file via the service
-    const token = await exportService.generateExportFile("user-stream-test", ExportFormat.JSON);
-    const app = buildApp();
-    const res = await request(app).get(`/api/v1/exports/download/${token}`);
-    expect(res.status).toBe(200);
-    expect(res.headers["content-disposition"]).toMatch(/^attachment;/);
-    expect(res.headers["content-type"]).toBe("application/json");
-    const parsed = JSON.parse(res.text);
-    expect(parsed.invoices).toBeDefined();
-
-    // File should be gone after download
-    const fp = await exportService.getFilePath(token);
-    expect(fp).toBeNull();
-  });
-
-  it("enforces single-use (second download fails)", async () => {
-    const token = await exportService.generateExportFile("user-stream-test", ExportFormat.JSON);
-    const app = buildApp();
-
-    const dl1 = await request(app).get(`/api/v1/exports/download/${token}`);
-    expect(dl1.status).toBe(200);
-
-    const dl2 = await request(app).get(`/api/v1/exports/download/${token}`);
-    expect(dl2.status).toBe(401);
-    expect(dl2.body.error.code).toBe("INVALID_TOKEN");
-  });
-
-  it("rejects invalid token", async () => {
-    const app = buildApp();
-    const res = await request(app).get("/api/v1/exports/download/badtoken123");
-    expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe("INVALID_TOKEN");
-  });
-
-  it("rejects expired token", async () => {
-    const token = makeExpiredToken("u1", ExportFormat.JSON);
-    // Put a file on disk so validation doesn't fail on file-missing
-    const safeToken = token.replace(/[/+=]/g, "_");
-    await fsp.writeFile(path.join(exportDir, `${safeToken}.json`), "{}");
-    const app = buildApp();
-    const res = await request(app).get(`/api/v1/exports/download/${token}`);
-    expect(res.status).toBe(401);
-    expect(res.body.error.code).toBe("INVALID_TOKEN");
-  });
-});
-
-// ---------------------------------------------------------------------------
-// downloadExport controller - deterministic failure-boundary coverage
-// ---------------------------------------------------------------------------
-describe("downloadExport controller - failure boundaries", () => {
-  function makeReq(overrides: any = {}): any {
-    return {
-      params: { token: "" },
-      query: {},
-      headers: {},
-      ip: "127.0.0.1",
-      method: "GET",
-      path: "/api/v1/exports/download/test-token",
-      on: (event: string, handler: Function) => { if (event === "close") req.closeHandler = handler; },
-      closeHandler: null as Function | null,
-      ...overrides,
-    };
-  }
-
-  function makeRes() {
-    const res: any = {
-      statusCode: 200,
-      body: undefined,
-      headers: {},
-      headersSent: false,
-      status(code: number) {
-        this.statusCode = code;
-        return this;
-      },
-      json(payload: any) {
-        this.body = payload;
-        return this;
-      },
-      setHeader(name: string, value: string) {
-        this.headers[name] = value;
-      },
-      getHeader(name: string) {
-        return this.headers[name];
-      },
-      on: (event: string, handler: Function) => {},
-      end: () => {},
-    };
-    return res;
-  }
-
-  function makeToken(userId: string, format: ExportFormat, expiresAt: number): string {
-    const payload = JSON.stringify({ userId, format, expiresAt });
-    const signature = crypto
-      .createHmac("sha256", config.EXPORT_SECRET)
-      .update(payload)
-      .digest("hex");
-    return Buffer.from(JSON.stringify({ payload, signature })).toString("base64");
-  }
-
-  function makeFutureToken(userId: string, format: ExportFormat): string {
-    return makeToken(userId, format, Date.now() + 3600_000);
-  }
-
-  function makeExpiredToken(userId: string, format: ExportFormat): string {
-    return makeToken(userId, format, Date.now() - 1000);
-  }
-
-  let nextFn: jest.Mock;
-
-  beforeEach(() => {
-    nextFn = jest.fn();
-  });
-
-  it("returns 400 for malformed token (fails assertExportToken)", async () => {
-    const req = makeReq({ params: { token: "not-a-valid-token-format" } });
-    const res = makeRes();
-    await downloadExport(req, res, nextFn);
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error.code).toBe(ExportErrorCode.TOKEN_INVALID);
-    expect(nextFn).not.toHaveBeenCalled();
-  });
-
-  it("returns 401 for expired token with stable code TOKEN_EXPIRED", async () => {
-    const token = makeExpiredToken("user-1", ExportFormat.JSON);
-    // Put a file on disk so file exists but token is expired
-    const safeToken = token.replace(/[/+=]/g, "_");
-    await fsp.writeFile(path.join(exportDir, `${safeToken}.json`), "{}");
-    const req = makeReq({ params: { token } });
-    const res = makeRes();
-    await downloadExport(req, res, nextFn);
-    expect(res.statusCode).toBe(401);
-    expect(res.body.error.code).toBe(ExportErrorCode.TOKEN_EXPIRED);
-    expect(nextFn).not.toHaveBeenCalled();
-  });
-
-  it("returns 400 for invalid token signature with stable code TOKEN_INVALID", async () => {
-    const payload = JSON.stringify({ userId: "u1", format: "json", expiresAt: Date.now() + 3600_000 });
-    const badSig = crypto.createHmac("sha256", "wrong-secret").update(payload).digest("hex");
-    const token = Buffer.from(JSON.stringify({ payload, signature: badSig })).toString("base64");
-    const req = makeReq({ params: { token } });
-    const res = makeRes();
-    await downloadExport(req, res, nextFn);
-    expect(res.statusCode).toBe(400);
-    expect(res.body.error.code).toBe(ExportErrorCode.TOKEN_INVALID);
-    expect(nextFn).not.toHaveBeenCalled();
-  });
-
-  it("returns 404 for valid token but missing file with stable code NOT_FOUND", async () => {
-    const token = makeFutureToken("user-1", ExportFormat.JSON);
-    const req = makeReq({ params: { token } });
-    const res = makeRes();
-    await downloadExport(req, res, nextFn);
-    expect(res.statusCode).toBe(404);
-    expect(res.body.error.code).toBe(ExportErrorCode.NOT_FOUND);
-    expect(nextFn).not.toHaveBeenCalled();
-  });
-
-  it("returns 429 when concurrency limit exceeded", async () => {
-    // Use the handler directly with mocked concurrency that always fails
-    const handler = createDownloadExportHandler({
-      ...require("../controllers/v1/exports").defaultDependencies,
-      tryAcquire: () => false,
-    });
-    const req = makeReq({ params: { token: makeFutureToken("user-1", ExportFormat.JSON) } });
-    const res = makeRes();
-    await handler(req, res, nextFn);
-    expect(res.statusCode).toBe(429);
-    expect(res.body.error.code).toBe("DOWNLOAD_CONCURRENCY_EXCEEDED");
-    expect(nextFn).not.toHaveBeenCalled();
-  });
-
-  it("streams file successfully and deletes after download (single-use)", async () => {
-    const token = await exportService.generateExportFile("user-stream-test", ExportFormat.JSON);
-    const req = makeReq({ params: { token } });
-    const res = makeRes();
-    await downloadExport(req, res, nextFn);
-    expect(res.statusCode).toBe(200);
-    expect(res.getHeader("Content-Type")).toBe("application/json");
-    expect(res.getHeader("Content-Disposition")).toMatch(/^attachment;/);
-
-    // File should be gone after download
-    const fp = await exportService.getFilePath(token);
-    expect(fp).toBeNull();
-    expect(nextFn).not.toHaveBeenCalled();
-  });
-
-  it("enforces single-use: second download of same token fails with INVALID_TOKEN", async () => {
-    const token = await exportService.generateExportFile("user-stream-test", ExportFormat.JSON);
-    const req1 = makeReq({ params: { token } });
-    const res1 = makeRes();
-    await downloadExport(req1, res1, nextFn);
-    expect(res1.statusCode).toBe(200);
-
-    const req2 = makeReq({ params: { token } });
-    const res2 = makeRes();
-    await downloadExport(req2, res2, nextFn);
-    expect(res2.statusCode).toBe(401);
-    expect(res2.body.error.code).toBe(ExportErrorCode.TOKEN_INVALID); // File deleted = token invalid
-    expect(nextFn).not.toHaveBeenCalled();
-  });
-
-  it("releases concurrency slot on stream error", async () => {
-    // Create a handler with a read stream that errors immediately
-    const handler = createDownloadExportHandler({
-      ...require("../controllers/v1/exports").defaultDependencies,
-      createReadStream: () => {
-        const stream = require("stream");
-        const readable = new stream.Readable({
-          read() {
-            this.emit("error", new Error("disk read error"));
-          },
-        });
-        return readable;
-      },
-    });
-    const token = makeFutureToken("user-1", ExportFormat.JSON);
-    // Create a real file so validation passes
-    const safeToken = token.replace(/[/+=]/g, "_");
-    await fsp.writeFile(path.join(exportDir, `${safeToken}.json`), "{}");
-
-    const req = makeReq({ params: { token } });
-    const res = makeRes();
-    await handler(req, res, nextFn);
-    expect(res.statusCode).toBe(500);
-    expect(res.body.error.code).toBe(ExportErrorCode.STORAGE_FAILURE);
-    // Slot should be released (no leak)
-    expect(nextFn).not.toHaveBeenCalled();
-  });
-
-  it("does not leak sensitive data in error responses", async () => {
-    const token = makeFutureToken("user-1", ExportFormat.JSON);
-    const req = makeReq({ params: { token } });
-    const res = makeRes();
-    await downloadExport(req, res, nextFn);
-    expect(res.statusCode).toBe(404);
-    const bodyStr = JSON.stringify(res.body);
-    expect(bodyStr).not.toContain(exportDir);
-    expect(bodyStr).not.toContain("/secret");
-    expect(bodyStr).not.toContain("stack");
-    expect(nextFn).not.toHaveBeenCalled();
-  });
-
-  it("is deterministic across repeated valid calls (when file recreated)", async () => {
-    // First download
-    const token1 = await exportService.generateExportFile("user-stream-test", ExportFormat.JSON);
-    const req1 = makeReq({ params: { token: token1 } });
-    const res1 = makeRes();
-    await downloadExport(req1, res1, nextFn);
-    expect(res1.statusCode).toBe(200);
-
-    // Second download with new token (new file generated)
-    const token2 = await exportService.generateExportFile("user-stream-test", ExportFormat.JSON);
-    const req2 = makeReq({ params: { token: token2 } });
-    const res2 = makeRes();
-    nextFn.mockClear();
-    await downloadExport(req2, res2, nextFn);
-    expect(res2.statusCode).toBe(200);
-    expect(res2.getHeader("Content-Type")).toBe("application/json");
-    expect(nextFn).not.toHaveBeenCalled();
-  });
-
-  it("handles client disconnect mid-stream and still deletes file", async () => {
-    const token = await exportService.generateExportFile("user-stream-test", ExportFormat.JSON);
-    const req = makeReq({ params: { token } });
-    const res = makeRes();
-    
-    // Simulate client disconnect after headers sent
-    let closeHandler: Function | null = null;
-    req.on = jest.fn((event: string, handler: Function) => {
-      if (event === "close") closeHandler = handler;
-    });
-    
-    await downloadExport(req, res, nextFn);
-    
-    // Simulate close event
-    if (closeHandler) {
-      await closeHandler();
+    const generated = await request(app).post("/api/v1/exports/generate").set("Authorization", `Bearer ${userId}`).query({ format }).expect(200);
+    expect(generated.body.success).toBe(true);
+    expect(generated.body.expires_in).toBeTruthy();
+    const token = generated.body.download_url.split("/download/")[1];
+    expect(exportService.validateTokenStrict(token)).toMatchObject({ userId, format });
+    const file = await exportService.getFilePathStrict(token);
+    const expected = await fsp.readFile(file, "utf8");
+    const response = await request(app).get(`/api/v1/exports/download/${encodeURIComponent(token)}`).expect(200);
+    expect(response.headers["content-disposition"]).toContain(`.${format}`);
+    expect(response.headers["content-type"]).toContain(format === ExportFormat.JSON ? "application/json" : "text/csv");
+    expect(response.text).toBe(expected);
+    if (format === ExportFormat.JSON) {
+      expect(response.body.invoices).toEqual([{ id: invoice.id, amount: "123", currency: "USD", status: "pending", due_date: 1700000000 }]);
+      expect(response.body.bids[0].bid_id).toBe("bid-1");
+      expect(response.body.settlements[0].id).toBe("stl-1");
+      expect(response.body.invoices[0]).not.toHaveProperty("business");
+    } else {
+      expect(response.text).toContain("--- INVOICES ---\nid,amount,currency,status,due_date\ninv-1,123,USD,pending,2023-11-14T22:13:20.000Z");
+      expect(response.text).toContain("--- BIDS ---");
+      expect(response.text).toContain("--- SETTLEMENTS ---");
     }
-    
-    // File should still be deleted (single-use semantics)
-    const fp = await exportService.getFilePath(token);
-    expect(fp).toBeNull();
+    await waitForDeletion(token);
+    const repeated = await request(app).get(`/api/v1/exports/download/${encodeURIComponent(token)}`).expect(404);
+    expect(repeated.body.error.code).toBe(ExportErrorCode.NOT_FOUND);
+    expect(exportConcurrencyService.getActiveCount(userId)).toBe(0);
+  });
+
+  it("defaults to JSON and does not include another user's data", async () => {
+    const response = await request(buildApp()).post("/api/v1/exports/generate").set("Authorization", "Bearer different-user").expect(200);
+    const token = response.body.download_url.split("/download/")[1];
+    const file = await exportService.getFilePathStrict(token);
+    expect(JSON.parse(await fsp.readFile(file, "utf8"))).toEqual({ invoices: [], bids: [], settlements: [] });
+  });
+
+  it.each([undefined, "Bearer "])("rejects missing authentication (%s)", async (authorization) => {
+    const req = request(buildApp()).post("/api/v1/exports/generate");
+    if (authorization) req.set("Authorization", authorization);
+    const response = await req.expect(401);
+    expect(response.body.error.code).toBe("UNAUTHORIZED");
+  });
+
+  it("rejects unsupported formats", async () => {
+    const response = await request(buildApp()).post("/api/v1/exports/generate").set("Authorization", `Bearer ${userId}`).query({ format: "ndjson" }).expect(400);
+    expect(response.body.error.code).toBe("INVALID_FORMAT");
+  });
+
+  it("reports generation failure without leaking details, releases its slot, and permits retry", async () => {
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    jest.spyOn(exportService, "generateExportFile").mockRejectedValueOnce(new Error("disk full at /secret/path"));
+    const app = buildApp();
+    const response = await request(app).post("/api/v1/exports/generate").set("Authorization", `Bearer ${userId}`).expect(500);
+    expect(response.body.error.code).toBe("EXPORT_GENERATION_FAILED");
+    expect(response.text).not.toContain("/secret/path");
+    expect(exportConcurrencyService.getActiveCount(userId)).toBe(0);
+    await request(app).post("/api/v1/exports/generate").set("Authorization", `Bearer ${userId}`).expect(200);
+  });
+
+  it.each([
+    ["malformed", () => "invalid-token", 400, ExportErrorCode.TOKEN_INVALID],
+    ["bad signature", () => signedToken(Date.now() + 60000, "wrong-secret"), 400, ExportErrorCode.TOKEN_INVALID],
+    ["expired", () => signedToken(Date.now() - 1000), 401, ExportErrorCode.TOKEN_EXPIRED],
+    ["missing file", () => signedToken(Date.now() + 60000), 404, ExportErrorCode.NOT_FOUND],
+  ] as const)("rejects %s tokens with stable errors", async (_name, makeToken, status, code) => {
+    const response = await request(buildApp()).get(`/api/v1/exports/download/${encodeURIComponent(makeToken())}`).expect(status);
+    expect(response.body.error.code).toBe(code);
+    expect(response.text).not.toContain(exportDir);
+    expect(exportConcurrencyService.getActiveCount(userId)).toBe(0);
+  });
+});
+
+describe("file lifecycle", () => {
+  it("creates private files on platforms supporting POSIX modes", async () => {
+    const create = jest.spyOn(fs, "createWriteStream");
+    const chmod = jest.spyOn(fsp, "chmod");
+    const token = await exportService.generateExportFile(userId, ExportFormat.JSON);
+    const file = await exportService.getFilePathStrict(token);
+    expect(create).toHaveBeenCalledWith(`${file}.tmp`, { mode: 0o600 });
+    expect(chmod).toHaveBeenCalledWith(file, 0o600);
+    if (process.platform !== "win32") expect((await fsp.stat(file)).mode & 0o777).toBe(0o600);
+  });
+
+  it("removes expired exports while retaining fresh exports and unrelated files", async () => {
+    const stale = path.join(exportDir, "stale.json");
+    await fsp.writeFile(stale, "{}");
+    await fsp.utimes(stale, new Date(0), new Date(0));
+    const token = await exportService.generateExportFile(userId, ExportFormat.CSV);
+    await fsp.writeFile(path.join(exportDir, "readme.md"), "keep");
+    expect(await exportService.cleanupExpiredFiles()).toBe(1);
+    expect(await exportService.getFilePath(token)).not.toBeNull();
+    expect(await fsp.readFile(path.join(exportDir, "readme.md"), "utf8")).toBe("keep");
+    expect(await exportService.getFilePath("invalid")).toBeNull();
+  });
+});
+
+describe("bounded streaming and backpressure", () => {
+  it.each([ExportFormat.JSON, ExportFormat.CSV])("bounds the output buffer while generating large %s exports", async (format) => {
+    const rows = Array.from({ length: 10000 }, (_, i) => ({ ...invoice, id: `inv-${i}` }));
+    jest.mocked(invoiceStore.findInvoices).mockReturnValue(rows as any);
+    const originalCreate = fs.createWriteStream.bind(fs);
+    let peakBufferedBytes = 0;
+    let backpressureSignals = 0;
+    jest.spyOn(fs, "createWriteStream").mockImplementation((file, options) => {
+      const stream = originalCreate(file, { ...(options as object), highWaterMark: 128 });
+      const originalWrite = stream.write.bind(stream);
+      jest.spyOn(stream, "write").mockImplementation((...args: any[]) => {
+        const accepted = (originalWrite as any)(...args);
+        peakBufferedBytes = Math.max(peakBufferedBytes, stream.writableLength);
+        if (!accepted) backpressureSignals++;
+        return accepted;
+      });
+      return stream;
+    });
+    const token = await exportService.generateExportFile(userId, format);
+    const file = await exportService.getFilePathStrict(token);
+    expect((await fsp.stat(file)).size).toBeGreaterThan(400000);
+    expect(backpressureSignals).toBeGreaterThan(0);
+    // A deterministic memory bound: queued output stays within one small
+    // stream buffer plus a row, rather than retaining the entire export.
+    expect(peakBufferedBytes).toBeLessThan(1024);
+    const output = await fsp.readFile(file, "utf8");
+    if (format === ExportFormat.JSON) expect(JSON.parse(output).invoices).toHaveLength(rows.length);
+    else expect(output.match(/^inv-\d+,/gm)).toHaveLength(rows.length);
+    expect(await fsp.readdir(exportDir)).not.toContain(path.basename(file) + ".tmp");
+  }, 60000);
+
+  it("pauses a download for a slow consumer and releases its slot exactly once", async () => {
+    const token = await exportService.generateExportFile(userId, ExportFormat.JSON);
+    const file = await exportService.getFilePathStrict(token);
+    const bytes = Buffer.alloc(256 * 1024, "x");
+    await fsp.writeFile(file, bytes);
+    const source = fs.createReadStream(file, { highWaterMark: 1024 });
+    const pause = jest.spyOn(source, "pause");
+    const chunks: Buffer[] = [];
+    let peakBufferedBytes = 0;
+    const response = streamResponse((chunk, done) => {
+      chunks.push(Buffer.from(chunk));
+      peakBufferedBytes = Math.max(peakBufferedBytes, source.readableLength);
+      setImmediate(done);
+    });
+    const done = finished(response);
+    const dependencies = downloadDependencies({ createReadStream: () => source });
+    const req = Object.assign(new EventEmitter(), { params: { token }, method: "GET", path: "/download", ip: "127.0.0.1" });
+    const next = jest.fn();
+    await createDownloadExportHandler(dependencies)(req as any, response, next);
+    await done;
+    await waitForDeletion(token);
+    expect(Buffer.concat(chunks)).toEqual(bytes);
+    expect(pause).toHaveBeenCalled();
+    expect(peakBufferedBytes).toBeLessThanOrEqual(2048);
+    expect(dependencies.release).toHaveBeenCalledTimes(1);
+    expect(dependencies.release).toHaveBeenCalledWith(userId);
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe("download failure boundaries", () => {
+  it("rejects concurrency overflow before opening a file", async () => {
+    const dependencies = downloadDependencies({ tryAcquire: jest.fn(() => false), createReadStream: jest.fn() });
+    const response = streamResponse((_chunk, done) => done());
+    const next = jest.fn();
+    await createDownloadExportHandler(dependencies)({ params: { token: signedToken(Date.now() + 60000) } } as any, response, next);
+    expect(response.status).toHaveBeenCalledWith(429);
+    expect(dependencies.createReadStream).not.toHaveBeenCalled();
+    expect(dependencies.release).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+    response.destroy();
+  });
+
+  it.each(["error", "disconnect"])("releases the download slot on %s", async (failure) => {
+    jest.spyOn(console, "error").mockImplementation(() => {});
+    const token = await exportService.generateExportFile(userId, ExportFormat.JSON);
+    const source = new Readable({ read() {} });
+    const response = streamResponse((_chunk, done) => done());
+    const dependencies = downloadDependencies({ createReadStream: () => source as fs.ReadStream });
+    const req = Object.assign(new EventEmitter(), { params: { token } });
+    const next = jest.fn();
+    try {
+      await createDownloadExportHandler(dependencies)(req as any, response, next);
+      if (failure === "error") source.emit("error", new Error("read failed at /secret/path"));
+      else {
+        req.emit("close");
+        await waitForDeletion(token);
+      }
+      expect(dependencies.release).toHaveBeenCalledTimes(1);
+      expect(JSON.stringify(response.json.mock.calls)).not.toContain("/secret/path");
+      expect(next).not.toHaveBeenCalled();
+    } finally {
+      source.destroy();
+      response.destroy();
+    }
+  });
+});
+
+describe("generation storage failures", () => {
+  it("cleans up after a backpressured write fails and allows retry", async () => {
+    const failed = new Writable({
+      highWaterMark: 1,
+      write(_chunk, _encoding, done) { setImmediate(() => done(new Error("disk failure /secret/path"))); },
+    });
+    jest.spyOn(fs, "createWriteStream").mockReturnValueOnce(failed as fs.WriteStream);
+    await expect(exportService.generateExportFile(userId, ExportFormat.JSON)).rejects.toMatchObject({
+      code: ExportErrorCode.STORAGE_FAILURE,
+      message: "Failed to write export file",
+      retryable: true,
+    });
+    expect(failed.destroyed).toBe(true);
+    expect(await fsp.readdir(exportDir)).toEqual([]);
+    const token = await exportService.generateExportFile(userId, ExportFormat.JSON);
+    expect(await exportService.getFilePath(token)).not.toBeNull();
   });
 });

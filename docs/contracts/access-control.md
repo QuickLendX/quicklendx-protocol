@@ -103,11 +103,18 @@ The comprehensive access-control matrix tests (`src/test_admin.rs`) cover:
 The comprehensive access-control tests live in:
 
 - `quicklendx-contracts/src/test_admin.rs` - Full access-control matrix with 60+ test cases
+- `quicklendx-contracts/src/test_entrypoint_auth_matrix.rs` - Maintained classification of every exported contract entrypoint, guarded against additions to the `#[contractimpl]` surface
 
 Test modules:
 - `test_admin` - Basic admin transfer safety tests (existing)
 - `access_control_matrix` - Core access control tests for all admin-gated methods
 - `access_control_matrix_extended` - Extended tests for fee, verification, vesting methods
+
+When adding an exported method, add it to the entrypoint matrix and classify it
+as mutating, admin-only, or read-only. Add its unauthenticated `try_*` call to
+the corresponding behavior test as well. If a method is known but has not yet
+been ported into `lib.rs`, list it in `PENDING_PORTS`; remove it from that list
+and classify it once it is exported.
 
 These tests assert both rejection behavior and state immutability after rejected calls.
 
