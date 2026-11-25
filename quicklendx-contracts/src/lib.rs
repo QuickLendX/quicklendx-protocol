@@ -84,6 +84,8 @@ mod test_dispute;
 mod test_dispute_timeline;
 #[cfg(test)]
 mod test_dispute_arbiter;
+#[cfg(test)]
+mod test;
 
 // The remaining test modules (already present in the codebase)
 #[cfg(test)]
