@@ -328,9 +328,8 @@ pub struct RepaymentRecord {
 }
 
 fn get_repayment_record(env: &Env, request_key: &BytesN<32>) -> Option<RepaymentRecord> {
-    env.storage()
-        .persistent()
-        .get(&(REPAYMENT_RECORD_KEY, request_key.clone()))
+    let key = (REPAYMENT_RECORD_KEY, request_key.clone());
+    crate::storage::persistent_get(env, &key)
 }
 
 fn store_repayment_record(env: &Env, request_key: &BytesN<32>, record: &RepaymentRecord) {

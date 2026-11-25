@@ -573,11 +573,10 @@ pub fn release_escrow(
 ///   any withheld origination fee.
 /// * [`QuickLendXError::TokenTransferFailed`] - the token contract panicked; escrow status is
 ///   **not** updated so the refund can be safely retried.
-pub(crate) fn refund_escrow(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-    _caller: &Address,
-) -> Result<(), QuickLendXError> {
+///
+/// This function performs no authorization or reentrancy-guard checks. Callers
+/// must authorize the operation and guard the enclosing payment entry point.
+pub fn refund_escrow_internal(env: &Env, invoice_id: &BytesN<32>) -> Result<(), QuickLendXError> {
     let mut escrow = EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
@@ -653,6 +652,17 @@ pub(crate) fn refund_escrow(
     );
 
     Ok(())
+}
+
+/// Compatibility wrapper for callers that still pass an authorization address.
+///
+/// Authorization is enforced by the public entry point before this function is called.
+pub(crate) fn refund_escrow(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    _caller: &Address,
+) -> Result<(), QuickLendXError> {
+    refund_escrow_internal(env, invoice_id)
 }
 
 #[cfg(test)]

@@ -24,7 +24,7 @@ mod test_risk_tier_calculation {
         let admin = Address::generate(&env);
         env.mock_all_auths();
         let _ = client.try_initialize_admin(&admin);
-        let _ = client.try_initialize_protocol_limits(&admin, &1i128, &365u64, &86400u64);
+        let _ = client.try_initialize_protocol_limits(&admin);
 
         (env, client, admin)
     }

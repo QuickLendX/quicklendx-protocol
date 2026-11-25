@@ -9,8 +9,24 @@ name = "wasm_build_size_budget"
 path = "tests/wasm_build_size_budget.rs"
 
 [[test]]
+name = "invoice_management_entrypoints"
+path = "tests/invoice_management_entrypoints.rs"
+
+[[test]]
 name = "test_fees_boundary"
 path = "tests/test_fees_boundary.rs"
+
+[[test]]
+name = "analytics_accuracy"
+path = "tests/analytics_accuracy.rs"
+
+[[test]]
+name = "backup_retention_validation"
+path = "tests/backup_retention_validation.rs"
+
+[[test]]
+name = "invoice_id_collision_regression"
+path = "tests/invoice_id_collision_regression.rs"
 
 [lib]
 # rlib for tests/integration; cdylib for WASM contract builds.
@@ -42,8 +58,8 @@ testutils = ["soroban-sdk/testutils"]
 # release WASM; enabled by default for development and test builds.
 extended-modules = []
 
-# Integration tests written against the full contract API; the crate root is
-# currently a stub, so they only build with the `legacy-tests` feature.
+# Integration tests written against the full contract API. Targets that still
+# require the `legacy-tests` feature are gated individually below.
 [[test]]
 name = "auth_verification_test"
 path = "tests/auth_verification_test.rs"

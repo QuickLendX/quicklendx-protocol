@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # WASM build and size budget regression checks for QuickLendX contracts.
 #
-# Builds the contract for Soroban (wasm32v1-native)
+# Builds the contract for Soroban (wasm32v1-none)
 # and applies a three-tier size classification:
 #
 #   OK      : size <= WARN_BYTES (90 % of hard limit)     – healthy

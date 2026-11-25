@@ -52,6 +52,7 @@ pub(super) fn store_test_invoice(
             resolved_by: business.clone(),
             resolved_at: 0,
             resolution_outcome: crate::types::DisputeResolution::None,
+            votes: soroban_sdk::Vec::new(env),
         },
         total_paid: 0,
         origination_fee_bps: None,

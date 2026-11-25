@@ -70,6 +70,7 @@ fn make_complex_invoice(
             resolved_by: Address::generate(env),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(env),
         },
         total_paid: 0,
         payment_history: Vec::new(env),

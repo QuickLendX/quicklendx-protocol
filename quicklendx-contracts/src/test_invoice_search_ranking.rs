@@ -59,6 +59,7 @@ mod test_invoice_search_ranking {
             resolved_by: business.clone(),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(env),
         };
 
         Invoice {
@@ -116,6 +117,7 @@ mod test_invoice_search_ranking {
             resolved_by: business.clone(),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(&env),
         };
 
         // Invoice 1: Exact ID match
@@ -239,6 +241,7 @@ mod test_invoice_search_ranking {
             resolved_by: business.clone(),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(&env),
         };
 
         // Invoice with Exact ID match, created at 1000
