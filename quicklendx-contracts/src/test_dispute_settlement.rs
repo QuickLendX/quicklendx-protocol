@@ -1,6 +1,6 @@
 ﻿#![cfg(test)]
 
-use crate::contract::{QuickLendXContract, QuickLendXContractClient};
+use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
 use crate::types::{DisputeStatus, InvoiceCategory, InvoiceStatus};
 use crate::test::{setup_verified_business, setup_verified_investor, setup_token};
