@@ -40,6 +40,25 @@ The invariant is enforced via:
 - Repeated settlement simulations
 - Randomized lifecycle inputs
 
+## Property-Tested Accounting
+
+`quicklendx-contracts/src/test_settlement_conservation_props.rs` checks randomized
+settlement sequences with different principal amounts, platform fee rates,
+insurance coverage, and revenue-split shares. The properties assert that:
+
+- Repayment ledger buckets sum to the cumulative amount paid after every
+  partial payment, and no bucket decreases as payments arrive.
+- Final investor and platform-fee token payouts sum exactly to the invoice
+  amount collected, including when settlement follows multiple partial
+  payments.
+- Treasury, developer, and platform revenue allocations sum exactly to
+  collected fees; the platform receives any division remainder.
+
+Run the suite with `PROPTEST_CASES=1000 cargo test --features fuzz-tests --lib test_settlement_conservation_props`
+from `quicklendx-contracts`. The test defaults to 32 cases when
+`PROPTEST_CASES` is not set and stores minimized failures in a source-adjacent
+proptest regression file.
+
 ---
 
 ## Security Classification

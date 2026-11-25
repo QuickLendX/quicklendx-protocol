@@ -85,7 +85,7 @@ curl https://api.quicklendx.com/api/v1/invoices \
 
 ## Request Signing for High-Value Writes
 
-To protect against replay attacks if a Bearer token leaks, high-value write endpoints (e.g. `POST /api/v1/bids`, `POST /api/v1/settlements`, `POST /api/v1/exports/generate`) require a cryptographic signature.
+To protect against replay attacks if a Bearer token leaks, high-value write endpoints (e.g. `POST /api/v1/bids`, `POST /api/v1/settlements`, `POST /api/v1/exports/generate`) require a cryptographic signature. For the complete protocol specification, error codes, secret rotation grace window behavior, and runnable Node.js/cURL examples, see [Request Signing Protocol](./request-signing.md).
 
 ### Signature Headers
 

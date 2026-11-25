@@ -111,6 +111,9 @@ pub const TOPIC_MIGRATION_ROLLED_BACK: &str = "migration_rolled_back";
 /// before the failure.  The migration is resumable from `next_offset`.
 pub const TOPIC_MIGRATION_FAILED: &str = "migration_failed";
 
+/// Topic emitted when a bounded migration runner step completes.
+pub const TOPIC_MIGRATION_STEP: &str = "migration_step";
+
 /// Topic emitted when the storage schema version is recorded or updated.
 pub const TOPIC_SCHEMA_VERSION_SET: &str = "schema_version_set";
 
@@ -2093,6 +2096,32 @@ pub fn arbiter_revoked(env: &Env, admin: &Address, arbiter: &Address) {
     );
 }
 
+/// Emitted once for every accepted distinct arbiter vote.
+pub fn dispute_arbiter_voted(
+    env: &Env,
+    invoice_id: &BytesN<32>,
+    arbiter: &Address,
+    outcome: crate::types::DisputeResolution,
+) {
+    env.events().publish(
+        (symbol_short!("dsp_vote"),),
+        (
+            invoice_id.clone(),
+            arbiter.clone(),
+            outcome.code(),
+            env.ledger().timestamp(),
+        ),
+    );
+}
+
+/// Emitted when the configured dispute quorum changes.
+pub fn dispute_quorum_updated(env: &Env, admin: &Address, quorum: u32) {
+    env.events().publish(
+        (symbol_short!("dsp_qrm"),),
+        (admin.clone(), quorum, env.ledger().timestamp()),
+    );
+}
+
 // ── Backfill lifecycle events ────────────────────────────────────────────────
 
 /// Emitted when a destructive backfill (e.g. `restore_from_backup`) begins.
@@ -2218,6 +2247,19 @@ pub struct MigrationFailed {
     pub timestamp: u64,
 }
 
+/// Emitted after a bounded migration runner step advances the offset cursor.
+#[derive(Debug, PartialEq)]
+#[contractevent]
+pub struct MigrationStepExecuted {
+    pub schema_from: u32,
+    pub schema_to: u32,
+    pub offset: u32,
+    pub processed: u32,
+    pub total_records: u32,
+    pub executed_by: Address,
+    pub timestamp: u64,
+}
+
 // ── Emitter helpers ──────────────────────────────────────────────────────────
 
 /// Emit a [`SchemaVersionSet`] event.
@@ -2290,6 +2332,28 @@ pub fn emit_migration_failed(
         records_migrated,
         next_offset,
         reason: String::from_str(env, reason),
+        timestamp: env.ledger().timestamp(),
+    }
+    .publish(env);
+}
+
+/// Emit a [`MigrationStepExecuted`] event.
+pub fn emit_migration_step_executed(
+    env: &Env,
+    schema_from: u32,
+    schema_to: u32,
+    offset: u32,
+    processed: u32,
+    total_records: u32,
+    executed_by: &Address,
+) {
+    MigrationStepExecuted {
+        schema_from,
+        schema_to,
+        offset,
+        processed,
+        total_records,
+        executed_by: executed_by.clone(),
         timestamp: env.ledger().timestamp(),
     }
     .publish(env);

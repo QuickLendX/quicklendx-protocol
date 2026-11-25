@@ -74,6 +74,7 @@ fn make_invoice(env: &Env, idx: u32, amount: i128) -> Invoice {
             resolved_by: Address::generate(env),
             resolved_at: 0,
             resolution_outcome: DisputeResolution::None,
+            votes: Vec::new(env),
         },
         total_paid: 0,
         payment_history: Vec::new(env),

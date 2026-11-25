@@ -1,5 +1,10 @@
 #![cfg(feature = "legacy-tests")]
 
+#![allow(
+    clippy::disallowed_methods,
+    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
+)]
+
 use quicklendx_contracts::bid::{BidStatus, BidStorage};
 use quicklendx_contracts::invoice::InvoiceCategory;
 use quicklendx_contracts::QuickLendXContract;
@@ -44,7 +49,6 @@ fn create_verified_investor(
 fn create_invoice(
     env: &Env,
     client: &QuickLendXContractClient,
-    admin: &Address,
     business: &Address,
     amount: i128,
     due_date: u64,
@@ -53,7 +57,6 @@ fn create_invoice(
     let currency = env
         .register_stellar_asset_contract_v2(token_admin)
         .address();
-    client.add_currency(&admin, &currency);
     let result = client.try_store_invoice(
         business,
         &amount,
@@ -63,10 +66,10 @@ fn create_invoice(
         &InvoiceCategory::Services,
         &Vec::new(env),
         &None,
-        &None,
-        &None,
     );
-    let invoice_id = result.expect("store_invoice should succeed").expect("store_invoice contract error");
+    let invoice_id = result
+        .expect("store_invoice should succeed")
+        .expect("store_invoice contract error");
     client.verify_invoice(&invoice_id);
     invoice_id
 }
@@ -110,11 +113,12 @@ fn expired_bid_not_active_during_grace() {
     let business = create_verified_business(&env, &client, &admin);
     let investor = create_verified_investor(&env, &client, &admin, 100_000_000);
 
-    client.set_bid_expiry_grace_seconds(&86_400u64);
+    env.as_contract(&client.address, || {
+        BidStorage::set_bid_expiry_grace_seconds(&env, &admin, 86_400u64).unwrap();
+    });
     let invoice_id = create_invoice(
         &env,
         &client,
-        &admin,
         &business,
         1_000_000,
         env.ledger().timestamp() + 86400 * 30,
@@ -124,8 +128,13 @@ fn expired_bid_not_active_during_grace() {
     set_bid_expiration(&env, &client.address, &bid_id, env.ledger().timestamp());
     env.ledger().set_timestamp(env.ledger().timestamp() + 10);
 
-    let active = env.as_contract(&client.address, || BidStorage::get_active_bid_count(&env, &invoice_id));
-    let by_investor = env.as_contract(&client.address, || BidStorage::count_active_bids_by_investor(&env, &investor));
+    let active = env.as_contract(&client.address, || {
+        BidStorage::get_active_bid_count(&env, &invoice_id)
+            .expect("active bid count should be available")
+    });
+    let by_investor = env.as_contract(&client.address, || {
+        BidStorage::count_active_bids_by_investor(&env, &investor)
+    });
     assert_eq!(active, 0);
     assert_eq!(by_investor, 0);
 }
@@ -138,7 +147,6 @@ fn expired_bids_queryable() {
     let invoice_id = create_invoice(
         &env,
         &client,
-        &admin,
         &business,
         1_000_000,
         env.ledger().timestamp() + 86400 * 30,
@@ -149,11 +157,13 @@ fn expired_bids_queryable() {
     env.ledger().set_timestamp(env.ledger().timestamp() + 1);
 
     env.as_contract(&client.address, || {
-        BidStorage::cleanup_expired_bids(&env, &invoice_id);
+        BidStorage::cleanup_expired_bids(&env, &invoice_id)
+            .expect("expired bid cleanup should succeed");
     });
 
     let expired = env.as_contract(&client.address, || {
         BidStorage::get_bids_by_status(&env, &invoice_id, BidStatus::Expired)
+            .expect("status-filtered bids should be available")
     });
     assert_eq!(expired.len(), 1);
     assert_eq!(expired.get(0).unwrap().bid_id, bid_id);
@@ -168,13 +178,14 @@ fn invariants_accept_boundary_expiry() {
     let invoice_id = create_invoice(
         &env,
         &client,
-        &admin,
         &business,
         1_000_000,
         env.ledger().timestamp() + 86400 * 30,
     );
 
-    client.set_bid_expiry_grace_seconds(&86_400u64);
+    env.as_contract(&client.address, || {
+        BidStorage::set_bid_expiry_grace_seconds(&env, &admin, 86_400u64).unwrap();
+    });
     let bid_id = create_and_place_bid(&env, &client, &investor, &invoice_id, 1_000_000, 1_010_000);
     set_bid_expiration(&env, &client.address, &bid_id, env.ledger().timestamp());
     env.ledger().set_timestamp(env.ledger().timestamp() + 10);
@@ -184,7 +195,14 @@ fn invariants_accept_boundary_expiry() {
     });
     assert!(within_grace);
 
-    let expired_id = create_and_place_bid(&env, &client, &other_investor, &invoice_id, 900_000, 909_000);
+    let expired_id = create_and_place_bid(
+        &env,
+        &client,
+        &other_investor,
+        &invoice_id,
+        900_000,
+        909_000,
+    );
     set_bid_status(&env, &client.address, &expired_id, BidStatus::Expired);
     set_bid_expiration(&env, &client.address, &expired_id, env.ledger().timestamp());
 

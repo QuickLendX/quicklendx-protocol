@@ -201,7 +201,7 @@ impl EmergencyWithdraw {
             Some(address_to_audit_string(env, &target)),
             Some(amount),
             Some(address_to_audit_string(env, &token)),
-        );
+        )?;
 
         crate::events::emit_emergency_withdrawal_initiated(
             env,
@@ -285,7 +285,7 @@ impl EmergencyWithdraw {
             Some(address_to_audit_string(env, &pending.target)),
             Some(pending.amount),
             Some(address_to_audit_string(env, &pending.token)),
-        );
+        )?;
 
         crate::events::emit_emergency_withdrawal_executed(
             env,
@@ -355,7 +355,7 @@ impl EmergencyWithdraw {
             Some(address_to_audit_string(env, &pending.target)),
             Some(pending.amount),
             Some(address_to_audit_string(env, &pending.token)),
-        );
+        )?;
 
         crate::events::emit_emergency_withdrawal_cancelled(
             env,

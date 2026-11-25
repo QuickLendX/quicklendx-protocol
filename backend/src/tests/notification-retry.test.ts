@@ -1,3 +1,4 @@
+import os from 'os';
 import path from 'path';
 import crypto from 'crypto';
 import { getDatabase, closeDatabase } from '../lib/database';
@@ -16,8 +17,9 @@ jest.mock('nodemailer', () => ({
   }),
 }));
 
-const TEST_DB_DIR = path.resolve(__dirname, '../../.data');
+const TEST_DB_DIR = os.tmpdir();
 const TEST_DB_PATH = path.join(TEST_DB_DIR, `test-notifications-retry-${crypto.randomUUID()}.db`);
+const TEST_AUDIT_DIR = path.join(TEST_DB_DIR, `audit-retry-${crypto.randomUUID()}`);
 
 function setupSchema(db: ReturnType<typeof getDatabase>) {
   db.exec(`
@@ -63,14 +65,20 @@ beforeAll(() => {
   closeDatabase();
   const db = getDatabase();
   setupSchema(db);
-  auditService.setAuditDir(path.join(TEST_DB_DIR, `audit-retry-${crypto.randomUUID()}`));
+  auditService.setAuditDir(TEST_AUDIT_DIR);
 });
 
 afterAll(() => {
   closeDatabase();
   try {
     const fs = require('fs');
-    if (fs.existsSync(TEST_DB_PATH)) fs.unlinkSync(TEST_DB_PATH);
+    for (const suffix of ['', '-wal', '-shm']) {
+      const p = `${TEST_DB_PATH}${suffix}`;
+      if (fs.existsSync(p)) fs.unlinkSync(p);
+    }
+    if (fs.existsSync(TEST_AUDIT_DIR)) {
+      fs.rmSync(TEST_AUDIT_DIR, { recursive: true, force: true });
+    }
   } catch {}
 });
 
