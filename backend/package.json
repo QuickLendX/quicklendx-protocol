@@ -7,8 +7,8 @@
   "scripts": {
     "seed": "ts-node seed.ts",
     "test:seeds": "jest seeds.test.ts",
-    "test": "jest",
-    "test:coverage": "jest --coverage --forceExit",
+    "test": "jest --config jest.config.cjs",
+    "test:coverage": "jest --config jest.config.cjs --coverage --forceExit",
     "dev": "ts-node-dev src/index.ts",
     "start": "ts-node src/index.ts",
     "db:backup": "ts-node scripts/backup-db.ts",

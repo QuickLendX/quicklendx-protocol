@@ -1,11 +1,15 @@
-export default {
+/** @type {import('jest').Config} */
+module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
   testMatch: ["**/*.test.ts"],
-  globals: {
-    "ts-jest": {
-      diagnostics: false,
-    },
+  transform: {
+    "^.+\\.tsx?$": [
+      "ts-jest",
+      {
+        diagnostics: false,
+      },
+    ],
   },
   coverageThreshold: {
     global: {
