@@ -1,2 +1,9 @@
 [target.wasm32v1-none]
 rustflags = ["-C", "target-feature=+bulk-memory"]
+
+# Use the legacy getrandom backend on Windows to avoid the bcrypt
+# import-library generation that requires dlltool.exe. The pre-built
+# artifacts in the repo were produced with this cfg; reusing them keeps
+# local builds working without a MinGW toolchain.
+[target.x86_64-pc-windows-gnu]
+rustflags = ["--cfg", "getrandom_backend=\"windows_legacy\""]

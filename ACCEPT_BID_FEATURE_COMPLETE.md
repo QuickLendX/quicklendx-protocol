@@ -42,9 +42,9 @@ All requirements have been met, comprehensive testing is complete, and documenta
 **Location**: `docs/contracts/` and `quicklendx-contracts/`
 
 - **escrow.md**: Comprehensive user guide (462 lines)
-- **REENTRANCY_VERIFICATION.md**: Security verification
-- **ACCEPT_BID_IMPLEMENTATION_SUMMARY.md**: Implementation details
-- **TEST_REPORT_ACCEPT_BID.md**: Test results and coverage
+- **REENTRANCY_VERIFICATION.md** (archived): Security verification — see `quicklendx-contracts/docs/archive/REENTRANCY_VERIFICATION.md`
+- **ACCEPT_BID_IMPLEMENTATION_SUMMARY.md** (archived): Implementation details — see `quicklendx-contracts/docs/archive/ACCEPT_BID_IMPLEMENTATION_SUMMARY.md`
+- **TEST_REPORT_ACCEPT_BID.md** (archived): Test results and coverage — see `quicklendx-contracts/docs/archive/TEST_REPORT_ACCEPT_BID.md`
 
 ## Requirements Validation
 

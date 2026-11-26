@@ -51,6 +51,19 @@ Once triaged, begin the technical investigation.
   - Link the transaction hashes and initial state.
 - **Emergency Action:** If the issue poses an immediate risk to funds, refer to the [RUNBOOK_INCIDENT_RESPONSE.md](RUNBOOK_INCIDENT_RESPONSE.md) for pause/circuit-breaker procedures.
 
+## Dispute arbiter quorum
+
+For investigations involving material or complex disputes, operators may
+configure a multi-arbiter quorum with `set_dispute_quorum`. Registered
+arbiters submit independent structured votes through
+`resolve_dispute_structured`; the invoice remains `UnderReview` until one
+outcome receives the configured number of distinct arbiter votes.
+
+The default quorum is `1`. Larger values should be paired with enough
+registered arbiters and an explicit operating procedure for tie or split
+outcomes. Monitor `dsp_vote` events for per-arbiter evidence and
+`dsp_qrm` events for configuration changes.
+
 ## Cross-References
 
 - [RUNBOOK_INCIDENT_RESPONSE.md](RUNBOOK_INCIDENT_RESPONSE.md): For emergency response procedures.

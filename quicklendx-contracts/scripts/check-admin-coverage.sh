@@ -5,7 +5,7 @@
 #   ./scripts/check-admin-coverage.sh [path/to/lcov.info]
 #
 # Environment:
-#   ADMIN_COVERAGE_MIN  Minimum coverage percentage (default: 95)
+#   ADMIN_COVERAGE_MIN  Minimum coverage percentage (default: 80)
 #
 # Exit codes:
 #   0  coverage threshold met
@@ -16,12 +16,15 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 CONTRACTS_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 LCOV_PATH="${1:-$CONTRACTS_DIR/coverage/lcov.info}"
 # TODO: restore to 95% after the legacy test suite is repaired or updated for
-#       the current Soroban/Rust toolchain.  The 10 pre-existing test failures
-#       bring admin coverage well below the intended threshold.  (Issue #2963
-#       re-declared mod admin in lib.rs, reactivating this gate; admin.rs line
-#       coverage with the full module graph compiled is currently 12.4%, so
-#       the floor is set just under that baseline.)
-MIN_COVERAGE="${ADMIN_COVERAGE_MIN:-12}"
+#       the current Soroban/Rust toolchain.  The gate is currently held at 80%
+#       (the minimum acceptable floor for src/admin.rs).  The 10 pre-existing
+#       test failures in the legacy suite still pull coverage below the 95%
+#       target; once those are resolved the threshold should be raised back to
+#       95% and this comment removed.  (Issue #2963 re-declared mod admin in
+#       lib.rs, reactivating this gate; admin.rs line coverage with the full
+#       module graph compiled was 12.4% before the require_not_self,
+#       require_not_reserved, and cancel_treasury_rotation tests were added.)
+MIN_COVERAGE="${ADMIN_COVERAGE_MIN:-80}"
 
 # While the crate root is a stub that does not compile src/admin.rs, no
 # coverage can exist for it. Skip loudly instead of failing on a missing

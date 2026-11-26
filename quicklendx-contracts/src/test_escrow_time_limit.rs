@@ -8,7 +8,7 @@
 //! already matured.
 //!
 //! The guard is implemented as:
-//! ```rust
+//! ```rust,ignore - illustrative guard snippet from validate_bid_placement
 //! if env.ledger().timestamp() >= invoice.due_date {
 //!     return Err(QuickLendXError::InvalidStatus);
 //! }

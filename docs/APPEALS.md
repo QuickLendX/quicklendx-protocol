@@ -273,7 +273,7 @@ contract:
 4. A `resolve_appeal` entrypoint that records the appeal outcome.
 
 These enhancements are tracked in the
-[DISPUTE_IMPLEMENTATION_COMPLETE.md](../DISPUTE_IMPLEMENTATION_COMPLETE.md#future-enhancements)
+[DISPUTE_IMPLEMENTATION_COMPLETE.md](archive/DISPUTE_IMPLEMENTATION_COMPLETE.md#future-enhancements)
 future-enhancements list.
 
 ## Related documentation

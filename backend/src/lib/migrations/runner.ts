@@ -101,6 +101,7 @@ const MIGRATIONS_TABLE = `
 const MIGRATIONS_DIR = path.resolve(process.cwd(), "src", "migrations");
 const HOTFIX_APPROVALS_DIR_NAME = ".hotfix-approvals";
 const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), HOTFIX_APPROVALS_DIR_NAME);
+const APPROVAL_NAME_PATTERN = /^[a-z0-9_]+$/;
 
 /** Read-only query backing `getAppliedVersions`. Never interpolates input. */
 const APPLIED_VERSIONS_SQL = "SELECT version FROM _migrations ORDER BY version ASC";
@@ -156,7 +157,7 @@ function validateDefinition(
   if (typeof candidate.version !== "number") {
     throw new MigrationLoadError(
       MigrationLoadErrorCodes.INVALID_DEFINITION,
-      `Migration ${file} is missing a numeric `version` export.`,
+      `Migration ${file} is missing a numeric "version" export.`,
     );
   }
   if (candidate.version !== parsed.version) {
@@ -168,7 +169,7 @@ function validateDefinition(
   if (typeof candidate.up !== "function") {
     throw new MigrationLoadError(
       MigrationLoadErrorCodes.INVALID_DEFINITION,
-      `Migration ${file} is missing a `up` function.`,
+      `Migration ${file} is missing an "up" function.`,
     );
   }
   return def as MigrationDefinition;
@@ -185,8 +186,8 @@ function validateDefinition(
  *   - A missing directory is treated as an empty migration set (ENOENT).
  *   - Permission and I/O errors are surfaced as `MigrationLoadError` with a code.
  */
-export async function loadMigrationsFromFS(): Promise<ParsedMigration[]> {
-  const dir = resolveMigrationsDir();
+export async function loadMigrationsFromFS(directory?: string): Promise<ParsedMigration[]> {
+  const dir = directory ? path.resolve(directory) : resolveMigrationsDir();
 
   let files: string[];
   try {
@@ -254,7 +255,7 @@ export async function loadMigrationsFromFS(): Promise<ParsedMigration[]> {
       const loaded = require(filePath);
       def = (loaded && (loaded.default ?? loaded)) as MigrationDefinition;
     } catch (err: unknown) {
-      const message = err instance of Error ? err.message : String(err);
+      const message = err instanceof Error ? err.message : String(err);
       throw new MigrationLoadError(
         MigrationLoadErrorCodes.MISSING_DEFAULT_EXPORT,
         `Failed to load migration ${file}: ${message}`,
@@ -338,6 +339,12 @@ export async function isHotfixApproved(migration: ParsedMigration): Promise<bool
 function normalizeParams(params?: unknown[] | null): unknown[] {
   if (params === undefined || params === null) return [];
   return params;
+}
+
+function toCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.trunc(value)
+    : 0;
 }
 
 /**
@@ -615,8 +622,6 @@ export function buildContext(db: DatabaseClient, isProd: boolean): MigrationCont
 
 export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient; to?: number | string; all?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
   const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb, to, all } = options;
-export async function runMigrations(options: { dryRun?: boolean; allowDown?: boolean; verbose?: boolean; skipChecksumVerify?: boolean; db?: DatabaseClient; to?: string; all?: boolean } = {}): Promise<{ applied: MigrationState[]; skipped: number; durationMs: number }> {
-  const { dryRun = false, allowDown = false, verbose = false, skipChecksumVerify = false, db: providedDb } = options;
   const isProd = config.NODE_ENV === "production";
   const startTime = Date.now();
 
@@ -644,9 +649,14 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
     if (verbose) console.log("✅ Checksum verification passed for all applied migrations");
   }
 
-  const appliedRows = db.prepare(
+  const appliedRowsQuery = db.prepare(
     "SELECT version, name, checksum, applied_at, duration_ms, author, meta FROM _migrations ORDER BY version ASC"
-  ).all() || [];
+  ).all();
+  const appliedRowsResult = appliedRowsQuery ?? [];
+  if (!Array.isArray(appliedRowsResult)) {
+    throw new Error("Unable to read applied migration ledger: expected an array of rows.");
+  }
+  const appliedRows = appliedRowsResult;
   const applied = new Map<number, MigrationState>();
   appliedRows.forEach((r: any) => {
     let meta: Record<string, unknown> = {};
@@ -735,9 +745,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
           const appliedAt = new Date().toISOString();
           const migStart = Date.now();
           let durationMs = 0;
-          let state!: MigrationState;
-          let durationMs = 0;
-          let state!: MigrationState;
+          let state: MigrationState | undefined;
           let appliedInTransaction = false;
 
           // The context's transaction helper is awaited so that the async `up`
@@ -784,9 +792,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
             ]);
             appliedInTransaction = true;
           });
-          applyTx();
-
-          if (concurrentlyApplied) {
+          if (!appliedInTransaction || !state) {
             skipped++;
             continue;
           }
@@ -804,9 +810,8 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
 
           appliedThisRun.push(state);
           if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${appliedDurationMs}ms)`);
-          if (verbose) console.log(`✅ Applied migration ${version}_${fileMig.name} (${state.durationMs}ms)`);
         } catch (err: any) {
-          console.error(`❌ Migration ${version}_${fileMig.name} failed:', err.message);
+          console.error(`❌ Migration ${version}_${fileMig.name} failed:`, err.message);
           throw err;
         }
       } else {
@@ -849,17 +854,22 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
         const migStart = Date.now();
         try {
           let durationMs = 0;
+          let rolledBack = false;
           await ctx.db.transaction(async () => {
+            const claimed = db
+              .prepare("SELECT version FROM _migrations WHERE version = ?")
+              .get([version]);
+            if (!claimed) return;
+
             const downFn = fileMig.content.down;
             if (!downFn) throw new Error(`Migration ${fileMig.file} missing down function`);
             await downFn(ctx);
 
             durationMs = Date.now() - migStart;
             db.prepare("DELETE FROM _migrations WHERE version = ?").run([version]);
+            rolledBack = true;
           });
-          rollbackTx();
-
-          if (concurrentlyApplied) {
+          if (!rolledBack) {
             skipped++;
             continue;
           }
@@ -876,7 +886,7 @@ export async function runMigrations(options: { dryRun?: boolean; allowDown?: boo
 
 if (verbose) console.log(`⬩ Rolled back migration ${version}_${fileMig.name} (${durationMs}ms)`);
         } catch (err: any) {
-          console.error(`❌ Rollback of ${version}_${fileMig.name} failed:', err.message);
+          console.error(`❌ Rollback of ${version}_${fileMig.name} failed:`, err.message);
           throw err;
         }
       } else {
@@ -1176,117 +1186,45 @@ export async function validateMigrationFiles(): Promise<{ valid: boolean; errors
     versionCounts.set(m.version, (versionCounts.get(m.version) ?? 0) + 1);
   }
 
-  const uniqueVersions = new Set(versions);
-  if (uniqueVersions.size !== versions.length) {
-    errors.push("Duplicate version numbers detected");
-  }
-
-  return { valid: errors.length === 0, errors };
-}
-
-export async function verifyAppliedChecksums(db?: DatabaseClient): Promise<{ valid: boolean; errors: string[] }> {
-  const errors: string[] = [];
-  const database = db || toDatabaseClient(getDatabase());
-  
-  // Ensure migrations table exists
-  database.exec(MIGRATIONS_TABLE);
-  
-  const appliedRows = database.prepare(
-    "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
-  ).all() || [];
-  
-  const fileMigrations = await loadMigrationsFromFS();
-  const fileMigrationMap = new Map(fileMigrations.map((m) => [m.version, m]));
-  
-  for (const row of appliedRows) {
-    const fileMig = fileMigrationMap.get(row.version);
-    if (!fileMig) {
-      errors.push(`Applied migration ${row.version}_${row.name} not found in filesystem`);
-      continue;
-    }
-    
-    const filePath = path.join(MIGRATIONS_DIR, fileMig.file);
-    const fileContent = await fs.readFile(filePath, "utf-8");
-    const currentChecksum = computeChecksum(fileContent);
-    
-    if (currentChecksum !== row.checksum) {
-      errors.push(
-        `Duplicate version ${version}: found ${count} migration files with the same version number`
-      );
+  for (const [version, count] of versionCounts) {
+    if (count > 1) {
+      errors.push(`Duplicate version ${version}: found ${count} migration files with the same version number`);
     }
   }
 
-  // Work on the deduplicated, sorted version list for sequence checks.
-  const versions = Array.from(new Set(migrations.map((m) => m.version))).sort((a, b) => a - b);
-
-  // ── 2. Version-zero guard ─────────────────────────────────────────────────────
-  // Version 0 is explicitly prohibited; the sequence must begin at 1.
+  const versions = [...versionCounts.keys()].sort((a, b) => a - b);
   if (versions.length > 0 && versions[0] === 0) {
-    errors.push(
-      "Version 0 is not allowed: migration versions must start at 1"
-    );
+    errors.push("Version 0 is not allowed: migration versions must start at 1");
   }
-
-  // ── 3. Gap detection ──────────────────────────────────────────────────────────
-  // After deduplication, every integer from 1 to max must be present.
-  // Report each missing version individually so operators can act on all gaps
-  // at once without having to re-run validation iteratively.
-  for (let i = 0; i < versions.length; i++) {
-    if (i === 0) {
-      // The first version should be 1 (unless 0 was already reported above).
-      if (versions[i] !== 0 && versions[i] !== 1) {
-        errors.push(
-          `Version sequence must start at 1, but the first migration found is version ${versions[i]}`
-        );
-      }
-    } else {
-      const expected = versions[i - 1] + 1;
-      if (versions[i] !== expected) {
-        // There may be multiple missing versions between two adjacent entries.
-        for (let missing = expected; missing < versions[i]; missing++) {
-          errors.push(`Gap detected: migration version ${missing} is missing`);
-        }
-      }
+  if (versions.length > 0 && versions[0] !== 1 && versions[0] !== 0) {
+    errors.push(`Version sequence must start at 1, but the first migration found is version ${versions[0]}`);
+  }
+  for (let index = 1; index < versions.length; index++) {
+    for (let missing = versions[index - 1] + 1; missing < versions[index]; missing++) {
+      errors.push(`Gap detected: migration version ${missing} is missing`);
     }
   }
 
-  // ── 4. Duplicate name detection ───────────────────────────────────────────────
-  // Migration names are used in logs, metrics, and the _migrations table. A
-  // collision causes ambiguity that cannot be resolved at runtime without
-  // reading version numbers, which operators frequently do not do under pressure.
-  const nameCounts = new Map<string, number[]>();
-  for (const m of migrations) {
-    if (!nameCounts.has(m.name)) nameCounts.set(m.name, []);
-    nameCounts.get(m.name)!.push(m.version);
+  const nameVersions = new Map<string, number[]>();
+  for (const migration of migrations) {
+    const usedVersions = nameVersions.get(migration.name) ?? [];
+    usedVersions.push(migration.version);
+    nameVersions.set(migration.name, usedVersions);
   }
-  for (const [name, usedByVersions] of nameCounts) {
-    if (usedByVersions.length > 1) {
+  for (const [name, usedVersions] of nameVersions) {
+    if (usedVersions.length > 1) {
       errors.push(
-        `Duplicate migration name "${name}" used by versions: ${usedByVersions.sort((a, b) => a - b).join(", ")}`
+        `Duplicate migration name "${name}" used by versions: ${usedVersions.sort((a, b) => a - b).join(", ")}`
       );
     }
   }
 
-  // ── 5 & 6. Per-migration required-field and hotfix validation ─────────────────
-  // MigrationPolicy.validateMetadata covers:
-  //   - name non-empty
-  //   - author non-empty
-  //   - authoredAt non-empty
-  //   - up function present
-  //   - hotfix-specific fields (meta.reason, meta.rollback_risk, down function)
-  //
-  // We import lazily via require to avoid a circular dependency at module load time
-  // (policy imports from runner, runner would import from policy). The dynamic
-  // import is safe here because validateMigrationFiles is always async.
-  //
-  // Each error is prefixed with the migration identifier so the caller can
-  // display them as a flat list without needing to group by migration.
   const { MigrationPolicy } = await import("./policy");
-  for (const m of migrations) {
-    const metaCheck = MigrationPolicy.validateMetadata(m.content);
-    if (!metaCheck.valid) {
-      for (const err of metaCheck.errors) {
-        errors.push(`Migration ${m.version}_${m.name}: ${err}`);
+  for (const migration of migrations) {
+    const metadata = MigrationPolicy.validateMetadata(migration.content);
+    if (!metadata.valid) {
+      for (const error of metadata.errors) {
+        errors.push(`Migration ${migration.version}_${migration.name}: ${error}`);
       }
     }
   }
@@ -1305,11 +1243,13 @@ export interface AppliedMugrationRow {
   checksum: string;
 }
 
+export type AppliedMigrationRow = AppliedMugrationRow;
+
 export interface VerifyAppliedChecksumsOptions {
   /** Override the migrations directory (used by tests). Defaults to src/migrations. */
   migrationsDir?: string;
   /** Override the applied-rows source (used by tests). Defaults to reading _migrations. */
-  appliedRows?: AppliedMugrationRow[];
+  appliedRows?: AppliedMigrationRow[];
 }
 
 /**
@@ -1331,33 +1271,74 @@ export async function verifyAppliedChecksums(
   options: VerifyAppliedChecksumsOptions = {},
 ): Promise<ChecksumVerificationResult> {
   const errors: string[] = [];
-  const database = db || getDatabase();
-// Ensure migrations table exists
-  database.exec(MIGRATIONS_TABLE);
-  const appliedRows = database.prepare(
-    "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
-  ).all() || [];
+  let appliedRows: unknown;
+  if (options.appliedRows !== undefined) {
+    appliedRows = options.appliedRows;
+  } else {
+    try {
+      const database = db || toDatabaseClient(getDatabase());
+      database.exec(MIGRATIONS_TABLE);
+      const appliedRowsQuery = database.prepare(
+        "SELECT version, name, checksum FROM _migrations ORDER BY version ASC"
+      ).all();
+      appliedRows = appliedRowsQuery ?? [];
+    } catch (error) {
+      errors.push(`Unable to read applied migration checksums: ${sanitizeDriverMessage(error)}`);
+      return { valid: false, errors };
+    }
+  }
 
+  if (!Array.isArray(appliedRows)) {
+    errors.push("Unable to read applied migration checksums: expected an array of rows.");
+    return { valid: false, errors };
+  }
   if (appliedRows.length === 0) {
     return { valid: true, errors: [] };
   }
 
-  const migrations = await loadMigrationsFromFS();
+  let migrations: ParsedMigration[];
+  try {
+    migrations = await loadMigrationsFromFS(options.migrationsDir);
+  } catch (error) {
+    errors.push(`Unable to load migrations for checksum verification: ${sanitizeDriverMessage(error)}`);
+    return { valid: false, errors };
+  }
+
   // First-match semantics (matching loadMigrationsFromFS ordering) so duplicate
   // version numbers resolve deterministically the same way the runner applies them.
   const fileMigrationMap = new Map<number, ParsedMigration>();
   for (const m of migrations) {
     if (!fileMigrationMap.has(m.version)) fileMigrationMap.set(m.version, m);
   }
-for (const row of appliedRows as any[]) {
+  const seenVersions = new Set<number>();
+  for (const candidate of appliedRows) {
+    if (candidate === null || typeof candidate !== "object" || Array.isArray(candidate)) {
+      errors.push("Unable to verify an applied migration checksum: malformed ledger row.");
+      continue;
+    }
+    const row = candidate as AppliedMigrationRow;
+    if (seenVersions.has(row.version)) {
+      errors.push(`Duplicate applied migration version ${row.version}.`);
+      continue;
+    }
+    seenVersions.add(row.version);
+
     const mig = fileMigrationMap.get(row.version);
     if (!mig) {
       errors.push(`Applied migration ${row.version}_${row.name} has no corresponding file`);
       continue;
     }
-const fileContent = await fs.readFile(path.join(resolveMigrationsDir(), mig.file), "utf-8");
-    const actual = computeChecksum(fileContent);
-    if (actual !== row.checksum) {
+  let fileContent: string;
+  try {
+    const migrationDirectory = options.migrationsDir
+      ? path.resolve(options.migrationsDir)
+      : resolveMigrationsDir();
+    fileContent = await fs.readFile(path.join(migrationDirectory, mig.file), "utf-8");
+  } catch (error) {
+    errors.push(`Unable to read migration ${mig.file}: ${sanitizeDriverMessage(error)}`);
+    continue;
+  }
+    if (computeChecksum(fileContent) !== row.checksum) {
       errors.push(`Checksum mismatch for ${row.version}_${row.name}`);
     }
   }

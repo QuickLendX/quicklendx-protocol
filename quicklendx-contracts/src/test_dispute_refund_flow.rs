@@ -7,7 +7,8 @@
 
 use super::*;
 use crate::errors::QuickLendXError;
-use crate::payments::EscrowStatus;
+use crate::payments::{EscrowStatus, EscrowStorage};
+use crate::types::DisputeResolution;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
     token, Address, BytesN, Env, String, Vec,
@@ -38,7 +39,7 @@ fn setup_funded_invoice_for_dispute() -> FundedDisputeFixture {
     let investor = Address::generate(&env);
 
     client.set_admin(&admin);
-    let _ = client.try_initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
+    let _ = client.try_initialize_protocol_limits(&admin);
 
     let token_admin = Address::generate(&env);
     let currency = env
@@ -107,6 +108,17 @@ fn setup_funded_invoice_for_dispute() -> FundedDisputeFixture {
         bid_id,
         bid_amount,
     }
+}
+
+fn put_fixture_dispute_under_review(fx: &FundedDisputeFixture) {
+    fx.client.create_dispute(
+        &fx.invoice_id,
+        &fx.investor,
+        &String::from_str(&fx.env, "Investor reports the goods were rejected"),
+        &String::from_str(&fx.env, "Inspection record and delivery photos"),
+    );
+    fx.client
+        .put_dispute_under_review(&fx.invoice_id, &fx.admin);
 }
 
 #[test]
@@ -227,5 +239,90 @@ fn dispute_resolved_against_business_refund_aligns_terminal_statuses() {
         tok.balance(&fx.investor),
         investor_balance_after_refund,
         "settlement attempt after refund must not move funds"
+    );
+}
+
+#[test]
+fn investor_favorable_resolution_refunds_held_escrow_once() {
+    let fx = setup_funded_invoice_for_dispute();
+    let token_client = token::Client::new(&fx.env, &fx.currency);
+    let investor_balance_before = token_client.balance(&fx.investor);
+    let business_balance_before = token_client.balance(&fx.business);
+
+    put_fixture_dispute_under_review(&fx);
+    fx.client.resolve_dispute_structured(
+        &fx.invoice_id,
+        &fx.admin,
+        &DisputeResolution::FavorInvestor,
+        &String::from_str(&fx.env, "Refund the investor"),
+    );
+
+    assert_eq!(
+        fx.client.get_escrow_status(&fx.invoice_id),
+        EscrowStatus::Refunded
+    );
+    assert_eq!(
+        token_client.balance(&fx.investor),
+        investor_balance_before + fx.bid_amount
+    );
+    assert_eq!(token_client.balance(&fx.business), business_balance_before);
+
+    let contract_id = fx.client.address.clone();
+    assert_eq!(
+        fx.env.as_contract(&contract_id, || {
+            EscrowStorage::get_held_reserve(&fx.env, &fx.currency)
+        }),
+        0
+    );
+
+    let second_refund = fx.env.as_contract(&contract_id, || {
+        crate::payments::refund_escrow_internal(&fx.env, &fx.invoice_id)
+    });
+    assert_eq!(second_refund, Err(QuickLendXError::InvalidStatus));
+    assert_eq!(
+        token_client.balance(&fx.investor),
+        investor_balance_before + fx.bid_amount,
+        "a repeated internal refund must not transfer funds twice"
+    );
+}
+
+#[test]
+fn investor_favorable_resolution_leaves_released_escrow_untouched() {
+    let fx = setup_funded_invoice_for_dispute();
+    let token_client = token::Client::new(&fx.env, &fx.currency);
+
+    fx.client.release_escrow(&fx.invoice_id, &fx.business);
+    let investor_balance_after_release = token_client.balance(&fx.investor);
+    let business_balance_after_release = token_client.balance(&fx.business);
+
+    put_fixture_dispute_under_review(&fx);
+    fx.client.resolve_dispute_structured(
+        &fx.invoice_id,
+        &fx.admin,
+        &DisputeResolution::FavorInvestor,
+        &String::from_str(&fx.env, "Record the investor decision"),
+    );
+
+    assert_eq!(
+        fx.client.get_escrow_status(&fx.invoice_id),
+        EscrowStatus::Released
+    );
+    assert_eq!(
+        token_client.balance(&fx.investor),
+        investor_balance_after_release,
+        "resolution must not refund an escrow that was already released"
+    );
+    assert_eq!(
+        token_client.balance(&fx.business),
+        business_balance_after_release,
+        "resolution must not transfer released funds again"
+    );
+
+    let contract_id = fx.client.address.clone();
+    assert_eq!(
+        fx.env.as_contract(&contract_id, || {
+            EscrowStorage::get_held_reserve(&fx.env, &fx.currency)
+        }),
+        0
     );
 }

@@ -1,6 +1,6 @@
 # QuickLendX Frontend
 
-[![Next.js](https://img.shields.io/badge/Next.js-15.4-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-15.5.12-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.0-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
 
@@ -82,12 +82,35 @@ quicklendx-frontend/
 
 ### Available Scripts
 
-- `npm run dev` - Start development server with Turbopack
-- `npm run build` - Build for production
-- `npm run start` - Start production server
-- `npm run lint` - Run ESLint
-- `npm test` - Run Jest Node and jsdom projects
-- `npm run test:e2e` - Build and run Playwright browser tests
+- `npm run dev` - Start development server with Turbopack (`next dev --turbopack`)
+- `npm run build` - Build for production (`next build`)
+- `npm run build:e2e` - Build with test-only wallet injection enabled for E2E tests (`cross-env NEXT_PUBLIC_E2E=1 next build`)
+- `npm run start` - Start production server (`next start`)
+- `npm run lint` - Run ESLint (`eslint .`)
+- `npm test` - Run Jest tests (`jest --passWithNoTests`)
+- `npm run test:watch` - Run Jest tests in watch mode (`jest --watch`)
+- `npm run test:e2e` - Run Playwright browser tests (`playwright test`)
+
+### Quality Checks
+
+Before submitting a pull request, run the exact quality checks enforced by CI (`.github/workflows/frontend-ci.yml`):
+
+```bash
+# Type-check the codebase
+npx tsc --noEmit
+
+# Lint source files with ESLint
+npm run lint
+
+# Check code formatting with Prettier
+npx prettier --check .
+
+# Run unit and component test suites
+npm test
+
+# Run Playwright browser tests
+npm run test:e2e
+```
 
 ### Code Organization
 
@@ -115,9 +138,10 @@ The `next.config.ts` file contains Next.js configuration. Key settings:
 | Variable | Default | Description |
 | --- | --- | --- |
 | `NEXT_PUBLIC_API_URL` | `http://localhost:3001/api/v1` | Base URL for the API. Include the `/api/v1` prefix. |
-| `NEXT_PUBLIC_NETWORK` | `testnet` | Stellar network (`testnet` or `public`). |
+| `NEXT_PUBLIC_NETWORK` | `testnet` | Stellar network: `testnet`, `public`, or `mainnet` (alias of `public`). Case-insensitive. An unrecognised value falls back to `testnet` and logs a one-time console warning. |
 | `NEXT_PUBLIC_E2E` | `0` | Test-only wallet injection is enabled with `1` by the E2E build. |
 | `NEXT_PUBLIC_ENABLE_NEW_INVOICE_ROUTE` | `false` | Enables the new business invoice route when set to `true`. |
+| `NEXT_PUBLIC_ENABLE_BID_FLOW` | `false` | Shows the place-bid form on `/invest/invoices/[id]` when set to `true`. The backend authenticates `POST /bids` with an API key and an HMAC request signature, so enable it only where the browser can supply both. |
 | `NEXT_PUBLIC_ANALYTICS_ENABLED` | `false` | Telemetry is opt-in; set to `true` to enable it. |
 | `NEXT_PUBLIC_ANALYTICS_PROVIDER` | `noop` | Provider: `noop`, `mixpanel`, `ga`/`google-analytics`, or `self-hosted`. |
 | `NEXT_PUBLIC_MIXPANEL_TOKEN` | Unset | Required when the provider is `mixpanel`. |
@@ -189,10 +213,11 @@ The application can be deployed to any platform supporting Next.js:
 
 ### Core Dependencies
 
-- **next** (15.4.1): React framework
+- **next** (15.5.12): React framework
 - **react** (19.1.0): UI library
 - **react-dom** (19.1.0): React DOM bindings
-- **typescript** (5.0): Type safety
+- **typescript** (5.x): Type safety
+- **@stellar/freighter-api** (6.0.1): Stellar wallet integration
 
 ### UI & Styling
 
@@ -201,7 +226,7 @@ The application can be deployed to any platform supporting Next.js:
 
 ### Utilities
 
-- **axios** (1.6.0): HTTP client
+- **axios** (1.13.2): HTTP client
 - **zod** (3.22.4): Schema validation
 - **react-hot-toast** (2.4.1): Toast notifications
 - **react-error-boundary** (4.0.12): Error handling

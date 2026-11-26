@@ -9,13 +9,14 @@
 //! ## How regression detection works
 //!
 //! 1. **Hard budget** (`WASM_SIZE_BUDGET_BYTES`): an absolute ceiling enforced
-//!    in CI.  The build fails immediately if the optimised WASM exceeds this.
+//!    in CI (currently 655 360 B / 640 KiB, with a future target to reduce to
+//!    256 KiB).  The build fails immediately if the optimised WASM exceeds this.
 //! 2. **Warning zone** (`WASM_SIZE_WARNING_BYTES`): 90 % of the hard budget
-//!    (~230 KiB).  A diagnostic is printed when the binary enters this zone,
-//!    prompting developers to reduce size before hitting the hard limit.
+//!    (589 824 B / 576 KiB).  A diagnostic is printed when the binary enters
+//!    this zone, prompting developers to reduce size before hitting the hard limit.
 //! 3. **Regression baseline** (`WASM_SIZE_BASELINE_BYTES`): the last known
 //!    good size.  The binary may grow by at most `WASM_REGRESSION_MARGIN`
-//!    (5 %) relative to this value before the regression test fails.
+//!    (10 %) relative to this value before the regression test fails.
 //!    **Update this constant whenever the contract legitimately grows**,
 //!    in the same PR that introduces the growth, alongside
 //!    `scripts/wasm-size-baseline.toml` and `scripts/check-wasm-size.sh`.
@@ -32,12 +33,12 @@
 //!
 //! ## Budget table
 //!
-//! | Constant                   | Value          | Purpose                                     |
-//! |----------------------------|----------------|---------------------------------------------|
-//! | `WASM_SIZE_BUDGET_BYTES`   | 262 144 B (256 KiB) | Hard failure threshold               |
-//! | `WASM_SIZE_WARNING_BYTES`  | ~235 929 B (90 %) | Warning zone upper edge               |
-//! | `WASM_SIZE_BASELINE_BYTES` | 454 858 B       | Last recorded optimised size           |
-//! | `WASM_REGRESSION_MARGIN`   | 0.10 (10 %)     | Max allowed growth vs baseline         |
+//! | Constant                   | Value               | Purpose                                     |
+//! |----------------------------|---------------------|---------------------------------------------|
+//! | `WASM_SIZE_BUDGET_BYTES`   | 655 360 B (640 KiB) | Hard failure threshold (target: 256 KiB)    |
+//! | `WASM_SIZE_WARNING_BYTES`  | 589 824 B (90 %)    | Warning zone upper edge                     |
+//! | `WASM_SIZE_BASELINE_BYTES` | 558 732 B           | Last recorded optimised size                |
+//! | `WASM_REGRESSION_MARGIN`   | 0.10 (10 %)         | Max allowed growth vs baseline              |
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -49,14 +50,14 @@ use std::process::Command;
 //    scripts/wasm-size-baseline.toml (hard_budget_bytes, bytes, regression_margin)
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Hard size limit in bytes for the **optimised** WASM (512 KiB).
+/// Hard size limit in bytes for the **optimised** WASM (640 KiB / 655 360 B).
 ///
-/// This is a temporary budget increase while size reduction work is ongoing.
-/// Increasing this value requires explicit sign-off in code review.
+/// This is a temporary budget increase while size reduction work (toward 256 KiB)
+/// is ongoing. Increasing this value requires explicit sign-off in code review.
 const WASM_SIZE_BUDGET_BYTES: u64 = 640 * 1024;
 const WASM_SIZE_RAW_BUDGET_BYTES: u64 = 640 * 1024;
 
-/// Warning zone threshold: 90 % of the hard budget (~230 KiB).
+/// Warning zone threshold: 90 % of the hard budget (589 824 B / 576 KiB).
 ///
 /// Reaching this zone is a signal to start a size-reduction effort before
 /// crossing the hard limit.  See `classify_size` for how the threshold is used.
@@ -70,9 +71,9 @@ const WASM_SIZE_WARNING_BYTES: u64 = (WASM_SIZE_BUDGET_BYTES as f64 * 0.90) as u
 const WASM_SIZE_BASELINE_BYTES: u64 = 558_732;
 
 /// Maximum fractional growth allowed relative to `WASM_SIZE_BASELINE_BYTES`
-/// before the regression test fails (5 %).
+/// before the regression test fails (10 %).
 ///
-/// A 5 % margin accommodates minor feature additions without sacrificing
+/// A 10 % margin accommodates minor feature additions without sacrificing
 /// regression visibility.  The resulting regression limit must remain below
 /// `WASM_SIZE_BUDGET_BYTES` (asserted in `regression_limit_is_within_hard_budget`).
 const WASM_REGRESSION_MARGIN: f64 = 0.10;
@@ -220,10 +221,10 @@ fn maybe_optimise(wasm_path: &PathBuf) -> (PathBuf, bool) {
 //  Unit tests – fast, no I/O, no WASM build
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// `WASM_SIZE_BUDGET_BYTES` equals exactly 512 KiB (524 288 bytes).
+/// `WASM_SIZE_BUDGET_BYTES` equals exactly 640 KiB (655 360 bytes).
 #[test]
-fn budget_constant_equals_512_kib() {
-    assert_eq!(WASM_SIZE_BUDGET_BYTES, 524_288);
+fn budget_constant_equals_640_kib() {
+    assert_eq!(WASM_SIZE_BUDGET_BYTES, 655_360);
 }
 
 /// Warning threshold is strictly below the hard budget.
@@ -448,8 +449,8 @@ fn regression_zero_margin_passes_exact_match() {
 /// consistent with what the shell script computes (integer truncation aside).
 #[test]
 fn regression_limit_matches_shell_script_arithmetic() {
-    // Bash: REGRESSION_LIMIT = BASELINE + BASELINE * 5 / 100  (integer division)
-    let shell_limit = WASM_SIZE_BASELINE_BYTES + WASM_SIZE_BASELINE_BYTES * 5 / 100;
+    // Bash: REGRESSION_LIMIT = BASELINE + BASELINE * 10 / 100  (integer division)
+    let shell_limit = WASM_SIZE_BASELINE_BYTES + WASM_SIZE_BASELINE_BYTES * 10 / 100;
     let rust_limit = (WASM_SIZE_BASELINE_BYTES as f64 * (1.0 + WASM_REGRESSION_MARGIN)) as u64;
     // Allow up to 1 byte of rounding difference between integer and float arithmetic.
     let diff = if rust_limit > shell_limit {
@@ -566,7 +567,7 @@ fn wasm_size_baseline_toml_contains_required_keys() {
 
 /// The hard budget recorded in the TOML matches the Rust constant.
 ///
-/// Both must equal 262 144 (256 KiB).  A mismatch indicates that one was
+/// Both must equal 655 360 (640 KiB).  A mismatch indicates that one was
 /// updated without the other.
 #[test]
 fn baseline_toml_hard_budget_matches_rust_constant() {
@@ -630,6 +631,36 @@ fn baseline_toml_bytes_match_rust_constant() {
     );
 }
 
+/// The regression margin recorded in the TOML matches the Rust constant.
+///
+/// Both must equal `WASM_REGRESSION_MARGIN`.
+#[test]
+fn baseline_toml_regression_margin_matches_rust_constant() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("scripts")
+        .join("wasm-size-baseline.toml");
+    let content = std::fs::read_to_string(&path).expect("could not read wasm-size-baseline.toml");
+
+    let value: f64 = content
+        .lines()
+        .find(|l| {
+            let t = l.trim_start();
+            !t.starts_with('#') && t.starts_with("regression_margin") && t.contains('=')
+        })
+        .and_then(|l| l.splitn(2, '=').nth(1))
+        .and_then(|v| {
+            let numeric = v.trim().split('#').next().unwrap_or("").trim();
+            numeric.parse().ok()
+        })
+        .expect("could not parse regression_margin from wasm-size-baseline.toml");
+
+    assert!(
+        (value - WASM_REGRESSION_MARGIN).abs() < f64::EPSILON,
+        "regression_margin in wasm-size-baseline.toml ({value}) \
+         does not match WASM_REGRESSION_MARGIN ({WASM_REGRESSION_MARGIN})"
+    );
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 //  Integration tests – invoke `cargo build`, require WASM target
 //
@@ -642,9 +673,10 @@ fn baseline_toml_bytes_match_rust_constant() {
 /// Builds the contract in release mode and asserts the WASM artifact is within
 /// the applicable size budget.
 ///
-/// When `wasm-opt` is available the **optimised** budget (256 KiB, network
-/// limit) is enforced.  When it is absent, the **raw** fallback budget
-/// (320 KiB) applies and a diagnostic is printed to prompt installation.
+/// When `wasm-opt` is available the **optimised** budget (640 KiB, enforced
+/// CI limit; target: 256 KiB) is enforced.  When it is absent, the **raw**
+/// fallback budget (640 KiB) applies and a diagnostic is printed to prompt
+/// installation.
 ///
 /// Emits a warning diagnostic when the binary is in the 90–100 % zone so
 /// developers get early warning before hitting the hard limit.
@@ -660,16 +692,16 @@ fn wasm_release_build_fits_hard_budget() {
     if !was_optimised {
         eprintln!(
             "\nNOTE: wasm-opt not found; checking against raw WASM budget \
-             ({} KiB) instead of the network limit ({} KiB). \
+             ({} KiB) instead of the optimised limit ({} KiB). \
              Install binaryen (brew install binaryen / apt install binaryen) \
-             for accurate 256 KiB enforcement.\n",
+             for accurate optimised enforcement.\n",
             WASM_SIZE_RAW_BUDGET_BYTES / 1024,
             WASM_SIZE_BUDGET_BYTES / 1024,
         );
         assert!(
             size <= WASM_SIZE_RAW_BUDGET_BYTES,
             "Raw WASM size {size} B exceeds fallback budget {WASM_SIZE_RAW_BUDGET_BYTES} B \
-             (320 KiB); path: {}",
+             (640 KiB); path: {}",
             final_path.display()
         );
         return;
@@ -685,14 +717,14 @@ fn wasm_release_build_fits_hard_budget() {
     }
     assert!(
         tier != SizeTier::Over,
-        "WASM size {size} B exceeds hard budget {WASM_SIZE_BUDGET_BYTES} B (256 KiB); \
+        "WASM size {size} B exceeds hard budget {WASM_SIZE_BUDGET_BYTES} B (640 KiB); \
          path: {}",
         final_path.display()
     );
 }
 
 /// Builds the contract in release mode and asserts the size has not regressed
-/// beyond `WASM_REGRESSION_MARGIN` (5 %) relative to `WASM_SIZE_BASELINE_BYTES`.
+/// beyond `WASM_REGRESSION_MARGIN` (10 %) relative to `WASM_SIZE_BASELINE_BYTES`.
 ///
 /// # Updating the baseline after a legitimate size increase
 /// 1. Update `WASM_SIZE_BASELINE_BYTES` in this file.
