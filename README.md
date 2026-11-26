@@ -64,6 +64,10 @@ migration, and troubleshooting stuck runs.
 •  docs/PROFIT_SPLIT.md : How platform and investor fees are split.
 •  docs/INDEXING_CONTRACT.md : What the indexer relies on from the Soroban smart contracts — events, topics, data structures, and storage keys.
 
+## Security
+
+Please review our [SECURITY.md](SECURITY.md) vulnerability disclosure policy for information on reporting security issues, supported versions, and our incident response procedures.
+
 ## Contribution
 
 Please follow the repository guidelines in  AGENTS.md  and include tests for any behavior changes.
@@ -114,6 +118,10 @@ npm run dev
 - [`docs/FEES_GRACE_DEFAULT.md`](docs/FEES_GRACE_DEFAULT.md): Unified contributor reference — platform fees, grace period resolution, and default trigger rules in one place.
 - [`docs/GOVERNANCE.md`](docs/GOVERNANCE.md): Governance model, admin handover (one-step and two-step) flow, and the emergency-withdraw timelock — operator-facing.
 - [`docs/QLX_MULTISIG_ROTATION.md`](docs/QLX_MULTISIG_ROTATION.md): Multisig signer rotation procedure with timelock — step-by-step operator guide for safely rotating signers on a multisig-controlled admin account.
+
+## Security
+
+Please review our [SECURITY.md](SECURITY.md) vulnerability disclosure policy for information on reporting security issues, supported versions, and our incident response procedures.
 
 ## Contribution
 
