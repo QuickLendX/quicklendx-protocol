@@ -59,7 +59,6 @@ export default {
     // until they are rewritten against the merged implementation.
     "src/tests/perf/soak.test.ts",
     "src/tests/openapi-contract.test.ts",
-    "src/tests/kyc-service.kms.test.ts",
     "tests/openapi-conformance.test.ts",
     "tests/tenant-isolation.test.ts",
     "src/tests/bids.test.ts",
