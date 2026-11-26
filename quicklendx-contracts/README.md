@@ -94,6 +94,9 @@ QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing t
 git clone https://github.com/your-org/quicklendx-protocol.git
 cd quicklendx-protocol/quicklendx-contracts
 
+# Check required and optional contributor tooling
+bash scripts/doctor.sh
+
 # Build the contracts
 cargo build
 
