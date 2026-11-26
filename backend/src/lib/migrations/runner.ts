@@ -101,6 +101,7 @@ const MIGRATIONS_TABLE = `
 const MIGRATIONS_DIR = path.resolve(process.cwd(), "src", "migrations");
 const HOTFIX_APPROVALS_DIR_NAME = ".hotfix-approvals";
 const HOTFIX_APPROVALS_DIR = path.resolve(process.cwd(), HOTFIX_APPROVALS_DIR_NAME);
+const APPROVAL_NAME_PATTERN = /^[a-z0-9_]+$/;
 
 /** Read-only query backing `getAppliedVersions`. Never interpolates input. */
 const APPLIED_VERSIONS_SQL = "SELECT version FROM _migrations ORDER BY version ASC";
