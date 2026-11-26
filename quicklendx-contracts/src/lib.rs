@@ -74,6 +74,10 @@ pub mod test_utils;
 // ============================================================================
 // Test modules
 // ============================================================================
+//
+// All `src/test_*.rs` modules are declared in `src/tests/mod.rs` so this
+// file stays small and stable across PRs. Run
+// `scripts/check-test-modules.sh` to find test files without a declaration.
 
 #[cfg(test)]
 mod test;
@@ -865,6 +869,7 @@ mod test_view_only;
 mod test_volume_tier_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
+mod tests;
 
 // ============================================================================
 // Contract-level macros (re-exported from diagnostics)
