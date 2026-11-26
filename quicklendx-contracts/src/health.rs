@@ -26,16 +26,14 @@
 //!
 //! # Example Usage (Pseudo-Rust)
 //!
-//! ```ignore
-//! let health = get_protocol_health(&env);
-//! println!("Protocol version: {}", health.version);
-//! println!("Paused: {}", health.paused);
-//! if let Some(pending) = &health.emergency_withdraw_pending {
-//!     println!("Emergency withdraw pending: expires_at = {}", pending.expires_at);
-//! }
-//! println!("Treasury: {:?}", health.treasury);
-//! println!("Invoices: {}", health.total_invoice_count);
-//! println!("Currencies: {}", health.currency_count);
+//! ```ignore - pseudo-code illustration; contract crate is #![no_std] without println! or direct standalone get_protocol_health
+//! let health = ProtocolHealth::new(&env);
+//! let version = health.version;
+//! let is_paused = health.paused;
+//! let is_emergency_pending = health.emergency_withdraw_pending;
+//! let treasury_address = health.treasury;
+//! let invoice_count = health.total_invoice_count;
+//! let currency_count = health.currency_count;
 //! ```
 
 use crate::emergency::EmergencyWithdraw;
