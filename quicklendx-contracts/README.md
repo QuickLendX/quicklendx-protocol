@@ -169,6 +169,18 @@ Every entrypoint is a thin wrapper; validation, auth and events live in the modu
 | `pause(admin: Address)` | `PauseControl::set_paused` | admin |
 | `unpause(admin: Address)` | `PauseControl::set_paused` | admin |
 | `is_paused()` | `PauseControl::is_paused` | - |
+| `add_currency(admin, currency)` / `add_currencies_batch(admin, currencies)` | `CurrencyWhitelist` | admin; unpaused |
+| `remove_currency(admin, currency)` / `remove_currencies_batch(admin, currencies)` | `CurrencyWhitelist` | admin; unpaused |
+| `set_currencies(admin, currencies)` / `clear_currencies(admin)` | `CurrencyWhitelist` | admin; unpaused |
+| `get_whitelisted_currencies()` / `get_whitelisted_currencies_paged(cursor, limit)` | `CurrencyWhitelist` | - |
+| `get_platform_metrics()` / `export_analytics_snapshot()` | `AnalyticsCalculator` | - |
+| `calculate_financial_metrics(period)` / `calculate_performance_metrics()` | `AnalyticsCalculator` | - |
+| `generate_business_report(business, period)` / `generate_investor_report(investor, period)` | `AnalyticsCalculator` | - |
+| `calculate_user_behavior_metrics(user)` / `calculate_investor_analytics(investor)` | `AnalyticsCalculator` | - |
+| `calc_investor_perf_metrics()` | `AnalyticsCalculator` | - |
+| `query_audit_logs_paged(filter, cursor, limit)` / `get_invoice_audit_trail_paged(invoice_id, cursor, limit)` | `AuditStorage` | - |
+| `get_audit_entries_by_operation_paged(operation, cursor, limit)` / `get_audit_entries_by_actor_paged(actor, cursor, limit)` | `AuditStorage` | - |
+| `get_audit_entry(audit_id)` / `get_audit_stats()` | `AuditStorage` | - |
 | `submit_kyc_application(business: Address, kyc_data: String)` | `verification::submit_kyc_application` | business |
 | `verify_business(admin: Address, business: Address)` | `verification::verify_business` | admin |
 | `submit_investor_kyc(investor: Address, kyc_data: String)` | `verification::submit_investor_kyc` | investor |
