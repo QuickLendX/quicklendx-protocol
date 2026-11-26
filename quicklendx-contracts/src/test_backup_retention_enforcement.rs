@@ -311,3 +311,49 @@ fn test_archive_marks_without_deleting_and_is_excluded() {
         BackupStatus::Archived
     );
 }
+
+// ============================================================================
+// Deterministic tie-breaking & scale (50 backups with equal timestamps)
+// ============================================================================
+
+/// When 50 active backups share the exact same timestamp, both preview and
+/// cleanup deterministically tie-break by `backup_id` (ascending), purging the
+/// 40 smallest IDs and retaining the 10 largest IDs with no orphans.
+#[test]
+fn test_equal_timestamps_50_backups_deterministic_tie_break() {
+    let env = setup_env();
+    let max_backups: u32 = 10;
+    set_policy(&env, max_backups, 0, true);
+
+    let mut created_ids: std::vec::Vec<BytesN<32>> = std::vec::Vec::with_capacity(50);
+    for _ in 0..50 {
+        created_ids.push(create_backup(&env));
+    }
+
+    // Preview must agree with actual cleanup before mutation.
+    let preview = BackupStorage::preview_cleanup_old_backups(&env);
+    assert!(!preview.cleanup_disabled);
+    assert_eq!(preview.would_purge_count, 40);
+    assert_eq!(preview.would_retain_count, max_backups);
+
+    let removed = BackupStorage::cleanup_old_backups(&env).unwrap();
+    assert_eq!(removed, 40);
+
+    // Sort IDs ascending to match deterministic (timestamp, backup_id) order.
+    created_ids.sort();
+    let expected_purged = &created_ids[..40];
+    let expected_retained = &created_ids[40..];
+
+    let remaining = BackupStorage::get_all_backups(&env);
+    assert_eq!(remaining.len(), max_backups);
+
+    for id in expected_retained {
+        assert!(
+            remaining.contains(id),
+            "expected backup with larger ID to be retained"
+        );
+    }
+    for id in expected_purged {
+        assert_no_orphan(&env, id);
+    }
+}
