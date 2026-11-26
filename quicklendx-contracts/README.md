@@ -194,13 +194,27 @@ Every entrypoint is a thin wrapper; validation, auth and events live in the modu
 | `get_business_invoices(business: Address)` | `InvoiceStorage::get_business_invoices` | - |
 | `get_total_invoice_count()` | `InvoiceStorage::get_total_count` | - |
 | `place_bid(investor: Address, invoice_id: BytesN<32>, bid_amount: i128, expected_return: i128, salt: BytesN<32>)` | `BidStorage::store_bid` | investor |
-| `accept_bid(invoice_id: BytesN<32>, bid_id: BytesN<32>)` | `escrow::accept_bid_and_fund` | - |
+| `accept_bid_and_fund(invoice_id: BytesN<32>, bid_id: BytesN<32>)` | `escrow::accept_bid_and_fund` | business |
+| `accept_bid_and_fund_with_key(invoice_id: BytesN<32>, bid_id: BytesN<32>, request_key: BytesN<32>)` | `escrow::accept_bid_and_fund_with_key` | business |
+| `accept_bid(invoice_id: BytesN<32>, bid_id: BytesN<32>)` | `escrow::accept_bid_and_fund` | business |
+| `withdraw_bid(bid_id: BytesN<32>)` | `BidStorage::update_bid` | investor |
+| `cleanup_expired_bids(invoice_id: BytesN<32>)` | `BidStorage::cleanup_expired_bids` | - |
 | `get_bid(bid_id: BytesN<32>)` | `BidStorage::get_bid` | - |
 | `get_bids_for_invoice(invoice_id: BytesN<32>)` | `BidStorage::get_bids_for_invoice` | - |
+| `get_ranked_bids(invoice_id: BytesN<32>)` | `BidStorage::rank_bids` | - |
+| `get_ranked_bids_paged(invoice_id: BytesN<32>, cursor: Option<String>, limit: u32)` | `BidStorage::rank_bids_paged` | - |
+| `get_best_bid(invoice_id: BytesN<32>)` | `BidStorage::get_best_bid` | - |
+| `get_bids_by_status(invoice_id: BytesN<32>, status: BidStatus)` | `BidStorage::get_bids_by_status` | - |
+| `get_bids_by_investor(invoice_id: BytesN<32>, investor: Address)` | `BidStorage::get_bids_by_investor` | - |
+| `get_investor_active_exposure(investor: Address)` | `payments::get_investor_exposure` | - |
+| `get_investor_available_capacity(investor: Address)` | `payments::get_investor_available_capacity` | - |
+| `validate_funding_commitment(investor: Address, amount: i128)` | `payments::validate_funding_commitment` | - |
 | `get_escrow_details(invoice_id: BytesN<32>)` | `EscrowStorage::get_escrow_by_invoice` | - |
 | `release_escrow(invoice_id: BytesN<32>, business: Address)` | `payments::release_escrow` | business |
 | `get_investment(invoice_id: BytesN<32>)` | `InvestmentStorage::get_investment_by_invoice` | - |
 | `get_invoice_investment(invoice_id: BytesN<32>)` | `InvestmentStorage::get_investment_by_invoice` | - |
+| `get_investments_by_investor(investor: Address)` | `InvestmentStorage::get_investments_by_investor` | - |
+| `withdraw_investment(invoice_id: BytesN<32>, investor: Address)` | `escrow::withdraw_investment` | investor |
 | `process_partial_payment(invoice_id: BytesN<32>, payment_amount: i128, transaction_id: String)` | `settlement::process_partial_payment` | - |
 | `settle_invoice(invoice_id: BytesN<32>, payment_amount: i128, snap: Investment)` | `settlement::settle_invoice` | - |
 | `get_invoice_progress(invoice_id: BytesN<32>)` | `settlement::get_invoice_progress` | - |

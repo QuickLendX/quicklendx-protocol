@@ -1775,15 +1775,62 @@ impl QuickLendXContract {
         Ok(bid_id)
     }
 
+    pub fn accept_bid_and_fund(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || {
+            crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id)
+        })
+    }
+
+    pub fn accept_bid_and_fund_with_key(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+        request_key: BytesN<32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || {
+            crate::escrow::accept_bid_and_fund_with_key(&env, &invoice_id, &bid_id, &request_key)
+        })
+    }
+
     pub fn accept_bid(
         env: Env,
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
+        Self::accept_bid_and_fund(env, invoice_id, bid_id).map(|_| ())
+    }
+
+    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
-        with_payment_guard(&env, || {
-            crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id).map(|_| ())
-        })
+        let mut bid = crate::bid::BidStorage::get_bid(&env, &bid_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        bid.investor.require_auth();
+
+        if bid.status != crate::types::BidStatus::Placed {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        if bid.is_expired(env.ledger().timestamp()) {
+            bid.status = crate::types::BidStatus::Expired;
+            crate::bid::BidStorage::update_bid(&env, &bid);
+            crate::events::emit_bid_expired(&env, &bid);
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        bid.status = crate::types::BidStatus::Withdrawn;
+        crate::bid::BidStorage::update_bid(&env, &bid);
+        crate::events::emit_bid_withdrawn(&env, &bid);
+        Ok(())
+    }
+
+    pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> Result<u32, QuickLendXError> {
+        crate::bid::BidStorage::cleanup_expired_bids(&env, &invoice_id)
     }
 
     pub fn get_bid(env: Env, bid_id: BytesN<32>) -> Option<crate::types::Bid> {
@@ -1801,6 +1848,13 @@ impl QuickLendXContract {
         bids
     }
 
+    pub fn get_ranked_bids(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<Vec<crate::types::Bid>, QuickLendXError> {
+        crate::bid::BidStorage::rank_bids(&env, &invoice_id)
+    }
+
     pub fn get_ranked_bids_paged(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1808,6 +1862,51 @@ impl QuickLendXContract {
         limit: u32,
     ) -> Result<crate::types::CursorBidsPage, QuickLendXError> {
         crate::bid::BidStorage::rank_bids_paged(&env, &invoice_id, cursor, limit)
+    }
+
+    pub fn get_best_bid(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<Option<crate::types::Bid>, QuickLendXError> {
+        crate::bid::BidStorage::get_best_bid(&env, &invoice_id)
+    }
+
+    pub fn get_bids_by_status(
+        env: Env,
+        invoice_id: BytesN<32>,
+        status: crate::types::BidStatus,
+    ) -> Result<Vec<crate::types::Bid>, QuickLendXError> {
+        crate::bid::BidStorage::get_bids_by_status(&env, &invoice_id, status)
+    }
+
+    pub fn get_bids_by_investor(
+        env: Env,
+        invoice_id: BytesN<32>,
+        investor: Address,
+    ) -> Result<Vec<crate::types::Bid>, QuickLendXError> {
+        crate::bid::BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
+    }
+
+    pub fn get_investor_active_exposure(
+        env: Env,
+        investor: Address,
+    ) -> Result<i128, QuickLendXError> {
+        crate::payments::get_investor_exposure(&env, &investor)
+    }
+
+    pub fn get_investor_available_capacity(
+        env: Env,
+        investor: Address,
+    ) -> Result<i128, QuickLendXError> {
+        crate::payments::get_investor_available_capacity(&env, &investor)
+    }
+
+    pub fn validate_funding_commitment(
+        env: Env,
+        investor: Address,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        crate::payments::validate_funding_commitment(&env, &investor, amount)
     }
 
     // =========================================================================
@@ -1985,6 +2084,21 @@ impl QuickLendXContract {
     pub fn get_invoice_investment(env: Env, invoice_id: BytesN<32>) -> Investment {
         crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
             .expect("invoice has no investment")
+    }
+
+    pub fn get_investments_by_investor(env: Env, investor: Address) -> Vec<BytesN<32>> {
+        crate::investment::InvestmentStorage::get_investments_by_investor(&env, &investor)
+    }
+
+    pub fn withdraw_investment(
+        env: Env,
+        invoice_id: BytesN<32>,
+        investor: Address,
+    ) -> Result<(), QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || {
+            crate::escrow::withdraw_investment(&env, &invoice_id, &investor)
+        })
     }
 
     pub fn get_investor_investments_paged(
