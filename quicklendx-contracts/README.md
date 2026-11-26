@@ -94,6 +94,9 @@ QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing t
 git clone https://github.com/your-org/quicklendx-protocol.git
 cd quicklendx-protocol/quicklendx-contracts
 
+# Check required and optional contributor tooling
+bash scripts/doctor.sh
+
 # Build the contracts
 cargo build
 
@@ -139,6 +142,9 @@ let bid_id = contract.place_bid(
 The full entrypoint inventory, function details, data structures, and usage examples are in the [Contracts API Reference](../docs/contracts/api-reference.md).
 
 ## Deployment
+
+For a guarded test-network deployment, protocol initialization, and invoice
+smoke flow, see the [Test-network deployment guide](../docs/DEPLOY_TESTNET.md).
 
 Build and validate the contracts from `quicklendx-contracts/` with `cargo build` and `cargo test`. For an optimized production artifact, use `stellar contract build` and follow the current Stellar CLI deployment workflow.
 

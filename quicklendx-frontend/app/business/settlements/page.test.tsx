@@ -1,9 +1,13 @@
 import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createElement as mockCreateElement } from "react";
 import type React from "react";
 import SettlementsPage from "./page";
 import { listSettlements, type Settlement } from "./_lib/data";
-import { useWallet } from "@/app/lib/wallet/WalletProvider";
+import {
+  useWallet,
+  type WalletContextValue,
+} from "@/app/lib/wallet/WalletProvider";
 
 jest.mock("next/navigation", () => ({
   useRouter: () => ({ replace: mockReplace }),
@@ -12,7 +16,6 @@ jest.mock("next/navigation", () => ({
 }));
 
 jest.mock("next/link", () => {
-  const React = require("react");
   return {
     __esModule: true,
     default: ({
@@ -20,7 +23,7 @@ jest.mock("next/link", () => {
       children,
       ...props
     }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string }) =>
-      React.createElement("a", { href, ...props }, children),
+      mockCreateElement("a", { href, ...props }, children),
   };
 });
 
@@ -30,8 +33,11 @@ jest.mock("./_lib/data", () => ({
 
 jest.mock("@/app/lib/wallet/WalletProvider", () => ({
   useWallet: jest.fn(),
-  WalletConnectControl: () =>
-    require("react").createElement("button", null, "Connect Wallet"),
+}));
+
+jest.mock("@/app/components/WalletConnect", () => ({
+  WalletConnect: () =>
+    mockCreateElement("button", null, "Connect Wallet"),
 }));
 
 const mockReplace = jest.fn((url: string) => {
@@ -41,6 +47,19 @@ let mockSearch = "";
 const mockListSettlements = jest.mocked(listSettlements);
 const mockUseWallet = jest.mocked(useWallet);
 const connectedAddress = "GCONNECTEDWALLET";
+
+function makeWallet(
+  state: WalletContextValue["state"],
+  address?: string
+): WalletContextValue {
+  return {
+    state,
+    address,
+    connect: async () => {},
+    disconnect: async () => {},
+    signTransaction: async () => "",
+  };
+}
 
 function makeSettlement(
   index: number,
@@ -63,10 +82,7 @@ function response(data: Settlement[], indexLagSeconds = 10) {
 }
 
 async function renderConnected(rows: Settlement[], lag = 10) {
-  mockUseWallet.mockReturnValue({
-    state: "connected",
-    address: connectedAddress,
-  });
+  mockUseWallet.mockReturnValue(makeWallet("CONNECTED", connectedAddress));
   mockListSettlements.mockResolvedValue(response(rows, lag));
   const rendered = render(<SettlementsPage />);
   await waitFor(() => expect(mockListSettlements).toHaveBeenCalledTimes(1));
@@ -77,10 +93,7 @@ beforeEach(() => {
   mockSearch = "";
   mockReplace.mockClear();
   mockListSettlements.mockReset();
-  mockUseWallet.mockReturnValue({
-    state: "connected",
-    address: connectedAddress,
-  });
+  mockUseWallet.mockReturnValue(makeWallet("CONNECTED", connectedAddress));
 });
 
 describe("Settlement receipts page", () => {
@@ -160,10 +173,7 @@ describe("Settlement receipts page", () => {
 
   it("renders five accessible loading skeleton rows", async () => {
     let resolveFetch!: (value: ReturnType<typeof response>) => void;
-    mockUseWallet.mockReturnValue({
-      state: "connected",
-      address: connectedAddress,
-    });
+    mockUseWallet.mockReturnValue(makeWallet("CONNECTED", connectedAddress));
     mockListSettlements.mockReturnValue(
       new Promise((resolve) => {
         resolveFetch = resolve;
@@ -184,10 +194,7 @@ describe("Settlement receipts page", () => {
   });
 
   it("shows an alert and retries a rejected fetch", async () => {
-    mockUseWallet.mockReturnValue({
-      state: "connected",
-      address: connectedAddress,
-    });
+    mockUseWallet.mockReturnValue(makeWallet("CONNECTED", connectedAddress));
     mockListSettlements
       .mockRejectedValueOnce(new Error("offline"))
       .mockResolvedValueOnce(response([makeSettlement(1)]));
@@ -217,7 +224,7 @@ describe("Settlement receipts page", () => {
   });
 
   it("prompts for a wallet and does not fetch without a connected address", () => {
-    mockUseWallet.mockReturnValue({ state: "disconnected" });
+    mockUseWallet.mockReturnValue(makeWallet("NOT_CONNECTED"));
     render(<SettlementsPage />);
 
     expect(
