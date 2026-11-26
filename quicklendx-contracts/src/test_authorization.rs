@@ -1,7 +1,7 @@
 #![cfg(all(test, feature = "legacy-tests"))]
 
 use crate::admin::AdminStorage;
-use crate::contract::{QuickLendXContract, QuickLendXContractClient};
+use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
 use crate::types::{InvoiceCategory, InvoiceMetadata, InvoiceStatus};
 use soroban_sdk::{testutils::Address as _, Address, Bytes, BytesN, Env, Vec};
