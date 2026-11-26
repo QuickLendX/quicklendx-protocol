@@ -10,3 +10,6 @@ target
 
 # Auto-generated TypeScript contract bindings (regenerated on every make build)
 bindings/
+
+# Local test-network deployment metadata
+.env.deploy

@@ -140,6 +140,9 @@ The full entrypoint inventory, function details, data structures, and usage exam
 
 ## Deployment
 
+For a guarded test-network deployment, protocol initialization, and invoice
+smoke flow, see the [Test-network deployment guide](../docs/DEPLOY_TESTNET.md).
+
 Build and validate the contracts from `quicklendx-contracts/` with `cargo build` and `cargo test`. For an optimized production artifact, use `stellar contract build` and follow the current Stellar CLI deployment workflow.
 
 Before deployment, verify the contract configuration and admin setup using the [admin operations guide](../docs/contracts/admin.md). The [WASM size budget](../docs/contracts/wasm-size.md) documents size thresholds and CI enforcement.
