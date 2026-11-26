@@ -57,7 +57,7 @@ describe("load-shedding concurrency cap", () => {
 
     expect(overflow.status).toBe(503);
     expect(overflow.headers["retry-after"]).toBe(String(RETRY_AFTER_SECONDS));
-    expect(overflow.body.code).toBe("CONCURRENCY_CAP");
+    expect(overflow.body.error.code).toBe("CONCURRENCY_CAP");
 
     // Wait for slow requests to finish so port/fd cleanup is clean.
     await Promise.allSettled(saturating);

@@ -59,7 +59,6 @@ export default {
     // until they are rewritten against the merged implementation.
     "src/tests/perf/soak.test.ts",
     "src/tests/openapi-contract.test.ts",
-    "src/tests/kyc-service.kms.test.ts",
     "tests/openapi-conformance.test.ts",
     "tests/openapi-example-validation.test.ts",
     "tests/tenant-isolation.test.ts",
@@ -68,7 +67,6 @@ export default {
     "src/tests/bids.test.ts",
     "src/tests/migration-integration.test.ts",
     "src/tests/streaming-exports.test.ts",
-    "src/tests/load-shedding-concurrency.test.ts",
     "src/tests/latency-tracker.test.ts",
     "src/tests/drift-severity.test.ts",
     "src/tests/cache-headers.endpoints.test.ts",
