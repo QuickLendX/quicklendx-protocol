@@ -71,6 +71,8 @@ export default function NotificationPreferencesPage() {
   const { address } = useWallet();
   const [preferences, setPreferences] =
     useState<NotificationPreferences>(DEFAULT_PREFERENCES);
+  const [savedPreferences, setSavedPreferences] =
+    useState<NotificationPreferences>(DEFAULT_PREFERENCES);
   const [email, setEmail] = useState("");
   const [emailError, setEmailError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -89,10 +91,12 @@ export default function NotificationPreferencesPage() {
     try {
       const loaded = await getNotificationPreferences(address);
       setPreferences(loaded);
+      setSavedPreferences(loaded);
       setEmail(loaded.email_address ?? "");
     } catch (error) {
       if (isNotFound(error)) {
         setPreferences(DEFAULT_PREFERENCES);
+        setSavedPreferences(DEFAULT_PREFERENCES);
         setEmail("");
       } else {
         const message = errorMessage(error);
@@ -126,6 +130,7 @@ export default function NotificationPreferencesPage() {
         if (!active) return;
         if (isNotFound(error)) {
           setPreferences(DEFAULT_PREFERENCES);
+          setSavedPreferences(DEFAULT_PREFERENCES);
           setEmail("");
           return;
         }
@@ -154,9 +159,7 @@ export default function NotificationPreferencesPage() {
     }
     setEmailError(null);
 
-    const previous = preferences;
     const next = { ...preferences };
-    setPreferences(next);
     setSaving(true);
 
     try {
@@ -165,13 +168,14 @@ export default function NotificationPreferencesPage() {
         notifications: next.notifications,
         ...(trimmedEmail ? { email_address: trimmedEmail } : {}),
       });
+      setSavedPreferences(next);
       toast.success(
         result.verification_required
           ? "Check your inbox to verify the new email address."
           : "Notification preferences saved."
       );
     } catch (error) {
-      setPreferences(previous);
+      setPreferences(savedPreferences);
       toast.error(errorMessage(error));
     } finally {
       setSaving(false);
@@ -221,7 +225,7 @@ export default function NotificationPreferencesPage() {
         </div>
       )}
 
-      <form onSubmit={handleSave} className="space-y-6">
+      <form onSubmit={handleSave} noValidate className="space-y-6">
         <fieldset disabled={loading || saving} className="space-y-6">
           <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4">
