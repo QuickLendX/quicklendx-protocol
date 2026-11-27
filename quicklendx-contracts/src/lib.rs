@@ -210,7 +210,7 @@ mod test_default_finality;
 mod test_default_finality_matrix;
 #[cfg(test)]
 mod test_default_grace_boundary;
-#[cfg(test)]
+#[cfg(all(test, feature = "diagnostics"))]
 mod test_diagnostics;
 #[cfg(test)]
 mod test_dispute_event_invariant;
@@ -1379,5 +1379,16 @@ impl QuickLendXContract {
     pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<types::Invoice, errors::QuickLendXError> {
         storage::InvoiceStorage::get(&env, &invoice_id)
             .ok_or(errors::QuickLendXError::InvoiceNotFound)
+    }
+}
+
+#[cfg(all(test, not(feature = "diagnostics")))]
+mod test_diagnostics_disabled {
+    #[test]
+    fn test_diagnostics_feature_disabled_configuration_compiles() {
+        assert!(!cfg!(feature = "diagnostics"));
+        let env = soroban_sdk::Env::default();
+        crate::qlx_log!(&env, "test", "disabled configuration");
+        crate::qlx_log!(&env, "test", "disabled configuration {}", 42);
     }
 }

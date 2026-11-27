@@ -19,6 +19,17 @@ This document describes the `qlx_log!` macro — the uniform structured diagnost
 
 > **Never deploy a production WASM built with `--features diagnostics`** unless you also use the `release-with-logs` profile and intentionally want debug output. Standard `release` builds always have `debug-assertions = false`, which mutes `soroban_sdk::log!` at the host level regardless.
 
+### Testing
+
+The diagnostics unit tests are gated on the `diagnostics` feature, so the default library build does not depend on feature-only items such as `get_protocol_diagnostics`:
+
+```bash
+cargo test --lib
+cargo test --lib --features diagnostics test_diagnostics
+```
+
+Run the second command to exercise the diagnostics module (macro emission, domain tags, and the `get_protocol_diagnostics` entry point).
+
 ### Build Profiles
 
 The project's `Cargo.toml` already defines:
