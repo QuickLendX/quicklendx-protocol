@@ -81,6 +81,7 @@ describe("NotificationPreferencesPage", () => {
     render(<NotificationPreferencesPage />);
 
     await screen.findByLabelText("Invoice funded");
+    fireEvent.click(screen.getByLabelText("Payment received"));
     fireEvent.click(screen.getByRole("button", { name: "Save preferences" }));
 
     await waitFor(() => {
@@ -88,6 +89,7 @@ describe("NotificationPreferencesPage", () => {
         "You do not have permission to perform this action."
       );
     });
+    expect(screen.getByLabelText("Payment received")).not.toBeChecked();
   });
 
   it("rejects an invalid email before sending an update", async () => {
