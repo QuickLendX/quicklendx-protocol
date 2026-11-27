@@ -100,6 +100,29 @@ If the published URL returns a 404, the most likely cause is that no tag has bee
 
 ---
 
+## Documentation Example Policy (doctests)
+
+All Rust documentation examples in the codebase must adhere to the following rules to ensure `cargo test --doc` remains green:
+
+1. **Compilation requirement**: Any doc comment example enclosed in standard triple backticks (````rust```` or ```` ``` ````) is treated by `rustdoc` as a test and must compile cleanly under `#![no_std]` constraints.
+2. **Explicit ignore with reason**: If an example is illustrative, pseudo-code, an incomplete snippet, or requires runtime environment context not available during documentation testing, it must be marked with `ignore` and an accompanying one-line explanation:
+   ```markdown
+   /// ```ignore - illustrative snippet; requires full contract execution environment
+   /// let health = ProtocolHealth::new(&env);
+   /// ```
+   ```
+   or
+   ```markdown
+   /// ```rust,ignore - partial guard logic snippet
+   /// if env.ledger().timestamp() >= invoice.due_date {
+   ///     return Err(QuickLendXError::InvalidStatus);
+   /// }
+   /// ```
+   ```
+3. **No `std` APIs in examples**: Because contract modules are `#![no_std]`, examples must never call `std::` facilities such as `println!` without appropriate gating.
+
+---
+
 ## Related documentation
 
 - [`quicklendx-contracts/README.md`](../quicklendx-contracts/README.md) — build instructions, test commands, and contract architecture

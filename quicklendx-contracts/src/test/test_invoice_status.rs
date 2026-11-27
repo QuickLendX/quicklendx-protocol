@@ -35,7 +35,7 @@ mod tests {
             description,
             category,
             tags,
-        None).expect("invoice creation should succeed");
+        ).expect("invoice creation should succeed");
         // Manually set status to the desired variant for testing
         inv.status = status;
         inv
@@ -100,7 +100,7 @@ mod tests {
     fn test_mark_as_defaulted_transitions_status() {
         let env = dummy_env();
         let mut inv = create_invoice(&env, InvoiceStatus::Funded);
-        inv.mark_as_defaulted(&mut inv);
+        inv.mark_as_defaulted();
         assert_eq!(inv.status, InvoiceStatus::Defaulted);
     }
 
