@@ -124,6 +124,7 @@ export default function NotificationPreferencesPage() {
       .then((loaded) => {
         if (!active) return;
         setPreferences(loaded);
+        setSavedPreferences(loaded);
         setEmail(loaded.email_address ?? "");
       })
       .catch((error: unknown) => {
