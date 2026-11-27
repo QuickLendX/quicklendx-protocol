@@ -1,196 +1,19 @@
-//! Storage management for the QuickLendX invoice factoring protocol.
-//!
-//! This module defines storage keys, indexing strategies, and storage operations
-//! for efficient data retrieval and management.
+//! Invoice storage operations, caching, and secondary index maintenance.
 
-use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
+use soroban_sdk::{
+    contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec,
+};
 
 use crate::errors::QuickLendXError;
 use crate::protocol_limits;
 use crate::types::{
-    BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, InvestorFreezeInfo, Invoice,
-    InvoiceCategory, InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
+    BusinessFreezeReason, FreezeInfo, InvestorFreezeInfo, Invoice,
+    InvoiceCategory, InvoiceLock, InvoiceStatus, PruneReport, RebuildReport,
 };
-
-/// Soroban TTL policy based on 5-second ledgers.
-///
-/// 1 day  = 17,280 ledgers
-/// 7 days = 120,960 ledgers
-/// 30 days = 518,400 ledgers
-///
-/// Persistent entries are extended only when their remaining TTL falls
-/// below the 7-day threshold, and are then extended to 30 days.
-pub const PERSISTENT_BUMP_THRESHOLD: u32 = 120_960;
-pub const PERSISTENT_EXTEND_TO: u32 = 518_400;
-
-/// Instance storage uses the same 7-day/30-day TTL policy.
-pub const INSTANCE_BUMP_THRESHOLD: u32 = 120_960;
-pub const INSTANCE_EXTEND_TO: u32 = 518_400;
-
-/// Maximum time limit for invoice locks in seconds (30 days)
-pub const LOCK_TIME_LIMIT_SECONDS: u64 = 2_592_000;
-
-// ============================================================================
-// Storage Schema Version
-//
-// This is the authoritative version of the on-chain storage layout.  Every
-// deployed contract instance stores the version it was initialised with.  The
-// upgrade / migration path must:
-//   1. Increment STORAGE_SCHEMA_VERSION.
-//   2. Provide a migration function that brings old records to the new shape.
-//   3. Emit the appropriate migration events (started / completed / failed /
-//      rolled_back) so off-chain tooling can reconcile every committed action.
-//
-// Forward compatibility:  the contract can read records from any previous
-//   version by treating unknown fields as absent / default.
-// Backward compatibility:  new code must not write the new format until the
-//   migration is fully committed (schema version is bumped in storage).
-// ============================================================================
-
-/// The storage schema version understood by this build of the contract.
-/// Increment this constant whenever the on-chain data layout changes in a
-/// backward-incompatible way.
-pub const STORAGE_SCHEMA_VERSION: u32 = 1;
-
-/// Instance-storage key that records the committed schema version.
-/// **BREAKING**: renaming this key loses the version record on every deployed
-/// contract and forces a full re-migration.
-const SCHEMA_VERSION_KEY: Symbol = symbol_short!("sch_ver");
-
-/// Instance-storage key for the schema version currently being migrated to
-/// (set while a migration is in-progress, absent otherwise).
-const MIGRATION_PENDING_VER_KEY: Symbol = symbol_short!("mig_ver");
-
-/// Persistent-storage key for the migration progress cursor (records migrated
-/// so far in the current run).
-const MIGRATION_OFFSET_KEY: Symbol = symbol_short!("mig_off");
-
-/// Persistent-storage key for the cumulative record count migrated across all
-/// pages in the current run.
-const MIGRATION_RECORDS_KEY: Symbol = symbol_short!("mig_rec");
-
-pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
-where
-    T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
-{
-    env.storage()
-        .persistent()
-        .extend_ttl(key, PERSISTENT_BUMP_THRESHOLD, PERSISTENT_EXTEND_TO);
-}
-
-pub fn bump_persistent<T>(env: &Env, key: &T)
-where
-    T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
-{
-    extend_persistent_ttl(env, key);
-}
-
-pub fn persistent_set<K, V>(env: &Env, key: &K, val: &V)
-where
-    K: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
-    V: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
-{
-    env.storage().persistent().set(key, val);
-    extend_persistent_ttl(env, key);
-}
-
-pub fn persistent_get<K, V>(env: &Env, key: &K) -> Option<V>
-where
-    K: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
-    V: soroban_sdk::TryFromVal<soroban_sdk::Env, soroban_sdk::Val>,
-{
-    let val = env.storage().persistent().get(key);
-    if val.is_some() {
-        extend_persistent_ttl(env, key);
-    }
-    val
-}
-
-pub fn extend_instance_ttl(env: &Env) {
-    env.storage()
-        .instance()
-        .extend_ttl(INSTANCE_BUMP_THRESHOLD, INSTANCE_EXTEND_TO);
-}
-
-/// Storage key for the pending treasury address during a rotation.
-pub const PENDING_TREASURY_KEY: Symbol = symbol_short!("pnd_trs");
-/// Storage key for the pending treasury execution timestamp.
-pub const PENDING_TREASURY_TS_KEY: Symbol = symbol_short!("trs_ts");
-
-/// Counter and configuration keys for the contract.
-///
-/// # BREAKING: Rename Requires Migration
-///
-/// Each method here produces a storage key persisted on-chain.  Renaming the
-/// inner `symbol_short!` string is a **breaking change**: the value stored under
-/// the old key becomes permanently unreadable.  See `docs/storage-key-stability.md`
-/// for the migration checklist.
-pub struct StorageKeys;
-
-/// Primary storage key namespace for core entities.
-///
-/// # BREAKING: Rename Requires Migration
-///
-/// Renaming a variant's discriminant (e.g., `Invoice` → `Inv`) changes the
-/// XDR encoding of every key in that variant, orphaning all existing records.
-#[derive(Clone)]
-#[contracttype]
-pub enum DataKey {
-    Invoice(BytesN<32>),
-    Bid(BytesN<32>),
-    Investment(BytesN<32>),
-    FrozenInvoice(BytesN<32>),
-    FreezeInfo(BytesN<32>),
-    EscrowExtension(BytesN<32>),
-    InvestorFreezeInfo(Address),
-    PerInvestorPositionCap(BytesN<32>),
-    /// Content-addressed dispute evidence bound to its owning invoice.
-    DisputeEvidence(BytesN<32>),
-}
-
-impl StorageKeys {
-    /// **Storage class**: Instance  
-    /// **BREAKING**: Renaming `"fees"` loses the persisted platform-fee configuration.
-    pub fn platform_fees() -> Symbol {
-        symbol_short!("fees")
-    }
-    /// **Storage class**: Persistent  
-    /// **BREAKING**: Renaming `"inv_count"` resets the invoice counter on all deployed contracts.
-    pub fn invoice_count() -> Symbol {
-        symbol_short!("inv_count")
-    }
-    /// **Storage class**: Persistent  
-    /// **BREAKING**: Renaming `"bid_count"` resets the bid counter on all deployed contracts.
-    pub fn bid_count() -> Symbol {
-        symbol_short!("bid_count")
-    }
-    /// **Storage class**: Persistent  
-    /// **BREAKING**: Renaming `"inv_cnt"` resets the investment counter on all deployed contracts.
-    pub fn investment_count() -> Symbol {
-        symbol_short!("inv_cnt")
-    }
-    /// **Storage class**: Persistent  
-    /// **BREAKING**: Renaming `"biz_def_h"` resets the business default history counters.
-    pub fn business_default_history(business: &Address) -> (Symbol, Address) {
-        (symbol_short!("biz_def_h"), business.clone())
-    }
-}
-
-/// Secondary indexes for efficient querying.
-///
-/// # BREAKING: Rename Requires Migration
-///
-/// Every method in this struct produces a storage key that is persisted on-chain.
-/// Renaming the inner `symbol_short!` string in **any** method is a **breaking change**:
-/// existing contract data stored under the old key becomes permanently unreachable
-/// (orphaned) unless a migration function explicitly copies it to the new key.
-///
-/// Before changing any key string:
-/// 1. Write a migration function that reads from the old key and writes to the new key.
-/// 2. Update `src/test_snapshots/storage_keys.txt` with the new expected values.
-/// 3. Obtain admin/security-team review of the snapshot diff.
-/// 4. Document the migration in `docs/storage-key-stability.md`.
-pub struct Indexes;
+use super::{
+    bump_persistent, extend_instance_ttl, extend_persistent_ttl, persistent_get, persistent_set,
+    DataKey, Indexes, StorageKeys, StorageIntegrityAudit, LOCK_TIME_LIMIT_SECONDS,
+};
 
 /// Selects one secondary invoice index for bounded integrity cleanup.
 #[derive(Clone)]
@@ -202,6 +25,20 @@ pub enum InvoiceIndex {
     TaxId(String),
     Tag(String),
     Category(InvoiceCategory),
+}
+
+
+impl StorageKeys {
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"inv_count"` resets the invoice counter on all deployed contracts.
+    pub fn invoice_count() -> Symbol {
+        symbol_short!("inv_count")
+    }
+    /// **Storage class**: Persistent  
+    /// **BREAKING**: Renaming `"biz_def_h"` resets the business default history counters.
+    pub fn business_default_history(business: &Address) -> (Symbol, Address) {
+        (symbol_short!("biz_def_h"), business.clone())
+    }
 }
 
 impl Indexes {
@@ -226,70 +63,6 @@ impl Indexes {
             InvoiceStatus::Defaulted => symbol_short!("defaulted"),
             InvoiceStatus::Cancelled => symbol_short!("cancelled"),
             InvoiceStatus::Refunded => symbol_short!("refunded"),
-        };
-        (symbol_short!("inv_st"), status_symbol)
-    }
-
-    /// Returns the persistent storage key for the bid list attached to an invoice.
-    ///
-    /// **Storage class**: Persistent  
-    /// **BREAKING**: Renaming `"bids_inv"` orphans all per-invoice bid indexes.
-    pub fn bids_by_invoice(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
-        (symbol_short!("bids_inv"), invoice_id.clone())
-    }
-
-    /// Returns the persistent storage key for the bid list owned by an investor.
-    ///
-    /// **Storage class**: Persistent  
-    /// **BREAKING**: Renaming `"bids_invr"` orphans all per-investor bid indexes.
-    pub fn bids_by_investor(investor: &Address) -> (Symbol, Address) {
-        (symbol_short!("bids_invr"), investor.clone())
-    }
-
-    /// Returns the persistent storage key for the bid list in a given status bucket.
-    ///
-    /// **Storage class**: Persistent  
-    /// **BREAKING**: Renaming any status symbol or `"bids_stat"` orphans that status index.
-    pub fn bids_by_status(status: BidStatus) -> (Symbol, Symbol) {
-        let status_symbol = match status {
-            BidStatus::Placed => symbol_short!("placed"),
-            BidStatus::Withdrawn => symbol_short!("withdrawn"),
-            BidStatus::Accepted => symbol_short!("accepted"),
-            BidStatus::Expired => symbol_short!("expired"),
-            BidStatus::Cancelled => symbol_short!("cancelled"),
-        };
-        (symbol_short!("bids_stat"), status_symbol)
-    }
-
-    /// Returns the persistent storage key for the investment list attached to an invoice.
-    ///
-    /// **Storage class**: Persistent  
-    /// **BREAKING**: Renaming `"invst_inv"` orphans all per-invoice investment indexes.
-    pub fn investments_by_invoice(invoice_id: &BytesN<32>) -> (Symbol, BytesN<32>) {
-        (symbol_short!("invst_inv"), invoice_id.clone())
-    }
-
-    /// Returns the persistent storage key for the investment list owned by an investor.
-    ///
-    /// **Storage class**: Persistent  
-    /// **BREAKING**: Renaming `"inv_invst"` orphans all per-investor investment indexes.
-    pub fn investments_by_investor(investor: &Address) -> (Symbol, Address) {
-        (symbol_short!("inv_invst"), investor.clone())
-    }
-
-    /// Returns the persistent storage key for the investment list in a given status bucket.
-    ///
-    /// **Storage class**: Persistent  
-    /// **BREAKING**: Renaming any status symbol or `"inv_st"` here orphans that index.
-    /// Note: this shares the `"inv_st"` prefix with `invoices_by_status`; the second
-    /// tuple element (the status symbol) acts as the discriminator.
-    pub fn investments_by_status(status: InvestmentStatus) -> (Symbol, Symbol) {
-        let status_symbol = match status {
-            InvestmentStatus::Active => symbol_short!("active"),
-            InvestmentStatus::Withdrawn => symbol_short!("withdrawn"),
-            InvestmentStatus::Completed => symbol_short!("completed"),
-            InvestmentStatus::Defaulted => symbol_short!("defaulted"),
-            InvestmentStatus::Refunded => symbol_short!("refunded"),
         };
         (symbol_short!("inv_st"), status_symbol)
     }
@@ -337,6 +110,7 @@ impl Indexes {
         (symbol_short!("inv_cat"), cat_symbol)
     }
 }
+
 
 /// Storage operations for invoices.
 ///
@@ -1306,271 +1080,7 @@ impl InvoiceStorage {
 }
 
 /// Storage operations for bids
-pub use crate::bid::BidStorage;
 
-/// Storage operations for investments
-pub use crate::investment::InvestmentStorage;
-
-/// Storage operations for platform configuration
-pub struct ConfigStorage;
-impl ConfigStorage {
-    pub fn set_platform_fees(env: &Env, config: &PlatformFeeConfig) {
-        env.storage()
-            .instance()
-            .set(&StorageKeys::platform_fees(), config);
-    }
-    pub fn get_platform_fees(env: &Env) -> Option<PlatformFeeConfig> {
-        env.storage().instance().get(&StorageKeys::platform_fees())
-    }
-}
-
-pub struct StorageManager;
-
-/// Storage key for the view-only context flag.
-const VIEW_ONLY_KEY: Symbol = symbol_short!("view_onl");
-
-impl StorageManager {
-    pub fn clear_all_mappings(env: &Env) -> Result<(), QuickLendXError> {
-        crate::governance::require_no_open_governance_proposal(env)?;
-        env.storage()
-            .persistent()
-            .remove(&StorageKeys::invoice_count());
-        env.storage().persistent().remove(&StorageKeys::bid_count());
-        env.storage()
-            .persistent()
-            .remove(&StorageKeys::investment_count());
-        Ok(())
-    }
-
-    /// Return `true` if the current context is marked as view-only.
-    pub fn is_view_only(env: &Env) -> bool {
-        env.storage()
-            .instance()
-            .get(&VIEW_ONLY_KEY)
-            .unwrap_or(false)
-    }
-
-    /// Mark the current context as view-only or normal.
-    pub fn set_view_only(env: &Env, enabled: bool) {
-        env.storage().instance().set(&VIEW_ONLY_KEY, &enabled);
-    }
-
-    /// Execute a closure within a view-only context.
-    ///
-    /// Sets the view-only flag, runs `f`, then restores the previous flag state.
-    pub fn with_view_only<F, R>(env: &Env, f: F) -> R
-    where
-        F: FnOnce() -> R,
-    {
-        let previous = Self::is_view_only(env);
-        Self::set_view_only(env, true);
-        let result = f();
-        Self::set_view_only(env, previous);
-        result
-    }
-}
-
-// ============================================================================
-// Storage Schema Version and Migration Control
-//
-// Design invariants:
-// • Only one migration may be in-progress at a time (guarded by the pending
-//   version key).
-// • A migration page is idempotent: rerunning it with the same offset
-//   produces the same storage state.
-// • A rollback clears all migration state and restores the committed schema
-//   version; partial new-schema writes must not be observable after rollback.
-// • Failed operations leave storage at the last checkpointed offset so the
-//   migration can be resumed without re-processing already-migrated records.
-// ============================================================================
-
-/// Schema version and migration lifecycle management.
-pub struct StorageMigration;
-
-impl StorageMigration {
-    // ── Read-only accessors ──────────────────────────────────────────────
-
-    /// Return the committed schema version stored in instance storage.
-    /// Returns `0` if no version has been set (fresh / pre-migration contract).
-    pub fn get_schema_version(env: &Env) -> u32 {
-        if !env.storage().instance().has(&SCHEMA_VERSION_KEY) {
-            return 0u32;
-        }
-        env.storage()
-            .instance()
-            .get(&SCHEMA_VERSION_KEY)
-            .unwrap_or(0u32)
-    }
-
-    /// Return the pending migration target version, if any.
-    /// `None` means no migration is currently in progress.
-    pub fn get_pending_migration_version(env: &Env) -> Option<u32> {
-        if !env.storage().instance().has(&MIGRATION_PENDING_VER_KEY) {
-            return None;
-        }
-        env.storage().instance().get(&MIGRATION_PENDING_VER_KEY)
-    }
-
-    /// Return `true` when a migration is in-progress (pending version is set).
-    pub fn is_migration_in_progress(env: &Env) -> bool {
-        env.storage().instance().has(&MIGRATION_PENDING_VER_KEY)
-    }
-
-    /// Return the migration progress cursor (next offset to process).
-    /// Returns `0` when no migration is in progress or on the first page.
-    pub fn get_migration_offset(env: &Env) -> u32 {
-        persistent_get(env, &MIGRATION_OFFSET_KEY).unwrap_or(0u32)
-    }
-
-    /// Return the cumulative number of records migrated so far.
-    pub fn get_migration_records_migrated(env: &Env) -> u32 {
-        persistent_get(env, &MIGRATION_RECORDS_KEY).unwrap_or(0u32)
-    }
-
-    // ── Write operations ─────────────────────────────────────────────────
-
-    /// Set the committed schema version in instance storage.
-    ///
-    /// # Security
-    /// Callers must ensure the admin has authorised this change before calling.
-    pub fn set_schema_version(env: &Env, version: u32, admin: &soroban_sdk::Address) {
-        env.storage().instance().set(&SCHEMA_VERSION_KEY, &version);
-        crate::events::emit_schema_version_set(env, version, admin);
-    }
-
-    /// Begin a migration from `schema_from` to `schema_to`.
-    ///
-    /// # Errors
-    /// Returns `Err(QuickLendXError::OperationNotAllowed)` if:
-    /// - A migration is already in progress.
-    /// - `schema_from` does not match the committed schema version.
-    /// - `schema_to` is not greater than `schema_from`.
-    pub fn begin_migration(
-        env: &Env,
-        admin: &soroban_sdk::Address,
-        schema_from: u32,
-        schema_to: u32,
-    ) -> Result<(), crate::errors::QuickLendXError> {
-        if Self::is_migration_in_progress(env) {
-            return Err(crate::errors::QuickLendXError::OperationNotAllowed);
-        }
-        let committed = Self::get_schema_version(env);
-        if committed != schema_from {
-            return Err(crate::errors::QuickLendXError::OperationNotAllowed);
-        }
-        if schema_to <= schema_from {
-            return Err(crate::errors::QuickLendXError::OperationNotAllowed);
-        }
-        env.storage()
-            .instance()
-            .set(&MIGRATION_PENDING_VER_KEY, &schema_to);
-        // Reset progress counters.
-        persistent_set(env, &MIGRATION_OFFSET_KEY, &0u32);
-        persistent_set(env, &MIGRATION_RECORDS_KEY, &0u32);
-        crate::events::emit_migration_started(env, schema_from, schema_to, admin);
-        Ok(())
-    }
-
-    /// Record progress after processing one migration page.
-    ///
-    /// Updates the offset cursor and cumulative record count.
-    /// Does NOT commit the schema version — call [`commit_migration`] when all
-    /// records have been processed.
-    pub fn advance_migration_page(env: &Env, new_offset: u32, records_this_page: u32) {
-        persistent_set(env, &MIGRATION_OFFSET_KEY, &new_offset);
-        let prior: u32 = persistent_get(env, &MIGRATION_RECORDS_KEY).unwrap_or(0);
-        let total = prior.saturating_add(records_this_page);
-        persistent_set(env, &MIGRATION_RECORDS_KEY, &total);
-    }
-
-    /// Commit the migration: bump the schema version and clear migration state.
-    ///
-    /// # Errors
-    /// Returns `Err(QuickLendXError::OperationNotAllowed)` if no migration is
-    /// in progress.
-    pub fn commit_migration(
-        env: &Env,
-        admin: &soroban_sdk::Address,
-    ) -> Result<(), crate::errors::QuickLendXError> {
-        let schema_to = Self::get_pending_migration_version(env)
-            .ok_or(crate::errors::QuickLendXError::OperationNotAllowed)?;
-        let schema_from = Self::get_schema_version(env);
-        let records_migrated = Self::get_migration_records_migrated(env);
-        // Commit.
-        env.storage()
-            .instance()
-            .set(&SCHEMA_VERSION_KEY, &schema_to);
-        Self::clear_migration_state(env);
-        crate::events::emit_migration_completed(
-            env,
-            schema_from,
-            schema_to,
-            records_migrated,
-            admin,
-        );
-        Ok(())
-    }
-
-    /// Roll back an in-progress migration without modifying any record data.
-    ///
-    /// Clears migration state and emits `MigrationRolledBack`.  The caller is
-    /// responsible for reverting any partial writes made during migration pages
-    /// before calling this function.
-    ///
-    /// # Errors
-    /// Returns `Err(QuickLendXError::OperationNotAllowed)` if no migration is
-    /// in progress.
-    pub fn rollback_migration(
-        env: &Env,
-        admin: &soroban_sdk::Address,
-    ) -> Result<(), crate::errors::QuickLendXError> {
-        let schema_to = Self::get_pending_migration_version(env)
-            .ok_or(crate::errors::QuickLendXError::OperationNotAllowed)?;
-        let schema_from = Self::get_schema_version(env);
-        Self::clear_migration_state(env);
-        crate::events::emit_migration_rolled_back(env, schema_from, schema_to, admin);
-        Ok(())
-    }
-
-    /// Emit a failure event for the current page and update the progress cursor
-    /// so the migration is resumable.
-    ///
-    /// Storage is left at the last successfully checkpointed offset; partial
-    /// writes within the failed page are the caller's responsibility to avoid.
-    pub fn record_migration_failure(
-        env: &Env,
-        records_this_page: u32,
-        next_offset: u32,
-        reason: &str,
-    ) {
-        let schema_from = Self::get_schema_version(env);
-        let schema_to = Self::get_pending_migration_version(env).unwrap_or(schema_from);
-        Self::advance_migration_page(env, next_offset, records_this_page);
-        let total_migrated = Self::get_migration_records_migrated(env);
-        crate::events::emit_migration_failed(
-            env,
-            schema_from,
-            schema_to,
-            total_migrated,
-            next_offset,
-            reason,
-        );
-    }
-
-    // ── Internal helpers ─────────────────────────────────────────────────
-
-    fn clear_migration_state(env: &Env) {
-        env.storage().instance().remove(&MIGRATION_PENDING_VER_KEY);
-        env.storage().persistent().remove(&MIGRATION_OFFSET_KEY);
-        env.storage().persistent().remove(&MIGRATION_RECORDS_KEY);
-    }
-}
-
-/// Per-call cache for storage reads.
-///
-/// Caches a single `Invoice` lookup so that repeated reads of the same key
-/// within a contract invocation return the cached value and skip redundant
-/// host interface calls and duplicate TTL extensions.
 pub struct StorageReadCache {
     cached_id: [u8; 32],
     cached_invoice: Option<Invoice>,
@@ -1613,7 +1123,6 @@ impl StorageReadCache {
 /// This helper provides deep inspection of secondary indexes to ensure no
 /// orphan IDs exist and that all records are mutually consistent across
 /// different indexing strategies (status, owner, metadata).
-pub struct StorageIntegrityAudit;
 
 impl StorageIntegrityAudit {
     /// Audits all invoice-related indexes for consistency and orphans.
@@ -1713,162 +1222,6 @@ impl StorageIntegrityAudit {
     }
 
     /// Audits all bid-related indexes using the global bid list as source of truth.
-    pub fn audit_bid_integrity(env: &Env) -> Result<(), Vec<String>> {
-        let mut errors = Vec::new(env);
-        let all_bid_ids = BidStorage::get_all_bids(env);
-
-        for bid_id in all_bid_ids.iter() {
-            match BidStorage::get_bid(env, &bid_id) {
-                None => {
-                    errors.push_back(String::from_str(env, "Orphan ID in global bid list"));
-                }
-                Some(bid) => {
-                    // Check investor index
-                    let investor_ids = BidStorage::get_bids_by_investor_all(env, &bid.investor);
-                    if !investor_ids.contains(&bid_id) {
-                        errors.push_back(String::from_str(env, "Bid missing from investor index"));
-                    }
-
-                    // Check invoice index
-                    let invoice_ids = BidStorage::get_bids_for_invoice(env, &bid.invoice_id);
-                    if !invoice_ids.contains(&bid_id) {
-                        errors.push_back(String::from_str(env, "Bid missing from invoice index"));
-                    }
-                }
-            }
-        }
-
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
-    }
-
-    /// Audits all investment-related indexes.
-    pub fn audit_investment_integrity(env: &Env) -> Result<(), Vec<String>> {
-        let mut errors = Vec::new(env);
-        let mut all_discovered = Vec::new(env);
-
-        // 1. Check active index (should only contain Active investments)
-        let active_ids = InvestmentStorage::get_active_investment_ids(env);
-        for id in active_ids.iter() {
-            if !all_discovered.contains(&id) {
-                all_discovered.push_back(id.clone());
-            }
-            match InvestmentStorage::get(env, &id) {
-                None => {
-                    errors.push_back(String::from_str(
-                        env,
-                        "Orphan ID in active investment index",
-                    ));
-                }
-                Some(inv) => {
-                    if inv.status != InvestmentStatus::Active {
-                        errors.push_back(String::from_str(
-                            env,
-                            "Terminal investment found in active index",
-                        ));
-                    }
-                }
-            }
-        }
-
-        // 2. Cross-check consistency for discovered investments
-        for id in all_discovered.iter() {
-            if let Some(inv) = InvestmentStorage::get(env, &id) {
-                // Check investor index
-                let investor_ids = InvestmentStorage::get_by_investor(env, &inv.investor);
-                if !investor_ids.contains(&id) {
-                    errors.push_back(String::from_str(
-                        env,
-                        "Investment missing from investor index",
-                    ));
-                }
-
-                // Check invoice mapping
-                if let Some(mapped_id) =
-                    InvestmentStorage::get_investment_by_invoice(env, &inv.invoice_id)
-                {
-                    if mapped_id.investment_id != id.clone() {
-                        errors.push_back(String::from_str(
-                            env,
-                            "Invoice to investment mapping mismatch",
-                        ));
-                    }
-                } else {
-                    errors.push_back(String::from_str(
-                        env,
-                        "Investment missing from invoice mapping",
-                    ));
-                }
-            }
-        }
-
-        if errors.is_empty() {
-            Ok(())
-        } else {
-            Err(errors)
-        }
-    }
-
-    /// Performs a full protocol-wide integrity audit.
-    pub fn audit_all(env: &Env) -> Result<(), Vec<String>> {
-        let mut all_errors = Vec::new(env);
-
-        if let Err(e) = Self::audit_invoice_integrity(env) {
-            for err in e.iter() {
-                all_errors.push_back(err.clone());
-            }
-        }
-        if let Err(e) = Self::audit_bid_integrity(env) {
-            for err in e.iter() {
-                all_errors.push_back(err.clone());
-            }
-        }
-        if let Err(e) = Self::audit_investment_integrity(env) {
-            for err in e.iter() {
-                all_errors.push_back(err.clone());
-            }
-        }
-
-        if all_errors.is_empty() {
-            Ok(())
-        } else {
-            Err(all_errors)
-        }
-    }
-}
-
-/// Check if a treasury rotation is currently pending.
-pub fn has_pending_treasury(env: &Env) -> bool {
-    env.storage().instance().has(&PENDING_TREASURY_KEY)
-}
-
-/// Remove the pending treasury address and timestamp from storage.
-pub fn remove_pending_treasury(env: &Env) {
-    env.storage().instance().remove(&PENDING_TREASURY_KEY);
-    env.storage().instance().remove(&PENDING_TREASURY_TS_KEY);
-}
-
-/// Store a pending treasury rotation request (address + timestamp).
-///
-/// This is a low-level setter used by treasury rotation flows and by tests
-/// that need to prime the pending state before exercising `cancel_treasury_rotation`.
-pub fn set_pending_treasury(env: &Env, address: &Address, timestamp: u64) {
-    env.storage().instance().set(&PENDING_TREASURY_KEY, address);
-    env.storage().instance().set(&PENDING_TREASURY_TS_KEY, &timestamp);
-}
-
-/// Get the pending treasury address and its execution timestamp.
-/// This is used by tests and potentially by UI components to show pending changes.
-pub fn get_pending_treasury(env: &Env) -> Option<(Address, u64)> {
-    if !has_pending_treasury(env) {
-        return None;
-    }
-    let address = env.storage().instance().get(&PENDING_TREASURY_KEY)?;
-    let timestamp = env.storage().instance().get(&PENDING_TREASURY_TS_KEY)?;
-    Some((address, timestamp))
 }
 
 // ============================================================================
@@ -2022,6 +1375,7 @@ mod test_storage_read_cache {
         Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceCategory, InvoiceRating,
         InvoiceStatus, PaymentRecord,
     };
+
     use soroban_sdk::{testutils::Address as _, Address, Env};
 
     fn create_sample_invoice(env: &Env, id: &BytesN<32>, business: &Address) -> Invoice {

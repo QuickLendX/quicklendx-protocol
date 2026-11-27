@@ -1,123 +1,101 @@
-use super::*;
+use crate::analytics::{AnalyticsCalculator, AnalyticsStorage, ANALYTICS_SCHEMA_VERSION};
+use crate::invoice::InvoiceCategory;
+use crate::{QuickLendXContract, QuickLendXContractClient};
 use soroban_sdk::{
-    testutils::{Address as _, Events, MockAuth, MockAuthInvoke},
-    Address, Env, IntoVal, String, Vec,
+    testutils::{Address as _, Ledger},
+    Address, Env, String, Vec,
 };
 
-fn setup_test(env: &Env) -> (QuickLendXContractClient, Address, Address) {
+fn setup_test(env: &Env) -> (QuickLendXContractClient<'_>, Address, Address, Address) {
     let contract_id = env.register(QuickLendXContract, ());
     let client = QuickLendXContractClient::new(env, &contract_id);
     let admin = Address::generate(env);
-
-    // Initializing admin requires admin's auth
-    env.mock_auths(&[MockAuth {
-        address: &admin,
-        invoke: &MockAuthInvoke {
-            contract: &contract_id,
-            fn_name: "set_admin",
-            args: (admin.clone(),).into_val(env),
-            sub_invokes: &[],
-        },
-    }]);
+    let business = Address::generate(env);
+    env.mock_all_auths();
     client.set_admin(&admin);
-
-    (client, admin, contract_id)
+    (client, contract_id, admin, business)
 }
 
 #[test]
-fn test_export_analytics_data_success() {
+fn test_export_analytics_snapshot_reflects_uploaded_invoices() {
     let env = Env::default();
-    let (client, admin, contract_id) = setup_test(&env);
+    let ts = 1_500_000u64;
+    env.ledger().set_timestamp(ts);
+    let (client, contract_id, _admin, business) = setup_test(&env);
 
-    let export_type = String::from_str(&env, "CSV");
-    let mut filters: Vec<String> = Vec::new(&env);
-    filters.push_back(String::from_str(&env, "active_only"));
-
-    // Authorize export_analytics_data
-    env.mock_auths(&[MockAuth {
-        address: &admin,
-        invoke: &MockAuthInvoke {
-            contract: &contract_id,
-            fn_name: "export_analytics_data",
-            args: (export_type.clone(), filters.clone()).into_val(&env),
-            sub_invokes: &[],
-        },
-    }]);
-
-    let result = client.export_analytics_data(&export_type, &filters);
-
-    assert_eq!(result, String::from_str(&env, "Analytics data exported"));
-
-    // Check event emission
-    let events = env.events().all();
-    assert!(events.events().len() > 0, "Expected at least one event");
-}
-
-#[test]
-fn test_export_analytics_data_fails_non_admin() {
-    let env = Env::default();
-    let (client, _admin, _contract_id) = setup_test(&env);
-
-    let export_type = String::from_str(&env, "CSV");
-    let filters: Vec<String> = Vec::new(&env);
-
-    // Call without any auth setup for admin.
-    // It should fail because it calls admin.require_auth() but admin didn't sign.
-    let result = client.try_export_analytics_data(&export_type, &filters);
-
-    assert!(result.is_err());
-}
-
-#[test]
-fn test_query_analytics_data_success() {
-    let env = Env::default();
-    let (client, _admin, _contract_id) = setup_test(&env);
-
-    let query_type = String::from_str(&env, "performance");
-    let mut filters: Vec<String> = Vec::new(&env);
-    filters.push_back(String::from_str(&env, "period:daily"));
-    let limit = 10;
-
-    let result = client.query_analytics_data(&query_type, &filters, &limit);
-
-    assert_eq!(result.len(), 1);
-    assert_eq!(
-        result.get(0).unwrap(),
-        String::from_str(&env, "Analytics query completed")
+    let currency = Address::generate(&env);
+    client.store_invoice(
+        &business,
+        &4_000,
+        &currency,
+        &(ts + 86_400),
+        &String::from_str(&env, "export-inv"),
+        &InvoiceCategory::Services,
+        &Vec::new(&env),
+        &None,
     );
+
+    let snapshot = env
+        .as_contract(&contract_id, || {
+            AnalyticsCalculator::export_analytics_snapshot(&env)
+        })
+        .unwrap();
+
+    assert_eq!(snapshot.schema_version, ANALYTICS_SCHEMA_VERSION);
+    assert_eq!(snapshot.ledger_timestamp, ts);
+    assert_eq!(snapshot.platform_metrics.total_invoices, 1);
+    assert_eq!(snapshot.platform_metrics.total_volume, 4_000);
 }
 
 #[test]
-fn test_query_analytics_data_limit_capping() {
+fn test_analytics_storage_platform_metrics_roundtrip() {
     let env = Env::default();
-    let (client, _admin, _contract_id) = setup_test(&env);
+    env.ledger().set_timestamp(2_000_000);
+    let (_client, contract_id, _admin, _business) = setup_test(&env);
 
-    let query_type = String::from_str(&env, "volume");
-    let filters: Vec<String> = Vec::new(&env);
-    let large_limit = 1000;
+    env.as_contract(&contract_id, || {
+        assert!(AnalyticsStorage::get_platform_metrics(&env).is_none());
 
-    let result = client.query_analytics_data(&query_type, &filters, &large_limit);
-    assert_eq!(result.len(), 1);
+        let metrics = AnalyticsCalculator::calculate_platform_metrics(&env).unwrap();
+        AnalyticsStorage::store_platform_metrics(&env, &metrics);
+
+        let loaded = AnalyticsStorage::get_platform_metrics(&env).unwrap();
+        assert_eq!(loaded, metrics);
+    });
 }
 
 #[test]
-fn test_export_analytics_data_empty_filters() {
+fn test_analytics_storage_performance_metrics_roundtrip() {
     let env = Env::default();
-    let (client, admin, contract_id) = setup_test(&env);
+    env.ledger().set_timestamp(2_500_000);
+    let (_client, contract_id, _admin, _business) = setup_test(&env);
 
-    let export_type = String::from_str(&env, "JSON");
-    let filters: Vec<String> = Vec::new(&env);
+    env.as_contract(&contract_id, || {
+        assert!(AnalyticsStorage::get_performance_metrics(&env).is_none());
 
-    env.mock_auths(&[MockAuth {
-        address: &admin,
-        invoke: &MockAuthInvoke {
-            contract: &contract_id,
-            fn_name: "export_analytics_data",
-            args: (export_type.clone(), filters.clone()).into_val(&env),
-            sub_invokes: &[],
-        },
-    }]);
+        let metrics = AnalyticsCalculator::calculate_performance_metrics(&env).unwrap();
+        AnalyticsStorage::store_performance_metrics(&env, &metrics);
 
-    let result = client.export_analytics_data(&export_type, &filters);
-    assert_eq!(result, String::from_str(&env, "Analytics data exported"));
+        let loaded = AnalyticsStorage::get_performance_metrics(&env).unwrap();
+        assert_eq!(loaded, metrics);
+    });
+}
+
+#[test]
+fn test_analytics_storage_user_behavior_roundtrip() {
+    let env = Env::default();
+    env.ledger().set_timestamp(3_000_000);
+    let (_client, contract_id, _admin, business) = setup_test(&env);
+
+    env.as_contract(&contract_id, || {
+        assert!(AnalyticsStorage::get_user_behavior(&env, &business).is_none());
+
+        let behavior =
+            AnalyticsCalculator::calculate_user_behavior_metrics(&env, &business).unwrap();
+        AnalyticsStorage::store_user_behavior(&env, &business, &behavior);
+
+        let loaded = AnalyticsStorage::get_user_behavior(&env, &business).unwrap();
+        assert_eq!(loaded.user_address, business);
+        assert_eq!(loaded.total_invoices_uploaded, behavior.total_invoices_uploaded);
+    });
 }
