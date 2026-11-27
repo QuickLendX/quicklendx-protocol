@@ -148,7 +148,7 @@ Semantic aliases (`InvoiceCreated`, `FundsLocked`, `LoanSettled`,
 `DisputeOpened`) are type aliases to the canonical structs above and share
 the same topics.
 
-For `PauseBlocked` events see [docs/pause-events.md](pause-events.md).
+For `PauseBlocked` events see [EVENTS_SCHEMA.md#pause-blocked-events](EVENTS_SCHEMA.md#pause-blocked-events).
 
 ---
 
@@ -245,7 +245,7 @@ is verified in `test_no_events_emitted_for_reads` in `src/test_events.rs`.
 
 ## Related docs
 
-- [docs/events_complete.md](events_complete.md) — full per-event field reference
-- [docs/pause-events.md](pause-events.md) — `PauseBlocked` event details
+- [docs/EVENTS_SCHEMA.md](EVENTS_SCHEMA.md) — canonical full per-event field reference
+- [Pause-blocked events](EVENTS_SCHEMA.md#pause-blocked-events) — `PauseBlocked` topic, payload, and entrypoints
 - [docs/diagnostics.md](diagnostics.md) — health and diagnostics endpoints
 - [docs/backfill.md](backfill.md) — replaying historical events

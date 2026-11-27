@@ -27,11 +27,11 @@ storage at `"proto_ver"` during `initialize()` and can be read via
 ### Event Schema Version
 
 Tracks the shape of event payloads as described in
-`docs/contracts/events.md`. Each event topic string maps to the schema
+`docs/EVENTS_SCHEMA.md`. Each event topic string maps to the schema
 version that produced it (see `EVENT_TOPIC_SCHEMA_VERSIONS` in
 `backend/src/services/versioningService.ts`).
 
-**Stability rules (from `docs/contracts/events.md`):**
+**Stability rules (from `docs/EVENTS_SCHEMA.md`):**
 - Topic strings are **frozen once deployed** — no renames, no removals.
 - Payload fields are **append-only** — existing field positions are frozen;
   new fields always go at the end.
@@ -141,7 +141,7 @@ confirmed, decommission the old indexer pipeline.
 
 1. Add the topic string and its initial schema version to
    `EVENT_TOPIC_SCHEMA_VERSIONS` in `versioningService.ts`.
-2. Add the topic to `docs/contracts/events.md` with its full payload
+2. Add the topic to `docs/EVENTS_SCHEMA.md` with its full payload
    definition.
 3. Add a test case in `backend/tests/versioning.test.ts` under the
    `resolveEventSchemaVersion` suite.
@@ -236,7 +236,7 @@ By **failing loud** on mismatches, we ensure:
 ## References
 
 - Contract version constant: `quicklendx-contracts/src/init.rs` — `PROTOCOL_VERSION`
-- Event stability policy: `docs/contracts/events.md`
+- Event stability policy: `docs/EVENTS_SCHEMA.md`
 - On-chain storage schema: `docs/contracts/storage-schema.md`
 - Versioning service: `backend/src/services/versioningService.ts`
 - Type definitions: `backend/src/types/contract.ts` — `VersionedRecord`
