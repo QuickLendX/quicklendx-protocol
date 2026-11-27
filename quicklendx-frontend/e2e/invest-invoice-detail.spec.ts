@@ -1,14 +1,12 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import AxeBuilder from "@axe-core/playwright";
 
 const INVOICE_ID =
   "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
 const BUSINESS_ADDRESS =
   "GBSXVD727UNXJZ7ZM4VCXBTK3UMPXR7O6LLXS7XVOECGDYH3XFNV7C5K";
-const BEST_INVESTOR =
-  "GBSXABCDEFGH12345678907C5K";
-const RUNNER_UP_INVESTOR =
-  "GAXMYZ1234567890ABCDEFGH7C5K";
+const BEST_INVESTOR = "GBSXABCDEFGH12345678907C5K";
+const RUNNER_UP_INVESTOR = "GAXMYZ1234567890ABCDEFGH7C5K";
 
 const INVOICE = {
   id: INVOICE_ID,
@@ -59,7 +57,7 @@ const FRESHNESS = {
 };
 
 async function expectNoSeriousOrCriticalAxeViolations(
-  page: Parameters<Parameters<typeof test>[1]>[0]["page"]
+  page: Page
 ) {
   const results = await new AxeBuilder({ page }).analyze();
   expect(
