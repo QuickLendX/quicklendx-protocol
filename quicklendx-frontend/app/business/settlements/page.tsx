@@ -3,10 +3,8 @@
 import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import {
-  WalletConnectControl,
-  useWallet,
-} from "@/app/lib/wallet/WalletProvider";
+import { WalletConnect } from "@/app/components/WalletConnect";
+import { useWallet } from "@/app/lib/wallet/WalletProvider";
 import { EmptySettlements } from "./_components/EmptySettlements";
 import { SettlementsFilters } from "./_components/SettlementsFilters";
 import { SettlementsTable } from "./_components/SettlementsTable";
@@ -71,7 +69,7 @@ function SettlementsContent() {
   }, [search]);
 
   useEffect(() => {
-    if (wallet.state !== "connected" || !wallet.address) return;
+    if (wallet.state !== "CONNECTED" || !wallet.address) return;
 
     let active = true;
     setLoadState("loading");
@@ -156,7 +154,7 @@ function SettlementsContent() {
     URL.revokeObjectURL(url);
   }, [filteredRows]);
 
-  if (wallet.state !== "connected" || !wallet.address) {
+  if (wallet.state !== "CONNECTED" || !wallet.address) {
     return (
       <div className="mx-auto flex min-h-screen max-w-5xl flex-col px-4 py-10 sm:px-6 lg:px-8">
         <Link
@@ -173,7 +171,7 @@ function SettlementsContent() {
             Connect your wallet to see your settlements.
           </p>
           <div className="mt-6 flex justify-center">
-            <WalletConnectControl />
+            <WalletConnect />
           </div>
         </section>
       </div>

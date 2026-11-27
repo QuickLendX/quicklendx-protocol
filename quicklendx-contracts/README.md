@@ -94,6 +94,9 @@ QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing t
 git clone https://github.com/your-org/quicklendx-protocol.git
 cd quicklendx-protocol/quicklendx-contracts
 
+# Check required and optional contributor tooling
+bash scripts/doctor.sh
+
 # Build the contracts
 cargo build
 
@@ -140,6 +143,9 @@ The full entrypoint inventory, function details, data structures, and usage exam
 
 ## Deployment
 
+For a guarded test-network deployment, protocol initialization, and invoice
+smoke flow, see the [Test-network deployment guide](../docs/DEPLOY_TESTNET.md).
+
 Build and validate the contracts from `quicklendx-contracts/` with `cargo build` and `cargo test`. For an optimized production artifact, use `stellar contract build` and follow the current Stellar CLI deployment workflow.
 
 Before deployment, verify the contract configuration and admin setup using the [admin operations guide](../docs/contracts/admin.md). The [WASM size budget](../docs/contracts/wasm-size.md) documents size thresholds and CI enforcement.
@@ -169,6 +175,18 @@ Every entrypoint is a thin wrapper; validation, auth and events live in the modu
 | `pause(admin: Address)` | `PauseControl::set_paused` | admin |
 | `unpause(admin: Address)` | `PauseControl::set_paused` | admin |
 | `is_paused()` | `PauseControl::is_paused` | - |
+| `add_currency(admin, currency)` / `add_currencies_batch(admin, currencies)` | `CurrencyWhitelist` | admin; unpaused |
+| `remove_currency(admin, currency)` / `remove_currencies_batch(admin, currencies)` | `CurrencyWhitelist` | admin; unpaused |
+| `set_currencies(admin, currencies)` / `clear_currencies(admin)` | `CurrencyWhitelist` | admin; unpaused |
+| `get_whitelisted_currencies()` / `get_whitelisted_currencies_paged(cursor, limit)` | `CurrencyWhitelist` | - |
+| `get_platform_metrics()` / `export_analytics_snapshot()` | `AnalyticsCalculator` | - |
+| `calculate_financial_metrics(period)` / `calculate_performance_metrics()` | `AnalyticsCalculator` | - |
+| `generate_business_report(business, period)` / `generate_investor_report(investor, period)` | `AnalyticsCalculator` | - |
+| `calculate_user_behavior_metrics(user)` / `calculate_investor_analytics(investor)` | `AnalyticsCalculator` | - |
+| `calc_investor_perf_metrics()` | `AnalyticsCalculator` | - |
+| `query_audit_logs_paged(filter, cursor, limit)` / `get_invoice_audit_trail_paged(invoice_id, cursor, limit)` | `AuditStorage` | - |
+| `get_audit_entries_by_operation_paged(operation, cursor, limit)` / `get_audit_entries_by_actor_paged(actor, cursor, limit)` | `AuditStorage` | - |
+| `get_audit_entry(audit_id)` / `get_audit_stats()` | `AuditStorage` | - |
 | `submit_kyc_application(business: Address, kyc_data: String)` | `verification::submit_kyc_application` | business |
 | `verify_business(admin: Address, business: Address)` | `verification::verify_business` | admin |
 | `submit_investor_kyc(investor: Address, kyc_data: String)` | `verification::submit_investor_kyc` | investor |
@@ -182,13 +200,27 @@ Every entrypoint is a thin wrapper; validation, auth and events live in the modu
 | `get_business_invoices(business: Address)` | `InvoiceStorage::get_business_invoices` | - |
 | `get_total_invoice_count()` | `InvoiceStorage::get_total_count` | - |
 | `place_bid(investor: Address, invoice_id: BytesN<32>, bid_amount: i128, expected_return: i128, salt: BytesN<32>)` | `BidStorage::store_bid` | investor |
-| `accept_bid(invoice_id: BytesN<32>, bid_id: BytesN<32>)` | `escrow::accept_bid_and_fund` | - |
+| `accept_bid_and_fund(invoice_id: BytesN<32>, bid_id: BytesN<32>)` | `escrow::accept_bid_and_fund` | business |
+| `accept_bid_and_fund_with_key(invoice_id: BytesN<32>, bid_id: BytesN<32>, request_key: BytesN<32>)` | `escrow::accept_bid_and_fund_with_key` | business |
+| `accept_bid(invoice_id: BytesN<32>, bid_id: BytesN<32>)` | `escrow::accept_bid_and_fund` | business |
+| `withdraw_bid(bid_id: BytesN<32>)` | `BidStorage::update_bid` | investor |
+| `cleanup_expired_bids(invoice_id: BytesN<32>)` | `BidStorage::cleanup_expired_bids` | - |
 | `get_bid(bid_id: BytesN<32>)` | `BidStorage::get_bid` | - |
 | `get_bids_for_invoice(invoice_id: BytesN<32>)` | `BidStorage::get_bids_for_invoice` | - |
+| `get_ranked_bids(invoice_id: BytesN<32>)` | `BidStorage::rank_bids` | - |
+| `get_ranked_bids_paged(invoice_id: BytesN<32>, cursor: Option<String>, limit: u32)` | `BidStorage::rank_bids_paged` | - |
+| `get_best_bid(invoice_id: BytesN<32>)` | `BidStorage::get_best_bid` | - |
+| `get_bids_by_status(invoice_id: BytesN<32>, status: BidStatus)` | `BidStorage::get_bids_by_status` | - |
+| `get_bids_by_investor(invoice_id: BytesN<32>, investor: Address)` | `BidStorage::get_bids_by_investor` | - |
+| `get_investor_active_exposure(investor: Address)` | `payments::get_investor_exposure` | - |
+| `get_investor_available_capacity(investor: Address)` | `payments::get_investor_available_capacity` | - |
+| `validate_funding_commitment(investor: Address, amount: i128)` | `payments::validate_funding_commitment` | - |
 | `get_escrow_details(invoice_id: BytesN<32>)` | `EscrowStorage::get_escrow_by_invoice` | - |
 | `release_escrow(invoice_id: BytesN<32>, business: Address)` | `payments::release_escrow` | business |
 | `get_investment(invoice_id: BytesN<32>)` | `InvestmentStorage::get_investment_by_invoice` | - |
 | `get_invoice_investment(invoice_id: BytesN<32>)` | `InvestmentStorage::get_investment_by_invoice` | - |
+| `get_investments_by_investor(investor: Address)` | `InvestmentStorage::get_investments_by_investor` | - |
+| `withdraw_investment(invoice_id: BytesN<32>, investor: Address)` | `escrow::withdraw_investment` | investor |
 | `process_partial_payment(invoice_id: BytesN<32>, payment_amount: i128, transaction_id: String)` | `settlement::process_partial_payment` | - |
 | `settle_invoice(invoice_id: BytesN<32>, payment_amount: i128, snap: Investment)` | `settlement::settle_invoice` | - |
 | `get_invoice_progress(invoice_id: BytesN<32>)` | `settlement::get_invoice_progress` | - |

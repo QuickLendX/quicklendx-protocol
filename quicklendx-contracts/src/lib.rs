@@ -74,7 +74,13 @@ pub mod test_utils;
 // ============================================================================
 // Test modules
 // ============================================================================
+//
+// All `src/test_*.rs` modules are declared in `src/tests/mod.rs` so this
+// file stays small and stable across PRs. Run
+// `scripts/check-test-modules.sh` to find test files without a declaration.
 
+#[cfg(test)]
+mod test;
 #[cfg(test)]
 mod test_dispute;
 #[cfg(test)]
@@ -104,6 +110,8 @@ mod test_dispute;
 mod test_dispute_timeline;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_arbiter;
+#[cfg(test)]
+mod test;
 
 // The remaining test modules (already present in the codebase)
 #[cfg(test)]
@@ -863,6 +871,7 @@ mod test_view_only;
 mod test_volume_tier_props;
 #[cfg(all(test, feature = "legacy-tests"))]
 mod test_withdraw_bid_matrix;
+mod tests;
 
 // ============================================================================
 // Contract-level macros (re-exported from diagnostics)
@@ -1291,6 +1300,70 @@ impl QuickLendXContract {
         crate::currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
     }
 
+    /// Add a batch of currencies to the whitelist (admin only).
+    pub fn add_currencies_batch(
+        env: Env,
+        admin: Address,
+        currencies: Vec<Address>,
+    ) -> Result<Vec<bool>, QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
+        PauseControl::require_not_paused(&env)?;
+        AdminStorage::require_admin(&env, &admin)?;
+        crate::protocol_limits::require_batch_size_bound(&currencies)?;
+        check_and_record_mutation(&env, &admin)?;
+        crate::currency::CurrencyWhitelist::add_currencies_batch(&env, &admin, &currencies)
+    }
+
+    /// Remove one currency from the whitelist (admin only).
+    pub fn remove_currency(
+        env: Env,
+        admin: Address,
+        currency: Address,
+    ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
+        PauseControl::require_not_paused(&env)?;
+        AdminStorage::require_admin(&env, &admin)?;
+        check_and_record_mutation(&env, &admin)?;
+        crate::currency::CurrencyWhitelist::remove_currency(&env, &admin, &currency)
+    }
+
+    /// Remove a batch of currencies from the whitelist (admin only).
+    pub fn remove_currencies_batch(
+        env: Env,
+        admin: Address,
+        currencies: Vec<Address>,
+    ) -> Result<Vec<bool>, QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
+        PauseControl::require_not_paused(&env)?;
+        AdminStorage::require_admin(&env, &admin)?;
+        crate::protocol_limits::require_batch_size_bound(&currencies)?;
+        check_and_record_mutation(&env, &admin)?;
+        crate::currency::CurrencyWhitelist::remove_currencies_batch(&env, &admin, &currencies)
+    }
+
+    /// Replace the whitelist with the supplied currency addresses (admin only).
+    pub fn set_currencies(
+        env: Env,
+        admin: Address,
+        currencies: Vec<Address>,
+    ) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
+        PauseControl::require_not_paused(&env)?;
+        AdminStorage::require_admin(&env, &admin)?;
+        crate::protocol_limits::require_batch_size_bound(&currencies)?;
+        check_and_record_mutation(&env, &admin)?;
+        crate::currency::CurrencyWhitelist::set_currencies(&env, &admin, &currencies)
+    }
+
+    /// Clear the currency whitelist (admin only).
+    pub fn clear_currencies(env: Env, admin: Address) -> Result<(), QuickLendXError> {
+        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
+        PauseControl::require_not_paused(&env)?;
+        AdminStorage::require_admin(&env, &admin)?;
+        check_and_record_mutation(&env, &admin)?;
+        crate::currency::CurrencyWhitelist::clear_currencies(&env, &admin)
+    }
+
     pub fn get_user_notifications(env: Env, user: Address) -> Vec<BytesN<32>> {
         crate::notifications::NotificationSystem::get_user_notifications(&env, &user)
     }
@@ -1312,7 +1385,7 @@ impl QuickLendXContract {
         cursor: Option<String>,
         limit: u32,
     ) -> Result<crate::audit::CursorAuditPage, QuickLendXError> {
-        crate::audit::AuditStorage::query_audit_logs_paged(&env, &filter, cursor, limit)
+        crate::audit::AuditStorage::query_audit_logs_paged(&env, &filter, cursor, crate::pagination::cap_query_limit(limit))
     }
 
     // =========================================================================
@@ -1327,8 +1400,179 @@ impl QuickLendXContract {
         env: Env,
     ) -> Result<crate::analytics::PlatformMetrics, QuickLendXError> {
         crate::analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
+    }
+
     pub fn get_total_invoice_count(env: Env) -> u32 {
         InvoiceStorage::get_total_count(&env) as u32
+    }
+
+    /// Read one immutable audit entry by its identifier.
+    pub fn get_audit_entry(
+        env: Env,
+        audit_id: BytesN<32>,
+    ) -> Option<crate::audit::AuditLogEntry> {
+        crate::audit::AuditStorage::get_audit_entry(&env, &audit_id)
+    }
+
+    /// Return a bounded page of audit entries for an invoice.
+    pub fn get_invoice_audit_trail_paged(
+        env: Env,
+        invoice_id: BytesN<32>,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        crate::audit::AuditStorage::get_invoice_audit_trail_paged(
+            &env, &invoice_id, cursor, crate::pagination::cap_query_limit(limit),
+        )
+    }
+
+    /// Return a bounded page of audit entry IDs for an operation.
+    pub fn get_audit_entries_by_operation_paged(
+        env: Env,
+        operation: crate::audit::AuditOperation,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        crate::audit::AuditStorage::get_audit_entries_by_operation_paged(
+            &env, &operation, cursor, crate::pagination::cap_query_limit(limit),
+        )
+    }
+
+    /// Return a bounded page of audit entry IDs for an actor.
+    pub fn get_audit_entries_by_actor_paged(
+        env: Env,
+        actor: Address,
+        cursor: Option<String>,
+        limit: u32,
+    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
+        crate::audit::AuditStorage::get_audit_entries_by_actor_paged(
+            &env, &actor, cursor, crate::pagination::cap_query_limit(limit),
+        )
+    }
+
+    /// Return bounded audit records matching the supplied filter.
+    pub fn query_audit_logs(
+        env: Env,
+        filter: crate::audit::AuditQueryFilter,
+        limit: u32,
+    ) -> Vec<crate::audit::AuditLogEntry> {
+        crate::audit::AuditStorage::query_audit_logs(
+            &env, &filter, crate::pagination::cap_query_limit(limit),
+        )
+    }
+
+    /// Return aggregate audit statistics.
+    pub fn get_audit_stats(env: Env) -> crate::audit::AuditStats {
+        crate::audit::AuditStorage::get_audit_stats(&env)
+    }
+
+    /// Export a versioned read-only analytics snapshot.
+    pub fn export_analytics_snapshot(
+        env: Env,
+    ) -> Result<crate::analytics::AnalyticsSnapshot, QuickLendXError> {
+        crate::analytics::AnalyticsCalculator::export_analytics_snapshot(&env)
+    }
+
+    /// Calculate financial analytics for a time period.
+    pub fn calculate_financial_metrics(
+        env: Env,
+        period: crate::analytics::TimePeriod,
+    ) -> Result<crate::analytics::FinancialMetrics, QuickLendXError> {
+        crate::analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period)
+    }
+
+    /// Calculate platform performance analytics.
+    pub fn calculate_performance_metrics(
+        env: Env,
+    ) -> Result<crate::analytics::PerformanceMetrics, QuickLendXError> {
+        crate::analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
+    }
+
+    /// Generate and persist a business analytics report for a time period.
+    pub fn generate_business_report(
+        env: Env,
+        business: Address,
+        period: crate::analytics::TimePeriod,
+    ) -> Result<crate::analytics::BusinessReport, QuickLendXError> {
+        crate::analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
+    }
+
+    /// Generate and persist an investor analytics report for a time period.
+    pub fn generate_investor_report(
+        env: Env,
+        investor: Address,
+        period: crate::analytics::TimePeriod,
+    ) -> Result<crate::analytics::InvestorReport, QuickLendXError> {
+        crate::analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
+    }
+
+    /// Calculate behavior analytics for a user.
+    pub fn calculate_user_behavior_metrics(
+        env: Env,
+        user: Address,
+    ) -> Result<crate::analytics::UserBehaviorMetrics, QuickLendXError> {
+        crate::analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)
+    }
+
+    /// Calculate investor analytics for an investor.
+    pub fn calculate_investor_analytics(
+        env: Env,
+        investor: Address,
+    ) -> Result<crate::analytics::InvestorAnalytics, QuickLendXError> {
+        crate::analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)
+    }
+
+    /// Calculate aggregate investor performance metrics.
+    pub fn calc_investor_perf_metrics(
+        env: Env,
+    ) -> Result<crate::analytics::InvestorPerformanceMetrics, QuickLendXError> {
+        crate::analytics::AnalyticsCalculator::calc_investor_perf_metrics(&env)
+    }
+
+    /// Read a previously generated business report.
+    pub fn get_business_report(
+        env: Env,
+        report_id: BytesN<32>,
+    ) -> Option<crate::analytics::BusinessReport> {
+        crate::analytics::AnalyticsStorage::get_business_report(&env, &report_id)
+    }
+
+    /// Read a previously generated investor report.
+    pub fn get_investor_report(
+        env: Env,
+        report_id: BytesN<32>,
+    ) -> Option<crate::analytics::InvestorReport> {
+        crate::analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
+    }
+
+    /// Read cached user behavior analytics.
+    pub fn get_user_behavior(
+        env: Env,
+        user: Address,
+    ) -> Option<crate::analytics::UserBehaviorMetrics> {
+        crate::analytics::AnalyticsStorage::get_user_behavior(&env, &user)
+    }
+
+    /// Read cached investor analytics.
+    pub fn get_investor_analytics(
+        env: Env,
+        investor: Address,
+    ) -> Option<crate::analytics::InvestorAnalytics> {
+        crate::analytics::AnalyticsStorage::get_investor_analytics(&env, &investor)
+    }
+
+    /// Read cached performance metrics.
+    pub fn get_performance_metrics(
+        env: Env,
+    ) -> Option<crate::analytics::PerformanceMetrics> {
+        crate::analytics::AnalyticsStorage::get_performance_metrics(&env)
+    }
+
+    /// Read cached investor performance metrics.
+    pub fn get_investor_performance(
+        env: Env,
+    ) -> Option<crate::analytics::InvestorPerformanceMetrics> {
+        crate::analytics::AnalyticsStorage::get_investor_performance(&env)
     }
 
     // =========================================================================
@@ -1531,15 +1775,62 @@ impl QuickLendXContract {
         Ok(bid_id)
     }
 
+    pub fn accept_bid_and_fund(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || {
+            crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id)
+        })
+    }
+
+    pub fn accept_bid_and_fund_with_key(
+        env: Env,
+        invoice_id: BytesN<32>,
+        bid_id: BytesN<32>,
+        request_key: BytesN<32>,
+    ) -> Result<BytesN<32>, QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || {
+            crate::escrow::accept_bid_and_fund_with_key(&env, &invoice_id, &bid_id, &request_key)
+        })
+    }
+
     pub fn accept_bid(
         env: Env,
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
+        Self::accept_bid_and_fund(env, invoice_id, bid_id).map(|_| ())
+    }
+
+    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
-        with_payment_guard(&env, || {
-            crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id).map(|_| ())
-        })
+        let mut bid = crate::bid::BidStorage::get_bid(&env, &bid_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        bid.investor.require_auth();
+
+        if bid.status != crate::types::BidStatus::Placed {
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        if bid.is_expired(env.ledger().timestamp()) {
+            bid.status = crate::types::BidStatus::Expired;
+            crate::bid::BidStorage::update_bid(&env, &bid);
+            crate::events::emit_bid_expired(&env, &bid);
+            return Err(QuickLendXError::OperationNotAllowed);
+        }
+
+        bid.status = crate::types::BidStatus::Withdrawn;
+        crate::bid::BidStorage::update_bid(&env, &bid);
+        crate::events::emit_bid_withdrawn(&env, &bid);
+        Ok(())
+    }
+
+    pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> Result<u32, QuickLendXError> {
+        crate::bid::BidStorage::cleanup_expired_bids(&env, &invoice_id)
     }
 
     pub fn get_bid(env: Env, bid_id: BytesN<32>) -> Option<crate::types::Bid> {
@@ -1557,6 +1848,13 @@ impl QuickLendXContract {
         bids
     }
 
+    pub fn get_ranked_bids(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<Vec<crate::types::Bid>, QuickLendXError> {
+        crate::bid::BidStorage::rank_bids(&env, &invoice_id)
+    }
+
     pub fn get_ranked_bids_paged(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1564,6 +1862,51 @@ impl QuickLendXContract {
         limit: u32,
     ) -> Result<crate::types::CursorBidsPage, QuickLendXError> {
         crate::bid::BidStorage::rank_bids_paged(&env, &invoice_id, cursor, limit)
+    }
+
+    pub fn get_best_bid(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<Option<crate::types::Bid>, QuickLendXError> {
+        crate::bid::BidStorage::get_best_bid(&env, &invoice_id)
+    }
+
+    pub fn get_bids_by_status(
+        env: Env,
+        invoice_id: BytesN<32>,
+        status: crate::types::BidStatus,
+    ) -> Result<Vec<crate::types::Bid>, QuickLendXError> {
+        crate::bid::BidStorage::get_bids_by_status(&env, &invoice_id, status)
+    }
+
+    pub fn get_bids_by_investor(
+        env: Env,
+        invoice_id: BytesN<32>,
+        investor: Address,
+    ) -> Result<Vec<crate::types::Bid>, QuickLendXError> {
+        crate::bid::BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
+    }
+
+    pub fn get_investor_active_exposure(
+        env: Env,
+        investor: Address,
+    ) -> Result<i128, QuickLendXError> {
+        crate::payments::get_investor_exposure(&env, &investor)
+    }
+
+    pub fn get_investor_available_capacity(
+        env: Env,
+        investor: Address,
+    ) -> Result<i128, QuickLendXError> {
+        crate::payments::get_investor_available_capacity(&env, &investor)
+    }
+
+    pub fn validate_funding_commitment(
+        env: Env,
+        investor: Address,
+        amount: i128,
+    ) -> Result<(), QuickLendXError> {
+        crate::payments::validate_funding_commitment(&env, &investor, amount)
     }
 
     // =========================================================================
@@ -1741,6 +2084,21 @@ impl QuickLendXContract {
     pub fn get_invoice_investment(env: Env, invoice_id: BytesN<32>) -> Investment {
         crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
             .expect("invoice has no investment")
+    }
+
+    pub fn get_investments_by_investor(env: Env, investor: Address) -> Vec<BytesN<32>> {
+        crate::investment::InvestmentStorage::get_investments_by_investor(&env, &investor)
+    }
+
+    pub fn withdraw_investment(
+        env: Env,
+        invoice_id: BytesN<32>,
+        investor: Address,
+    ) -> Result<(), QuickLendXError> {
+        PauseControl::require_not_paused(&env)?;
+        with_payment_guard(&env, || {
+            crate::escrow::withdraw_investment(&env, &invoice_id, &investor)
+        })
     }
 
     pub fn get_investor_investments_paged(

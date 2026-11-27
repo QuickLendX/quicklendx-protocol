@@ -25,11 +25,16 @@ When reviewing pull requests:
 
 If you modify contract logic and resource consumption legitimately increases, you must update the baselines.
 
-Run the automated baseline update script:
+Run the automated baseline update script from the repository root (or `quicklendx-contracts/`):
 ```bash
-./scripts/update-gas-baseline.sh
+./quicklendx-contracts/scripts/update-gas-baseline.sh
 ```
-This script executes the test suite with `UPDATE_GAS_BASELINE=1` enabled, measuring actual resource usage and automatically saving them back into `gas-baseline.toml`.
+This script executes `cargo test --test gas_regression` with `UPDATE_GAS_BASELINE=1` enabled, measuring actual resource usage and writing deterministic UTF-8 (no BOM) baselines back into `quicklendx-contracts/scripts/gas-baseline.toml`.
+
+Verify determinism and regression enforcement by running:
+```bash
+cd quicklendx-contracts && cargo test --test gas_regression
+```
 
 ---
 
