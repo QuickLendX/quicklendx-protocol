@@ -11,6 +11,15 @@ import { z } from "zod";
 
 const isProduction = process.env.NODE_ENV === "production";
 
+/**
+ * Strict boolean parser for environment variables.
+ * Accepts only "true", "false", "1", "0". Anything else is rejected.
+ * Unlike z.coerce.boolean(), the string "false" correctly yields false.
+ */
+export const envBoolean = z
+  .enum(["true", "false", "1", "0"])
+  .transform((value) => value === "true" || value === "1");
+
 export const configSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
   PORT: z.coerce.number().int().min(1).max(65535).default(3001),
@@ -33,7 +42,7 @@ export const configSchema = z.object({
   EXPORT_DIR: z.string().default(".data/exports"),
   EXPORT_TTL_MS: z.coerce.number().int().min(1).default(3600000), // 1 hour
   ARCHIVE_DIR: z.string().default(".data/archives"),
-  ARCHIVE_ENABLED: z.coerce.boolean().default(false),
+  ARCHIVE_ENABLED: envBoolean.default(false),
   EXPOSURE_CAP_PER_INVESTOR_USD: z.coerce.number().int().min(0).default(10000000000), // 10B default
 
   // Database configuration
