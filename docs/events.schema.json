@@ -3,7 +3,7 @@
   "title": "QuickLendX Contract Events Schema",
   "description": "Authoritative machine-readable schema of all on-chain events emitted by quicklendx-contracts. Generated from quicklendx-contracts/src/events_schema.rs via scripts/gen-events-schema.sh.",
   "source": "quicklendx-contracts/src/events_schema.rs",
-  "event_count": 89,
+  "event_count": 92,
   "events": [
     {
       "emitter": "emit_ttl_extended",
@@ -1940,6 +1940,50 @@
       ]
     },
     {
+      "emitter": "dispute_arbiter_voted",
+      "topic": "dsp_vote",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "invoice_id",
+          "type": "BytesN<32>"
+        },
+        {
+          "name": "arbiter",
+          "type": "Address"
+        },
+        {
+          "name": "outcome_code",
+          "type": "u32"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "dispute_quorum_updated",
+      "topic": "dsp_qrm",
+      "format": "tuple",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "admin",
+          "type": "Address"
+        },
+        {
+          "name": "quorum",
+          "type": "u32"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
       "emitter": "backfill_started",
       "topic": "bkf_sta",
       "format": "tuple",
@@ -2096,6 +2140,42 @@
         {
           "name": "reason",
           "type": "String"
+        },
+        {
+          "name": "timestamp",
+          "type": "u64"
+        }
+      ]
+    },
+    {
+      "emitter": "emit_migration_step_executed",
+      "topic": "migration_step_executed",
+      "format": "contractevent",
+      "topic_fields": [],
+      "fields": [
+        {
+          "name": "schema_from",
+          "type": "u32"
+        },
+        {
+          "name": "schema_to",
+          "type": "u32"
+        },
+        {
+          "name": "offset",
+          "type": "u32"
+        },
+        {
+          "name": "processed",
+          "type": "u32"
+        },
+        {
+          "name": "total_records",
+          "type": "u32"
+        },
+        {
+          "name": "executed_by",
+          "type": "Address"
         },
         {
           "name": "timestamp",

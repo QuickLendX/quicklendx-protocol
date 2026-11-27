@@ -972,6 +972,29 @@ pub const EVENT_SCHEMA: &[EventSchema] = &[
         format: "tuple",
     },
     EventSchema {
+        emitter: "dispute_arbiter_voted",
+        topic: "dsp_vote",
+        topic_fields: &[],
+        fields: &[
+            field("invoice_id", "BytesN<32>"),
+            field("arbiter", "Address"),
+            field("outcome_code", "u32"),
+            field("timestamp", "u64"),
+        ],
+        format: "tuple",
+    },
+    EventSchema {
+        emitter: "dispute_quorum_updated",
+        topic: "dsp_qrm",
+        topic_fields: &[],
+        fields: &[
+            field("admin", "Address"),
+            field("quorum", "u32"),
+            field("timestamp", "u64"),
+        ],
+        format: "tuple",
+    },
+    EventSchema {
         emitter: "backfill_started",
         topic: "bkf_sta",
         topic_fields: &[],
@@ -1051,6 +1074,21 @@ pub const EVENT_SCHEMA: &[EventSchema] = &[
         ],
         format: "contractevent",
     },
+    EventSchema {
+        emitter: "emit_migration_step_executed",
+        topic: "migration_step_executed",
+        topic_fields: &[],
+        fields: &[
+            field("schema_from", "u32"),
+            field("schema_to", "u32"),
+            field("offset", "u32"),
+            field("processed", "u32"),
+            field("total_records", "u32"),
+            field("executed_by", "Address"),
+            field("timestamp", "u64"),
+        ],
+        format: "contractevent",
+    },
 ];
 
 #[cfg(test)]
@@ -1063,8 +1101,8 @@ mod test_events_schema {
     use crate::fees::FeeType;
     use crate::payments::{Escrow, EscrowStatus};
     use crate::types::{
-        Bid, BidStatus, InvestorFreezeReason, Invoice, InvoiceCategory, InvoiceMetadata,
-        InvoiceStatus, PlatformFeeConfig,
+        Bid, BidStatus, DisputeResolution, InvestorFreezeReason, Invoice, InvoiceCategory,
+        InvoiceMetadata, InvoiceStatus, PlatformFeeConfig,
     };
     use crate::verification::{
         BusinessVerificationStatus, InvestorRiskLevel, InvestorTier, InvestorVerification,
@@ -1361,6 +1399,13 @@ mod test_events_schema {
             "emit_incident_mode_exited" => events::emit_incident_mode_exited(env, &addr1),
             "arbiter_registered" => events::arbiter_registered(env, &addr1, &addr2),
             "arbiter_revoked" => events::arbiter_revoked(env, &addr1, &addr2),
+            "dispute_arbiter_voted" => events::dispute_arbiter_voted(
+                env,
+                &id,
+                &addr1,
+                DisputeResolution::RefundInvestor,
+            ),
+            "dispute_quorum_updated" => events::dispute_quorum_updated(env, &addr1, 2),
             "backfill_started" => events::backfill_started(env, &addr1),
             "backfill_finished" => events::backfill_finished(env, &addr1, 10),
             "emit_schema_version_set" => events::emit_schema_version_set(env, 2, &addr1),
@@ -1373,6 +1418,9 @@ mod test_events_schema {
             }
             "emit_migration_failed" => {
                 events::emit_migration_failed(env, 1, 2, 5, 5, "timeout")
+            }
+            "emit_migration_step_executed" => {
+                events::emit_migration_step_executed(env, 1, 2, 0, 5, 10, &addr1)
             }
             other => panic!("Unhandled emitter in trigger_emitter: {other}"),
         }
