@@ -32,9 +32,9 @@ cd "$CONTRACTS_DIR"
 export CARGO_TARGET_DIR="$CONTRACTS_DIR/target"
 
 # ── Budget constants ───────────────────────────────────────────────────────────
-MAX_BYTES="$((640 * 1024))"           # 655 360 B – hard limit (unoptimised raw build headroom)
+MAX_BYTES="$((256 * 1024))"           # 262 144 B – hard limit (documented budget)
 WARN_BYTES="$((MAX_BYTES * 9 / 10))"  # 90 % warning zone
-BASELINE_BYTES=558732                 # last recorded size
+BASELINE_BYTES=454858                 # last recorded size (post feature-gating)
 REGRESSION_MARGIN_PCT=10              # 10 % growth allowed vs baseline
 REGRESSION_LIMIT=$(( BASELINE_BYTES + BASELINE_BYTES * REGRESSION_MARGIN_PCT / 100 ))
 WASM_NAME="quicklendx_contracts.wasm"
@@ -97,14 +97,14 @@ echo "  WASM path       : $WASM_PATH"
 echo "  Size            : ${SIZE} B  (~$(( SIZE / 1024 )) KiB)"
 echo "  Baseline        : ${BASELINE_BYTES} B  (+${REGRESSION_MARGIN_PCT}% -> limit ${REGRESSION_LIMIT} B)"
 echo "  Warn zone entry : ${WARN_BYTES} B  (90% of budget)"
-echo "  Hard limit      : ${MAX_BYTES} B  (640 KiB)"
+echo "  Hard limit      : ${MAX_BYTES} B  (256 KiB)"
 echo ""
 
 FAIL=false
 
 # ── Tier 1: hard budget ────────────────────────────────────────────────────────
 if [[ "$SIZE" -gt "$MAX_BYTES" ]]; then
-  echo "::error::WASM size ${SIZE} B exceeds hard budget ${MAX_BYTES} B (640 KiB)"
+  echo "::error::WASM size ${SIZE} B exceeds hard budget ${MAX_BYTES} B (256 KiB)"
   echo ""
   echo "  Remediation:"
   echo "    1. Install wasm-opt and re-run:      brew install binaryen"
@@ -113,7 +113,7 @@ if [[ "$SIZE" -gt "$MAX_BYTES" ]]; then
   FAIL=true
 elif [[ "$SIZE" -gt "$WARN_BYTES" ]]; then
   echo "::warning::WASM size ${SIZE} B is in the WARNING zone (>${WARN_BYTES} B)."
-  echo "  Plan size-reduction work before reaching the 640 KiB hard limit."
+  echo "  Plan size-reduction work before reaching the 256 KiB hard limit."
 else
   echo "==> Hard budget check passed (${SIZE} / ${MAX_BYTES} B)."
 fi

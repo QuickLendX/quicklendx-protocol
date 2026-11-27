@@ -1,4 +1,4 @@
-﻿# QuickLendX Protocol - Smart Contracts
+# QuickLendX Protocol - Smart Contracts
 
 [![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Soroban](https://img.shields.io/badge/Soroban-000000?style=for-the-badge&logo=stellar&logoColor=white)](https://soroban.stellar.org/)
@@ -31,6 +31,8 @@ QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing t
 - **KYC/Verification**: Business verification and compliance features
 - **Audit Trail**: Complete transaction history and audit capabilities
 - **Backup & Recovery**: Data backup and restoration functionality
+
+> **Release WASM size budget**: the release build must stay under the single agreed budget enforced by `scripts/check-wasm-size.sh` and `tests/wasm_build_size_budget.rs`. Non-core modules (analytics exports, backups, audit queries, diagnostics) are gated behind Cargo features that are disabled for the release profile; core entrypoints listed below remain available in default builds.
 
 ### Key Features
 

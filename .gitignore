@@ -39,3 +39,5 @@ test_snapshots/
 
 CLAUDE.md
 plan.md
+config.bat
+node_modules

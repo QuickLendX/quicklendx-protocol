@@ -54,13 +54,16 @@ legacy-tests = []
 # Feature-gated logging and structured diagnostics
 diagnostics = []
 testutils = ["soroban-sdk/testutils"]
+# Non-core modules (analytics exports, backups, audit queries). Off for the
+# release WASM; enabled by default for development and test builds.
+extended-modules = []
 
-# Integration tests written against legacy contract APIs.
 # Integration tests written against the full contract API. Targets that still
 # require the `legacy-tests` feature are gated individually below.
 [[test]]
 name = "auth_verification_test"
 path = "tests/auth_verification_test.rs"
+required-features = ["legacy-tests"]
 
 [[test]]
 name = "bid_acceptance_replay"
@@ -69,27 +72,34 @@ path = "tests/bid_acceptance_replay.rs"
 [[test]]
 name = "investor_kyc_tier"
 path = "tests/investor_kyc_tier.rs"
+required-features = ["legacy-tests"]
 
 [[test]]
 name = "invoice_lifecycle_e2e"
 path = "tests/invoice_lifecycle_e2e.rs"
+required-features = ["legacy-tests"]
 
 [[test]]
 name = "issue_2954_bid_expiry_active_counts"
 path = "tests/issue_2954_bid_expiry_active_counts.rs"
+required-features = ["legacy-tests"]
 
 [[test]]
 name = "pagination_match_over_under"
 path = "tests/pagination_match_over_under.rs"
+required-features = ["legacy-tests"]
 
 [[test]]
 name = "profit_fee_golden"
 path = "tests/profit_fee_golden.rs"
+required-features = ["legacy-tests"]
 
 [[test]]
 name = "test_admin_lookalike"
 path = "tests/test_admin_lookalike.rs"
+required-features = ["legacy-tests"]
 
 [[test]]
 name = "test_treasury_rotation"
 path = "tests/test_treasury_rotation.rs"
+required-features = ["legacy-tests"]

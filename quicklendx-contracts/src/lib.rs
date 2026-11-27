@@ -12,8 +12,6 @@ pub mod audit;
 pub mod backpressure;
 pub mod backup;
 pub mod backup_v1;
-#[cfg(any(test, feature = "testutils"))]
-pub mod bench;
 pub mod bid;
 pub mod currency;
 pub mod defaults;
@@ -38,7 +36,6 @@ pub mod invoice_amount;
 pub mod invoice_search;
 pub mod kyc_policy;
 pub mod maintenance;
-pub mod migration;
 pub mod monitor;
 pub mod multisig;
 pub mod notifications;
@@ -65,6 +62,9 @@ pub mod vesting;
 #[cfg(feature = "diagnostics")]
 pub mod diagnostics;
 
+// Non-core modules gated behind the `analytics-exports` and `backup-tools` features
+// so that the release WASM excludes them by default. See Cargo.toml [features].
+
 pub mod address_summary;
 pub mod analytics;
 
@@ -74,810 +74,534 @@ pub mod test_utils;
 // ============================================================================
 // Test modules
 // ============================================================================
-//
-// All `src/test_*.rs` modules are declared in `src/tests/mod.rs` so this
-// file stays small and stable across PRs. Run
-// `scripts/check-test-modules.sh` to find test files without a declaration.
 
 #[cfg(test)]
-mod test;
+mod test_settlement;
+#[cfg(test)]
+mod test_partial_payments;
+#[cfg(test)]
+mod test_payment_history;
 #[cfg(test)]
 mod test_dispute;
 #[cfg(test)]
-mod test_dispute_arbiter;
-#[cfg(test)]
 mod test_dispute_timeline;
 #[cfg(test)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_settlement;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_partial_payments;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_payment_history;
-#[cfg(test)]
-mod test_settlement;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_settlement;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_partial_payments;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_payment_history;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_payment_token_policy;
-#[cfg(test)]
-mod test_dispute;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_dispute_timeline;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_arbiter;
-#[cfg(test)]
-mod test;
 
 // The remaining test modules (already present in the codebase)
 #[cfg(test)]
-mod test_fee_admin_auth;
-#[cfg(test)]
-mod test_platform_fee_ownership;
-#[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-mod test_address_summary;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_accept_bid_instruction_budget;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_accept_bid_race;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_admin;
 #[cfg(test)]
-mod test_rating_auth;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_accept_bid_instruction_budget;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_accept_bid_race;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_admin;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_events_audit_parity;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_admin_handover;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_admin_lookalike;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_admin_simple;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_admin_standalone;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_admin_two_step;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_analytics_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_audit;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_audit_config;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_audit_stats_regression;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_authorization;
-#[cfg(all(test, feature = "legacy-tests"))]
 #[cfg(test)]
-mod test_entrypoint_auth_matrix;
+mod test_analytics_consistency;
+#[cfg(test)]
+mod test_audit;
+#[cfg(test)]
+mod test_audit_config;
+#[cfg(test)]
+mod test_audit_stats_regression;
+#[cfg(test)]
+mod test_authorization;
 #[cfg(test)]
 mod test_auto_resolution_boundary;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_backfill_guard;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_backpressure_shedding;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_backup;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_backup_restore_reindex;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_backup_retention_enforcement;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_backup_safety;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_bid;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_bid_acceptance_replay;
 #[cfg(test)]
-mod test_bid_active_counts_history;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_atomic_rollback;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_bid_audit_parity;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_bid_cancel_accept_race;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_capacity_stress;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_capacity_stress;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_capacity_stress;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_compare_order_props;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_bid_concurrency;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_bid_exclusivity;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_bid_expiry_boundary;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_bid_expiry_grace;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
 mod test_bid_match_helper;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
 mod test_bid_ranking;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking_determinism;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_match_helper;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_ranking;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_ranking_determinism;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_match_helper;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_ranking;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_ranking_determinism;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ranking_tiebreaker;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_bid_state_matrix;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
 mod test_bid_transition_matrix;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_transition_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_transition_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_transition_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_bid_transition_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_bid_ttl;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_bid_validation;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_business_freeze_reason;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_business_invoices_paged_ordering;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_business_kyc;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_cancel_invoice_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_cancel_refund;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_cannot_withdraw_more_than_deposited;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_category_breakdown;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_cleanup_pagination;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_clock_rollover;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_compute_yield_props;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_concurrent_default_overlap;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_config_bounds_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_cross_module_consistency;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_currency;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_currency_batch;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_currency_match_funding;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_currency_precision;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_default;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_default_finality;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_default_finality_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_default_grace_boundary;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_diagnostics;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_event_invariant;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_dispute_evidence_identity;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_dispute_history_guard;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_dispute_refund_flow;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_dispute_settlement;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_dispute_state_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_dispute_time_limit;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_dispute_timeline_props;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_due_date_boundaries;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_due_date_guard;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_dust_transfer;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_early_payment_discount_bps;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_emergency;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_emergency_escrow_protection;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_emergency_withdraw;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_emergency_withdraw_props;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_error_code_stability;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_errors;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_early_release;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-mod test_escrow_entrypoints;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_escrow_event_completeness;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_expiry_extend;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_invariant_model;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_mutual_exclusion;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_refund;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_refund_after_expiry;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_refund_hardened;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_settle_refund_race;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_state_machine;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_escrow_time_limit;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
 mod test_escrow_uniqueness;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_escrow_uniqueness;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_escrow_uniqueness;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_escrow_uniqueness;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_escrow_uniqueness;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_events;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_evidence_hash_format;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_evidence_kind_guard_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_evidence_size_cap;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_expired_bids_cleanup;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_expired_escrow;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fee_analytics_boundaries;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fee_recipient_rotation_guard;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fees;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fees_extended;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-mod test_footprint_limits;
-#[cfg(test)]
 mod test_freeze_appeal_channel;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_freeze_appeal_channel;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_freeze_appeal_channel;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_freeze_appeal_channel;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_freeze_appeal_channel;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_freeze_event;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_freeze_guard_writes;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_freshness;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_freshness_bounds;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_freshness_lag;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_funding_events_audit_parity;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_accept_bid_and_fund;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_accounting;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_cancelled_noop;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_currency_whitelist;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_default_boundaries;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_default_counter;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_default_flow;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_distribute_revenue;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_invoice_metadata;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_invoice_search;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_fuzz_partial_payment;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_settlement_currency_whitelist;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_fuzz_tier_boundary;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_governance;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_health_status;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_id_collision_cross_domain;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_id_stability;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_idempotency;
-#[cfg(test)]
 mod test_incident;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_init;
 #[cfg(test)]
-mod test_contract_init_admin;
-#[cfg(test)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_incident;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_init;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_incident;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_init;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_incident;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_init;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_init_debug;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_init_invariants;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_input_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_insurance;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_insurance_claim_payout;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_insurance_optin_lifecycle;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_insurance_premium_props;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_insurance_stacking;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invariant_self_check;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invariants;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investment_active_guard;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investment_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investment_lifecycle;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investment_queries;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investment_state_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investment_terminal_states;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investment_transitions;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investment_withdrawal;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_investor_bid_limit;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investor_exposure_caps;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investor_freeze_reason;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investor_kyc;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_investor_rating_recompute;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_invoice;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invoice_amount_precision;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invoice_batch_cancel;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invoice_id_collision;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invoice_id_collision_regression;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invoice_lifecycle_invariants;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invoice_metadata;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invoice_normalization;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invoice_search;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invoice_search_ranking;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_invoice_state_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_kyc_lifecycle_enforcement;
 #[cfg(test)]
-mod test_kyc_policy;
-#[cfg(test)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_ledger_timestamp_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_lifecycle;
 #[cfg(test)]
-mod test_lifecycle_model;
-#[cfg(test)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_limit;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_line_item_consistency;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_lock_time_limit;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_lock_time_limit_guard;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_maintenance;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_maintenance_write_matrix;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_max_invoice_tags_boundary;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_max_invoices_per_business;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_min_invoice_amount;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_min_partial_fill_boundary;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_multisig;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_notification_status_matrix;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_notifications;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_operational_limits;
 #[cfg(test)]
-mod test_overdue_expiration;
-#[cfg(test)]
 mod test_overflow;
 #[cfg(test)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_overflow;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_overflow;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_overdue_expiration;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_pagination_cursors;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
 mod test_panic_handler;
 #[cfg(test)]
-mod test_partial_payments;
-#[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_overflow;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_overdue_expiration;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_pagination_cursors;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_panic_handler;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_overflow;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_overdue_expiration;
-#[cfg(test)]
-mod test_overdue_scan_resilience;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_pagination_cursors;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_panic_handler;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_pause;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_pause_reads_available;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_pause_reason;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_pause_reason_cap;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_pause_toggle_symmetry;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_payments;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_payments_auth;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_payments_repayment;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_payments_repayment_limits;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_per_investor_position_cap;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_platform_metrics_reconciliation;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_profit_fee;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_profit_fee_formula;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_profits_props;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_protocol_health;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_protocol_limits;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_protocol_limits_boundary;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_prune_terminal_invoices;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_queries;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_rating_override;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_ratings_snapshot;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_rebuild_indexes;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_recipient_history;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_reentrancy;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_reentrancy_fault_injection;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_refund;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_regulatory;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_regulatory_gate;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_repayment_events_audit_parity;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_replay_guard;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_require_business_active;
 #[cfg(test)]
-mod test_resolution_policy_enforcement;
-#[cfg(test)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_require_valid_business_kyc_tier;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_require_valid_invoice_category;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_resource_rate_limits;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_revenue_split;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_risk_tier;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_seed;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_self_call_rejection;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_settle_during_dispute;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_settlement_accounting_identity;
-#[cfg(all(test, feature = "fuzz-tests"))]
-mod test_settlement_conservation_props;
 #[cfg(test)]
-#[cfg(all(test, feature = "legacy-tests"))]
+mod test_self_call_rejection;
+#[cfg(test)]
+mod test_settle_during_dispute;
+#[cfg(test)]
+mod test_settlement_accounting_identity;
+#[cfg(test)]
 mod test_settlement_atomic_rollback;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_settlement_auto_release;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_settlement_capacity_stress;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_settlement_currency_whitelist;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_settlement_dispute_interaction;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_settlement_history_reconstruction;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_snapshot;
 #[cfg(test)]
-#[allow(
-    clippy::disallowed_methods,
-    reason = "Test assertions report unexpected Result errors; production linting remains enabled."
-)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_storage;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-mod test_storage_tier_migration;
-#[cfg(test)]
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_storage;
-#[cfg(all(test, feature = "legacy-tests"))]
-mod test_storage;
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_storage_key_layout;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_storage_migration_compat;
 #[cfg(test)]
-mod test_storage_ttl;
-#[cfg(test)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_store_invoice_auth;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_store_invoices_batch;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_string_limits;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_tier_boundary;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_treasury_rotation;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_treasury_rotation_deadline;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_treasury_split_overflow_props;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_twa_props;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_types;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_upgrade_guard;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_verification_matrix;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_verify_bid_match;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_vesting;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_vesting_cliff_final;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_vesting_summary;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_view_only;
 #[cfg(test)]
-#[allow(clippy::disallowed_macros)]
-#[cfg(all(test, feature = "legacy-tests"))]
 mod test_volume_tier_props;
-#[cfg(all(test, feature = "legacy-tests"))]
+#[cfg(test)]
 mod test_withdraw_bid_matrix;
-mod tests;
 
 // ============================================================================
 // Contract-level macros (re-exported from diagnostics)
 // ============================================================================
 
-#[cfg(not(feature = "diagnostics"))]
 #[macro_export]
 macro_rules! qlx_log {
     ($env:expr, $module:expr, $fmt:expr $(, $arg:expr)*) => {{
@@ -892,7 +616,6 @@ macro_rules! qlx_log {
     }};
 }
 
-#[cfg(not(feature = "diagnostics"))]
 #[macro_export]
 macro_rules! assert_view_only {
     ($env:expr) => {{
@@ -917,45 +640,12 @@ use crate::admin::AdminStorage;
 use crate::arbiter::ArbiterStorage;
 use crate::errors::QuickLendXError;
 use crate::pause::PauseControl;
-use crate::protocol_limits::{
-    check_and_record_mutation, require_description_bound, require_line_items_bound,
-    require_status_batch_bound, require_tags_bound,
-};
+use crate::protocol_limits::check_and_record_mutation;
 use crate::reentrancy::with_payment_guard;
 use crate::storage::InvoiceStorage;
 use crate::types::{
-    Dispute, DisputeResolution, DisputeStatus, Investment, InvoiceCategory, InvoiceLock,
-    InvoiceMetadata, InvoiceStatus,
-    BusinessFreezeReason, Dispute, DisputeResolution, DisputeStatus, Investment, InvoiceCategory,
-    InvoiceStatus,
+    Dispute, DisputeResolution, DisputeStatus, Investment, InvoiceCategory, InvoiceStatus,
 };
-
-/// Load an invoice for a state-changing call made by its owning business.
-///
-/// Existence, ownership and the owner's signature are verified first and the
-/// mutation quota is charged last, so unauthorised calls fail fast. This
-/// helper calls `require_auth` for `business`; callers must not authenticate
-/// the same address again within the same invocation (Soroban rejects a
-/// duplicate `require_auth`). Frozen invoices reject writes (with
-/// `InvoiceLockExpired` once the lock outlives the lock-time limit).
-fn load_invoice_for_owner_write(
-    env: &Env,
-    business: &Address,
-    invoice_id: &BytesN<32>,
-) -> Result<crate::types::Invoice, QuickLendXError> {
-    PauseControl::require_not_paused(env)?;
-    let invoice =
-        InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-    crate::invoice::require_matching_business_invoice_ownership(env, business, &invoice)?;
-    business.require_auth();
-    if InvoiceStorage::is_frozen(env, invoice_id) {
-        InvoiceStorage::require_lock_within_time_limit(env, invoice_id)?;
-        return Err(QuickLendXError::InvoiceFrozen);
-    }
-    check_and_record_mutation(env, business)?;
-    Ok(invoice)
-}
-
 
 #[contract]
 pub struct QuickLendXContract;
@@ -979,30 +669,11 @@ impl QuickLendXContract {
         AdminStorage::get_admin(&env).ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
-    /// Initialize the contract admin exactly once.
-    ///
-    /// # Authorization
-    /// Requires the `admin` argument to authorize the call.
-    pub fn initialize_admin(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        AdminStorage::initialize(&env, &admin)
-    }
-
-    /// Transfer the admin role from the current admin to `new_admin`.
-    ///
-    /// # Authorization
-    /// Requires the current admin (read from storage) to authorize the call.
-    pub fn transfer_admin(env: Env, new_admin: Address) -> Result<(), QuickLendXError> {
-        let current = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        AdminStorage::transfer_admin(&env, &current, &new_admin)
-    }
-
     pub fn initialize_fee_system(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         crate::fees::FeeManager::initialize(&env, &admin)
     }
 
     pub fn update_platform_fee_bps(env: Env, fee_bps: u32) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         crate::fees::FeeManager::update_platform_fee(&env, &admin, fee_bps)
     }
@@ -1013,11 +684,7 @@ impl QuickLendXContract {
         crate::fees::FeeManager::get_platform_fee_config(&env)
     }
 
-    pub fn calculate_profit(
-        env: Env,
-        investment_amount: i128,
-        payment_amount: i128,
-    ) -> (i128, i128) {
+    pub fn calculate_profit(env: Env, investment_amount: i128, payment_amount: i128) -> (i128, i128) {
         crate::profits::calculate_profit(&env, investment_amount, payment_amount)
     }
 
@@ -1029,58 +696,19 @@ impl QuickLendXContract {
     }
 
     pub fn initialize_protocol_limits(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         crate::protocol_limits::ProtocolLimitsContract::initialize(env, admin)
     }
 
-    /// Admin-only: add a token address to the currency whitelist.
-    ///
-    /// An empty whitelist accepts every currency; once a currency is added the
-    /// list becomes restrictive. See [`crate::currency::CurrencyWhitelist`].
-    pub fn add_currency(
-        env: Env,
-        admin: Address,
-        currency: Address,
-    ) -> Result<(), QuickLendXError> {
-        crate::currency::CurrencyWhitelist::add_currency(&env, &admin, &currency)
-    }
-
     pub fn pause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         PauseControl::set_paused(&env, &admin, true)
     }
 
     pub fn unpause(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         PauseControl::set_paused(&env, &admin, false)
     }
 
     pub fn is_paused(env: Env) -> bool {
         PauseControl::is_paused(&env)
-    }
-
-    /// Schedule a WASM upgrade. Only the current admin may schedule it.
-    pub fn schedule_upgrade(
-        env: Env,
-        admin: Address,
-        wasm_hash: BytesN<32>,
-    ) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::schedule_upgrade(&env, &admin, &wasm_hash)
-    }
-
-    /// Cancel a scheduled WASM upgrade and restore the previous pause state.
-    pub fn cancel_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::cancel_upgrade(&env, &admin)
-    }
-
-    /// Execute a scheduled WASM upgrade after its timelock has elapsed.
-    pub fn execute_upgrade(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::execute_upgrade(&env, &admin)
-    }
-
-    /// Read the pending upgrade hash and its scheduling timestamp.
-    pub fn get_pending_upgrade(env: Env) -> Option<(BytesN<32>, u64)> {
-        crate::upgrade::UpgradeControl::get_pending_upgrade(&env)
     }
 
     // =========================================================================
@@ -1092,7 +720,6 @@ impl QuickLendXContract {
         business: Address,
         kyc_data: String,
     ) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         check_and_record_mutation(&env, &business)?;
         crate::verification::submit_kyc_application(&env, &business, kyc_data)
     }
@@ -1102,7 +729,6 @@ impl QuickLendXContract {
         admin: Address,
         business: Address,
     ) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         crate::verification::verify_business(&env, &admin, &business)
     }
 
@@ -1111,41 +737,16 @@ impl QuickLendXContract {
         investor: Address,
         kyc_data: String,
     ) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         check_and_record_mutation(&env, &investor)?;
         crate::verification::submit_investor_kyc(&env, &investor, kyc_data)
     }
 
     /// Verify investor with investment limit. Admin is read from storage
     /// (matches test usage: `client.verify_investor(investor, limit)`).
-    pub fn verify_investor(
-        env: Env,
-        investor: Address,
-        limit: i128,
-    ) -> Result<(), QuickLendXError> {
     pub fn verify_investor(env: Env, investor: Address, limit: i128) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         crate::verification::verify_investor(&env, &admin, &investor, limit)?;
         Ok(())
-    }
-
-    pub fn get_businesses_paged(
-        env: Env,
-        status: crate::verification::BusinessVerificationStatus,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::kyc_policy::KycPageResult, QuickLendXError> {
-        crate::kyc_policy::get_businesses_paged(&env, status, cursor, limit)
-    }
-
-    pub fn get_investors_paged(
-        env: Env,
-        status: crate::verification::BusinessVerificationStatus,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::kyc_policy::KycPageResult, QuickLendXError> {
-        crate::kyc_policy::get_investors_paged(&env, status, cursor, limit)
     }
 
     // =========================================================================
@@ -1187,15 +788,11 @@ impl QuickLendXContract {
         Ok(id)
     }
 
-    pub fn get_invoice(
-        env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Result<crate::types::Invoice, QuickLendXError> {
+    pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<crate::types::Invoice, QuickLendXError> {
         InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
     }
 
     pub fn verify_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         AdminStorage::require_admin(&env, &admin)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
@@ -1210,7 +807,6 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         status: InvoiceStatus,
     ) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         AdminStorage::require_admin(&env, &admin)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
@@ -1221,7 +817,6 @@ impl QuickLendXContract {
     }
 
     pub fn cancel_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
             .ok_or(QuickLendXError::InvoiceNotFound)?;
         let caller = invoice.business.clone();
@@ -1230,512 +825,12 @@ impl QuickLendXContract {
         Ok(())
     }
 
-    /// Emit the `InvoiceExpired` event for an invoice past its due date.
-    ///
-    /// Requires `current_timestamp > invoice.due_date`. This entrypoint only
-    /// emits the event; it does not change the invoice status. Status
-    /// transitions are performed by `mark_invoice_defaulted` (→ `Defaulted`)
-    /// or `refund_escrow` (→ `Refunded`).
-    pub fn expire_invoice(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        if env.ledger().timestamp() <= invoice.due_date {
-            return Err(QuickLendXError::InvalidStatus);
-        }
-        crate::events::emit_invoice_expired(&env, &invoice);
-        Ok(())
-    }
-
     pub fn get_available_invoices(env: Env) -> Vec<BytesN<32>> {
         InvoiceStorage::get_invoices_by_status(&env, InvoiceStatus::Verified)
     }
 
-    /// Return all invoice IDs currently in `status`.
-    pub fn get_invoices_by_status(env: Env, status: InvoiceStatus) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_invoices_by_status(&env, status)
-    }
-
     pub fn get_business_invoices(env: Env, business: Address) -> Vec<BytesN<32>> {
         InvoiceStorage::get_business_invoices(&env, &business)
-    }
-
-    pub fn get_business_invoices_paged(
-        env: Env,
-        business: Address,
-        status_filter: Option<InvoiceStatus>,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::types::InvoicePage, QuickLendXError> {
-        InvoiceStorage::get_business_invoices_paged(
-            &env,
-            &business,
-            status_filter,
-            cursor,
-            limit,
-        )
-    }
-
-    pub fn get_whitelisted_currencies_paged(
-        env: Env,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::types::CursorAddressPage, QuickLendXError> {
-        crate::currency::CurrencyWhitelist::get_whitelisted_currencies_paged(
-            &env, cursor, limit,
-        )
-    }
-
-    #[deprecated(note = "use get_whitelisted_currencies_paged with an opaque cursor")]
-    pub fn get_whitelisted_currency_offset(
-        env: Env,
-        offset: u32,
-        limit: u32,
-    ) -> crate::types::PaginatedCurrencies {
-        crate::currency::CurrencyWhitelist::get_whitelisted_currency_offset(
-            &env, offset, limit,
-        )
-    }
-
-    pub fn get_whitelisted_currencies(env: Env) -> Vec<Address> {
-        crate::currency::CurrencyWhitelist::get_whitelisted_currencies(&env)
-    }
-
-    /// Add a batch of currencies to the whitelist (admin only).
-    pub fn add_currencies_batch(
-        env: Env,
-        admin: Address,
-        currencies: Vec<Address>,
-    ) -> Result<Vec<bool>, QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
-        PauseControl::require_not_paused(&env)?;
-        AdminStorage::require_admin(&env, &admin)?;
-        crate::protocol_limits::require_batch_size_bound(&currencies)?;
-        check_and_record_mutation(&env, &admin)?;
-        crate::currency::CurrencyWhitelist::add_currencies_batch(&env, &admin, &currencies)
-    }
-
-    /// Remove one currency from the whitelist (admin only).
-    pub fn remove_currency(
-        env: Env,
-        admin: Address,
-        currency: Address,
-    ) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
-        PauseControl::require_not_paused(&env)?;
-        AdminStorage::require_admin(&env, &admin)?;
-        check_and_record_mutation(&env, &admin)?;
-        crate::currency::CurrencyWhitelist::remove_currency(&env, &admin, &currency)
-    }
-
-    /// Remove a batch of currencies from the whitelist (admin only).
-    pub fn remove_currencies_batch(
-        env: Env,
-        admin: Address,
-        currencies: Vec<Address>,
-    ) -> Result<Vec<bool>, QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
-        PauseControl::require_not_paused(&env)?;
-        AdminStorage::require_admin(&env, &admin)?;
-        crate::protocol_limits::require_batch_size_bound(&currencies)?;
-        check_and_record_mutation(&env, &admin)?;
-        crate::currency::CurrencyWhitelist::remove_currencies_batch(&env, &admin, &currencies)
-    }
-
-    /// Replace the whitelist with the supplied currency addresses (admin only).
-    pub fn set_currencies(
-        env: Env,
-        admin: Address,
-        currencies: Vec<Address>,
-    ) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
-        PauseControl::require_not_paused(&env)?;
-        AdminStorage::require_admin(&env, &admin)?;
-        crate::protocol_limits::require_batch_size_bound(&currencies)?;
-        check_and_record_mutation(&env, &admin)?;
-        crate::currency::CurrencyWhitelist::set_currencies(&env, &admin, &currencies)
-    }
-
-    /// Clear the currency whitelist (admin only).
-    pub fn clear_currencies(env: Env, admin: Address) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
-        PauseControl::require_not_paused(&env)?;
-        AdminStorage::require_admin(&env, &admin)?;
-        check_and_record_mutation(&env, &admin)?;
-        crate::currency::CurrencyWhitelist::clear_currencies(&env, &admin)
-    }
-
-    pub fn get_user_notifications(env: Env, user: Address) -> Vec<BytesN<32>> {
-        crate::notifications::NotificationSystem::get_user_notifications(&env, &user)
-    }
-
-    pub fn get_user_notifications_paged(
-        env: Env,
-        user: Address,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
-        crate::notifications::NotificationSystem::get_user_notifications_paged(
-            &env, &user, cursor, limit,
-        )
-    }
-
-    pub fn query_audit_logs_paged(
-        env: Env,
-        filter: crate::audit::AuditQueryFilter,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::audit::CursorAuditPage, QuickLendXError> {
-        crate::audit::AuditStorage::query_audit_logs_paged(&env, &filter, cursor, crate::pagination::cap_query_limit(limit))
-    }
-
-    // =========================================================================
-    // Analytics
-    // =========================================================================
-
-    /// Platform analytics derived live from on-chain state.
-    ///
-    /// Totals and rates are computed from the invoice status indexes, so the
-    /// values always reflect the current ledger state. Read-only; no auth.
-    pub fn get_platform_metrics(
-        env: Env,
-    ) -> Result<crate::analytics::PlatformMetrics, QuickLendXError> {
-        crate::analytics::AnalyticsCalculator::calculate_platform_metrics(&env)
-    }
-
-    pub fn get_total_invoice_count(env: Env) -> u32 {
-        InvoiceStorage::get_total_count(&env) as u32
-    }
-
-    /// Read one immutable audit entry by its identifier.
-    pub fn get_audit_entry(
-        env: Env,
-        audit_id: BytesN<32>,
-    ) -> Option<crate::audit::AuditLogEntry> {
-        crate::audit::AuditStorage::get_audit_entry(&env, &audit_id)
-    }
-
-    /// Return a bounded page of audit entries for an invoice.
-    pub fn get_invoice_audit_trail_paged(
-        env: Env,
-        invoice_id: BytesN<32>,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
-        crate::audit::AuditStorage::get_invoice_audit_trail_paged(
-            &env, &invoice_id, cursor, crate::pagination::cap_query_limit(limit),
-        )
-    }
-
-    /// Return a bounded page of audit entry IDs for an operation.
-    pub fn get_audit_entries_by_operation_paged(
-        env: Env,
-        operation: crate::audit::AuditOperation,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
-        crate::audit::AuditStorage::get_audit_entries_by_operation_paged(
-            &env, &operation, cursor, crate::pagination::cap_query_limit(limit),
-        )
-    }
-
-    /// Return a bounded page of audit entry IDs for an actor.
-    pub fn get_audit_entries_by_actor_paged(
-        env: Env,
-        actor: Address,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
-        crate::audit::AuditStorage::get_audit_entries_by_actor_paged(
-            &env, &actor, cursor, crate::pagination::cap_query_limit(limit),
-        )
-    }
-
-    /// Return bounded audit records matching the supplied filter.
-    pub fn query_audit_logs(
-        env: Env,
-        filter: crate::audit::AuditQueryFilter,
-        limit: u32,
-    ) -> Vec<crate::audit::AuditLogEntry> {
-        crate::audit::AuditStorage::query_audit_logs(
-            &env, &filter, crate::pagination::cap_query_limit(limit),
-        )
-    }
-
-    /// Return aggregate audit statistics.
-    pub fn get_audit_stats(env: Env) -> crate::audit::AuditStats {
-        crate::audit::AuditStorage::get_audit_stats(&env)
-    }
-
-    /// Export a versioned read-only analytics snapshot.
-    pub fn export_analytics_snapshot(
-        env: Env,
-    ) -> Result<crate::analytics::AnalyticsSnapshot, QuickLendXError> {
-        crate::analytics::AnalyticsCalculator::export_analytics_snapshot(&env)
-    }
-
-    /// Calculate financial analytics for a time period.
-    pub fn calculate_financial_metrics(
-        env: Env,
-        period: crate::analytics::TimePeriod,
-    ) -> Result<crate::analytics::FinancialMetrics, QuickLendXError> {
-        crate::analytics::AnalyticsCalculator::calculate_financial_metrics(&env, period)
-    }
-
-    /// Calculate platform performance analytics.
-    pub fn calculate_performance_metrics(
-        env: Env,
-    ) -> Result<crate::analytics::PerformanceMetrics, QuickLendXError> {
-        crate::analytics::AnalyticsCalculator::calculate_performance_metrics(&env)
-    }
-
-    /// Generate and persist a business analytics report for a time period.
-    pub fn generate_business_report(
-        env: Env,
-        business: Address,
-        period: crate::analytics::TimePeriod,
-    ) -> Result<crate::analytics::BusinessReport, QuickLendXError> {
-        crate::analytics::AnalyticsCalculator::generate_business_report(&env, &business, period)
-    }
-
-    /// Generate and persist an investor analytics report for a time period.
-    pub fn generate_investor_report(
-        env: Env,
-        investor: Address,
-        period: crate::analytics::TimePeriod,
-    ) -> Result<crate::analytics::InvestorReport, QuickLendXError> {
-        crate::analytics::AnalyticsCalculator::generate_investor_report(&env, &investor, period)
-    }
-
-    /// Calculate behavior analytics for a user.
-    pub fn calculate_user_behavior_metrics(
-        env: Env,
-        user: Address,
-    ) -> Result<crate::analytics::UserBehaviorMetrics, QuickLendXError> {
-        crate::analytics::AnalyticsCalculator::calculate_user_behavior_metrics(&env, &user)
-    }
-
-    /// Calculate investor analytics for an investor.
-    pub fn calculate_investor_analytics(
-        env: Env,
-        investor: Address,
-    ) -> Result<crate::analytics::InvestorAnalytics, QuickLendXError> {
-        crate::analytics::AnalyticsCalculator::calculate_investor_analytics(&env, &investor)
-    }
-
-    /// Calculate aggregate investor performance metrics.
-    pub fn calc_investor_perf_metrics(
-        env: Env,
-    ) -> Result<crate::analytics::InvestorPerformanceMetrics, QuickLendXError> {
-        crate::analytics::AnalyticsCalculator::calc_investor_perf_metrics(&env)
-    }
-
-    /// Read a previously generated business report.
-    pub fn get_business_report(
-        env: Env,
-        report_id: BytesN<32>,
-    ) -> Option<crate::analytics::BusinessReport> {
-        crate::analytics::AnalyticsStorage::get_business_report(&env, &report_id)
-    }
-
-    /// Read a previously generated investor report.
-    pub fn get_investor_report(
-        env: Env,
-        report_id: BytesN<32>,
-    ) -> Option<crate::analytics::InvestorReport> {
-        crate::analytics::AnalyticsStorage::get_investor_report(&env, &report_id)
-    }
-
-    /// Read cached user behavior analytics.
-    pub fn get_user_behavior(
-        env: Env,
-        user: Address,
-    ) -> Option<crate::analytics::UserBehaviorMetrics> {
-        crate::analytics::AnalyticsStorage::get_user_behavior(&env, &user)
-    }
-
-    /// Read cached investor analytics.
-    pub fn get_investor_analytics(
-        env: Env,
-        investor: Address,
-    ) -> Option<crate::analytics::InvestorAnalytics> {
-        crate::analytics::AnalyticsStorage::get_investor_analytics(&env, &investor)
-    }
-
-    /// Read cached performance metrics.
-    pub fn get_performance_metrics(
-        env: Env,
-    ) -> Option<crate::analytics::PerformanceMetrics> {
-        crate::analytics::AnalyticsStorage::get_performance_metrics(&env)
-    }
-
-    /// Read cached investor performance metrics.
-    pub fn get_investor_performance(
-        env: Env,
-    ) -> Option<crate::analytics::InvestorPerformanceMetrics> {
-        crate::analytics::AnalyticsStorage::get_investor_performance(&env)
-    }
-
-    // =========================================================================
-    // Invoice management: upload, tags, category, metadata, lock, queries
-    // =========================================================================
-
-    /// Upload an invoice with explicit fee settings.
-    ///
-    /// Equivalent to [`Self::store_invoice`] but also accepts the late-payment
-    /// penalty and early-payment discount. Oversize descriptions or tag vectors
-    /// are rejected with `InputTooLarge` before any state is touched.
-    #[allow(clippy::too_many_arguments)]
-    pub fn upload_invoice(
-        env: Env,
-        business: Address,
-        amount: i128,
-        currency: Address,
-        due_date: u64,
-        description: String,
-        category: InvoiceCategory,
-        tags: Vec<String>,
-        origination_fee_bps: Option<u32>,
-        late_payment_penalty_bps: Option<u32>,
-        early_payment_discount_bps: Option<u32>,
-    ) -> Result<BytesN<32>, QuickLendXError> {
-        PauseControl::require_not_paused(&env)?;
-        business.require_auth();
-        require_description_bound(&description)?;
-        require_tags_bound(&tags)?;
-        check_and_record_mutation(&env, &business)?;
-        crate::verification::require_business_not_pending(&env, &business)?;
-        crate::invoice_amount::validate_invoice_amount_ceiling(amount)?;
-        crate::protocol_limits::check_invoice_limit(&env, &business)?;
-        let invoice = crate::invoice::Invoice::new_with_fee_settings(
-            &env,
-            business,
-            amount,
-            currency,
-            due_date,
-            description,
-            category,
-            tags,
-            origination_fee_bps,
-            late_payment_penalty_bps,
-            early_payment_discount_bps,
-        )?;
-        let id = invoice.id.clone();
-        InvoiceStorage::store_invoice(&env, &invoice);
-        Ok(id)
-    }
-
-    /// Add a (normalised) tag to an invoice owned by `business`.
-    pub fn add_invoice_tag(
-        env: Env,
-        business: Address,
-        invoice_id: BytesN<32>,
-        tag: String,
-    ) -> Result<(), QuickLendXError> {
-        let mut invoice = load_invoice_for_owner_write(&env, &business, &invoice_id)?;
-        invoice.add_tag(&env, tag)?;
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
-    }
-
-    /// Remove a tag from an invoice owned by `business`.
-    pub fn remove_invoice_tag(
-        env: Env,
-        business: Address,
-        invoice_id: BytesN<32>,
-        tag: String,
-    ) -> Result<(), QuickLendXError> {
-        let mut invoice = load_invoice_for_owner_write(&env, &business, &invoice_id)?;
-        invoice.remove_tag(tag)?;
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
-    }
-
-    /// Change the category of an invoice owned by `business`.
-    pub fn update_invoice_category(
-        env: Env,
-        business: Address,
-        invoice_id: BytesN<32>,
-        category: InvoiceCategory,
-    ) -> Result<(), QuickLendXError> {
-        let mut invoice = load_invoice_for_owner_write(&env, &business, &invoice_id)?;
-        invoice.update_category(category);
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
-    }
-
-    /// Replace the metadata of an invoice owned by `caller`.
-    pub fn update_invoice_metadata(
-        env: Env,
-        caller: Address,
-        invoice_id: BytesN<32>,
-        metadata: InvoiceMetadata,
-    ) -> Result<(), QuickLendXError> {
-        require_line_items_bound(&metadata.line_items)?;
-        require_description_bound(&metadata.notes)?;
-        let mut invoice = load_invoice_for_owner_write(&env, &caller, &invoice_id)?;
-        // Ownership and auth were already enforced by the helper above.
-        invoice.set_metadata(&env, Some(metadata))?;
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
-    }
-
-    /// Remove all metadata from an invoice owned by `caller`.
-    pub fn clear_invoice_metadata(
-        env: Env,
-        caller: Address,
-        invoice_id: BytesN<32>,
-    ) -> Result<(), QuickLendXError> {
-        let mut invoice = load_invoice_for_owner_write(&env, &caller, &invoice_id)?;
-        // Ownership and auth were already enforced by the helper above.
-        invoice.set_metadata(&env, None)?;
-        InvoiceStorage::update_invoice(&env, &invoice);
-        Ok(())
-    }
-
-    /// Admin-only: set or clear the hold on an invoice.
-    pub fn set_invoice_lock(
-        env: Env,
-        admin: Address,
-        invoice_id: BytesN<32>,
-        lock: InvoiceLock,
-    ) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin_auth(&env, &admin)?;
-        InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
-        InvoiceStorage::set_invoice_lock(&env, &invoice_id, lock);
-        Ok(())
-    }
-
-    pub fn get_invoice_lock(env: Env, invoice_id: BytesN<32>) -> InvoiceLock {
-        InvoiceStorage::get_invoice_lock(&env, &invoice_id)
-    }
-
-    /// Invoices whose metadata customer name equals `customer_name`.
-    pub fn get_invoices_by_customer(env: Env, customer_name: String) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_by_customer(&env, &customer_name)
-    }
-
-    /// Invoices whose metadata tax id equals `tax_id`.
-    pub fn get_invoices_by_tax_id(env: Env, tax_id: String) -> Vec<BytesN<32>> {
-        InvoiceStorage::get_by_tax_id(&env, &tax_id)
-    }
-
-    /// Status of each requested invoice, in request order (`None` if unknown).
-    /// Requests larger than the status-batch bound fail with `InputTooLarge`.
-    pub fn get_invoices_by_status_batch(
-        env: Env,
-        ids: Vec<BytesN<32>>,
-    ) -> Result<Vec<Option<InvoiceStatus>>, QuickLendXError> {
-        require_status_batch_bound(&ids)?;
-        let mut statuses = Vec::new(&env);
-        for id in ids.iter() {
-            statuses.push_back(InvoiceStorage::get_invoice(&env, &id).map(|i| i.status));
-        }
-        Ok(statuses)
-    }
-
-    /// Number of invoices currently indexed under `status`.
-    pub fn get_invoice_count_by_status(env: Env, status: InvoiceStatus) -> u32 {
-        InvoiceStorage::get_invoices_by_status(&env, status).len()
     }
 
     // =========================================================================
@@ -1771,31 +866,7 @@ impl QuickLendXContract {
             expiration_timestamp: env.ledger().timestamp() + 86_400,
         };
         crate::bid::BidStorage::store_bid(&env, &bid);
-        crate::bid::BidStorage::add_bid_to_invoice(&env, &bid.invoice_id, &bid.bid_id);
         Ok(bid_id)
-    }
-
-    pub fn accept_bid_and_fund(
-        env: Env,
-        invoice_id: BytesN<32>,
-        bid_id: BytesN<32>,
-    ) -> Result<BytesN<32>, QuickLendXError> {
-        PauseControl::require_not_paused(&env)?;
-        with_payment_guard(&env, || {
-            crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id)
-        })
-    }
-
-    pub fn accept_bid_and_fund_with_key(
-        env: Env,
-        invoice_id: BytesN<32>,
-        bid_id: BytesN<32>,
-        request_key: BytesN<32>,
-    ) -> Result<BytesN<32>, QuickLendXError> {
-        PauseControl::require_not_paused(&env)?;
-        with_payment_guard(&env, || {
-            crate::escrow::accept_bid_and_fund_with_key(&env, &invoice_id, &bid_id, &request_key)
-        })
     }
 
     pub fn accept_bid(
@@ -1803,34 +874,11 @@ impl QuickLendXContract {
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
     ) -> Result<(), QuickLendXError> {
-        Self::accept_bid_and_fund(env, invoice_id, bid_id).map(|_| ())
-    }
-
-    pub fn withdraw_bid(env: Env, bid_id: BytesN<32>) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
-        let mut bid = crate::bid::BidStorage::get_bid(&env, &bid_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
-        bid.investor.require_auth();
-
-        if bid.status != crate::types::BidStatus::Placed {
-            return Err(QuickLendXError::OperationNotAllowed);
-        }
-
-        if bid.is_expired(env.ledger().timestamp()) {
-            bid.status = crate::types::BidStatus::Expired;
-            crate::bid::BidStorage::update_bid(&env, &bid);
-            crate::events::emit_bid_expired(&env, &bid);
-            return Err(QuickLendXError::OperationNotAllowed);
-        }
-
-        bid.status = crate::types::BidStatus::Withdrawn;
-        crate::bid::BidStorage::update_bid(&env, &bid);
-        crate::events::emit_bid_withdrawn(&env, &bid);
-        Ok(())
-    }
-
-    pub fn cleanup_expired_bids(env: Env, invoice_id: BytesN<32>) -> Result<u32, QuickLendXError> {
-        crate::bid::BidStorage::cleanup_expired_bids(&env, &invoice_id)
+        with_payment_guard(&env, || {
+            crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id)
+                .map(|_| ())
+        })
     }
 
     pub fn get_bid(env: Env, bid_id: BytesN<32>) -> Option<crate::types::Bid> {
@@ -1848,67 +896,6 @@ impl QuickLendXContract {
         bids
     }
 
-    pub fn get_ranked_bids(
-        env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Result<Vec<crate::types::Bid>, QuickLendXError> {
-        crate::bid::BidStorage::rank_bids(&env, &invoice_id)
-    }
-
-    pub fn get_ranked_bids_paged(
-        env: Env,
-        invoice_id: BytesN<32>,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::types::CursorBidsPage, QuickLendXError> {
-        crate::bid::BidStorage::rank_bids_paged(&env, &invoice_id, cursor, limit)
-    }
-
-    pub fn get_best_bid(
-        env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Result<Option<crate::types::Bid>, QuickLendXError> {
-        crate::bid::BidStorage::get_best_bid(&env, &invoice_id)
-    }
-
-    pub fn get_bids_by_status(
-        env: Env,
-        invoice_id: BytesN<32>,
-        status: crate::types::BidStatus,
-    ) -> Result<Vec<crate::types::Bid>, QuickLendXError> {
-        crate::bid::BidStorage::get_bids_by_status(&env, &invoice_id, status)
-    }
-
-    pub fn get_bids_by_investor(
-        env: Env,
-        invoice_id: BytesN<32>,
-        investor: Address,
-    ) -> Result<Vec<crate::types::Bid>, QuickLendXError> {
-        crate::bid::BidStorage::get_bids_by_investor(&env, &invoice_id, &investor)
-    }
-
-    pub fn get_investor_active_exposure(
-        env: Env,
-        investor: Address,
-    ) -> Result<i128, QuickLendXError> {
-        crate::payments::get_investor_exposure(&env, &investor)
-    }
-
-    pub fn get_investor_available_capacity(
-        env: Env,
-        investor: Address,
-    ) -> Result<i128, QuickLendXError> {
-        crate::payments::get_investor_available_capacity(&env, &investor)
-    }
-
-    pub fn validate_funding_commitment(
-        env: Env,
-        investor: Address,
-        amount: i128,
-    ) -> Result<(), QuickLendXError> {
-        crate::payments::validate_funding_commitment(&env, &investor, amount)
-    }
-
     // =========================================================================
     // Escrow
     // =========================================================================
@@ -1921,22 +908,6 @@ impl QuickLendXContract {
             .ok_or(QuickLendXError::StorageKeyNotFound)
     }
 
-    /// Admin-only lookup of an escrow by its direct `escrow_id`.
-    ///
-    /// Unlike `get_escrow_details` (which looks up by invoice), this returns
-    /// the escrow record keyed by `escrow_id`. Requires the caller to be the
-    /// current admin.
-    pub fn admin_get_escrow(
-        env: Env,
-        admin: Address,
-        escrow_id: BytesN<32>,
-    ) -> Result<crate::payments::Escrow, QuickLendXError> {
-        admin.require_auth();
-        crate::admin::AdminStorage::require_admin(&env, &admin)?;
-        crate::payments::EscrowStorage::get_escrow(&env, &escrow_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)
-    }
-
     pub fn release_escrow(
         env: Env,
         invoice_id: BytesN<32>,
@@ -1946,129 +917,6 @@ impl QuickLendXContract {
         with_payment_guard(&env, || {
             crate::payments::release_escrow(&env, &invoice_id, &business)
         })
-    }
-
-    /// Admin-only: refund a funded invoice's escrow back to the investor.
-    ///
-    /// Convenience wrapper around [`crate::escrow::refund_escrow_funds`] that
-    /// reads the admin from storage. Transitions the invoice to `Refunded`.
-    pub fn refund_escrow(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        PauseControl::require_not_paused(&env)?;
-        let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
-        with_payment_guard(&env, || {
-            crate::escrow::refund_escrow_funds(&env, &invoice_id, &admin)
-        })
-    }
-
-    /// Return the escrow status for an invoice.
-    ///
-    /// # Errors
-    /// * `QuickLendXError::StorageKeyNotFound` — no escrow record exists for
-    ///   the given invoice.
-    pub fn get_escrow_status(
-        env: Env,
-        invoice_id: BytesN<32>,
-    ) -> Result<crate::payments::EscrowStatus, QuickLendXError> {
-        crate::payments::EscrowStorage::get_escrow_status(&env, &invoice_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)
-    }
-
-    /// Release a funded invoice's escrow to the business.
-    ///
-    /// The invoice must be `Funded` and its escrow must be `Held`.
-    /// `payments::release_escrow` enforces that the escrow's business authorizes
-    /// the call, and `EscrowStatus::verify_transition` rejects any transition
-    /// other than `Held -> Released`, so a second release fails with
-    /// `InvalidStatus`.
-    pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
-        PauseControl::require_not_paused(&env)?;
-        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        if invoice.status != InvoiceStatus::Funded {
-            return Err(QuickLendXError::InvalidStatus);
-        }
-        let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvalidStatus)?;
-        with_payment_guard(&env, || {
-            crate::payments::release_escrow(&env, &invoice_id, &escrow.business)
-        })
-    }
-
-    /// Refund a funded invoice's escrow back to the investor.
-    ///
-    /// Authorized for the contract admin or the invoice's business. Delegates to
-    /// `escrow::refund_escrow_funds`, which enforces that authorization matrix
-    /// and the `Held -> Refunded` escrow transition.
-    pub fn refund_escrow_funds(
-        env: Env,
-        invoice_id: BytesN<32>,
-        caller: Address,
-    ) -> Result<(), QuickLendXError> {
-        PauseControl::require_not_paused(&env)?;
-        with_payment_guard(&env, || {
-            crate::escrow::refund_escrow_funds(&env, &invoice_id, &caller)
-        })
-    }
-
-    /// Record `caller`'s approval for an early escrow release.
-    ///
-    /// Ported from the contract reference surface as-is: the approval bookkeeping
-    /// for early release is not yet wired into `release_escrow_funds`, so this
-    /// entrypoint currently succeeds without side effects.
-    pub fn approve_early_escrow_release(
-        env: Env,
-        invoice_id: BytesN<32>,
-        caller: Address,
-    ) -> Result<(), QuickLendXError> {
-        let _ = (&env, &invoice_id, &caller);
-        Ok(())
-    }
-
-    /// Mark an invoice as completed (paid) by its owning business.
-    ///
-    /// Idempotent on `nonce`; only an invoice that is still open for funding may
-    /// be completed.
-    pub fn complete_invoice(
-        env: Env,
-        caller: Address,
-        invoice_id: BytesN<32>,
-        nonce: BytesN<32>,
-    ) -> Result<(), QuickLendXError> {
-        if crate::idempotency::idempotency_exists(&env, &nonce) {
-            return Ok(());
-        }
-        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        check_and_record_mutation(&env, &invoice.business)?;
-        let invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        if !invoice.is_available_for_funding() {
-            return Err(QuickLendXError::InvoiceNotAvailableForFunding);
-        }
-        let mut invoice = InvoiceStorage::get_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
-        crate::invoice::require_matching_business_invoice_ownership(&env, &caller, &invoice)?;
-        caller.require_auth();
-        invoice.mark_as_paid(&env, caller.clone(), env.ledger().timestamp());
-        InvoiceStorage::update_invoice(&env, &invoice);
-        crate::idempotency::store_idempotency(&env, &nonce);
-        Ok(())
-    }
-
-    /// Freeze an invoice (admin only).
-    ///
-    /// Emits `InvoiceFrozen` with the appeals channel so off-chain consumers can
-    /// surface the appeals path to the affected business.
-    pub fn freeze_invoice(
-        env: Env,
-        admin: Address,
-        invoice_id: BytesN<32>,
-        reason: BusinessFreezeReason,
-    ) -> Result<(), QuickLendXError> {
-        AdminStorage::require_admin(&env, &admin)?;
-        InvoiceStorage::set_frozen(&env, &invoice_id, true, Some(reason));
-        crate::events::emit_invoice_frozen(&env, &invoice_id, &admin, reason.label());
-        Ok(())
     }
 
     // =========================================================================
@@ -2084,37 +932,6 @@ impl QuickLendXContract {
     pub fn get_invoice_investment(env: Env, invoice_id: BytesN<32>) -> Investment {
         crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
             .expect("invoice has no investment")
-    }
-
-    pub fn get_investments_by_investor(env: Env, investor: Address) -> Vec<BytesN<32>> {
-        crate::investment::InvestmentStorage::get_investments_by_investor(&env, &investor)
-    }
-
-    pub fn withdraw_investment(
-        env: Env,
-        invoice_id: BytesN<32>,
-        investor: Address,
-    ) -> Result<(), QuickLendXError> {
-        PauseControl::require_not_paused(&env)?;
-        with_payment_guard(&env, || {
-            crate::escrow::withdraw_investment(&env, &invoice_id, &investor)
-        })
-    }
-
-    pub fn get_investor_investments_paged(
-        env: Env,
-        investor: Address,
-        status_filter: Option<crate::types::InvestmentStatus>,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
-        crate::investment_queries::InvestmentQueries::get_investor_investments_paged(
-            &env,
-            &investor,
-            status_filter,
-            cursor,
-            limit,
-        )
     }
 
     // =========================================================================
@@ -2155,9 +972,8 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         // Verify the caller-supplied snapshot is fresh.
-        let stored =
-            crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
-                .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let stored = crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         if stored.investment_id != snap.investment_id || stored.amount != snap.amount {
             return Err(QuickLendXError::StaleInvestmentSnapshot);
         }
@@ -2193,15 +1009,6 @@ impl QuickLendXContract {
     ) -> Result<Vec<crate::settlement::SettlementPaymentRecord>, QuickLendXError> {
         let capped = limit.min(crate::settlement::MAX_SETTLEMENT_BATCH_SIZE_SOFT_CAP);
         crate::settlement::get_payment_records(&env, &invoice_id, from, capped)
-    }
-
-    pub fn get_payment_records_paged(
-        env: Env,
-        invoice_id: BytesN<32>,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::settlement::CursorPaymentRecordsPage, QuickLendXError> {
-        crate::settlement::get_payment_records_paged(&env, &invoice_id, cursor, limit)
     }
 
     /// Returns `true` if the invoice has been fully settled.
@@ -2261,9 +1068,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         check_and_record_mutation(&env, &admin)?;
-        with_payment_guard(&env, || {
-            crate::dispute::resolve_dispute(&env, &admin, &invoice_id, &resolution)
-        })
+        crate::dispute::resolve_dispute(&env, &admin, &invoice_id, &resolution)
     }
 
     /// Resolve a dispute with a structured outcome (admin + registered arbiter).
@@ -2276,9 +1081,7 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         check_and_record_mutation(&env, &admin)?;
-        with_payment_guard(&env, || {
-            crate::dispute::resolve_dispute_structured(&env, &admin, &invoice_id, outcome, &note)
-        })
+        crate::dispute::resolve_dispute_structured(&env, &admin, &invoice_id, outcome, &note)
     }
 
     /// Return the dispute details for an invoice, or `None` if no dispute exists.
@@ -2291,28 +1094,12 @@ impl QuickLendXContract {
         crate::dispute::get_invoices_with_disputes(&env)
     }
 
-    pub fn get_invoices_with_disputes_paged(
-        env: Env,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
-        crate::dispute::get_invoices_with_disputes_paged(&env, cursor, limit)
-    }
-
     /// Filter dispute-indexed invoices by their current dispute status.
-    pub fn get_invoices_by_dispute_status(env: Env, status: DisputeStatus) -> Vec<BytesN<32>> {
-        crate::dispute::get_invoices_by_dispute_status(&env, &status)
-    }
-
-    pub fn get_disputes_by_status_paged(
+    pub fn get_invoices_by_dispute_status(
         env: Env,
         status: DisputeStatus,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::types::CursorBytes32Page, QuickLendXError> {
-        crate::dispute::get_invoices_by_dispute_status_paged(
-            &env, &status, cursor, limit,
-        )
+    ) -> Vec<BytesN<32>> {
+        crate::dispute::get_invoices_by_dispute_status(&env, &status)
     }
 
     /// Return a paginated dispute timeline for an invoice.
@@ -2323,15 +1110,6 @@ impl QuickLendXContract {
         limit: u32,
     ) -> Result<crate::dispute_timeline::DisputeTimeline, QuickLendXError> {
         crate::dispute_timeline::get_dispute_timeline(&env, &invoice_id, offset, limit)
-    }
-
-    pub fn get_dispute_timeline_paged(
-        env: Env,
-        invoice_id: BytesN<32>,
-        cursor: Option<String>,
-        limit: u32,
-    ) -> Result<crate::dispute_timeline::CursorDisputeTimeline, QuickLendXError> {
-        crate::dispute_timeline::get_dispute_timeline_paged(&env, &invoice_id, cursor, limit)
     }
 
     /// Update the evidence on an open (Disputed) dispute. Creator-only, immutable once UnderReview.
@@ -2377,7 +1155,6 @@ impl QuickLendXContract {
         admin: Address,
         arbiter: Address,
     ) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         ArbiterStorage::register_arbiter(&env, &admin, &arbiter)
     }
 
@@ -2387,7 +1164,6 @@ impl QuickLendXContract {
         admin: Address,
         arbiter: Address,
     ) -> Result<(), QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         ArbiterStorage::unregister_arbiter(&env, &admin, &arbiter)
     }
 
@@ -2401,32 +1177,12 @@ impl QuickLendXContract {
         ArbiterStorage::is_arbiter(&env, &addr)
     }
 
-    /// Configure the distinct-arbiter quorum for structured dispute resolutions.
-    pub fn set_dispute_quorum(
-        env: Env,
-        admin: Address,
-        quorum: u32,
-    ) -> Result<(), QuickLendXError> {
-        ArbiterStorage::set_dispute_quorum(&env, &admin, quorum)
-    }
-
-    /// Return the configured dispute-resolution quorum (default: 1).
-    pub fn get_dispute_quorum(env: Env) -> u32 {
-        ArbiterStorage::get_dispute_quorum(&env)
-    }
-
     // ── Backup Management ────────────────────────────────────────────────────
 
     /// Create a backup of all invoices across all statuses.
     ///
     /// Returns the backup ID.
-    pub fn create_backup(
-        env: Env,
-        admin: Address,
-        description: String,
-    ) -> Result<BytesN<32>, errors::QuickLendXError> {
     pub fn create_backup(env: Env, admin: Address, description: String) -> Result<BytesN<32>, errors::QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
 
@@ -2436,7 +1192,7 @@ impl QuickLendXContract {
 
         let all_invoices = backup::BackupStorage::get_all_invoices(&env);
         let backup_id = backup::BackupStorage::generate_backup_id(&env);
-
+        
         let backup = backup::Backup {
             backup_id: backup_id.clone(),
             timestamp: env.ledger().timestamp(),
@@ -2459,13 +1215,7 @@ impl QuickLendXContract {
     ///
     /// Clears all existing invoices and restores from the backup snapshot.
     /// Returns the number of invoices restored.
-    pub fn restore_backup(
-        env: Env,
-        admin: Address,
-        backup_id: BytesN<32>,
-    ) -> Result<u32, errors::QuickLendXError> {
     pub fn restore_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<u32, errors::QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         backup::BackupStorage::restore_from_backup(&env, &backup_id)
@@ -2479,7 +1229,6 @@ impl QuickLendXContract {
         max_age_seconds: u64,
         enabled: bool,
     ) -> Result<(), errors::QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
 
@@ -2493,13 +1242,7 @@ impl QuickLendXContract {
     }
 
     /// Archive a backup (mark it as no longer active).
-    pub fn archive_backup(
-        env: Env,
-        admin: Address,
-        backup_id: BytesN<32>,
-    ) -> Result<(), errors::QuickLendXError> {
     pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), errors::QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         governance::require_no_open_governance_proposal(&env)?;
@@ -2516,7 +1259,6 @@ impl QuickLendXContract {
     ///
     /// Returns the number of backups removed.
     pub fn cleanup_backups(env: Env, admin: Address) -> Result<u32, errors::QuickLendXError> {
-        crate::upgrade::UpgradeControl::require_no_pending_upgrade(&env)?;
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         backup::BackupStorage::cleanup_old_backups(&env)
@@ -2544,235 +1286,6 @@ impl QuickLendXContract {
     /// Preview which backups would be cleaned up by the retention policy.
     pub fn preview_cleanup_backups(env: Env) -> backup::BackupCleanupDryRunReport {
         backup::BackupStorage::preview_cleanup_old_backups(&env)
-    }
-
-    // ── Storage Migration Runner ─────────────────────────────────────────────
-
-    /// Plan and initiate a resumable storage migration from `from` to `to` (admin only).
-    pub fn migration_plan(
-        env: Env,
-        admin: Address,
-        from: u32,
-        to: u32,
-    ) -> Result<migration::MigrationPlan, errors::QuickLendXError> {
-        migration::MigrationRunner::plan(&env, &admin, from, to)
-    }
-
-    /// Execute one bounded step of the active storage migration (admin only).
-    pub fn migration_run_step(
-        env: Env,
-        admin: Address,
-        limit: u32,
-    ) -> Result<migration::MigrationStepResult, errors::QuickLendXError> {
-        migration::MigrationRunner::run_step(&env, &admin, limit)
-    }
-
-    /// Preview the next storage migration step without mutating state (admin only).
-    pub fn migration_dry_run(
-        env: Env,
-        admin: Address,
-        limit: u32,
-    ) -> Result<migration::MigrationDryRunReport, errors::QuickLendXError> {
-        migration::MigrationRunner::dry_run(&env, &admin, limit)
-    }
-
-    /// Return the current storage migration status.
-    pub fn migration_status(env: Env) -> migration::MigrationStatus {
-        migration::MigrationRunner::status(&env)
-    }
-
-    /// Roll back an in-progress storage migration (admin only).
-    pub fn migration_rollback(env: Env, admin: Address) -> Result<(), errors::QuickLendXError> {
-        migration::MigrationRunner::rollback(&env, &admin)
-    }
-
-    /// Return the persisted completion record for a migrated schema version.
-    pub fn get_migration_record(
-        env: Env,
-        version: u32,
-    ) -> Option<migration::MigrationVersionRecord> {
-        migration::MigrationRunner::get_version_record(&env, version)
-    // ── Stub Methods for Test Compatibility ─────────────────────────────────
-    // These are minimal stubs to satisfy existing tests. Full implementation
-    // would be added when those modules are complete.
-
-    pub fn initialize_protocol_limits(
-        _env: Env,
-        _admin: Address,
-        _min_amount: i128,
-        _max_due_days: u64,
-        _lock_time_limit: u64,
-    ) -> Result<(), errors::QuickLendXError> {
-        Ok(())
-    }
-
-    pub fn store_invoice(
-        env: Env,
-        business: Address,
-        amount: i128,
-        currency: Address,
-        due_date: u64,
-        description: String,
-        category: types::InvoiceCategory,
-        _tags: Vec<String>,
-        _customer_name: Option<String>,
-    ) -> BytesN<32> {
-        use types::{Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceStatus};
-        
-        let invoice_id = storage::InvoiceStorage::next_count(&env);
-        let mut id_bytes = [0u8; 32];
-        id_bytes[24..32].copy_from_slice(&invoice_id.to_be_bytes());
-        let id = BytesN::from_array(&env, &id_bytes);
-
-        let invoice = Invoice {
-            id: id.clone(),
-            business,
-            amount,
-            currency,
-            due_date,
-            status: InvoiceStatus::Pending,
-            created_at: env.ledger().timestamp(),
-            description,
-            metadata_customer_name: None,
-            metadata_customer_address: None,
-            metadata_tax_id: None,
-            metadata_notes: None,
-            metadata_line_items: Vec::new(&env),
-            category,
-            tags: Vec::new(&env),
-            funded_amount: 0,
-            funded_at: None,
-            investor: None,
-            settled_at: None,
-            average_rating: None,
-            total_ratings: 0,
-            ratings: Vec::new(&env),
-            dispute_status: DisputeStatus::None,
-            dispute: Dispute {
-                created_by: Address::generate(&env),
-                created_at: 0,
-                reason: String::from_str(&env, ""),
-                evidence: String::from_str(&env, ""),
-                resolution: String::from_str(&env, ""),
-                resolved_by: Address::generate(&env),
-                resolved_at: 0,
-                resolution_outcome: DisputeResolution::None,
-            },
-            total_paid: 0,
-            payment_history: Vec::new(&env),
-            origination_fee_bps: None,
-            late_payment_penalty_bps: None,
-            early_payment_discount_bps: None,
-        };
-
-        storage::InvoiceStorage::store_invoice(&env, &invoice);
-        id
-    }
-
-    pub fn get_total_invoice_count(env: Env) -> u64 {
-        storage::InvoiceStorage::get_total_count(&env)
-    }
-
-    pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<types::Invoice, errors::QuickLendXError> {
-        storage::InvoiceStorage::get(&env, &invoice_id)
-            .ok_or(errors::QuickLendXError::InvoiceNotFound)
-    }
-    // =========================================================================
-    // Vesting
-    // =========================================================================
-
-    /// Create a time-locked vesting schedule for `beneficiary`.
-    ///
-    /// Locks `total_amount` of `token` in contract custody and releases it
-    /// linearly from `start_time` to `end_time`, gated by a `cliff_seconds`
-    /// cliff. Returns the new schedule id.
-    ///
-    /// # Authorization
-    /// Requires the current admin to authorize and pays for the tokens.
-    ///
-    /// # Errors
-    /// - `InvalidAmount` if `total_amount <= 0`
-    /// - `InvalidTimestamp` if the timeline is backdated/non-monotonic or the
-    ///   cliff eliminates the post-cliff window
-    /// - `NotAdmin` if `admin` is not the stored admin
-    pub fn create_vesting_schedule(
-        env: Env,
-        admin: Address,
-        token: Address,
-        beneficiary: Address,
-        total_amount: i128,
-        start_time: u64,
-        cliff_seconds: u64,
-        end_time: u64,
-    ) -> Result<u64, QuickLendXError> {
-        crate::vesting::Vesting::create_schedule(
-            &env,
-            &admin,
-            token,
-            beneficiary,
-            total_amount,
-            start_time,
-            cliff_seconds,
-            end_time,
-        )
-    }
-
-    /// Return the vesting schedule with `id`, if it exists.
-    pub fn get_vesting_schedule(env: Env, id: u64) -> Option<crate::vesting::VestingSchedule> {
-        crate::vesting::Vesting::get_schedule(&env, id)
-    }
-
-    /// Aggregated vesting summary for `user` across all of their schedules.
-    pub fn get_vesting_summary(env: Env, user: Address) -> crate::vesting::VestingSummary {
-        crate::vesting::Vesting::get_summary_for_user(&env, &user)
-    }
-
-    /// Total amount vested for schedule `id` at the current ledger time.
-    ///
-    /// Returns `None` if the schedule does not exist.
-    pub fn get_vesting_vested(env: Env, id: u64) -> Option<i128> {
-        crate::vesting::Vesting::get_schedule(&env, id)
-            .and_then(|s| crate::vesting::Vesting::vested_amount(&env, &s).ok())
-    }
-
-    /// Amount currently releasable for schedule `id` at the current ledger time.
-    ///
-    /// Returns `None` if the schedule does not exist.
-    pub fn get_vesting_releasable(env: Env, id: u64) -> Option<i128> {
-        crate::vesting::Vesting::get_schedule(&env, id)
-            .and_then(|s| crate::vesting::Vesting::releasable_amount(&env, &s).ok())
-    }
-
-    /// Release the currently releasable tokens for schedule `id` to its
-    /// beneficiary and return the amount transferred.
-    ///
-    /// # Authorization
-    /// Requires the schedule's beneficiary to authorize the call.
-    ///
-    /// # Errors
-    /// - `Unauthorized` if the caller is not the beneficiary
-    /// - `InvalidTimestamp` if called before the cliff
-    /// - Returns `Ok(0)` when nothing remains to release (idempotent)
-    pub fn release_vested_tokens(
-        env: Env,
-        beneficiary: Address,
-        id: u64,
-    ) -> Result<i128, QuickLendXError> {
-        crate::vesting::Vesting::release(&env, &beneficiary, id)
-    }
-
-    /// Alias of [`Self::release_vested_tokens`].
-    pub fn release_vesting(
-        env: Env,
-        beneficiary: Address,
-        id: u64,
-    ) -> Result<i128, QuickLendXError> {
-        crate::vesting::Vesting::release(&env, &beneficiary, id)
-    }
-
-    /// Alias of [`Self::get_vesting_releasable`].
-    pub fn get_releasable_vesting(env: Env, id: u64) -> Option<i128> {
-        Self::get_vesting_releasable(env, id)
     }
 
 }
