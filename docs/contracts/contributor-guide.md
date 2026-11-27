@@ -589,7 +589,7 @@ records.
 
 - [`docs/contracts/invoice-lifecycle.md`](invoice-lifecycle.md) — full state machine with transitions
 - [`docs/contracts/errors.md`](errors.md) — error code reference
-- [`docs/contracts/events.md`](events.md) — event schema reference
+- [`docs/EVENTS_SCHEMA.md`](../EVENTS_SCHEMA.md) — canonical event schema reference
 - [`docs/contracts/security.md`](security.md) — reentrancy, pause, and access control
 - [`docs/contracts/protocol-limits.md`](protocol-limits.md) — all configurable limits
 - [`quicklendx-contracts/README.md`](../../quicklendx-contracts/README.md) — build, deploy, and test overview

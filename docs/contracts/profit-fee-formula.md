@@ -251,7 +251,7 @@ This subtraction-based approach ensures exact equality with no rounding errors.
 
 The no-dust accounting identity `investor_return + platform_fee == payment_amount` is
 proven by the contract test-suite. See the table-driven, property-based, and settlement
-flow tests in [quicklendx-contracts/src/test_settlement_accounting_identity.rs](quicklendx-contracts/src/test_settlement_accounting_identity.rs)
+flow tests in [quicklendx-contracts/src/test_settlement_accounting_identity.rs](../../quicklendx-contracts/src/test_settlement_accounting_identity.rs)
 which validate the identity across all fee-bps values in `0..=10000`, the smallest
 non-zero payment amount, and near-`i128` boundary values.
 
@@ -565,4 +565,4 @@ const calc = calculateFees(10000, 11000, 200);
 
 - [Settlement Module](./settlement.md) - Settlement flow integration
 - [Fees Module](./fees.md) - Complete fee system documentation
-- [Events](./events.md) - Event emission details
+- [Events](../EVENTS_SCHEMA.md) - Canonical event emission details

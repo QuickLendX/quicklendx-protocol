@@ -672,7 +672,7 @@ if invoice.is_overdue(current_timestamp) {
 
 ## References
 
-- [Events Module](./events.md) - Event emission system
+- [Events Module](../EVENTS_SCHEMA.md) - Canonical event emission system
 - [Invoice Lifecycle](./invoice-lifecycle.md) - Invoice state management
 - [Bidding System](./bidding.md) - Bid placement and acceptance
 - [Payment Processing](./escrow.md) - Payment and escrow management

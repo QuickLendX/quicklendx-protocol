@@ -13,7 +13,7 @@ export const CURRENT_CONTRACT_VERSION = 1;
 export const CURRENT_EVENT_SCHEMA_VERSION = 1;
 
 /**
- * Maps each canonical event topic string (from docs/contracts/events.md)
+ * Maps each canonical event topic string (from docs/EVENTS_SCHEMA.md)
  * to the event schema version that produced it.
  *
  * When an event topic's payload is extended in a breaking way, add a new

@@ -3,7 +3,7 @@
 This document outlines the key protocol events that node operators and support teams should monitor, along with recommended alert thresholds.
 
 ## Audience
-This guide is written for **Operators** running off-chain indexers and alert pipelines. For downstream integrators consuming these events, refer to [events.md](events.md). If an alert requires action, refer to the [Incident Response Runbook](RUNBOOK_INCIDENT_RESPONSE.md).
+This guide is written for **Operators** running off-chain indexers and alert pipelines. For downstream integrators consuming these events, refer to [EVENTS_SCHEMA.md](EVENTS_SCHEMA.md). If an alert requires action, refer to the [Incident Response Runbook](RUNBOOK_INCIDENT_RESPONSE.md).
 
 ## Counters and Alert Thresholds
 
@@ -45,4 +45,4 @@ Emitted when locked investor funds are refunded due to a cancelled bid or expire
 ## Cross-References
 * Main documentation: [README.md](../README.md)
 * Incident procedures: [RUNBOOK_INCIDENT_RESPONSE.md](RUNBOOK_INCIDENT_RESPONSE.md)
-* API Schemas: [events.md](events.md)
+* Event schemas: [EVENTS_SCHEMA.md](EVENTS_SCHEMA.md)

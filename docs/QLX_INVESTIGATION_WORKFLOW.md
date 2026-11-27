@@ -20,7 +20,7 @@ When an alert fires or a user reports an issue, the first step is to gather the 
    - `invoice_id` or `bid_id` involved
    - Invoker account ID
 3. **Check the Indexer/Dashboards:**
-   - Review [EVENT_DASHBOARDS.md](EVENT_DASHBOARDS.md) for related error events or spikes.
+   - Review the [operator dashboards](EVENTS_SCHEMA.md#operator-dashboards-and-alerts) for related error events or spikes.
    - Example Query: Look for `Error` events associated with the specific `invoice_id`.
 
 **Concrete Example:**
@@ -67,5 +67,5 @@ outcomes. Monitor `dsp_vote` events for per-arbiter evidence and
 ## Cross-References
 
 - [RUNBOOK_INCIDENT_RESPONSE.md](RUNBOOK_INCIDENT_RESPONSE.md): For emergency response procedures.
-- [EVENT_DASHBOARDS.md](EVENT_DASHBOARDS.md): For monitoring and querying events.
+- [Operator dashboards](EVENTS_SCHEMA.md#operator-dashboards-and-alerts): For monitoring and querying events.
 - [contracts/errors.md](contracts/errors.md): Reference for contract error codes.
