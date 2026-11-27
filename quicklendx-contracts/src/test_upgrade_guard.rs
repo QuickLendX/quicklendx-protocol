@@ -224,3 +224,67 @@ fn scheduled_event_has_executable_at() {
     let (_, scheduled_at) = UpgradeControl::get_pending_upgrade(&env).unwrap();
     assert_eq!(scheduled_at, initial_time);
 }
+
+
+#[test]
+fn contract_entrypoints_expose_upgrade_schedule_cancel_and_pending_query() {
+    let (env, admin, wasm_hash) = setup_test();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+    client.set_admin(&admin);
+
+    client.schedule_upgrade(&admin, &wasm_hash);
+    let pending = client.get_pending_upgrade().unwrap();
+    assert_eq!(pending.0, wasm_hash);
+    assert!(client.is_paused());
+
+    client.cancel_upgrade(&admin);
+    assert!(client.get_pending_upgrade().is_none());
+    assert!(!client.is_paused());
+}
+
+#[test]
+fn contract_entrypoint_rejects_early_upgrade_execution() {
+    let (env, admin, wasm_hash) = setup_test();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+    client.set_admin(&admin);
+
+    client.schedule_upgrade(&admin, &wasm_hash);
+    let result = client.try_execute_upgrade(&admin);
+    assert_eq!(
+        result.unwrap_err().unwrap(),
+        QuickLendXError::UpgradeTimelockNotElapsed
+    );
+    assert!(client.get_pending_upgrade().is_some());
+}
+
+#[test]
+fn contract_entrypoint_blocks_kyc_writes_while_upgrade_is_pending() {
+    let (env, admin, wasm_hash) = setup_test();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+    client.set_admin(&admin);
+
+    client.schedule_upgrade(&admin, &wasm_hash);
+    let business = Address::generate(&env);
+    let result = client.try_submit_kyc_application(
+        &business,
+        &soroban_sdk::String::from_str(&env, "kyc"),
+    );
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::UpgradePending);
+}
+
+
+#[test]
+fn contract_entrypoint_blocks_invoice_state_changes_while_upgrade_is_pending() {
+    let (env, admin, wasm_hash) = setup_test();
+    let contract_id = env.register(crate::QuickLendXContract, ());
+    let client = crate::QuickLendXContractClient::new(&env, &contract_id);
+    client.set_admin(&admin);
+
+    client.schedule_upgrade(&admin, &wasm_hash);
+    let invoice_id = BytesN::from_array(&env, &[7u8; 32]);
+    let result = client.try_verify_invoice(&invoice_id);
+    assert_eq!(result.unwrap_err().unwrap(), QuickLendXError::UpgradePending);
+}

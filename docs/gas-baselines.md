@@ -25,11 +25,46 @@ When reviewing pull requests:
 
 If you modify contract logic and resource consumption legitimately increases, you must update the baselines.
 
-Run the automated baseline update script:
+Run the automated baseline update script from the repository root (or `quicklendx-contracts/`):
 ```bash
-./scripts/update-gas-baseline.sh
+./quicklendx-contracts/scripts/update-gas-baseline.sh
 ```
-This script executes the test suite with `UPDATE_GAS_BASELINE=1` enabled, measuring actual resource usage and automatically saving them back into `gas-baseline.toml`.
+This script executes `cargo test --test gas_regression` with `UPDATE_GAS_BASELINE=1` enabled, measuring actual resource usage and writing deterministic UTF-8 (no BOM) baselines back into `quicklendx-contracts/scripts/gas-baseline.toml`.
+
+Verify determinism and regression enforcement by running:
+```bash
+cd quicklendx-contracts && cargo test --test gas_regression
+```
+
+---
+
+## Soroban Transaction Footprint Limits
+
+In addition to per-entrypoint gas regression baselines, QuickLendX enforces hard Soroban transaction footprint limits (ledger read entries, write entries, read bytes, write bytes, CPU instructions, and memory bytes) at maximum configured protocol bounds.
+
+- **Single-Source Constants**: Defined in `FOOTPRINT_LIMITS` in [operational_limits.rs](../quicklendx-contracts/src/operational_limits.rs).
+- **Enforced Test Suite**: [test_footprint_limits.rs](../quicklendx-contracts/src/test_footprint_limits.rs) runs `accept_bid_and_fund`, `settle_invoice`, `cleanup_expired_bids`, `process_partial_payment`, and paged queries (`get_payment_records`, `get_bids_for_invoice`, `get_dispute_timeline`) at their maximum configured bounds and asserts `env.cost_estimate().resources()` / `env.budget()` stay under the documented ceilings.
+
+### Enforced Footprint Constants
+
+| Constant | Entrypoint | Max Read Entries | Max Write Entries | Max Read Bytes | Max Write Bytes | Max Instructions | Max Mem Bytes |
+|---|---|---|---|---|---|---|---|
+| `FOOTPRINT_ACCEPT_BID_AND_FUND` | `accept_bid_and_fund` (50 bids) | 100 | 50 | 200 000 | 66 560 | 100 000 000 | 41 943 040 |
+| `FOOTPRINT_SETTLE_INVOICE` | `settle_invoice` | 100 | 50 | 200 000 | 66 560 | 100 000 000 | 41 943 040 |
+| `FOOTPRINT_CLEANUP_EXPIRED_BIDS` | `cleanup_expired_bids` (50 expired bids) | 100 | 50 | 200 000 | 66 560 | 100 000 000 | 41 943 040 |
+| `FOOTPRINT_PROCESS_PARTIAL_PAYMENT` | `process_partial_payment` (after 50 payments) | 100 | 50 | 200 000 | 66 560 | 100 000 000 | 41 943 040 |
+| `FOOTPRINT_PAGED_QUERIES` | Paged queries (limit 50) | 100 | 50 | 200 000 | 66 560 | 100 000 000 | 41 943 040 |
+
+### Running & Updating Footprint Limits
+
+```bash
+cd quicklendx-contracts && cargo test --lib test_footprint_limits
+```
+
+If a legitimate protocol change alters an entrypoint's resource footprint:
+1. Edit the corresponding `FOOTPRINT_*` constant in `quicklendx-contracts/src/operational_limits.rs` (must stay within the `SOROBAN_MAX_*` network caps).
+2. Re-run `cd quicklendx-contracts && cargo test --lib test_footprint_limits` and `cargo test --lib operational_limits`.
+3. Update the tables in `docs/CAPS.md` and `docs/gas-baselines.md` and explain the change in the PR description.
 
 ---
 

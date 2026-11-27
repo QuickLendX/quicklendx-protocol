@@ -1,10 +1,23 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { fetchInvoiceById, fetchRankedBids } from "../../lib/api/endpoints";
+import {
+  fetchInvoiceById,
+  fetchInvoices,
+  fetchRankedBids,
+} from "../../lib/api/endpoints";
+import { FreshnessBanner } from "../../components/FreshnessBanner";
+import { PlaceBidForm } from "./PlaceBidForm";
 import { RankedBidsTable } from "./RankedBidsTable";
-import { Bid, PublicInvoice, toPublicInvoice } from "../_lib/view-model";
+import type { InvestorLimit } from "../_lib/investor-limit";
+import { mergePlacedBid } from "../_lib/place-bid";
+import {
+  Bid,
+  FreshnessMetadata,
+  PublicInvoice,
+  toPublicInvoice,
+} from "../_lib/view-model";
 
 export interface InvoiceDetailViewProps {
   params: Promise<{ id: string }> | { id: string };
@@ -45,6 +58,69 @@ export function InvoiceDetailView(props: InvoiceDetailViewProps) {
 
   // bidFlowEnabled defaults to false, but can be overridden via prop or query/flag
   const bidFlowEnabled = props.bidFlowEnabled ?? false;
+
+  // Place-bid flow state. Only used when bidFlowEnabled is true.
+  const [showBidForm, setShowBidForm] = useState(false);
+  const [freshness, setFreshness] = useState<FreshnessMetadata | null>(null);
+  const [investorLimit, setInvestorLimit] = useState<InvestorLimit | null>(null);
+
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  /**
+   * Indexer freshness. It comes from the invoice list response, the same source
+   * the marketplace page uses, since neither the invoice nor the bids endpoint
+   * carries it. A failure is not an error here: no metadata means no banner and
+   * no pause, the same as the marketplace.
+   */
+  const loadFreshness = useCallback(async () => {
+    try {
+      const page = await fetchInvoices({ limit: 1 });
+      if (alive.current) setFreshness(page?.freshness ?? null);
+    } catch {
+      // keep whatever we had
+    }
+  }, []);
+
+  /**
+   * Re-read the ranked bids and freshness. `placed` is a bid that was just
+   * accepted: the ranked endpoint can trail the write, so it is kept in the list
+   * until the server's answer contains it.
+   */
+  const refreshAfterBid = useCallback(
+    async (placed?: Bid) => {
+      if (!invoiceId) return;
+      try {
+        const ranked = await fetchRankedBids(invoiceId);
+        if (!alive.current) return;
+        setBids(placed ? mergePlacedBid(ranked, placed) : ranked);
+      } catch {
+        // Keep the list we have (including an optimistic bid); a failed refresh
+        // must not blank the screen.
+      }
+      await loadFreshness();
+    },
+    [invoiceId, loadFreshness]
+  );
+
+  const handleBidPlaced = useCallback(
+    (bid: Bid) => {
+      // Optimistic: show the new bid in its ranked position right away...
+      setBids((current) => mergePlacedBid(current, bid));
+      // ...then reconcile with the server and refresh the freshness banner.
+      void refreshAfterBid(bid);
+    },
+    [refreshAfterBid]
+  );
+
+  useEffect(() => {
+    if (bidFlowEnabled && invoiceId) void loadFreshness();
+  }, [bidFlowEnabled, invoiceId, loadFreshness]);
 
   useEffect(() => {
     if (!invoiceId) return;
@@ -153,6 +229,9 @@ export function InvoiceDetailView(props: InvoiceDetailViewProps) {
           {bidFlowEnabled && (
             <button
               type="button"
+              onClick={() => setShowBidForm((open) => !open)}
+              aria-expanded={showBidForm}
+              aria-controls="place-bid-panel"
               className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-sm rounded-lg shadow-sm transition-colors"
             >
               Place a bid
@@ -216,6 +295,32 @@ export function InvoiceDetailView(props: InvoiceDetailViewProps) {
           )}
         </div>
       </div>
+
+      {/* Data freshness. Shown with the bid flow, and refreshed after each bid. */}
+      {bidFlowEnabled && freshness && (
+        <div className="mb-6">
+          <FreshnessBanner freshness={freshness} />
+        </div>
+      )}
+
+      {/* Place-bid form */}
+      {bidFlowEnabled && showBidForm && (
+        <div id="place-bid-panel">
+          <PlaceBidForm
+            invoiceId={invoice.id}
+            invoiceAmount={invoice.amount}
+            currency={invoice.currency}
+            invoiceStatus={invoice.status}
+            rankedBids={bids}
+            freshness={freshness}
+            investorLimit={investorLimit}
+            onLimitLearned={setInvestorLimit}
+            onBidPlaced={handleBidPlaced}
+            onAmbiguousFailure={() => void refreshAfterBid()}
+            onCancel={() => setShowBidForm(false)}
+          />
+        </div>
+      )}
 
       {/* Ranked Bids Section */}
       <div className="bg-white rounded-xl border border-gray-200 p-6 sm:p-8 shadow-sm">

@@ -1,6 +1,6 @@
 #![cfg(all(test, feature = "fuzz-tests"))]
 
-use crate::contract::{QuickLendXContract, QuickLendXContractClient};
+use crate::{QuickLendXContract, QuickLendXContractClient};
 use crate::errors::QuickLendXError;
 use crate::invoice::InvoiceCategory;
 use proptest::prelude::*;

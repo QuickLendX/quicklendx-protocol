@@ -1,502 +1,419 @@
-/**
- * Property-based tests for pagination encoding/decoding.
- *
- * Uses fast-check to verify:
- * 1. Round-trip correctness: decode(encode(x)) === x
- * 2. Negative domain coverage: malformed inputs surface as null/error
- * 3. Invariant properties: limits are clamped to [1, 100]
- * 4. Robustness: no crashes on adversarial inputs
- */
-
 import fc from "fast-check";
 import {
-  encodeCursor,
+  applyPagination,
   decodeCursor,
-  parsePaginationParams,
-  CursorPayload,
-  PaginationError,
   DEFAULT_LIMIT,
+  encodeCursor,
   MAX_LIMIT,
+  PageResult,
+  paginationScope,
+  parsePaginationParams,
+  PaginationError,
+  CursorPayload,
 } from "./pagination";
 
+interface SortItem {
+  id: string;
+  score: number;
+}
+
+const finiteNumberArb = fc
+  .double({ noNaN: true, noDefaultInfinity: true })
+  .filter((value) => !Object.is(value, -0));
+
+const cursorPayloadArb = fc
+  .record({
+    id: fc.string({ minLength: 1 }),
+    sort_val: finiteNumberArb,
+    scope: fc.oneof(fc.constant(undefined), fc.string()),
+  })
+  .map(({ id, sort_val, scope }): CursorPayload =>
+    scope === undefined ? { id, sort_val } : { id, sort_val, scope }
+  );
+
+const itemArb = fc
+  .array(
+    fc.tuple(fc.string({ minLength: 0, maxLength: 12 }), fc.integer({ min: -20, max: 20 })),
+    { minLength: 0, maxLength: 30 }
+  )
+  .map((entries): SortItem[] =>
+    entries.map(([id, score], index) => ({ id: `${index}:${id}`, score }))
+  );
+
+const safeStringArb = fc.stringMatching(/^[A-Za-z0-9_-]*$/);
+
+function sortedItems(items: SortItem[]): SortItem[] {
+  return [...items].sort((left, right) => {
+    if (left.score !== right.score) return right.score - left.score;
+    return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+  });
+}
+
+function collectPages(
+  items: SortItem[],
+  limit: number,
+  scope?: string
+): PageResult<SortItem>[] {
+  const pages: PageResult<SortItem>[] = [];
+  let cursor: string | undefined;
+
+  while (true) {
+    if (pages.length > items.length + 1) {
+      throw new Error("pagination did not terminate");
+    }
+    const params = parsePaginationParams({ limit, cursor });
+    const page = applyPagination(items, "score", params, scope);
+    pages.push(page);
+    if (!page.has_more || page.next_cursor === null) {
+      return pages;
+    }
+    cursor = page.next_cursor;
+  }
+}
+
 describe("Pagination property-based tests", () => {
-  /**
-   * POSITIVE DOMAIN: Round-trip correctness
-   * Property: decode(encode(x)) === x for all valid CursorPayload
-   */
-  describe("Round-trip encoding/decoding", () => {
-    it("should encode and decode arbitrary CursorPayload without loss", () => {
+  describe("Cursor round-trip", () => {
+    it("decodes every encoded payload without loss", () => {
+      fc.assert(
+        fc.property(cursorPayloadArb, (payload) => {
+          expect(decodeCursor(encodeCursor(payload))).toEqual(payload);
+        })
+      );
+    });
+
+    it("encodes finite numeric extremes without loss", () => {
       fc.assert(
         fc.property(
-          fc.record({
-            id: fc.string({ minLength: 1, maxLength: 100 }),
-            sort_val: fc.number({ min: -Number.MAX_SAFE_INTEGER, max: Number.MAX_SAFE_INTEGER }),
-          }),
-          (payload: CursorPayload) => {
-            const encoded = encodeCursor(payload);
-            const decoded = decodeCursor(encoded);
-
-            // Verify round-trip correctness
-            expect(decoded).not.toBeNull();
-            expect(decoded).toEqual(payload);
+          fc.oneof(
+            fc.constant(Number.MAX_SAFE_INTEGER),
+            fc.constant(Number.MIN_SAFE_INTEGER),
+            fc.constant(Number.MAX_VALUE),
+            fc.constant(Number.MIN_VALUE)
+          ),
+          (sort_val) => {
+            const payload: CursorPayload = { id: "extreme", sort_val };
+            expect(decodeCursor(encodeCursor(payload))).toEqual(payload);
           }
         )
       );
     });
 
-    it("should handle extreme numeric values in sort_val", () => {
+    it("preserves ids containing unicode and JSON metacharacters", () => {
       fc.assert(
-        fc.property(
-          fc.record({
-            id: fc.stringOf(fc.char()),
-            sort_val: fc.oneof(
-              fc.constant(0),
-              fc.constant(1),
-              fc.constant(-1),
-              fc.constant(Number.MAX_SAFE_INTEGER),
-              fc.constant(Number.MIN_SAFE_INTEGER)
-            ),
-          }),
-          (payload: CursorPayload) => {
-            const encoded = encodeCursor(payload);
-            const decoded = decodeCursor(encoded);
-            expect(decoded).toEqual(payload);
-          }
-        )
+        fc.property(fc.string({ minLength: 1 }), (id) => {
+          const payload: CursorPayload = { id, sort_val: 42 };
+          expect(decodeCursor(encodeCursor(payload))?.id).toBe(id);
+        })
       );
     });
 
-    it("should preserve string id with special characters", () => {
+    it("encodes deterministically", () => {
       fc.assert(
-        fc.property(
-          fc.record({
-            id: fc.string({ minLength: 1, maxLength: 50 }),
-            sort_val: fc.integer(),
-          }),
-          (payload: CursorPayload) => {
-            const encoded = encodeCursor(payload);
-            const decoded = decodeCursor(encoded);
-            expect(decoded?.id).toBe(payload.id);
-          }
-        )
+        fc.property(cursorPayloadArb, (payload) => {
+          expect(encodeCursor(payload)).toBe(encodeCursor(payload));
+        })
+      );
+    });
+
+    it("ignores extra fields when decoding", () => {
+      const encoded = Buffer.from(
+        JSON.stringify({ id: "test-id", sort_val: 42, extra: "ignored" })
+      ).toString("base64url");
+      expect(decodeCursor(encoded)).toEqual({ id: "test-id", sort_val: 42 });
+    });
+
+    it("never throws while encoding valid payloads", () => {
+      fc.assert(
+        fc.property(cursorPayloadArb, (payload) => {
+          expect(() => encodeCursor(payload)).not.toThrow();
+        })
       );
     });
   });
 
-  /**
-   * NEGATIVE DOMAIN: Malformed inputs
-   * Property: decodeCursor(malformed) returns null
-   */
-  describe("Rejection of malformed cursors", () => {
-    it("should reject invalid base64url strings", () => {
-      fc.assert(
-        fc.property(
-          fc.string({
-            minLength: 1,
-            maxLength: 100,
-            // Characters NOT in base64url alphabet
-            blacklist: "!@#$%^&*(){}[]|\\;:',<>?/`~ \n\t",
-          }),
-          (malformed: string) => {
-            const result = decodeCursor(malformed);
-            // Either returns null or throws (both are acceptable)
-            expect([null, undefined].includes(result)).toBe(true);
-          }
-        )
-      );
-    });
-
-    it("should reject truncated base64url (incomplete padding)", () => {
-      fc.assert(
-        fc.property(
-          fc.record({
-            id: fc.string({ minLength: 1, maxLength: 50 }),
-            sort_val: fc.integer(),
-          }),
-          (payload: CursorPayload) => {
-            const encoded = encodeCursor(payload);
-            // Truncate the encoded string (remove last 1-3 chars)
-            const truncated = encoded.slice(0, Math.max(1, encoded.length - 1));
-
-            const decoded = decodeCursor(truncated);
-            // Truncation might fail to decode or return null
-            // The key is it shouldn't crash
-            expect(typeof decoded === "object" || decoded === null).toBe(true);
-          }
-        )
-      );
-    });
-
-    it("should reject JSON with wrong field types", () => {
+  describe("Malformed cursors", () => {
+    it("rejects invalid field types, missing fields, and non-JSON content", () => {
       const invalid = [
-        Buffer.from(JSON.stringify({ id: 123, sort_val: "string" })).toString(
+        Buffer.from(JSON.stringify({ id: 123, sort_val: "string" })).toString("base64url"),
+        Buffer.from(JSON.stringify({ id: "abc" })).toString("base64url"),
+        Buffer.from(JSON.stringify({ sort_val: 123 })).toString("base64url"),
+        Buffer.from(JSON.stringify({ id: null, sort_val: 123 })).toString("base64url"),
+        Buffer.from(JSON.stringify({ id: "abc", sort_val: NaN })).toString("base64url"),
+        Buffer.from(JSON.stringify({ id: "abc", sort_val: Infinity })).toString("base64url"),
+        Buffer.from(JSON.stringify({ id: "abc", sort_val: 1, scope: 42 })).toString(
           "base64url"
-        ), // wrong types
-        Buffer.from(JSON.stringify({ id: "abc" })).toString("base64url"), // missing sort_val
-        Buffer.from(JSON.stringify({ sort_val: 123 })).toString("base64url"), // missing id
-        Buffer.from(JSON.stringify({ id: null, sort_val: 123 })).toString(
-          "base64url"
-        ), // null id
-        Buffer.from(JSON.stringify({ id: "abc", sort_val: NaN })).toString(
-          "base64url"
-        ), // NaN sort_val
-        Buffer.from(JSON.stringify({ id: "abc", sort_val: Infinity })).toString(
-          "base64url"
-        ), // Infinity
+        ),
+        Buffer.from("not json").toString("base64url"),
+        "",
+        " ",
+        "\t",
+        "\n",
       ];
 
       invalid.forEach((cursor) => {
-        const result = decodeCursor(cursor);
-        expect(result).toBeNull();
+        expect(decodeCursor(cursor)).toBeNull();
       });
     });
 
-    it("should reject non-JSON base64url content", () => {
+    it("never throws on arbitrary strings", () => {
       fc.assert(
-        fc.property(fc.string({ minLength: 1, maxLength: 50 }), (content: string) => {
-          const encoded = Buffer.from(content).toString("base64url");
-          // If content is not valid JSON, decode should return null
-          try {
-            const result = decodeCursor(encoded);
-            expect(result).toBeNull();
-          } catch {
-            // Parsing errors are acceptable
+        fc.property(fc.string(), (raw) => {
+          const decoded = decodeCursor(raw);
+          if (decoded !== null) {
+            expect(typeof decoded.id).toBe("string");
+            expect(typeof decoded.sort_val).toBe("number");
+            expect(Number.isFinite(decoded.sort_val)).toBe(true);
           }
         })
       );
     });
 
-    it("should reject tampering with padding", () => {
+    it("returns null or a valid payload for truncated cursors", () => {
+      fc.assert(
+        fc.property(cursorPayloadArb, (payload) => {
+          const encoded = encodeCursor(payload);
+          const truncated = encoded.slice(0, Math.max(1, encoded.length - 1));
+          const decoded = decodeCursor(truncated);
+          if (decoded !== null) {
+            expect(typeof decoded.id).toBe("string");
+            expect(Number.isFinite(decoded.sort_val)).toBe(true);
+          }
+        })
+      );
+    });
+  });
+
+  describe("Limit parsing", () => {
+    it("uses DEFAULT_LIMIT when limit is omitted", () => {
+      expect(parsePaginationParams({}).limit).toBe(DEFAULT_LIMIT);
+      expect(parsePaginationParams({ cursor: "" }).limit).toBe(DEFAULT_LIMIT);
+    });
+
+    it("preserves limits in the valid range", () => {
+      fc.assert(
+        fc.property(fc.integer({ min: 1, max: MAX_LIMIT }), (limit) => {
+          expect(parsePaginationParams({ limit }).limit).toBe(limit);
+        })
+      );
+    });
+
+    it("clamps limits above MAX_LIMIT", () => {
       fc.assert(
         fc.property(
-          fc.record({
-            id: fc.string({ minLength: 1, maxLength: 50 }),
-            sort_val: fc.integer(),
-          }),
-          (payload: CursorPayload) => {
-            const encoded = encodeCursor(payload);
-            // Try adding extra padding
-            const tampered = encoded + "===";
-
-            try {
-              const result = decodeCursor(tampered);
-              // Should either return null or throw
-              expect([null, undefined].includes(result)).toBe(true);
-            } catch {
-              // Decoding errors are fine for tampered data
-            }
+          fc.integer({ min: MAX_LIMIT + 1, max: Number.MAX_SAFE_INTEGER }),
+          (limit) => {
+            expect(parsePaginationParams({ limit }).limit).toBe(MAX_LIMIT);
           }
         )
       );
     });
 
-    it("should reject empty and whitespace cursors", () => {
-      const invalid = ["", " ", "\t", "\n", "   "];
-      invalid.forEach((cursor) => {
-        const result = decodeCursor(cursor);
-        expect(result).toBeNull();
-      });
-    });
-  });
-
-  /**
-   * INVARIANT PROPERTIES: Limit clamping
-   * Property: parsePaginationParams always returns limit in [1, MAX_LIMIT]
-   */
-  describe("Limit validation and clamping", () => {
-    it("should clamp limit to [1, MAX_LIMIT]", () => {
+    it("accepts numeric strings as limits", () => {
       fc.assert(
-        fc.property(fc.integer(), (limitValue: number) => {
-          const params = parsePaginationParams({ limit: limitValue });
-
-          // Verify clamping invariant
-          expect(params.limit).toBeGreaterThanOrEqual(1);
-          expect(params.limit).toBeLessThanOrEqual(MAX_LIMIT);
-        })
+        fc.property(
+          fc.integer({ min: 1, max: MAX_LIMIT }).map(String),
+          (limit) => {
+            expect(parsePaginationParams({ limit }).limit).toBe(Number(limit));
+          }
+        )
       );
     });
 
-    it("should return DEFAULT_LIMIT when limit is undefined", () => {
+    it("rejects limits below one and non-integer limits", () => {
       fc.assert(
-        fc.property(fc.anything(), (_: any) => {
-          const params = parsePaginationParams({});
+        fc.property(
+          fc.oneof(
+            fc.integer({ max: 0 }),
+            fc
+              .double({ noNaN: true, noDefaultInfinity: true })
+              .filter((value) => !Number.isInteger(value)),
+            fc.constantFrom("", "abc", "1.5", "0", "-1", "NaN", null, NaN, Infinity, {}, [])
+          ),
+          (limit) => {
+            expect(() => parsePaginationParams({ limit })).toThrow(PaginationError);
+          }
+        )
+      );
+    });
+  });
+
+  describe("Cursor parameter parsing", () => {
+    it("decodes cursors passed to parsePaginationParams", () => {
+      fc.assert(
+        fc.property(cursorPayloadArb, (payload) => {
+          const params = parsePaginationParams({ cursor: encodeCursor(payload) });
+          expect(params.cursor).toEqual(payload);
           expect(params.limit).toBe(DEFAULT_LIMIT);
         })
       );
     });
 
-    it("should reject negative limits", () => {
+    it("treats an empty cursor as no cursor", () => {
+      expect(parsePaginationParams({ cursor: "" }).cursor).toBeNull();
+      expect(parsePaginationParams({}).cursor).toBeNull();
+    });
+
+    it("rejects null and malformed cursors", () => {
+      const invalid = [
+        null,
+        "not a cursor",
+        "!!!",
+        Buffer.from("not json").toString("base64url"),
+      ];
+      invalid.forEach((cursor) => {
+        expect(() => parsePaginationParams({ cursor })).toThrow(PaginationError);
+      });
+    });
+
+    it("rejects every non-string cursor", () => {
       fc.assert(
-        fc.property(fc.integer({ max: 0 }), (negLimit: number) => {
-          expect(() => {
-            parsePaginationParams({ limit: negLimit });
-          }).toThrow(PaginationError);
+        fc.property(
+          fc.oneof(fc.integer(), fc.boolean(), fc.constant(null), fc.array(fc.anything())),
+          (cursor) => {
+            expect(() => parsePaginationParams({ cursor })).toThrow(PaginationError);
+          }
+        )
+      );
+    });
+  });
+
+  describe("Scope handling", () => {
+    it("canonicalizes filter scopes deterministically", () => {
+      fc.assert(
+        fc.property(
+          fc.array(fc.tuple(safeStringArb, safeStringArb)),
+          (entries) => {
+            const filters = Object.fromEntries(entries);
+            const expected = Object.entries(filters)
+              .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0))
+              .map(
+                ([key, value]) =>
+                  `${encodeURIComponent(key)}=${encodeURIComponent(value)}`
+              )
+              .join("&");
+            expect(paginationScope(filters)).toBe(expected);
+          }
+        )
+      );
+    });
+
+    it("omits undefined filters and encodes reserved characters", () => {
+      expect(paginationScope({ b: "two", a: "one", missing: undefined })).toBe(
+        "a=one&b=two"
+      );
+      expect(paginationScope({ "a b": "x/y" })).toBe("a%20b=x%2Fy");
+    });
+
+    it("throws when a scoped cursor is used with another scope", () => {
+      const items: SortItem[] = [
+        { id: "a", score: 10 },
+        { id: "b", score: 9 },
+      ];
+      const first = applyPagination(
+        items,
+        "score",
+        parsePaginationParams({ limit: 1 }),
+        "tenant-a"
+      );
+      const params = parsePaginationParams({ limit: 1, cursor: first.next_cursor });
+      expect(() => applyPagination(items, "score", params, "tenant-b")).toThrow(
+        PaginationError
+      );
+    });
+  });
+
+  describe("Page iteration", () => {
+    it("returns items in stable sort_val DESC, id ASC order", () => {
+      fc.assert(
+        fc.property(itemArb, (items) => {
+          const pages = collectPages(items, 3);
+          expect(pages.flatMap((page) => page.data)).toEqual(sortedItems(items));
         })
       );
     });
 
-    it("should accept and clamp large limits to MAX_LIMIT", () => {
+    it("produces identical pages regardless of input order", () => {
       fc.assert(
-        fc.property(
-          fc.integer({ min: MAX_LIMIT + 1, max: Number.MAX_SAFE_INTEGER }),
-          (largeLimit: number) => {
-            const params = parsePaginationParams({ limit: largeLimit });
-            expect(params.limit).toBe(MAX_LIMIT);
-          }
-        )
-      );
-    });
-
-    it("should accept limits in valid range [1, MAX_LIMIT]", () => {
-      fc.assert(
-        fc.property(fc.integer({ min: 1, max: MAX_LIMIT }), (validLimit: number) => {
-          const params = parsePaginationParams({ limit: validLimit });
-          expect(params.limit).toBe(validLimit);
+        fc.property(itemArb, (items) => {
+          expect(collectPages(items, 3)).toEqual(collectPages([...items].reverse(), 3));
         })
       );
     });
 
-    it("should reject non-integer limit values", () => {
+    it("never repeats an item across pages", () => {
       fc.assert(
-        fc.property(
-          fc.oneof(
-            fc.string(),
-            fc.float({ noNaN: false, noInfinity: false }),
-            fc.boolean(),
-            fc.object()
-          ),
-          (invalid: any) => {
-            expect(() => {
-              parsePaginationParams({ limit: invalid });
-            }).toThrow();
-          }
-        )
-      );
-    });
-  });
-
-  /**
-   * CURSOR PARAMETER PARSING
-   * Property: decodeCursor results are validated by parsePaginationParams
-   */
-  describe("Cursor parameter parsing", () => {
-    it("should decode valid cursors passed to parsePaginationParams", () => {
-      fc.assert(
-        fc.property(
-          fc.record({
-            id: fc.string({ minLength: 1, maxLength: 100 }),
-            sort_val: fc.number({ noNaN: true, noInfinity: true }),
-          }),
-          (payload: CursorPayload) => {
-            const encoded = encodeCursor(payload);
-            const params = parsePaginationParams({ cursor: encoded });
-
-            expect(params.cursor).toEqual(payload);
-          }
-        )
-      );
-    });
-
-    it("should reject invalid cursors in parsePaginationParams", () => {
-      fc.assert(
-        fc.property(
-          fc.string({
-            minLength: 1,
-            blacklist: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_=",
-          }),
-          (malformed: string) => {
-            expect(() => {
-              parsePaginationParams({ cursor: malformed });
-            }).toThrow(PaginationError);
-          }
-        )
-      );
-    });
-
-    it("should accept empty/null cursor as no-cursor", () => {
-      const params1 = parsePaginationParams({ cursor: "" });
-      expect(params1.cursor).toBeNull();
-
-      const params2 = parsePaginationParams({});
-      expect(params2.cursor).toBeNull();
-
-      const params3 = parsePaginationParams({ cursor: null });
-      expect(params3.cursor).toBeNull();
-    });
-
-    it("should reject non-string cursor", () => {
-      fc.assert(
-        fc.property(
-          fc.oneof(
-            fc.integer(),
-            fc.boolean(),
-            fc.object(),
-            fc.array(fc.anything())
-          ),
-          (nonString: any) => {
-            expect(() => {
-              parsePaginationParams({ cursor: nonString });
-            }).toThrow(PaginationError);
-          }
-        )
-      );
-    });
-  });
-
-  /**
-   * EDGE CASES: Robustness
-   * Property: encodeCursor and decodeCursor never crash on valid inputs
-   */
-  describe("Robustness and edge cases", () => {
-    it("should handle very long id strings", () => {
-      fc.assert(
-        fc.property(
-          fc.record({
-            id: fc.string({ minLength: 1000, maxLength: 10000 }),
-            sort_val: fc.integer(),
-          }),
-          (payload: CursorPayload) => {
-            const encoded = encodeCursor(payload);
-            const decoded = decodeCursor(encoded);
-            expect(decoded).toEqual(payload);
-          }
-        )
-      );
-    });
-
-    it("should handle unicode and special characters in id", () => {
-      fc.assert(
-        fc.property(
-          fc.record({
-            id: fc.string({ minLength: 1, maxLength: 100 }),
-            sort_val: fc.integer(),
-          }),
-          (payload: CursorPayload) => {
-            const encoded = encodeCursor(payload);
-            const decoded = decodeCursor(encoded);
-            expect(decoded?.id).toBe(payload.id);
-          }
-        )
-      );
-    });
-
-    it("should handle payload with extra fields (should ignore)", () => {
-      const payload = { id: "test-id", sort_val: 42, extra: "field" };
-      const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
-      const decoded = decodeCursor(encoded);
-
-      // Should decode the valid fields
-      expect(decoded?.id).toBe("test-id");
-      expect(decoded?.sort_val).toBe(42);
-      // Extra fields are ignored (not in CursorPayload contract)
-    });
-
-    it("should never throw on any valid CursorPayload", () => {
-      fc.assert(
-        fc.property(
-          fc.record({
-            id: fc.string({ minLength: 1, maxLength: 100 }),
-            sort_val: fc.number({ noNaN: true, noInfinity: true }),
-          }),
-          (payload: CursorPayload) => {
-            expect(() => {
-              encodeCursor(payload);
-            }).not.toThrow();
-          }
-        )
-      );
-    });
-
-    it("should never crash on arbitrary strings passed to decodeCursor", () => {
-      fc.assert(
-        fc.property(fc.string(), (arbitrary: string) => {
-          expect(() => {
-            decodeCursor(arbitrary);
-          }).not.toThrow();
+        fc.property(itemArb, fc.integer({ min: 1, max: 10 }), (items, limit) => {
+          const ids = collectPages(items, limit).flatMap((page) =>
+            page.data.map((item) => item.id)
+          );
+          expect(new Set(ids).size).toBe(ids.length);
         })
       );
     });
-  });
 
-  /**
-   * STATELESS & DETERMINISTIC
-   * Property: encoding is deterministic (same input always produces same output)
-   */
-  describe("Determinism and idempotence", () => {
-    it("should encode the same payload identically every time", () => {
+    it("keeps pages within the limit and marks only the final page as complete", () => {
       fc.assert(
-        fc.property(
-          fc.record({
-            id: fc.string({ minLength: 1, maxLength: 100 }),
-            sort_val: fc.integer(),
-          }),
-          (payload: CursorPayload) => {
-            const encoded1 = encodeCursor(payload);
-            const encoded2 = encodeCursor(payload);
-            expect(encoded1).toBe(encoded2);
-          }
-        )
+        fc.property(itemArb, fc.integer({ min: 1, max: 10 }), (items, limit) => {
+          const pages = collectPages(items, limit);
+          pages.forEach((page, index) => {
+            expect(page.data.length).toBeLessThanOrEqual(limit);
+            expect(page.has_more).toBe(index < pages.length - 1);
+            if (!page.has_more) expect(page.next_cursor).toBeNull();
+          });
+        })
       );
     });
 
-    it("should decode the same cursor identically every time", () => {
+    it("round-trips next_cursor to the last item on each page", () => {
       fc.assert(
-        fc.property(
-          fc.record({
-            id: fc.string({ minLength: 1, maxLength: 100 }),
-            sort_val: fc.integer(),
-          }),
-          (payload: CursorPayload) => {
-            const encoded = encodeCursor(payload);
-            const decoded1 = decodeCursor(encoded);
-            const decoded2 = decodeCursor(encoded);
-            expect(decoded1).toEqual(decoded2);
-          }
-        )
+        fc.property(itemArb, safeStringArb, (items, scope) => {
+          const pages = collectPages(items, 3, scope);
+          pages.forEach((page, index) => {
+            if (page.next_cursor === null) return;
+            const last = page.data[page.data.length - 1];
+            expect(decodeCursor(page.next_cursor)).toEqual({
+              id: last.id,
+              sort_val: last.score,
+              scope,
+            });
+            expect(pages[index + 1].data[0].id).not.toBe(last.id);
+          });
+        })
       );
     });
-  });
 
-  /**
-   * REGRESSION TESTS: Known failure modes
-   * These tests document specific security/correctness properties
-   */
-  describe("Regression: Known failure modes", () => {
-    it("should reject cursors with NaN in sort_val", () => {
-      const malformed = Buffer.from(
-        JSON.stringify({ id: "test", sort_val: NaN })
-      ).toString("base64url");
-      const result = decodeCursor(malformed);
-      expect(result).toBeNull();
+    it("returns an empty page for a cursor past the end", () => {
+      const items: SortItem[] = [
+        { id: "a", score: 10 },
+        { id: "b", score: 9 },
+      ];
+      const cursor = encodeCursor({ id: "z", sort_val: -1000 });
+      const params = parsePaginationParams({ limit: 10, cursor });
+      expect(applyPagination(items, "score", params)).toEqual({
+        data: [],
+        next_cursor: null,
+        has_more: false,
+      });
     });
 
-    it("should reject cursors with Infinity in sort_val", () => {
-      const malformed = Buffer.from(
-        JSON.stringify({ id: "test", sort_val: Infinity })
-      ).toString("base64url");
-      const result = decodeCursor(malformed);
-      expect(result).toBeNull();
+    it("rejects non-finite sort fields", () => {
+      expect(() =>
+        applyPagination(
+          [{ id: "a", score: NaN }],
+          "score",
+          parsePaginationParams({ limit: 10 })
+        )
+      ).toThrow(PaginationError);
     });
 
-    it("should reject cursors with negative Infinity in sort_val", () => {
-      const malformed = Buffer.from(
-        JSON.stringify({ id: "test", sort_val: -Infinity })
-      ).toString("base64url");
-      const result = decodeCursor(malformed);
-      expect(result).toBeNull();
-    });
-
-    it("should handle cursor from concurrent updates (stale cursor race)", () => {
-      // Simulate a cursor from an older snapshot
-      const stalePayload: CursorPayload = {
-        id: "old-id-12345",
-        sort_val: 99999,
-      };
-      const staleCursor = encodeCursor(stalePayload);
-
-      // Should decode without issue (staleness is handled by pagination logic, not cursor)
-      const decoded = decodeCursor(staleCursor);
-      expect(decoded).toEqual(stalePayload);
+    it("does not mutate the input array", () => {
+      fc.assert(
+        fc.property(itemArb, (items) => {
+          const before = items.map((item) => ({ ...item }));
+          collectPages(items, 3);
+          expect(items).toEqual(before);
+        })
+      );
     });
   });
 });

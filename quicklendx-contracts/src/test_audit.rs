@@ -5,13 +5,94 @@
 
 use super::*;
 use crate::audit::{
-    AuditLogEntry, AuditOperation, AuditOperationFilter, AuditQueryFilter, AuditStorage,
+    AuditLogEntry, AuditOperation, AuditOperationFilter, AuditQueryFilter, AuditStorage, OpType,
 };
 use crate::invoice::InvoiceCategory;
 use soroban_sdk::{
     testutils::{Address as _, Ledger},
-    Address, BytesN, Env, String, Vec,
+    symbol_short, Address, BytesN, Env, String, Vec,
 };
+
+#[test]
+fn test_every_audit_operation_maps_to_its_op_type_symbol() {
+    let operations = [
+        (AuditOperation::InvoiceCreated, symbol_short!("inv_crt")),
+        (AuditOperation::InvoiceUploaded, symbol_short!("inv_up")),
+        (AuditOperation::InvoiceVerified, symbol_short!("inv_ver")),
+        (AuditOperation::InvoiceFunded, symbol_short!("inv_fnd")),
+        (AuditOperation::InvoicePaid, symbol_short!("inv_pd")),
+        (AuditOperation::InvoiceDefaulted, symbol_short!("inv_def")),
+        (AuditOperation::InvoiceStatusChanged, symbol_short!("inv_stch")),
+        (AuditOperation::InvoiceRated, symbol_short!("inv_rt")),
+        (AuditOperation::BidPlaced, symbol_short!("bid_plc")),
+        (AuditOperation::BidAccepted, symbol_short!("bid_acc")),
+        (AuditOperation::BidCancelled, symbol_short!("bid_cnl")),
+        (AuditOperation::BidExpired, symbol_short!("bid_exp")),
+        (AuditOperation::BidWithdrawn, symbol_short!("bid_wdr")),
+        (AuditOperation::EscrowCreated, symbol_short!("esc_cr")),
+        (AuditOperation::EscrowReleased, symbol_short!("esc_rel")),
+        (AuditOperation::EscrowRefunded, symbol_short!("esc_ref")),
+        (AuditOperation::PaymentProcessed, symbol_short!("pay_prc")),
+        (AuditOperation::SettlementCompleted, symbol_short!("stl_cmp")),
+        (
+            AuditOperation::ConfigProtocolChanged,
+            symbol_short!("cfg_prt"),
+        ),
+        (AuditOperation::ConfigFeeChanged, symbol_short!("cfg_fee")),
+        (
+            AuditOperation::ConfigTreasuryChanged,
+            symbol_short!("cfg_trs"),
+        ),
+        (
+            AuditOperation::ConfigFeeStructureChanged,
+            symbol_short!("cfg_fstr"),
+        ),
+        (
+            AuditOperation::ConfigRevenueDistributionChanged,
+            symbol_short!("cfg_rev"),
+        ),
+        (AuditOperation::RatingOverridden, symbol_short!("rt_over")),
+        (AuditOperation::AdminInitialized, symbol_short!("adm_init")),
+        (AuditOperation::AdminTransferred, symbol_short!("adm_trf")),
+        (
+            AuditOperation::AdminTransferInitiated,
+            symbol_short!("adm_req"),
+        ),
+        (
+            AuditOperation::AdminTransferCancelled,
+            symbol_short!("adm_cnl"),
+        ),
+        (AuditOperation::AdminTwoStepUpdated, symbol_short!("adm_2st")),
+        (AuditOperation::ProtocolPaused, symbol_short!("paused")),
+        (AuditOperation::ProtocolUnpaused, symbol_short!("unpaused")),
+        (
+            AuditOperation::EmergencyWithdrawalInitiated,
+            symbol_short!("emg_init"),
+        ),
+        (
+            AuditOperation::EmergencyWithdrawalExecuted,
+            symbol_short!("emg_exec"),
+        ),
+        (
+            AuditOperation::EmergencyWithdrawalCancelled,
+            symbol_short!("emg_cnl"),
+        ),
+        (
+            AuditOperation::TreasuryRotationCancelled,
+            symbol_short!("tr_rot_cn"),
+        ),
+        (AuditOperation::KycSubmitted, symbol_short!("kyc_sub")),
+        (AuditOperation::KycVerified, symbol_short!("kyc_ver")),
+        (AuditOperation::KycRejected, symbol_short!("kyc_rej")),
+        (AuditOperation::KycRevoked, symbol_short!("kyc_rev")),
+        (AuditOperation::InvestorFrozen, symbol_short!("inv_frz")),
+        (AuditOperation::InvestorUnfrozen, symbol_short!("inv_unf")),
+    ];
+
+    for (operation, expected_symbol) in operations {
+        assert_eq!(OpType::from(operation).to_symbol(), expected_symbol);
+    }
+}
 
 fn setup() -> (Env, QuickLendXContractClient<'static>, Address, Address) {
     let env = Env::default();
@@ -47,6 +128,39 @@ fn test_audit_records_are_versioned_and_correlated() {
     );
     assert_eq!(entry.operation_id, entry.audit_id);
     assert!(client.verify_audit_chain(&invoice_id));
+}
+
+#[test]
+fn duplicate_operation_id_is_rejected_without_mutating_audit_storage() {
+    let (env, client, _admin, actor) = setup();
+    let invoice_id = BytesN::from_array(&env, &[7u8; 32]);
+    let operation_id = BytesN::from_array(&env, &[9u8; 32]);
+
+    let (first_append, duplicate_append, total_entries) =
+        env.as_contract(&client.address, || {
+            let entry = AuditLogEntry::new_with_operation_id(
+                &env,
+                invoice_id,
+                AuditOperation::InvoiceCreated,
+                actor,
+                None,
+                None,
+                None,
+                None,
+                operation_id,
+            );
+            let first_append = AuditStorage::store_audit_entry(&env, &entry);
+            let duplicate_append = AuditStorage::store_audit_entry(&env, &entry);
+            let total_entries = AuditStorage::get_audit_stats(&env).total_entries;
+            (first_append, duplicate_append, total_entries)
+        });
+
+    assert_eq!(first_append, Ok(()));
+    assert_eq!(
+        duplicate_append,
+        Err(crate::errors::QuickLendXError::AuditIntegrityError)
+    );
+    assert_eq!(total_entries, 1);
 }
 
 #[test]
@@ -1726,13 +1840,13 @@ fn test_audit_hash_chain_tampered_middle_fails() {
         &None,
     );
     let _ = client.verify_invoice(&invoice_id);
-    crate::audit::log_payment_processed(
+    assert!(crate::audit::log_payment_processed(
         &env,
         invoice_id.clone(),
         business.clone(),
         25,
         String::from_str(&env, "manual test payment"),
-    );
+    ).is_ok());
 
     assert!(client.verify_audit_chain(&invoice_id));
     let trail = client.get_invoice_audit_trail(&invoice_id);

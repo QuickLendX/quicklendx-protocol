@@ -29,6 +29,7 @@ use soroban_sdk::{symbol_short, Address, Env, Symbol, Vec};
 
 const ARBITERS_KEY: Symbol = symbol_short!("arbiters");
 const ARBITER_FLAG_KEY: Symbol = symbol_short!("arb_flag");
+const DISPUTE_QUORUM_KEY: Symbol = symbol_short!("dsp_qrm");
 
 /// Storage layer for the dispute-arbiter registry.
 ///
@@ -39,6 +40,29 @@ const ARBITER_FLAG_KEY: Symbol = symbol_short!("arb_flag");
 pub struct ArbiterStorage;
 
 impl ArbiterStorage {
+    /// Return the configured dispute-resolution quorum. Missing configuration
+    /// defaults to 1 for backward compatibility with existing deployments.
+    pub fn get_dispute_quorum(env: &Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DISPUTE_QUORUM_KEY)
+            .unwrap_or(1)
+    }
+
+    /// Configure the distinct-arbiter quorum for dispute resolutions.
+    pub fn set_dispute_quorum(
+        env: &Env,
+        admin: &Address,
+        quorum: u32,
+    ) -> Result<(), QuickLendXError> {
+        AdminStorage::require_admin_auth(env, admin)?;
+        if quorum == 0 {
+            return Err(QuickLendXError::InvalidDisputeQuorum);
+        }
+        env.storage().instance().set(&DISPUTE_QUORUM_KEY, &quorum);
+        crate::events::dispute_quorum_updated(env, admin, quorum);
+        Ok(())
+    }
     /// Return every currently registered arbiter address.
     pub fn list_arbiters(env: &Env) -> Vec<Address> {
         env.storage()
@@ -125,6 +149,7 @@ impl ArbiterStorage {
     /// protocol configuration; arbiter status controls dispute resolution.
     /// They are deliberately not the same authority.
     pub fn require_dispute_arbiter(env: &Env, address: &Address) -> Result<(), QuickLendXError> {
+        address.require_auth();
         if !Self::is_arbiter(env, address) {
             return Err(QuickLendXError::NotArbiter);
         }

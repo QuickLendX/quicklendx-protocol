@@ -1,8 +1,8 @@
-# QuickLendX Protocol - Smart Contracts
+﻿# QuickLendX Protocol - Smart Contracts
 
 [![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)](https://www.rust-lang.org/)
 [![Soroban](https://img.shields.io/badge/Soroban-000000?style=for-the-badge&logo=stellar&logoColor=white)](https://soroban.stellar.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 **Production-ready** smart contracts for QuickLendX, a decentralized invoice financing protocol built on Stellar's Soroban platform. These contracts enable businesses to access working capital by selling their invoices to investors through a secure, transparent, and efficient blockchain-based marketplace.
 
@@ -13,12 +13,11 @@
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Architecture](#architecture)
-- [API Documentation](#api-documentation)
-- [Deterministic Ledger Time](#deterministic-ledger-time)
-- [Code Examples](#code-examples)
-- [Deployment Guide](#deployment-guide)
+- [API Reference](../docs/contracts/api-reference.md)
+- [Deployment](#deployment)
+- [WASM Size Budget](../docs/contracts/wasm-size.md)
 - [Troubleshooting](#troubleshooting)
-- [Best Practices](#best-practices)
+- [Security](#security)
 - [Documentation](#documentation)
 - [Contributing](#contributing)
 
@@ -95,14 +94,17 @@ QuickLendX is a comprehensive DeFi protocol that facilitates invoice financing t
 git clone https://github.com/your-org/quicklendx-protocol.git
 cd quicklendx-protocol/quicklendx-contracts
 
+# Check required and optional contributor tooling
+bash scripts/doctor.sh
+
 # Build the contracts
 cargo build
 
-# Run tests
-cargo test
+# Run unit tests
+cargo test --lib
 
 # Run with logs for debugging
-cargo test --profile release-with-logs
+cargo test --lib --profile release-with-logs
 ```
 
 ### Basic Usage Example
@@ -135,33 +137,120 @@ let bid_id = contract.place_bid(
 )?;
 ```
 
-## 📖 API Documentation
+## API Reference
 
-### Deterministic Ledger Time
+The full entrypoint inventory, function details, data structures, and usage examples are in the [Contracts API Reference](../docs/contracts/api-reference.md).
 
-See [Deterministic Ledger Time](docs/contracts/deterministic-time.md) for guidelines on using `env.ledger().timestamp()` instead of off-chain wall-clock time in contract logic.
+## Deployment
 
-### Settlement formula and update timing
+For a guarded test-network deployment, protocol initialization, and invoice
+smoke flow, see the [Test-network deployment guide](../docs/DEPLOY_TESTNET.md).
 
-See [Settlement formula, inputs, and update timing](../docs/contracts/settlement-formula.md) for the contributor-facing explanation of the settlement formula and when fee updates apply.
+Build and validate the contracts from `quicklendx-contracts/` with `cargo build` and `cargo test`. For an optimized production artifact, use `stellar contract build` and follow the current Stellar CLI deployment workflow.
 
-### Settlement Currencies
+Before deployment, verify the contract configuration and admin setup using the [admin operations guide](../docs/contracts/admin.md). The [WASM size budget](../docs/contracts/wasm-size.md) documents size thresholds and CI enforcement.
 
-See [Settlement Currencies by Invoice Type](docs/SETTLEMENT_CURRENCIES.md) for a downstream integrator guide on which tokens are accepted for each invoice category.
+## Troubleshooting
 
-### Contract entrypoints (current surface)
+- Build failures: install the Rust and Stellar CLI toolchains listed under [Quick Start](#quick-start), then run `cargo build`.
+- Contract errors: consult the [error reference](../docs/contracts/errors.md) and [diagnostics guide](docs/diagnostics.md).
+- For more detail, run `cargo test -- --nocapture` and review the failing test output.
 
-The deployed contract (`src/contract.rs`) currently exposes the protocol
-initialization and admin slice and invoice creation and lifecycle. The
-remaining modules (bids, escrow, settlement, disputes, KYC, fees, pause,
-backup) are wired in by their own issues; the functions documented under *Core Functions* below describe those
-modules and are not callable on-chain until they are wired.
+## Security
 
-Every entrypoint is a thin wrapper; validation, auth and events live in the
-module function it delegates to.
+The deployed contract (defined in `src/lib.rs`) exposes the contract entrypoints across admin, fee management, KYC/verification, invoice lifecycle, bidding, escrow, investment queries, settlement, disputes, arbiter registry, and backup management.
+
+Every entrypoint is a thin wrapper; validation, auth and events live in the module function it delegates to.
 
 | Entrypoint | Delegates to | Auth |
 |---|---|---|
+| `set_admin(admin: Address)` | `AdminStorage::set_admin_legacy` | admin |
+| `get_admin()` | `AdminStorage::get_admin` | - |
+| `initialize_fee_system(admin: Address)` | `FeeManager::initialize` | admin |
+| `update_platform_fee_bps(fee_bps: u32)` | `FeeManager::update_platform_fee` | admin |
+| `get_platform_fee_config()` | `FeeManager::get_platform_fee_config` | - |
+| `calculate_profit(investment_amount: i128, payment_amount: i128)` | `profits::calculate_profit` | - |
+| `invariant_self_check(admin: Address)` | `invariants::invariant_self_check` | admin |
+| `initialize_protocol_limits(admin: Address)` | `ProtocolLimitsContract::initialize` | admin |
+| `pause(admin: Address)` | `PauseControl::set_paused` | admin |
+| `unpause(admin: Address)` | `PauseControl::set_paused` | admin |
+| `is_paused()` | `PauseControl::is_paused` | - |
+| `add_currency(admin, currency)` / `add_currencies_batch(admin, currencies)` | `CurrencyWhitelist` | admin; unpaused |
+| `remove_currency(admin, currency)` / `remove_currencies_batch(admin, currencies)` | `CurrencyWhitelist` | admin; unpaused |
+| `set_currencies(admin, currencies)` / `clear_currencies(admin)` | `CurrencyWhitelist` | admin; unpaused |
+| `get_whitelisted_currencies()` / `get_whitelisted_currencies_paged(cursor, limit)` | `CurrencyWhitelist` | - |
+| `get_platform_metrics()` / `export_analytics_snapshot()` | `AnalyticsCalculator` | - |
+| `calculate_financial_metrics(period)` / `calculate_performance_metrics()` | `AnalyticsCalculator` | - |
+| `generate_business_report(business, period)` / `generate_investor_report(investor, period)` | `AnalyticsCalculator` | - |
+| `calculate_user_behavior_metrics(user)` / `calculate_investor_analytics(investor)` | `AnalyticsCalculator` | - |
+| `calc_investor_perf_metrics()` | `AnalyticsCalculator` | - |
+| `query_audit_logs_paged(filter, cursor, limit)` / `get_invoice_audit_trail_paged(invoice_id, cursor, limit)` | `AuditStorage` | - |
+| `get_audit_entries_by_operation_paged(operation, cursor, limit)` / `get_audit_entries_by_actor_paged(actor, cursor, limit)` | `AuditStorage` | - |
+| `get_audit_entry(audit_id)` / `get_audit_stats()` | `AuditStorage` | - |
+| `submit_kyc_application(business: Address, kyc_data: String)` | `verification::submit_kyc_application` | business |
+| `verify_business(admin: Address, business: Address)` | `verification::verify_business` | admin |
+| `submit_investor_kyc(investor: Address, kyc_data: String)` | `verification::submit_investor_kyc` | investor |
+| `verify_investor(investor: Address, limit: i128)` | `verification::verify_investor` | admin |
+| `store_invoice(business: Address, amount: i128, currency: Address, due_date: u64, description: String, category: InvoiceCategory, tags: Vec<String>, origination_fee_bps: Option<u32>)` | `Invoice::new` + `InvoiceStorage::store_invoice` | business |
+| `get_invoice(invoice_id: BytesN<32>)` | `InvoiceStorage::get_invoice` | - |
+| `verify_invoice(invoice_id: BytesN<32>)` | `Invoice::verify` | admin |
+| `update_invoice_status(invoice_id: BytesN<32>, status: InvoiceStatus)` | `InvoiceStorage::update_invoice` | admin |
+| `cancel_invoice(invoice_id: BytesN<32>)` | `invoice.cancel` | business |
+| `get_available_invoices()` | `InvoiceStorage::get_invoices_by_status` | - |
+| `get_business_invoices(business: Address)` | `InvoiceStorage::get_business_invoices` | - |
+| `get_total_invoice_count()` | `InvoiceStorage::get_total_count` | - |
+| `place_bid(investor: Address, invoice_id: BytesN<32>, bid_amount: i128, expected_return: i128, salt: BytesN<32>)` | `BidStorage::store_bid` | investor |
+| `accept_bid_and_fund(invoice_id: BytesN<32>, bid_id: BytesN<32>)` | `escrow::accept_bid_and_fund` | business |
+| `accept_bid_and_fund_with_key(invoice_id: BytesN<32>, bid_id: BytesN<32>, request_key: BytesN<32>)` | `escrow::accept_bid_and_fund_with_key` | business |
+| `accept_bid(invoice_id: BytesN<32>, bid_id: BytesN<32>)` | `escrow::accept_bid_and_fund` | business |
+| `withdraw_bid(bid_id: BytesN<32>)` | `BidStorage::update_bid` | investor |
+| `cleanup_expired_bids(invoice_id: BytesN<32>)` | `BidStorage::cleanup_expired_bids` | - |
+| `get_bid(bid_id: BytesN<32>)` | `BidStorage::get_bid` | - |
+| `get_bids_for_invoice(invoice_id: BytesN<32>)` | `BidStorage::get_bids_for_invoice` | - |
+| `get_ranked_bids(invoice_id: BytesN<32>)` | `BidStorage::rank_bids` | - |
+| `get_ranked_bids_paged(invoice_id: BytesN<32>, cursor: Option<String>, limit: u32)` | `BidStorage::rank_bids_paged` | - |
+| `get_best_bid(invoice_id: BytesN<32>)` | `BidStorage::get_best_bid` | - |
+| `get_bids_by_status(invoice_id: BytesN<32>, status: BidStatus)` | `BidStorage::get_bids_by_status` | - |
+| `get_bids_by_investor(invoice_id: BytesN<32>, investor: Address)` | `BidStorage::get_bids_by_investor` | - |
+| `get_investor_active_exposure(investor: Address)` | `payments::get_investor_exposure` | - |
+| `get_investor_available_capacity(investor: Address)` | `payments::get_investor_available_capacity` | - |
+| `validate_funding_commitment(investor: Address, amount: i128)` | `payments::validate_funding_commitment` | - |
+| `get_escrow_details(invoice_id: BytesN<32>)` | `EscrowStorage::get_escrow_by_invoice` | - |
+| `release_escrow(invoice_id: BytesN<32>, business: Address)` | `payments::release_escrow` | business |
+| `get_investment(invoice_id: BytesN<32>)` | `InvestmentStorage::get_investment_by_invoice` | - |
+| `get_invoice_investment(invoice_id: BytesN<32>)` | `InvestmentStorage::get_investment_by_invoice` | - |
+| `get_investments_by_investor(investor: Address)` | `InvestmentStorage::get_investments_by_investor` | - |
+| `withdraw_investment(invoice_id: BytesN<32>, investor: Address)` | `escrow::withdraw_investment` | investor |
+| `process_partial_payment(invoice_id: BytesN<32>, payment_amount: i128, transaction_id: String)` | `settlement::process_partial_payment` | - |
+| `settle_invoice(invoice_id: BytesN<32>, payment_amount: i128, snap: Investment)` | `settlement::settle_invoice` | - |
+| `get_invoice_progress(invoice_id: BytesN<32>)` | `settlement::get_invoice_progress` | - |
+| `get_payment_count(invoice_id: BytesN<32>)` | `settlement::get_payment_count` | - |
+| `get_payment_records(invoice_id: BytesN<32>, from: u32, limit: u32)` | `settlement::get_payment_records` | - |
+| `is_invoice_finalized(invoice_id: BytesN<32>)` | `settlement::is_invoice_finalized` | - |
+| `get_settlement_batch_size()` | `settlement::default_settlement_batch_size_soft_cap` | - |
+| `get_settlement_batch_size_max()` | `settlement::max_settlement_batch_size_soft_cap` | - |
+| `create_dispute(invoice_id: BytesN<32>, creator: Address, reason: String, evidence: String)` | `dispute::create_dispute` | creator |
+| `put_dispute_under_review(invoice_id: BytesN<32>, admin: Address)` | `dispute::put_dispute_under_review` | admin |
+| `resolve_dispute(invoice_id: BytesN<32>, admin: Address, resolution: String)` | `dispute::resolve_dispute` | admin |
+| `resolve_dispute_structured(invoice_id: BytesN<32>, admin: Address, outcome: DisputeResolution, note: String)` | `dispute::resolve_dispute_structured` | admin |
+| `get_dispute_details(invoice_id: BytesN<32>)` | `dispute::get_dispute_details` | - |
+| `get_invoices_with_disputes()` | `dispute::get_invoices_with_disputes` | - |
+| `get_invoices_by_dispute_status(status: DisputeStatus)` | `dispute::get_invoices_by_dispute_status` | - |
+| `get_dispute_timeline(invoice_id: BytesN<32>, offset: u32, limit: u32)` | `dispute_timeline::get_dispute_timeline` | - |
+| `update_dispute_evidence(invoice_id: BytesN<32>, creator: Address, new_evidence: String)` | `verification::validate_dispute_evidence` | creator |
+| `register_arbiter(admin: Address, arbiter: Address)` | `ArbiterStorage::register_arbiter` | admin |
+| `unregister_arbiter(admin: Address, arbiter: Address)` | `ArbiterStorage::unregister_arbiter` | admin |
+| `list_arbiters()` | `ArbiterStorage::list_arbiters` | - |
+| `is_arbiter(addr: Address)` | `ArbiterStorage::is_arbiter` | - |
+| `create_backup(admin: Address, description: String)` | `BackupStorage::store_backup` | admin |
+| `restore_backup(admin: Address, backup_id: BytesN<32>)` | `BackupStorage::restore_from_backup` | admin |
+| `set_backup_retention_policy(admin: Address, max_backups: u32, max_age_seconds: u64, enabled: bool)` | `BackupStorage::set_retention_policy` | admin |
+| `archive_backup(admin: Address, backup_id: BytesN<32>)` | `BackupStorage::update_backup` | admin |
+| `cleanup_backups(admin: Address)` | `BackupStorage::cleanup_old_backups` | admin |
+| `get_backups()` | `BackupStorage::get_all_backups` | - |
+| `get_backup_details(backup_id: BytesN<32>)` | `BackupStorage::get_backup` | - |
+| `validate_backup(backup_id: BytesN<32>)` | `BackupStorage::validate_backup` | - |
+| `preview_cleanup_backups()` | `BackupStorage::preview_cleanup_old_backups` | - |
 | `initialize(params: InitializationParams)` | `ProtocolInitializer::initialize` | `params.admin` (once) |
 | `is_initialized()` | `ProtocolInitializer::is_initialized` | — |
 | `get_version()` | `ProtocolInitializer::get_version` | — |
@@ -185,6 +274,9 @@ module function it delegates to.
 | `is_two_step_enabled()` | `AdminStorage::is_two_step_enabled` | — |
 | `get_pending_admin()` | `AdminStorage::get_pending_admin` | — |
 | `store_invoice(business, amount, currency, due_date, description, category, tags, origination_fee_bps, late_payment_penalty_bps, early_payment_discount_bps, nonce)` | `Invoice::new` + `InvoiceStorage::store_invoice` (see order of checks below) | business |
+| `upload_invoice(business, amount, currency, due_date, description, category, tags, origination_fee_bps, late_payment_penalty_bps, early_payment_discount_bps)` | Bound checks (`require_description_bound`, `require_tags_bound`) + `Invoice::new_with_fee_settings` + `InvoiceStorage::store_invoice` | business |
+| `set_invoice_lock(admin, invoice_id, lock)` | `InvoiceStorage::set_invoice_lock`; the invoice must exist | admin (`require_admin_auth`) |
+| `get_invoice_lock(invoice_id)` | `InvoiceStorage::get_invoice_lock` | — |
 | `get_invoice(invoice_id)` | `InvoiceStorage::get` | — |
 | `get_business_invoices(business)` | `InvoiceStorage::get_business_invoices` | — |
 | `get_invoices_by_status(status)` | `InvoiceStorage::get_invoices_by_status` | — |
@@ -326,7 +418,8 @@ pub fn accept_bid(
 
 ##### `release_escrow_funds`
 
-Releases escrow funds to the investor upon invoice verification.
+Releases a funded invoice's escrow to the business. The invoice must be
+`Funded` and the escrow `Held`; the escrow's business must authorize the call.
 
 ```rust
 pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError>
@@ -334,10 +427,67 @@ pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), Quic
 
 ##### `refund_escrow_funds`
 
-Refunds escrow funds to the investor if conditions aren't met.
+Refunds a funded invoice's escrow back to the investor. Authorized for the
+contract admin or the invoice's business.
 
 ```rust
-pub fn refund_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError>
+pub fn refund_escrow_funds(
+    env: Env,
+    invoice_id: BytesN<32>,
+    caller: Address,
+) -> Result<(), QuickLendXError>
+```
+
+##### `get_escrow_status`
+
+Returns the escrow status (`Held`, `Released` or `Refunded`) for an invoice.
+
+```rust
+pub fn get_escrow_status(
+    env: Env,
+    invoice_id: BytesN<32>,
+) -> Result<EscrowStatus, QuickLendXError>
+```
+
+##### `approve_early_escrow_release`
+
+Records a caller's approval for an early escrow release.
+
+```rust
+pub fn approve_early_escrow_release(
+    env: Env,
+    invoice_id: BytesN<32>,
+    caller: Address,
+) -> Result<(), QuickLendXError>
+```
+
+#### Invoice completion & freeze
+
+##### `complete_invoice`
+
+Marks an invoice as completed (paid) by its owning business. Idempotent on
+`nonce`.
+
+```rust
+pub fn complete_invoice(
+    env: Env,
+    caller: Address,
+    invoice_id: BytesN<32>,
+    nonce: BytesN<32>,
+) -> Result<(), QuickLendXError>
+```
+
+##### `freeze_invoice`
+
+Freezes an invoice (admin only) and emits an `InvoiceFrozen` event.
+
+```rust
+pub fn freeze_invoice(
+    env: Env,
+    admin: Address,
+    invoice_id: BytesN<32>,
+    reason: BusinessFreezeReason,
+) -> Result<(), QuickLendXError>
 ```
 
 #### Verification & KYC
@@ -377,38 +527,42 @@ pub fn get_business_invoices_paged(
     env: Env,
     business: Address,
     status_filter: Option<InvoiceStatus>,
-    offset: u32,
+    cursor: Option<String>,
     limit: u32,
-) -> Vec<BytesN<32>>
+) -> Result<InvoicePage, QuickLendXError>
 ```
 
 **Parameters:**
 
 - `business`: Address of the business
 - `status_filter`: Optional status filter (None returns all statuses)
-- `offset`: Starting index for pagination (0-based)
+- `cursor`: `None` for the first page, otherwise the exact `next_cursor` from
+  the preceding response
 - `limit`: Maximum number of results to return
 
-**Returns:** Vector of invoice IDs
+**Returns:** `InvoicePage` containing invoice IDs, total count, generation,
+`has_more`, and an optional opaque `next_cursor`. Results are sorted newest
+first by `created_at`. Cursors are rejected with `UnstableCursor` if the
+business invoice index changes.
 
 **Example:**
 
 ```rust
 // Get first 10 verified invoices for a business
-let invoices = contract.get_business_invoices_paged(
+let first_page = contract.get_business_invoices_paged(
     &env,
     business_addr,
     Some(InvoiceStatus::Verified),
-    0,  // offset
+    None,  // cursor
     10  // limit
 );
 
 // Get next 10 invoices
-let more_invoices = contract.get_business_invoices_paged(
+let second_page = contract.get_business_invoices_paged(
     &env,
     business_addr,
     Some(InvoiceStatus::Verified),
-    10, // offset
+    first_page.next_cursor,
     10  // limit
 );
 ```
@@ -422,29 +576,31 @@ pub fn get_investor_investments_paged(
     env: Env,
     investor: Address,
     status_filter: Option<InvestmentStatus>,
-    offset: u32,
+    cursor: Option<String>,
     limit: u32,
-) -> Vec<BytesN<32>>
+) -> Result<CursorBytes32Page, QuickLendXError>
 ```
 
 **Parameters:**
 
 - `investor`: Address of the investor
 - `status_filter`: Optional investment status filter
-- `offset`: Starting index for pagination
+- `cursor`: `None` for the first page; otherwise pass the previous `next_cursor`
 - `limit`: Maximum number of results to return
 
-**Returns:** Vector of investment IDs
+**Returns:** `CursorBytes32Page` containing ordered investment IDs, count,
+`has_more`, and an optional `next_cursor`. The cursor is bound to the investor,
+filter, and current matching result set.
 
 **Example:**
 
 ```rust
-// Get all active investments for an investor
+// Get the first page of active investments for an investor
 let active_investments = contract.get_investor_investments_paged(
     &env,
     investor_addr,
     Some(InvestmentStatus::Active),
-    0,
+    None,
     50
 );
 ```
@@ -697,7 +853,7 @@ let page1 = contract.get_business_invoices_paged(
     &env,
     business_addr,
     None, // all statuses
-    0,    // offset
+    None, // first page
     10    // limit
 );
 
@@ -706,7 +862,7 @@ let page2 = contract.get_business_invoices_paged(
     &env,
     business_addr,
     None,
-    10,   // offset
+    page1.next_cursor,
     10    // limit
 );
 
@@ -741,8 +897,8 @@ let bids = contract.get_bid_history_paged(
 
 Query limit safety:
 
-- Public query endpoints with pagination/limits enforce `MAX_QUERY_LIMIT = 100`.
-- Effective limit is always `min(limit, 100)` for `query_audit_logs`, `query_analytics_data`,
+- Public query endpoints with pagination/limits enforce `MAX_QUERY_LIMIT = 50`.
+- Effective limit is always `min(limit, 50)` for `query_audit_logs`, `query_analytics_data`,
   `get_business_invoices_paged`, `get_investor_investments_paged`,
   `get_available_invoices_paged`, `get_bid_history_paged`, and `get_investor_bids_paged`.
 
@@ -851,31 +1007,32 @@ stellar-cli contract deploy \
 #### Contract size budget
 
 The release build is tuned for minimal WASM size (`opt-level = "z"`, LTO, strip,
-`codegen-units = 1`). The contract **must** stay within the size budget to be
-accepted by the Stellar network.
+`codegen-units = 1`). The contract **must** stay within the current enforced
+size budget of **655 360 B (640 KiB)** (with a long-term target to reduce back
+to **256 KiB**).
 
 ##### Three-tier size classification
 
 | Tier        | Range                            | Behaviour                                                                   |
 | ----------- | -------------------------------- | --------------------------------------------------------------------------- |
-| **OK**      | 0 – 235 929 B (≤ 90 % of budget) | Green – no action needed.                                                   |
-| **Warning** | 235 930 – 262 144 B (90 – 100 %) | Yellow – plan a reduction effort; CI prints a diagnostic but does not fail. |
-| **Over**    | > 262 144 B (> 256 KiB)          | Red – CI **fails**; artifact is rejected by the Stellar network.            |
+| **OK**      | 0 – 589 824 B (≤ 90 % of budget) | Green – no action needed.                                                   |
+| **Warning** | 589 825 – 655 360 B (90 – 100 %) | Yellow – plan a reduction effort; CI prints a diagnostic but does not fail. |
+| **Over**    | > 655 360 B (> 640 KiB)          | Red – CI **fails**; artifact exceeds the enforced size budget.              |
 
 ##### Regression detection
 
 In addition to the hard budget, CI compares the current build against a recorded
-**baseline** (last known good size). If the artifact grows by more than **5 %**
+**baseline** (last known good size). If the artifact grows by more than **10 %**
 relative to the baseline, CI fails even if the hard budget is not yet broken.
 This catches incremental drift before it becomes a problem.
 
 | Constant            | Value                     | Location                                                                                           |
 | ------------------- | ------------------------- | -------------------------------------------------------------------------------------------------- |
-| Hard budget (opt.)  | 262 144 B (256 KiB)       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
-| Raw fallback budget | 327 680 B (320 KiB)       | `tests/wasm_build_size_budget.rs` – used when `wasm-opt` absent (e.g. Windows local builds)        |
-| Warning zone        | 235 929 B (90 %)          | `tests/wasm_build_size_budget.rs`                                                                  |
-| Regression baseline | 217 668 B (last recorded) | `tests/wasm_build_size_budget.rs`, `scripts/wasm-size-baseline.toml`                               |
-| Regression margin   | 5 %                       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`                                    |
+| Hard budget (opt.)  | 655 360 B (640 KiB)       | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
+| Raw fallback budget | 655 360 B (640 KiB)       | `tests/wasm_build_size_budget.rs` – used when `wasm-opt` absent (e.g. Windows local builds)        |
+| Warning zone        | 589 824 B (90 %)          | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`                                    |
+| Regression baseline | 558 732 B (last recorded) | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
+| Regression margin   | 10 %                      | `tests/wasm_build_size_budget.rs`, `scripts/check-wasm-size.sh`, `scripts/wasm-size-baseline.toml` |
 
 ##### Update procedure after a legitimate size increase
 
@@ -887,7 +1044,7 @@ locations in the **same PR** that introduces the growth:
 cd quicklendx-contracts
 ./scripts/check-wasm-size.sh   # prints "WASM size: <N> bytes"
 
-# 2. Update the baseline (replace 217668 with the new value)
+# 2. Update the baseline (replace 558732 with the new value)
 #    a. tests/wasm_build_size_budget.rs  → WASM_SIZE_BASELINE_BYTES
 #    b. scripts/check-wasm-size.sh       → BASELINE_BYTES
 #    c. scripts/wasm-size-baseline.toml  → [baseline].bytes and recorded
@@ -1175,12 +1332,15 @@ The protocol includes comprehensive fuzz testing for critical operations:
 - **Arithmetic Safety**: Tests for overflow/underflow in calculations
 
 See [SECURITY_ANALYSIS.md](SECURITY_ANALYSIS.md) for detailed security analysis.
+Review the [contract security guide](../docs/contracts/security.md), [access-control reference](../docs/contracts/access-control.md), and repository [security analysis](SECURITY_ANALYSIS.md) before changing privileged or value-moving flows.
+
+Tests for auth-gated calls should enable `env.mock_all_auths()` before the first contract interaction. This test-only helper does not bypass business-logic checks or change production authorization.
 
 ## 📚 Documentation
 
 Additional documentation is available in the `docs/` directory:
 
-- **[Regulatory Compliance Hook](docs/contracts/regulatory.md)**: Reserved compliance seam — how `require_regulatory_ok` is wired into invoice and bid flows.
+- **[Regulatory Compliance Hook](../docs/contracts/regulatory.md)**: Reserved compliance seam — how `require_regulatory_ok` is wired into invoice and bid flows.
 - **[Decimal Handling](docs/decimal-handling.md)**: How the contract handles different token decimal places (USDC, DAI, XLM, etc.) and how integrators should convert amounts
 - **[Protocol Limits](PROTOCOL_LIMITS_README.md)**: Protocol-wide limits and configuration
 - **[Admin Operations](docs/admin-dry-run.md)**: Admin function dry-run previews
@@ -1188,7 +1348,7 @@ Additional documentation is available in the `docs/` directory:
 - **[Bid Ranking](../docs/BID_RANKING.md)**: Deterministic ordering function — tier-by-tier tie-breaker logic, invariants, and contributor workflow.
 - **[Escrow Invariants](docs/escrow-invariants.md)**: Escrow state guarantees and safety properties
 - **[Investment Lifecycle](docs/investment-lifecycle.md)**: Investment states and transitions
-- **[Settlement & Fund Distribution](docs/SETTLEMENT.md)**: How invoice settlement splits funds across investors, treasury, and the platform.
+- **[Settlement & Fund Distribution](../docs/SETTLEMENT.md)**: How invoice settlement splits funds across investors, treasury, and the platform.
 - **[Settlement & Dispute Interaction](docs/settlement-dispute-interaction.md)**: How settlements interact with disputes
 - **[Invoice Search](docs/invoice-search-ranking.md)**: Invoice search and ranking algorithms
 - **[Insurance Stacking](docs/insurance-stacking.md)**: Multiple insurance providers per investment
@@ -1210,50 +1370,36 @@ authorization check without a real signature. **This does not weaken production
 security** — `mock_all_auths()` is only available under the `testutils` feature
 flag and has no effect in deployed WASM.
 
-### Why tests were disabled
+### Running tests
 
-Several audit-trail and dispute-resolution tests were commented out with
-`// TODO: Fix authorization issues in test environment`. The root causes were:
+The test suite uses `env.mock_all_auths()` from the `soroban-sdk` `testutils`
+feature to satisfy `require_auth()` calls without real signatures.
+**This does not affect production security** — `mock_all_auths()` is compiled
+only under `#[cfg(test)]` and has no effect in deployed WASM.
 
-1. **`upload_invoice`** calls `business.require_auth()` — tests that called it
-   without `mock_all_auths()` active would panic.
-2. **`create_dispute`** calls `creator.require_auth()` — same issue.
-3. **`set_admin`** / `verify_business` / `verify_investor` all require auth —
-   calling them before `mock_all_auths()` was set up caused failures.
-4. Some tests called `mock_all_auths()` mid-test (after the first contract call),
-   which was too late.
+#### Commands
 
-### Fix applied (PR #816)
+```bash
+# Unit tests (fast, no integration harness)
+cargo test --lib
 
-Every previously-disabled test now follows this pattern:
+# A single integration test suite by name
+cargo test --test <test_name>
 
-```rust
-#[test]
-fn test_example() {
-    let env = Env::default();
-    // Place mock_all_auths() FIRST, before any contract call.
-    // This satisfies every require_auth() check for the duration of the test
-    // without changing any production authorization logic.
-    env.mock_all_auths();
+# All tests including feature-gated suites
+cargo test --features legacy-tests
 
-    let contract_id = env.register(QuickLendXContract, ());
-    let client = QuickLendXContractClient::new(&env, &contract_id);
+# Property / fuzz-style tests (requires proptest)
+cargo test --features fuzz-tests
 
-    // Set up admin and KYC-verify actors before calling guarded entry points.
-    let admin = Address::generate(&env);
-    client.set_admin(&admin);
+# Tests with structured diagnostic logging
+cargo test --features diagnostics
 
-    let business = Address::generate(&env);
-    client.submit_kyc_application(&business, &String::from_str(&env, "KYC data"));
-    client.verify_business(&admin, &business);
-
-    // Now call the auth-gated entry point normally.
-    let invoice_id = client.upload_invoice(&business, /* ... */);
-    // ...
-}
+# Verbose output (useful for debugging failures)
+RUST_LOG=debug cargo test --lib -- --nocapture
 ```
 
-### Key rules for writing auth-aware tests
+#### `mock_all_auths()` rules
 
 | Rule | Reason |
 |------|--------|
@@ -1322,19 +1468,13 @@ Default constants (defined in `src/protocol_limits.rs`):
 | `DEFAULT_MIN_BID_AMOUNT` | `10` |
 | `DEFAULT_MIN_BID_BPS` | `100` (1 %) |
 | `DEFAULT_MAX_INVOICES_PER_BUSINESS` | `100` |
+## Test Harness Authorization
 
-### Bid TTL and per-investor bid cap
+For test setup patterns and shared helpers, see the [contracts contributor guide](../docs/contracts/contributor-guide.md).
 
-| Entrypoint | Description |
-|-----------|-------------|
-| `get_bid_ttl_config()` | Full TTL snapshot (`current_days`, `min_days`, `max_days`, `is_custom`) |
-| `set_bid_ttl_days(days)` | Set bid TTL 1–30 days (admin only) |
-| `reset_bid_ttl_to_default()` | Restore default 7-day TTL |
-| `get_bid_limit_config()` | Full per-investor cap snapshot (`limit`, `is_disabled`, `is_custom`) |
-| `set_max_active_bids_per_investor(limit)` | Set cap; `0` = unlimited |
-| `reset_bid_limit()` | Restore default 20-bid cap |
+## Protocol Limits
 
-Full documentation: [`docs/contracts/limits.md`](../docs/contracts/limits.md).
+See the [protocol limits reference](docs/contracts/limits.md) for configurable limits, defaults, and admin entrypoints.
 
 ## 🤝 Contributing
 
@@ -1358,7 +1498,7 @@ We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) f
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License.
 
 ## 🆘 Support
 

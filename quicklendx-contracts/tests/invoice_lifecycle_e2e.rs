@@ -64,9 +64,8 @@ fn setup_contract(env: &Env) -> Fixture {
     let investor = Address::generate(env);
 
     // Admin bootstrap
-    client.initialize_admin(&admin);
     client.set_admin(&admin);
-    client.initialize_protocol_limits(&admin, &1i128, &365u64, &86_400u64);
+    client.initialize_protocol_limits(&admin);
 
     // Real SAC token
     let token_admin = Address::generate(env);
@@ -107,7 +106,7 @@ fn setup_contract(env: &Env) -> Fixture {
 
 fn upload_verified_invoice(fx: &Fixture, amount: i128, description: &str) -> BytesN<32> {
     let due_date = fx.client.env.ledger().timestamp() + 86_400;
-    let invoice_id = fx.client.upload_invoice(
+    let invoice_id = fx.client.store_invoice(
         &fx.business,
         &amount,
         &fx.currency,
@@ -115,8 +114,6 @@ fn upload_verified_invoice(fx: &Fixture, amount: i128, description: &str) -> Byt
         &String::from_str(&fx.client.env, description),
         &InvoiceCategory::Goods,
         &Vec::new(&fx.client.env),
-        &None,
-        &None,
         &None,
     );
 
@@ -182,7 +179,7 @@ fn test_invoice_lifecycle_happy_path() {
     // ── Stage 1: Upload invoice ──────────────────────────────────────────────
     // Business uploads an invoice; status must be Pending.
     let due_date = env.ledger().timestamp() + 86_400;
-    let invoice_id = fx.client.upload_invoice(
+    let invoice_id = fx.client.store_invoice(
         &fx.business,
         &invoice_amount,
         &fx.currency,
@@ -261,7 +258,7 @@ fn test_invoice_lifecycle_happy_path() {
     let investor_bal_before = tok.balance(&fx.investor);
     let contract_bal_before = tok.balance(&fx.contract_id);
 
-    let _escrow_id = fx.client.accept_bid_and_fund(&invoice_id, &bid_id);
+    let _escrow_id = fx.client.accept_bid(&invoice_id, &bid_id);
 
     let investor_bal_after = tok.balance(&fx.investor);
     let contract_bal_after = tok.balance(&fx.contract_id);
@@ -319,7 +316,10 @@ fn test_invoice_lifecycle_happy_path() {
     fx.client.process_partial_payment(
         &invoice_id,
         &partial_amount,
-        &String::from_str(&env, "partial-pay-1"),
+        &String::from_str(
+            &env,
+            "1111111111111111111111111111111111111111111111111111111111111111",
+        ),
     );
 
     let invoice = fx.client.get_invoice(&invoice_id);
@@ -344,7 +344,7 @@ fn test_invoice_lifecycle_happy_path() {
     let business_bal_before = tok.balance(&fx.business);
     let investor_bal_before_settle = tok.balance(&fx.investor);
 
-    let snap = fx.client.get_investment_by_invoice(&invoice_id);
+    let snap = fx.client.get_invoice_investment(&invoice_id);
     fx.client.settle_invoice(&invoice_id, &remaining, &snap);
 
     let invoice = fx.client.get_invoice(&invoice_id);
@@ -413,7 +413,7 @@ fn test_boundary_bid_equal_to_invoice_amount_accepts_and_funds_exactly() {
     let fx = setup_contract(&env);
     let tok = token::Client::new(&env, &fx.currency);
 
-    let invoice_amount: i128 = 10_000;
+    let invoice_amount: i128 = 10_000_000;
     let invoice_id =
         upload_verified_invoice(&fx, invoice_amount, "Boundary bid equal to invoice amount");
     let bid_salt = BytesN::from_array(&env, &[11u8; 32]);
@@ -425,7 +425,7 @@ fn test_boundary_bid_equal_to_invoice_amount_accepts_and_funds_exactly() {
         &fx.investor,
         &invoice_id,
         &invoice_amount,
-        &(invoice_amount + 1_000),
+        &(invoice_amount + 1_000_000),
         &bid_salt,
     );
 
@@ -434,7 +434,7 @@ fn test_boundary_bid_equal_to_invoice_amount_accepts_and_funds_exactly() {
     assert_eq!(bid.bid_amount, invoice_amount);
     assert_eq!(fx.client.get_bids_for_invoice(&invoice_id).len(), 1);
 
-    fx.client.accept_bid_and_fund(&invoice_id, &bid_id);
+    fx.client.accept_bid(&invoice_id, &bid_id);
 
     let escrow = fx.client.get_escrow_details(&invoice_id);
     assert!(matches!(escrow.status, EscrowStatus::Held));
@@ -554,7 +554,7 @@ fn test_invoice_lifecycle_default_branch() {
     // ── Stage 1: Upload invoice ──────────────────────────────────────────────
     // Business uploads an invoice.
     let due_date = env.ledger().timestamp() + 86_400; // 1 day from now
-    let invoice_id = fx.client.upload_invoice(
+    let invoice_id = fx.client.store_invoice(
         &fx.business,
         &invoice_amount,
         &fx.currency,
@@ -600,7 +600,7 @@ fn test_invoice_lifecycle_default_branch() {
     let investor_bal_before = tok.balance(&fx.investor);
     let contract_bal_before = tok.balance(&fx.contract_id);
 
-    fx.client.accept_bid_and_fund(&invoice_id, &bid_id);
+    fx.client.accept_bid(&invoice_id, &bid_id);
 
     assert_eq!(
         fx.client.get_invoice(&invoice_id).status,
@@ -721,7 +721,7 @@ fn test_partial_then_full_settle() {
     // ── Stage 1: Upload invoice ──────────────────────────────────────────────
     // Business uploads an invoice.
     let due_date = env.ledger().timestamp() + 86_400;
-    let invoice_id = fx.client.upload_invoice(
+    let invoice_id = fx.client.store_invoice(
         &fx.business,
         &invoice_amount,
         &fx.currency,
@@ -763,7 +763,7 @@ fn test_partial_then_full_settle() {
 
     // ── Stage 4: Accept bid and fund ─────────────────────────────────────────
     // Business accepts the bid; escrow is created.
-    fx.client.accept_bid_and_fund(&invoice_id, &bid_id);
+    fx.client.accept_bid(&invoice_id, &bid_id);
     assert_eq!(
         fx.client.get_invoice(&invoice_id).status,
         InvoiceStatus::Funded,
@@ -776,7 +776,10 @@ fn test_partial_then_full_settle() {
     fx.client.process_partial_payment(
         &invoice_id,
         &20_000_000i128,
-        &String::from_str(&env, "partial-1"),
+        &String::from_str(
+            &env,
+            "2222222222222222222222222222222222222222222222222222222222222222",
+        ),
     );
     let invoice = fx.client.get_invoice(&invoice_id);
     assert_eq!(
@@ -793,7 +796,10 @@ fn test_partial_then_full_settle() {
     fx.client.process_partial_payment(
         &invoice_id,
         &20_000_000i128,
-        &String::from_str(&env, "partial-2"),
+        &String::from_str(
+            &env,
+            "3333333333333333333333333333333333333333333333333333333333333333",
+        ),
     );
     let invoice = fx.client.get_invoice(&invoice_id);
     assert_eq!(
@@ -810,7 +816,10 @@ fn test_partial_then_full_settle() {
     fx.client.process_partial_payment(
         &invoice_id,
         &20_000_000i128,
-        &String::from_str(&env, "partial-3"),
+        &String::from_str(
+            &env,
+            "4444444444444444444444444444444444444444444444444444444444444444",
+        ),
     );
     let invoice = fx.client.get_invoice(&invoice_id);
     assert_eq!(
@@ -834,7 +843,7 @@ fn test_partial_then_full_settle() {
     let investor_bal_before = tok.balance(&fx.investor);
 
     env.ledger().set_timestamp(5_000);
-    let snap = fx.client.get_investment_by_invoice(&invoice_id);
+    let snap = fx.client.get_invoice_investment(&invoice_id);
     fx.client
         .settle_invoice(&invoice_id, &40_000_000i128, &snap);
 
