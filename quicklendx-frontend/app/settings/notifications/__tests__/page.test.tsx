@@ -57,8 +57,11 @@ describe("NotificationPreferencesPage", () => {
     render(<NotificationPreferencesPage />);
 
     expect(await screen.findByLabelText("Invoice funded")).toBeChecked();
+    await waitFor(() =>
+      expect(screen.getByLabelText("Email address")).toHaveValue("investor@example.com")
+    );
     expect(screen.getByLabelText("Payment received")).not.toBeChecked();
-    expect(screen.getByLabelText("Email address")).toHaveValue("investor@example.com");
+    expect(mockGet).toHaveBeenCalledWith(walletAddress);
 
     fireEvent.click(screen.getByLabelText("Payment received"));
     fireEvent.click(screen.getByRole("button", { name: "Save preferences" }));
@@ -81,6 +84,9 @@ describe("NotificationPreferencesPage", () => {
     render(<NotificationPreferencesPage />);
 
     await screen.findByLabelText("Invoice funded");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save preferences" })).toBeEnabled()
+    );
     fireEvent.click(screen.getByLabelText("Payment received"));
     fireEvent.click(screen.getByRole("button", { name: "Save preferences" }));
 
@@ -96,6 +102,9 @@ describe("NotificationPreferencesPage", () => {
     render(<NotificationPreferencesPage />);
 
     await screen.findByLabelText("Invoice funded");
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save preferences" })).toBeEnabled()
+    );
     fireEvent.change(screen.getByLabelText("Email address"), {
       target: { value: "not-an-email" },
     });
@@ -115,6 +124,9 @@ describe("NotificationPreferencesPage", () => {
     render(<NotificationPreferencesPage />);
 
     expect(await screen.findByLabelText("Invoice funded")).toBeChecked();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Save preferences" })).toBeEnabled()
+    );
     expect(screen.getByLabelText("Enable email notifications")).toBeChecked();
     expect(toast.error).not.toHaveBeenCalled();
   });
