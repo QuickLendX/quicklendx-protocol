@@ -361,9 +361,9 @@ fn encode_allocation_audit(
         }
         let mut num = [0u8; 41];
         let len = crate::audit::write_i128_to_buf(&mut num, value);
-        for i in 0..len {
+        for byte in num.iter().take(len) {
             if n < buf.len() {
-                buf[n] = num[i];
+                buf[n] = *byte;
                 n += 1;
             }
         }
@@ -725,7 +725,7 @@ pub fn settle_invoice(
     env: &Env,
     invoice_id: &BytesN<32>,
     payment_amount: i128,
-    snap: &crate::types::Investment,
+    _snap: &crate::types::Investment,
     business: &Address,
 ) -> Result<(), QuickLendXError> {
     if payment_amount <= 0 {
@@ -771,7 +771,8 @@ pub fn settle_invoice(
         .checked_add(applied_preview)
         .ok_or(QuickLendXError::InvalidAmount)?;
 
-    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
+    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFunded)?;
 
     if projected_total < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -938,31 +939,6 @@ pub fn store_settlement_currencies(
     );
 }
 
-/// Check that `invoice_currency` is in the per-invoice settlement currency
-/// whitelist.  When no whitelist is stored (backward compat) the check passes.
-fn require_settlement_currency_allowed(
-    env: &Env,
-    invoice_id: &BytesN<32>,
-    invoice_currency: &Address,
-) -> Result<(), QuickLendXError> {
-    let stored: Option<soroban_sdk::Vec<Address>> = env
-        .storage()
-        .persistent()
-        .get(&SettlementDataKey::SettlementCurrencies(invoice_id.clone()));
-    if let Some(allowed) = stored {
-        if allowed.is_empty() {
-            return Ok(());
-        }
-        for c in allowed.iter() {
-            if c == *invoice_currency {
-                return Ok(());
-            }
-        }
-        return Err(QuickLendXError::SettlementCurrencyNotAllowed);
-    }
-    Ok(())
-}
-
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
@@ -970,7 +946,7 @@ fn require_settlement_currency_allowed(
 fn settle_invoice_internal(
     env: &Env,
     invoice_id: &BytesN<32>,
-    business: &Address,
+    _business: &Address,
 ) -> Result<(), QuickLendXError> {
     // Double-finalization guard: reject if already settled.
     if is_finalized(env, invoice_id) {
@@ -982,7 +958,8 @@ fn settle_invoice_internal(
     ensure_payable_status(&invoice)?;
     require_no_active_dispute(&invoice)?;
 
-    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id).unwrap();
+    let investment = InvestmentStorage::get_investment_by_invoice(env, invoice_id)
+        .ok_or(QuickLendXError::InvoiceNotFunded)?;
 
     if compute_remaining_due(env, &invoice)? != 0 || invoice.total_paid < investment.amount {
         return Err(QuickLendXError::PaymentTooLow);
@@ -1272,17 +1249,6 @@ fn get_payment_count_internal(env: &Env, invoice_id: &BytesN<32>) -> u32 {
         .unwrap_or(0)
 }
 
-fn get_last_applied_amount(env: &Env, invoice_id: &BytesN<32>) -> Result<i128, QuickLendXError> {
-    let count = get_payment_count_internal(env, invoice_id);
-    if count == 0 {
-        return Err(QuickLendXError::StorageKeyNotFound);
-    }
-
-    let last_index = count.saturating_sub(1);
-    let record = get_payment_record(env, invoice_id, last_index)?;
-    Ok(record.amount)
-}
-
 fn make_settlement_nonce(env: &Env, invoice_id: &BytesN<32>) -> String {
     // Generate a deterministic, per-invoice 64-character hex nonce.
     // sha256("settle" || invoice_id) produces a unique 32-byte digest per invoice.
@@ -1292,7 +1258,7 @@ fn make_settlement_nonce(env: &Env, invoice_id: &BytesN<32>) -> String {
     // succeed once (status becomes Paid after the first call).
     let mut payload = soroban_sdk::Bytes::new(env);
     // "settle" prefix as raw bytes
-    payload.extend_from_array(&[b's', b'e', b't', b't', b'l', b'e']);
+    payload.extend_from_array(b"settle");
     let id_bytes = invoice_id.to_array();
     payload.extend_from_slice(&id_bytes);
     let digest: soroban_sdk::BytesN<32> = env.crypto().sha256(&payload).into();
@@ -1302,13 +1268,19 @@ fn make_settlement_nonce(env: &Env, invoice_id: &BytesN<32>) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut hex_buf = [0u8; 64];
     for (i, &byte) in digest_bytes.iter().enumerate() {
-        hex_buf[i * 2]     = HEX[(byte >> 4) as usize];
+        hex_buf[i * 2] = HEX[(byte >> 4) as usize];
         hex_buf[i * 2 + 1] = HEX[(byte & 0x0f) as usize];
     }
     // SAFETY: hex_buf contains only ASCII hex characters.
-    String::from_str(env, core::str::from_utf8(&hex_buf).unwrap_or("0000000000000000000000000000000000000000000000000000000000000000"))
+    String::from_str(
+        env,
+        core::str::from_utf8(&hex_buf)
+            .unwrap_or("0000000000000000000000000000000000000000000000000000000000000000"),
+    )
 }
 
+// Legacy event topics remain part of the public event ABI.
+#[allow(deprecated)]
 fn emit_payment_recorded(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -1329,6 +1301,8 @@ fn emit_payment_recorded(
     );
 }
 
+// Legacy event topics remain part of the public event ABI.
+#[allow(deprecated)]
 fn emit_invoice_settled_final(
     env: &Env,
     invoice_id: &BytesN<32>,

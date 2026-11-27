@@ -4,7 +4,7 @@ use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, Symbol, Vec}
 use crate::admin::AdminStorage;
 use crate::errors::QuickLendXError;
 use crate::events::{emit_bid_expired, emit_bid_expiry_grace_updated, emit_bid_ttl_updated};
-use crate::storage::{bump_persistent, extend_persistent_ttl};
+use crate::storage::bump_persistent;
 pub use crate::types::{Bid, BidStatus};
 
 /// Storage keys for indexed bid lookups.
@@ -235,7 +235,9 @@ impl BidStorage {
         let mut active_count = 0u32;
         let mut idx: u32 = 0;
         while idx < bid_ids.len() {
-            let bid_id = bid_ids.get(idx).unwrap();
+            let bid_id = bid_ids
+                .get(idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             if let Some(bid) = Self::get_bid(env, &bid_id) {
                 if bid.is_active(current_timestamp) {
                     active_count += 1;
@@ -546,8 +548,13 @@ impl BidStorage {
         // so expired bids would never actually be pruned and every later sweep
         // would re-scan them (violating the bounded-index invariant).
         if active.len() < bid_ids.len() {
-            let key = Self::investor_bids_key(investor);
-            env.storage().persistent().set(&key, &active);
+            let count_key = BidIndexKey::InvestorBidsCount(investor.clone());
+            let count = active.len();
+            env.storage().persistent().set(&count_key, &count);
+            for (index, bid_id) in active.iter().enumerate() {
+                let entry_key = BidIndexKey::InvestorBidsEntry(investor.clone(), index as u32);
+                env.storage().persistent().set(&entry_key, &bid_id);
+            }
         }
 
         newly_expired
@@ -787,7 +794,6 @@ impl BidStorage {
 
         let end_idx = (offset + capped_limit).min(old_count);
         let mut cleaned_count = 0u32;
-        let mut write_idx: u32 = offset;
         let mut read_idx: u32 = offset;
 
         // Process only the requested range [offset, end_idx)
@@ -859,7 +865,9 @@ impl BidStorage {
         let records = Self::get_bid_records_for_invoice(env, invoice_id);
         let mut idx: u32 = 0;
         while idx < records.len() {
-            let bid = records.get(idx).unwrap();
+            let bid = records
+                .get(idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             let eligible = status != BidStatus::Placed || !bid.is_expired(env.ledger().timestamp());
             if bid.status == status && eligible {
                 filtered.push_back(bid);
@@ -877,7 +885,9 @@ impl BidStorage {
         let records = Self::get_bid_records_for_invoice(env, invoice_id);
         let mut idx: u32 = 0;
         while idx < records.len() {
-            let bid = records.get(idx).unwrap();
+            let bid = records
+                .get(idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             if &bid.investor == investor {
                 filtered.push_back(bid);
             }
@@ -923,7 +933,9 @@ impl BidStorage {
         let mut best: Option<Bid> = None;
         let mut idx: u32 = 0;
         while idx < records.len() {
-            let candidate = records.get(idx).unwrap();
+            let candidate = records
+                .get(idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             if candidate.status != BidStatus::Placed || candidate.is_expired(current_timestamp) {
                 idx += 1;
                 continue;
@@ -950,10 +962,14 @@ impl BidStorage {
         }
 
         let mut best_idx: u32 = 0;
-        let mut best_bid = records.get(0).unwrap();
+        let mut best_bid = records
+            .get(0)
+            .unwrap_or_else(|| panic!("empty bid records"));
         let mut idx: u32 = 1;
         while idx < records.len() {
-            let candidate = records.get(idx).unwrap();
+            let candidate = records
+                .get(idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             if Self::compare_bids(&candidate, &best_bid) == Ordering::Greater {
                 best_idx = idx;
                 best_bid = candidate;
@@ -993,7 +1009,9 @@ impl BidStorage {
         let mut remaining = Vec::new(env);
         let mut idx: u32 = 0;
         while idx < records.len() {
-            let bid = records.get(idx).unwrap();
+            let bid = records
+                .get(idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             if bid.status == BidStatus::Placed && !bid.is_expired(current_timestamp) {
                 remaining.push_back(bid);
             }
@@ -1003,15 +1021,22 @@ impl BidStorage {
         let mut ranked = Vec::new(env);
 
         while !remaining.is_empty() {
-            let best_idx = Self::select_best_index(&remaining).unwrap();
-            let best_bid = remaining.get(best_idx).unwrap();
+            let best_idx =
+                Self::select_best_index(&remaining).unwrap_or_else(|| panic!("no selectable bid"));
+            let best_bid = remaining
+                .get(best_idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             ranked.push_back(best_bid);
 
             let mut new_remaining = Vec::new(env);
             let mut copy_idx: u32 = 0;
             while copy_idx < remaining.len() {
                 if copy_idx != best_idx {
-                    new_remaining.push_back(remaining.get(copy_idx).unwrap());
+                    new_remaining.push_back(
+                        remaining
+                            .get(copy_idx)
+                            .unwrap_or_else(|| panic!("bid index out of bounds")),
+                    );
                 }
                 copy_idx += 1;
             }
@@ -1096,7 +1121,9 @@ impl BidStorage {
         let mut count: u32 = 0;
         let mut idx: u32 = 0;
         while idx < all_bids.len() {
-            let bid = all_bids.get(idx).unwrap();
+            let bid = all_bids
+                .get(idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             if bid.is_active(current_timestamp) {
                 count = count.saturating_add(1);
             }
@@ -1113,7 +1140,9 @@ impl BidStorage {
         let mut total_amount: i128 = 0;
         let mut idx: u32 = 0;
         while idx < all_bids.len() {
-            let bid = all_bids.get(idx).unwrap();
+            let bid = all_bids
+                .get(idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             if bid.status == BidStatus::Placed && !bid.is_expired(current_timestamp) {
                 total_amount = total_amount.saturating_add(bid.bid_amount);
             }
@@ -1147,8 +1176,8 @@ impl BidStorage {
         let mix = timestamp
             .saturating_add(next_counter)
             .saturating_add(0xB1D0);
-        for i in 18..32 {
-            bytes[i] = (mix % 256) as u8;
+        for byte in bytes.iter_mut().skip(18) {
+            *byte = (mix % 256) as u8;
         }
         BytesN::from_array(env, &bytes)
     }
@@ -1167,12 +1196,16 @@ impl BidStorage {
         let bid_ids = Self::get_bids_for_invoice(env, invoice_id);
         let mut idx: u32 = 0;
         while idx < bid_ids.len() {
-            let bid_id = bid_ids.get(idx).unwrap();
+            let bid_id = bid_ids
+                .get(idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             if let Some(bid) = Self::get_bid(env, &bid_id) {
-                if bid.status == BidStatus::Expired && bid.expiration_timestamp > current_timestamp {
+                if bid.status == BidStatus::Expired && bid.expiration_timestamp > current_timestamp
+                {
                     return false;
                 }
-                if bid.status == BidStatus::Placed && bid.is_cleanup_eligible(current_timestamp, grace_seconds)
+                if bid.status == BidStatus::Placed
+                    && bid.is_cleanup_eligible(current_timestamp, grace_seconds)
                 {
                     return false;
                 }
@@ -1190,7 +1223,9 @@ impl BidStorage {
             (0u32, 0u32, 0u32, 0u32, 0u32);
         let mut idx: u32 = 0;
         while idx < records.len() {
-            let bid = records.get(idx).unwrap();
+            let bid = records
+                .get(idx)
+                .unwrap_or_else(|| panic!("bid index out of bounds"));
             match bid.status {
                 BidStatus::Placed => placed += 1,
                 BidStatus::Accepted => accepted += 1,

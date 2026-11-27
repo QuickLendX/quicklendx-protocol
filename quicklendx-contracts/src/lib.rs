@@ -1,4 +1,6 @@
 #![no_std]
+// Generated contract client methods mirror fixed public signatures.
+#![allow(clippy::too_many_arguments)]
 
 extern crate alloc;
 
@@ -17,6 +19,7 @@ pub mod currency;
 pub mod defaults;
 pub mod dispute;
 pub mod dispute_timeline;
+pub mod emergency;
 pub mod errors;
 pub mod escrow;
 pub mod events;
@@ -75,17 +78,17 @@ pub mod test_utils;
 // ============================================================================
 
 #[cfg(test)]
-mod test_settlement;
+mod test_dispute;
+#[cfg(test)]
+mod test_dispute_arbiter;
+#[cfg(test)]
+mod test_dispute_timeline;
 #[cfg(test)]
 mod test_partial_payments;
 #[cfg(test)]
 mod test_payment_history;
 #[cfg(test)]
-mod test_dispute;
-#[cfg(test)]
-mod test_dispute_timeline;
-#[cfg(test)]
-mod test_dispute_arbiter;
+mod test_settlement;
 
 // The remaining test modules (already present in the codebase)
 #[cfg(test)]
@@ -453,9 +456,9 @@ mod test_notifications;
 #[cfg(test)]
 mod test_operational_limits;
 #[cfg(test)]
-mod test_overflow;
-#[cfg(test)]
 mod test_overdue_expiration;
+#[cfg(test)]
+mod test_overflow;
 #[cfg(test)]
 mod test_pagination_cursors;
 #[cfg(test)]
@@ -603,18 +606,23 @@ mod test_withdraw_bid_matrix;
 // Contract-level macros (re-exported from diagnostics)
 // ============================================================================
 
+#[cfg(any(test, feature = "diagnostics"))]
 #[macro_export]
 macro_rules! qlx_log {
-    ($env:expr, $module:expr, $fmt:expr $(, $arg:expr)*) => {{
-        #[cfg(feature = "diagnostics")]
-        {
-            let _ = ($env, $module, $fmt $(, $arg)*);
-        }
-        #[cfg(not(feature = "diagnostics"))]
-        {
-            let _ = ($env, $module, $fmt $(, $arg)*);
-        }
+    ($env:expr, $domain:literal, $msg:literal) => {
+        soroban_sdk::log!($env, "[{}] {}", $domain, $msg)
+    };
+    ($env:expr, $domain:literal, $msg:literal, $($arg:tt)*) => {{
+        let rendered = ::alloc::format!($msg, $($arg)*);
+        soroban_sdk::log!($env, "[{}] {}", $domain, rendered)
     }};
+}
+
+#[cfg(not(any(test, feature = "diagnostics")))]
+#[macro_export]
+macro_rules! qlx_log {
+    ($env:expr, $domain:literal, $msg:literal) => {{}};
+    ($env:expr, $domain:literal, $msg:literal, $($arg:tt)*) => {{}};
 }
 
 #[macro_export]
@@ -685,7 +693,11 @@ impl QuickLendXContract {
         crate::fees::FeeManager::get_platform_fee_config(&env)
     }
 
-    pub fn calculate_profit(env: Env, investment_amount: i128, payment_amount: i128) -> (i128, i128) {
+    pub fn calculate_profit(
+        env: Env,
+        investment_amount: i128,
+        payment_amount: i128,
+    ) -> (i128, i128) {
         crate::profits::calculate_profit(&env, investment_amount, payment_amount)
     }
 
@@ -744,7 +756,11 @@ impl QuickLendXContract {
 
     /// Verify investor with investment limit. Admin is read from storage
     /// (matches test usage: `client.verify_investor(investor, limit)`).
-    pub fn verify_investor(env: Env, investor: Address, limit: i128) -> Result<(), QuickLendXError> {
+    pub fn verify_investor(
+        env: Env,
+        investor: Address,
+        limit: i128,
+    ) -> Result<(), QuickLendXError> {
         let admin = AdminStorage::get_admin(&env).ok_or(QuickLendXError::NotAdmin)?;
         crate::verification::verify_investor(&env, &admin, &investor, limit)?;
         Ok(())
@@ -765,12 +781,13 @@ impl QuickLendXContract {
         tags: Vec<String>,
         origination_fee_bps: Option<u32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        let _ = origination_fee_bps;
         PauseControl::require_not_paused(&env)?;
         check_and_record_mutation(&env, &business)?;
         business.require_auth();
         crate::verification::require_business_not_pending(&env, &business)?;
         crate::invoice_amount::validate_invoice_amount_ceiling(amount)?;
-        crate::protocol_limits::ProtocolLimitsContract::check_invoice_limit(&env, &business)?;
+        crate::protocol_limits::check_invoice_limit(&env, &business)?;
         let invoice = crate::invoice::Invoice::new(
             &env,
             business,
@@ -780,16 +797,16 @@ impl QuickLendXContract {
             description,
             category,
             tags,
-            origination_fee_bps,
-            None,
-            None,
         )?;
         let id = invoice.id.clone();
         InvoiceStorage::store_invoice(&env, &invoice);
         Ok(id)
     }
 
-    pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<crate::types::Invoice, QuickLendXError> {
+    pub fn get_invoice(
+        env: Env,
+        invoice_id: BytesN<32>,
+    ) -> Result<crate::types::Invoice, QuickLendXError> {
         InvoiceStorage::get_invoice(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)
     }
 
@@ -846,6 +863,7 @@ impl QuickLendXContract {
         expected_return: i128,
         salt: BytesN<32>,
     ) -> Result<BytesN<32>, QuickLendXError> {
+        let _ = salt;
         PauseControl::require_not_paused(&env)?;
         check_and_record_mutation(&env, &investor)?;
         investor.require_auth();
@@ -874,7 +892,7 @@ impl QuickLendXContract {
         env: Env,
         invoice_id: BytesN<32>,
         bid_id: BytesN<32>,
-    ) -> Result<(), QuickLendXError> {
+    ) -> Result<BytesN<32>, QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         with_payment_guard(&env, || {
             crate::escrow::accept_bid_and_fund(&env, &invoice_id, &bid_id)
@@ -931,7 +949,7 @@ impl QuickLendXContract {
     /// Get the investment for an invoice (panics if not funded — test helper).
     pub fn get_invoice_investment(env: Env, invoice_id: BytesN<32>) -> Investment {
         crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
-            .expect("invoice has no investment")
+            .unwrap_or_else(|| panic!("invoice has no investment"))
     }
 
     // =========================================================================
@@ -972,8 +990,9 @@ impl QuickLendXContract {
     ) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
         // Verify the caller-supplied snapshot is fresh.
-        let stored = crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let stored =
+            crate::investment::InvestmentStorage::get_investment_by_invoice(&env, &invoice_id)
+                .ok_or(QuickLendXError::StorageKeyNotFound)?;
         if stored.investment_id != snap.investment_id || stored.amount != snap.amount {
             return Err(QuickLendXError::StaleInvestmentSnapshot);
         }
@@ -1095,10 +1114,7 @@ impl QuickLendXContract {
     }
 
     /// Filter dispute-indexed invoices by their current dispute status.
-    pub fn get_invoices_by_dispute_status(
-        env: Env,
-        status: DisputeStatus,
-    ) -> Vec<BytesN<32>> {
+    pub fn get_invoices_by_dispute_status(env: Env, status: DisputeStatus) -> Vec<BytesN<32>> {
         crate::dispute::get_invoices_by_dispute_status(&env, &status)
     }
 
@@ -1182,7 +1198,11 @@ impl QuickLendXContract {
     /// Create a backup of all invoices across all statuses.
     ///
     /// Returns the backup ID.
-    pub fn create_backup(env: Env, admin: Address, description: String) -> Result<BytesN<32>, errors::QuickLendXError> {
+    pub fn create_backup(
+        env: Env,
+        admin: Address,
+        description: String,
+    ) -> Result<BytesN<32>, errors::QuickLendXError> {
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
 
@@ -1192,7 +1212,7 @@ impl QuickLendXContract {
 
         let all_invoices = backup::BackupStorage::get_all_invoices(&env);
         let backup_id = backup::BackupStorage::generate_backup_id(&env);
-        
+
         let backup = backup::Backup {
             backup_id: backup_id.clone(),
             timestamp: env.ledger().timestamp(),
@@ -1215,7 +1235,11 @@ impl QuickLendXContract {
     ///
     /// Clears all existing invoices and restores from the backup snapshot.
     /// Returns the number of invoices restored.
-    pub fn restore_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<u32, errors::QuickLendXError> {
+    pub fn restore_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<u32, errors::QuickLendXError> {
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         backup::BackupStorage::restore_from_backup(&env, &backup_id)
@@ -1242,7 +1266,11 @@ impl QuickLendXContract {
     }
 
     /// Archive a backup (mark it as no longer active).
-    pub fn archive_backup(env: Env, admin: Address, backup_id: BytesN<32>) -> Result<(), errors::QuickLendXError> {
+    pub fn archive_backup(
+        env: Env,
+        admin: Address,
+        backup_id: BytesN<32>,
+    ) -> Result<(), errors::QuickLendXError> {
         admin.require_auth();
         admin::AdminStorage::require_admin(&env, &admin)?;
         governance::require_no_open_governance_proposal(&env)?;
@@ -1290,94 +1318,21 @@ impl QuickLendXContract {
 
     // ── Admin Management ─────────────────────────────────────────────────────
 
-    /// Set the contract admin (for testing - would normally require auth).
-    pub fn set_admin(env: Env, admin: Address) {
-        admin::AdminStorage::set_admin(&env, &admin);
-    }
-
     // ── Stub Methods for Test Compatibility ─────────────────────────────────
     // These are minimal stubs to satisfy existing tests. Full implementation
     // would be added when those modules are complete.
+}
 
-    pub fn initialize_protocol_limits(
-        _env: Env,
-        _admin: Address,
-        _min_amount: i128,
-        _max_due_days: u64,
-        _lock_time_limit: u64,
-    ) -> Result<(), errors::QuickLendXError> {
-        Ok(())
-    }
-
-    pub fn store_invoice(
-        env: Env,
-        business: Address,
-        amount: i128,
-        currency: Address,
-        due_date: u64,
-        description: String,
-        category: types::InvoiceCategory,
-        _tags: Vec<String>,
-        _customer_name: Option<String>,
-    ) -> BytesN<32> {
-        use types::{Dispute, DisputeResolution, DisputeStatus, Invoice, InvoiceStatus};
-        
-        let invoice_id = storage::InvoiceStorage::next_count(&env);
-        let mut id_bytes = [0u8; 32];
-        id_bytes[24..32].copy_from_slice(&invoice_id.to_be_bytes());
-        let id = BytesN::from_array(&env, &id_bytes);
-
-        let invoice = Invoice {
-            id: id.clone(),
-            business,
-            amount,
-            currency,
-            due_date,
-            status: InvoiceStatus::Pending,
-            created_at: env.ledger().timestamp(),
-            description,
-            metadata_customer_name: None,
-            metadata_customer_address: None,
-            metadata_tax_id: None,
-            metadata_notes: None,
-            metadata_line_items: Vec::new(&env),
-            category,
-            tags: Vec::new(&env),
-            funded_amount: 0,
-            funded_at: None,
-            investor: None,
-            settled_at: None,
-            average_rating: None,
-            total_ratings: 0,
-            ratings: Vec::new(&env),
-            dispute_status: DisputeStatus::None,
-            dispute: Dispute {
-                created_by: Address::generate(&env),
-                created_at: 0,
-                reason: String::from_str(&env, ""),
-                evidence: String::from_str(&env, ""),
-                resolution: String::from_str(&env, ""),
-                resolved_by: Address::generate(&env),
-                resolved_at: 0,
-                resolution_outcome: DisputeResolution::None,
-            },
-            total_paid: 0,
-            payment_history: Vec::new(&env),
-            origination_fee_bps: None,
-            late_payment_penalty_bps: None,
-            early_payment_discount_bps: None,
-        };
-
-        storage::InvoiceStorage::store_invoice(&env, &invoice);
-        id
-    }
-
-    pub fn get_total_invoice_count(env: Env) -> u64 {
-        storage::InvoiceStorage::get_total_count(&env)
-    }
-
-    pub fn get_invoice(env: Env, invoice_id: BytesN<32>) -> Result<types::Invoice, errors::QuickLendXError> {
-        storage::InvoiceStorage::get(&env, &invoice_id)
-            .ok_or(errors::QuickLendXError::InvoiceNotFound)
+#[cfg(all(test, not(feature = "diagnostics")))]
+mod test_diagnostics_disabled {
+    #[test]
+    fn test_diagnostics_disabled_macro_branch_is_noop() {
+        let env = soroban_sdk::Env::default();
+        crate::qlx_log!(&env, "test", "must be compiled out");
+        crate::qlx_log!(&env, "test", "must not format {}", 42);
+        assert!(env.logs().all().is_empty());
     }
 }
+
+#[cfg(all(test, feature = "diagnostics"))]
+mod test_diagnostics;

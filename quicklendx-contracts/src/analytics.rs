@@ -1,3 +1,4 @@
+// Legacy analytics helpers remain in the public module API.
 #![allow(dead_code)]
 
 use crate::errors::QuickLendXError;
@@ -243,6 +244,7 @@ impl AnalyticsStorage {
         (symbol_short!("inv_perf"),)
     }
 
+    // Legacy key helper retained for source compatibility.
     #[allow(dead_code)]
     fn analytics_data_key() -> (soroban_sdk::Symbol,) {
         (symbol_short!("analytics"),)
@@ -667,7 +669,9 @@ impl AnalyticsCalculator {
 
                     // Update category volume
                     for i in 0..volume_by_category.len() {
-                        let (cat, vol) = volume_by_category.get(i).unwrap();
+                        let (cat, vol) = volume_by_category
+                            .get(i)
+                            .unwrap_or_else(|| panic!("category index out of bounds"));
                         if cat == invoice.category {
                             volume_by_category.set(i, (cat, vol.saturating_add(invoice.amount)));
                             break;
@@ -677,7 +681,9 @@ impl AnalyticsCalculator {
                     // Track currency distribution
                     let mut found_currency = false;
                     for i in 0..currency_distribution.len() {
-                        let (curr, amount): (Address, i128) = currency_distribution.get(i).unwrap();
+                        let (curr, amount): (Address, i128) = currency_distribution
+                            .get(i)
+                            .unwrap_or_else(|| panic!("currency index out of bounds"));
                         if curr == invoice.currency {
                             currency_distribution
                                 .set(i, (curr, amount.saturating_add(invoice.amount)));
@@ -936,7 +942,9 @@ impl AnalyticsCalculator {
 
                     // Update category breakdown
                     for i in 0..category_breakdown.len() {
-                        let (cat, count) = category_breakdown.get(i).unwrap();
+                        let (cat, count) = category_breakdown
+                            .get(i)
+                            .unwrap_or_else(|| panic!("category index out of bounds"));
                         if cat == invoice.category {
                             category_breakdown.set(i, (cat, count.saturating_add(1)));
                             break;
@@ -1129,7 +1137,9 @@ impl AnalyticsCalculator {
             let plen = preferred_categories.len();
             let mut pi: u32 = 0;
             while pi < plen {
-                let (_, count) = preferred_categories.get(pi).unwrap();
+                let (_, count) = preferred_categories
+                    .get(pi)
+                    .unwrap_or_else(|| panic!("category index out of bounds"));
                 if count > 0 {
                     unique_categories = unique_categories.saturating_add(1);
                 }

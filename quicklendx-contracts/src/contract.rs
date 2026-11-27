@@ -169,6 +169,7 @@ impl QuickLendXContract {
     /// bounds; KYC, regulatory, currency whitelist and protocol limits;
     /// `Invoice::new` (amount ceiling, due date, bps, tags); storage; event,
     /// audit entry and notification; idempotency record.
+    // Contract API arity is fixed by the public ABI.
     #[allow(clippy::too_many_arguments)]
     pub fn store_invoice(
         env: Env,
@@ -299,9 +300,14 @@ impl QuickLendXContract {
         Ok(())
     }
 
-     pub fn verify_invoice(env: Env, admin: Address, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
+    pub fn verify_invoice(
+        env: Env,
+        admin: Address,
+        invoice_id: BytesN<32>,
+    ) -> Result<(), QuickLendXError> {
         AdminStorage::require_admin(&env, &admin)?;
-        let mut invoice = InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
+        let mut invoice =
+            InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
 
         // Issue #300: re-verifying an already-funded invoice triggers the
         // pending escrow release instead of downgrading the invoice status.
@@ -622,7 +628,7 @@ impl QuickLendXContract {
             InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.update_metadata(&env, &caller, metadata)?;
         InvoiceStorage::update_invoice(&env, &invoice);
-        
+
         crate::idempotency::store_idempotency(&env, &nonce);
         Ok(())
     }
@@ -805,8 +811,8 @@ impl QuickLendXContract {
 
     pub fn release_escrow_funds(env: Env, invoice_id: BytesN<32>) -> Result<(), QuickLendXError> {
         PauseControl::require_not_paused(&env)?;
-        let invoice = InvoiceStorage::get(&env, &invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        let invoice =
+            InvoiceStorage::get(&env, &invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         // Only a Funded invoice may have its escrow released. This also covers
         // the "no escrow exists" case (Verified/Pending/Refunded invoices).
         if invoice.status != InvoiceStatus::Funded {

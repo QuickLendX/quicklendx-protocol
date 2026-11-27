@@ -231,7 +231,7 @@ fn paginate(
 /// * `invoice_id` - The invoice whose dispute timeline is requested.
 /// * `offset`     - Zero-based starting position (0 = first event).
 /// * `limit`      - Maximum entries to return; capped at
-///                  [`TIMELINE_MAX_PAGE_SIZE`] (50).
+///   [`TIMELINE_MAX_PAGE_SIZE`] (50).
 ///
 /// # Returns
 /// * `Ok(DisputeTimeline)` - Paginated timeline reflecting on-chain state.
@@ -249,6 +249,7 @@ fn paginate(
 /// * `offset` beyond the total event count returns an empty page with
 ///   `has_more = false`.
 /// * `limit = 0` returns an empty page.
+// Public query API retained for ABI compatibility.
 #[allow(dead_code)]
 pub fn get_dispute_timeline(
     env: &Env,

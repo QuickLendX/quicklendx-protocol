@@ -93,7 +93,7 @@ impl Investment {
     /// # Arguments
     /// * `amount`              - Positive investment principal in base currency units.
     /// * `coverage_percentage` - Integer percentage in
-    ///                           [`MIN_COVERAGE_PERCENTAGE`]`..=`[`MAX_COVERAGE_PERCENTAGE`].
+    ///   [`MIN_COVERAGE_PERCENTAGE`]`..=`[`MAX_COVERAGE_PERCENTAGE`].
     ///
     /// # Returns
     /// * The premium in base currency units, always - [`MIN_PREMIUM_AMOUNT`] when
@@ -155,9 +155,9 @@ impl Investment {
     /// # Arguments
     /// * `provider`            - Address of the insurance provider.
     /// * `coverage_percentage` - Coverage in
-    ///                           [`MIN_COVERAGE_PERCENTAGE`]`..=`[`MAX_COVERAGE_PERCENTAGE`].
+    ///   [`MIN_COVERAGE_PERCENTAGE`]`..=`[`MAX_COVERAGE_PERCENTAGE`].
     /// * `premium`             - Pre-computed premium - [`MIN_PREMIUM_AMOUNT`], typically
-    ///                           produced by [`Investment::calculate_premium`].
+    ///   produced by [`Investment::calculate_premium`].
     ///
     /// # Returns
     /// * `Ok(coverage_amount)` - The absolute amount covered in base currency units.
@@ -165,14 +165,11 @@ impl Investment {
     /// # Errors
     /// * [`InvalidCoveragePercentage`] - `coverage_percentage` out of valid range.
     /// * [`InvalidAmount`]             - Investment principal - 0, premium below
-    ///                                   minimum, `coverage_amount` is zero or
-    ///                                   exceeds principal, or premium exceeds
-    ///                                   coverage amount.
+    ///   minimum, `coverage_amount` is zero or exceeds principal, or premium
+    ///   exceeds coverage amount.
     /// * [`OperationNotAllowed`]       - Existing active policies already meet or
-    ///                                   exceed the cumulative cap, or adding the
-    ///                                   requested policy would push total active
-    ///                                   coverage above
-    ///                                   [`MAX_TOTAL_COVERAGE_PERCENTAGE`].
+    ///   exceed the cumulative cap, or adding the requested policy would push
+    ///   total active coverage above [`MAX_TOTAL_COVERAGE_PERCENTAGE`].
     ///
     /// # Security
     /// All arithmetic bounds are re-checked inside this method so that it is
@@ -348,8 +345,8 @@ impl InvestmentStorage {
         let mix = timestamp
             .saturating_add(next_counter)
             .saturating_add(0x1A4E);
-        for i in 18..32 {
-            id_bytes[i] = (mix % 256) as u8;
+        for byte in id_bytes.iter_mut().skip(18) {
+            *byte = (mix % 256) as u8;
         }
 
         BytesN::from_array(env, &id_bytes)
@@ -419,7 +416,7 @@ impl InvestmentStorage {
         // Only validate when the status actually changes.
         if previous_status != investment.status {
             InvestmentStatus::validate_transition(&previous_status, &investment.status)
-                .expect("invalid investment status transition");
+                .unwrap_or_else(|_| panic!("invalid investment status transition"));
 
             // Remove from active index when leaving Active state.
             if previous_status == InvestmentStatus::Active {

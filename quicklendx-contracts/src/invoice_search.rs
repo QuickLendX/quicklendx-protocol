@@ -140,7 +140,7 @@ impl InvoiceSearch {
         for i in 0..=(text_lower.len() - query_lower.len()) {
             let mut matches = true;
             for j in 0..query_lower.len() {
-                if text_lower_bytes.get(i + j).unwrap() != query_lower_bytes.get(j).unwrap() {
+                if text_lower_bytes.get(i + j) != query_lower_bytes.get(j) {
                     matches = false;
                     break;
                 }
@@ -244,8 +244,15 @@ impl InvoiceSearch {
 
                     if should_swap {
                         // Swap elements
-                        let temp = results.get(j).unwrap();
-                        results.set(j, results.get(j + 1).unwrap());
+                        let temp = results
+                            .get(j)
+                            .unwrap_or_else(|| panic!("search result index out of bounds"));
+                        results.set(
+                            j,
+                            results
+                                .get(j + 1)
+                                .unwrap_or_else(|| panic!("search result index out of bounds")),
+                        );
                         results.set(j + 1, temp);
                     }
                 }

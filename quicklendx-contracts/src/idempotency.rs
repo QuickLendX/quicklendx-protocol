@@ -17,7 +17,7 @@
 
 extern crate alloc;
 
-use crate::storage::{bump_persistent, extend_persistent_ttl};
+use crate::storage::extend_persistent_ttl;
 use soroban_sdk::{symbol_short, xdr::ToXdr, Address, Bytes, BytesN, Env, Symbol};
 
 /// Storage namespace for idempotency markers (`bool`).

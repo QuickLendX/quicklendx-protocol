@@ -353,21 +353,21 @@ impl NotificationPreferences {
         priority: &NotificationPriority,
     ) -> bool {
         // Check minimum priority first
-        let priority_check = match (&self.minimum_priority, priority) {
-            (NotificationPriority::Critical, NotificationPriority::Critical) => true,
+        let priority_check = matches!(
+            (&self.minimum_priority, priority),
             (
+                NotificationPriority::Critical,
+                NotificationPriority::Critical
+            ) | (
                 NotificationPriority::High,
-                NotificationPriority::High | NotificationPriority::Critical,
-            ) => true,
-            (
+                NotificationPriority::High | NotificationPriority::Critical
+            ) | (
                 NotificationPriority::Medium,
                 NotificationPriority::Medium
-                | NotificationPriority::High
-                | NotificationPriority::Critical,
-            ) => true,
-            (NotificationPriority::Low, _) => true,
-            _ => false,
-        };
+                    | NotificationPriority::High
+                    | NotificationPriority::Critical
+            ) | (NotificationPriority::Low, _)
+        );
 
         if !priority_check {
             return false;
@@ -430,6 +430,8 @@ impl NotificationSystem {
     /// 1. **Immediate rejection** at the contract level (no event emission)
     /// 2. **Deterministic key derivation** that survives contract upgrades
     /// 3. **Replay protection** for the same logical notification event
+    // Legacy event topics remain part of the public event ABI.
+    #[allow(deprecated)]
     pub fn create_notification(
         env: &Env,
         recipient: Address,
@@ -505,6 +507,8 @@ impl NotificationSystem {
     }
 
     /// Update notification status
+    // Legacy event topics remain part of the public event ABI.
+    #[allow(deprecated)]
     pub fn update_notification_status(
         env: &Env,
         notification_id: &BytesN<32>,
@@ -593,6 +597,8 @@ impl NotificationSystem {
     }
 
     /// Update user notification preferences in persistent storage with TTL refresh.
+    // Legacy event topics remain part of the public event ABI.
+    #[allow(deprecated)]
     pub fn update_user_preferences(
         env: &Env,
         user: &Address,
@@ -1132,8 +1138,8 @@ impl NotificationSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::QuickLendXContract;
     use crate::types::{Invoice, InvoiceCategory, InvoiceStatus};
+    use crate::QuickLendXContract;
     use soroban_sdk::{
         testutils::{Address as _, Ledger},
         Address, BytesN, Env, String,
@@ -1146,11 +1152,7 @@ mod tests {
         (env, contract_id)
     }
 
-    fn sample_invoice(
-        env: &Env,
-        business: &Address,
-        investor: Option<&Address>,
-    ) -> Invoice {
+    fn sample_invoice(env: &Env, business: &Address, investor: Option<&Address>) -> Invoice {
         Invoice {
             id: BytesN::from_array(env, &[1u8; 32]),
             business: business.clone(),
@@ -1220,29 +1222,61 @@ mod tests {
             let inv_id = inv_notifs.get(0).unwrap();
 
             // Distinct IDs in the same ledger
-            assert_ne!(biz_id, inv_id, "notification IDs in same ledger must be distinct");
+            assert_ne!(
+                biz_id, inv_id,
+                "notification IDs in same ledger must be distinct"
+            );
 
             // Correct recipient on each record
             let biz_record = NotificationSystem::get_notification(&env, &biz_id).unwrap();
             let inv_record = NotificationSystem::get_notification(&env, &inv_id).unwrap();
 
-            assert_eq!(biz_record.recipient, business, "business record must belong to business");
-            assert_eq!(inv_record.recipient, investor, "investor record must belong to investor");
-            assert_eq!(biz_record.delivery_status, NotificationDeliveryStatus::Pending);
-            assert_eq!(inv_record.delivery_status, NotificationDeliveryStatus::Pending);
+            assert_eq!(
+                biz_record.recipient, business,
+                "business record must belong to business"
+            );
+            assert_eq!(
+                inv_record.recipient, investor,
+                "investor record must belong to investor"
+            );
+            assert_eq!(
+                biz_record.delivery_status,
+                NotificationDeliveryStatus::Pending
+            );
+            assert_eq!(
+                inv_record.delivery_status,
+                NotificationDeliveryStatus::Pending
+            );
 
             // Marking business's as read leaves investor's unread
-            NotificationSystem::update_notification_status(&env, &biz_id, NotificationDeliveryStatus::Read)
-                .expect("mark business notif as read");
+            NotificationSystem::update_notification_status(
+                &env,
+                &biz_id,
+                NotificationDeliveryStatus::Read,
+            )
+            .expect("mark business notif as read");
 
             let biz_record_after = NotificationSystem::get_notification(&env, &biz_id).unwrap();
             let inv_record_after = NotificationSystem::get_notification(&env, &inv_id).unwrap();
 
-            assert_eq!(biz_record_after.delivery_status, NotificationDeliveryStatus::Read);
-            assert_eq!(inv_record_after.delivery_status, NotificationDeliveryStatus::Pending, "investor record must remain unread");
+            assert_eq!(
+                biz_record_after.delivery_status,
+                NotificationDeliveryStatus::Read
+            );
+            assert_eq!(
+                inv_record_after.delivery_status,
+                NotificationDeliveryStatus::Pending,
+                "investor record must remain unread"
+            );
 
-            assert_eq!(NotificationSystem::get_notification_unread_count(&env, &business), 0);
-            assert_eq!(NotificationSystem::get_notification_unread_count(&env, &investor), 1);
+            assert_eq!(
+                NotificationSystem::get_notification_unread_count(&env, &business),
+                0
+            );
+            assert_eq!(
+                NotificationSystem::get_notification_unread_count(&env, &investor),
+                1
+            );
         });
     }
 
@@ -1265,13 +1299,24 @@ mod tests {
             NotificationSystem::update_user_preferences(&env, &business, prefs);
 
             let res = NotificationSystem::notify_dispute_opened(&env, &invoice);
-            assert!(res.is_ok(), "notify_dispute_opened must succeed even if business is blocked");
+            assert!(
+                res.is_ok(),
+                "notify_dispute_opened must succeed even if business is blocked"
+            );
 
             let biz_notifs = NotificationSystem::get_user_notifications(&env, &business);
             let inv_notifs = NotificationSystem::get_user_notifications(&env, &investor);
 
-            assert_eq!(biz_notifs.len(), 0, "blocked business must receive 0 notifications");
-            assert_eq!(inv_notifs.len(), 1, "investor must receive exactly 1 notification");
+            assert_eq!(
+                biz_notifs.len(),
+                0,
+                "blocked business must receive 0 notifications"
+            );
+            assert_eq!(
+                inv_notifs.len(),
+                1,
+                "investor must receive exactly 1 notification"
+            );
 
             let inv_id = inv_notifs.get(0).unwrap();
             let inv_record = NotificationSystem::get_notification(&env, &inv_id).unwrap();
@@ -1310,13 +1355,18 @@ mod tests {
             assert_eq!(biz_notifs.len(), 2, "business must have 2 notifications");
             assert_eq!(inv_notifs.len(), 2, "investor must have 2 notifications");
 
-            let b_notif1 = NotificationSystem::get_notification(&env, &biz_notifs.get(0).unwrap()).unwrap();
-            let b_notif2 = NotificationSystem::get_notification(&env, &biz_notifs.get(1).unwrap()).unwrap();
+            let b_notif1 =
+                NotificationSystem::get_notification(&env, &biz_notifs.get(0).unwrap()).unwrap();
+            let b_notif2 =
+                NotificationSystem::get_notification(&env, &biz_notifs.get(1).unwrap()).unwrap();
 
             assert_eq!(b_notif1.notification_type, NotificationType::PaymentOverdue);
             assert_eq!(b_notif2.notification_type, NotificationType::PaymentOverdue);
 
-            assert_ne!(b_notif1.related_invoice_id, b_notif2.related_invoice_id, "notifications must reference different invoices");
+            assert_ne!(
+                b_notif1.related_invoice_id, b_notif2.related_invoice_id,
+                "notifications must reference different invoices"
+            );
             assert_eq!(b_notif1.related_invoice_id, Some(invoice1.id));
             assert_eq!(b_notif2.related_invoice_id, Some(invoice2.id));
         });
@@ -1357,7 +1407,10 @@ mod tests {
             );
 
             assert!(
-                matches!(res2, Err(crate::errors::QuickLendXError::NotificationDuplicate)),
+                matches!(
+                    res2,
+                    Err(crate::errors::QuickLendXError::NotificationDuplicate)
+                ),
                 "exact duplicate in same ledger must return NotificationDuplicate"
             );
         });

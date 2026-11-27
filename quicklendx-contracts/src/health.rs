@@ -38,7 +38,6 @@
 //! println!("Currencies: {}", health.currency_count);
 //! ```
 
-use crate::emergency::EmergencyWithdraw;
 use soroban_sdk::{contracttype, Address};
 
 /// Canonical protocol health snapshot.
@@ -111,7 +110,6 @@ impl ProtocolHealth {
     /// - No state mutations
     /// - Safe to call from any context (read-only getter)
     pub fn new(env: &soroban_sdk::Env) -> Self {
-        use crate::admin::AdminStorage;
         use crate::currency::CurrencyWhitelist;
         use crate::emergency::EmergencyWithdraw;
         use crate::init::ProtocolInitializer;

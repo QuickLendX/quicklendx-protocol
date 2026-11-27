@@ -45,9 +45,9 @@ use soroban_sdk::{Address, Env};
 /// # Arguments
 ///
 /// * `_env`   – Soroban execution environment (available for oracle calls in a
-///              future implementation; unused today).
+///   future implementation; unused today).
 /// * `_actor` – The address initiating the action (business for `store_invoice`,
-///              investor for `place_bid`).
+///   investor for `place_bid`).
 ///
 /// # Errors
 ///

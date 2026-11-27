@@ -27,11 +27,7 @@
 
 use crate::errors::QuickLendXError;
 use crate::pagination;
-use crate::verification::{
-    get_kyc_index_page, BusinessVerificationStatus, BusinessVerificationStorage,
-    InvestorVerificationStorage, KycIndexKind,
-};
-use alloc::string::String as AllocString;
+use crate::verification::{get_kyc_index_page, BusinessVerificationStatus, KycIndexKind};
 use soroban_sdk::{contracttype, Address, Env, String, Vec};
 
 // ---------------------------------------------------------------------------
@@ -101,7 +97,7 @@ pub fn decode_cursor(cursor: &String) -> Result<u32, QuickLendXError> {
 
     let mut offset: u32 = 0;
     for &b in &buf[..len] {
-        if b < b'0' || b > b'9' {
+        if !b.is_ascii_digit() {
             return Err(QuickLendXError::InvalidCursor);
         }
         let digit = (b - b'0') as u32;
@@ -126,7 +122,6 @@ pub fn decode_cursor(cursor: &String) -> Result<u32, QuickLendXError> {
 ///
 /// # Errors
 /// - `InvalidCursor` if `cursor` contains non-digit characters or overflows.
-
 fn query_businesses_by_status(
     env: &Env,
     status: BusinessVerificationStatus,
@@ -169,7 +164,6 @@ fn query_businesses_by_status(
 
 /// Retrieve a sorted, paginated slice of addresses that hold a given KYC
 /// status for investors.
-
 fn query_investors_by_status(
     env: &Env,
     status: BusinessVerificationStatus,
@@ -246,145 +240,6 @@ pub fn get_investors_paged(
 // ---------------------------------------------------------------------------
 // Internal helpers
 // ---------------------------------------------------------------------------
-
-/// Sort a `Vec<Address>` by `(submitted_at ASC, address_bytes ASC)` by
-/// reading each verification record.
-///
-/// `is_business`: `true` → look up via `BusinessVerificationStorage`,
-/// `false` → look up via `InvestorVerificationStorage`.
-///
-/// This is O(n) storage reads and O(n log n) comparisons, bounded by the
-/// total number of records in the given status list. For the expected
-/// platform scale this is acceptable.
-fn sort_addresses_by_submitted_at(
-    env: &Env,
-    addresses: &Vec<Address>,
-    is_business: bool,
-) -> Vec<Address> {
-    if addresses.len() <= 1 {
-        return addresses.clone();
-    }
-
-    // Collect (submitted_at, address_bytes, address) tuples for sorting.
-    let count = addresses.len() as u32;
-    // Use a simple insertion sort – efficient for the expected sizes
-    // (< 1000 records per status) and avoids heap allocation for intermediate
-    // sort keys.
-    let mut sorted: Vec<Address> = Vec::new(env);
-    for addr in addresses.iter() {
-        sorted.push_back(addr);
-    }
-
-    // Extract timestamps for each address.
-    let mut timestamps: soroban_sdk::Vec<u64> = soroban_sdk::Vec::new(env);
-    for addr in sorted.iter() {
-        let ts = if is_business {
-            BusinessVerificationStorage::get_verification(env, &addr)
-                .map(|v| v.submitted_at)
-                .unwrap_or(0)
-        } else {
-            InvestorVerificationStorage::get(env, &addr)
-                .map(|v| v.submitted_at)
-                .unwrap_or(0)
-        };
-        timestamps.push_back(ts);
-    }
-
-    // Insertion sort on the (timestamp, address) pairs.
-    // For small N this is faster than merge sort due to no extra allocation.
-    let mut i = 1u32;
-    while i < count {
-        let mut j = i;
-        while j > 0 {
-            let prev = j - 1;
-            let ts_prev = timestamps.get(prev).unwrap_or(0);
-            let ts_curr = timestamps.get(j).unwrap_or(0);
-
-            let should_swap = if ts_prev > ts_curr {
-                true
-            } else if ts_prev == ts_curr {
-                // Tie-break lexicographically by address byte encoding.
-                let addr_prev = sorted.get(prev).unwrap();
-                let addr_curr = sorted.get(j).unwrap();
-                address_lex_gt(env, &addr_prev, &addr_curr)
-            } else {
-                false
-            };
-
-            if should_swap {
-                // Swap in sorted
-                let tmp_addr = sorted.get(j).unwrap();
-                let prev_addr = sorted.get(prev).unwrap();
-                sorted.set(j, prev_addr);
-                sorted.set(prev, tmp_addr);
-
-                // Swap timestamps
-                let tmp_ts = timestamps.get(j).unwrap_or(0);
-                timestamps.set(j, ts_prev);
-                timestamps.set(prev, tmp_ts);
-
-                j -= 1;
-            } else {
-                break;
-            }
-        }
-        i += 1;
-    }
-
-    sorted
-}
-
-/// Compare two addresses lexicographically by their string representation.
-/// Returns `true` if `a > b`.
-fn address_lex_gt(_env: &Env, a: &Address, b: &Address) -> bool {
-    // Soroban Addresses are 32-byte ed25519 keys (or 32-byte contract hashes).
-    // Use their string representation for stable lexicographic ordering.
-    let a_str = a.to_string();
-    let b_str = b.to_string();
-
-    let a_len = a_str.len() as usize;
-    let b_len = b_str.len() as usize;
-    let min_len = if a_len < b_len { a_len } else { b_len };
-
-    // Copy the Soroban strings into stack buffers for byte comparison.
-    let mut a_buf = [0u8; 66]; // max Soroban String hex representation
-    let mut b_buf = [0u8; 66];
-    a_str.copy_into_slice(&mut a_buf[..a_len]);
-    b_str.copy_into_slice(&mut b_buf[..b_len]);
-
-    for i in 0..min_len {
-        if a_buf[i] > b_buf[i] {
-            return true;
-        }
-        if a_buf[i] < b_buf[i] {
-            return false;
-        }
-    }
-    // If all compared bytes equal, shorter string is "less than".
-    a_len > b_len
-}
-
-/// Copy a sub-range of addresses from `sorted` into a fresh `Vec`.
-fn paginate_address_list(
-    env: &Env,
-    sorted: &Vec<Address>,
-    offset: u32,
-    limit: u32,
-) -> Vec<Address> {
-    let total = sorted.len();
-    let start = offset.min(total);
-    let end = start.saturating_add(limit).min(total);
-
-    let mut page = Vec::new(env);
-    let mut i = start;
-    while i < end {
-        if let Some(addr) = sorted.get(i) {
-            page.push_back(addr);
-        }
-        i += 1;
-    }
-    page
-}
 
 // ===========================================================================
 // Tests

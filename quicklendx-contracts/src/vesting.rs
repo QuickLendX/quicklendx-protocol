@@ -122,12 +122,7 @@ impl VestingStorage {
             return Err(QuickLendXError::InvalidAmount);
         }
         let key = Self::reserve_key(token);
-        let current: i128 = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0i128)
-            .max(0);
+        let current: i128 = env.storage().persistent().get(&key).unwrap_or(0i128).max(0);
         let new_value = current
             .checked_add(amount)
             .ok_or(QuickLendXError::ArithmeticOverflow)?;
@@ -149,12 +144,7 @@ impl VestingStorage {
             return Err(QuickLendXError::InvalidAmount);
         }
         let key = Self::reserve_key(token);
-        let current: i128 = env
-            .storage()
-            .persistent()
-            .get(&key)
-            .unwrap_or(0i128)
-            .max(0);
+        let current: i128 = env.storage().persistent().get(&key).unwrap_or(0i128).max(0);
         // If the counter would go below zero, clamp to zero (defensive guard).
         let new_value = current.saturating_sub(amount).max(0);
         env.storage().persistent().set(&key, &new_value);
@@ -247,6 +237,10 @@ impl Vesting {
     /// # Security
     /// - Requires admin authorization
     /// - Transfers tokens into contract custody immediately
+    // Legacy event topics remain part of the public event ABI.
+    #[allow(deprecated)]
+    // Contract API arity is fixed by the public ABI.
+    #[allow(clippy::too_many_arguments)]
     pub fn create_schedule(
         env: &Env,
         admin: &Address,
@@ -429,10 +423,13 @@ impl Vesting {
     /// - Enforces timelock/cliff: returns `InvalidTimestamp` if called before cliff
     /// - Prevents over-release via `released_amount` tracking
     /// - Idempotent after full release: returns `Ok(0)` when nothing remains
+    // Legacy event topics remain part of the public event ABI.
+    #[allow(deprecated)]
     pub fn release(env: &Env, beneficiary: &Address, id: u64) -> Result<i128, QuickLendXError> {
         beneficiary.require_auth();
 
-        let mut schedule = VestingStorage::get(env, id).unwrap();
+        let mut schedule =
+            VestingStorage::get(env, id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         if &schedule.beneficiary != beneficiary {
             return Err(QuickLendXError::Unauthorized);

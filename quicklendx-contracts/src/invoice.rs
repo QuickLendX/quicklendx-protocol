@@ -26,7 +26,7 @@ pub const MAX_INVOICE_TAGS: u32 = 10;
 /// closes that gap by providing a single enforcement point that can be
 /// dropped into any tag-mutation path.
 pub fn require_max_invoice_tags(tags: &Vec<String>, cap: u32) -> Result<(), QuickLendXError> {
-    if tags.len() as u32 >= cap {
+    if tags.len() >= cap {
         return Err(QuickLendXError::TagLimitExceeded);
     }
     Ok(())
@@ -39,6 +39,8 @@ pub fn require_max_invoice_tags(tags: &Vec<String>, cap: u32) -> Result<(), Quic
 pub const MAX_RATINGS_PER_INVOICE: u32 = 100;
 
 impl Invoice {
+    // Constructors mirror the fixed on-chain invoice record layout.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         env: &Env,
         business: Address,
@@ -64,6 +66,8 @@ impl Invoice {
         )
     }
 
+    // Constructors mirror the fixed on-chain invoice record layout.
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_fee_settings(
         env: &Env,
         business: Address,
@@ -353,7 +357,10 @@ impl Invoice {
     pub fn remove_tag(&mut self, tag: String) -> Result<(), QuickLendXError> {
         let mut idx = 0u32;
         while idx < self.tags.len() {
-            let existing = self.tags.get(idx).unwrap();
+            let existing = self
+                .tags
+                .get(idx)
+                .unwrap_or_else(|| panic!("tag index out of bounds"));
             if eq_trimmed_lower_ascii(&tag, &existing) {
                 self.tags.remove(idx);
             } else {
@@ -413,8 +420,8 @@ impl Invoice {
         feedback: String,
     ) -> Result<(), QuickLendXError> {
         rater.require_auth();
-        let mut invoice = InvoiceStorage::get_invoice(env, invoice_id)
-            .ok_or(QuickLendXError::InvoiceNotFound)?;
+        let mut invoice =
+            InvoiceStorage::get_invoice(env, invoice_id).ok_or(QuickLendXError::InvoiceNotFound)?;
         invoice.add_rating(rating, feedback, rater, env.ledger().timestamp())?;
         InvoiceStorage::update_invoice(env, &invoice);
         Ok(())

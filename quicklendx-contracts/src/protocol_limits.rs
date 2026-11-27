@@ -52,6 +52,7 @@ pub const RATE_LIMIT_WINDOW_SEQUENCES: u32 = 20;
 /// Maximum state-mutating calls any single address may issue within one window.
 pub const MAX_MUTATIONS_PER_WINDOW: u32 = 30;
 
+// Legacy limit definitions remain in the public module API.
 #[allow(dead_code)]
 #[contracttype]
 #[derive(Clone, Eq, PartialEq)]
@@ -73,6 +74,7 @@ pub struct ProtocolLimits {
     pub min_investor_tier: crate::verification::InvestorTier,
 }
 
+// Legacy limit definitions remain in the public module API.
 #[allow(dead_code)]
 const LIMITS_KEY: &str = "protocol_limits";
 
@@ -88,10 +90,13 @@ pub const DEFAULT_MIN_BID_BPS: u32 = 100; // 1%
 /// @notice Hard minimum bid amount that admin may not undercut.
 pub const MIN_BID_FLOOR: i128 = 1;
 
+// Legacy limit definitions remain in the public module API.
 #[allow(dead_code)]
 const DEFAULT_MAX_DUE_DAYS: u64 = 365;
+// Legacy limit definitions remain in the public module API.
 #[allow(dead_code)]
 const DEFAULT_GRACE_PERIOD: u64 = 7 * 24 * 60 * 60; // 7 days
+                                                    // Legacy limit definitions remain in the public module API.
 #[allow(dead_code)]
 pub const DEFAULT_MAX_INVOICES_PER_BUSINESS: u32 = 100; // 0 = unlimited
 
@@ -174,9 +179,11 @@ fn validate_protocol_limits_params(
     Ok(())
 }
 
+// Legacy limit definitions remain in the public module API.
 #[allow(dead_code)]
 pub struct ProtocolLimitsContract;
 
+// Legacy limit definitions remain in the public module API.
 #[allow(dead_code)]
 impl ProtocolLimitsContract {
     /// @notice Initialize protocol limits storage with defaults.
@@ -206,6 +213,8 @@ impl ProtocolLimitsContract {
 
     /// @notice Update protocol-wide limits used for invoice/bid validation.
     /// @dev Requires admin authorization.
+    // Limit setters mirror the fixed public configuration API.
+    #[allow(clippy::too_many_arguments)]
     pub fn set_protocol_limits(
         env: Env,
         admin: Address,
@@ -234,6 +243,8 @@ impl ProtocolLimitsContract {
     /// @notice Update protocol limits without calling `require_auth` again.
     /// @dev Intended for internal use when the caller has already been authorized
     ///      in the same invocation frame (e.g., during contract initialization).
+    // Limit setters mirror the fixed public configuration API.
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn set_protocol_limits_authed(
         env: &Env,
         admin: &Address,
@@ -473,21 +484,12 @@ pub fn check_invoice_limit(env: &Env, business: &Address) -> Result<(), QuickLen
 
 /// Persistent record for per-address mutation accounting.
 #[contracttype]
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq, Default)]
 pub struct MutationRateRecord {
     /// Ledger sequence at which the current window started.
     pub window_start: u32,
     /// Number of state-mutating calls observed in this window.
     pub count: u32,
-}
-
-impl Default for MutationRateRecord {
-    fn default() -> Self {
-        Self {
-            window_start: 0,
-            count: 0,
-        }
-    }
 }
 
 /// Internal storage key for mutation-rate records.
@@ -501,10 +503,7 @@ fn mutation_rate_key(_env: &Env, addr: &Address) -> (soroban_sdk::Symbol, Addres
 /// Read the current rate-record for `addr`.
 fn read_rate_record(env: &Env, addr: &Address) -> MutationRateRecord {
     let key = mutation_rate_key(env, addr);
-    env.storage()
-        .instance()
-        .get(&key)
-        .unwrap_or(MutationRateRecord::default())
+    env.storage().instance().get(&key).unwrap_or_default()
 }
 
 /// Write the rate-record for `addr`.
@@ -575,7 +574,7 @@ pub fn check_and_record_mutation(env: &Env, addr: &Address) -> Result<(), QuickL
 
 /// Reject a description blob that exceeds [`MAX_INPUT_DESCRIPTION_BYTES`].
 pub fn require_description_bound(desc: &soroban_sdk::String) -> Result<(), QuickLendXError> {
-    if desc.len() as u32 > MAX_INPUT_DESCRIPTION_BYTES {
+    if desc.len() > MAX_INPUT_DESCRIPTION_BYTES {
         return Err(QuickLendXError::InputTooLarge);
     }
     Ok(())
@@ -583,7 +582,7 @@ pub fn require_description_bound(desc: &soroban_sdk::String) -> Result<(), Quick
 
 /// Reject a KYC data blob that exceeds [`MAX_INPUT_KYC_DATA_BYTES`].
 pub fn require_kyc_data_bound(data: &soroban_sdk::String) -> Result<(), QuickLendXError> {
-    if data.len() as u32 > MAX_INPUT_KYC_DATA_BYTES {
+    if data.len() > MAX_INPUT_KYC_DATA_BYTES {
         return Err(QuickLendXError::InputTooLarge);
     }
     Ok(())
@@ -591,7 +590,7 @@ pub fn require_kyc_data_bound(data: &soroban_sdk::String) -> Result<(), QuickLen
 
 /// Reject a tags vector that exceeds [`MAX_INPUT_TAGS`].
 pub fn require_tags_bound<T>(tags: &soroban_sdk::Vec<T>) -> Result<(), QuickLendXError> {
-    if tags.len() as u32 > MAX_INPUT_TAGS {
+    if tags.len() > MAX_INPUT_TAGS {
         return Err(QuickLendXError::InputTooLarge);
     }
     Ok(())
@@ -599,7 +598,7 @@ pub fn require_tags_bound<T>(tags: &soroban_sdk::Vec<T>) -> Result<(), QuickLend
 
 /// Reject a batch-size vector that exceeds [`MAX_INPUT_BATCH_SIZE`].
 pub fn require_batch_size_bound<T>(items: &soroban_sdk::Vec<T>) -> Result<(), QuickLendXError> {
-    if items.len() as u32 > MAX_INPUT_BATCH_SIZE {
+    if items.len() > MAX_INPUT_BATCH_SIZE {
         return Err(QuickLendXError::InputTooLarge);
     }
     Ok(())
@@ -607,7 +606,7 @@ pub fn require_batch_size_bound<T>(items: &soroban_sdk::Vec<T>) -> Result<(), Qu
 
 /// Reject a status-query batch that exceeds [`MAX_INPUT_STATUS_BATCH_SIZE`].
 pub fn require_status_batch_bound<T>(items: &soroban_sdk::Vec<T>) -> Result<(), QuickLendXError> {
-    if items.len() as u32 > MAX_INPUT_STATUS_BATCH_SIZE {
+    if items.len() > MAX_INPUT_STATUS_BATCH_SIZE {
         return Err(QuickLendXError::InputTooLarge);
     }
     Ok(())
@@ -615,7 +614,7 @@ pub fn require_status_batch_bound<T>(items: &soroban_sdk::Vec<T>) -> Result<(), 
 
 /// Reject a line-items vector that exceeds [`MAX_INPUT_LINE_ITEMS`].
 pub fn require_line_items_bound<T>(items: &soroban_sdk::Vec<T>) -> Result<(), QuickLendXError> {
-    if items.len() as u32 > MAX_INPUT_LINE_ITEMS {
+    if items.len() > MAX_INPUT_LINE_ITEMS {
         return Err(QuickLendXError::InputTooLarge);
     }
     Ok(())

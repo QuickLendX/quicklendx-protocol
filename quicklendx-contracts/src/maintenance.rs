@@ -85,6 +85,8 @@ impl MaintenanceControl {
     }
 
     /// Write maintenance flags without re-checking admin (caller must authorize).
+    // Legacy event topics remain part of the public event ABI.
+    #[allow(deprecated)]
     pub(crate) fn apply_maintenance_mode(
         env: &Env,
         enabled: bool,

@@ -4,6 +4,7 @@
 //! initialization, authenticated transfers, optional two-step handoff, and
 //! transfer-lock protections.
 
+// Legacy admin helpers remain in the public module API.
 #![allow(dead_code)]
 
 use crate::audit::{address_to_audit_string, log_config_change, AuditOperation};

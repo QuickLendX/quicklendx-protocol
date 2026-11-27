@@ -1,3 +1,4 @@
+// Legacy event topics remain part of the public event ABI.
 #![allow(deprecated)]
 
 use crate::audit::OpType;
@@ -7,7 +8,7 @@ use crate::payments::Escrow;
 use crate::types::Bid;
 use crate::types::{InvestorFreezeReason, Invoice, InvoiceMetadata, PlatformFeeConfig};
 use crate::verification::{InvestorRiskLevel, InvestorTier, InvestorVerification};
-use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
+use soroban_sdk::{contractevent, symbol_short, Address, BytesN, Env, String, Vec};
 
 // ============================================================================
 // Topic Constants
@@ -1228,6 +1229,8 @@ pub fn emit_payment_recorded(
 
 /// Emit a committed [`RepaymentAllocated`] record. Call only after payment
 /// storage has been written.
+// Event payloads mirror fixed public event schemas.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_repayment_allocated(
     env: &Env,
     operation_id: BytesN<32>,
@@ -1319,6 +1322,8 @@ pub fn emit_invoice_funded(env: &Env, invoice_id: &BytesN<32>, investor: &Addres
 // Insurance Event Emitters
 // ============================================================================
 
+// Event payloads mirror fixed public event schemas.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_insurance_added(
     env: &Env,
     investment_id: &BytesN<32>,
@@ -1759,7 +1764,10 @@ pub fn emit_dispute_rejected(
 // Profit / Fee Breakdown Event Emitter
 // ============================================================================
 
+// Legacy event helper retained for source compatibility.
 #[allow(dead_code)]
+// Event payloads mirror fixed public event schemas.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_profit_fee_breakdown(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -1961,6 +1969,8 @@ pub fn emit_invoice_status_updated(
     InvoiceStatusUpdated { invoice_id, status }.publish(env);
 }
 
+// Event payloads mirror fixed public event schemas.
+#[allow(clippy::too_many_arguments)]
 pub fn emit_protocol_initialized(
     env: &Env,
     admin: &Address,
@@ -2018,10 +2028,20 @@ pub fn treasury_rotation_cancelled(env: &Env, admin: &Address) {
 // ── Upgrade events ──────────────────────────────────────────────────────────
 
 /// Emitted when an admin schedules a WASM contract upgrade.
-pub fn emit_upgrade_scheduled(env: &Env, admin: &Address, wasm_hash: &BytesN<32>, executable_at: u64) {
+pub fn emit_upgrade_scheduled(
+    env: &Env,
+    admin: &Address,
+    wasm_hash: &BytesN<32>,
+    executable_at: u64,
+) {
     env.events().publish(
         (symbol_short!("upg_sch"),),
-        (admin.clone(), wasm_hash.clone(), env.ledger().timestamp(), executable_at),
+        (
+            admin.clone(),
+            wasm_hash.clone(),
+            env.ledger().timestamp(),
+            executable_at,
+        ),
     );
 }
 

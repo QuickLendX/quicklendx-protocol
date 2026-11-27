@@ -36,6 +36,8 @@ where
 }
 
 /// Returns whether the payment-path guard is currently locked.
+// Exercised by reentrancy regression tests; not called from contract entrypoints.
+#[allow(dead_code)]
 pub(crate) fn is_payment_guard_locked(env: &Env) -> bool {
     env.storage()
         .instance()

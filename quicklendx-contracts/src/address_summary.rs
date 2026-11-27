@@ -1,8 +1,8 @@
 use crate::errors::QuickLendXError;
 use crate::investment_queries;
 use crate::storage::{BidStorage, InvoiceStorage};
-use crate::types::{BidStatus, InvestmentStatus};
-use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Vec};
+use crate::types::BidStatus;
+use soroban_sdk::{contracttype, Address, Env};
 
 /// Canonical summary shape for any supported participant address.
 ///
@@ -85,14 +85,6 @@ impl AddressSummary {
         summary.investor_defaulted_count = s.defaulted_count;
         summary.investor_refunded_count = s.refunded_count;
         summary.investor_total_positions = s.total_positions;
-    }
-
-    fn with_business(summary: &mut Self, _business: &Address) {
-        // Kept for API symmetry; business summarization is implemented in
-        // `BusinessStrategy::summarize`.
-        //
-        // This helper intentionally does nothing.
-        let _ = summary;
     }
 }
 

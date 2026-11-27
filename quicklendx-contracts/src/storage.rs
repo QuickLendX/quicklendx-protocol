@@ -6,7 +6,6 @@
 use soroban_sdk::{contracttype, symbol_short, Address, BytesN, Env, String, Symbol, Vec};
 
 use crate::errors::QuickLendXError;
-use crate::protocol_limits;
 use crate::types::{
     BidStatus, BusinessFreezeReason, FreezeInfo, InvestmentStatus, InvestorFreezeInfo, Invoice,
     InvoiceCategory, InvoiceLock, InvoiceStatus, PlatformFeeConfig, PruneReport, RebuildReport,
@@ -73,13 +72,9 @@ pub fn extend_persistent_ttl<T>(env: &Env, key: &T)
 where
     T: soroban_sdk::IntoVal<soroban_sdk::Env, soroban_sdk::Val>,
 {
-    let ttl = env.storage().persistent().get_ttl(key);
-
-    if ttl < PERSISTENT_BUMP_THRESHOLD {
-        env.storage()
-            .persistent()
-            .extend_ttl(key, PERSISTENT_BUMP_THRESHOLD, PERSISTENT_EXTEND_TO);
-    }
+    env.storage()
+        .persistent()
+        .extend_ttl(key, PERSISTENT_BUMP_THRESHOLD, PERSISTENT_EXTEND_TO);
 }
 
 pub fn bump_persistent<T>(env: &Env, key: &T)
@@ -452,7 +447,9 @@ impl InvoiceStorage {
         let mut position = start;
         let mut scanned = 0u32;
         while scanned < end.saturating_sub(start) && position < entries.len() {
-            let id = entries.get(position).unwrap();
+            let id = entries
+                .get(position)
+                .unwrap_or_else(|| panic!("entry index out of bounds"));
             let valid = Self::entry_matches(env, index, &id) && !valid_seen.contains(&id);
             if valid {
                 valid_seen.push_back(id);
@@ -808,7 +805,8 @@ impl InvoiceStorage {
     }
 
     pub fn clear_all(env: &Env) {
-        crate::governance::require_no_open_governance_proposal(env).unwrap();
+        crate::governance::require_no_open_governance_proposal(env)
+            .unwrap_or_else(|_| panic!("open governance proposal"));
         let ids = Self::get_all_invoice_ids(env);
         for id in ids.iter() {
             Self::delete_invoice(env, &id);
@@ -876,65 +874,61 @@ impl InvoiceStorage {
         matches
     }
 
-fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
-    let index = InvoiceIndex::Business(business.clone());
-    let mut invoices = Self::raw_index_entries(env, &index);
+    fn add_to_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
+        let index = InvoiceIndex::Business(business.clone());
+        let mut invoices = Self::raw_index_entries(env, &index);
 
-    if !invoices.contains(invoice_id) {
-        invoices.push_back(invoice_id.clone());
+        if !invoices.contains(invoice_id) {
+            invoices.push_back(invoice_id.clone());
 
-        let key = Indexes::invoices_by_business(business);
-        env.storage().persistent().set(&key, &invoices);
-        extend_persistent_ttl(env, &key);
-        Self::bump_business_generation(env, business);
+            let key = Indexes::invoices_by_business(business);
+            env.storage().persistent().set(&key, &invoices);
+            extend_persistent_ttl(env, &key);
+            Self::bump_business_generation(env, business);
+        }
     }
-}
 
-fn remove_from_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
-    let index = InvoiceIndex::Business(business.clone());
-    let mut invoices = Self::raw_index_entries(env, &index);
+    fn remove_from_business_index(env: &Env, business: &Address, invoice_id: &BytesN<32>) {
+        let index = InvoiceIndex::Business(business.clone());
+        let mut invoices = Self::raw_index_entries(env, &index);
 
-    if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
-        invoices.remove(pos as u32);
+        if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
+            invoices.remove(pos as u32);
 
-        let key = Indexes::invoices_by_business(business);
-        env.storage().persistent().set(&key, &invoices);
-        extend_persistent_ttl(env, &key);
-        Self::bump_business_generation(env, business);
+            let key = Indexes::invoices_by_business(business);
+            env.storage().persistent().set(&key, &invoices);
+            extend_persistent_ttl(env, &key);
+            Self::bump_business_generation(env, business);
+        }
     }
-}
 
-fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
-    let index = InvoiceIndex::Status(status);
-    let mut invoices = Self::raw_index_entries(env, &index);
+    fn add_to_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
+        let index = InvoiceIndex::Status(status);
+        let mut invoices = Self::raw_index_entries(env, &index);
 
-    if !invoices.contains(invoice_id) {
-        invoices.push_back(invoice_id.clone());
+        if !invoices.contains(invoice_id) {
+            invoices.push_back(invoice_id.clone());
 
-        let key = Indexes::invoices_by_status(status);
-        env.storage().persistent().set(&key, &invoices);
-        extend_persistent_ttl(env, &key);
-        Self::bump_status_generation(env, status);
+            let key = Indexes::invoices_by_status(status);
+            env.storage().persistent().set(&key, &invoices);
+            extend_persistent_ttl(env, &key);
+            Self::bump_status_generation(env, status);
+        }
     }
-}
 
-fn remove_from_status_index(
-    env: &Env,
-    status: InvoiceStatus,
-    invoice_id: &BytesN<32>,
-) {
-    let index = InvoiceIndex::Status(status);
-    let mut invoices = Self::raw_index_entries(env, &index);
+    fn remove_from_status_index(env: &Env, status: InvoiceStatus, invoice_id: &BytesN<32>) {
+        let index = InvoiceIndex::Status(status);
+        let mut invoices = Self::raw_index_entries(env, &index);
 
-    if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
-        invoices.remove(pos as u32);
+        if let Some(pos) = invoices.iter().position(|id| id == *invoice_id) {
+            invoices.remove(pos as u32);
 
-        let key = Indexes::invoices_by_status(status);
-        env.storage().persistent().set(&key, &invoices);
-        extend_persistent_ttl(env, &key);
-        Self::bump_status_generation(env, status);
+            let key = Indexes::invoices_by_status(status);
+            env.storage().persistent().set(&key, &invoices);
+            extend_persistent_ttl(env, &key);
+            Self::bump_status_generation(env, status);
+        }
     }
-}
 
     pub fn add_to_customer_index(env: &Env, customer_name: &String, invoice_id: &BytesN<32>) {
         let key = Indexes::invoices_by_customer(customer_name);
@@ -1155,13 +1149,15 @@ fn remove_from_status_index(
             return Ok(Vec::new(env));
         }
         let mut result = Vec::new(env);
-        let first_tag = tags.get(0).unwrap();
+        let first_tag = tags.get(0).unwrap_or_else(|| panic!("empty tag list"));
         let first_ids = Self::get_invoices_by_tag(env, &first_tag);
 
         for id in first_ids.iter() {
             let mut all_match = true;
             for i in 1..tags.len() {
-                let tag = tags.get(i).unwrap();
+                let tag = tags
+                    .get(i)
+                    .unwrap_or_else(|| panic!("tag index out of bounds"));
                 let tag_ids = Self::get_invoices_by_tag(env, &tag);
                 if !tag_ids.contains(&id) {
                     all_match = false;
@@ -1224,7 +1220,8 @@ const VIEW_ONLY_KEY: Symbol = symbol_short!("view_onl");
 
 impl StorageManager {
     pub fn clear_all_mappings(env: &Env) {
-        crate::governance::require_no_open_governance_proposal(env).unwrap();
+        crate::governance::require_no_open_governance_proposal(env)
+            .unwrap_or_else(|_| panic!("open governance proposal"));
         env.storage()
             .persistent()
             .remove(&StorageKeys::invoice_count());
@@ -1522,6 +1519,12 @@ impl StorageReadCache {
     }
 }
 
+impl Default for StorageReadCache {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// Comprehensive integrity audit for protocol storage indexes.
 ///
 /// This helper provides deep inspection of secondary indexes to ensure no
@@ -1768,16 +1771,8 @@ pub fn remove_pending_treasury(env: &Env) {
 /// Get the pending treasury address and its execution timestamp.
 /// This is used by tests and potentially by UI components to show pending changes.
 pub fn get_pending_treasury(env: &Env) -> Option<(Address, u64)> {
-    if !has_pending_treasury(env) {
-        return None;
-    }
-    // We can safely unwrap here because we've already checked with `has()`.
-    let address = env.storage().instance().get(&PENDING_TREASURY_KEY).unwrap();
-    let timestamp = env
-        .storage()
-        .instance()
-        .get(&PENDING_TREASURY_TS_KEY)
-        .unwrap();
+    let address = env.storage().instance().get(&PENDING_TREASURY_KEY)?;
+    let timestamp = env.storage().instance().get(&PENDING_TREASURY_TS_KEY)?;
     Some((address, timestamp))
 }
 

@@ -84,7 +84,7 @@ impl UpgradeControl {
         // Store pre-existing pause state so we can restore it after cancel/execute
         let was_paused = crate::pause::PauseControl::is_paused(env);
         let prev_reason = crate::pause::PauseControl::pause_reason(env);
-        
+
         env.storage()
             .instance()
             .set(&PRE_UPGRADE_PAUSED_KEY, &was_paused);
@@ -129,18 +129,16 @@ impl UpgradeControl {
             .storage()
             .instance()
             .get(&PENDING_UPGRADE_WASM_KEY)
-            .unwrap();
-        
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+
         // Restore the pause state that existed before scheduling
         let was_paused: bool = env
             .storage()
             .instance()
             .get(&PRE_UPGRADE_PAUSED_KEY)
             .unwrap_or(false);
-        let prev_reason: Option<PauseReason> = env
-            .storage()
-            .instance()
-            .get(&PRE_UPGRADE_PAUSE_RSN_KEY);
+        let prev_reason: Option<PauseReason> =
+            env.storage().instance().get(&PRE_UPGRADE_PAUSE_RSN_KEY);
 
         env.storage().instance().remove(&PENDING_UPGRADE_WASM_KEY);
         env.storage().instance().remove(&PENDING_UPGRADE_AT_KEY);
@@ -188,10 +186,8 @@ impl UpgradeControl {
             .instance()
             .get(&PRE_UPGRADE_PAUSED_KEY)
             .unwrap_or(false);
-        let prev_reason: Option<PauseReason> = env
-            .storage()
-            .instance()
-            .get(&PRE_UPGRADE_PAUSE_RSN_KEY);
+        let prev_reason: Option<PauseReason> =
+            env.storage().instance().get(&PRE_UPGRADE_PAUSE_RSN_KEY);
 
         env.storage().instance().remove(&PENDING_UPGRADE_WASM_KEY);
         env.storage().instance().remove(&PENDING_UPGRADE_AT_KEY);

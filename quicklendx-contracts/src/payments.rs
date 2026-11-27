@@ -326,7 +326,7 @@ impl EscrowStatus {
     /// Enforces the legal transition matrix for escrow lifecycle:
     /// - `Held` -> `Released`
     /// - `Held` -> `Refunded`
-    /// All other transitions (including repeated terminal states) are rejected.
+    ///   All other transitions (including repeated terminal states) are rejected.
     pub fn verify_transition(&self, next: &EscrowStatus) -> Result<(), QuickLendXError> {
         match (self, next) {
             (EscrowStatus::Held, EscrowStatus::Released) => Ok(()),
@@ -691,8 +691,8 @@ impl EscrowStorage {
         let mix = timestamp
             .saturating_add(next_counter)
             .saturating_add(0xE5C0);
-        for i in 18..32 {
-            id_bytes[i] = (mix % 256) as u8;
+        for byte in id_bytes.iter_mut().skip(18) {
+            *byte = (mix % 256) as u8;
         }
 
         BytesN::from_array(env, &id_bytes)
@@ -1147,7 +1147,6 @@ pub(crate) fn refund_escrow(
 /// - Balance and allowance are checked **before** the token call so that the contract
 ///   never enters a partial-transfer state.
 /// - When `from == to` the function is a no-op (returns `Ok(())`).
-
 pub fn transfer_funds(
     env: &Env,
     currency: &Address,
@@ -1156,7 +1155,7 @@ pub fn transfer_funds(
     amount: i128,
 ) -> Result<(), QuickLendXError> {
     // Reject amounts below the minimum transfer threshold (dust prevention) or exceeding upper bound
-    if amount < MIN_TRANSFER || amount > crate::protocol_limits::MAX_INVOICE_AMOUNT {
+    if !(MIN_TRANSFER..=crate::protocol_limits::MAX_INVOICE_AMOUNT).contains(&amount) {
         return Err(QuickLendXError::InvalidAmount);
     }
 
@@ -1434,10 +1433,10 @@ pub fn repay_escrow(
     // silently clamped) at this network boundary, unlike the pure
     // `allocate_repayment` helper whose clamping is preserved for callers that
     // pass pre-normalized BPS.
-    if payment_amount < 0 || payment_amount > crate::protocol_limits::MAX_INVOICE_AMOUNT {
+    if !(0..=crate::protocol_limits::MAX_INVOICE_AMOUNT).contains(&payment_amount) {
         return Err(QuickLendXError::InvalidAmount);
     }
-    if late_fee_bps < 0 || late_fee_bps > crate::profits::BPS_DENOMINATOR {
+    if !(0..=crate::profits::BPS_DENOMINATOR).contains(&late_fee_bps) {
         return Err(QuickLendXError::InvalidFeeBasisPoints);
     }
 
@@ -1615,7 +1614,6 @@ pub fn repay_escrow_with_key(
     Ok(allocation)
 }
 
-use soroban_sdk::String;
 #[cfg(test)]
 mod payments_tests {
     use super::*;

@@ -5,12 +5,14 @@
 use crate::audit::{log_config_change, write_i128_to_buf, write_u64_to_buf, AuditOperation};
 use crate::errors::QuickLendXError;
 use crate::events;
+use crate::types::PlatformFeeConfig;
 use soroban_sdk::{
     contracttype, symbol_short, vec, Address, BytesN, Env, Map, String, Symbol, Vec,
 };
 
 // Constants
 const MAX_FEE_BPS: u32 = 1000; // 10% hard cap for all fees
+                               // Legacy fee constants remain in the public module API.
 #[allow(dead_code)]
 const MIN_FEE_BPS: u32 = 0;
 /// Basis-point denominator for percentage calculations (100% = 10,000 bps).
@@ -31,6 +33,7 @@ const FEE_CONFIG_KEY: Symbol = symbol_short!("fee_cfg");
 const REVENUE_KEY: Symbol = symbol_short!("revenue");
 const VOLUME_KEY: Symbol = symbol_short!("volume");
 const ORIGINATION_HOLD_KEY: Symbol = symbol_short!("orig_hold");
+// Legacy fee constants remain in the public module API.
 #[allow(dead_code)]
 const TREASURY_CONFIG_KEY: Symbol = symbol_short!("treasury");
 const PLATFORM_FEE_KEY: Symbol = symbol_short!("plt_fee");
@@ -416,10 +419,15 @@ impl FeeManager {
         env: &Env,
         fee_type: &FeeType,
     ) -> Result<FeeStructure, QuickLendXError> {
-        let fee_structures: Vec<FeeStructure> =
-            env.storage().instance().get(&FEE_CONFIG_KEY).unwrap();
+        let fee_structures: Vec<FeeStructure> = env
+            .storage()
+            .instance()
+            .get(&FEE_CONFIG_KEY)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         for i in 0..fee_structures.len() {
-            let structure = fee_structures.get(i).unwrap();
+            let structure = fee_structures
+                .get(i)
+                .unwrap_or_else(|| panic!("fee structure index out of bounds"));
             if structure.fee_type == *fee_type {
                 return Ok(structure);
             }
@@ -523,7 +531,9 @@ impl FeeManager {
         // Check rule 1: For LatePayment, ensure it doesn't undercut regular fees
         if *fee_type == FeeType::LatePayment {
             for i in 0..fee_structures.len() {
-                let structure = fee_structures.get(i).unwrap();
+                let structure = fee_structures
+                    .get(i)
+                    .unwrap_or_else(|| panic!("fee structure index out of bounds"));
                 if structure.fee_type == FeeType::Platform && structure.min_fee > min_fee {
                     // LatePayment min shouldn't be less than Platform min
                     // (though LatePayment max should be higher)
@@ -537,7 +547,9 @@ impl FeeManager {
         // Check rule 2: Validate total system fee exposure isn't unreasonable
         let mut total_active_min_fees: i128 = 0;
         for i in 0..fee_structures.len() {
-            let structure = fee_structures.get(i).unwrap();
+            let structure = fee_structures
+                .get(i)
+                .unwrap_or_else(|| panic!("fee structure index out of bounds"));
             // Accumulate total active minimum fees, checking for i128 overflow.
             // Exclude the structure being updated/replaced to avoid double-counting.
             if structure.is_active && structure.fee_type != *fee_type {
@@ -579,8 +591,11 @@ impl FeeManager {
         // Apply comprehensive consistency checks
         Self::validate_fee_structure_consistency(&fee_type, base_fee_bps, min_fee, max_fee)?;
         Self::validate_cross_fee_consistency(env, &fee_type, min_fee, max_fee)?;
-        let mut fee_structures: Vec<FeeStructure> =
-            env.storage().instance().get(&FEE_CONFIG_KEY).unwrap();
+        let mut fee_structures: Vec<FeeStructure> = env
+            .storage()
+            .instance()
+            .get(&FEE_CONFIG_KEY)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         let mut found = false;
         let mut old_bps = 0u32;
         let mut old_min_fee: i128 = 0;
@@ -596,7 +611,9 @@ impl FeeManager {
             updated_by: admin.clone(),
         };
         for i in 0..fee_structures.len() {
-            let structure = fee_structures.get(i).unwrap();
+            let structure = fee_structures
+                .get(i)
+                .unwrap_or_else(|| panic!("fee structure index out of bounds"));
             if structure.fee_type == fee_type {
                 old_bps = structure.base_fee_bps;
                 old_min_fee = structure.min_fee;
@@ -683,13 +700,18 @@ impl FeeManager {
                 return Err(QuickLendXError::InvalidFeeBasisPoints);
             }
         }
-        let fee_structures: Vec<FeeStructure> =
-            env.storage().instance().get(&FEE_CONFIG_KEY).unwrap();
+        let fee_structures: Vec<FeeStructure> = env
+            .storage()
+            .instance()
+            .get(&FEE_CONFIG_KEY)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         let user_volume_data = Self::get_user_volume(env, user);
         let tier_discount = Self::get_tier_discount(&user_volume_data.current_tier);
         let mut total_fees: i128 = 0;
         for i in 0..fee_structures.len() {
-            let structure = fee_structures.get(i).unwrap();
+            let structure = fee_structures
+                .get(i)
+                .unwrap_or_else(|| panic!("fee structure index out of bounds"));
             if !structure.is_active {
                 continue;
             }
@@ -1149,7 +1171,7 @@ impl FeeManager {
             .storage()
             .instance()
             .get(&symbol_short!("rev_cfg"))
-            .unwrap();
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         // Re-validate shares at distribution time (defense in depth)
         Self::validate_revenue_shares(
@@ -1167,7 +1189,11 @@ impl FeeManager {
         }
 
         let revenue_key = (REVENUE_KEY, period);
-        let mut revenue_data: RevenueData = env.storage().persistent().get(&revenue_key).unwrap();
+        let mut revenue_data: RevenueData = env
+            .storage()
+            .persistent()
+            .get(&revenue_key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         if revenue_data.pending_distribution == 0 {
             return Err(QuickLendXError::OperationNotAllowed);
@@ -1223,7 +1249,11 @@ impl FeeManager {
 
     pub fn get_analytics(env: &Env, period: u64) -> Result<FeeAnalytics, QuickLendXError> {
         let revenue_key = (REVENUE_KEY, period);
-        let revenue_data: RevenueData = env.storage().persistent().get(&revenue_key).unwrap();
+        let revenue_data: RevenueData = env
+            .storage()
+            .persistent()
+            .get(&revenue_key)
+            .ok_or(QuickLendXError::StorageKeyNotFound)?;
         crate::storage::extend_persistent_ttl(env, &revenue_key);
         let average_fee_rate = if revenue_data.transaction_count > 0 {
             revenue_data

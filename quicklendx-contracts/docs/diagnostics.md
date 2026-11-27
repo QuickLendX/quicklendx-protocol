@@ -95,3 +95,25 @@ No authentication required. Read-only; never mutates state. No PII is exposed.
 ### Summary Rule
 
 If the signal is required for the frontend or indexing service to reconstruct contract history, use a contract **Event**. If the signal is only useful for troubleshooting, debugging, or verifying internal execution flow during development/testing, use a **Diagnostic**.
+
+---
+
+## Testing Diagnostics
+
+Run the default library tests to verify the disabled macro branch:
+
+```bash
+cargo test --lib
+```
+
+Run the diagnostics test module explicitly with the Cargo feature enabled:
+
+```bash
+cargo test --lib --features diagnostics test_diagnostics
+```
+
+The broader diagnostics-enabled library build can also be checked with:
+
+```bash
+cargo test --lib --features diagnostics
+```

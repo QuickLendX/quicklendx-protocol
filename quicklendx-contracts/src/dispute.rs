@@ -3,9 +3,9 @@ use crate::arbiter::ArbiterStorage;
 use crate::dispute_timeline::{clear_under_review_timestamp, set_under_review_timestamp};
 use crate::errors::QuickLendXError;
 use crate::investment::InvestmentStorage;
-use crate::resolution_policy::{EscrowEffect, InvoiceEffect, InvestmentEffect, ResolutionPolicy};
+use crate::resolution_policy::{EscrowEffect, InvestmentEffect, InvoiceEffect, ResolutionPolicy};
 use crate::storage::{DataKey, InvoiceStorage};
-use crate::types::{Dispute, DisputeResolution, DisputeStatus, InvoiceStatus, InvestmentStatus};
+use crate::types::{Dispute, DisputeResolution, DisputeStatus, InvestmentStatus, InvoiceStatus};
 use crate::verification::{
     validate_dispute_eligibility, validate_dispute_evidence, validate_dispute_reason,
     validate_dispute_resolution,
@@ -89,19 +89,6 @@ pub fn add_to_dispute_index(env: &Env, invoice_id: &BytesN<32>) {
     }
 }
 
-/// Track an invoice ID in the dispute index.
-///
-/// Idempotent helper used by contract entry points to keep query indexes
-/// consistent.  Safe to call multiple times for the same invoice — duplicate
-/// entries are suppressed.
-///
-/// # Parameters
-/// - `env`        — The contract environment.
-/// - `invoice_id` — The invoice to index as dispute-bearing.
-pub(crate) fn track_dispute_invoice(env: &Env, invoice_id: &BytesN<32>) {
-    add_to_dispute_index(env, invoice_id);
-}
-
 #[cfg(all(test, feature = "legacy-tests"))]
 mod evidence_identity_tests {
     use super::*;
@@ -147,19 +134,14 @@ mod evidence_identity_tests {
     }
 }
 
-fn zero_address(env: &Env) -> Address {
-    Address::from_str(
-        env,
-        "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
-    )
-}
-
 /// Reserve content-addressed evidence for one invoice.
 ///
 /// The digest is the evidence identity: a retry with the same payload is
 /// rejected, and the same payload cannot be attached to another invoice.
 /// Reservation happens only after authorization, lifecycle, and size checks so
 /// failed requests cannot consume an identifier.
+// Legacy event topics remain part of the public event ABI.
+#[allow(deprecated)]
 pub(crate) fn reserve_evidence(
     env: &Env,
     invoice_id: &BytesN<32>,
@@ -179,10 +161,6 @@ pub(crate) fn reserve_evidence(
     );
     Ok(digest)
 }
-fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> {
-    Ok(())
-}
-
 /// Open a new dispute on an invoice.
 ///
 /// # Preconditions
@@ -218,6 +196,7 @@ fn assert_is_admin(_env: &Env, _admin: &Address) -> Result<(), QuickLendXError> 
 /// | [`QuickLendXError::DisputeAlreadyExists`] | Dispute already open on this invoice |
 /// | [`QuickLendXError::InvalidDisputeReason`] | `reason` empty or > 1 000 chars |
 /// | [`QuickLendXError::InvalidDisputeEvidence`] | `evidence` empty or > 2 000 chars |
+// Public dispute API retained for ABI compatibility.
 #[allow(dead_code)]
 pub fn create_dispute(
     env: &Env,
@@ -526,7 +505,11 @@ pub fn apply_resolution_policy(
                 crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
             {
                 if escrow.status == crate::payments::EscrowStatus::Held {
-                    crate::payments::refund_escrow_internal(env, invoice_id)?;
+                    crate::payments::refund_escrow(
+                        env,
+                        invoice_id,
+                        &env.current_contract_address(),
+                    )?;
                 }
             }
         }
@@ -584,11 +567,7 @@ pub fn get_invoices_with_disputes(env: &Env) -> Vec<BytesN<32>> {
 }
 
 /// Return a paginated slice of dispute-indexed invoice IDs.
-pub fn get_invoices_with_disputes_paged(
-    env: &Env,
-    offset: u32,
-    limit: u32,
-) -> Vec<BytesN<32>> {
+pub fn get_invoices_with_disputes_paged(env: &Env, offset: u32, limit: u32) -> Vec<BytesN<32>> {
     let list = get_dispute_index(env);
     let total_count = list.len();
     let (start, end) = crate::pagination::calculate_safe_bounds(offset, limit, total_count);
@@ -619,14 +598,6 @@ pub fn get_invoices_with_disputes_paginated(
     }
 }
 
-/// @notice Read the dispute index for query endpoints.
-/// @param env The contract environment.
-/// @return Invoice IDs that have entered the dispute lifecycle.
-pub(crate) fn indexed_dispute_invoices(env: &Env) -> Vec<BytesN<32>> {
-    get_dispute_index(env)
-}
-
-#[allow(dead_code)]
 pub fn get_invoices_by_dispute_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
     let mut result = Vec::new(env);
     for invoice_id in get_dispute_index(env).iter() {
@@ -658,14 +629,6 @@ pub fn get_invoices_by_dispute_status_paged(
         idx = idx.saturating_add(1);
     }
     page
-}
-
-/// @notice Filter dispute-indexed invoices by dispute status.
-/// @param env The contract environment.
-/// @param status Desired dispute status filter.
-/// @return Invoice IDs whose current dispute status matches `status`.
-pub(crate) fn indexed_invoices_by_status(env: &Env, status: &DisputeStatus) -> Vec<BytesN<32>> {
-    get_invoices_by_dispute_status(env, status)
 }
 
 /// Guard: reject report/analytics-snapshot generation while any invoice has

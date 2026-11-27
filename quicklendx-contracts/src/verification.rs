@@ -10,9 +10,7 @@ use crate::protocol_limits::{
 use crate::storage::InvoiceStorage;
 use crate::types::BidStatus;
 use crate::types::{DisputeStatus, Invoice, InvoiceMetadata, InvoiceStatus};
-use soroban_sdk::{
-    contracttype, symbol_short, vec, Address, Bytes, Env, String, TryFromVal, Val, Vec,
-};
+use soroban_sdk::{contracttype, vec, Address, Bytes, Env, String, TryFromVal, Val, Vec};
 
 /// Maximum normalized tags allowed on an invoice.
 pub const MAX_INVOICE_TAG_COUNT: u32 = 10;
@@ -131,8 +129,12 @@ fn ensure_kyc_index_sorted(env: &Env, kind: KycIndexKind) {
     while i < entries.len() {
         let mut j = i;
         while j > 0 {
-            let previous = entries.get(j - 1).unwrap();
-            let current = entries.get(j).unwrap();
+            let previous = entries
+                .get(j - 1)
+                .unwrap_or_else(|| panic!("KYC index out of bounds"));
+            let current = entries
+                .get(j)
+                .unwrap_or_else(|| panic!("KYC index out of bounds"));
 
             let previous_time = kyc_submitted_at(env, kind, &previous);
             let current_time = kyc_submitted_at(env, kind, &current);
@@ -154,9 +156,12 @@ fn ensure_kyc_index_sorted(env: &Env, kind: KycIndexKind) {
     // Persist the ordered entries.
     for i in 0..entries.len() {
         let entry_key = KycIndexKey::Entry(kind, i);
-        env.storage()
-            .persistent()
-            .set(&entry_key, &entries.get(i).unwrap());
+        env.storage().persistent().set(
+            &entry_key,
+            &entries
+                .get(i)
+                .unwrap_or_else(|| panic!("KYC index out of bounds")),
+        );
         crate::storage::extend_persistent_ttl(env, &entry_key);
     }
 
@@ -486,9 +491,6 @@ pub fn validate_risk_score(score: u32) -> Result<(), QuickLendXError> {
 pub struct BusinessVerificationStorage;
 
 impl BusinessVerificationStorage {
-    const VERIFIED_BUSINESSES_KEY: &'static str = "verified_businesses";
-    const PENDING_BUSINESSES_KEY: &'static str = "pending_businesses";
-    const REJECTED_BUSINESSES_KEY: &'static str = "rejected_businesses";
     const ADMIN_KEY: &'static str = "admin_address";
     const DELETED_BUSINESSES_KEY: &'static str = "deleted_businesses";
 
@@ -610,15 +612,14 @@ impl BusinessVerificationStorage {
         }
     }
 
-
-pub fn get_verification(env: &Env, business: &Address) -> Option<BusinessVerification> {
-    let key = KycStorageKey::BusinessRecord(business.clone());
-    let value = env.storage().persistent().get(&key);
-    if value.is_some() {
-        crate::storage::extend_persistent_ttl(env, &key);
+    pub fn get_verification(env: &Env, business: &Address) -> Option<BusinessVerification> {
+        let key = KycStorageKey::BusinessRecord(business.clone());
+        let value = env.storage().persistent().get(&key);
+        if value.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        value
     }
-    value
-}
 
     pub fn update_verification(
         env: &Env,
@@ -855,9 +856,6 @@ const SILVER_SUCCESSFUL_INVESTMENTS_MIN: u32 = 3;
 const SILVER_DEFAULT_RATE_MAX_PCT: u32 = 25;
 
 impl InvestorVerificationStorage {
-    const VERIFIED_INVESTORS_KEY: &'static str = "verified_investors";
-    const PENDING_INVESTORS_KEY: &'static str = "pending_investors";
-    const REJECTED_INVESTORS_KEY: &'static str = "rejected_investors";
     #[cfg(test)]
     const INVESTOR_HISTORY_KEY: &'static str = "investor_history";
     #[cfg(test)]
@@ -932,16 +930,14 @@ impl InvestorVerificationStorage {
         crate::storage::extend_persistent_ttl(env, &key);
     }
 
-
-pub fn get(env: &Env, investor: &Address) -> Option<InvestorVerification> {
-    let key = KycStorageKey::InvestorRecord(investor.clone());
-    let value = env.storage().persistent().get(&key);
-    if value.is_some() {
-        crate::storage::extend_persistent_ttl(env, &key);
+    pub fn get(env: &Env, investor: &Address) -> Option<InvestorVerification> {
+        let key = KycStorageKey::InvestorRecord(investor.clone());
+        let value = env.storage().persistent().get(&key);
+        if value.is_some() {
+            crate::storage::extend_persistent_ttl(env, &key);
+        }
+        value
     }
-    value
-}
-
 
     pub fn update(env: &Env, verification: &InvestorVerification) {
         let old_verification = Self::get(env, &verification.investor);
@@ -1637,7 +1633,7 @@ pub fn verify_investor(
         InvestorVerificationStorage::get(env, investor).ok_or(QuickLendXError::KYCNotFound)?;
 
     match verification.status {
-        BusinessVerificationStatus::Verified => return Err(QuickLendXError::KYCAlreadyVerified),
+        BusinessVerificationStatus::Verified => Err(QuickLendXError::KYCAlreadyVerified),
         BusinessVerificationStatus::Pending | BusinessVerificationStatus::Rejected => {
             // Calculate risk score and determine tier
             let risk_score = calculate_investor_risk_score(env, investor, &verification.kyc_data)?;
@@ -1804,7 +1800,11 @@ pub fn calculate_investor_risk_score(
             verification.successful_investments + verification.defaulted_investments;
 
         if total_investments > 0 {
-            let default_rate = (verification.defaulted_investments * 100) / total_investments;
+            let default_rate = verification
+                .defaulted_investments
+                .saturating_mul(100)
+                .checked_div(total_investments)
+                .unwrap_or(0);
             risk_score += default_rate;
         }
 
@@ -2355,7 +2355,7 @@ pub fn validate_invoice_metadata(
             return Err(QuickLendXError::InvalidDescription);
         }
 
-        if record.1 <= 0 || record.2 < 0 {
+        if record.2 < 0 {
             return Err(QuickLendXError::InvalidAmount);
         }
 
@@ -2435,7 +2435,7 @@ pub fn validate_evidence_hash(evidence_hash: &Bytes) -> Result<(), QuickLendXErr
 /// @param hash The transaction hash string to validate.
 /// @return Ok(()) if valid 64-char hex, Err(InvalidTransactionHash) otherwise.
 pub fn validate_transaction_hash(
-    env: &soroban_sdk::Env,
+    _env: &soroban_sdk::Env,
     hash: &soroban_sdk::String,
 ) -> Result<(), crate::errors::QuickLendXError> {
     if hash.len() != 64 {
@@ -2443,8 +2443,7 @@ pub fn validate_transaction_hash(
     }
 
     let bytes = hash.to_bytes();
-    for i in 0..bytes.len() {
-        let b = bytes.get(i).unwrap();
+    for b in bytes.iter() {
         match b {
             b'0'..=b'9' | b'a'..=b'f' | b'A'..=b'F' => {}
             _ => return Err(crate::errors::QuickLendXError::InvalidTransactionHash),

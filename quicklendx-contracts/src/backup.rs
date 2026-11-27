@@ -156,8 +156,8 @@ impl BackupStorage {
         let mix = timestamp
             .saturating_add(next_counter)
             .saturating_add(0xB4C4);
-        for i in 18..32 {
-            id_bytes[i] = (mix % 256) as u8;
+        for byte in id_bytes.iter_mut().skip(18) {
+            *byte = (mix % 256) as u8;
         }
 
         BytesN::from_array(env, &id_bytes)
@@ -218,7 +218,10 @@ impl BackupStorage {
         env: &Env,
         backup_id: &BytesN<32>,
     ) -> Result<u32, QuickLendXError> {
-        let raw_val: soroban_sdk::Val = env.storage().instance().get(backup_id)
+        let raw_val: soroban_sdk::Val = env
+            .storage()
+            .instance()
+            .get(backup_id)
             .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         if let Ok(map) =
@@ -327,15 +330,14 @@ impl BackupStorage {
     /// 4. Every invoice in the payload has a positive `amount`.
     pub fn validate_backup(env: &Env, backup_id: &BytesN<32>) -> Result<(), QuickLendXError> {
         let _version = Self::verify_backup_version(env, backup_id)?;
-        let backup = Self::get_backup(env, backup_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let backup = Self::get_backup(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         // Validate metadata alone first (cheap).
         Self::validate_backup_metadata(&backup, None)?;
 
         // Fetch the payload and validate together with the count.
-        let data = Self::get_backup_data(env, backup_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let data =
+            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
         if data.len() != backup.invoice_count {
             return Err(QuickLendXError::StorageError);
@@ -413,10 +415,10 @@ impl BackupStorage {
         Self::validate_backup(env, backup_id)?;
 
         // Fetch the validated payload.
-        let data = Self::get_backup_data(env, backup_id)
-            .ok_or(QuickLendXError::StorageKeyNotFound)?;
+        let data =
+            Self::get_backup_data(env, backup_id).ok_or(QuickLendXError::StorageKeyNotFound)?;
 
-        let restore_outcome: Result<u32, QuickLendXError> = (|| {
+        let restore_outcome: Result<u32, QuickLendXError> = {
             let restored_count = data.len();
 
             //  Step 2: atomically clear all existing invoice state
@@ -438,7 +440,7 @@ impl BackupStorage {
             }
 
             Ok(restored_count)
-        })();
+        };
 
         // Always clear the in-progress flag, even on failure, so the contract
         // is not stuck in "backfilling" forever.
@@ -479,9 +481,26 @@ impl BackupStorage {
         let len = backup_timestamps.len();
         for i in 0..len {
             for j in 0..len - i - 1 {
-                if backup_timestamps.get(j).unwrap().1 > backup_timestamps.get(j + 1).unwrap().1 {
-                    let temp = backup_timestamps.get(j).unwrap().clone();
-                    backup_timestamps.set(j, backup_timestamps.get(j + 1).unwrap().clone());
+                if backup_timestamps
+                    .get(j)
+                    .unwrap_or_else(|| panic!("backup index out of bounds"))
+                    .1
+                    > backup_timestamps
+                        .get(j + 1)
+                        .unwrap_or_else(|| panic!("backup index out of bounds"))
+                        .1
+                {
+                    let temp = backup_timestamps
+                        .get(j)
+                        .unwrap_or_else(|| panic!("backup index out of bounds"))
+                        .clone();
+                    backup_timestamps.set(
+                        j,
+                        backup_timestamps
+                            .get(j + 1)
+                            .unwrap_or_else(|| panic!("backup index out of bounds"))
+                            .clone(),
+                    );
                     backup_timestamps.set(j + 1, temp);
                 }
             }
@@ -491,7 +510,9 @@ impl BackupStorage {
         if policy.max_age_seconds > 0 {
             let mut i = 0;
             while i < backup_timestamps.len() {
-                let (backup_id, timestamp) = backup_timestamps.get(i).unwrap();
+                let (backup_id, timestamp) = backup_timestamps
+                    .get(i)
+                    .unwrap_or_else(|| panic!("backup index out of bounds"));
                 let age = current_time.saturating_sub(timestamp);
 
                 if age > policy.max_age_seconds {
@@ -549,9 +570,26 @@ impl BackupStorage {
         let len = active.len();
         for i in 0..len {
             for j in 0..len.saturating_sub(i + 1) {
-                if active.get(j).unwrap().1 > active.get(j + 1).unwrap().1 {
-                    let tmp = active.get(j).unwrap().clone();
-                    active.set(j, active.get(j + 1).unwrap().clone());
+                if active
+                    .get(j)
+                    .unwrap_or_else(|| panic!("backup index out of bounds"))
+                    .1
+                    > active
+                        .get(j + 1)
+                        .unwrap_or_else(|| panic!("backup index out of bounds"))
+                        .1
+                {
+                    let tmp = active
+                        .get(j)
+                        .unwrap_or_else(|| panic!("backup index out of bounds"))
+                        .clone();
+                    active.set(
+                        j,
+                        active
+                            .get(j + 1)
+                            .unwrap_or_else(|| panic!("backup index out of bounds"))
+                            .clone(),
+                    );
                     active.set(j + 1, tmp);
                 }
             }
@@ -563,7 +601,12 @@ impl BackupStorage {
         if policy.max_age_seconds > 0 {
             let mut i = 0;
             while i < active.len() {
-                let age = current_time.saturating_sub(active.get(i).unwrap().1);
+                let age = current_time.saturating_sub(
+                    active
+                        .get(i)
+                        .unwrap_or_else(|| panic!("backup index out of bounds"))
+                        .1,
+                );
                 if age > policy.max_age_seconds {
                     would_purge = would_purge.saturating_add(1);
                     active.remove(i);

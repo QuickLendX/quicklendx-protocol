@@ -366,7 +366,7 @@ fn update_states_after_funding(
     crate::qlx_log!(env, "escrow", "Invoice funded and bid accepted");
 
     // 7. Audit & Events
-    crate::events::emit_bid_accepted(env, &bid, invoice_id, &invoice.business);
+    crate::events::emit_bid_accepted(env, bid, invoice_id, &invoice.business);
     crate::audit::log_bid_accepted(
         env,
         invoice_id.clone(),
@@ -380,14 +380,13 @@ fn update_states_after_funding(
         invoice_id.clone(),
         bid.investor.clone(),
         bid.bid_amount,
-        bid.bid_id.clone(),
     );
     emit_invoice_funded(env, invoice_id, &bid.investor, escrow_amount);
     crate::audit::log_invoice_funded(env, invoice_id.clone(), bid.investor.clone(), escrow_amount);
 
     // Lifecycle trigger: emits `NotificationType::BidAccepted` to the investor
     // after escrow funding and state transitions complete successfully.
-    let _ = crate::notifications::NotificationSystem::notify_bid_accepted(env, &invoice, &bid);
+    let _ = crate::notifications::NotificationSystem::notify_bid_accepted(env, invoice, bid);
 
     Ok(())
 }
@@ -433,7 +432,7 @@ pub fn refund_escrow_funds(
     }
 
     // 4. Retrieve Escrow
-    let escrow = crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
+    crate::payments::EscrowStorage::get_escrow_by_invoice(env, invoice_id)
         .ok_or(QuickLendXError::StorageKeyNotFound)?;
 
     // 5. Transfer funds and update escrow state

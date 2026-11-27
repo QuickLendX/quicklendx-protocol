@@ -72,13 +72,6 @@ fn active_proposals_count(env: &Env) -> u32 {
         .unwrap_or(0)
 }
 
-fn increment_active_proposals(env: &Env) {
-    let count = active_proposals_count(env).saturating_add(1);
-    env.storage()
-        .instance()
-        .set(&active_proposals_key(), &count);
-}
-
 fn decrement_active_proposals(env: &Env) {
     let count = active_proposals_count(env).saturating_sub(1);
     env.storage()
@@ -296,7 +289,11 @@ pub trait Governable {
             && env.ledger().sequence() > proposal.voting_ends_at_ledger
         {
             Self::finalize_proposal(env, proposal_id)?;
-            proposal = env.storage().instance().get(&key).unwrap();
+            proposal = env
+                .storage()
+                .instance()
+                .get(&key)
+                .ok_or(QuickLendXError::StorageKeyNotFound)?;
         }
 
         if proposal.status != ProposalStatus::Passed {

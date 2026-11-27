@@ -81,7 +81,7 @@ impl MultisigContract {
             }
             seen_owners.push_back(index);
 
-            let public_key = owners.get(index).unwrap();
+            let public_key = owners.get(index).ok_or(MultisigError::InvalidOwnerIndex)?;
             // Cryptographically verify signature
             env.crypto()
                 .ed25519_verify(&public_key, &message_hash.clone().into(), &sig.signature);

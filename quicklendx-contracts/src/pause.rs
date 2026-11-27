@@ -1,7 +1,7 @@
 use crate::admin::AdminStorage;
 use crate::audit::{log_config_change, AuditOperation};
 use crate::errors::QuickLendXError;
-use soroban_sdk::{contracttype, symbol_short, vec, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{contracttype, symbol_short, Address, Env, String, Symbol};
 
 const PAUSED_KEY: Symbol = symbol_short!("paused");
 const PAUSED_AT_KEY: Symbol = symbol_short!("paused_at");
@@ -12,6 +12,8 @@ pub(crate) const MAX_PAUSE_DURATION: u64 = 7 * 24 * 3600;
 ///
 /// Compared at runtime via [`soroban_sdk::String`] equality because Soroban
 /// `String` is a host type without a direct `as_str()` accessor.
+// Documented in docs/pause-events.md as the pause-coverage reference list.
+#[allow(dead_code)]
 const ALL_ENTRYPOINTS: &[&str] = &[
     "store_invoice",
     "verify_invoice",

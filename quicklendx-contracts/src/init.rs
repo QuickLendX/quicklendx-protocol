@@ -508,7 +508,7 @@ impl ProtocolInitializer {
         params: &InitializationParams,
     ) -> Result<(), QuickLendXError> {
         // VALIDATION: Fee basis points (0% to 10%)
-        if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
+        if params.fee_bps > MAX_FEE_BPS {
             return Err(QuickLendXError::InvalidFeeBasisPoints);
         }
 
@@ -549,7 +549,10 @@ impl ProtocolInitializer {
         let zero = Self::zero_address(env);
         let len = params.initial_currencies.len();
         for i in 0..len {
-            let curr = params.initial_currencies.get(i).unwrap();
+            let curr = params
+                .initial_currencies
+                .get(i)
+                .unwrap_or_else(|| panic!("currency index out of bounds"));
             // Must not be a reserved address
             if curr == params.admin
                 || curr == params.treasury
@@ -560,7 +563,12 @@ impl ProtocolInitializer {
             }
             // Must not be a duplicate (O(n-) - list is expected to be small)
             for j in (i + 1)..len {
-                if curr == params.initial_currencies.get(j).unwrap() {
+                if curr
+                    == params
+                        .initial_currencies
+                        .get(j)
+                        .unwrap_or_else(|| panic!("currency index out of bounds"))
+                {
                     return Err(QuickLendXError::InvalidCurrency);
                 }
             }
@@ -570,7 +578,10 @@ impl ProtocolInitializer {
         // addresses, or the well-known zero/burn address.
         let corridor_len = params.corridors.len();
         for i in 0..corridor_len {
-            let corridor = params.corridors.get(i).unwrap();
+            let corridor = params
+                .corridors
+                .get(i)
+                .unwrap_or_else(|| panic!("corridor index out of bounds"));
             if corridor == params.admin
                 || corridor == params.treasury
                 || corridor == contract_address
@@ -579,7 +590,12 @@ impl ProtocolInitializer {
                 return Err(QuickLendXError::InvalidAddress);
             }
             for j in (i + 1)..corridor_len {
-                if corridor == params.corridors.get(j).unwrap() {
+                if corridor
+                    == params
+                        .corridors
+                        .get(j)
+                        .unwrap_or_else(|| panic!("corridor index out of bounds"))
+                {
                     return Err(QuickLendXError::InvalidAddress);
                 }
             }
@@ -778,7 +794,7 @@ impl ProtocolInitializer {
     /// first validation failure. Discriminants match `QuickLendXError` repr values.
     fn validate_config_params(params: &ProtocolConfigParams) -> (bool, u32) {
         // fee_bps: 0–1 000  (mirrors set_fee_config)
-        if params.fee_bps < MIN_FEE_BPS || params.fee_bps > MAX_FEE_BPS {
+        if params.fee_bps > MAX_FEE_BPS {
             return (false, QuickLendXError::InvalidFeeBasisPoints as u32);
         }
         // min_invoice_amount must be positive  (mirrors set_protocol_config)
@@ -1010,6 +1026,8 @@ impl ProtocolInitializer {
 
 /// Emit protocol initialization event
 /// @notice Emits a single initialization event with the configured parameters.
+// Initialization events mirror the fixed public event schema.
+#[allow(clippy::too_many_arguments)]
 fn emit_protocol_initialized(
     env: &Env,
     admin: &Address,
@@ -1035,6 +1053,8 @@ fn emit_protocol_initialized(
 }
 
 /// Emit protocol configuration update event
+// Legacy event topics remain part of the public event ABI.
+#[allow(deprecated)]
 fn emit_protocol_config_updated(
     env: &Env,
     admin: &Address,
@@ -1055,6 +1075,8 @@ fn emit_protocol_config_updated(
 }
 
 /// Emit fee configuration update event
+// Legacy event topics remain part of the public event ABI.
+#[allow(deprecated)]
 fn emit_fee_config_updated(env: &Env, admin: &Address, fee_bps: u32) {
     env.events().publish(
         (symbol_short!("fee_cfg"),),
@@ -1063,6 +1085,8 @@ fn emit_fee_config_updated(env: &Env, admin: &Address, fee_bps: u32) {
 }
 
 /// Emit treasury update event
+// Legacy event topics remain part of the public event ABI.
+#[allow(deprecated)]
 fn emit_treasury_updated(env: &Env, admin: &Address, treasury: &Address) {
     env.events().publish(
         (symbol_short!("trsr_upd"),),
