@@ -986,6 +986,9 @@ mod test_regulatory;
 #[path = "../test_regulatory_gate.rs"]
 mod test_regulatory_gate;
 
+#[path = "../test_mutating_entrypoint_inventory.rs"]
+mod test_mutating_entrypoint_inventory;
+
 #[cfg(feature = "legacy-tests")]
 #[path = "../test_repayment_events_audit_parity.rs"]
 mod test_repayment_events_audit_parity;
